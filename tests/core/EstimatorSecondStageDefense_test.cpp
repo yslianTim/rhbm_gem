@@ -1630,12 +1630,12 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         std::nullopt,
         *initial_objective,
         audit_state));
-    ASSERT_TRUE(audit_state.best.has_value());
+    ASSERT_TRUE(audit_state.has_value());
     EXPECT_DOUBLE_EQ(
-        audit_state.best->objective.total_objective,
+        audit_state->objective.total_objective,
         initial_objective->total_objective);
-    EXPECT_FALSE(audit_state.best->uses_polish);
-    EXPECT_FALSE(audit_state.best->accepted_iteration.has_value());
+    EXPECT_FALSE(audit_state->uses_polish);
+    EXPECT_FALSE(audit_state->accepted_iteration.has_value());
 
     EXPECT_FALSE(audit_detail::TryUpdateBestAuditState(
         initial_state,
@@ -1656,13 +1656,13 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         std::optional<std::size_t>{ 7 },
         *improved_objective,
         audit_state));
-    ASSERT_TRUE(audit_state.best.has_value());
+    ASSERT_TRUE(audit_state.has_value());
     EXPECT_DOUBLE_EQ(
-        audit_state.best->objective.total_objective,
+        audit_state->objective.total_objective,
         improved_objective->total_objective);
-    EXPECT_TRUE(audit_state.best->uses_polish);
-    ASSERT_TRUE(audit_state.best->accepted_iteration.has_value());
-    EXPECT_EQ(*audit_state.best->accepted_iteration, 7U);
+    EXPECT_TRUE(audit_state->uses_polish);
+    ASSERT_TRUE(audit_state->accepted_iteration.has_value());
+    EXPECT_EQ(*audit_state->accepted_iteration, 7U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjective)
@@ -1680,13 +1680,13 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjec
             std::optional<std::size_t>{ 4 },
             objective)
     };
-    ASSERT_TRUE(available.best.has_value());
+    ASSERT_TRUE(available.has_value());
     EXPECT_DOUBLE_EQ(
-        available.best->objective.total_objective,
+        available->objective.total_objective,
         objective->total_objective);
-    EXPECT_TRUE(available.best->uses_polish);
-    ASSERT_TRUE(available.best->accepted_iteration.has_value());
-    EXPECT_EQ(*available.best->accepted_iteration, 4U);
+    EXPECT_TRUE(available->uses_polish);
+    ASSERT_TRUE(available->accepted_iteration.has_value());
+    EXPECT_EQ(*available->accepted_iteration, 4U);
 
     const std::optional<audit_detail::ObjectiveBreakdown> unavailable;
     const auto empty{
@@ -1696,7 +1696,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjec
             std::nullopt,
             unavailable)
     };
-    EXPECT_FALSE(empty.best.has_value());
+    EXPECT_FALSE(empty.has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
@@ -1716,10 +1716,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousA
         1.0,
         std::nullopt,
         tolerance));
-    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        std::nullopt, 1.0, std::nullopt, tolerance));
-    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.0, std::nullopt, std::nullopt, tolerance));
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeReference)

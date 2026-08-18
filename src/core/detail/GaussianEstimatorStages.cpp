@@ -189,10 +189,6 @@ void LogMaximumIterations(
     {
         warning_message << "; applying latest validated state";
     }
-    else
-    {
-        warning_message << "; no validated state is available";
-    }
     AppendOffsetSummary(warning_message, selection.state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -212,22 +208,22 @@ void LogSecondStageSummary(
     std::ostringstream message;
     message << "Second-stage local fitting summary: accepted_iterations="
         << accepted_iteration_count << ", best_iteration=";
-    if (!best_audit_state.best.has_value())
+    if (!best_audit_state.has_value())
     {
         message << "unavailable";
     }
-    else if (best_audit_state.best->accepted_iteration.has_value())
+    else if (best_audit_state->accepted_iteration.has_value())
     {
-        message << *best_audit_state.best->accepted_iteration;
+        message << *best_audit_state->accepted_iteration;
     }
     else
     {
         message << "initial";
     }
     message << ", stop_reason=" << stop_reason << ", best_audit_objective=";
-    if (best_audit_state.best.has_value())
+    if (best_audit_state.has_value())
     {
-        message << std::scientific << std::setprecision(8) << best_audit_state.best->objective.total_objective;
+        message << std::scientific << std::setprecision(8) << best_audit_state->objective.total_objective;
     }
     else
     {
@@ -294,7 +290,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         context,
         iteration_state.solver_workspace_by_key
     };
-    if (iteration_state.best_audit_state.best.has_value())
+    if (iteration_state.best_audit_state.has_value())
     {
         performance_counters.RecordFullStateMaterialization();
     }
@@ -361,7 +357,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
-                    iteration_state.best_audit_state.best)
+                    iteration_state.best_audit_state)
             };
             ApplyFitState(model_object, context, final_state_selection.state);
             LogSecondStageSummary(
@@ -389,7 +385,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
-                    iteration_state.best_audit_state.best)
+                    iteration_state.best_audit_state)
             };
             ApplyFitState(model_object, context, final_state_selection.state);
             LogSecondStageSummary(
@@ -439,7 +435,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
-                    iteration_state.best_audit_state.best)
+                    iteration_state.best_audit_state)
             };
             ApplyFitState(model_object, context, final_state_selection.state);
             LogMaximumIterations(

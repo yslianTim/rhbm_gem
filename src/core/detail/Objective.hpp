@@ -62,16 +62,12 @@ struct AuditedState
     std::optional<std::size_t> accepted_iteration{};
 };
 
-struct BestAuditState
-{
-    std::optional<AuditedState> best{};
-};
+using BestAuditState = std::optional<AuditedState>;
 
 enum class FinalStateSource
 {
     BestAudit,
-    LatestValidated,
-    Unavailable
+    LatestValidated
 };
 
 struct FinalStateSelection
@@ -112,8 +108,6 @@ inline std::string_view GetFinalStateSourceText(FinalStateSource source)
         return "best-audit";
     case FinalStateSource::LatestValidated:
         return "latest-validated";
-    case FinalStateSource::Unavailable:
-        return "unavailable";
     }
     return "unavailable";
 }
@@ -130,9 +124,7 @@ struct ObjectiveAttemptDiagnostic
 {
     double effective_damping{ 1.0 };
     bool is_invalid_model{ false };
-    PreObjectiveFailureReason pre_objective_failure_reason{
-        PreObjectiveFailureReason::None
-    };
+    PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
     std::optional<double> pre_objective_attempted_step_norm{};
     std::optional<double> fit_scale{};
     std::optional<double> tail_scale{};
@@ -152,27 +144,26 @@ struct ObjectiveAttemptDiagnostic
 
 inline double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count)
 {
-    if (cluster_atom_count == 0 || active_atom_count == 0 ||
-        cluster_atom_count > active_atom_count)
+    if (cluster_atom_count == 0 || active_atom_count == 0 || cluster_atom_count > active_atom_count)
     {
-        throw std::invalid_argument(
-            "Local fitting cluster atom counts are invalid.");
+        throw std::invalid_argument("Local fitting cluster atom counts are invalid.");
     }
-    return static_cast<double>(cluster_atom_count) /
-        static_cast<double>(active_atom_count);
+    return static_cast<double>(cluster_atom_count) / static_cast<double>(active_atom_count);
 }
 
 inline void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
 {
-    if (!std::isfinite(tolerance.absolute_tolerance) ||
-        tolerance.absolute_tolerance < 0.0 ||
-        !std::isfinite(tolerance.relative_tolerance) ||
-        tolerance.relative_tolerance < 0.0)
+    if (!std::isfinite(tolerance.absolute_tolerance) || tolerance.absolute_tolerance < 0.0 ||
+        !std::isfinite(tolerance.relative_tolerance) || tolerance.relative_tolerance < 0.0)
     {
         throw std::invalid_argument(
-            "Local fitting audit objective tolerances must be finite and "
-            "non-negative.");
+            "Local fitting audit objective tolerances must be finite and non-negative.");
     }
+}
+
+inline double CalculateObjectiveToleranceUnchecked(double reference, ObjectiveTolerance tolerance)
+{
+    return tolerance.absolute_tolerance + tolerance.relative_tolerance * std::abs(reference);
 }
 
 inline double CalculateObjectiveTolerance(double reference, ObjectiveTolerance tolerance)
@@ -182,7 +173,7 @@ inline double CalculateObjectiveTolerance(double reference, ObjectiveTolerance t
     {
         throw std::invalid_argument("Local fitting audit objective reference must be finite.");
     }
-    return tolerance.absolute_tolerance + tolerance.relative_tolerance * std::abs(reference);
+    return CalculateObjectiveToleranceUnchecked(reference, tolerance);
 }
 
 inline std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
@@ -218,28 +209,26 @@ inline bool IsBetterAuditObjective(
     ValidateObjectiveTolerance(tolerance);
     if (!std::isfinite(candidate)) return false;
     if (!std::isfinite(best)) return true;
-    return candidate < best - CalculateObjectiveTolerance(best, tolerance);
+    return candidate < best - CalculateObjectiveToleranceUnchecked(best, tolerance);
 }
 
 inline bool IsAuditObjectiveAcceptableForProgress(
-    std::optional<double> candidate,
-    std::optional<double> previous,
+    double candidate,
+    double previous,
     std::optional<double> best,
     ObjectiveTolerance tolerance)
 {
     ValidateObjectiveTolerance(tolerance);
-    if (!candidate.has_value() || !previous.has_value() ||
-        !std::isfinite(*candidate) || !std::isfinite(*previous))
+    if (!std::isfinite(candidate) || !std::isfinite(previous))
     {
         return false;
     }
     const auto is_deteriorated = [&](double reference)
     {
         if (!std::isfinite(reference)) return true;
-        return *candidate > reference + CalculateObjectiveTolerance(reference, tolerance);
+        return candidate > reference + CalculateObjectiveToleranceUnchecked(reference, tolerance);
     };
-    return !is_deteriorated(*previous) &&
-        (!best.has_value() || !is_deteriorated(*best));
+    return !is_deteriorated(previous) && (!best.has_value() || !is_deteriorated(*best));
 }
 
 struct ObjectiveScale
@@ -253,6 +242,12 @@ struct ObjectiveClusterDomain
     std::vector<SampleRef> fit_sample_ref_list{};
     std::vector<SampleRef> tail_sample_ref_list{};
     std::optional<ObjectiveScale> scale{};
+};
+
+struct ResidualObjectiveContribution
+{
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
 };
 
 struct ObjectiveDomain
@@ -303,13 +298,10 @@ inline void LogObjectiveDomain(
         << (is_terminal_reset ?
             "Reset second-stage objective domain" : "Initialize second-stage objective domain")
         << ": fit/tail/offset weights = "
-        << kFitRangeWeight << "/"
-        << kTailValidationWeight << "/"
-        << kOffsetPlausibilityPenaltyWeight
+        << kFitRangeWeight << "/" << kTailValidationWeight << "/" << kOffsetPlausibilityPenaltyWeight
         << ", clusters = " << domain.cluster_by_key.size()
         << ", active atoms = " << domain.active_atom_count
-        << ", unique fit/tail samples = "
-        << domain.fit_sample_count << "/" << domain.tail_sample_count
+        << ", unique fit/tail samples = " << domain.fit_sample_count << "/" << domain.tail_sample_count
         << ", fixed fit scale median/p99/max = ";
     append_scale_summary(message, fit_scale_list);
     message << ", fixed tail scale median/p99/max = ";
@@ -450,13 +442,13 @@ inline ObjectiveDomain BuildObjectiveDomain(
 
 
 template <typename ResidualEvaluator>
-inline std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContributionImpl(
+inline std::optional<ResidualObjectiveContribution> EvaluateResidualObjectiveContributionImpl(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
     const ResidualEvaluator & residual_evaluator)
 {
     if (domain.active_atom_count == 0) return std::nullopt;
-    ObjectiveBreakdown breakdown;
+    ResidualObjectiveContribution contribution;
     for (const auto & sample_ref : sample_ref_list)
     {
         const auto & owner_key{
@@ -492,17 +484,23 @@ inline std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContributionIm
         };
         if (is_fit_range)
         {
-            breakdown.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
+            contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
         }
         else
         {
-            breakdown.tail_validation_loss += coefficient * loss;
+            contribution.tail_validation_loss += coefficient * loss;
         }
     }
-    return BuildObjectiveBreakdown(
-        breakdown.fit_range_residual_objective,
-        breakdown.tail_validation_loss,
-        0.0);
+    const auto weighted_total{
+        contribution.fit_range_residual_objective + kTailValidationWeight * contribution.tail_validation_loss
+    };
+    if (!std::isfinite(contribution.fit_range_residual_objective) ||
+        !std::isfinite(contribution.tail_validation_loss) ||
+        !std::isfinite(weighted_total))
+    {
+        return std::nullopt;
+    }
+    return contribution;
 }
 
 template <typename State>
@@ -631,7 +629,9 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    ObjectiveBreakdown total;
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
+    double offset_plausibility_penalty{ 0.0 };
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
         const auto fit_contribution{
@@ -666,26 +666,25 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
             EvaluateOffsetPlausibilityPenalty(model_snapshot.selected, key, domain)
         };
         if (!offset_contribution.has_value()) return std::nullopt;
-        total.fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
-        total.fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
-        total.tail_validation_loss += fit_contribution->tail_validation_loss;
-        total.tail_validation_loss += tail_contribution->tail_validation_loss;
-        total.tail_validation_penalty += fit_contribution->tail_validation_penalty;
-        total.tail_validation_penalty += tail_contribution->tail_validation_penalty;
-        total.offset_plausibility_penalty += *offset_contribution;
+        fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
+        fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
+        tail_validation_loss += fit_contribution->tail_validation_loss;
+        tail_validation_loss += tail_contribution->tail_validation_loss;
+        offset_plausibility_penalty += *offset_contribution;
     }
-    total.total_objective =
-        total.fit_range_residual_objective +
-        total.tail_validation_penalty +
-        total.offset_plausibility_penalty;
-    return std::isfinite(total.total_objective) ? std::optional<ObjectiveBreakdown>{ total } : std::nullopt;
+    return BuildObjectiveBreakdown(
+        fit_range_residual_objective,
+        tail_validation_loss,
+        offset_plausibility_penalty);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const ResidualBaseline & baseline)
 {
-    ObjectiveBreakdown total;
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
+    double offset_plausibility_penalty{ 0.0 };
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
         std::vector<SampleRef> sample_ref_list{ cluster_domain.fit_sample_ref_list };
@@ -708,24 +707,23 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
             EvaluateOffsetPlausibilityPenalty(baseline.model_snapshot.selected, key, domain)
         };
         if (!offset_penalty.has_value()) return std::nullopt;
-        total.fit_range_residual_objective += residual_contribution->fit_range_residual_objective;
-        total.tail_validation_loss += residual_contribution->tail_validation_loss;
-        total.offset_plausibility_penalty += *offset_penalty;
+        fit_range_residual_objective += residual_contribution->fit_range_residual_objective;
+        tail_validation_loss += residual_contribution->tail_validation_loss;
+        offset_plausibility_penalty += *offset_penalty;
     }
     return BuildObjectiveBreakdown(
-        total.fit_range_residual_objective,
-        total.tail_validation_loss,
-        total.offset_plausibility_penalty);
+        fit_range_residual_objective,
+        tail_validation_loss,
+        offset_plausibility_penalty);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
-    const std::optional<ObjectiveBreakdown> & baseline,
+    const ObjectiveBreakdown & baseline,
     PerformanceCounters & performance_counters)
 {
-    if (!baseline.has_value()) return std::nullopt;
     const auto & changed_key{
         candidate_overlay.GetCandidateState().GetOverrideAtomIndexList()
     };
@@ -754,26 +752,15 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
         return std::nullopt;
     }
     return BuildObjectiveBreakdown(
-        baseline->fit_range_residual_objective +
+        baseline.fit_range_residual_objective +
             candidate_changed->fit_range_residual_objective -
             previous_changed->fit_range_residual_objective,
-        baseline->tail_validation_loss +
+        baseline.tail_validation_loss +
             candidate_changed->tail_validation_loss -
             previous_changed->tail_validation_loss,
-        baseline->offset_plausibility_penalty +
+        baseline.offset_plausibility_penalty +
             candidate_changed->offset_plausibility_penalty -
             previous_changed->offset_plausibility_penalty);
-}
-
-inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const SecondStageContext & context,
-    const FitState & state,
-    const ObjectiveDomain & domain)
-{
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, state)
-    };
-    return EvaluateAuditObjective(context, domain, model_snapshot);
 }
 
 inline ObjectiveByKey BuildObjectiveByKey(
@@ -820,24 +807,28 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const std::optional<ObjectiveBreakdown> & previous_objective,
     PerformanceCounters & performance_counters)
 {
+    if (!previous_objective.has_value())
+    {
+        return CombinedObjectiveCheck{};
+    }
     const auto candidate_objective{
         EvaluateObjectiveDelta(
             candidate_overlay,
             affected_sample_ref_list,
             domain,
-            previous_objective,
+            *previous_objective,
             performance_counters)
     };
-    return CombinedObjectiveCheck{
+    const auto accepted{
+        candidate_objective.has_value() &&
         IsAuditObjectiveAcceptableForProgress(
-            candidate_objective.has_value() ?
-                std::optional<double>{ candidate_objective->total_objective } :
-                std::nullopt,
-            previous_objective.has_value() ?
-                std::optional<double>{ previous_objective->total_objective } :
-                std::nullopt,
+            candidate_objective->total_objective,
+            previous_objective->total_objective,
             best_objective,
-            kObjectiveProgressTolerance),
+            kObjectiveProgressTolerance)
+    };
+    return CombinedObjectiveCheck{
+        accepted,
         candidate_objective
     };
 }
@@ -903,15 +894,15 @@ inline bool TryUpdateBestAuditState(
     const ObjectiveBreakdown & candidate_objective,
     BestAuditState & audit_state)
 {
-    if (audit_state.best.has_value() &&
+    if (audit_state.has_value() &&
         !IsBetterAuditObjective(
             candidate_objective.total_objective,
-            audit_state.best->objective.total_objective,
+            audit_state->objective.total_objective,
             kObjectiveStrictTolerance))
     {
         return false;
     }
-    audit_state.best = AuditedState{
+    audit_state = AuditedState{
         candidate_objective,
         candidate_state,
         candidate_uses_polish,
@@ -926,17 +917,13 @@ inline BestAuditState BuildBestAuditState(
     std::optional<std::size_t> accepted_iteration,
     const std::optional<ObjectiveBreakdown> & objective)
 {
-    BestAuditState audit_state;
-    if (objective.has_value())
-    {
-        static_cast<void>(TryUpdateBestAuditState(
-            state,
-            uses_polish,
-            accepted_iteration,
-            *objective,
-            audit_state));
-    }
-    return audit_state;
+    if (!objective.has_value()) return std::nullopt;
+    return AuditedState{
+        *objective,
+        state,
+        uses_polish,
+        accepted_iteration
+    };
 }
 
 inline void ReconcileClusterObjectiveState(
@@ -996,7 +983,6 @@ inline bool TryCommitClusterCandidate(
             diagnostic.tail_scale = domain_iter->second.scale->tail;
         }
     }
-    auto & state{ objective_state };
     diagnostic.candidate_objective =
         EvaluateObjectiveContribution(
             candidate_overlay,
@@ -1004,50 +990,52 @@ inline bool TryCommitClusterCandidate(
             objective_sample_ref_list,
             domain);
     diagnostic.previous_objective = previous_objective;
-    diagnostic.best_objective = state.best_objective;
+    diagnostic.best_objective = objective_state.best_objective;
 
     const auto is_objective_deteriorated = [](
-        const std::optional<ObjectiveBreakdown> & candidate,
-        const std::optional<double> & reference)
+        double candidate,
+        double reference)
     {
-        if (!reference.has_value()) return false;
-        if (!candidate.has_value()) return true;
-        return candidate->total_objective > *reference +
-            CalculateObjectiveTolerance(*reference, kObjectiveProgressTolerance);
+        if (!std::isfinite(reference)) return true;
+        return candidate > reference +
+            CalculateObjectiveToleranceUnchecked(reference, kObjectiveProgressTolerance);
     };
     if (!diagnostic.candidate_objective.has_value() || !diagnostic.previous_objective.has_value())
     {
         return false;
     }
+    const auto candidate_objective_value{
+        diagnostic.candidate_objective->total_objective
+    };
+    const auto previous_objective_value{
+        diagnostic.previous_objective->total_objective
+    };
     diagnostic.rejected_by_previous = is_objective_deteriorated(
-        diagnostic.candidate_objective,
-        diagnostic.previous_objective->total_objective);
-    diagnostic.rejected_by_best = is_objective_deteriorated(
-        diagnostic.candidate_objective,
-        state.best_objective.has_value() ?
-            std::optional<double>{ state.best_objective->total_objective } : std::nullopt);
+        candidate_objective_value,
+        previous_objective_value);
+    diagnostic.rejected_by_best = objective_state.best_objective.has_value() &&
+        is_objective_deteriorated(
+            candidate_objective_value,
+            objective_state.best_objective->total_objective);
     if (diagnostic.rejected_by_previous || diagnostic.rejected_by_best)
     {
         return false;
     }
     if (requires_strict_improvement &&
-        (!diagnostic.candidate_objective.has_value() ||
-            !diagnostic.previous_objective.has_value() ||
-            !IsBetterAuditObjective(
-                diagnostic.candidate_objective->total_objective,
-                diagnostic.previous_objective->total_objective,
-                kObjectiveStrictTolerance)))
+        !IsBetterAuditObjective(
+            candidate_objective_value,
+            previous_objective_value,
+            kObjectiveStrictTolerance))
     {
         return false;
     }
 
-    auto is_better_than_best{ !state.best_objective.has_value() };
-    if (state.best_objective.has_value())
+    auto is_better_than_best{ !objective_state.best_objective.has_value() };
+    if (objective_state.best_objective.has_value())
     {
-        const auto candidate_objective_value{
-            diagnostic.candidate_objective->total_objective
+        const auto best_objective_value{
+            objective_state.best_objective->total_objective
         };
-        const auto best_objective_value{ state.best_objective->total_objective };
         if (IsBetterAuditObjective(
                 candidate_objective_value,
                 best_objective_value,
@@ -1064,13 +1052,13 @@ inline bool TryCommitClusterCandidate(
         }
         else
         {
-            is_better_than_best = maximum_transformed_change < state.best_maximum_transformed_change;
+            is_better_than_best = maximum_transformed_change < objective_state.best_maximum_transformed_change;
         }
     }
     if (is_better_than_best)
     {
-        state.best_objective = diagnostic.candidate_objective;
-        state.best_maximum_transformed_change = maximum_transformed_change;
+        objective_state.best_objective = diagnostic.candidate_objective;
+        objective_state.best_maximum_transformed_change = maximum_transformed_change;
     }
     return true;
 }

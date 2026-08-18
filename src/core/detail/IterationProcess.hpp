@@ -960,8 +960,8 @@ inline IterationResult RunIteration(
     performance_counters.RecordFullStateMaterialization();
 
     const auto best_audit_objective{
-        iteration_state.best_audit_state.best.has_value() ?
-            std::optional<double>{iteration_state.best_audit_state.best->objective.total_objective } :
+        iteration_state.best_audit_state.has_value() ?
+            std::optional<double>{iteration_state.best_audit_state->objective.total_objective } :
             std::nullopt
     };
     const auto combined_changed_key_list{ selection.accepted_key_list };
