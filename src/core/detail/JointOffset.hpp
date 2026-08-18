@@ -46,17 +46,11 @@ constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 struct JointOffsetParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
-    std::vector<std::vector<std::size_t>> atom_position_list_by_group{};
     Eigen::VectorXd seed_offset{};
 
     std::size_t AtomCount() const
     {
         return group_position_by_atom.size();
-    }
-
-    std::size_t GroupCount() const
-    {
-        return atom_position_list_by_group.size();
     }
 
     Eigen::Index ParameterCount() const
@@ -69,29 +63,8 @@ struct JointOffsetParameterization
         return static_cast<Eigen::Index>(group_position_by_atom.at(atom_position));
     }
 
-    std::optional<Eigen::VectorXd> AggregateBasis(
-        const std::vector<std::pair<std::size_t, double>> & atom_basis_entries) const
+    Eigen::VectorXd ExpandOffsets(const Eigen::VectorXd & group_offset) const
     {
-        Eigen::VectorXd group_basis{ Eigen::VectorXd::Zero(ParameterCount()) };
-        for (const auto & [atom_position, basis] : atom_basis_entries)
-        {
-            if (atom_position >= AtomCount() || !std::isfinite(basis))
-            {
-                return std::nullopt;
-            }
-            group_basis(OffsetColumn(atom_position)) += basis;
-        }
-        return group_basis.allFinite() ?
-            std::optional<Eigen::VectorXd>{ std::move(group_basis) } : std::nullopt;
-    }
-
-    std::optional<Eigen::VectorXd> ExpandOffsets(const Eigen::VectorXd & group_offset) const
-    {
-        if (group_offset.size() != ParameterCount() || !group_offset.allFinite())
-        {
-            return std::nullopt;
-        }
-
         Eigen::VectorXd atom_offset{
             Eigen::VectorXd::Zero(static_cast<Eigen::Index>(AtomCount()))
         };
@@ -104,12 +77,12 @@ struct JointOffsetParameterization
     }
 };
 
-inline std::optional<JointOffsetParameterization>
-BuildJointOffsetParameterization(
+inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterization(
     const std::vector<GroupKey> & group_key_by_atom_position,
-    const std::vector<GaussianModel3D> & base_model_list)
+    const Eigen::VectorXd & atom_offset)
 {
-    if (group_key_by_atom_position.empty() || group_key_by_atom_position.size() != base_model_list.size())
+    const auto atom_count{ static_cast<std::size_t>(atom_offset.size()) };
+    if (group_key_by_atom_position.empty() || group_key_by_atom_position.size() != atom_count)
     {
         return std::nullopt;
     }
@@ -127,21 +100,19 @@ BuildJointOffsetParameterization(
     }
 
     JointOffsetParameterization parameterization;
-    parameterization.group_position_by_atom.resize(base_model_list.size());
-    parameterization.atom_position_list_by_group.resize(group_position_by_key.size());
+    parameterization.group_position_by_atom.resize(atom_count);
     parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_key.size()));
     std::vector<std::vector<double>> offset_list_by_group(group_position_by_key.size());
 
-    for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
+    for (std::size_t atom_position = 0; atom_position < atom_count; atom_position++)
     {
-        const auto offset{ base_model_list.at(atom_position).GetOffset() };
+        const auto offset{ atom_offset(static_cast<Eigen::Index>(atom_position)) };
         if (!std::isfinite(offset)) return std::nullopt;
 
         const auto atom_group_position{
             group_position_by_key.at(group_key_by_atom_position.at(atom_position))
         };
         parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
-        parameterization.atom_position_list_by_group.at(atom_group_position).emplace_back(atom_position);
         offset_list_by_group.at(atom_group_position).emplace_back(offset);
     }
 
@@ -160,8 +131,7 @@ BuildJointOffsetParameterization(
         if (!std::isfinite(median)) return std::nullopt;
         parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = median;
     }
-    return parameterization.seed_offset.allFinite() ?
-        std::optional<JointOffsetParameterization>{ std::move(parameterization) } : std::nullopt;
+    return parameterization;
 }
 
 struct JointOffsetSolveResult
@@ -170,64 +140,40 @@ struct JointOffsetSolveResult
     Eigen::VectorXd offset{};
 };
 
-struct JointOffsetBuildResult
-{
-    algorithm::WeightedRidgeSystem system{};
-    JointOffsetParameterization parameterization{};
-};
-
-inline JointOffsetBuildResult BuildJointOffsetSystem(
+inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
+    const JointOffsetParameterization & parameterization,
     bool log_debug_diagnostics)
 {
-    std::vector<GroupKey> group_key_by_atom_position;
-    std::vector<GaussianModel3D> active_model_list;
-    group_key_by_atom_position.reserve(active_index_list.size());
-    active_model_list.reserve(active_index_list.size());
-    for (const auto atom_index : active_index_list)
-    {
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        active_model_list.emplace_back(GetFitModel(model_snapshot.selected, atom_index));
-    }
-    auto parameterization{
-        BuildJointOffsetParameterization(group_key_by_atom_position, active_model_list)
-    };
-    if (!parameterization.has_value())
-    {
-        throw std::runtime_error("Joint offset group parameterization is invalid.");
-    }
-
-    std::unordered_map<std::size_t, std::size_t> active_position_by_atom_index;
-    active_position_by_atom_index.reserve(active_index_list.size());
-    std::unordered_map<GroupKey, std::size_t> active_position_by_group_key;
+    std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_atom_index;
+    active_offset_column_by_atom_index.reserve(active_index_list.size());
+    std::unordered_map<GroupKey, Eigen::Index> active_offset_column_by_group_key;
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        active_position_by_atom_index.emplace(atom_index, i);
-        active_position_by_group_key.emplace(group_key_by_atom_position.at(i), i);
+        const auto offset_column{ parameterization.OffsetColumn(i) };
+        active_offset_column_by_atom_index.emplace(atom_index, offset_column);
+        active_offset_column_by_group_key.emplace(
+            context.at(atom_index).group_key,
+            offset_column);
     }
 
-    const auto column_count{ parameterization->ParameterCount() };
+    const auto column_count{ parameterization.ParameterCount() };
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> response_list;
     Eigen::VectorXd group_column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> group_column_cross_sum_map;
-    std::vector<std::pair<std::size_t, double>> atom_row_basis_entries;
     std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
+    group_row_basis_entries.reserve(static_cast<std::size_t>(column_count));
     for (const auto active_index : active_index_list)
     {
-        const auto target_position{
-            active_position_by_atom_index.at(active_index)
-        };
         const auto & atom_context{ context.at(active_index) };
         const auto & target_model{
             GetFitModel(model_snapshot.selected, active_index)
         };
-        atom_row_basis_entries.reserve(active_index_list.size());
-        group_row_basis_entries.reserve(parameterization->GroupCount());
         for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
@@ -243,10 +189,10 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
             auto residual{ static_cast<double>(sample.response) - target_signal };
-            atom_row_basis_entries.clear();
+            Eigen::VectorXd group_basis{ Eigen::VectorXd::Zero(column_count) };
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                atom_row_basis_entries.emplace_back(static_cast<std::size_t>(target_position), target_basis);
+                group_basis(active_offset_column_by_atom_index.at(active_index)) += target_basis;
             }
 
             for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
@@ -255,19 +201,17 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
             {
                 const auto & neighbor_atom_sample{ *neighbor_iter };
                 const auto & neighbor_model{
-                    ResolveNeighborAtomModel(
-                        neighbor_atom_sample,
-                        model_snapshot)
+                    ResolveNeighborAtomModel(neighbor_atom_sample, model_snapshot)
                 };
-                int neighbor_position{ -1 };
+                Eigen::Index neighbor_offset_column{ -1 };
                 if (neighbor_atom_sample.is_selected)
                 {
-                    const auto neighbor_position_iter{
-                        active_position_by_atom_index.find(neighbor_atom_sample.atom_index)
+                    const auto neighbor_offset_column_iter{
+                        active_offset_column_by_atom_index.find(neighbor_atom_sample.atom_index)
                     };
-                    if (neighbor_position_iter != active_position_by_atom_index.end())
+                    if (neighbor_offset_column_iter != active_offset_column_by_atom_index.end())
                     {
-                        neighbor_position = static_cast<int>(neighbor_position_iter->second);
+                        neighbor_offset_column = neighbor_offset_column_iter->second;
                     }
                 }
                 else
@@ -275,15 +219,15 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                     const auto group_key{
                         context.unselected_atom_list.at(neighbor_atom_sample.atom_index).group_key
                     };
-                    const auto position_iter{
-                        active_position_by_group_key.find(group_key)
+                    const auto offset_column_iter{
+                        active_offset_column_by_group_key.find(group_key)
                     };
-                    if (position_iter != active_position_by_group_key.end())
+                    if (offset_column_iter != active_offset_column_by_group_key.end())
                     {
-                        neighbor_position = static_cast<int>(position_iter->second);
+                        neighbor_offset_column = offset_column_iter->second;
                     }
                 }
-                if (neighbor_position < 0)
+                if (neighbor_offset_column < 0)
                 {
                     const auto response{
                         neighbor_model.ResponseAtDistance(neighbor_atom_sample.distance)
@@ -311,26 +255,21 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 residual -= signal;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
-                    atom_row_basis_entries.emplace_back(static_cast<std::size_t>(neighbor_position), basis);
+                    group_basis(neighbor_offset_column) += basis;
                 }
             }
             if (!std::isfinite(residual))
             {
                 throw std::runtime_error("Joint offset residual is not finite.");
             }
-            if (atom_row_basis_entries.empty()) continue;
-
-            const auto group_basis{
-                parameterization->AggregateBasis(atom_row_basis_entries)
-            };
-            if (!group_basis.has_value())
+            if (!group_basis.allFinite())
             {
                 throw std::runtime_error("Joint offset group basis is invalid.");
             }
             group_row_basis_entries.clear();
-            for (Eigen::Index column_index = 0; column_index < group_basis->size(); column_index++)
+            for (Eigen::Index column_index = 0; column_index < group_basis.size(); column_index++)
             {
-                const auto basis{ (*group_basis)(column_index) };
+                const auto basis{ group_basis(column_index) };
                 if (std::abs(basis) <= std::numeric_limits<double>::epsilon())
                 {
                     continue;
@@ -394,15 +333,14 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
     }
 
     const auto row_count{ static_cast<Eigen::Index>(response_list.size()) };
-    Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
-    for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
-    {
-        response(row_index) = response_list.at(static_cast<std::size_t>(row_index));
-    }
-
     algorithm::WeightedRidgeSystem system;
     system.design_matrix.resize(row_count, column_count);
     system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
+    system.response = Eigen::VectorXd::Zero(row_count);
+    for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
+    {
+        system.response(row_index) = response_list.at(static_cast<std::size_t>(row_index));
+    }
     const auto conditioning{
         EvaluateJointFittingConditioning(
             system.design_matrix,
@@ -426,21 +364,24 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
             Logger::Log(LogLevel::Debug, message.str());
         }
     }
-    system.response = std::move(response);
-    system.previous_parameter = parameterization->seed_offset;
+    system.previous_parameter = parameterization.seed_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
+    Eigen::VectorXd group_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
+    for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
+    {
+        const auto atom_index{ active_index_list.at(atom_position) };
+        const auto offset_column{ parameterization.OffsetColumn(atom_position) };
+        group_ridge_multiplier(offset_column) = std::max(
+            group_ridge_multiplier(offset_column),
+            ridge_multiplier_list.at(atom_index));
+    }
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        double multiplier{ 1.0 };
-        for (const auto atom_position :
-            parameterization->atom_position_list_by_group.at(static_cast<std::size_t>(column_index)))
-        {
-            const auto atom_index{ active_index_list.at(atom_position) };
-            multiplier = std::max(multiplier, ridge_multiplier_list.at(atom_index));
-        }
         const auto square_sum{ group_column_square_sum(column_index) };
         const auto combined_multiplier{
-            std::max(multiplier, proactive_ridge_multiplier(column_index))
+            std::max(
+                group_ridge_multiplier(column_index),
+                proactive_ridge_multiplier(column_index))
         };
         system.ridge_diagonal(column_index) =
             CalculateJointFittingRidgeDiagonal(
@@ -448,10 +389,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 kJointOffsetRidgeRatio,
                 combined_multiplier);
     }
-    return JointOffsetBuildResult{
-        std::move(system),
-        std::move(*parameterization)
-    };
+    return system;
 }
 
 inline double CalculateWeightedRidgeSurrogateObjective(
@@ -518,20 +456,34 @@ inline JointOffsetSolveResult EstimateJointOffsets(
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
+    std::vector<GroupKey> group_key_by_atom_position;
+    group_key_by_atom_position.reserve(active_index_list.size());
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         previous_offset(static_cast<Eigen::Index>(i)) =
             GetFitModel(model_snapshot.selected, atom_index).GetOffset();
     }
-    JointOffsetBuildResult build_result;
+    auto parameterization{
+        BuildJointOffsetParameterization(group_key_by_atom_position, previous_offset)
+    };
+    if (!parameterization.has_value())
+    {
+        return JointOffsetSolveResult{
+            JointOffsetSolveStatus::SystemBuildFailed,
+            previous_offset
+        };
+    }
+    algorithm::WeightedRidgeSystem system;
     try
     {
-        build_result = BuildJointOffsetSystem(
+        system = BuildJointOffsetSystem(
             context,
             active_index_list,
             model_snapshot,
             ridge_multiplier_list,
+            *parameterization,
             log_debug_diagnostics);
     }
     catch (const std::runtime_error &)
@@ -541,23 +493,14 @@ inline JointOffsetSolveResult EstimateJointOffsets(
             previous_offset
         };
     }
-    auto system{ std::move(build_result.system) };
-    auto parameterization{ std::move(build_result.parameterization) };
     const auto make_progress_result = [&](
         JointOffsetSolveStatus status,
         const Eigen::VectorXd & group_offset)
     {
-        auto atom_offset{ parameterization.ExpandOffsets(group_offset) };
-        if (!atom_offset.has_value())
-        {
-            return JointOffsetSolveResult{
-                JointOffsetSolveStatus::IrlsSolveFailed,
-                previous_offset
-            };
-        }
+        auto atom_offset{ parameterization->ExpandOffsets(group_offset) };
         return JointOffsetSolveResult{
             status,
-            std::move(*atom_offset)
+            std::move(atom_offset)
         };
     };
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
