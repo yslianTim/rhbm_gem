@@ -150,20 +150,13 @@ class CouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
 
-    struct WeightedPair
-    {
-        AtomPair pair{};
-        double weight{ 0.0 };
-    };
-
     std::size_t m_atom_count{ 0 };
     std::vector<Eigen::Matrix3d> m_self_gram_list{};
     std::map<AtomPair, Eigen::Matrix3d> m_pair_accumulator_by_pair{};
     std::vector<GraphSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
-    static void NormalizeParticipantList(
-        std::vector<GraphParticipant> & participant_list)
+    static void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list)
     {
         std::sort(
             participant_list.begin(),
@@ -241,30 +234,22 @@ class CouplingGraphBuilder
         return norm;
     }
 
-    std::vector<CouplingGraphSummary::ThresholdSensitivity>
-    BuildThresholdSensitivity(
-        const std::vector<WeightedPair> & weighted_pair_list,
+    std::vector<CouplingGraphSummary::ThresholdSensitivity> BuildThresholdSensitivity(
+        const std::vector<GraphWeightedEdge> & weighted_edge_list,
         const std::vector<double> & minimum_weight_list) const
     {
         std::vector<CouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
         sensitivity_list.reserve(minimum_weight_list.size());
         for (const auto minimum_weight : minimum_weight_list)
         {
-            if (!std::isfinite(minimum_weight) || minimum_weight < 0.0 || minimum_weight > 1.0)
-            {
-                throw std::invalid_argument(
-                    "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
-            }
-
             DisjointSet component_set{ m_atom_count };
-
             std::size_t retained_edge_count{ 0 };
-            for (const auto & weighted_pair : weighted_pair_list)
+            for (const auto & weighted_edge : weighted_edge_list)
             {
-                const auto weight{ weighted_pair.weight };
+                const auto weight{ weighted_edge.weight };
                 if (weight < minimum_weight) continue;
                 retained_edge_count++;
-                component_set.Merge(weighted_pair.pair.first, weighted_pair.pair.second);
+                component_set.Merge(weighted_edge.left_atom_index, weighted_edge.right_atom_index);
             }
 
             std::size_t component_count{ 0 };
@@ -281,7 +266,7 @@ class CouplingGraphBuilder
                 CouplingGraphSummary::ThresholdSensitivity{
                     minimum_weight,
                     retained_edge_count,
-                    weighted_pair_list.size() - retained_edge_count,
+                    weighted_edge_list.size() - retained_edge_count,
                     component_count,
                     maximum_component_size,
                     m_atom_count == 0 ? 0.0 :
@@ -292,33 +277,24 @@ class CouplingGraphBuilder
     }
 
     GraphTopology BuildFromWeights(
-        const std::vector<WeightedPair> & weighted_pair_list,
-        double minimum_weight,
-        bool uses_weighted_graph)
+        const std::vector<GraphWeightedEdge> & weighted_edge_list,
+        double minimum_weight)
     {
         GraphTopology topology;
         topology.adjacency_list.resize(m_atom_count);
         topology.sample_dependency_list = std::move(m_sample_dependency_list);
-        topology.summary.uses_weighted_graph = uses_weighted_graph;
         topology.summary.minimum_weight = minimum_weight;
-        topology.summary.candidate_edge_count = weighted_pair_list.size();
+        topology.summary.candidate_edge_count = weighted_edge_list.size();
 
         std::vector<double> weight_list;
-        weight_list.reserve(weighted_pair_list.size());
-        for (const auto & weighted_pair : weighted_pair_list)
+        weight_list.reserve(weighted_edge_list.size());
+        for (const auto & weighted_edge : weighted_edge_list)
         {
-            const auto weight{ weighted_pair.weight };
+            const auto weight{ weighted_edge.weight };
             weight_list.emplace_back(weight);
             if (weight < minimum_weight) continue;
 
-            topology.adjacency_list.at(weighted_pair.pair.first).emplace_back(weighted_pair.pair.second);
-            topology.adjacency_list.at(weighted_pair.pair.second).emplace_back(weighted_pair.pair.first);
-            topology.retained_edge_list.emplace_back(
-                GraphWeightedEdge{
-                    weighted_pair.pair.first,
-                    weighted_pair.pair.second,
-                    weight
-                });
+            topology.retained_edge_list.emplace_back(weighted_edge);
             topology.summary.retained_edge_count++;
         }
         topology.summary.cut_edge_count = topology.summary.candidate_edge_count - topology.summary.retained_edge_count;
@@ -329,11 +305,17 @@ class CouplingGraphBuilder
         return topology;
     }
 
-    void AddSampleData(
-        SampleRef sample_id,
-        const std::vector<GraphParticipant> & participant_list)
+public:
+    explicit CouplingGraphBuilder(std::size_t atom_count)
+        : m_atom_count{ atom_count },
+          m_self_gram_list(atom_count, Eigen::Matrix3d::Zero())
     {
-        bool sample_has_invalid_jacobian{ false };
+    }
+
+    void AddSample(SampleRef sample_id, std::vector<GraphParticipant> & participant_list)
+    {
+        NormalizeParticipantList(participant_list);
+
         for (std::size_t i = 0; i < participant_list.size(); i++)
         {
             const auto & participant{ participant_list.at(i) };
@@ -349,10 +331,9 @@ class CouplingGraphBuilder
             }
             if (!participant.jacobian.allFinite())
             {
-                sample_has_invalid_jacobian = true;
+                m_has_invalid_jacobian = true;
             }
         }
-        m_has_invalid_jacobian = m_has_invalid_jacobian || sample_has_invalid_jacobian;
 
         GraphSampleDependency dependency;
         dependency.sample_id = sample_id;
@@ -378,9 +359,7 @@ class CouplingGraphBuilder
                 auto pair_iter{ m_pair_accumulator_by_pair.find(pair) };
                 if (pair_iter == m_pair_accumulator_by_pair.end())
                 {
-                    pair_iter = m_pair_accumulator_by_pair.emplace(
-                        pair,
-                        Eigen::Matrix3d::Zero()).first;
+                    pair_iter = m_pair_accumulator_by_pair.emplace(pair, Eigen::Matrix3d::Zero()).first;
                 }
                 if (m_has_invalid_jacobian) continue;
                 pair_iter->second += left.jacobian * right.jacobian.transpose();
@@ -388,31 +367,11 @@ class CouplingGraphBuilder
         }
     }
 
-public:
-    explicit CouplingGraphBuilder(std::size_t atom_count)
-        : m_atom_count{ atom_count },
-          m_self_gram_list(atom_count, Eigen::Matrix3d::Zero())
-    {
-    }
-
-    void AddSample(
-        SampleRef sample_id,
-        std::vector<GraphParticipant> & participant_list)
-    {
-        NormalizeParticipantList(participant_list);
-        AddSampleData(sample_id, participant_list);
-    }
-
 private:
     std::optional<GraphTopology> BuildWeighted(
         double minimum_weight,
         const std::vector<double> & sensitivity_minimum_weight_list)
     {
-        if (!std::isfinite(minimum_weight) || minimum_weight < 0.0 || minimum_weight > 1.0)
-        {
-            throw std::invalid_argument(
-                "Local fitting coupling minimum weight must be in [0, 1].");
-        }
         if (m_has_invalid_jacobian) return std::nullopt;
 
         std::vector<double> self_gram_norm_list(m_atom_count, 0.0);
@@ -434,8 +393,8 @@ private:
             return norm;
         };
 
-        std::vector<WeightedPair> weighted_pair_list;
-        weighted_pair_list.reserve(m_pair_accumulator_by_pair.size());
+        std::vector<GraphWeightedEdge> weighted_edge_list;
+        weighted_edge_list.reserve(m_pair_accumulator_by_pair.size());
         for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
         {
             if (!cross_gram.allFinite())
@@ -451,7 +410,8 @@ private:
             double weight{ 0.0 };
             if (left_norm == 0.0 || right_norm == 0.0)
             {
-                weighted_pair_list.emplace_back(WeightedPair{ pair, weight });
+                weighted_edge_list.emplace_back(
+                    GraphWeightedEdge{ pair.first, pair.second, weight });
                 continue;
             }
             const auto denominator{
@@ -463,24 +423,26 @@ private:
             };
             if (!std::isfinite(raw_weight)) return std::nullopt;
             weight = std::clamp(raw_weight, 0.0, 1.0);
-            weighted_pair_list.emplace_back(WeightedPair{ pair, weight });
+            weighted_edge_list.emplace_back(
+                GraphWeightedEdge{ pair.first, pair.second, weight });
         }
-        auto sensitivity_list{ BuildThresholdSensitivity(weighted_pair_list, sensitivity_minimum_weight_list) };
-        auto topology{ BuildFromWeights(weighted_pair_list, minimum_weight, true) };
-        topology.summary.threshold_sensitivity_list = std::move(sensitivity_list);
+        auto topology{ BuildFromWeights(weighted_edge_list, minimum_weight) };
+        topology.summary.uses_weighted_graph = true;
+        topology.summary.threshold_sensitivity_list =
+            BuildThresholdSensitivity(weighted_edge_list, sensitivity_minimum_weight_list);
         return topology;
     }
 
     GraphTopology BuildBinary()
     {
-        std::vector<WeightedPair> weighted_pair_list;
-        weighted_pair_list.reserve(m_pair_accumulator_by_pair.size());
-        for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
+        std::vector<GraphWeightedEdge> weighted_edge_list;
+        weighted_edge_list.reserve(m_pair_accumulator_by_pair.size());
+        for (const auto & entry : m_pair_accumulator_by_pair)
         {
-            static_cast<void>(cross_gram);
-            weighted_pair_list.emplace_back(WeightedPair{ pair, 1.0 });
+            weighted_edge_list.emplace_back(
+                GraphWeightedEdge{ entry.first.first, entry.first.second, 1.0 });
         }
-        return BuildFromWeights(weighted_pair_list, 0.0, false);
+        return BuildFromWeights(weighted_edge_list, 0.0);
     }
 
 public:
@@ -502,11 +464,10 @@ public:
             weighted_topology.has_value() ? std::move(*weighted_topology) : BuildBinary()
         };
         topology.summary.configured_minimum_weight = options.minimum_weight;
-        topology = ApplyGraphResidueCutoff(
+        return ApplyGraphResidueCutoff(
             std::move(topology),
             std::move(residue_key_by_atom_index),
             options.maximum_residue_count);
-        return topology;
     }
 };
 
@@ -729,10 +690,9 @@ inline GraphTopology ApplyGraphResidueCutoff(
         residue_index_by_key.emplace(residue_key, 0);
     }
     std::size_t next_residue_index{ 0 };
-    for (auto & [residue_key, residue_index] : residue_index_by_key)
+    for (auto & entry : residue_index_by_key)
     {
-        static_cast<void>(residue_key);
-        residue_index = next_residue_index++;
+        entry.second = next_residue_index++;
     }
 
     std::vector<std::size_t> residue_index_by_atom_index;
@@ -978,10 +938,9 @@ inline CouplingGraphPartition BuildGraphPartition(
     {
         key_by_root[component_set.Find(position)].emplace_back(active_index_list.at(position));
     }
-    for (auto & [root, key] : key_by_root)
+    for (auto & entry : key_by_root)
     {
-        static_cast<void>(root);
-        std::sort(key.begin(), key.end());
+        std::sort(entry.second.begin(), entry.second.end());
     }
 
     std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
@@ -1020,10 +979,9 @@ inline std::vector<ClusterKey> BuildGraphClusterKeyList(const CouplingGraphParti
 {
     std::vector<ClusterKey> cluster_key_list;
     cluster_key_list.reserve(partition.sample_id_list_by_key.size());
-    for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
+    for (const auto & entry : partition.sample_id_list_by_key)
     {
-        static_cast<void>(sample_id_list);
-        cluster_key_list.emplace_back(key);
+        cluster_key_list.emplace_back(entry.first);
     }
     return cluster_key_list;
 }
