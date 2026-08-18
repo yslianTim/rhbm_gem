@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -34,15 +33,6 @@ namespace rhbm_gem::core {
 namespace {
 
 using detail::FitState;
-
-struct OffsetStat
-{
-    std::size_t atom_count{ 0 };
-    std::size_t finite_count{ 0 };
-    double median_absolute_offset{ 0.0 };
-    double percentile_absolute_offset{ 0.0 };
-    double maximum_absolute_offset{ 0.0 };
-};
 
 void ApplyFitState(
     ModelObject & model_object,
@@ -63,36 +53,33 @@ void ApplyFitState(
     }
 }
 
-OffsetStat SummarizeOffsets(const FitState & state)
+void AppendOffsetSummary(std::ostringstream & stream, const FitState & state)
 {
-    OffsetStat stats;
-    stats.atom_count = state.size();
+    std::size_t finite_count{ 0 };
     std::vector<double> absolute_offset_list;
     absolute_offset_list.reserve(state.size());
     for (const auto & result : state)
     {
         const auto offset{ result.mdpde.GetModel().GetOffset() };
         if (!std::isfinite(offset)) continue;
-        stats.finite_count++;
+        finite_count++;
         absolute_offset_list.emplace_back(std::abs(offset));
     }
-    if (absolute_offset_list.empty()) return stats;
-
-    stats.median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
-    stats.percentile_absolute_offset = array_helper::ComputePercentile(absolute_offset_list, 0.99);
-    stats.maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
-    return stats;
-}
-
-void AppendOffsetSummary(std::ostringstream & stream, const OffsetStat & stats)
-{
+    double median_absolute_offset{ 0.0 };
+    double percentile_absolute_offset{ 0.0 };
+    double maximum_absolute_offset{ 0.0 };
+    if (!absolute_offset_list.empty())
+    {
+        median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
+        percentile_absolute_offset = array_helper::ComputePercentile(absolute_offset_list, 0.99);
+        maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
+    }
     stream << std::scientific << std::setprecision(2)
-        << "; offsets finite = " << stats.finite_count
-        << " of " << stats.atom_count
+        << "; offsets finite = " << finite_count << " of " << state.size()
         << ", |C| median/p99/max = "
-        << stats.median_absolute_offset << "/"
-        << stats.percentile_absolute_offset << "/"
-        << stats.maximum_absolute_offset;
+        << median_absolute_offset << "/"
+        << percentile_absolute_offset << "/"
+        << maximum_absolute_offset;
 }
 
 void AppendAuditSummary(std::ostringstream & stream, const detail::AuditedState & audited_state)
@@ -123,7 +110,7 @@ void LogTerminalFallback(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     const detail::TerminalSummary & terminal_summary,
-    const OffsetStat & offset_stats)
+    const FitState & state)
 {
     if (quiet_mode) return;
 
@@ -132,7 +119,7 @@ void LogTerminalFallback(
     warning_message << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
     detail::AppendTerminalSummary(warning_message, terminal_summary);
-    AppendOffsetSummary(warning_message, offset_stats);
+    AppendOffsetSummary(warning_message, state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -146,10 +133,9 @@ void FinishWithNoActiveAtoms(
     const detail::TerminalSummary & terminal_summary)
 {
     ApplyFitState(model_object, context, state);
-    const auto offset_stats{ SummarizeOffsets(state) };
     if (terminal_summary.HasFailures())
     {
-        LogTerminalFallback(quiet_mode, accepted_iteration_count, terminal_summary, offset_stats);
+        LogTerminalFallback(quiet_mode, accepted_iteration_count, terminal_summary, state);
         return;
     }
     if (!quiet_mode)
@@ -164,7 +150,7 @@ void LogConverged(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     const algorithm::ParameterChangeStats & transformed_change_stats,
-    const OffsetStat & offset_stats)
+    const FitState & state)
 {
     if (quiet_mode) return;
 
@@ -178,7 +164,7 @@ void LogConverged(
         << transformed_change_stats.percentile_list.at(detail::kLogWidthChangeIndex)
         << ", and percentile offset-to-peak-ratio change = "
         << transformed_change_stats.percentile_list.at(detail::kOffsetToPeakRatioChangeIndex);
-    AppendOffsetSummary(message, offset_stats);
+    AppendOffsetSummary(message, state);
     message << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
@@ -186,8 +172,7 @@ void LogConverged(
 void LogMaximumIterations(
     bool quiet_mode,
     const detail::FinalStateSelection & selection,
-    const detail::TerminalSummary & terminal_summary,
-    const OffsetStat & applied_offset_stats)
+    const detail::TerminalSummary & terminal_summary)
 {
     if (quiet_mode) return;
 
@@ -208,7 +193,7 @@ void LogMaximumIterations(
     {
         warning_message << "; no validated state is available";
     }
-    AppendOffsetSummary(warning_message, applied_offset_stats);
+    AppendOffsetSummary(warning_message, selection.state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -218,7 +203,7 @@ void LogSecondStageSummary(
     std::size_t accepted_iteration_count,
     std::string_view stop_reason,
     const detail::BestAuditState & best_audit_state,
-    std::optional<bool> final_uses_polish,
+    bool final_uses_polish,
     detail::FinalStateSource final_state_source)
 {
     if (quiet_mode) return;
@@ -249,14 +234,7 @@ void LogSecondStageSummary(
         message << "unavailable";
     }
     message << ", final_uses_polish=";
-    if (!final_uses_polish.has_value())
-    {
-        message << "unavailable";
-    }
-    else
-    {
-        message << (*final_uses_polish ? "yes" : "no");
-    }
+    message << (final_uses_polish ? "yes" : "no");
     message << ", final_state_source="
         << detail::GetFinalStateSourceText(final_state_source) << ".";
     Logger::Log(LogLevel::Info, message.str());
@@ -428,9 +406,6 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 
         if (iteration_result.converged)
         {
-            const auto accepted_offset_stats{
-                SummarizeOffsets(iteration_state.previous_state)
-            };
             ApplyFitState(model_object, context, iteration_state.previous_state);
             if (iteration_state.terminal_failure_state.HasFailures())
             {
@@ -438,7 +413,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     options.quiet_mode,
                     iteration_state.accepted_iteration_count,
                     iteration_state.terminal_failure_state.Summary(),
-                    accepted_offset_stats);
+                    iteration_state.previous_state);
             }
             else
             {
@@ -446,7 +421,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     options.quiet_mode,
                     iteration_state.accepted_iteration_count,
                     iteration_result.transformed_change_stats,
-                    accepted_offset_stats);
+                    iteration_state.previous_state);
             }
             LogSecondStageSummary(
                 options.quiet_mode,
@@ -471,8 +446,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             LogMaximumIterations(
                 options.quiet_mode,
                 final_state_selection,
-                iteration_state.terminal_failure_state.Summary(),
-                SummarizeOffsets(final_state_selection.state));
+                iteration_state.terminal_failure_state.Summary());
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,

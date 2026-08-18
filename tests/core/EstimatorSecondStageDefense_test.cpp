@@ -4045,7 +4045,7 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
     testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string out{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
+    const std::string err{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
@@ -4057,6 +4057,9 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
     }
     EXPECT_NE(
         out.find("Reset second-stage objective domain"),
+        std::string::npos);
+    EXPECT_NE(
+        err.find("offsets finite = "),
         std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
