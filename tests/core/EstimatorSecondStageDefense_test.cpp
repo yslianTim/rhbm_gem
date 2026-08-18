@@ -1668,6 +1668,40 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     EXPECT_EQ(*audit_state.best->accepted_iteration, 7U);
 }
 
+TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjective)
+{
+    const audit_detail::FitState state;
+    const auto objective{
+        audit_detail::BuildObjectiveBreakdown(1.0, 0.0, 0.0)
+    };
+    ASSERT_TRUE(objective.has_value());
+
+    const auto available{
+        audit_detail::BuildBestAuditState(
+            state,
+            true,
+            std::optional<std::size_t>{ 4 },
+            objective)
+    };
+    ASSERT_TRUE(available.best.has_value());
+    EXPECT_DOUBLE_EQ(
+        available.best->objective.total_objective,
+        objective->total_objective);
+    EXPECT_TRUE(available.best->uses_polish);
+    ASSERT_TRUE(available.best->accepted_iteration.has_value());
+    EXPECT_EQ(*available.best->accepted_iteration, 4U);
+
+    const std::optional<audit_detail::ObjectiveBreakdown> unavailable;
+    const auto empty{
+        audit_detail::BuildBestAuditState(
+            state,
+            false,
+            std::nullopt,
+            unavailable)
+    };
+    EXPECT_FALSE(empty.best.has_value());
+}
+
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
 {
     const audit_detail::ObjectiveTolerance tolerance{

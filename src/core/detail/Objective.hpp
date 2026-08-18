@@ -365,14 +365,12 @@ inline std::optional<double> BuildFixedObjectiveScale(
 
 inline ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
-    const FitState & initial_state,
+    const SecondStageModelSnapshot & model_snapshot,
     const std::vector<ClusterKey> & cluster_key_list,
-    const FitOptions & options)
+    double distance_min,
+    double distance_max)
 {
     ObjectiveDomain domain;
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, initial_state)
-    };
     domain.owner_key_by_atom_index.resize(context.size());
     domain.fit_sample_mask_by_atom.resize(context.size());
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
@@ -401,14 +399,12 @@ inline ObjectiveDomain BuildObjectiveDomain(
                     sample_index
                 };
                 const auto residual_sample{
-                    EvaluateResidualSample(context, initial_state, sample_ref, model_snapshot)
+                    EvaluateResidualSample(context, model_snapshot.selected, sample_ref, model_snapshot)
                 };
                 const auto distance{
                     static_cast<double>(raw_sampling_entries.at(sample_index).point.distance)
                 };
-                const auto is_fit_range{
-                    distance >= options.distance_min && distance <= options.distance_max
-                };
+                const auto is_fit_range{ distance >= distance_min && distance <= distance_max };
                 domain.fit_sample_mask_by_atom.at(atom_index).at(sample_index) =
                     is_fit_range ? 1 : 0;
                 auto & sample_ref_list{ is_fit_range ?
@@ -724,13 +720,15 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
-    const ClusterKey & changed_key,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
     const std::optional<ObjectiveBreakdown> & baseline,
     PerformanceCounters & performance_counters)
 {
     if (!baseline.has_value()) return std::nullopt;
+    const auto & changed_key{
+        candidate_overlay.GetCandidateState().GetOverrideAtomIndexList()
+    };
     const auto unique_sample_count{
         domain.fit_sample_count + domain.tail_sample_count
     };
@@ -816,7 +814,6 @@ inline ObjectiveByKey BuildObjectiveByKey(
 
 inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const CandidateEvaluationOverlay & candidate_overlay,
-    const ClusterKey & changed_key,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
     std::optional<double> best_objective,
@@ -826,7 +823,6 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const auto candidate_objective{
         EvaluateObjectiveDelta(
             candidate_overlay,
-            changed_key,
             affected_sample_ref_list,
             domain,
             previous_objective,
@@ -889,7 +885,6 @@ inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     const auto combined_check{
         EvaluateCombinedObjective(
             combined_overlay,
-            combined_patch.atom_index_list,
             affected_sample_ref_list,
             objective_domain,
             best_objective,
@@ -925,41 +920,23 @@ inline bool TryUpdateBestAuditState(
     return true;
 }
 
-inline BestAuditState BuildInitialBestAuditState(
-    const SecondStageContext & context,
-    const FitState & initial_state,
-    bool initial_uses_polish,
+inline BestAuditState BuildBestAuditState(
+    const FitState & state,
+    bool uses_polish,
     std::optional<std::size_t> accepted_iteration,
-    const ObjectiveDomain & domain)
+    const std::optional<ObjectiveBreakdown> & objective)
 {
     BestAuditState audit_state;
-    const auto objective{ EvaluateAuditObjective(context, initial_state, domain) };
     if (objective.has_value())
     {
         static_cast<void>(TryUpdateBestAuditState(
-            initial_state,
-            initial_uses_polish,
+            state,
+            uses_polish,
             accepted_iteration,
             *objective,
             audit_state));
     }
     return audit_state;
-}
-
-inline void ResetBestAuditAfterObjectiveDomainChange(
-    const SecondStageContext & context,
-    const FitState & validated_state,
-    bool validated_uses_polish,
-    std::size_t accepted_iteration,
-    const ObjectiveDomain & domain,
-    BestAuditState & audit_state)
-{
-    audit_state = BuildInitialBestAuditState(
-        context,
-        validated_state,
-        validated_uses_polish,
-        accepted_iteration,
-        domain);
 }
 
 inline void ReconcileClusterObjectiveState(

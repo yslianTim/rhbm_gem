@@ -859,17 +859,23 @@ inline IterationState BuildIterationState(
     ResetClusterSolverWorkspace(
         iteration_state.cluster_key_list,
         iteration_state.solver_workspace_by_key);
+    const auto initial_model_snapshot{
+        BuildSecondStageModelSnapshot(context, iteration_state.previous_state)
+    };
     iteration_state.objective_domain = BuildObjectiveDomain(
         context,
-        iteration_state.previous_state,
+        initial_model_snapshot,
         iteration_state.cluster_key_list,
-        options);
-    iteration_state.best_audit_state = BuildInitialBestAuditState(
-        context,
+        options.distance_min,
+        options.distance_max);
+    const auto initial_audit_objective{
+        EvaluateAuditObjective(context, iteration_state.objective_domain, initial_model_snapshot)
+    };
+    iteration_state.best_audit_state = BuildBestAuditState(
         iteration_state.previous_state,
         UsesPolish(iteration_state.previous_polish_provenance),
         std::nullopt,
-        iteration_state.objective_domain);
+        initial_audit_objective);
     return iteration_state;
 }
 
@@ -1049,15 +1055,16 @@ inline IterationResult RunIteration(
             auto remaining_cluster_key_list{
                 BuildGraphClusterKeyList(remaining_graph_partition)
             };
-            iteration_state.objective_domain = BuildObjectiveDomain(
-                context,
-                assembled_state,
-                remaining_cluster_key_list,
-                options);
-            iteration_state.cluster_objective_state.clear();
             const auto assembled_model_snapshot{
                 BuildSecondStageModelSnapshot(context, assembled_state)
             };
+            iteration_state.objective_domain = BuildObjectiveDomain(
+                context,
+                assembled_model_snapshot,
+                remaining_cluster_key_list,
+                options.distance_min,
+                options.distance_max);
+            iteration_state.cluster_objective_state.clear();
             const auto remaining_objective_by_key{
                 BuildObjectiveByKey(
                     context,
@@ -1068,13 +1075,17 @@ inline IterationResult RunIteration(
             ReconcileClusterObjectiveState(
                 remaining_objective_by_key,
                 iteration_state.cluster_objective_state);
-            ResetBestAuditAfterObjectiveDomainChange(
-                context,
+            const auto reset_audit_objective{
+                EvaluateAuditObjective(
+                    context,
+                    iteration_state.objective_domain,
+                    assembled_model_snapshot)
+            };
+            iteration_state.best_audit_state = BuildBestAuditState(
                 assembled_state,
                 assembled_uses_polish,
                 iteration_state.accepted_iteration_count + 1,
-                iteration_state.objective_domain,
-                iteration_state.best_audit_state);
+                reset_audit_objective);
             iteration_state.active_index_list = std::move(remaining_active_index_list);
             iteration_state.cluster_key_list = std::move(remaining_cluster_key_list);
             performance_counters.RecordSolverWorkspaceReset();
@@ -1163,24 +1174,32 @@ inline IterationResult RunIteration(
             iteration_state.active_index_list)
     };
     iteration_state.accepted_iteration_count++;
-    const auto candidate_audit_objective{
-        objective_domain_changed ||
-            !result.diagnostics.combined_backtracking_objective.has_value() ?
-            EvaluateAuditObjective(
-                context,
-                assembled_state,
-                iteration_state.objective_domain) :
+    bool improved_best_audit{ false };
+    if (!objective_domain_changed)
+    {
+        auto candidate_audit_objective{
             result.diagnostics.combined_backtracking_objective
-    };
-    const auto improved_best_audit{
-        candidate_audit_objective.has_value() &&
-        TryUpdateBestAuditState(
-            assembled_state,
-            assembled_uses_polish,
-            iteration_state.accepted_iteration_count,
-            *candidate_audit_objective,
-            iteration_state.best_audit_state)
-    };
+        };
+        if (!candidate_audit_objective.has_value())
+        {
+            const auto candidate_model_snapshot{
+                BuildSecondStageModelSnapshot(context, assembled_state)
+            };
+            candidate_audit_objective = EvaluateAuditObjective(
+                context,
+                iteration_state.objective_domain,
+                candidate_model_snapshot);
+        }
+        if (candidate_audit_objective.has_value())
+        {
+            improved_best_audit = TryUpdateBestAuditState(
+                assembled_state,
+                assembled_uses_polish,
+                iteration_state.accepted_iteration_count,
+                *candidate_audit_objective,
+                iteration_state.best_audit_state);
+        }
+    }
     if (improved_best_audit)
     {
         performance_counters.RecordFullStateMaterialization();

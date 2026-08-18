@@ -857,7 +857,6 @@ inline bool TryBacktrackCombinedCandidate(
                 local_criteria_accepted ?
                     EvaluateCombinedObjective(
                         candidate_overlay,
-                        candidate_patch->atom_index_list,
                         affected_sample_ref_list,
                         objective_domain,
                         best_audit_objective,
