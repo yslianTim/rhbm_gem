@@ -403,19 +403,10 @@ public:
         AddSampleData(sample_id, participant_list);
     }
 
-    void AddSortedSample(
-        SampleRef sample_id,
-        const std::vector<GraphParticipant> & participant_list)
-    {
-        auto normalized_list{ participant_list };
-        NormalizeParticipantList(normalized_list);
-        AddSampleData(sample_id, normalized_list);
-    }
-
 private:
     std::optional<GraphTopology> BuildWeighted(
         double minimum_weight,
-        const std::vector<double> & sensitivity_minimum_weight_list = {})
+        const std::vector<double> & sensitivity_minimum_weight_list)
     {
         if (!std::isfinite(minimum_weight) || minimum_weight < 0.0 || minimum_weight > 1.0)
         {
@@ -1025,9 +1016,7 @@ inline CouplingGraphPartition BuildGraphPartition(
     return partition;
 }
 
-inline std::vector<ClusterKey>
-BuildGraphClusterKeyList(
-    const CouplingGraphPartition & partition)
+inline std::vector<ClusterKey> BuildGraphClusterKeyList(const CouplingGraphPartition & partition)
 {
     std::vector<ClusterKey> cluster_key_list;
     cluster_key_list.reserve(partition.sample_id_list_by_key.size());
@@ -1039,8 +1028,7 @@ BuildGraphClusterKeyList(
     return cluster_key_list;
 }
 
-inline std::vector<SampleRef>
-BuildGraphAffectedSampleUnion(
+inline std::vector<SampleRef> BuildGraphAffectedSampleUnion(
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & key_list)
 {
