@@ -98,9 +98,9 @@ void AppendAuditSummary(std::ostringstream & stream, const detail::AuditedState 
         << std::scientific << std::setprecision(2)
         << ", fixed audit objective fit/tail-weighted/offset/total = "
         << objective.fit_range_residual_objective << "/"
-        << objective.tail_validation_penalty << "/"
+        << objective.GetTailValidationPenalty() << "/"
         << objective.offset_plausibility_penalty << "/"
-        << objective.total_objective
+        << objective.GetTotalObjective()
         << ", tail raw/weight = "
         << objective.tail_validation_loss << "/"
         << detail::kTailValidationWeight;
@@ -180,12 +180,12 @@ void LogMaximumIterations(
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
     detail::AppendTerminalSummary(warning_message, terminal_summary);
-    if (selection.source == detail::FinalStateSource::BestAudit && selection.audit_state != nullptr)
+    if (selection.audit_state != nullptr)
     {
         warning_message << "; applying best validated audit state";
         AppendAuditSummary(warning_message, *selection.audit_state);
     }
-    else if (selection.source == detail::FinalStateSource::LatestValidated)
+    else
     {
         warning_message << "; applying latest validated state";
     }
@@ -200,7 +200,7 @@ void LogSecondStageSummary(
     std::string_view stop_reason,
     const detail::BestAuditState & best_audit_state,
     bool final_uses_polish,
-    detail::FinalStateSource final_state_source)
+    bool final_uses_best_audit)
 {
     if (quiet_mode) return;
 
@@ -223,7 +223,8 @@ void LogSecondStageSummary(
     message << ", stop_reason=" << stop_reason << ", best_audit_objective=";
     if (best_audit_state.has_value())
     {
-        message << std::scientific << std::setprecision(8) << best_audit_state->objective.total_objective;
+        message << std::scientific << std::setprecision(8)
+            << best_audit_state->objective.GetTotalObjective();
     }
     else
     {
@@ -232,7 +233,7 @@ void LogSecondStageSummary(
     message << ", final_uses_polish=";
     message << (final_uses_polish ? "yes" : "no");
     message << ", final_state_source="
-        << detail::GetFinalStateSourceText(final_state_source) << ".";
+        << (final_uses_best_audit ? "best-audit" : "latest-validated") << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
 
@@ -315,7 +316,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "terminal-isolation",
                 iteration_state.best_audit_state,
                 detail::UsesPolish(iteration_state.previous_polish_provenance),
-                detail::FinalStateSource::LatestValidated);
+                false);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -366,7 +367,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 detail::GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
                 iteration_state.best_audit_state,
                 final_state_selection.uses_polish,
-                final_state_selection.source);
+                final_state_selection.audit_state != nullptr);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -394,7 +395,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "audit-patience",
                 iteration_state.best_audit_state,
                 final_state_selection.uses_polish,
-                final_state_selection.source);
+                final_state_selection.audit_state != nullptr);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -424,7 +425,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "converged",
                 iteration_state.best_audit_state,
                 detail::UsesPolish(iteration_state.previous_polish_provenance),
-                detail::FinalStateSource::LatestValidated);
+                false);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -448,7 +449,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "maximum-iterations",
                 iteration_state.best_audit_state,
                 final_state_selection.uses_polish,
-                final_state_selection.source);
+                final_state_selection.audit_state != nullptr);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }

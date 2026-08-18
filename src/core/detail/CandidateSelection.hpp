@@ -322,8 +322,8 @@ inline bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
             diagnostic.trust_region_step_norm,
             diagnostic.trust_region_radius,
             IsBetterAuditObjective(
-                diagnostic.candidate_objective->total_objective,
-                diagnostic.previous_objective->total_objective,
+                diagnostic.candidate_objective->GetTotalObjective(),
+                diagnostic.previous_objective->GetTotalObjective(),
                 kObjectiveStrictTolerance));
 }
 

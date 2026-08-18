@@ -1632,8 +1632,8 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         audit_state));
     ASSERT_TRUE(audit_state.has_value());
     EXPECT_DOUBLE_EQ(
-        audit_state->objective.total_objective,
-        initial_objective->total_objective);
+        audit_state->objective.GetTotalObjective(),
+        initial_objective->GetTotalObjective());
     EXPECT_FALSE(audit_state->uses_polish);
     EXPECT_FALSE(audit_state->accepted_iteration.has_value());
 
@@ -1658,8 +1658,8 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         audit_state));
     ASSERT_TRUE(audit_state.has_value());
     EXPECT_DOUBLE_EQ(
-        audit_state->objective.total_objective,
-        improved_objective->total_objective);
+        audit_state->objective.GetTotalObjective(),
+        improved_objective->GetTotalObjective());
     EXPECT_TRUE(audit_state->uses_polish);
     ASSERT_TRUE(audit_state->accepted_iteration.has_value());
     EXPECT_EQ(*audit_state->accepted_iteration, 7U);
@@ -1682,8 +1682,8 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjec
     };
     ASSERT_TRUE(available.has_value());
     EXPECT_DOUBLE_EQ(
-        available->objective.total_objective,
-        objective->total_objective);
+        available->objective.GetTotalObjective(),
+        objective->GetTotalObjective());
     EXPECT_TRUE(available->uses_polish);
     ASSERT_TRUE(available->accepted_iteration.has_value());
     EXPECT_EQ(*available->accepted_iteration, 4U);
@@ -1780,25 +1780,30 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
     };
     ASSERT_TRUE(empty_tail.has_value());
     EXPECT_DOUBLE_EQ(empty_tail->tail_validation_loss, 0.0);
-    EXPECT_DOUBLE_EQ(empty_tail->tail_validation_penalty, 0.0);
+    EXPECT_DOUBLE_EQ(empty_tail->GetTailValidationPenalty(), 0.0);
     EXPECT_DOUBLE_EQ(objective->tail_validation_loss, 2.0);
-    EXPECT_DOUBLE_EQ(objective->tail_validation_penalty, 0.5);
+    EXPECT_DOUBLE_EQ(objective->GetTailValidationPenalty(), 0.5);
     EXPECT_DOUBLE_EQ(objective->offset_plausibility_penalty, 0.18);
-    EXPECT_DOUBLE_EQ(objective->total_objective, 1.08);
+    EXPECT_DOUBLE_EQ(objective->GetTotalObjective(), 1.08);
     EXPECT_DOUBLE_EQ(
-        objective->total_objective,
+        objective->GetTotalObjective(),
         objective->fit_range_residual_objective +
-            objective->tail_validation_penalty +
+            objective->GetTailValidationPenalty() +
             objective->offset_plausibility_penalty);
     EXPECT_TRUE(audit_detail::IsBetterAuditObjective(
-        objective->total_objective,
-        previous->total_objective,
+        objective->GetTotalObjective(),
+        previous->GetTotalObjective(),
         audit_detail::ObjectiveTolerance{ 1.0e-10, 1.0e-8 }));
     EXPECT_FALSE(
         audit_detail::BuildObjectiveBreakdown(
             std::numeric_limits<double>::infinity(),
             2.0,
             0.18).has_value());
+    EXPECT_FALSE(
+        audit_detail::BuildObjectiveBreakdown(
+            std::numeric_limits<double>::max(),
+            0.0,
+            std::numeric_limits<double>::max()).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
@@ -1830,10 +1835,10 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         std::vector<coupling_detail::SampleRef>{ { 1, 0 } });
 
     const audit_detail::ObjectiveBreakdown previous_breakdown{
-        1.0, 2.0, 0.0, 0.0, 3.0
+        1.0, 2.0, 0.0
     };
     const audit_detail::ObjectiveBreakdown existing_best{
-        0.5, 0.5, 0.0, 0.0, 1.0
+        0.5, 0.5, 0.0
     };
     audit_detail::ObjectiveByKey previous_objective_by_key;
     previous_objective_by_key.emplace(existing_key, previous_breakdown);
@@ -1854,12 +1859,12 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
     ASSERT_EQ(state_by_key.size(), 2U);
     ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
     EXPECT_DOUBLE_EQ(
-        state_by_key.at(existing_key).best_objective->total_objective,
-        existing_best.total_objective);
+        state_by_key.at(existing_key).best_objective->GetTotalObjective(),
+        existing_best.GetTotalObjective());
     ASSERT_TRUE(state_by_key.at(new_key).best_objective.has_value());
     EXPECT_DOUBLE_EQ(
-        state_by_key.at(new_key).best_objective->total_objective,
-        previous_breakdown.total_objective);
+        state_by_key.at(new_key).best_objective->GetTotalObjective(),
+        previous_breakdown.GetTotalObjective());
     EXPECT_DOUBLE_EQ(
         state_by_key.at(new_key).best_maximum_transformed_change,
         0.0);

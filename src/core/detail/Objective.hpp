@@ -7,7 +7,6 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,13 +26,29 @@
 
 namespace rhbm_gem::core::detail {
 
+constexpr double kTailValidationWeight{ 0.25 };
+constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
+constexpr double kFitRangeWeight{ 1.0 };
+constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
+constexpr double kOffsetPeakRatioMax{ 1.0 };
+constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
+
 struct ObjectiveBreakdown
 {
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
-    double tail_validation_penalty{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
-    double total_objective{ 0.0 };
+
+    constexpr double GetTailValidationPenalty() const noexcept
+    {
+        return kTailValidationWeight * tail_validation_loss;
+    }
+
+    constexpr double GetTotalObjective() const noexcept
+    {
+        return fit_range_residual_objective + GetTailValidationPenalty() + offset_plausibility_penalty;
+    }
 };
 
 struct ObjectiveTolerance
@@ -42,17 +57,8 @@ struct ObjectiveTolerance
     double relative_tolerance{ 0.0 };
 };
 
-constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
-constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
-constexpr double kFitRangeWeight{ 1.0 };
-constexpr double kTailValidationWeight{ 0.25 };
-constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
-constexpr double kOffsetPeakRatioMax{ 1.0 };
-constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
-constexpr ObjectiveTolerance
-kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
-constexpr ObjectiveTolerance
-kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
+constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 
 struct AuditedState
 {
@@ -64,52 +70,31 @@ struct AuditedState
 
 using BestAuditState = std::optional<AuditedState>;
 
-enum class FinalStateSource
-{
-    BestAudit,
-    LatestValidated
-};
-
 struct FinalStateSelection
 {
     const FitState & state;
     bool uses_polish{ false };
     const AuditedState * audit_state{ nullptr };
-    FinalStateSource source;
 };
 
 inline FinalStateSelection SelectFinalState(
     const FitState & latest_validated_state,
     bool latest_validated_uses_polish,
-    const std::optional<AuditedState> & audited_state)
+    const BestAuditState & audited_state)
 {
     if (audited_state.has_value())
     {
         return FinalStateSelection{
             audited_state->state,
             audited_state->uses_polish,
-            &*audited_state,
-            FinalStateSource::BestAudit
+            &*audited_state
         };
     }
     return FinalStateSelection{
         latest_validated_state,
         latest_validated_uses_polish,
-        nullptr,
-        FinalStateSource::LatestValidated
+        nullptr
     };
-}
-
-inline std::string_view GetFinalStateSourceText(FinalStateSource source)
-{
-    switch (source)
-    {
-    case FinalStateSource::BestAudit:
-        return "best-audit";
-    case FinalStateSource::LatestValidated:
-        return "latest-validated";
-    }
-    return "unavailable";
 }
 
 enum class PreObjectiveFailureReason
@@ -188,23 +173,16 @@ inline std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
         return std::nullopt;
     }
 
-    ObjectiveBreakdown breakdown;
-    breakdown.fit_range_residual_objective = fit_range_residual_objective;
-    breakdown.tail_validation_loss = tail_validation_loss;
-    breakdown.tail_validation_penalty = kTailValidationWeight * tail_validation_loss;
-    breakdown.offset_plausibility_penalty = offset_plausibility_penalty;
-    breakdown.total_objective =
-        breakdown.fit_range_residual_objective +
-        breakdown.tail_validation_penalty +
-        breakdown.offset_plausibility_penalty;
-    if (!std::isfinite(breakdown.total_objective)) return std::nullopt;
+    const ObjectiveBreakdown breakdown{
+        fit_range_residual_objective,
+        tail_validation_loss,
+        offset_plausibility_penalty
+    };
+    if (!std::isfinite(breakdown.GetTotalObjective())) return std::nullopt;
     return breakdown;
 }
 
-inline bool IsBetterAuditObjective(
-    double candidate,
-    double best,
-    ObjectiveTolerance tolerance)
+inline bool IsBetterAuditObjective(double candidate, double best, ObjectiveTolerance tolerance)
 {
     ValidateObjectiveTolerance(tolerance);
     if (!std::isfinite(candidate)) return false;
@@ -268,9 +246,9 @@ inline void LogObjectiveDomain(
     if (quiet_mode) return;
     std::vector<double> fit_scale_list;
     std::vector<double> tail_scale_list;
-    for (const auto & [key, cluster_domain] : domain.cluster_by_key)
+    for (const auto & entry : domain.cluster_by_key)
     {
-        static_cast<void>(key);
+        const auto & cluster_domain{ entry.second };
         if (!cluster_domain.scale.has_value()) continue;
         fit_scale_list.emplace_back(cluster_domain.scale->fit);
         if (cluster_domain.scale->tail.has_value())
@@ -328,7 +306,6 @@ struct CombinedObjectiveCheck
 
 struct CombinedCandidateObjectiveCheck
 {
-    bool guard_required{ false };
     bool accepted{ true };
     std::optional<ObjectiveBreakdown> previous_objective{};
     std::optional<ObjectiveBreakdown> candidate_objective{};
@@ -469,13 +446,19 @@ inline std::optional<ResidualObjectiveContribution> EvaluateResidualObjectiveCon
             owner_iter->second.fit_sample_ref_list.size() : owner_iter->second.tail_sample_ref_list.size()
         };
         if (sample_count == 0) return std::nullopt;
-        const auto scale{ is_fit_range ?
-            std::optional<double>{ owner_iter->second.scale->fit } : owner_iter->second.scale->tail
-        };
-        if (!scale.has_value()) return std::nullopt;
+        double scale;
+        if (is_fit_range)
+        {
+            scale = owner_iter->second.scale->fit;
+        }
+        else
+        {
+            if (!owner_iter->second.scale->tail.has_value()) return std::nullopt;
+            scale = *owner_iter->second.scale->tail;
+        }
         const auto loss{
             algorithm::CalculateCauchyLoss(
-                residual_sample->residual / *scale,
+                residual_sample->residual / scale,
                 kObjectiveRobustLossCutoffMultiplier)
         };
         const auto coefficient{
@@ -822,8 +805,8 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const auto accepted{
         candidate_objective.has_value() &&
         IsAuditObjectiveAcceptableForProgress(
-            candidate_objective->total_objective,
-            previous_objective->total_objective,
+            candidate_objective->GetTotalObjective(),
+            previous_objective->GetTotalObjective(),
             best_objective,
             kObjectiveProgressTolerance)
     };
@@ -845,8 +828,7 @@ inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     PerformanceCounters & performance_counters)
 {
     CombinedCandidateObjectiveCheck result;
-    result.guard_required = partition.boundary_sample_count > 0 && !accepted_key_list.empty();
-    if (!result.guard_required) return result;
+    if (partition.boundary_sample_count == 0 || accepted_key_list.empty()) return result;
 
     result.previous_objective = EvaluateAuditObjective(objective_domain, baseline);
 
@@ -896,8 +878,8 @@ inline bool TryUpdateBestAuditState(
 {
     if (audit_state.has_value() &&
         !IsBetterAuditObjective(
-            candidate_objective.total_objective,
-            audit_state->objective.total_objective,
+            candidate_objective.GetTotalObjective(),
+            audit_state->objective.GetTotalObjective(),
             kObjectiveStrictTolerance))
     {
         return false;
@@ -1005,10 +987,10 @@ inline bool TryCommitClusterCandidate(
         return false;
     }
     const auto candidate_objective_value{
-        diagnostic.candidate_objective->total_objective
+        diagnostic.candidate_objective->GetTotalObjective()
     };
     const auto previous_objective_value{
-        diagnostic.previous_objective->total_objective
+        diagnostic.previous_objective->GetTotalObjective()
     };
     diagnostic.rejected_by_previous = is_objective_deteriorated(
         candidate_objective_value,
@@ -1016,7 +998,7 @@ inline bool TryCommitClusterCandidate(
     diagnostic.rejected_by_best = objective_state.best_objective.has_value() &&
         is_objective_deteriorated(
             candidate_objective_value,
-            objective_state.best_objective->total_objective);
+            objective_state.best_objective->GetTotalObjective());
     if (diagnostic.rejected_by_previous || diagnostic.rejected_by_best)
     {
         return false;
@@ -1034,7 +1016,7 @@ inline bool TryCommitClusterCandidate(
     if (objective_state.best_objective.has_value())
     {
         const auto best_objective_value{
-            objective_state.best_objective->total_objective
+            objective_state.best_objective->GetTotalObjective()
         };
         if (IsBetterAuditObjective(
                 candidate_objective_value,

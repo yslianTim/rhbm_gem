@@ -124,9 +124,9 @@ inline void AppendObjectiveBreakdown(
     }
     stream
         << breakdown->fit_range_residual_objective << "/"
-        << breakdown->tail_validation_penalty << "/"
+        << breakdown->GetTailValidationPenalty() << "/"
         << breakdown->offset_plausibility_penalty << "/"
-        << breakdown->total_objective;
+        << breakdown->GetTotalObjective();
 }
 
 inline std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReason reason)
@@ -961,7 +961,7 @@ inline IterationResult RunIteration(
 
     const auto best_audit_objective{
         iteration_state.best_audit_state.has_value() ?
-            std::optional<double>{iteration_state.best_audit_state->objective.total_objective } :
+            std::optional<double>{iteration_state.best_audit_state->objective.GetTotalObjective() } :
             std::nullopt
     };
     const auto combined_changed_key_list{ selection.accepted_key_list };
@@ -978,9 +978,7 @@ inline IterationResult RunIteration(
             performance_counters)
     };
     selection.combined_backtracking_objective = combined_check.candidate_objective;
-    auto combined_objective_accepted{
-        !combined_check.guard_required || combined_check.accepted
-    };
+    auto combined_objective_accepted{ combined_check.accepted };
     if (!combined_objective_accepted)
     {
         combined_objective_accepted =
