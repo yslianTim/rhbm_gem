@@ -893,20 +893,13 @@ inline IterationResult RunIteration(
     performance_counters.RecordGaussianCacheMisses();
 
     const auto previous_objective_by_key{
-        BuildObjectiveByKey(
-            graph_partition,
-            objective_domain,
-            residual_baseline)
+        BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
-    ReconcileClusterObjectiveState(
-        cluster_key_list,
-        previous_objective_by_key,
-        iteration_state.cluster_objective_state);
+    ReconcileClusterObjectiveState(previous_objective_by_key, iteration_state.cluster_objective_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
     const auto joint_offset_ridge_multiplier_list{
-        BuildSuspiciousJointOffsetRidgeMultiplierList(
-            iteration_state.rollback_atom_mask)
+        BuildSuspiciousJointOffsetRidgeMultiplierList(iteration_state.rollback_atom_mask)
     };
 
     const auto iteration_phase_start{
@@ -927,9 +920,7 @@ inline IterationResult RunIteration(
     const auto iteration_suspicious_atom_count{
         CountSuspiciousAtoms(raw_iteration_result.rollback_atom_mask)
     };
-    const auto has_suspicious_offset_fallback{
-        iteration_suspicious_atom_count > 0
-    };
+    const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
     const auto is_stationarity_eligible{
         AreClustersStationarityEligible(raw_iteration_result.health_by_key)
     };
@@ -940,9 +931,7 @@ inline IterationResult RunIteration(
     auto working_cluster_objective_state{
         iteration_state.cluster_objective_state
     };
-    const auto candidate_phase_start{
-        performance_counters.StartCandidatePhase()
-    };
+    const auto candidate_phase_start{ performance_counters.StartCandidatePhase() };
     auto selection{
         SelectClusterCandidates(
             context,
@@ -966,6 +955,11 @@ inline IterationResult RunIteration(
     performance_counters.FinishCandidatePhase(candidate_phase_start);
     performance_counters.RecordFullStateMaterialization();
 
+    const auto best_audit_objective{
+        iteration_state.best_audit_state.best.has_value() ?
+            std::optional<double>{iteration_state.best_audit_state.best->objective.total_objective } :
+            std::nullopt
+    };
     const auto combined_changed_key_list{ selection.accepted_key_list };
     const auto combined_check{
         EvaluateCombinedCandidateObjective(
@@ -976,7 +970,7 @@ inline IterationResult RunIteration(
             selection.assembled_state,
             selection.accepted_key_list,
             objective_domain,
-            iteration_state.best_audit_state,
+            best_audit_objective,
             performance_counters)
     };
     selection.combined_backtracking_objective = combined_check.candidate_objective;
@@ -995,7 +989,7 @@ inline IterationResult RunIteration(
                 objective_domain,
                 previous_objective_by_key,
                 combined_check.previous_objective,
-                iteration_state.best_audit_state,
+                best_audit_objective,
                 iteration_state.cluster_objective_state,
                 working_cluster_objective_state,
                 selection,
@@ -1072,7 +1066,6 @@ inline IterationResult RunIteration(
                     assembled_model_snapshot)
             };
             ReconcileClusterObjectiveState(
-                remaining_cluster_key_list,
                 remaining_objective_by_key,
                 iteration_state.cluster_objective_state);
             ResetBestAuditAfterObjectiveDomainChange(
@@ -1170,16 +1163,23 @@ inline IterationResult RunIteration(
             iteration_state.active_index_list)
     };
     iteration_state.accepted_iteration_count++;
+    const auto candidate_audit_objective{
+        objective_domain_changed ||
+            !result.diagnostics.combined_backtracking_objective.has_value() ?
+            EvaluateAuditObjective(
+                context,
+                assembled_state,
+                iteration_state.objective_domain) :
+            result.diagnostics.combined_backtracking_objective
+    };
     const auto improved_best_audit{
+        candidate_audit_objective.has_value() &&
         TryUpdateBestAuditState(
-            context,
             assembled_state,
             assembled_uses_polish,
             iteration_state.accepted_iteration_count,
-            iteration_state.objective_domain,
-            iteration_state.best_audit_state,
-            objective_domain_changed ?
-                std::nullopt : result.diagnostics.combined_backtracking_objective)
+            *candidate_audit_objective,
+            iteration_state.best_audit_state)
     };
     if (improved_best_audit)
     {

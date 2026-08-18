@@ -367,8 +367,6 @@ inline ClusterCandidateResult SelectClusterCandidate(
         return result;
     }
 
-    ClusterObjectiveStateMap objective_state;
-    objective_state.emplace(key, result.objective_state);
     std::optional<BaseProposal> base_proposal;
     if (!contains_suspicious_atom)
     {
@@ -479,7 +477,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
             previous_objective,
             false,
             objective_domain,
-            objective_state,
+            result.objective_state,
             result.diagnostic,
             performance_counters)
     };
@@ -514,7 +512,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
                         previous_objective,
                         false,
                         objective_domain,
-                        objective_state,
+                        result.objective_state,
                         trial_diagnostic,
                         performance_counters))
                 {
@@ -554,7 +552,6 @@ inline ClusterCandidateResult SelectClusterCandidate(
     if (!accepted_base_candidate)
     {
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
-        result.objective_state = objective_state.at(key);
         return result;
     }
 
@@ -600,7 +597,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
                     result.diagnostic.candidate_objective,
                     true,
                     objective_domain,
-                    objective_state,
+                    result.objective_state,
                     polish_diagnostic,
                     performance_counters))
             {
@@ -626,7 +623,6 @@ inline ClusterCandidateResult SelectClusterCandidate(
             }
         }
     }
-    result.objective_state = objective_state.at(key);
     return result;
 }
 
@@ -783,7 +779,7 @@ inline bool TryBacktrackCombinedCandidate(
     const ObjectiveDomain & objective_domain,
     const ObjectiveByKey & previous_objective_by_key,
     const std::optional<ObjectiveBreakdown> & previous_audit_objective,
-    const BestAuditState & best_audit_state,
+    std::optional<double> best_audit_objective,
     const ClusterObjectiveStateMap & committed_objective_state,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection,
@@ -849,7 +845,7 @@ inline bool TryBacktrackCombinedCandidate(
                         previous_objective_by_key.at(key),
                         false,
                         objective_domain,
-                        trial_objective_state,
+                        trial_objective_state.at(key),
                         diagnostic,
                         performance_counters))
                 {
@@ -864,7 +860,7 @@ inline bool TryBacktrackCombinedCandidate(
                         candidate_patch->atom_index_list,
                         affected_sample_ref_list,
                         objective_domain,
-                        best_audit_state,
+                        best_audit_objective,
                         previous_audit_objective,
                         performance_counters) :
                     CombinedObjectiveCheck{}

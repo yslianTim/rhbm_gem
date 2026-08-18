@@ -1606,6 +1606,68 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
         std::invalid_argument);
 }
 
+TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjective)
+{
+    audit_detail::BestAuditState audit_state;
+    const audit_detail::FitState initial_state;
+    const auto initial_objective{
+        audit_detail::BuildObjectiveBreakdown(2.0, 0.0, 1.0)
+    };
+    const auto tied_objective{
+        audit_detail::BuildObjectiveBreakdown(3.0, 0.0, 0.0)
+    };
+    const auto worse_objective{
+        audit_detail::BuildObjectiveBreakdown(3.5, 0.0, 0.0)
+    };
+    const auto improved_objective{
+        audit_detail::BuildObjectiveBreakdown(1.0, 0.0, 0.0)
+    };
+    ASSERT_TRUE(initial_objective.has_value());
+    ASSERT_TRUE(tied_objective.has_value());
+    ASSERT_TRUE(worse_objective.has_value());
+    ASSERT_TRUE(improved_objective.has_value());
+
+    EXPECT_TRUE(audit_detail::TryUpdateBestAuditState(
+        initial_state,
+        false,
+        std::nullopt,
+        *initial_objective,
+        audit_state));
+    ASSERT_TRUE(audit_state.best.has_value());
+    EXPECT_DOUBLE_EQ(
+        audit_state.best->objective.total_objective,
+        initial_objective->total_objective);
+    EXPECT_FALSE(audit_state.best->uses_polish);
+    EXPECT_FALSE(audit_state.best->accepted_iteration.has_value());
+
+    EXPECT_FALSE(audit_detail::TryUpdateBestAuditState(
+        initial_state,
+        false,
+        std::nullopt,
+        *tied_objective,
+        audit_state));
+    EXPECT_FALSE(audit_detail::TryUpdateBestAuditState(
+        initial_state,
+        false,
+        std::nullopt,
+        *worse_objective,
+        audit_state));
+
+    EXPECT_TRUE(audit_detail::TryUpdateBestAuditState(
+        initial_state,
+        true,
+        std::optional<std::size_t>{ 7 },
+        *improved_objective,
+        audit_state));
+    ASSERT_TRUE(audit_state.best.has_value());
+    EXPECT_DOUBLE_EQ(
+        audit_state.best->objective.total_objective,
+        improved_objective->total_objective);
+    EXPECT_TRUE(audit_state.best->uses_polish);
+    ASSERT_TRUE(audit_state.best->accepted_iteration.has_value());
+    EXPECT_EQ(*audit_state.best->accepted_iteration, 7U);
+}
+
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
 {
     const audit_detail::ObjectiveTolerance tolerance{
@@ -1759,7 +1821,6 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         });
 
     audit_detail::ReconcileClusterObjectiveState(
-        coupling_detail::BuildGraphClusterKeyList(partition),
         previous_objective_by_key,
         state_by_key);
 
