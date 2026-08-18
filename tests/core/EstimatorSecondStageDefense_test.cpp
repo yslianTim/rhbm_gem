@@ -410,18 +410,15 @@ audit_detail::SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdateForTest(
     const rt::FitOptions & options)
 {
     const auto previous_baseline{
-        audit_detail::local_fitting_suspicious_internal::
-            BuildPreviousSuspiciousProfileBaseline(
-                sample_entries, previous_model, options)
+        audit_detail::BuildPreviousSuspiciousProfileBaseline(
+            sample_entries, previous_model, options)
     };
-    return audit_detail::local_fitting_suspicious_internal::
-        EvaluateSuspiciousGaussianUpdate(
-            sample_entries,
-            previous_model,
-            candidate_model,
-            options,
-            previous_baseline,
-            true);
+    return audit_detail::EvaluateSuspiciousGaussianUpdate(
+        sample_entries,
+        candidate_model,
+        options,
+        previous_baseline,
+        audit_detail::SuspiciousUpdateMode::PostRefit);
 }
 
 TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)

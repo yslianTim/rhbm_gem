@@ -100,8 +100,6 @@ inline void ClearSuspiciousUpdateMaskForClusters(
     }
 }
 
-namespace local_fitting_suspicious_internal {
-
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
 constexpr double kSuspiciousProfileScaleMin{ 1.0e-12 };
@@ -129,6 +127,24 @@ struct SuspiciousProfileAnalysis
 {
     bool all_responses_finite{ true };
     std::optional<ZeroOffsetProfileDiagnostics> profile{};
+};
+
+enum class SuspiciousProfileAnalysisMode
+{
+    Candidate,
+    PreviousBaseline
+};
+
+struct SuspiciousUpdateBaseline
+{
+    GaussianModel3D previous_model{};
+    SuspiciousProfileAnalysis previous_analysis{};
+};
+
+enum class SuspiciousUpdateMode
+{
+    OffsetOnly,
+    PostRefit
 };
 
 inline bool HasSuspiciousCenterSignFlip(
@@ -176,11 +192,14 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model,
     const FitOptions & options,
-    bool calculate_residual_scale)
+    SuspiciousProfileAnalysisMode mode)
 {
     SuspiciousProfileAnalysis analysis;
     std::vector<std::pair<double, double>> profile_samples;
     std::vector<double> residual_list;
+    const auto calculate_residual_scale{
+        mode == SuspiciousProfileAnalysisMode::PreviousBaseline
+    };
     profile_samples.reserve(sample_entries.size());
     if (calculate_residual_scale) residual_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
@@ -388,13 +407,15 @@ inline bool HasSuspiciousAmplitudeOffsetCompensation(
 
 inline SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
     const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
     const GaussianModel3D & candidate_model,
     const FitOptions & options,
-    const SuspiciousProfileAnalysis & previous_analysis,
-    bool is_post_refit)
+    const SuspiciousUpdateBaseline & previous_baseline,
+    SuspiciousUpdateMode mode)
 {
-    if (is_post_refit && !IsValidSecondStageGaussianModel(candidate_model))
+    const auto & previous_model{ previous_baseline.previous_model };
+    const auto & previous_analysis{ previous_baseline.previous_analysis };
+    if (mode == SuspiciousUpdateMode::PostRefit &&
+        !IsValidSecondStageGaussianModel(candidate_model))
     {
         return SuspiciousGaussianReason::InvalidModel;
     }
@@ -403,7 +424,7 @@ inline SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
             sample_entries,
             candidate_model,
             options,
-            false)
+            SuspiciousProfileAnalysisMode::Candidate)
     };
     if (!candidate_analysis.all_responses_finite)
     {
@@ -442,7 +463,10 @@ inline SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
             return SuspiciousGaussianReason::RadialRebound;
         }
     }
-    if (!is_post_refit) return SuspiciousGaussianReason::None;
+    if (mode == SuspiciousUpdateMode::OffsetOnly)
+    {
+        return SuspiciousGaussianReason::None;
+    }
     if (HasSuspiciousWidthGrowth(previous_model, candidate_model, previous_analysis.profile))
     {
         return SuspiciousGaussianReason::WidthGrowth;
@@ -454,20 +478,20 @@ inline SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
     return SuspiciousGaussianReason::None;
 }
 
-inline SuspiciousProfileAnalysis BuildPreviousSuspiciousProfileBaseline(
+inline SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & previous_model,
     const FitOptions & options)
 {
-    return BuildSuspiciousProfileAnalysis(
-        sample_entries,
+    return SuspiciousUpdateBaseline{
         previous_model,
-        options,
-        true);
+        BuildSuspiciousProfileAnalysis(
+            sample_entries,
+            previous_model,
+            options,
+            SuspiciousProfileAnalysisMode::PreviousBaseline)
+    };
 }
-
-
-} // namespace local_fitting_suspicious_internal
 
 inline SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
     const LocalPotentialSampleList & sample_entries,
@@ -476,16 +500,15 @@ inline SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
     const FitOptions & options)
 {
     const auto previous_baseline{
-        local_fitting_suspicious_internal::BuildPreviousSuspiciousProfileBaseline(
+        BuildPreviousSuspiciousProfileBaseline(
             sample_entries, previous_model, options)
     };
-    return local_fitting_suspicious_internal::EvaluateSuspiciousGaussianUpdate(
+    return EvaluateSuspiciousGaussianUpdate(
         sample_entries,
-        previous_model,
         candidate_model,
         options,
         previous_baseline,
-        false);
+        SuspiciousUpdateMode::OffsetOnly);
 }
 
 inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(

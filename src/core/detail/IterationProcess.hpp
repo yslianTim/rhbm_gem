@@ -528,32 +528,30 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
-        local_fitting_suspicious_internal::BuildPreviousSuspiciousProfileBaseline(
+        BuildPreviousSuspiciousProfileBaseline(
             adjusted_sampling_entries,
             previous_model,
             options)
     };
     const auto is_post_refit_candidate_acceptable = [&](const GaussianModel3D & model)
     {
-        const auto reason{ local_fitting_suspicious_internal::EvaluateSuspiciousGaussianUpdate(
+        const auto reason{ EvaluateSuspiciousGaussianUpdate(
                 adjusted_sampling_entries,
-                previous_model,
                 model,
                 options,
                 previous_baseline,
-                true) };
+                SuspiciousUpdateMode::PostRefit) };
         return reason == SuspiciousGaussianReason::None;
     };
     const auto is_offset_only_fallback_acceptable =
         [&](const GaussianModel3D & model)
     {
-        const auto reason{ local_fitting_suspicious_internal::EvaluateSuspiciousGaussianUpdate(
+        const auto reason{ EvaluateSuspiciousGaussianUpdate(
                 adjusted_sampling_entries,
-                previous_model,
                 model,
                 options,
                 previous_baseline,
-                false) };
+                SuspiciousUpdateMode::OffsetOnly) };
         return reason == SuspiciousGaussianReason::None;
     };
     try
