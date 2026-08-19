@@ -184,18 +184,18 @@ inline void LogRejectedClusterDiagnostics(
         }
 
         message << ", fit/tail scales = ";
-        if (diagnostic.fit_scale.has_value())
+        if (diagnostic.scale.has_value())
         {
-            message << *diagnostic.fit_scale;
+            message << diagnostic.scale->fit;
         }
         else
         {
             message << "unavailable";
         }
         message << "/";
-        if (diagnostic.tail_scale.has_value())
+        if (diagnostic.scale.has_value() && diagnostic.tail_sample_count > 0)
         {
-            message << *diagnostic.tail_scale;
+            message << diagnostic.scale->tail;
         }
         else
         {
@@ -339,18 +339,18 @@ inline void LogAcceptedBacktrackingDiagnostics(
             message << "-";
         }
         message << ", fixed fit/tail scales = ";
-        if (diagnostic.fit_scale.has_value())
+        if (diagnostic.scale.has_value())
         {
-            message << *diagnostic.fit_scale;
+            message << diagnostic.scale->fit;
         }
         else
         {
             message << "unavailable";
         }
         message << "/";
-        if (diagnostic.tail_scale.has_value())
+        if (diagnostic.scale.has_value() && diagnostic.tail_sample_count > 0)
         {
-            message << *diagnostic.tail_scale;
+            message << diagnostic.scale->tail;
         }
         else
         {
@@ -943,7 +943,8 @@ inline IterationResult RunIteration(
                 iteration_state.previous_polish_provenance,
                 objective_domain,
                 previous_objective_by_key,
-                combined_check.previous_objective,
+                combined_check.previous_objective.has_value() ?
+                    &*combined_check.previous_objective : nullptr,
                 best_audit_objective,
                 iteration_state.cluster_objective_state,
                 working_cluster_objective_state,

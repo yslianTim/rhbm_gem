@@ -322,7 +322,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
     bool contains_suspicious_atom,
     const std::vector<double> & ridge_multiplier_list,
     const ObjectiveDomain & objective_domain,
-    const std::optional<ObjectiveBreakdown> & previous_objective,
+    const ObjectiveBreakdown * previous_objective,
     const ClusterObjectiveState & previous_objective_state,
     double trust_region_radius,
     ClusterSolverWorkspace & solver_workspace,
@@ -563,7 +563,8 @@ inline ClusterCandidateResult SelectClusterCandidate(
                     polished_overlay,
                     key,
                     objective_sample_ref_list,
-                    result.diagnostic.candidate_objective,
+                    result.diagnostic.candidate_objective.has_value() ?
+                        &*result.diagnostic.candidate_objective : nullptr,
                     true,
                     objective_domain,
                     result.objective_state,
@@ -653,6 +654,7 @@ inline CandidateSelection SelectClusterCandidates(
                     unchanged_state_exhausted_key_list.end(),
                     key) != unchanged_state_exhausted_key_list.end()
             };
+            const auto & previous_objective{ previous_objective_by_key.at(key) };
             result_list.at(position) = SelectClusterCandidate(
                 context,
                 residual_baseline,
@@ -666,7 +668,7 @@ inline CandidateSelection SelectClusterCandidates(
                 contains_suspicious_atom,
                 ridge_multiplier_list,
                 objective_domain,
-                previous_objective_by_key.at(key),
+                previous_objective.has_value() ? &*previous_objective : nullptr,
                 previous_cluster_objective_state.at(key),
                 trust_region_state.GetRadius(key),
                 *solver_workspace_list.at(position),
@@ -754,7 +756,7 @@ inline bool TryBacktrackCombinedCandidate(
     const PolishProvenance & previous_polish_provenance,
     const ObjectiveDomain & objective_domain,
     const ObjectiveByKey & previous_objective_by_key,
-    const std::optional<ObjectiveBreakdown> & previous_audit_objective,
+    const ObjectiveBreakdown * previous_audit_objective,
     const ObjectiveBreakdown * best_audit_objective,
     const ClusterObjectiveStateMap & committed_objective_state,
     ClusterObjectiveStateMap & working_objective_state,
@@ -803,11 +805,12 @@ inline bool TryBacktrackCombinedCandidate(
                 ObjectiveAttemptDiagnostic diagnostic;
                 diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
                 diagnostic.accepted_backtracking_factor = factor;
+                const auto & previous_objective{ previous_objective_by_key.at(key) };
                 if (!TryCommitClusterCandidate(
                         candidate_overlay,
                         key,
                         partition.sample_id_list_by_key.at(key),
-                        previous_objective_by_key.at(key),
+                        previous_objective.has_value() ? &*previous_objective : nullptr,
                         false,
                         objective_domain,
                         trial_objective_state.at(key),
@@ -827,12 +830,12 @@ inline bool TryBacktrackCombinedCandidate(
                         best_audit_objective,
                         previous_audit_objective,
                         performance_counters) :
-                    CombinedObjectiveCheck{}
+                    std::optional<ObjectiveBreakdown>{}
             };
-            if (combined_check.accepted)
+            if (combined_check.has_value())
             {
                 selection.combined_backtracking_factor = factor;
-                selection.combined_backtracking_objective = combined_check.candidate_objective;
+                selection.combined_backtracking_objective = combined_check;
                 accepted_trial_objective_state = std::move(trial_objective_state);
                 return true;
             }
