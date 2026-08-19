@@ -101,8 +101,7 @@ void AppendAuditSummary(std::ostringstream & stream, const detail::AuditedState 
         << objective.GetTailValidationPenalty() << "/"
         << objective.offset_plausibility_penalty << "/"
         << objective.GetTotalObjective()
-        << ", tail raw/weight = "
-        << objective.tail_validation_loss << "/"
+        << ", tail raw/weight = " << objective.tail_validation_loss << "/"
         << detail::kTailValidationWeight;
 }
 
@@ -122,28 +121,6 @@ void LogTerminalFallback(
     AppendOffsetSummary(warning_message, state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
-}
-
-void FinishWithNoActiveAtoms(
-    ModelObject & model_object,
-    const detail::SecondStageContext & context,
-    const FitState & state,
-    bool quiet_mode,
-    std::size_t accepted_iteration_count,
-    const detail::TerminalSummary & terminal_summary)
-{
-    ApplyFitState(model_object, context, state);
-    if (terminal_summary.HasFailures())
-    {
-        LogTerminalFallback(quiet_mode, accepted_iteration_count, terminal_summary, state);
-        return;
-    }
-    if (!quiet_mode)
-    {
-        Logger::FinishProgressLine();
-        Logger::Log(LogLevel::Info,
-            "Skip 2nd-stage local atom fitting because no atoms are selected.");
-    }
 }
 
 void LogConverged(
@@ -223,7 +200,7 @@ void LogSecondStageSummary(
     message << ", stop_reason=" << stop_reason << ", best_audit_objective=";
     if (best_audit_state.has_value())
     {
-        message << std::scientific << std::setprecision(8)
+        message << std::scientific << std::setprecision(2)
             << best_audit_state->objective.GetTotalObjective();
     }
     else
@@ -303,13 +280,21 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     {
         if (iteration_state.active_index_list.empty())
         {
-            FinishWithNoActiveAtoms(
-                model_object,
-                context,
-                iteration_state.previous_state,
-                options.quiet_mode,
-                iteration_state.accepted_iteration_count,
-                iteration_state.terminal_failure_state.Summary());
+            ApplyFitState(model_object, context, iteration_state.previous_state);
+            if (iteration_state.terminal_failure_state.Summary().HasFailures())
+            {
+                LogTerminalFallback(
+                    options.quiet_mode,
+                    iteration_state.accepted_iteration_count,
+                    iteration_state.terminal_failure_state.Summary(),
+                    iteration_state.previous_state);
+            }
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Info,
+                    "Skip 2nd-stage local atom fitting because no atoms are selected.");
+            }
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
