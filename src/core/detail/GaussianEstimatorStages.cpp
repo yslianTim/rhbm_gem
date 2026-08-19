@@ -335,7 +335,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             detail::LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         }
         detail::LogAcceptedBacktrackingDiagnostics(options.quiet_mode, iteration_result.diagnostics);
-        if (iteration_result.outcome != detail::IterationOutcome::Accepted)
+        if (iteration_result.all_rejected_resolution.has_value())
         {
             detail::LogRejectedClusterDiagnostics(
                 options.quiet_mode,
@@ -346,10 +346,9 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_result.progress);
             detail::LogAllRejectedResolution(
                 options.quiet_mode,
-                iteration_result.diagnostics.rejected_cluster_partition,
-                iteration_result.diagnostics.trust_region_radius_update,
+                iteration_result.diagnostics.trust_region_update,
                 *iteration_result.all_rejected_resolution);
-            if (iteration_result.outcome == detail::IterationOutcome::Retry)
+            if (*iteration_result.all_rejected_resolution == detail::AllRejectedResolution::Retry)
             {
                 continue;
             }

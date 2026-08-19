@@ -41,21 +41,22 @@ constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 struct JointPolishParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
-    std::vector<std::vector<std::size_t>> atom_position_list_by_group{};
     Eigen::VectorXd seed_parameter{};
 
 private:
     std::optional<std::vector<GaussianModel3D>> DecodeParameter(
         const Eigen::VectorXd & parameter) const
     {
-        if (parameter.size() != ParameterCount() || !parameter.allFinite())
+        if (parameter.size() != seed_parameter.size() || !parameter.allFinite())
         {
             return std::nullopt;
         }
 
         std::vector<GaussianModel3D> model_list;
-        model_list.reserve(AtomCount());
-        for (std::size_t atom_position = 0; atom_position < AtomCount(); atom_position++)
+        model_list.reserve(group_position_by_atom.size());
+        for (std::size_t atom_position = 0;
+            atom_position < group_position_by_atom.size();
+            atom_position++)
         {
             const Eigen::Vector3d shape_coordinates{
                 parameter(ShapeColumn(atom_position, 0)),
@@ -79,9 +80,6 @@ private:
     }
 
 public:
-    std::size_t AtomCount() const { return group_position_by_atom.size(); }
-    Eigen::Index ParameterCount() const { return seed_parameter.size(); }
-
     Eigen::Index ShapeColumn(std::size_t atom_position, std::size_t shape_parameter_index) const
     {
         return static_cast<Eigen::Index>(
@@ -91,14 +89,15 @@ public:
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
         return static_cast<Eigen::Index>(
-            AtomCount() * kJointPolishShapeParameterSize + group_position_by_atom.at(atom_position));
+            group_position_by_atom.size() * kJointPolishShapeParameterSize +
+            group_position_by_atom.at(atom_position));
     }
 
     std::optional<std::vector<GaussianModel3D>> DecodeModels(
         const Eigen::VectorXd & direction,
         double damping) const
     {
-        if (direction.size() != ParameterCount() ||
+        if (direction.size() != seed_parameter.size() ||
             !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
         {
             return std::nullopt;
@@ -128,15 +127,13 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         group_position_by_key.emplace(group_key, 0);
     }
     std::size_t group_position{ 0 };
-    for (auto & [group_key, position] : group_position_by_key)
+    for (auto & group_entry : group_position_by_key)
     {
-        static_cast<void>(group_key);
-        position = group_position++;
+        group_entry.second = group_position++;
     }
 
     JointPolishParameterization parameterization;
     parameterization.group_position_by_atom.resize(base_model_list.size());
-    parameterization.atom_position_list_by_group.resize(group_position_by_key.size());
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
             base_model_list.size() * kJointPolishShapeParameterSize + group_position_by_key.size()));
@@ -152,7 +149,6 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
             group_position_by_key.at(group_key_by_atom_position.at(atom_position))
         };
         parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
-        parameterization.atom_position_list_by_group.at(atom_group_position).emplace_back(atom_position);
         parameterization.seed_parameter(
             parameterization.ShapeColumn(atom_position, 0)) =
             (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
@@ -168,7 +164,6 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        if (offset_list.empty()) return std::nullopt;
         std::sort(offset_list.begin(), offset_list.end());
         const auto middle{ offset_list.size() / 2 };
         const auto median{
@@ -177,13 +172,11 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
                 offset_list.at(middle)
         };
         if (!std::isfinite(median)) return std::nullopt;
-        const auto representative_atom_position{
-            parameterization.atom_position_list_by_group.at(current_group_position).front()
-        };
         parameterization.seed_parameter(
-            parameterization.OffsetColumn(representative_atom_position)) = median;
+            static_cast<Eigen::Index>(
+                parameterization.group_position_by_atom.size() * kJointPolishShapeParameterSize +
+                current_group_position)) = median;
     }
-    if (!parameterization.seed_parameter.allFinite()) return std::nullopt;
     return parameterization;
 }
 
@@ -196,22 +189,38 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const JointPolishParameterization & parameterization,
     ReusableWeightedRidgeSolver & reusable_solver)
 {
-    if (key.empty() || sample_ref_list.empty() || parameterization.AtomCount() != key.size())
+    if (key.empty() || sample_ref_list.empty() || parameterization.group_position_by_atom.size() != key.size())
     {
         return std::nullopt;
     }
     const auto seed_model_list{ parameterization.DecodeSeedModels() };
     if (!seed_model_list.has_value()) return std::nullopt;
 
-    const auto column_count{ parameterization.ParameterCount() };
+    const auto column_count{ parameterization.seed_parameter.size() };
     std::unordered_map<std::size_t, std::size_t> local_position_by_atom_index;
     local_position_by_atom_index.reserve(key.size());
-    std::unordered_map<GroupKey, std::size_t> local_position_by_group_key;
+    std::unordered_map<GroupKey, Eigen::Index> offset_column_by_group_key;
+    Eigen::VectorXd ridge_multiplier_by_column{ Eigen::VectorXd::Ones(column_count) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
         const auto atom_index{ key.at(local_position) };
         local_position_by_atom_index.emplace(atom_index, local_position);
-        local_position_by_group_key.emplace(context.at(atom_index).group_key, local_position);
+        const auto ridge_multiplier{ ridge_multiplier_list.at(atom_index) };
+        for (std::size_t parameter_index = 0;
+            parameter_index < kJointPolishShapeParameterSize;
+            parameter_index++)
+        {
+            ridge_multiplier_by_column(
+                parameterization.ShapeColumn(local_position, parameter_index)) =
+                ridge_multiplier;
+        }
+        const auto offset_column{ parameterization.OffsetColumn(local_position) };
+        offset_column_by_group_key.emplace(
+            context.at(atom_index).group_key,
+            offset_column);
+        ridge_multiplier_by_column(offset_column) = std::max(
+            ridge_multiplier_by_column(offset_column),
+            ridge_multiplier);
     }
     auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
@@ -243,23 +252,17 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             const auto local_position_iter{
                 local_position_by_atom_index.find(atom_index)
             };
-            const auto local_position_value{
-                local_position_iter == local_position_by_atom_index.end() ?
-                    -1 : static_cast<int>(local_position_iter->second)
-            };
             const auto & model{
-                local_position_value >= 0 ?
-                    seed_model_list->at(static_cast<std::size_t>(local_position_value)) :
+                local_position_iter != local_position_by_atom_index.end() ?
+                    seed_model_list->at(local_position_iter->second) :
                     base_state.GetModel(atom_index)
             };
             const auto evaluation{ EvaluateSharedOffsetResponse(model, distance) };
             if (!evaluation.has_value()) return false;
             predicted_response += evaluation->response;
 
-            if (local_position_value < 0) return true;
-            const auto local_position{
-                static_cast<std::size_t>(local_position_value)
-            };
+            if (local_position_iter == local_position_by_atom_index.end()) return true;
+            const auto local_position{ local_position_iter->second };
             for (std::size_t parameter_index = 0;
                 parameter_index < kJointPolishShapeParameterSize;
                 parameter_index++)
@@ -298,23 +301,21 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             predicted_response += evaluation->response;
 
             const auto local_position_iter{
-                local_position_by_group_key.find(unselected_atom_contributor.group_key)
+                offset_column_by_group_key.find(unselected_atom_contributor.group_key)
             };
-            if (local_position_iter == local_position_by_group_key.end() ||
+            if (local_position_iter == offset_column_by_group_key.end() ||
                 std::abs(evaluation->offset_jacobian) <= std::numeric_limits<double>::epsilon())
             {
                 return true;
             }
             triplet_list.emplace_back(
                 row_index,
-                parameterization.OffsetColumn(local_position_iter->second),
+                local_position_iter->second,
                 evaluation->offset_jacobian);
             return true;
         };
 
-        if (!append_model(
-                sample_ref.atom_index,
-                static_cast<double>(sample.point.distance)))
+        if (!append_model(sample_ref.atom_index, static_cast<double>(sample.point.distance)))
         {
             return std::nullopt;
         }
@@ -369,41 +370,17 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             system.design_matrix,
             kJointPolishConditioningPivotRatioThreshold)
     };
-    const auto conditioning_multiplier{
-        conditioning.guard_required ? kJointPolishConditioningRidgeMultiplier : 1.0
-    };
+    if (conditioning.guard_required)
+    {
+        ridge_multiplier_by_column.array() = ridge_multiplier_by_column.array().max(kJointPolishConditioningRidgeMultiplier);
+    }
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        double parameter_multiplier{ 1.0 };
-        const auto offset_column_base{
-            static_cast<Eigen::Index>(key.size() * kJointPolishShapeParameterSize)
-        };
-        if (column_index < offset_column_base)
-        {
-            const auto local_position{
-                static_cast<std::size_t>(column_index) / kJointPolishShapeParameterSize
-            };
-            parameter_multiplier = ridge_multiplier_list.at(key.at(local_position));
-        }
-        else
-        {
-            const auto group_position{
-                static_cast<std::size_t>(column_index - offset_column_base)
-            };
-            for (const auto local_position :
-                parameterization.atom_position_list_by_group.at(group_position))
-            {
-                parameter_multiplier = std::max(
-                    parameter_multiplier,
-                    ridge_multiplier_list.at(key.at(local_position)));
-            }
-        }
-        const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
             CalculateJointFittingRidgeDiagonal(
-                square_sum,
+                column_square_sum(column_index),
                 kJointPolishRidgeRatio,
-                std::max(parameter_multiplier, conditioning_multiplier));
+                ridge_multiplier_by_column(column_index));
     }
 
     const auto residual_scale{
@@ -422,32 +399,12 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     }
 
     Eigen::VectorXd direction;
-    if (!reusable_solver.Solve(system, weight, direction) || !direction.allFinite())
+    if (!reusable_solver.Solve(system, weight, direction))
     {
         return std::nullopt;
     }
 
     return direction;
-}
-
-inline bool HasMaterialJointPolishChange(
-    const std::vector<GaussianModel3D> & candidate_model_list,
-    const std::vector<GaussianModel3D> & seed_model_list)
-{
-    if (candidate_model_list.size() != seed_model_list.size()) return false;
-    for (std::size_t atom_position = 0; atom_position < candidate_model_list.size(); atom_position++)
-    {
-        const auto change{
-            CalculateTransformedChange(
-                candidate_model_list.at(atom_position),
-                seed_model_list.at(atom_position))
-        };
-        if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 struct JointPolishProposal
@@ -485,21 +442,9 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
     if (!parameterization.has_value()) return std::nullopt;
 
     const auto seed_model_list{ parameterization->DecodeSeedModels() };
-    if (!seed_model_list.has_value() ||
-        std::any_of(
-            seed_model_list->begin(),
-            seed_model_list->end(),
-            [](const GaussianModel3D & model)
-            {
-                return !IsValidSecondStageGaussianModel(model);
-            }))
-    {
-        return std::nullopt;
-    }
+    if (!seed_model_list.has_value()) return std::nullopt;
     const auto seed_step_norm{
-        CalculateModelTrustRegionStepNorm(
-            outer_previous_model_list,
-            *seed_model_list)
+        CalculateModelTrustRegionStepNorm(outer_previous_model_list, *seed_model_list)
     };
     if (!seed_step_norm.has_value() ||
         !IsTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
@@ -524,14 +469,7 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
         auto candidate_model_list{
             parameterization->DecodeModels(*direction, damping)
         };
-        if (candidate_model_list.has_value() &&
-            std::none_of(
-                candidate_model_list->begin(),
-                candidate_model_list->end(),
-                [](const GaussianModel3D & model)
-                {
-                    return !IsValidSecondStageGaussianModel(model);
-                }))
+        if (candidate_model_list.has_value())
         {
             const auto step_norm{
                 CalculateModelTrustRegionStepNorm(
@@ -541,9 +479,21 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
-                if (!HasMaterialJointPolishChange(
-                        *candidate_model_list,
-                        *seed_model_list))
+                bool has_material_change{ false };
+                for (std::size_t atom_position = 0; atom_position < candidate_model_list->size(); atom_position++)
+                {
+                    const auto change{
+                        CalculateTransformedChange(
+                            candidate_model_list->at(atom_position),
+                            seed_model_list->at(atom_position))
+                    };
+                    if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
+                    {
+                        has_material_change = true;
+                        break;
+                    }
+                }
+                if (!has_material_change)
                 {
                     return std::nullopt;
                 }
@@ -571,10 +521,6 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
                     const auto candidate_coordinates{
                         EncodeTransformedCoordinates(candidate_model)
                     };
-                    if (!base_coordinates.has_value() || !candidate_coordinates.has_value())
-                    {
-                        return std::nullopt;
-                    }
                     if ((base_coordinates->array() != candidate_coordinates->array()).any())
                     {
                         proposal.changed_atom_index_list.emplace_back(atom_index);

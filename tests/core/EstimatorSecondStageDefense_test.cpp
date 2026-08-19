@@ -2755,9 +2755,8 @@ TEST(EstimatorSecondStageDefenseTest,
     };
 
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->AtomCount(), 3U);
-    EXPECT_EQ(parameterization->atom_position_list_by_group.size(), 2U);
-    EXPECT_EQ(parameterization->ParameterCount(), 8);
+    EXPECT_EQ(parameterization->group_position_by_atom.size(), 3U);
+    EXPECT_EQ(parameterization->seed_parameter.size(), 8);
     EXPECT_EQ(parameterization->ShapeColumn(0, 0), 0);
     EXPECT_EQ(parameterization->ShapeColumn(1, 0), 2);
     EXPECT_EQ(parameterization->ShapeColumn(2, 0), 4);
@@ -2785,7 +2784,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     };
 
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->ParameterCount(), 12);
+    EXPECT_EQ(parameterization->seed_parameter.size(), 12);
     EXPECT_DOUBLE_EQ(
         parameterization->seed_parameter(
             parameterization->OffsetColumn(0)),
@@ -2797,7 +2796,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
 
     const auto seed_model_list{ parameterization->DecodeSeedModels() };
     const auto zero_direction{
-        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
     };
     const auto zero_model_list{
         parameterization->DecodeModels(zero_direction, 0.0)
@@ -2816,7 +2815,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     }
 
     Eigen::VectorXd direction{
-        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
     };
     direction(parameterization->OffsetColumn(1)) = 2.0;
     direction(parameterization->OffsetColumn(0)) = -1.0;

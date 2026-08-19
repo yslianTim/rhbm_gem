@@ -6,7 +6,6 @@
 #include <exception>
 #include <iomanip>
 #include <limits>
-#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -43,27 +42,14 @@ namespace rhbm_gem::core::detail {
 constexpr std::size_t kMaximumIterations{ 100 };
 constexpr std::size_t kAuditPatience{ 3 };
 
-enum class IterationOutcome
-{
-    Accepted,
-    Retry,
-    AllRejected
-};
-
 struct IterationDiagnostics
 {
-    std::vector<ClusterKey> accepted_key_list{};
-    std::vector<ClusterKey> rejected_key_list{};
     std::vector<RejectedClusterDiagnostic> accepted_cluster_diagnostic_list{};
     std::vector<RejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
-    std::vector<ClusterKey> backtracking_exhausted_key_list{};
     std::size_t combined_backtracking_trial_count{ 0 };
     std::optional<double> combined_backtracking_factor{};
-    std::optional<ObjectiveBreakdown> combined_backtracking_objective{};
     bool combined_backtracking_exhausted{ false };
-    PolishProgress polish_progress{};
-    RejectedClusterPartition rejected_cluster_partition{};
-    TrustRegionRadiusUpdate trust_region_radius_update{};
+    TrustRegionIterationUpdate trust_region_update{};
 };
 
 struct IterationState
@@ -96,14 +82,13 @@ struct IterationProgress
     PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     std::optional<double> accepted_maximum_transformed_change{};
-    std::optional<double> raw_maximum_transformed_change{};
+    double raw_maximum_transformed_change{ 0.0 };
 };
 
 using ProgressColumnWidths = std::array<std::size_t, 6>;
 
 struct IterationResult
 {
-    IterationOutcome outcome{ IterationOutcome::Accepted };
     IterationDiagnostics diagnostics{};
     IterationProgress progress{};
     std::optional<AllRejectedResolution> all_rejected_resolution{};
@@ -293,8 +278,7 @@ inline std::string_view GetAllRejectedResolutionText(AllRejectedResolution resol
 
 inline void LogAllRejectedResolution(
     bool quiet_mode,
-    const RejectedClusterPartition & partition,
-    const TrustRegionRadiusUpdate & radius_update,
+    const TrustRegionIterationUpdate & trust_region_update,
     AllRejectedResolution resolution)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
@@ -308,16 +292,16 @@ inline void LogAllRejectedResolution(
         << "All-rejected local fitting resolution: outcome = "
         << GetAllRejectedResolutionText(resolution)
         << ", exhausted/retryable/radius-changed/radius-saturated = "
-        << partition.exhausted_key_list.size() << "/"
-        << partition.retryable_key_list.size() << "/"
-        << radius_update.changed_key_list.size() << "/"
-        << radius_update.saturated_key_list.size() << ".";
+        << trust_region_update.rejected_cluster_partition.exhausted_key_list.size() << "/"
+        << trust_region_update.rejected_cluster_partition.retryable_key_list.size() << "/"
+        << trust_region_update.radius_update.changed_key_list.size() << "/"
+        << trust_region_update.radius_update.saturated_key_list.size() << ".";
     Logger::Log(LogLevel::Debug, message.str());
 }
 
 inline void LogAcceptedBacktrackingDiagnostics(
     bool quiet_mode,
-    const IterationDiagnostics & selection)
+    const IterationDiagnostics & diagnostics)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -325,33 +309,22 @@ inline void LogAcceptedBacktrackingDiagnostics(
     }
     const auto has_local_backtracking{
         std::any_of(
-            selection.accepted_cluster_diagnostic_list.begin(),
-            selection.accepted_cluster_diagnostic_list.end(),
-            [&](const RejectedClusterDiagnostic & diagnostic)
+            diagnostics.accepted_cluster_diagnostic_list.begin(),
+            diagnostics.accepted_cluster_diagnostic_list.end(),
+            [](const RejectedClusterDiagnostic & diagnostic)
             {
-                return diagnostic.attempt.backtracking_trial_count > 1 &&
-                    std::find(
-                        selection.accepted_key_list.begin(),
-                        selection.accepted_key_list.end(),
-                        diagnostic.key) != selection.accepted_key_list.end();
+                return diagnostic.attempt.backtracking_trial_count > 1;
             })
     };
-    if (!has_local_backtracking && selection.combined_backtracking_trial_count <= 1)
+    if (!has_local_backtracking && diagnostics.combined_backtracking_trial_count <= 1)
     {
         return;
     }
     Logger::FinishProgressLine();
-    for (const auto & cluster_diagnostic : selection.accepted_cluster_diagnostic_list)
+    for (const auto & cluster_diagnostic : diagnostics.accepted_cluster_diagnostic_list)
     {
         const auto & diagnostic{ cluster_diagnostic.attempt };
-        if (diagnostic.backtracking_trial_count <= 1 ||
-            std::find(
-                selection.accepted_key_list.begin(),
-                selection.accepted_key_list.end(),
-                cluster_diagnostic.key) == selection.accepted_key_list.end())
-        {
-            continue;
-        }
+        if (diagnostic.backtracking_trial_count <= 1) continue;
         std::ostringstream message;
         message
             << "Accepted local fitting objective backtracking: atoms = " << cluster_diagnostic.key.size()
@@ -387,31 +360,33 @@ inline void LogAcceptedBacktrackingDiagnostics(
         message << ".";
         Logger::Log(LogLevel::Debug, message.str());
     }
-    if (selection.combined_backtracking_trial_count <= 1) return;
+    if (diagnostics.combined_backtracking_trial_count <= 1) return;
     std::ostringstream message;
-    message
-        << "Combined-objective backtracking: trials/factor/exhausted = "
-        << selection.combined_backtracking_trial_count << "/";
-    if (selection.combined_backtracking_factor.has_value())
+    message << "Combined-objective backtracking: trials/factor/exhausted = "
+        << diagnostics.combined_backtracking_trial_count << "/";
+    if (diagnostics.combined_backtracking_factor.has_value())
     {
-        message << *selection.combined_backtracking_factor;
+        message << *diagnostics.combined_backtracking_factor;
     }
     else
     {
         message << "-";
     }
-    message << "/"
-        << (selection.combined_backtracking_exhausted ? "yes" : "no")
-        << ".";
+    message << "/" << (diagnostics.combined_backtracking_exhausted ? "yes" : "no") << ".";
     Logger::Log(LogLevel::Debug, message.str());
+}
+
+inline std::string FormatProgressMaximum(double value)
+{
+    std::ostringstream stream;
+    stream << std::scientific << std::setprecision(2) << value;
+    return stream.str();
 }
 
 inline std::string FormatProgressMaximum(const std::optional<double> & value)
 {
     if (!value.has_value()) return "-";
-    std::ostringstream stream;
-    stream << std::scientific << std::setprecision(2) << *value;
-    return stream.str();
+    return FormatProgressMaximum(*value);
 }
 
 inline constexpr std::array<std::string_view, 6> kProgressHeaderList
@@ -424,25 +399,23 @@ inline constexpr std::array<std::string_view, 6> kProgressHeaderList
     "dMax A/R"
 };
 
+template <typename CellType>
 inline std::string FormatProgressRow(
     const ProgressColumnWidths & column_widths,
-    const std::array<std::string, 6> & cell_list)
+    const std::array<CellType, 6> & cell_list)
 {
     std::ostringstream stream;
     for (std::size_t i = 0; i < cell_list.size(); i++)
     {
         if (i > 0) stream << " | ";
-        stream << std::left << std::setw(static_cast<int>(column_widths.at(i)))
-            << cell_list.at(i);
+        stream << std::left << std::setw(static_cast<int>(column_widths.at(i))) << cell_list.at(i);
     }
     return stream.str();
 }
 
 inline ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
 {
-    const auto maximum_iteration_text{
-        std::to_string(kMaximumIterations)
-    };
+    const auto maximum_iteration_text{ std::to_string(kMaximumIterations) };
     const auto maximum_atom_text{ std::to_string(atom_size) };
     const auto maximum_change_text{
         FormatProgressMaximum(std::numeric_limits<double>::max())
@@ -470,12 +443,7 @@ inline ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
 inline void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths)
 {
     if (quiet_mode) return;
-    std::array<std::string, 6> header_list;
-    for (std::size_t i = 0; i < header_list.size(); i++)
-    {
-        header_list.at(i) = kProgressHeaderList.at(i);
-    }
-    Logger::Log(LogLevel::Info, FormatProgressRow(column_widths, header_list));
+    Logger::Log(LogLevel::Info, FormatProgressRow(column_widths, kProgressHeaderList));
 }
 
 inline void LogIterationProgress(
@@ -528,30 +496,18 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
-        BuildPreviousSuspiciousProfileBaseline(
-            adjusted_sampling_entries,
-            previous_model,
-            options)
+        BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model, options)
     };
-    const auto is_post_refit_candidate_acceptable = [&](const GaussianModel3D & model)
+    const auto is_candidate_acceptable = [&](
+        const GaussianModel3D & model,
+        SuspiciousUpdateMode mode)
     {
         const auto reason{ EvaluateSuspiciousGaussianUpdate(
                 adjusted_sampling_entries,
                 model,
                 options,
                 previous_baseline,
-                SuspiciousUpdateMode::PostRefit) };
-        return reason == SuspiciousGaussianReason::None;
-    };
-    const auto is_offset_only_fallback_acceptable =
-        [&](const GaussianModel3D & model)
-    {
-        const auto reason{ EvaluateSuspiciousGaussianUpdate(
-                adjusted_sampling_entries,
-                model,
-                options,
-                previous_baseline,
-                SuspiciousUpdateMode::OffsetOnly) };
+                mode) };
         return reason == SuspiciousGaussianReason::None;
     };
     try
@@ -564,8 +520,8 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 options,
                 offset_model)
         };
-        const auto candidate_model{ candidate_result.mdpde.GetModel() };
-        if (is_post_refit_candidate_acceptable(candidate_model))
+        const auto & candidate_model{ candidate_result.mdpde.GetModel() };
+        if (is_candidate_acceptable(candidate_model, SuspiciousUpdateMode::PostRefit))
         {
             const auto is_stationarity_eligible{
                 candidate_result.fit_result.has_value() &&
@@ -590,7 +546,7 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         result.mdpde.GetModel().WithOffset(offset_model.GetOffset()),
         result.mdpde.GetStandardDeviationModel()
     };
-    if (!is_offset_only_fallback_acceptable(result.mdpde.GetModel()))
+    if (!is_candidate_acceptable(result.mdpde.GetModel(), SuspiciousUpdateMode::OffsetOnly))
     {
         return std::nullopt;
     }
@@ -605,16 +561,11 @@ inline RawIterationResult RunRawIteration(
     const std::vector<double> & ridge_multiplier_list,
     ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
-    const auto selected_atom_size{ context.size() };
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
     };
-    const auto is_debug_logging_enabled{
-        Logger::GetLogLevel() >= LogLevel::Debug
-    };
-    const auto log_debug_diagnostics{
-        !options.quiet_mode && is_debug_logging_enabled
-    };
+    const auto is_debug_logging_enabled{ Logger::GetLogLevel() >= LogLevel::Debug };
+    const auto log_debug_diagnostics{ !options.quiet_mode && is_debug_logging_enabled };
     std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
@@ -679,7 +630,7 @@ inline RawIterationResult RunRawIteration(
     }
 
     auto iteration_state{ previous_state };
-    SuspiciousUpdateMask rollback_atom_mask(selected_atom_size, 0);
+    SuspiciousUpdateMask rollback_atom_mask(context.size(), 0);
     std::vector<GroupKey> group_key_by_atom_index;
     group_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
@@ -717,8 +668,7 @@ inline RawIterationResult RunRawIteration(
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
-        current_model_snapshot.selected.model_list.at(atom_index) =
-            previous_state.at(atom_index).mdpde.GetModel();
+        current_model_snapshot.selected.model_list.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
     }
 
     FittedGaussianSnapshot refit_model_snapshot{
@@ -800,11 +750,11 @@ inline RawIterationResult RunRawIteration(
         if (exception) std::rethrow_exception(exception);
     }
 
-    std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
     std::size_t refit_position{ 0 };
     for (const auto & key : cluster_key_list)
     {
         auto & health{ health_by_key.at(key) };
+        bool has_post_refit_suspicious_atom{ false };
         for (const auto atom_index : key)
         {
             if (rollback_atom_mask.at(atom_index) != 0) continue;
@@ -813,7 +763,7 @@ inline RawIterationResult RunRawIteration(
             if (!refit_result.has_value())
             {
                 health.is_refit_stationarity_eligible = false;
-                post_refit_suspicious_seed_atom_index_list.emplace_back(atom_index);
+                has_post_refit_suspicious_atom = true;
                 continue;
             }
             if (!refit_result->is_stationarity_eligible)
@@ -822,22 +772,25 @@ inline RawIterationResult RunRawIteration(
             }
             iteration_state.at(atom_index) = std::move(refit_result->result);
         }
+        if (has_post_refit_suspicious_atom)
+        {
+            for (const auto atom_index : key)
+            {
+                rollback_atom_mask.at(atom_index) = 1;
+            }
+        }
     }
-    ExpandPostRefitSuspiciousClusters(
-        cluster_key_list,
-        post_refit_suspicious_seed_atom_index_list,
-        rollback_atom_mask);
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
         iteration_state.at(atom_index) = previous_state.at(atom_index);
     }
 
-    RawIterationResult iteration_result;
-    iteration_result.state = std::move(iteration_state);
-    iteration_result.rollback_atom_mask = std::move(rollback_atom_mask);
-    iteration_result.health_by_key = std::move(health_by_key);
-    return iteration_result;
+    return RawIterationResult{
+        std::move(iteration_state),
+        std::move(rollback_atom_mask),
+        std::move(health_by_key)
+    };
 }
 
 inline IterationState BuildIterationState(
@@ -964,7 +917,6 @@ inline IterationResult RunIteration(
             std::optional<double>{iteration_state.best_audit_state->objective.GetTotalObjective() } :
             std::nullopt
     };
-    const auto combined_changed_key_list{ selection.accepted_key_list };
     const auto combined_check{
         EvaluateCombinedCandidateObjective(
             context,
@@ -999,13 +951,9 @@ inline IterationResult RunIteration(
     }
     if (!combined_objective_accepted)
     {
-        RejectCombinedCandidate(
-            previous_state,
-            iteration_state.previous_polish_provenance,
-            selection);
         if (selection.combined_backtracking_exhausted)
         {
-            for (const auto & key : combined_changed_key_list)
+            for (const auto & key : selection.accepted_key_list)
             {
                 if (std::find(
                         selection.backtracking_exhausted_key_list.begin(),
@@ -1016,6 +964,10 @@ inline IterationResult RunIteration(
                 }
             }
         }
+        RejectCombinedCandidate(
+            previous_state,
+            iteration_state.previous_polish_provenance,
+            selection);
     }
     else
     {
@@ -1097,58 +1049,48 @@ inline IterationResult RunIteration(
         }
     }
 
-    const auto trust_region_iteration_update{
+    auto trust_region_iteration_update{
         iteration_state.trust_region_state.UpdateAfterIteration(
             selection.grow_trust_region_key_list,
             selection.rejected_key_list,
             selection.backtracking_exhausted_key_list)
     };
-    const auto & rejected_cluster_partition{
-        trust_region_iteration_update.rejected_cluster_partition
-    };
-    const auto & trust_region_radius_update{
-        trust_region_iteration_update.radius_update
-    };
 
     IterationResult result;
     result.objective_domain_changed = objective_domain_changed;
-    result.diagnostics.accepted_key_list = std::move(selection.accepted_key_list);
-    result.diagnostics.rejected_key_list = std::move(selection.rejected_key_list);
-    result.diagnostics.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
+    if (!selection.accepted_key_list.empty())
+    {
+        result.diagnostics.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
+    }
     result.diagnostics.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
-    result.diagnostics.backtracking_exhausted_key_list = std::move(selection.backtracking_exhausted_key_list);
     result.diagnostics.combined_backtracking_trial_count = selection.combined_backtracking_trial_count;
     result.diagnostics.combined_backtracking_factor = selection.combined_backtracking_factor;
-    result.diagnostics.combined_backtracking_objective = selection.combined_backtracking_objective;
     result.diagnostics.combined_backtracking_exhausted = selection.combined_backtracking_exhausted;
-    result.diagnostics.polish_progress = selection.polish_progress;
-    result.diagnostics.rejected_cluster_partition = rejected_cluster_partition;
-    result.diagnostics.trust_region_radius_update = trust_region_radius_update;
+    result.diagnostics.trust_region_update = std::move(trust_region_iteration_update);
     iteration_state.rollback_atom_mask = std::move(raw_iteration_result.rollback_atom_mask);
     result.progress = IterationProgress{
         attempt_number,
         iteration_state.accepted_iteration_count,
         context.size() - iteration_state.terminal_failure_state.AtomCount(),
         iteration_state.terminal_failure_state.AtomCount(),
-        result.diagnostics.accepted_key_list.size(),
-        result.diagnostics.rejected_key_list.size(),
-        result.diagnostics.polish_progress,
+        selection.accepted_key_list.size(),
+        selection.rejected_key_list.size(),
+        selection.polish_progress,
         iteration_suspicious_atom_count,
         std::nullopt,
         GetMaximumTransformedChange(raw_fixed_point_change_summary)
     };
 
-    if (result.diagnostics.accepted_key_list.empty())
+    if (selection.accepted_key_list.empty())
     {
-        result.outcome = IterationOutcome::AllRejected;
         result.all_rejected_resolution = ResolveAllRejected(
             attempt_number >= kMaximumIterations,
-            result.diagnostics.rejected_cluster_partition,
-            result.diagnostics.trust_region_radius_update);
+            result.diagnostics.trust_region_update.rejected_cluster_partition,
+            result.diagnostics.trust_region_update.radius_update);
         if (*result.all_rejected_resolution == AllRejectedResolution::Retry)
         {
             for (const auto & key :
-                result.diagnostics.rejected_cluster_partition.exhausted_key_list)
+                result.diagnostics.trust_region_update.rejected_cluster_partition.exhausted_key_list)
             {
                 if (std::find(
                         iteration_state.unchanged_state_exhausted_key_list.begin(),
@@ -1158,7 +1100,6 @@ inline IterationResult RunIteration(
                     iteration_state.unchanged_state_exhausted_key_list.emplace_back(key);
                 }
             }
-            result.outcome = IterationOutcome::Retry;
         }
         return result;
     }
@@ -1173,9 +1114,7 @@ inline IterationResult RunIteration(
     bool improved_best_audit{ false };
     if (!objective_domain_changed)
     {
-        auto candidate_audit_objective{
-            result.diagnostics.combined_backtracking_objective
-        };
+        auto candidate_audit_objective{ selection.combined_backtracking_objective };
         if (!candidate_audit_objective.has_value())
         {
             const auto candidate_model_snapshot{
@@ -1201,8 +1140,8 @@ inline IterationResult RunIteration(
         performance_counters.RecordFullStateMaterialization();
     }
     const auto changed_rejected_trust_radius{
-        !result.diagnostics.rejected_key_list.empty() &&
-        !result.diagnostics.trust_region_radius_update.changed_key_list.empty()
+        !selection.rejected_key_list.empty() &&
+        !result.diagnostics.trust_region_update.radius_update.changed_key_list.empty()
     };
     if (objective_domain_changed || improved_best_audit || changed_rejected_trust_radius)
     {
@@ -1221,14 +1160,13 @@ inline IterationResult RunIteration(
     result.converged =
         is_stationarity_eligible &&
         !has_suspicious_offset_fallback &&
-        result.diagnostics.rejected_key_list.empty() &&
+        selection.rejected_key_list.empty() &&
         IsTransformedChangeConverged(transformed_change_summary) &&
         IsTransformedChangeConverged(raw_fixed_point_change_summary);
 
     iteration_state.previous_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);
     iteration_state.unchanged_state_exhausted_key_list.clear();
-    result.outcome = IterationOutcome::Accepted;
     return result;
 }
 

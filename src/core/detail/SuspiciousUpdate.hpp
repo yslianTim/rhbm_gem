@@ -4,8 +4,8 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -115,8 +115,7 @@ constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 
 struct ZeroOffsetProfileDiagnostics
 {
-    double distance_min{ 0.0 };
-    double distance_max{ 0.0 };
+    double distance_range{ 0.0 };
     double innermost_response{ 0.0 };
     double max_abs_response{ 0.0 };
     double robust_residual_scale{ 0.0 };
@@ -231,14 +230,12 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
             return lhs.first < rhs.first;
         });
 
-    diagnostics.distance_min = profile_samples.front().first;
-    diagnostics.distance_max = profile_samples.back().first;
+    diagnostics.distance_range = profile_samples.back().first - profile_samples.front().first;
     for (std::size_t i = 0; i < profile_samples.size();)
     {
         const auto radius{ profile_samples.at(i).first };
         std::vector<double> response_list;
-        while (i < profile_samples.size() &&
-            IsSameSuspiciousProfileRadius(profile_samples.at(i).first, radius))
+        while (i < profile_samples.size() && IsSameSuspiciousProfileRadius(profile_samples.at(i).first, radius))
         {
             const auto response{ profile_samples.at(i).second };
             diagnostics.max_abs_response = std::max(diagnostics.max_abs_response, std::abs(response));
@@ -250,8 +247,7 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     diagnostics.innermost_response = diagnostics.radius_response_median_list.front();
     if (calculate_residual_scale)
     {
-        diagnostics.robust_residual_scale =
-            array_helper::ComputeMedianAbsoluteDeviationScale(residual_list);
+        diagnostics.robust_residual_scale = array_helper::ComputeMedianAbsoluteDeviationScale(residual_list);
     }
     analysis.profile = std::move(diagnostics);
     return analysis;
@@ -376,7 +372,7 @@ inline bool HasSuspiciousWidthGrowth(
     if (!std::isfinite(candidate_model.GetWidth()) || candidate_model.GetWidth() <= 0.0) return true;
     if (candidate_model.GetWidth() > kSuspiciousWidthGrowthLimit * previous_model.GetWidth()) return true;
     if (!previous_profile.has_value()) return false;
-    const auto distance_range{ previous_profile->distance_max - previous_profile->distance_min };
+    const auto distance_range{ previous_profile->distance_range };
     return distance_range > 0.0 && candidate_model.GetWidth() > kSuspiciousWidthRangeLimitRatio * distance_range;
 }
 
@@ -414,8 +410,7 @@ inline SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
 {
     const auto & previous_model{ previous_baseline.previous_model };
     const auto & previous_analysis{ previous_baseline.previous_analysis };
-    if (mode == SuspiciousUpdateMode::PostRefit &&
-        !IsValidSecondStageGaussianModel(candidate_model))
+    if (mode == SuspiciousUpdateMode::PostRefit && !IsValidSecondStageGaussianModel(candidate_model))
     {
         return SuspiciousGaussianReason::InvalidModel;
     }
@@ -500,8 +495,7 @@ inline SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
     const FitOptions & options)
 {
     const auto previous_baseline{
-        BuildPreviousSuspiciousProfileBaseline(
-            sample_entries, previous_model, options)
+        BuildPreviousSuspiciousProfileBaseline(sample_entries, previous_model, options)
     };
     return EvaluateSuspiciousGaussianUpdate(
         sample_entries,
@@ -521,59 +515,23 @@ inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
             "Suspicious shared-offset group input sizes are inconsistent.");
     }
 
-    std::map<GroupKey, bool> has_suspicious_seed_by_group;
-    for (std::size_t position = 0;
-        position < group_key_by_position.size();
-        position++)
+    std::set<GroupKey> suspicious_seed_group_key_set;
+    for (std::size_t position = 0; position < group_key_by_position.size(); position++)
     {
         if (suspicious_seed_mask.at(position) == 0) continue;
-        has_suspicious_seed_by_group[group_key_by_position.at(position)] = true;
+        suspicious_seed_group_key_set.emplace(group_key_by_position.at(position));
     }
 
     SuspiciousUpdateMask rollback_mask(group_key_by_position.size(), 0);
-    for (std::size_t position = 0;
-        position < group_key_by_position.size();
-        position++)
+    for (std::size_t position = 0; position < group_key_by_position.size(); position++)
     {
-        const auto seed_iter{
-            has_suspicious_seed_by_group.find(
-                group_key_by_position.at(position))
-        };
-        if (seed_iter != has_suspicious_seed_by_group.end())
+        if (suspicious_seed_group_key_set.find(group_key_by_position.at(position)) !=
+            suspicious_seed_group_key_set.end())
         {
             rollback_mask.at(position) = 1;
         }
     }
     return rollback_mask;
-}
-
-inline void ExpandPostRefitSuspiciousClusters(
-    const std::vector<std::vector<std::size_t>> & cluster_key_list,
-    const std::vector<std::size_t> & seed_atom_index_list,
-    SuspiciousUpdateMask & suspicious_mask)
-{
-    if (seed_atom_index_list.empty()) return;
-
-    for (const auto & key : cluster_key_list)
-    {
-        const auto is_affected{
-            std::any_of(
-                key.begin(),
-                key.end(),
-                [&](std::size_t atom_index)
-                {
-                    return std::find(
-                        seed_atom_index_list.begin(),
-                        seed_atom_index_list.end(),
-                        atom_index) != seed_atom_index_list.end();
-                })
-        };
-        if (!is_affected) continue;
-        for (const auto atom_index : key)
-        {
-            suspicious_mask.at(atom_index) = 1;
-        }
-    }
 }
 
 } // namespace rhbm_gem::core::detail
