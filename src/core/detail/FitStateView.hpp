@@ -74,12 +74,12 @@ struct FitStatePatch
 
 class FitStateView
 {
-    const FitState * m_base_state{ nullptr };
-    const FitStatePatch * m_patch{ nullptr };
+    const FitState & m_base_state;
+    const FitStatePatch & m_patch;
 
 public:
     FitStateView(const FitState & base_state, const FitStatePatch & patch)
-        : m_base_state{ &base_state }, m_patch{ &patch }
+        : m_base_state{ base_state }, m_patch{ patch }
     {
     }
 
@@ -87,7 +87,7 @@ public:
     {
         const auto * value{ FindOverride(atom_index) };
         if (value != nullptr) return *value;
-        return m_base_state->at(atom_index).mdpde;
+        return m_base_state.at(atom_index).mdpde;
     }
 
     const GaussianModel3D & GetModel(std::size_t atom_index) const
@@ -97,33 +97,39 @@ public:
 
     const GaussianModel3D & GetBaseModel(std::size_t atom_index) const
     {
-        return m_base_state->at(atom_index).mdpde.GetModel();
+        return m_base_state.at(atom_index).mdpde.GetModel();
     }
 
     const GaussianModel3DWithUncertainty * FindOverride(std::size_t atom_index) const
     {
-        return m_patch == nullptr ? nullptr : m_patch->Find(atom_index);
+        return m_patch.Find(atom_index);
     }
 
     const ClusterKey & GetOverrideAtomIndexList() const
     {
-        static const ClusterKey empty_atom_index_list;
-        return m_patch == nullptr ? empty_atom_index_list : m_patch->atom_index_list;
+        return m_patch.atom_index_list;
     }
 
     FitState Materialize() const
     {
-        auto state{ *m_base_state };
-        if (m_patch != nullptr) m_patch->ApplyTo(state);
+        auto state{ m_base_state };
+        m_patch.ApplyTo(state);
         return state;
     }
 
-    std::size_t GetSize() const { return m_base_state->size(); }
+    std::size_t GetSize() const { return m_base_state.size(); }
 };
 
 inline const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index)
 {
     return state.GetModel(atom_index);
+}
+
+inline const GaussianModel3D & GetFitModel(
+    const std::vector<GaussianModel3D> & state,
+    std::size_t atom_index)
+{
+    return state.at(atom_index);
 }
 
 } // namespace rhbm_gem::core::detail

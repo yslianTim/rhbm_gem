@@ -225,7 +225,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
-        selected_snapshot.model_list.at(key.at(local_position)) = seed_model_list->at(local_position);
+        selected_snapshot.at(key.at(local_position)) = seed_model_list->at(local_position);
     }
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(context, std::move(selected_snapshot))

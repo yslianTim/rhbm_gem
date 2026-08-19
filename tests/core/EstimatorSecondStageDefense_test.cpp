@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -274,7 +275,7 @@ BuildJointOffsetEstimationFixture(
     return {
         std::move(context),
         offset_detail::SecondStageModelSnapshot{
-            offset_detail::FittedGaussianSnapshot{ model_list },
+            model_list,
             {}
         }
     };
@@ -310,6 +311,7 @@ JointPolishFixture BuildJointPolishFixture(
     };
     JointPolishFixture fixture;
     fixture.context.selected_atom_list.resize(base_model_list.size());
+    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
     fixture.state.reserve(base_model_list.size());
     for (std::size_t atom_index = 0;
         atom_index < base_model_list.size();
@@ -339,19 +341,19 @@ JointPolishFixture BuildJointPolishFixture(
             base_model_list.at(atom_index)));
 
         const auto group_position_iter{
-            fixture.context.selected_group_id_by_key.find(
+            selected_group_id_by_key.find(
                 group_key_list.at(atom_index))
         };
         const auto group_position{
             group_position_iter ==
-                fixture.context.selected_group_id_by_key.end() ?
+                selected_group_id_by_key.end() ?
                 fixture.context.selected_atom_index_list_by_group.size() :
                 group_position_iter->second
         };
         if (group_position_iter ==
-            fixture.context.selected_group_id_by_key.end())
+            selected_group_id_by_key.end())
         {
-            fixture.context.selected_group_id_by_key.emplace(
+            selected_group_id_by_key.emplace(
                 group_key_list.at(atom_index),
                 group_position);
             fixture.context.selected_atom_index_list_by_group.emplace_back();
@@ -2571,13 +2573,13 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 9.0, 0.90, 0.7 },
         rg::GaussianModel3D{ 7.0, 0.70, 2.0 }
     };
-    const auto previous_shared_offset_model_list{
-        median_detail::BuildGroupMedianModelList(
+    const auto previous_shared_offset_list{
+        median_detail::BuildGroupMedianOffsetList(
             group_key_list,
             previous_model_list)
     };
-    const auto raw_shared_offset_model_list{
-        median_detail::BuildGroupMedianModelList(
+    const auto raw_shared_offset_list{
+        median_detail::BuildGroupMedianOffsetList(
             group_key_list,
             raw_model_list)
     };
@@ -2588,8 +2590,8 @@ TEST(EstimatorSecondStageDefenseTest,
             median_detail::BuildSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
-                previous_shared_offset_model_list,
-                raw_shared_offset_model_list,
+                previous_shared_offset_list,
+                raw_shared_offset_list,
                 damping)
         };
         ASSERT_TRUE(candidate_model_list.has_value());
@@ -3867,7 +3869,6 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
 {
     residual_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
-    context.selected_group_id_by_key.emplace(4, 0);
     context.selected_atom_index_list_by_group.emplace_back(
         std::vector<std::size_t>{ 0 });
     context.at(0).group_key = 4;
@@ -3933,7 +3934,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
 {
     audit_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
-    context.selected_group_id_by_key.emplace(4, 0);
     context.selected_atom_index_list_by_group.emplace_back(
         std::vector<std::size_t>{ 0 });
     context.at(0).group_key = 4;

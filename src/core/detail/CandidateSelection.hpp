@@ -105,19 +105,19 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         previous_model_list.emplace_back(outer_previous_state.at(atom_index).mdpde.GetModel());
         raw_model_list.emplace_back(raw_state.at(atom_index).mdpde.GetModel());
     }
-    const auto previous_shared_offset_model_list{
-        BuildGroupMedianModelList(group_key_by_atom_position, previous_model_list)
+    const auto previous_shared_offset_list{
+        BuildGroupMedianOffsetList(group_key_by_atom_position, previous_model_list)
     };
-    const auto raw_shared_offset_model_list{
-        BuildGroupMedianModelList(group_key_by_atom_position, raw_model_list)
+    const auto raw_shared_offset_list{
+        BuildGroupMedianOffsetList(group_key_by_atom_position, raw_model_list)
     };
 
     const auto seed_model_list{
         BuildSharedOffsetDampedModelList(
             previous_model_list,
             raw_model_list,
-            previous_shared_offset_model_list,
-            raw_shared_offset_model_list,
+            previous_shared_offset_list,
+            raw_shared_offset_list,
             0.0)
     };
     if (!seed_model_list.has_value())
@@ -156,8 +156,8 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
             BuildSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
-                previous_shared_offset_model_list,
-                raw_shared_offset_model_list,
+                previous_shared_offset_list,
+                raw_shared_offset_list,
                 damping)
         };
         if (candidate_model_list.has_value())

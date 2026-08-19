@@ -622,7 +622,7 @@ inline RawIterationResult RunRawIteration(
         for (std::size_t i = 0; i < key.size(); i++)
         {
             const auto atom_index{ key.at(i) };
-            current_model_snapshot.selected.model_list.at(atom_index) =
+            current_model_snapshot.selected.at(atom_index) =
                 GetFitModel(current_model_snapshot.selected, atom_index)
                     .WithOffset(result.offset(static_cast<Eigen::Index>(i)));
         }
@@ -668,13 +668,13 @@ inline RawIterationResult RunRawIteration(
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
-        current_model_snapshot.selected.model_list.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
+        current_model_snapshot.selected.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
     }
 
     FittedGaussianSnapshot refit_model_snapshot{
         BuildGroupMedianModelList(
             group_key_by_atom_index,
-            current_model_snapshot.selected.model_list)
+            current_model_snapshot.selected)
     };
     const auto refit_model_bundle{
         BuildSecondStageModelSnapshot(context, std::move(refit_model_snapshot))

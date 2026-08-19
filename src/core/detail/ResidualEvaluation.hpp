@@ -17,25 +17,15 @@ namespace rhbm_gem::core::detail {
 
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 
-struct FittedGaussianSnapshot
-{
-    std::vector<GaussianModel3D> model_list{};
-};
-
-inline const GaussianModel3D & GetFitModel(
-    const FittedGaussianSnapshot & snapshot,
-    std::size_t atom_index)
-{
-    return snapshot.model_list.at(atom_index);
-}
+using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.model_list.reserve(state.size());
+    snapshot.reserve(state.size());
     for (const auto & result : state)
     {
-        snapshot.model_list.emplace_back(result.mdpde.GetModel());
+        snapshot.emplace_back(result.mdpde.GetModel());
     }
     return snapshot;
 }
@@ -43,10 +33,10 @@ inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.model_list.reserve(state.GetSize());
+    snapshot.reserve(state.GetSize());
     for (std::size_t atom_index = 0; atom_index < state.GetSize(); atom_index++)
     {
-        snapshot.model_list.emplace_back(state.GetModel(atom_index));
+        snapshot.emplace_back(state.GetModel(atom_index));
     }
     return snapshot;
 }
@@ -70,7 +60,7 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
     const SecondStageContext & context,
     const FittedGaussianSnapshot & selected_snapshot)
 {
-    if (selected_snapshot.model_list.size() != context.size())
+    if (selected_snapshot.size() != context.size())
     {
         throw std::invalid_argument(
             "Second-stage selected contributor snapshot size is inconsistent.");
@@ -96,13 +86,13 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
     }
 
     FittedGaussianSnapshot snapshot;
-    snapshot.model_list.reserve(context.unselected_atom_list.size());
+    snapshot.reserve(context.unselected_atom_list.size());
     for (const auto & unselected_atom_contributor : context.unselected_atom_list)
     {
         if (unselected_atom_contributor.selected_group_id.has_value() &&
             median_model_by_group.at(*unselected_atom_contributor.selected_group_id).has_value())
         {
-            snapshot.model_list.emplace_back(
+            snapshot.emplace_back(
                 *median_model_by_group.at(*unselected_atom_contributor.selected_group_id));
             continue;
         }
@@ -111,7 +101,7 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
             throw std::logic_error(
                 "Second-stage unselected contributor seed is unavailable.");
         }
-        snapshot.model_list.emplace_back(
+        snapshot.emplace_back(
             unselected_atom_contributor.initial_seed->GetModel());
     }
     return snapshot;

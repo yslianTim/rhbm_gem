@@ -126,6 +126,8 @@ inline SecondStageContext BuildSecondStageContext(
     {
         context.selected_atom_list.emplace_back(AtomContext{ atom });
     }
+    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
+    selected_group_id_by_key.reserve(context.size());
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
     atom_index_map.reserve(context.size());
@@ -153,7 +155,7 @@ inline SecondStageContext BuildSecondStageContext(
             options.distance_min,
             options.distance_max);
         auto [group_iter, inserted]{
-            context.selected_group_id_by_key.emplace(
+            selected_group_id_by_key.emplace(
                 atom_context.group_key,
                 context.selected_atom_index_list_by_group.size())
         };
@@ -216,14 +218,14 @@ inline SecondStageContext BuildSecondStageContext(
                         data_internal::GetGroupKey(neighbor_atom)
                     };
                     const auto selected_group_iter{
-                        context.selected_group_id_by_key.find(group_key)
+                        selected_group_id_by_key.find(group_key)
                     };
                     context.unselected_atom_list.emplace_back(
                         UnselectedAtomContributor{
                             neighbor_atom,
                             group_key,
                             selected_group_iter ==
-                                context.selected_group_id_by_key.end() ?
+                                selected_group_id_by_key.end() ?
                                 std::nullopt :
                                 std::optional<std::size_t>{ selected_group_iter->second }
                         });

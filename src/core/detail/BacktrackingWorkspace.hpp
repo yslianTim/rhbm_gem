@@ -30,7 +30,6 @@ struct BacktrackingStep
     BacktrackingStepStatus status{ BacktrackingStepStatus::Exhausted };
     double factor{ 0.0 };
     std::size_t trial_number{ 0 };
-    double maximum_transformed_change{ std::numeric_limits<double>::infinity() };
     const FitStatePatch * candidate_patch{ nullptr };
 
     bool IsCandidateReady() const { return status == BacktrackingStepStatus::CandidateReady; }
@@ -39,7 +38,6 @@ struct BacktrackingStep
 class BacktrackingWorkspace
 {
     const FitState * m_previous_state{ nullptr };
-    std::vector<std::size_t> m_active_index_list{};
     double m_minimum_transformed_change{ 0.0 };
     double m_next_factor{ 0.5 };
     std::size_t m_trial_number{ 1 };
@@ -47,8 +45,8 @@ class BacktrackingWorkspace
     std::vector<GaussianModel3D> m_previous_model_list{};
     std::vector<GaussianModel3D> m_endpoint_model_list{};
     std::vector<GaussianModel3DUncertainty> m_endpoint_uncertainty_list{};
-    std::vector<GaussianModel3D> m_previous_shared_offset_model_list{};
-    std::vector<GaussianModel3D> m_endpoint_shared_offset_model_list{};
+    std::vector<double> m_previous_shared_offset_list{};
+    std::vector<double> m_endpoint_shared_offset_list{};
     FitStatePatch m_candidate_patch{};
 
 public:
@@ -60,7 +58,6 @@ public:
         const std::vector<std::size_t> & active_index_list,
         double minimum_transformed_change)
         : m_previous_state{ &previous_state },
-          m_active_index_list{ active_index_list },
           m_minimum_transformed_change{ minimum_transformed_change }
     {
         if (!std::isfinite(m_minimum_transformed_change) || m_minimum_transformed_change < 0.0)
@@ -68,15 +65,20 @@ public:
             throw std::invalid_argument(
                 "Local fitting backtracking minimum transformed change is invalid.");
         }
-        std::sort(m_active_index_list.begin(), m_active_index_list.end());
-        m_active_index_list.erase(
-            std::unique(m_active_index_list.begin(), m_active_index_list.end()),
-            m_active_index_list.end());
-        m_group_key_by_atom_position.reserve(m_active_index_list.size());
-        m_previous_model_list.reserve(m_active_index_list.size());
-        m_endpoint_model_list.reserve(m_active_index_list.size());
-        m_endpoint_uncertainty_list.reserve(m_active_index_list.size());
-        for (const auto atom_index : m_active_index_list)
+        m_candidate_patch.atom_index_list = active_index_list;
+        std::sort(
+            m_candidate_patch.atom_index_list.begin(),
+            m_candidate_patch.atom_index_list.end());
+        m_candidate_patch.atom_index_list.erase(
+            std::unique(
+                m_candidate_patch.atom_index_list.begin(),
+                m_candidate_patch.atom_index_list.end()),
+            m_candidate_patch.atom_index_list.end());
+        m_group_key_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
+        m_previous_model_list.reserve(m_candidate_patch.atom_index_list.size());
+        m_endpoint_model_list.reserve(m_candidate_patch.atom_index_list.size());
+        m_endpoint_uncertainty_list.reserve(m_candidate_patch.atom_index_list.size());
+        for (const auto atom_index : m_candidate_patch.atom_index_list)
         {
             m_group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
             m_previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
@@ -84,17 +86,16 @@ public:
             m_endpoint_uncertainty_list.emplace_back(
                 GetEndpointMdpde(endpoint_state, atom_index).GetStandardDeviationModel());
         }
-        m_previous_shared_offset_model_list =
-            BuildGroupMedianModelList(
+        m_previous_shared_offset_list =
+            BuildGroupMedianOffsetList(
                 m_group_key_by_atom_position,
                 m_previous_model_list);
-        m_endpoint_shared_offset_model_list =
-            BuildGroupMedianModelList(
+        m_endpoint_shared_offset_list =
+            BuildGroupMedianOffsetList(
                 m_group_key_by_atom_position,
                 m_endpoint_model_list);
-        m_candidate_patch.atom_index_list = m_active_index_list;
-        m_candidate_patch.mdpde_list.reserve(m_active_index_list.size());
-        for (const auto atom_index : m_active_index_list)
+        m_candidate_patch.mdpde_list.reserve(m_candidate_patch.atom_index_list.size());
+        for (const auto atom_index : m_candidate_patch.atom_index_list)
         {
             m_candidate_patch.mdpde_list.emplace_back(GetEndpointMdpde(endpoint_state, atom_index));
         }
@@ -112,7 +113,6 @@ public:
                 BacktrackingStepStatus::Exhausted,
                 factor,
                 m_trial_number,
-                std::numeric_limits<double>::infinity(),
                 nullptr
             };
         }
@@ -125,7 +125,6 @@ public:
                 BacktrackingStepStatus::InvalidCandidate,
                 factor,
                 m_trial_number,
-                std::numeric_limits<double>::infinity(),
                 nullptr
             };
         }
@@ -138,7 +137,6 @@ public:
                 BacktrackingStepStatus::Exhausted,
                 factor,
                 m_trial_number,
-                maximum_transformed_change,
                 nullptr
             };
         }
@@ -147,7 +145,6 @@ public:
             BacktrackingStepStatus::CandidateReady,
             factor,
             m_trial_number,
-            maximum_transformed_change,
             candidate_patch
         };
     }
@@ -184,12 +181,14 @@ public:
                 "Local fitting backtracking provenance sizes are inconsistent.");
         }
         auto provenance{ previous_provenance };
-        for (std::size_t atom_position = 0; atom_position < m_active_index_list.size(); atom_position++)
+        for (std::size_t atom_position = 0;
+            atom_position < m_candidate_patch.atom_index_list.size();
+            atom_position++)
         {
             if (HasMaterialChange(atom_position))
             {
-                provenance.at(m_active_index_list.at(atom_position)) =
-                    endpoint_provenance.at(m_active_index_list.at(atom_position));
+                provenance.at(m_candidate_patch.atom_index_list.at(atom_position)) =
+                    endpoint_provenance.at(m_candidate_patch.atom_index_list.at(atom_position));
             }
         }
         return provenance;
@@ -199,14 +198,16 @@ public:
         const PolishProvenance & previous_provenance,
         const PolishProvenance & endpoint_provenance) const
     {
-        if (previous_provenance.size() != m_active_index_list.size() ||
-            endpoint_provenance.size() != m_active_index_list.size())
+        if (previous_provenance.size() != m_candidate_patch.atom_index_list.size() ||
+            endpoint_provenance.size() != m_candidate_patch.atom_index_list.size())
         {
             throw std::invalid_argument(
                 "Local fitting active backtracking provenance sizes are inconsistent.");
         }
         auto provenance{ previous_provenance };
-        for (std::size_t atom_position = 0; atom_position < m_active_index_list.size(); atom_position++)
+        for (std::size_t atom_position = 0;
+            atom_position < m_candidate_patch.atom_index_list.size();
+            atom_position++)
         {
             if (HasMaterialChange(atom_position))
             {
@@ -223,13 +224,15 @@ private:
             BuildSharedOffsetDampedModelList(
                 m_previous_model_list,
                 m_endpoint_model_list,
-                m_previous_shared_offset_model_list,
-                m_endpoint_shared_offset_model_list,
+                m_previous_shared_offset_list,
+                m_endpoint_shared_offset_list,
                 factor)
         };
         if (!candidate_model_list.has_value()) return nullptr;
 
-        for (std::size_t atom_position = 0; atom_position < m_active_index_list.size(); atom_position++)
+        for (std::size_t atom_position = 0;
+            atom_position < m_candidate_patch.atom_index_list.size();
+            atom_position++)
         {
             m_candidate_patch.mdpde_list.at(atom_position) =
                 GaussianModel3DWithUncertainty{
@@ -253,8 +256,10 @@ private:
     double GetMaximumTransformedChange() const
     {
         std::vector<algorithm::ParameterChange> change_list;
-        change_list.reserve(m_active_index_list.size());
-        for (std::size_t atom_position = 0; atom_position < m_active_index_list.size(); atom_position++)
+        change_list.reserve(m_candidate_patch.atom_index_list.size());
+        for (std::size_t atom_position = 0;
+            atom_position < m_candidate_patch.atom_index_list.size();
+            atom_position++)
         {
             change_list.emplace_back(
                 CalculateTransformedChange(

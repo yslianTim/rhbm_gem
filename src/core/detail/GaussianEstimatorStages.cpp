@@ -220,7 +220,6 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 {
     auto context{ detail::BuildSecondStageContext(model_object, options) };
     detail::StoreSecondStageNeighborCounts(model_object, context);
-    const auto atom_size{ context.size() };
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
@@ -273,7 +272,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         performance_counters.RecordFullStateMaterialization();
     }
     detail::LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
-    const auto progress_column_widths{ detail::BuildProgressColumnWidths(atom_size) };
+    const auto progress_column_widths{ detail::BuildProgressColumnWidths(context.size()) };
     detail::LogProgressHeader(options.quiet_mode, progress_column_widths);
 
     for (std::size_t iter = 0; iter < detail::kMaximumIterations; iter++)

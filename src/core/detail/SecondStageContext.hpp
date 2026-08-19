@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -54,15 +53,13 @@ struct AtomContext
     auto NeighborBegin(std::size_t sample_index) const
     {
         return neighbor_atom_sample_list.begin() +
-            static_cast<std::ptrdiff_t>(
-                neighbor_atom_sample_offset_list.at(sample_index));
+            static_cast<std::ptrdiff_t>(neighbor_atom_sample_offset_list.at(sample_index));
     }
 
     auto NeighborEnd(std::size_t sample_index) const
     {
         return neighbor_atom_sample_list.begin() +
-            static_cast<std::ptrdiff_t>(
-                neighbor_atom_sample_offset_list.at(sample_index + 1));
+            static_cast<std::ptrdiff_t>(neighbor_atom_sample_offset_list.at(sample_index + 1));
     }
 };
 
@@ -70,7 +67,6 @@ struct SecondStageContext
 {
     std::vector<AtomContext> selected_atom_list{};
     std::vector<UnselectedAtomContributor> unselected_atom_list{};
-    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key{};
     std::vector<std::vector<std::size_t>> selected_atom_index_list_by_group{};
 
     std::size_t size() const { return selected_atom_list.size(); }
