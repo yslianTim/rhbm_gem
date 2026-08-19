@@ -98,8 +98,6 @@ struct CouplingGraphSummary
     double weight_percentile_95{ 0.0 };
     double weight_maximum{ 0.0 };
     std::vector<ThresholdSensitivity> threshold_sensitivity_list{};
-    // The threshold applied to retain edges; binary fallback uses zero.
-    double minimum_weight{ 0.0 };
     // The requested threshold, retained for diagnostics when fallback occurs.
     double configured_minimum_weight{ 0.0 };
     std::size_t component_count{ 0 };
@@ -139,11 +137,7 @@ struct CouplingGraphPartition
     std::size_t boundary_sample_count{ 0 };
 };
 
-inline GraphTopology ApplyGraphResidueCutoff(
-    GraphTopology topology,
-    std::vector<ResidueKey> residue_key_by_atom_index,
-    std::size_t maximum_residue_count);
-
+inline GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count);
 inline void UpdateGraphComponentSummary(GraphTopology & topology);
 
 class CouplingGraphBuilder
@@ -283,7 +277,6 @@ class CouplingGraphBuilder
         GraphTopology topology;
         topology.adjacency_list.resize(m_atom_count);
         topology.sample_dependency_list = std::move(m_sample_dependency_list);
-        topology.summary.minimum_weight = minimum_weight;
         topology.summary.candidate_edge_count = weighted_edge_list.size();
 
         std::vector<double> weight_list;
@@ -463,11 +456,9 @@ public:
         auto topology{
             weighted_topology.has_value() ? std::move(*weighted_topology) : BuildBinary()
         };
+        topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
         topology.summary.configured_minimum_weight = options.minimum_weight;
-        return ApplyGraphResidueCutoff(
-            std::move(topology),
-            std::move(residue_key_by_atom_index),
-            options.maximum_residue_count);
+        return ApplyGraphResidueCutoff(std::move(topology), options.maximum_residue_count);
     }
 };
 
@@ -518,9 +509,9 @@ inline GraphTopology BuildSecondStageGraphTopology(
     {
         if (!invariants.has_value())
         {
-            return std::optional<TransformedResponse>{};
+            return std::optional<Eigen::Vector3d>{};
         }
-        return EvaluateTransformedResponse(*invariants, distance);
+        return EvaluateTransformedJacobian(*invariants, distance);
     };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
@@ -542,8 +533,7 @@ inline GraphTopology BuildSecondStageGraphTopology(
             participant_list.emplace_back(
                 GraphParticipant{
                     atom_index,
-                    target_evaluation.has_value() ?
-                        target_evaluation->jacobian : invalid_jacobian
+                    target_evaluation.has_value() ? *target_evaluation : invalid_jacobian
                 });
             for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
                 neighbor_iter != atom_context.NeighborEnd(sample_index);
@@ -558,7 +548,7 @@ inline GraphTopology BuildSecondStageGraphTopology(
                         unselected_model_invariants.at(neighbor_atom_sample.atom_index),
                         neighbor_atom_sample.distance) };
                 const auto jacobian{
-                    neighbor_evaluation.has_value() ? neighbor_evaluation->jacobian : invalid_jacobian
+                    neighbor_evaluation.has_value() ? *neighbor_evaluation : invalid_jacobian
                 };
                 if (neighbor_atom_sample.is_selected)
                 {
@@ -595,7 +585,9 @@ inline GraphTopology BuildSecondStageGraphTopology(
     residue_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
-        residue_key_by_atom_index.emplace_back(atom_context.residue_key);
+        residue_key_by_atom_index.emplace_back(
+            atom_context.atom->GetChainID(),
+            atom_context.atom->GetSequenceID());
     }
     const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
     completed_work++;
@@ -669,10 +661,10 @@ inline void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
 
 inline GraphTopology ApplyGraphResidueCutoff(
     GraphTopology topology,
-    std::vector<ResidueKey> residue_key_by_atom_index,
     std::size_t maximum_residue_count)
 {
     const auto atom_count{ topology.adjacency_list.size() };
+    const auto & residue_key_by_atom_index{ topology.residue_key_by_atom_index };
     if (residue_key_by_atom_index.size() != atom_count)
     {
         throw std::invalid_argument(
@@ -724,9 +716,7 @@ inline GraphTopology ApplyGraphResidueCutoff(
         };
         if (left_residue_index == right_residue_index) continue;
 
-        const auto residue_pair{
-            std::minmax(left_residue_index, right_residue_index)
-        };
+        const auto residue_pair{ std::minmax(left_residue_index, right_residue_index) };
         auto weight_iter{ maximum_weight_by_residue_pair.find(residue_pair) };
         if (weight_iter == maximum_weight_by_residue_pair.end())
         {
@@ -801,7 +791,6 @@ inline GraphTopology ApplyGraphResidueCutoff(
             observed_maximum_residue_count,
             residue_component_set.ComponentSize(residue_index));
     }
-    topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
     topology.residue_cutoff_summary =
         GraphTopology::ResidueCutoffSummary{
             residue_index_by_key.size(),

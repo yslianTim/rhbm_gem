@@ -89,7 +89,6 @@ constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMa
 
 struct SecondStageSeedSelectionRecord
 {
-    std::size_t atom_index{ 0 };
     detail::SecondStageSeedSource source{ detail::SecondStageSeedSource::GlobalMedian };
     GaussianModel3D original_model{};
     GaussianModel3D selected_model{};
@@ -141,10 +140,6 @@ inline SecondStageContext BuildSecondStageContext(
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         atom_context.group_key = data_internal::GetGroupKey(atom);
-        atom_context.residue_key = {
-            atom->GetChainID(),
-            atom->GetSequenceID()
-        };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         atom_context.initial_result = local_view.GetGaussianResult(FittingStage::Second);
@@ -222,7 +217,7 @@ inline SecondStageContext BuildSecondStageContext(
                     };
                     context.unselected_atom_list.emplace_back(
                         UnselectedAtomContributor{
-                            neighbor_atom,
+                            neighbor_atom->GetSerialID(),
                             group_key,
                             selected_group_iter ==
                                 selected_group_id_by_key.end() ?
@@ -349,7 +344,6 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         result.mdpde = selection->model;
         build_result.selection_record_list.emplace_back(
             SecondStageSeedSelectionRecord{
-                i,
                 selection->source,
                 original_model,
                 selection->model.GetModel()
@@ -387,7 +381,7 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         unselected_atom_contributor.initial_seed = selection->model;
         build_result.unselected_selection_record_list.emplace_back(
             UnselectedSecondStageSeedSelectionRecord{
-                unselected_atom_contributor.atom->GetSerialID(),
+                unselected_atom_contributor.atom_serial_id,
                 selection->source,
                 selection->model.GetModel()
             });
@@ -441,11 +435,12 @@ inline void LogSecondStageSeedSelections(
     summary << ".";
     Logger::Log(LogLevel::Info, summary.str());
 
-    for (const auto & record : selection_record_list)
+    for (std::size_t atom_index = 0; atom_index < selection_record_list.size(); atom_index++)
     {
+        const auto & record{ selection_record_list.at(atom_index) };
         std::ostringstream detail_message;
         detail_message << "Second-stage seed selection: atom index = "
-            << record.atom_index
+            << atom_index
             << ", source = " << GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
             << ", original MDPDE A/B/C = "

@@ -412,7 +412,6 @@ struct JointPolishProposal
     FitStatePatch patch{};
     double effective_damping{ 0.0 };
     double step_norm{ 0.0 };
-    std::vector<std::size_t> changed_atom_index_list{};
 };
 
 inline std::optional<JointPolishProposal> BuildJointPolishProposal(
@@ -515,16 +514,6 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
                             candidate_model,
                             base_mdpde.GetStandardDeviationModel()
                         });
-                    const auto base_coordinates{
-                        EncodeTransformedCoordinates(base_mdpde.GetModel())
-                    };
-                    const auto candidate_coordinates{
-                        EncodeTransformedCoordinates(candidate_model)
-                    };
-                    if ((base_coordinates->array() != candidate_coordinates->array()).any())
-                    {
-                        proposal.changed_atom_index_list.emplace_back(atom_index);
-                    }
                 }
                 return proposal;
             }

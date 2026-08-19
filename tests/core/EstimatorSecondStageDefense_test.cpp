@@ -2451,13 +2451,12 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
         for (const auto distance : distance_list)
         {
             const auto evaluation{
-                polish_detail::EvaluateTransformedResponse(
+                polish_detail::EvaluateTransformedJacobian(
                     *invariants,
                     distance)
             };
             ASSERT_TRUE(evaluation.has_value());
-            EXPECT_TRUE(std::isfinite(evaluation->response));
-            EXPECT_TRUE(evaluation->jacobian.allFinite());
+            EXPECT_TRUE(evaluation->allFinite());
 
             for (Eigen::Index parameter_index = 0;
                 parameter_index < transformed->size();
@@ -2481,7 +2480,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
                     (2.0 * step)
                 };
                 const auto analytic{
-                    evaluation->jacobian(parameter_index)
+                    (*evaluation)(parameter_index)
                 };
                 const auto tolerance{
                     1.0e-6 * std::max(std::abs(finite_difference), 1.0)
@@ -2913,7 +2912,6 @@ TEST(
     EXPECT_TRUE(shape_changed);
     EXPECT_TRUE(offset_changed);
     EXPECT_LE(proposal->step_norm, 4.0 + 1.0e-12);
-    EXPECT_FALSE(proposal->changed_atom_index_list.empty());
     EXPECT_DOUBLE_EQ(
         proposal->patch.mdpde_list.at(0)
             .GetStandardDeviationModel().GetAmplitude(),
@@ -3225,7 +3223,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipan
     EXPECT_EQ(topology.summary.component_count, 1U);
     EXPECT_EQ(topology.summary.maximum_component_size, 2U);
     EXPECT_DOUBLE_EQ(topology.summary.maximum_component_ratio, 1.0);
-    EXPECT_DOUBLE_EQ(topology.summary.minimum_weight, 0.05);
     EXPECT_DOUBLE_EQ(topology.summary.configured_minimum_weight, 0.05);
     EXPECT_EQ(topology.residue_cutoff_summary.maximum_residue_count_limit, 10U);
 }
@@ -3460,11 +3457,11 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     {
         residue_key_list.emplace_back("A", residue_id);
     }
+    topology.residue_key_by_atom_index = residue_key_list;
 
     const auto capped_topology{
         coupling_detail::ApplyGraphResidueCutoff(
             std::move(topology),
-            residue_key_list,
             10)
     };
     EXPECT_EQ(capped_topology.residue_cutoff_summary.residue_count, 12U);
@@ -3527,10 +3524,12 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffPrioritizesStrongEdge
         { 1, 2, 0.80 },
         { 0, 1, 0.90 }
     };
+    topology.residue_key_by_atom_index = {
+        { "A", 1 }, { "A", 2 }, { "A", 3 }
+    };
     const auto capped_topology{
         coupling_detail::ApplyGraphResidueCutoff(
             std::move(topology),
-            { { "A", 1 }, { "A", 2 }, { "A", 3 } },
             2)
     };
     const auto partition{
@@ -3569,7 +3568,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
     coupling_detail::CouplingGraphOptions fallback_options;
     fallback_options.sensitivity_minimum_weight_list = { 0.05, 0.10 };
-    const auto binary_topology{
+    auto binary_topology{
         builder.BuildTopology(MakeUniqueResidueKeys(2), fallback_options)
     };
     EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
@@ -3580,10 +3579,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
             { 0, 1 })
     };
     EXPECT_EQ(binary_partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
+    binary_topology.residue_key_by_atom_index = { { "A", 1 }, { "A", 2 } };
     const auto capped_binary_topology{
         coupling_detail::ApplyGraphResidueCutoff(
             binary_topology,
-            { { "A", 1 }, { "A", 2 } },
             1)
     };
     const auto capped_binary_partition{

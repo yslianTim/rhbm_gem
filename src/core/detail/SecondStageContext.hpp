@@ -29,7 +29,7 @@ struct NeighborAtomSample
 
 struct UnselectedAtomContributor
 {
-    const AtomObject * atom{ nullptr };
+    int atom_serial_id{ 0 };
     GroupKey group_key{};
     std::optional<std::size_t> selected_group_id{};
     std::optional<GaussianModel3DWithUncertainty> initial_seed{};
@@ -40,7 +40,6 @@ struct AtomContext
     const AtomObject * atom{ nullptr };
     GroupKey group_key{};
     std::size_t group_id{ 0 };
-    ResidueKey residue_key{};
     LocalPotentialSampleList raw_sampling_entries{};
     LocalGaussianResult initial_result{};
     std::optional<GaussianModel3DWithUncertainty> group_prior{};

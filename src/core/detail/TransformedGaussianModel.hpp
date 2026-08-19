@@ -135,7 +135,7 @@ inline std::optional<GaussianModel3D> BuildGaussianParameterMedian(
         std::optional<GaussianModel3D>{ median_model } : std::nullopt;
 }
 
-inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
+inline std::unordered_map<GroupKey, GaussianModel3D> BuildGroupMedianModelByGroup(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
@@ -163,6 +163,16 @@ inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
         }
     }
 
+    return median_model_by_group;
+}
+
+inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
+    const std::vector<GroupKey> & group_key_by_atom_position,
+    const std::vector<GaussianModel3D> & model_list)
+{
+    const auto median_model_by_group{
+        BuildGroupMedianModelByGroup(group_key_by_atom_position, model_list)
+    };
     std::vector<GaussianModel3D> group_median_model_list;
     group_median_model_list.reserve(model_list.size());
     for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
@@ -180,12 +190,18 @@ inline std::vector<double> BuildGroupMedianOffsetList(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    const auto median_model_list{ BuildGroupMedianModelList(group_key_by_atom_position, model_list) };
+    const auto median_model_by_group{
+        BuildGroupMedianModelByGroup(group_key_by_atom_position, model_list)
+    };
     std::vector<double> offset_list;
-    offset_list.reserve(median_model_list.size());
-    for (const auto & model : median_model_list)
+    offset_list.reserve(model_list.size());
+    for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
     {
-        offset_list.emplace_back(model.GetOffset());
+        const auto median_iter{ median_model_by_group.find(
+            group_key_by_atom_position.at(atom_position)) };
+        offset_list.emplace_back(
+            median_iter != median_model_by_group.end() ?
+                median_iter->second.GetOffset() : model_list.at(atom_position).GetOffset());
     }
     return offset_list;
 }

@@ -178,31 +178,14 @@ inline void ApplyTerminalFallbackClusters(
     }
 }
 
-inline std::vector<std::size_t> BuildEligibleActiveIndexList(const std::vector<char> & terminal_atom_mask)
-{
-    const auto atom_size{ terminal_atom_mask.size() };
-    std::vector<std::size_t> active_index_list;
-    active_index_list.reserve(atom_size);
-    for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
-    {
-        if (terminal_atom_mask.at(atom_index) == 0)
-        {
-            active_index_list.emplace_back(atom_index);
-        }
-    }
-    return active_index_list;
-}
-
 struct TerminalFailureState
 {
     PersistentTerminalFailureStateMap persistent_state_by_key{};
     std::vector<char> terminal_atom_mask{};
     TerminalSummary terminal_summary{};
-
     TerminalFailureState() = default;
 
-    explicit TerminalFailureState(std::size_t atom_count)
-        : terminal_atom_mask(atom_count, 0)
+    explicit TerminalFailureState(std::size_t atom_count) : terminal_atom_mask(atom_count, 0)
     {
     }
 
@@ -212,7 +195,16 @@ struct TerminalFailureState
 
     std::vector<std::size_t> BuildEligibleActiveIndexList() const
     {
-        return detail::BuildEligibleActiveIndexList(terminal_atom_mask);
+        std::vector<std::size_t> active_index_list;
+        active_index_list.reserve(terminal_atom_mask.size());
+        for (std::size_t atom_index = 0; atom_index < terminal_atom_mask.size(); atom_index++)
+        {
+            if (terminal_atom_mask.at(atom_index) == 0)
+            {
+                active_index_list.emplace_back(atom_index);
+            }
+        }
+        return active_index_list;
     }
 
     std::vector<ClusterKey> IsolatePersistentFailures(

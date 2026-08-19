@@ -59,12 +59,6 @@ inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
     };
 }
 
-struct TransformedResponse
-{
-    double response{ 0.0 };
-    Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
-};
-
 struct TransformedModelInvariants
 {
     GaussianModel3D model{};
@@ -122,7 +116,7 @@ inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
     };
 }
 
-inline std::optional<TransformedResponse> EvaluateTransformedResponse(
+inline std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const TransformedModelInvariants & invariants,
     double distance)
 {
@@ -144,10 +138,7 @@ inline std::optional<TransformedResponse> EvaluateTransformedResponse(
         shared_offset_evaluation->offset_jacobian / center_offset_basis_scale;
     if (!jacobian.allFinite()) return std::nullopt;
 
-    return TransformedResponse{
-        shared_offset_evaluation->response,
-        jacobian
-    };
+    return jacobian;
 }
 
 } // namespace rhbm_gem::core::detail

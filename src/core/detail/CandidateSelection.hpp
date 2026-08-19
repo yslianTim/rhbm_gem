@@ -598,16 +598,20 @@ inline ClusterCandidateResult SelectClusterCandidate(
             else
             {
                 result.polish_progress.accepted_count = 1;
-                result.accepted_patch = std::move(polished_candidate->patch);
-                for (const auto atom_index : polished_candidate->changed_atom_index_list)
+                for (std::size_t position = 0; position < key.size(); position++)
                 {
-                    const auto position{
-                        static_cast<std::size_t>(std::distance(
-                            key.begin(),
-                            std::find(key.begin(), key.end(), atom_index)))
+                    const auto base_coordinates{
+                        EncodeTransformedCoordinates(base_state_view.GetModel(key.at(position)))
                     };
-                    result.polish_provenance.at(position) = 1;
+                    const auto candidate_coordinates{
+                        EncodeTransformedCoordinates(polished_candidate->patch.mdpde_list.at(position).GetModel())
+                    };
+                    if ((base_coordinates->array() != candidate_coordinates->array()).any())
+                    {
+                        result.polish_provenance.at(position) = 1;
+                    }
                 }
+                result.accepted_patch = std::move(polished_candidate->patch);
                 if (!accepted_by_backtracking && ShouldGrowTrustRegion(polish_diagnostic))
                 {
                     result.grow_trust_region = true;
