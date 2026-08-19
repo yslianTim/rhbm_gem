@@ -1629,7 +1629,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     EXPECT_TRUE(audit_detail::TryUpdateBestAuditState(
         initial_state,
         false,
-        std::nullopt,
+        0,
         *initial_objective,
         audit_state));
     ASSERT_TRUE(audit_state.has_value());
@@ -1637,25 +1637,25 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         audit_state->objective.GetTotalObjective(),
         initial_objective->GetTotalObjective());
     EXPECT_FALSE(audit_state->uses_polish);
-    EXPECT_FALSE(audit_state->accepted_iteration.has_value());
+    EXPECT_EQ(audit_state->source_iteration, 0U);
 
     EXPECT_FALSE(audit_detail::TryUpdateBestAuditState(
         initial_state,
         false,
-        std::nullopt,
+        0,
         *tied_objective,
         audit_state));
     EXPECT_FALSE(audit_detail::TryUpdateBestAuditState(
         initial_state,
         false,
-        std::nullopt,
+        0,
         *worse_objective,
         audit_state));
 
     EXPECT_TRUE(audit_detail::TryUpdateBestAuditState(
         initial_state,
         true,
-        std::optional<std::size_t>{ 7 },
+        7,
         *improved_objective,
         audit_state));
     ASSERT_TRUE(audit_state.has_value());
@@ -1663,8 +1663,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
         audit_state->objective.GetTotalObjective(),
         improved_objective->GetTotalObjective());
     EXPECT_TRUE(audit_state->uses_polish);
-    ASSERT_TRUE(audit_state->accepted_iteration.has_value());
-    EXPECT_EQ(*audit_state->accepted_iteration, 7U);
+    EXPECT_EQ(audit_state->source_iteration, 7U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjective)
@@ -1679,7 +1678,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjec
         audit_detail::BuildBestAuditState(
             state,
             true,
-            std::optional<std::size_t>{ 4 },
+            4,
             objective)
     };
     ASSERT_TRUE(available.has_value());
@@ -1687,15 +1686,14 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjec
         available->objective.GetTotalObjective(),
         objective->GetTotalObjective());
     EXPECT_TRUE(available->uses_polish);
-    ASSERT_TRUE(available->accepted_iteration.has_value());
-    EXPECT_EQ(*available->accepted_iteration, 4U);
+    EXPECT_EQ(available->source_iteration, 4U);
 
     const std::optional<audit_detail::ObjectiveBreakdown> unavailable;
     const auto empty{
         audit_detail::BuildBestAuditState(
             state,
             false,
-            std::nullopt,
+            0,
             unavailable)
     };
     EXPECT_FALSE(empty.has_value());

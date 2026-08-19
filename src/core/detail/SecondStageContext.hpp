@@ -31,7 +31,7 @@ struct UnselectedAtomContributor
 {
     int atom_serial_id{ 0 };
     std::optional<std::size_t> selected_group_id{};
-    std::optional<GaussianModel3DWithUncertainty> initial_seed{};
+    GaussianModel3DWithUncertainty initial_seed{};
 };
 
 struct AtomContext

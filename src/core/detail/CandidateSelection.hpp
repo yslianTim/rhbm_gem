@@ -755,7 +755,7 @@ inline bool TryBacktrackCombinedCandidate(
     const ObjectiveDomain & objective_domain,
     const ObjectiveByKey & previous_objective_by_key,
     const std::optional<ObjectiveBreakdown> & previous_audit_objective,
-    std::optional<double> best_audit_objective,
+    const ObjectiveBreakdown * best_audit_objective,
     const ClusterObjectiveStateMap & committed_objective_state,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection,

@@ -105,11 +105,7 @@ public:
                 }
                 else
                 {
-                    if (!unselected_atom_contributor.initial_seed.has_value())
-                    {
-                        return std::nullopt;
-                    }
-                    candidate_model = &unselected_atom_contributor.initial_seed->GetModel();
+                    candidate_model = &unselected_atom_contributor.initial_seed.GetModel();
                 }
             }
             adjusted_response +=
@@ -119,8 +115,7 @@ public:
         const auto expected_response{
             m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
                 baseline->adjusted_response - baseline->residual :
-                m_candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(
-                    static_cast<double>(sample.point.distance))
+                m_candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(static_cast<double>(sample.point.distance))
         };
         const auto residual{ adjusted_response - expected_response };
         if (!std::isfinite(adjusted_response) || !std::isfinite(residual))

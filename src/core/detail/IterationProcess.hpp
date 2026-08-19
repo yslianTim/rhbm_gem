@@ -824,7 +824,7 @@ inline IterationState BuildIterationState(
     iteration_state.best_audit_state = BuildBestAuditState(
         iteration_state.previous_state,
         UsesPolish(iteration_state.previous_polish_provenance),
-        std::nullopt,
+        0,
         initial_audit_objective);
     return iteration_state;
 }
@@ -911,10 +911,8 @@ inline IterationResult RunIteration(
     performance_counters.FinishCandidatePhase(candidate_phase_start);
     performance_counters.RecordFullStateMaterialization();
 
-    const auto best_audit_objective{
-        iteration_state.best_audit_state.has_value() ?
-            std::optional<double>{iteration_state.best_audit_state->objective.GetTotalObjective() } :
-            std::nullopt
+    const auto * best_audit_objective{
+        iteration_state.best_audit_state.has_value() ? &iteration_state.best_audit_state->objective : nullptr
     };
     const auto combined_check{
         EvaluateCombinedCandidateObjective(

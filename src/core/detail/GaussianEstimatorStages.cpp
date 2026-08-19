@@ -89,9 +89,9 @@ void AppendAuditSummary(std::ostringstream & stream, const detail::AuditedState 
 {
     const auto & objective{ audited_state.objective };
     stream << "; audit best source = ";
-    if (audited_state.accepted_iteration.has_value())
+    if (audited_state.source_iteration != 0)
     {
-        stream << "accepted iteration " << *audited_state.accepted_iteration;
+        stream << "accepted iteration " << audited_state.source_iteration;
     }
     else
     {
@@ -192,9 +192,9 @@ void LogSecondStageSummary(
     {
         message << "unavailable";
     }
-    else if (best_audit_state->accepted_iteration.has_value())
+    else if (best_audit_state->source_iteration != 0)
     {
-        message << *best_audit_state->accepted_iteration;
+        message << best_audit_state->source_iteration;
     }
     else
     {
