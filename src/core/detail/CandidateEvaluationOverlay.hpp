@@ -132,10 +132,6 @@ public:
 
     const FitStateView & GetCandidateState() const { return m_candidate_state; }
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
-    const FittedGaussianSnapshot & GetBaselineState() const
-    {
-        return m_baseline.model_snapshot.selected;
-    }
 };
 
 } // namespace rhbm_gem::core::detail

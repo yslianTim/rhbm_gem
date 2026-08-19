@@ -218,7 +218,6 @@ inline SecondStageContext BuildSecondStageContext(
                     context.unselected_atom_list.emplace_back(
                         UnselectedAtomContributor{
                             neighbor_atom->GetSerialID(),
-                            group_key,
                             selected_group_iter ==
                                 selected_group_id_by_key.end() ?
                                 std::nullopt :
@@ -275,7 +274,7 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
     state.resize(context.size());
-    std::unordered_map<GroupKey, std::vector<GaussianModel3D>> models_by_group;
+    std::vector<std::vector<GaussianModel3D>> models_by_group(context.selected_atom_index_list_by_group.size());
     std::vector<GaussianModel3D> global_models;
     global_models.reserve(context.size());
 
@@ -283,7 +282,6 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
     {
         const auto & atom_context{ context.at(i) };
         state.at(i) = atom_context.initial_result;
-        const auto group_key{ atom_context.group_key };
 
         const auto & result{ state.at(i) };
         const auto direct_selection{
@@ -297,18 +295,19 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         };
         if (!direct_selection.has_value()) continue;
 
-        models_by_group[group_key].emplace_back(direct_selection->model.GetModel());
+        models_by_group.at(atom_context.group_id).emplace_back(direct_selection->model.GetModel());
         global_models.emplace_back(direct_selection->model.GetModel());
     }
 
-    std::unordered_map<GroupKey, GaussianModel3DWithUncertainty> median_by_group;
-    median_by_group.reserve(models_by_group.size());
-    for (const auto & [group_key, models] : models_by_group)
+    std::vector<std::optional<GaussianModel3DWithUncertainty>> median_by_group(models_by_group.size());
+    for (std::size_t group_id = 0; group_id < models_by_group.size(); group_id++)
     {
-        const auto median_model{ BuildValidGaussianParameterMedian(models) };
+        const auto median_model{
+            BuildValidGaussianParameterMedian(models_by_group.at(group_id))
+        };
         if (median_model.has_value())
         {
-            median_by_group.emplace(group_key, *median_model);
+            median_by_group.at(group_id) = *median_model;
         }
     }
     const auto global_median{ BuildValidGaussianParameterMedian(global_models) };
@@ -318,12 +317,11 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
         const auto & atom_context{ context.at(i) };
-        const auto group_key{ atom_context.group_key };
         std::optional<GaussianModel3DWithUncertainty> group_median;
-        const auto group_median_iter{ median_by_group.find(group_key) };
-        if (group_median_iter != median_by_group.end())
+        if (atom_context.group_id < median_by_group.size() &&
+            median_by_group.at(atom_context.group_id).has_value())
         {
-            group_median = group_median_iter->second;
+            group_median = *median_by_group.at(atom_context.group_id);
         }
         const auto selection{
             SelectSecondStageSeed(
@@ -356,12 +354,11 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
             context.unselected_atom_list.at(i)
         };
         std::optional<GaussianModel3DWithUncertainty> group_median;
-        const auto group_median_iter{
-            median_by_group.find(unselected_atom_contributor.group_key)
-        };
-        if (group_median_iter != median_by_group.end())
+        if (unselected_atom_contributor.selected_group_id.has_value() &&
+            *unselected_atom_contributor.selected_group_id < median_by_group.size() &&
+            median_by_group.at(*unselected_atom_contributor.selected_group_id).has_value())
         {
-            group_median = group_median_iter->second;
+            group_median = *median_by_group.at(*unselected_atom_contributor.selected_group_id);
         }
         const auto selection{
             SelectSecondStageSeed(

@@ -976,7 +976,7 @@ inline IterationResult RunIteration(
 
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
-    const auto terminal_key_list{
+    const auto has_new_terminal_failures{
         iteration_state.terminal_failure_state.IsolatePersistentFailures(
             selection.accepted_key_list,
             raw_iteration_result.rollback_atom_mask,
@@ -990,7 +990,7 @@ inline IterationResult RunIteration(
         UsesPolish(assembled_polish_provenance)
     };
     bool objective_domain_changed{ false };
-    if (!terminal_key_list.empty())
+    if (has_new_terminal_failures)
     {
         auto remaining_active_index_list{
             iteration_state.terminal_failure_state.BuildEligibleActiveIndexList()

@@ -206,31 +206,25 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     return adjusted_sampling_entries;
 }
 
-inline std::vector<LocalPotentialSampleList> BuildSecondStageAdjustedSamples(
-    const SecondStageContext & context,
-    const FitState & state)
+inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
+    const AtomContext & atom_context,
+    const SecondStageModelSnapshot & model_snapshot)
 {
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, state)
-    };
-    const auto adjusted_response_cache{
-        BuildSecondStageAdjustedResponseCache(context, model_snapshot)
-    };
-    std::vector<LocalPotentialSampleList> adjusted_sampling_entries_list;
-    adjusted_sampling_entries_list.reserve(context.size());
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    LocalPotentialSampleList adjusted_sampling_entries;
+    adjusted_sampling_entries.reserve(atom_context.raw_sampling_entries.size());
+    for (std::size_t sample_index = 0;
+        sample_index < atom_context.raw_sampling_entries.size();
+        sample_index++)
     {
-        adjusted_sampling_entries_list.emplace_back(
-            BuildSecondStageAdjustedSamples(
-                context.at(atom_index),
-                adjusted_response_cache.at(atom_index)));
+        auto sample{ atom_context.raw_sampling_entries.at(sample_index) };
+        sample.response = static_cast<float>(
+            CalculateSecondStageAdjustedResponse(atom_context, sample_index, model_snapshot));
+        adjusted_sampling_entries.emplace_back(sample);
     }
-    return adjusted_sampling_entries_list;
+    return adjusted_sampling_entries;
 }
 
-inline ResidualBaseline BuildResidualBaseline(
-    const SecondStageContext & context,
-    const FitState & state)
+inline ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state)
 {
     ResidualBaseline baseline{
         BuildSecondStageModelSnapshot(context, state),
@@ -254,10 +248,8 @@ inline ResidualBaseline BuildResidualBaseline(
                 context.at(atom_index).raw_sampling_entries.at(sample_index)
             };
             const auto expected_response{
-                GetFitModel(
-                    baseline.model_snapshot.selected,
-                    atom_index).ResponseAtDistance(
-                    static_cast<double>(sample.point.distance))
+                GetFitModel(baseline.model_snapshot.selected, atom_index)
+                .ResponseAtDistance(static_cast<double>(sample.point.distance))
             };
             const auto residual{ adjusted_response - expected_response };
             baseline.sample_list.at(atom_index).emplace_back(
@@ -284,10 +276,7 @@ inline std::optional<ResidualSample> EvaluateResidualSample(
         atom_context.raw_sampling_entries.at(sample_ref.sample_index)
     };
     const auto adjusted_response{
-        CalculateSecondStageAdjustedResponse(
-            atom_context,
-            sample_ref.sample_index,
-            model_snapshot)
+        CalculateSecondStageAdjustedResponse(atom_context, sample_ref.sample_index, model_snapshot)
     };
     const auto expected_response{
         GetFitModel(state, sample_ref.atom_index).ResponseAtDistance(static_cast<double>(sample.point.distance))

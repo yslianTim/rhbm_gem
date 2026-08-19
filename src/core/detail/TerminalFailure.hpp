@@ -207,7 +207,7 @@ struct TerminalFailureState
         return active_index_list;
     }
 
-    std::vector<ClusterKey> IsolatePersistentFailures(
+    bool IsolatePersistentFailures(
         const std::vector<ClusterKey> & accepted_key_list,
         SuspiciousUpdateMask & suspicious_atom_mask,
         const ClusterHealthMap & health_by_key,
@@ -241,7 +241,7 @@ struct TerminalFailureState
                 terminal_key_list,
                 suspicious_atom_mask);
         }
-        return terminal_key_list;
+        return !terminal_key_list.empty();
     }
 };
 

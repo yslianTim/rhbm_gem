@@ -39,17 +39,20 @@ void ApplyFitState(
     const detail::SecondStageContext & context,
     const FitState & iteration_state)
 {
-    auto adjusted_sampling_entries_list{
-        detail::BuildSecondStageAdjustedSamples(context, iteration_state)
+    const auto model_snapshot{
+        detail::BuildSecondStageModelSnapshot(context, iteration_state)
     };
 
     auto analysis{ model_object.EditAnalysis() };
     for (std::size_t i = 0; i < context.size(); i++)
     {
+        auto adjusted_sampling_entries{
+            detail::BuildSecondStageAdjustedSamples(context.at(i), model_snapshot)
+        };
         analysis.ApplyAtomLocalSecondStageResult(
             *context.at(i).atom,
             iteration_state.at(i),
-            std::move(adjusted_sampling_entries_list.at(i)));
+            std::move(adjusted_sampling_entries));
     }
 }
 
@@ -225,36 +228,39 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
     }
 
-    auto initial_state_build_result{ detail::BuildInitialFitState(context) };
-    if (initial_state_build_result.failure != detail::SecondStageInitialStateBuildResult::Failure::None)
+    FitState initial_state;
     {
-        if (!options.quiet_mode)
+        auto initial_state_build_result{ detail::BuildInitialFitState(context) };
+        if (initial_state_build_result.failure != detail::SecondStageInitialStateBuildResult::Failure::None)
         {
-            const auto unselected_seed_failure{
-                initial_state_build_result.failure == detail::SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
-            };
-            Logger::Log(LogLevel::Warning,
-                unselected_seed_failure ?
-                    "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
-                    "is available for every unselected neighbor atom." :
-                    "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
-                    "is available for every selected atom.");
-            Logger::Log(LogLevel::Info,
-                "Second-stage local fitting summary: accepted_iterations=0, "
-                "best_iteration=unavailable, stop_reason=" +
-                std::string(unselected_seed_failure ? "no-valid-unselected-neighbor-seed" : "no-valid-seed") +
-                ", best_audit_objective=unavailable, final_uses_polish=unavailable, "
-                "final_state_source=unavailable.");
+            if (!options.quiet_mode)
+            {
+                const auto unselected_seed_failure{
+                    initial_state_build_result.failure == detail::SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
+                };
+                Logger::Log(LogLevel::Warning,
+                    unselected_seed_failure ?
+                        "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
+                        "is available for every unselected neighbor atom." :
+                        "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
+                        "is available for every selected atom.");
+                Logger::Log(LogLevel::Info,
+                    "Second-stage local fitting summary: accepted_iterations=0, "
+                    "best_iteration=unavailable, stop_reason=" +
+                    std::string(unselected_seed_failure ? "no-valid-unselected-neighbor-seed" : "no-valid-seed") +
+                    ", best_audit_objective=unavailable, final_uses_polish=unavailable, "
+                    "final_state_source=unavailable.");
+            }
+            return false;
         }
-        return false;
+        detail::LogSecondStageSeedSelections(
+            initial_state_build_result.selection_record_list,
+            options.quiet_mode);
+        detail::LogUnselectedSecondStageSeedSelections(
+            initial_state_build_result.unselected_selection_record_list,
+            options.quiet_mode);
+        initial_state = std::move(initial_state_build_result.state);
     }
-    detail::LogSecondStageSeedSelections(
-        initial_state_build_result.selection_record_list,
-        options.quiet_mode);
-    detail::LogUnselectedSecondStageSeedSelections(
-        initial_state_build_result.unselected_selection_record_list,
-        options.quiet_mode);
-    auto initial_state{ std::move(initial_state_build_result.state) };
     const auto graph_topology{
         detail::BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };

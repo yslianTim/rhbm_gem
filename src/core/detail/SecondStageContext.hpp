@@ -30,7 +30,6 @@ struct NeighborAtomSample
 struct UnselectedAtomContributor
 {
     int atom_serial_id{ 0 };
-    GroupKey group_key{};
     std::optional<std::size_t> selected_group_id{};
     std::optional<GaussianModel3DWithUncertainty> initial_seed{};
 };

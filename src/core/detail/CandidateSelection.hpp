@@ -236,38 +236,20 @@ inline void RejectCombinedCandidate(
     selection.polish_progress.accepted_count = 0;
 }
 
-inline std::vector<Eigen::Vector3d> InterpolateTransformedEstimations(
-    const std::vector<Eigen::Vector3d> & previous_estimation_list,
-    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    double damping)
-{
-    if (previous_estimation_list.size() != candidate_estimation_list.size() ||
-        !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
-    {
-        throw std::invalid_argument("Local fitting transformed interpolation inputs are invalid.");
-    }
-    std::vector<Eigen::Vector3d> interpolated_list;
-    interpolated_list.reserve(previous_estimation_list.size());
-    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
-    {
-        interpolated_list.emplace_back(
-            (previous_estimation_list.at(i) + damping * (candidate_estimation_list.at(i) - previous_estimation_list.at(i))).eval());
-    }
-    return interpolated_list;
-}
-
-inline std::optional<FitStatePatch> BuildCandidatePatch(
+inline std::optional<FitStatePatch> BuildDampedCandidatePatch(
     const FitState & previous_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
-    const std::vector<Eigen::Vector3d> & candidate_transformed_estimation_list,
+    const std::vector<Eigen::Vector3d> & endpoint_transformed_estimation_list,
     const FitState & uncertainty_state,
-    const std::vector<std::size_t> & active_index_list)
+    const std::vector<std::size_t> & active_index_list,
+    double damping)
 {
     if (previous_transformed_estimation_list.size() != active_index_list.size() ||
-        candidate_transformed_estimation_list.size() != active_index_list.size())
+        endpoint_transformed_estimation_list.size() != active_index_list.size() ||
+        !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
         throw std::invalid_argument(
-            "Local fitting candidate transformed coordinate count is inconsistent.");
+            "Local fitting candidate transformed interpolation inputs are invalid.");
     }
     FitStatePatch candidate_patch;
     candidate_patch.atom_index_list = active_index_list;
@@ -278,8 +260,10 @@ inline std::optional<FitStatePatch> BuildCandidatePatch(
         const auto & previous_transformed_estimation{
             previous_transformed_estimation_list.at(local_position)
         };
-        const auto & candidate_transformed_estimation{
-            candidate_transformed_estimation_list.at(local_position)
+        const auto candidate_transformed_estimation{
+            (previous_transformed_estimation +
+                damping * (endpoint_transformed_estimation_list.at(local_position) -
+                    previous_transformed_estimation)).eval()
         };
         if (!previous_transformed_estimation.allFinite() || !candidate_transformed_estimation.allFinite())
         {
@@ -413,19 +397,14 @@ inline ClusterCandidateResult SelectClusterCandidate(
                 1.0,
                 trust_region_radius)
         };
-        const auto base_cluster_estimation_list{
-            InterpolateTransformedEstimations(
-                previous_cluster_estimation_list,
-                raw_cluster_estimation_list,
-                trust_region_damping.effective_damping)
-        };
         auto base_patch{
-            BuildCandidatePatch(
+            BuildDampedCandidatePatch(
                 previous_state,
                 previous_cluster_estimation_list,
-                base_cluster_estimation_list,
+                raw_cluster_estimation_list,
                 raw_state,
-                key)
+                key,
+                trust_region_damping.effective_damping)
         };
         if (base_patch.has_value())
         {

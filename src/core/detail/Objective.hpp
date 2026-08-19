@@ -914,7 +914,7 @@ inline bool TryCommitClusterCandidate(
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
             candidate_overlay.GetCandidateState(),
-            candidate_overlay.GetBaselineState(),
+            candidate_overlay.GetBaseline().model_snapshot.selected,
             key)
     };
     const auto maximum_transformed_change{

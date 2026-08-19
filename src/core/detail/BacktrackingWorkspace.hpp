@@ -245,18 +245,19 @@ private:
 
     double GetMaximumTransformedChange() const
     {
-        std::vector<algorithm::ParameterChange> change_list;
-        change_list.reserve(m_candidate_patch.atom_index_list.size());
+        double maximum_change{ 0.0 };
         for (std::size_t atom_position = 0;
             atom_position < m_candidate_patch.atom_index_list.size();
             atom_position++)
         {
-            change_list.emplace_back(
-                CalculateTransformedChange(
-                    m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
-                    m_previous_model_list.at(atom_position)));
+            maximum_change = std::max(
+                maximum_change,
+                detail::GetMaximumTransformedChange(
+                    CalculateTransformedChange(
+                        m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
+                        m_previous_model_list.at(atom_position))));
         }
-        return detail::GetMaximumTransformedChange(change_list);
+        return maximum_change;
     }
 
     template <typename EndpointState>

@@ -141,16 +141,14 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const auto column_count{ parameterization.seed_offset.size() };
     std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_atom_index;
     active_offset_column_by_atom_index.reserve(active_index_list.size());
-    std::unordered_map<GroupKey, Eigen::Index> active_offset_column_by_group_key;
+    std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_group_id;
     Eigen::VectorXd ridge_multiplier_by_group{ Eigen::VectorXd::Ones(column_count) };
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
         const auto offset_column{ parameterization.OffsetColumn(i) };
         active_offset_column_by_atom_index.emplace(atom_index, offset_column);
-        active_offset_column_by_group_key.emplace(
-            context.at(atom_index).group_key,
-            offset_column);
+        active_offset_column_by_group_id.emplace(context.at(atom_index).group_id, offset_column);
         ridge_multiplier_by_group(offset_column) = std::max(
             ridge_multiplier_by_group(offset_column),
             ridge_multiplier_list.at(atom_index));
@@ -191,11 +189,9 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 group_basis(target_offset_column) += target_basis;
             }
 
-            for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
-                neighbor_iter != atom_context.NeighborEnd(sample_index);
-                ++neighbor_iter)
+            for (auto iter = atom_context.NeighborBegin(sample_index); iter != atom_context.NeighborEnd(sample_index); ++iter)
             {
-                const auto & neighbor_atom_sample{ *neighbor_iter };
+                const auto & neighbor_atom_sample{ *iter };
                 const auto & neighbor_model{
                     ResolveNeighborAtomModel(neighbor_atom_sample, model_snapshot)
                 };
@@ -212,13 +208,15 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 }
                 else
                 {
-                    const auto group_key{
-                        context.unselected_atom_list.at(neighbor_atom_sample.atom_index).group_key
+                    const auto selected_group_id{
+                        context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
                     };
                     const auto offset_column_iter{
-                        active_offset_column_by_group_key.find(group_key)
+                        selected_group_id.has_value() ?
+                            active_offset_column_by_group_id.find(*selected_group_id) :
+                            active_offset_column_by_group_id.end()
                     };
-                    if (offset_column_iter != active_offset_column_by_group_key.end())
+                    if (offset_column_iter != active_offset_column_by_group_id.end())
                     {
                         neighbor_offset_column = offset_column_iter->second;
                     }

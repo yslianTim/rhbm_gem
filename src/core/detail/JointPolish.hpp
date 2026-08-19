@@ -199,7 +199,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const auto column_count{ parameterization.seed_parameter.size() };
     std::unordered_map<std::size_t, std::size_t> local_position_by_atom_index;
     local_position_by_atom_index.reserve(key.size());
-    std::unordered_map<GroupKey, Eigen::Index> offset_column_by_group_key;
+    std::unordered_map<std::size_t, Eigen::Index> offset_column_by_group_id;
     Eigen::VectorXd ridge_multiplier_by_column{ Eigen::VectorXd::Ones(column_count) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
@@ -215,8 +215,8 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 ridge_multiplier;
         }
         const auto offset_column{ parameterization.OffsetColumn(local_position) };
-        offset_column_by_group_key.emplace(
-            context.at(atom_index).group_key,
+        offset_column_by_group_id.emplace(
+            context.at(atom_index).group_id,
             offset_column);
         ridge_multiplier_by_column(offset_column) = std::max(
             ridge_multiplier_by_column(offset_column),
@@ -276,8 +276,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 if (std::abs(derivative) <= std::numeric_limits<double>::epsilon()) continue;
                 triplet_list.emplace_back(row_index, column_index, derivative);
             }
-            if (std::abs(evaluation->offset_jacobian) >
-                std::numeric_limits<double>::epsilon())
+            if (std::abs(evaluation->offset_jacobian) > std::numeric_limits<double>::epsilon())
             {
                 triplet_list.emplace_back(
                     row_index,
@@ -300,18 +299,18 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             if (!evaluation.has_value()) return false;
             predicted_response += evaluation->response;
 
+            const auto selected_group_id{ unselected_atom_contributor.selected_group_id };
             const auto local_position_iter{
-                offset_column_by_group_key.find(unselected_atom_contributor.group_key)
+                selected_group_id.has_value() ?
+                    offset_column_by_group_id.find(*selected_group_id) :
+                    offset_column_by_group_id.end()
             };
-            if (local_position_iter == offset_column_by_group_key.end() ||
+            if (local_position_iter == offset_column_by_group_id.end() ||
                 std::abs(evaluation->offset_jacobian) <= std::numeric_limits<double>::epsilon())
             {
                 return true;
             }
-            triplet_list.emplace_back(
-                row_index,
-                local_position_iter->second,
-                evaluation->offset_jacobian);
+            triplet_list.emplace_back(row_index, local_position_iter->second, evaluation->offset_jacobian);
             return true;
         };
 
@@ -319,11 +318,11 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         {
             return std::nullopt;
         }
-        for (auto neighbor_iter = atom_context.NeighborBegin(sample_ref.sample_index);
-            neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
-            ++neighbor_iter)
+        for (auto iter = atom_context.NeighborBegin(sample_ref.sample_index);
+            iter != atom_context.NeighborEnd(sample_ref.sample_index);
+            ++iter)
         {
-            const auto & neighbor_atom_sample{ *neighbor_iter };
+            const auto & neighbor_atom_sample{ *iter };
             const auto appended{
                 neighbor_atom_sample.is_selected ?
                     append_model(
