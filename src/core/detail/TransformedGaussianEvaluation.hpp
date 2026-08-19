@@ -141,12 +141,4 @@ inline std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     return jacobian;
 }
 
-inline std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
-    const std::optional<TransformedModelInvariants> & invariants,
-    double distance)
-{
-    if (!invariants.has_value()) return std::nullopt;
-    return EvaluateTransformedJacobian(*invariants, distance);
-}
-
 } // namespace rhbm_gem::core::detail

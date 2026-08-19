@@ -361,11 +361,11 @@ public:
     }
 
 private:
-    std::optional<GraphTopology> BuildWeighted(
+    GraphTopology BuildWeightedOrBinary(
         double minimum_weight,
         const std::vector<double> & sensitivity_minimum_weight_list)
     {
-        if (m_has_invalid_jacobian) return std::nullopt;
+        if (m_has_invalid_jacobian) return BuildBinary();
 
         std::vector<double> self_gram_norm_list(m_atom_count, 0.0);
         std::vector<char> self_gram_norm_is_built(m_atom_count, 0);
@@ -390,16 +390,10 @@ private:
         weighted_edge_list.reserve(m_pair_accumulator_by_pair.size());
         for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
         {
-            if (!cross_gram.allFinite())
-            {
-                return std::nullopt;
-            }
+            if (!cross_gram.allFinite()) return BuildBinary();
             const auto left_norm{ get_self_gram_norm(pair.first) };
             const auto right_norm{ get_self_gram_norm(pair.second) };
-            if (!std::isfinite(left_norm) || !std::isfinite(right_norm))
-            {
-                return std::nullopt;
-            }
+            if (!std::isfinite(left_norm) || !std::isfinite(right_norm)) return BuildBinary();
             double weight{ 0.0 };
             if (left_norm == 0.0 || right_norm == 0.0)
             {
@@ -407,14 +401,10 @@ private:
                     GraphWeightedEdge{ pair.first, pair.second, weight });
                 continue;
             }
-            const auto denominator{
-                std::sqrt(left_norm) * std::sqrt(right_norm)
-            };
-            if (!std::isfinite(denominator)) return std::nullopt;
-            const auto raw_weight{
-                FrobeniusNorm(cross_gram) / denominator
-            };
-            if (!std::isfinite(raw_weight)) return std::nullopt;
+            const auto denominator{ std::sqrt(left_norm) * std::sqrt(right_norm) };
+            if (!std::isfinite(denominator)) return BuildBinary();
+            const auto raw_weight{ FrobeniusNorm(cross_gram) / denominator };
+            if (!std::isfinite(raw_weight)) return BuildBinary();
             weight = std::clamp(raw_weight, 0.0, 1.0);
             weighted_edge_list.emplace_back(
                 GraphWeightedEdge{ pair.first, pair.second, weight });
@@ -450,17 +440,23 @@ public:
                 "Local fitting coupling residue key count must match atom count.");
         }
 
-        auto weighted_topology{ BuildWeighted(
+        auto topology{ BuildWeightedOrBinary(
             options.minimum_weight,
             options.sensitivity_minimum_weight_list) };
-        auto topology{
-            weighted_topology.has_value() ? std::move(*weighted_topology) : BuildBinary()
-        };
         topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
         topology.summary.configured_minimum_weight = options.minimum_weight;
         return ApplyGraphResidueCutoff(std::move(topology), options.maximum_residue_count);
     }
 };
+
+inline Eigen::Vector3d EvaluateCouplingGraphJacobian(
+    const std::optional<TransformedModelInvariants> & invariants,
+    double distance,
+    const Eigen::Vector3d & invalid_jacobian)
+{
+    if (!invariants.has_value()) return invalid_jacobian;
+    return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
+}
 
 inline GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
@@ -514,36 +510,32 @@ inline GraphTopology BuildSecondStageGraphTopology(
         for (std::size_t j = 0; j < atom_context.raw_sampling_entries.size(); j++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(j) };
-            const auto target_evaluation{ EvaluateTransformedJacobian(
+            const auto target_jacobian{ EvaluateCouplingGraphJacobian(
                 selected_model_invariants.at(i),
-                static_cast<double>(sample.point.distance)) };
+                static_cast<double>(sample.point.distance),
+                invalid_jacobian) };
             participant_list.clear();
-            participant_list.emplace_back(
-                GraphParticipant{
-                    i,
-                    target_evaluation.has_value() ? *target_evaluation : invalid_jacobian
-                });
+            participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
             for (auto iter = atom_context.NeighborBegin(j);
                 iter != atom_context.NeighborEnd(j);
                 ++iter)
             {
                 const auto & neighbor_atom_sample{ *iter };
-                const auto neighbor_evaluation{ neighbor_atom_sample.is_selected ?
-                    EvaluateTransformedJacobian(
+                const auto neighbor_jacobian{ neighbor_atom_sample.is_selected ?
+                    EvaluateCouplingGraphJacobian(
                         selected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) :
-                    EvaluateTransformedJacobian(
+                        neighbor_atom_sample.distance,
+                        invalid_jacobian) :
+                    EvaluateCouplingGraphJacobian(
                         unselected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) };
-                const auto jacobian{
-                    neighbor_evaluation.has_value() ? *neighbor_evaluation : invalid_jacobian
-                };
+                        neighbor_atom_sample.distance,
+                        invalid_jacobian) };
                 if (neighbor_atom_sample.is_selected)
                 {
                     participant_list.emplace_back(
                         GraphParticipant{
                             neighbor_atom_sample.atom_index,
-                            jacobian
+                            neighbor_jacobian
                         });
                     continue;
                 }
@@ -554,7 +546,8 @@ inline GraphTopology BuildSecondStageGraphTopology(
                 for (const auto selected_index :
                     context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
-                    participant_list.emplace_back(GraphParticipant{ selected_index, jacobian });
+                    participant_list.emplace_back(
+                        GraphParticipant{ selected_index, neighbor_jacobian });
                 }
             }
             builder.AddSample(SampleRef{ i, j }, participant_list);
@@ -844,19 +837,18 @@ inline CouplingGraphPartition BuildGraphPartition(
     const std::vector<std::size_t> & active_index_list)
 {
     const auto atom_count{ topology.adjacency_list.size() };
-    std::vector<std::optional<std::size_t>> active_position_by_atom_index(atom_count);
+    const auto inactive_position{ active_index_list.size() };
+    std::vector<std::size_t> active_position_by_atom_index(atom_count, inactive_position);
     for (std::size_t position = 0; position < active_index_list.size(); position++)
     {
         const auto atom_index{ active_index_list.at(position) };
         if (atom_index >= atom_count)
         {
-            throw std::invalid_argument(
-                "Local fitting coupling active index is out of range.");
+            throw std::invalid_argument("Local fitting coupling active index is out of range.");
         }
-        if (active_position_by_atom_index.at(atom_index).has_value())
+        if (active_position_by_atom_index.at(atom_index) != inactive_position)
         {
-            throw std::invalid_argument(
-                "Local fitting coupling active indexes must be unique.");
+            throw std::invalid_argument("Local fitting coupling active indexes must be unique.");
         }
         active_position_by_atom_index.at(atom_index) = position;
     }
@@ -886,20 +878,19 @@ inline CouplingGraphPartition BuildGraphPartition(
 
     for (const auto atom_index : active_index_list)
     {
-        const auto position{ *active_position_by_atom_index.at(atom_index) };
+        const auto position{ active_position_by_atom_index.at(atom_index) };
         for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
         {
             if (neighbor_index >= atom_count)
             {
-                throw std::invalid_argument(
-                    "Local fitting coupling edge index is out of range.");
+                throw std::invalid_argument("Local fitting coupling edge index is out of range.");
             }
             const auto neighbor_position{
                 active_position_by_atom_index.at(neighbor_index)
             };
-            if (neighbor_position.has_value())
+            if (neighbor_position != inactive_position)
             {
-                component_set.Merge(position, *neighbor_position);
+                component_set.Merge(position, neighbor_position);
             }
         }
     }
@@ -927,8 +918,8 @@ inline CouplingGraphPartition BuildGraphPartition(
                     "Local fitting coupling sample contributor is out of range.");
             }
             const auto position{ active_position_by_atom_index.at(atom_index) };
-            if (!position.has_value()) continue;
-            root_list.emplace_back(component_set.Find(*position));
+            if (position == inactive_position) continue;
+            root_list.emplace_back(component_set.Find(position));
         }
         std::sort(root_list.begin(), root_list.end());
         root_list.erase(std::unique(root_list.begin(), root_list.end()), root_list.end());

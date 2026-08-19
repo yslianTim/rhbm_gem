@@ -214,37 +214,6 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     return adjusted_sampling_entries;
 }
 
-inline ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state)
-{
-    ResidualBaseline baseline{
-        BuildSecondStageModelSnapshot(context, state),
-        std::vector<std::vector<std::optional<ResidualSample>>>(context.size())
-    };
-    for (std::size_t i = 0; i < context.size(); i++)
-    {
-        const auto & atom_context{ context.at(i) };
-        const auto sample_count{ atom_context.raw_sampling_entries.size() };
-        baseline.sample_list.at(i).reserve(sample_count);
-        for (std::size_t j = 0; j < sample_count; j++)
-        {
-            const auto adjusted_response{
-                CalculateSecondStageAdjustedResponse(atom_context, j, baseline.model_snapshot)
-            };
-            const auto & sample{ atom_context.raw_sampling_entries.at(j) };
-            const auto expected_response{
-                GetFitModel(baseline.model_snapshot.selected, i).ResponseAtDistance(static_cast<double>(sample.point.distance))
-            };
-            const auto residual{ adjusted_response - expected_response };
-            baseline.sample_list.at(i).emplace_back(
-                std::isfinite(adjusted_response) && std::isfinite(residual) ?
-                    std::optional<ResidualSample>{
-                        ResidualSample{ adjusted_response, residual } } :
-                    std::nullopt);
-        }
-    }
-    return baseline;
-}
-
 template <typename State>
 inline std::optional<ResidualSample> EvaluateResidualSample(
     const SecondStageContext & context,
@@ -263,11 +232,32 @@ inline std::optional<ResidualSample> EvaluateResidualSample(
         GetFitModel(state, sample_ref.atom_index).ResponseAtDistance(static_cast<double>(sample.point.distance))
     };
     const auto residual{ adjusted_response - expected_response };
-    if (!std::isfinite(adjusted_response) || !std::isfinite(residual))
-    {
-        return std::nullopt;
-    }
+    if (!std::isfinite(adjusted_response) || !std::isfinite(residual)) return std::nullopt;
     return ResidualSample{ adjusted_response, residual };
+}
+
+inline ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state)
+{
+    ResidualBaseline baseline{
+        BuildSecondStageModelSnapshot(context, state),
+        std::vector<std::vector<std::optional<ResidualSample>>>(context.size())
+    };
+    for (std::size_t i = 0; i < context.size(); i++)
+    {
+        const auto & atom_context{ context.at(i) };
+        const auto sample_count{ atom_context.raw_sampling_entries.size() };
+        baseline.sample_list.at(i).reserve(sample_count);
+        for (std::size_t j = 0; j < sample_count; j++)
+        {
+            baseline.sample_list.at(i).emplace_back(
+                EvaluateResidualSample(
+                    context,
+                    baseline.model_snapshot.selected,
+                    SampleRef{ i, j },
+                    baseline.model_snapshot));
+        }
+    }
+    return baseline;
 }
 
 } // namespace rhbm_gem::core::detail
