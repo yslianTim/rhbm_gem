@@ -52,7 +52,6 @@ struct UnselectedAtomContributor
 struct AtomContext
 {
     const AtomObject * atom{ nullptr };
-    GroupKey group_key{};
     std::size_t group_id{ 0 };
     LocalPotentialSampleList raw_sampling_entries{};
     LocalGaussianResult initial_result{};

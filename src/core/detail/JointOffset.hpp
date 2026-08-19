@@ -70,30 +70,30 @@ struct JointOffsetParameterization
 };
 
 inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterization(
-    const std::vector<GroupKey> & group_key_by_atom_position,
+    const std::vector<std::size_t> & group_id_by_atom_position,
     const Eigen::VectorXd & atom_offset)
 {
     const auto atom_count{ static_cast<std::size_t>(atom_offset.size()) };
-    if (group_key_by_atom_position.empty() || group_key_by_atom_position.size() != atom_count)
+    if (group_id_by_atom_position.empty() || group_id_by_atom_position.size() != atom_count)
     {
         return std::nullopt;
     }
 
-    std::map<GroupKey, std::size_t> group_position_by_key;
-    for (const auto group_key : group_key_by_atom_position)
+    std::map<std::size_t, std::size_t> group_position_by_id;
+    for (const auto group_id : group_id_by_atom_position)
     {
-        group_position_by_key.emplace(group_key, 0);
+        group_position_by_id.emplace(group_id, 0);
     }
     std::size_t group_position{ 0 };
-    for (auto & group_entry : group_position_by_key)
+    for (auto & group_entry : group_position_by_id)
     {
         group_entry.second = group_position++;
     }
 
     JointOffsetParameterization parameterization;
     parameterization.group_position_by_atom.resize(atom_count);
-    parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_key.size()));
-    std::vector<std::vector<double>> offset_list_by_group(group_position_by_key.size());
+    parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_id.size()));
+    std::vector<std::vector<double>> offset_list_by_group(group_position_by_id.size());
 
     for (std::size_t atom_position = 0; atom_position < atom_count; atom_position++)
     {
@@ -101,7 +101,7 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         if (!std::isfinite(offset)) return std::nullopt;
 
         const auto atom_group_position{
-            group_position_by_key.at(group_key_by_atom_position.at(atom_position))
+            group_position_by_id.at(group_id_by_atom_position.at(atom_position))
         };
         parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
         offset_list_by_group.at(atom_group_position).emplace_back(offset);
@@ -418,17 +418,17 @@ inline JointOffsetSolveResult EstimateJointOffsets(
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
-    std::vector<GroupKey> group_key_by_atom_position;
-    group_key_by_atom_position.reserve(active_index_list.size());
+    std::vector<std::size_t> group_id_by_atom_position;
+    group_id_by_atom_position.reserve(active_index_list.size());
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
         previous_offset(static_cast<Eigen::Index>(i)) =
             GetFitModel(model_snapshot.selected, atom_index).GetOffset();
     }
     auto parameterization{
-        BuildJointOffsetParameterization(group_key_by_atom_position, previous_offset)
+        BuildJointOffsetParameterization(group_id_by_atom_position, previous_offset)
     };
     if (!parameterization.has_value())
     {

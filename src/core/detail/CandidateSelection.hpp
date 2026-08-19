@@ -93,23 +93,23 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         };
     }
 
-    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<std::size_t> group_id_by_atom_position;
     std::vector<GaussianModel3D> previous_model_list;
     std::vector<GaussianModel3D> raw_model_list;
-    group_key_by_atom_position.reserve(key.size());
+    group_id_by_atom_position.reserve(key.size());
     previous_model_list.reserve(key.size());
     raw_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
         previous_model_list.emplace_back(outer_previous_state.at(atom_index).mdpde.GetModel());
         raw_model_list.emplace_back(raw_state.at(atom_index).mdpde.GetModel());
     }
     const auto previous_shared_offset_list{
-        BuildGroupMedianOffsetList(group_key_by_atom_position, previous_model_list)
+        BuildGroupMedianOffsetList(group_id_by_atom_position, previous_model_list)
     };
     const auto raw_shared_offset_list{
-        BuildGroupMedianOffsetList(group_key_by_atom_position, raw_model_list)
+        BuildGroupMedianOffsetList(group_id_by_atom_position, raw_model_list)
     };
 
     std::vector<GaussianModel3D> seed_model_list;
@@ -300,13 +300,13 @@ inline bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
 {
     return diagnostic.candidate_objective.has_value() &&
         diagnostic.previous_objective.has_value() &&
-        IsTrustRegionGrowthEligible(
+        IsTrustRegionStepAtGrowthBoundary(
             diagnostic.trust_region_step_norm,
-            diagnostic.trust_region_radius,
-            IsBetterAuditObjective(
-                diagnostic.candidate_objective->GetTotalObjective(),
-                diagnostic.previous_objective->GetTotalObjective(),
-                kObjectiveStrictTolerance));
+            diagnostic.trust_region_radius) &&
+        IsBetterAuditObjective(
+            diagnostic.candidate_objective->GetTotalObjective(),
+            diagnostic.previous_objective->GetTotalObjective(),
+            kObjectiveStrictTolerance);
 }
 
 inline ClusterCandidateResult SelectClusterCandidate(

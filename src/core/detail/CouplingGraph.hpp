@@ -451,9 +451,11 @@ public:
 
 inline Eigen::Vector3d EvaluateCouplingGraphJacobian(
     const std::optional<TransformedModelInvariants> & invariants,
-    double distance,
-    const Eigen::Vector3d & invalid_jacobian)
+    double distance)
 {
+    static const Eigen::Vector3d invalid_jacobian{
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
+    };
     if (!invariants.has_value()) return invalid_jacobian;
     return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
 }
@@ -499,9 +501,6 @@ inline GraphTopology BuildSecondStageGraphTopology(
     {
         unselected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
     }
-    const auto invalid_jacobian{
-        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
-    };
     std::vector<GraphParticipant> participant_list;
     participant_list.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
@@ -512,8 +511,7 @@ inline GraphTopology BuildSecondStageGraphTopology(
             const auto & sample{ atom_context.raw_sampling_entries.at(j) };
             const auto target_jacobian{ EvaluateCouplingGraphJacobian(
                 selected_model_invariants.at(i),
-                static_cast<double>(sample.point.distance),
-                invalid_jacobian) };
+                static_cast<double>(sample.point.distance)) };
             participant_list.clear();
             participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
             for (auto iter = atom_context.NeighborBegin(j);
@@ -524,12 +522,10 @@ inline GraphTopology BuildSecondStageGraphTopology(
                 const auto neighbor_jacobian{ neighbor_atom_sample.is_selected ?
                     EvaluateCouplingGraphJacobian(
                         selected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance,
-                        invalid_jacobian) :
+                        neighbor_atom_sample.distance) :
                     EvaluateCouplingGraphJacobian(
                         unselected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance,
-                        invalid_jacobian) };
+                        neighbor_atom_sample.distance) };
                 if (neighbor_atom_sample.is_selected)
                 {
                     participant_list.emplace_back(

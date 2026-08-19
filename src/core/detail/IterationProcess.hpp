@@ -630,22 +630,22 @@ inline RawIterationResult RunRawIteration(
 
     auto iteration_state{ previous_state };
     SuspiciousUpdateMask rollback_atom_mask(context.size(), 0);
-    std::vector<GroupKey> group_key_by_atom_index;
-    group_key_by_atom_index.reserve(context.size());
+    std::vector<std::size_t> group_id_by_atom_index;
+    group_id_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
-        group_key_by_atom_index.emplace_back(atom_context.group_key);
+        group_id_by_atom_index.emplace_back(atom_context.group_id);
     }
     for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
     {
         const auto & key{ cluster_key_list.at(cluster_position) };
-        std::vector<GroupKey> group_key_by_position;
+        std::vector<std::size_t> group_id_by_position;
         SuspiciousUpdateMask suspicious_seed_mask(key.size(), 0);
-        group_key_by_position.reserve(key.size());
+        group_id_by_position.reserve(key.size());
         for (std::size_t position = 0; position < key.size(); position++)
         {
             const auto atom_index{ key.at(position) };
-            group_key_by_position.emplace_back(group_key_by_atom_index.at(atom_index));
+            group_id_by_position.emplace_back(group_id_by_atom_index.at(atom_index));
             if (EvaluateSuspiciousOffsetUpdate(
                     context.at(atom_index).raw_sampling_entries,
                     previous_state.at(atom_index).mdpde.GetModel(),
@@ -656,7 +656,7 @@ inline RawIterationResult RunRawIteration(
             }
         }
         const auto cluster_rollback_mask{
-            ExpandSuspiciousSharedOffsetGroups(group_key_by_position, suspicious_seed_mask)
+            ExpandSuspiciousSharedOffsetGroups(group_id_by_position, suspicious_seed_mask)
         };
         for (std::size_t position = 0; position < key.size(); position++)
         {
@@ -672,7 +672,7 @@ inline RawIterationResult RunRawIteration(
 
     FittedGaussianSnapshot refit_model_snapshot{
         BuildGroupMedianModelList(
-            group_key_by_atom_index,
+            group_id_by_atom_index,
             current_model_snapshot.selected)
     };
     const auto refit_model_bundle{

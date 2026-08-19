@@ -72,14 +72,6 @@ inline bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
         step_norm >= kTrustRegionGrowthBoundaryRatio * radius;
 }
 
-inline bool IsTrustRegionGrowthEligible(
-    double step_norm,
-    double radius,
-    bool objective_improved)
-{
-    return objective_improved && IsTrustRegionStepAtGrowthBoundary(step_norm, radius);
-}
-
 inline RejectedClusterPartition PartitionRejectedClusters(
     const std::vector<ClusterKey> & rejected_key_list,
     const std::vector<ClusterKey> & exhausted_key_list)
@@ -148,33 +140,27 @@ inline AllRejectedResolution ResolveAllRejected(
 
 class TrustRegionStateSet
 {
-private:
     TrustRegionOptions m_options{};
     std::map<ClusterKey, double> m_radius_by_key{};
-
-    static void ValidateOptions(const TrustRegionOptions & options)
-    {
-        if (!std::isfinite(options.initial_radius) ||
-            !std::isfinite(options.minimum_radius) ||
-            !std::isfinite(options.maximum_radius) ||
-            options.minimum_radius <= 0.0 ||
-            options.initial_radius < options.minimum_radius ||
-            options.maximum_radius < options.initial_radius ||
-            !std::isfinite(options.shrink_factor) ||
-            options.shrink_factor <= 0.0 ||
-            options.shrink_factor >= 1.0 ||
-            !std::isfinite(options.growth_factor) ||
-            options.growth_factor <= 1.0)
-        {
-            throw std::invalid_argument("Local fitting trust-region options are invalid.");
-        }
-    }
 
 public:
     explicit TrustRegionStateSet(TrustRegionOptions options = {})
         : m_options{ options }
     {
-        ValidateOptions(m_options);
+        if (!std::isfinite(m_options.initial_radius) ||
+            !std::isfinite(m_options.minimum_radius) ||
+            !std::isfinite(m_options.maximum_radius) ||
+            m_options.minimum_radius <= 0.0 ||
+            m_options.initial_radius < m_options.minimum_radius ||
+            m_options.maximum_radius < m_options.initial_radius ||
+            !std::isfinite(m_options.shrink_factor) ||
+            m_options.shrink_factor <= 0.0 ||
+            m_options.shrink_factor >= 1.0 ||
+            !std::isfinite(m_options.growth_factor) ||
+            m_options.growth_factor <= 1.0)
+        {
+            throw std::invalid_argument("Local fitting trust-region options are invalid.");
+        }
     }
 
     void Reconcile(const std::vector<ClusterKey> & key_list)
@@ -261,7 +247,7 @@ struct TrustRegionDamping
     double step_norm{ 0.0 };
 };
 
-inline void ValidateTrustRegionInputs(
+inline TrustRegionDamping LimitTrustRegionDamping(
     const std::vector<Eigen::Vector3d> & previous_estimation_list,
     const std::vector<Eigen::Vector3d> & candidate_estimation_list,
     double requested_damping,
@@ -284,19 +270,6 @@ inline void ValidateTrustRegionInputs(
             throw std::invalid_argument("Local fitting trust-region estimation is invalid.");
         }
     }
-}
-
-inline TrustRegionDamping LimitTrustRegionDamping(
-    const std::vector<Eigen::Vector3d> & previous_estimation_list,
-    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    double requested_damping,
-    double radius)
-{
-    ValidateTrustRegionInputs(
-        previous_estimation_list,
-        candidate_estimation_list,
-        requested_damping,
-        radius);
 
     double undamped_step_norm{ 0.0 };
     for (std::size_t i = 0; i < previous_estimation_list.size(); i++)

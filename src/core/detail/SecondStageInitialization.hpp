@@ -144,7 +144,7 @@ inline SecondStageContext BuildSecondStageContext(
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
-        atom_context.group_key = data_internal::GetGroupKey(atom);
+        const auto group_key{ data_internal::GetGroupKey(atom) };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         atom_context.initial_result = local_view.GetGaussianResult(FittingStage::Second);
@@ -155,9 +155,7 @@ inline SecondStageContext BuildSecondStageContext(
             options.distance_min,
             options.distance_max);
         auto [group_iter, inserted]{
-            selected_group_id_by_key.emplace(
-                atom_context.group_key,
-                context.selected_atom_index_list_by_group.size())
+            selected_group_id_by_key.emplace(group_key, context.selected_atom_index_list_by_group.size())
         };
         if (inserted)
         {

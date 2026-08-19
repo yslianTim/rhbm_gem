@@ -241,11 +241,11 @@ rg::GaussianModel3D MakeGaussianWithCenterSignal(
 std::pair<offset_detail::SecondStageContext,
     offset_detail::SecondStageModelSnapshot>
 BuildJointOffsetEstimationFixture(
-    const std::vector<GroupKey> & group_key_list,
+    const std::vector<std::size_t> & group_id_list,
     const std::vector<rg::GaussianModel3D> & model_list,
     const std::vector<double> & target_offset_list)
 {
-    if (group_key_list.size() != model_list.size() ||
+    if (group_id_list.size() != model_list.size() ||
         model_list.size() != target_offset_list.size())
     {
         throw std::invalid_argument(
@@ -254,12 +254,18 @@ BuildJointOffsetEstimationFixture(
 
     offset_detail::SecondStageContext context;
     context.selected_atom_list.resize(model_list.size());
+    std::unordered_map<std::size_t, std::size_t> dense_group_id_by_id;
     for (std::size_t atom_index = 0;
         atom_index < model_list.size();
         atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
-        atom_context.group_key = group_key_list.at(atom_index);
+        const auto group_iter{
+            dense_group_id_by_id.try_emplace(
+                group_id_list.at(atom_index),
+                dense_group_id_by_id.size()).first
+        };
+        atom_context.group_id = group_iter->second;
         SamplingPoint point;
         point.distance = 0.35F;
         atom_context.raw_sampling_entries.emplace_back(LocalPotentialSample{
@@ -290,11 +296,11 @@ struct JointPolishFixture
 };
 
 JointPolishFixture BuildJointPolishFixture(
-    const std::vector<GroupKey> & group_key_list,
+    const std::vector<std::size_t> & group_id_list,
     const std::vector<rg::GaussianModel3D> & base_model_list,
     const std::vector<rg::GaussianModel3D> & target_model_list)
 {
-    if (group_key_list.size() != base_model_list.size() ||
+    if (group_id_list.size() != base_model_list.size() ||
         base_model_list.size() != target_model_list.size() ||
         base_model_list.empty())
     {
@@ -311,14 +317,13 @@ JointPolishFixture BuildJointPolishFixture(
     };
     JointPolishFixture fixture;
     fixture.context.selected_atom_list.resize(base_model_list.size());
-    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
+    std::unordered_map<std::size_t, std::size_t> selected_group_id_by_id;
     fixture.state.reserve(base_model_list.size());
     for (std::size_t atom_index = 0;
         atom_index < base_model_list.size();
         atom_index++)
     {
         auto & atom_context{ fixture.context.at(atom_index) };
-        atom_context.group_key = group_key_list.at(atom_index);
         atom_context.neighbor_atom_sample_offset_list.assign(
             distance_list.size() + 1,
             0);
@@ -341,23 +346,24 @@ JointPolishFixture BuildJointPolishFixture(
             base_model_list.at(atom_index)));
 
         const auto group_position_iter{
-            selected_group_id_by_key.find(
-                group_key_list.at(atom_index))
+            selected_group_id_by_id.find(
+                group_id_list.at(atom_index))
         };
         const auto group_position{
             group_position_iter ==
-                selected_group_id_by_key.end() ?
+                selected_group_id_by_id.end() ?
                 fixture.context.selected_atom_index_list_by_group.size() :
                 group_position_iter->second
         };
         if (group_position_iter ==
-            selected_group_id_by_key.end())
+            selected_group_id_by_id.end())
         {
-            selected_group_id_by_key.emplace(
-                group_key_list.at(atom_index),
+            selected_group_id_by_id.emplace(
+                group_id_list.at(atom_index),
                 group_position);
             fixture.context.selected_atom_index_list_by_group.emplace_back();
         }
+        atom_context.group_id = group_position;
         fixture.context.selected_atom_index_list_by_group.at(group_position)
             .emplace_back(atom_index);
     }
@@ -767,12 +773,12 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousRollbackExpandsOnlyWithinSharedO
 {
     EXPECT_EQ(
         audit_detail::ExpandSuspiciousSharedOffsetGroups(
-            std::vector<GroupKey>{ 10, 10, 20, 30, 20 },
+            std::vector<std::size_t>{ 10, 10, 20, 30, 20 },
             std::vector<char>{ 0, 1, 0, 0, 0 }),
         (std::vector<char>{ 1, 1, 0, 0, 0 }));
     EXPECT_EQ(
         audit_detail::ExpandSuspiciousSharedOffsetGroups(
-            std::vector<GroupKey>{ 10, 20, 10, 20 },
+            std::vector<std::size_t>{ 10, 20, 10, 20 },
             std::vector<char>{ 0, 1, 0, 0 }),
         (std::vector<char>{ 0, 1, 0, 1 }));
 }
@@ -2095,7 +2101,7 @@ TEST(EstimatorSecondStageDefenseTest,
     initial_atom_offset << 1.0, 4.0, 3.0, 2.0, 6.0;
     const auto parameterization{
         offset_detail::BuildJointOffsetParameterization(
-            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
             initial_atom_offset)
     };
 
@@ -2133,13 +2139,13 @@ TEST(EstimatorSecondStageDefenseTest,
 
     EXPECT_FALSE(
         offset_detail::BuildJointOffsetParameterization(
-            std::vector<GroupKey>{ 20 },
+            std::vector<std::size_t>{ 20 },
             atom_offset).has_value());
     auto non_finite_atom_offset{ initial_atom_offset };
     non_finite_atom_offset(0) = std::numeric_limits<double>::infinity();
     EXPECT_FALSE(
         offset_detail::BuildJointOffsetParameterization(
-            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
             non_finite_atom_offset).has_value());
 }
 
@@ -2150,7 +2156,7 @@ TEST(EstimatorSecondStageDefenseTest,
     atom_offset << 1.0, 4.0, 3.0;
     const auto parameterization{
         offset_detail::BuildJointOffsetParameterization(
-            std::vector<GroupKey>{ 20, 10, 20 },
+            std::vector<std::size_t>{ 20, 10, 20 },
             atom_offset)
     };
     ASSERT_TRUE(parameterization.has_value());
@@ -2159,7 +2165,7 @@ TEST(EstimatorSecondStageDefenseTest,
     reordered_atom_offset << 4.0, 1.0, 3.0;
     const auto reordered{
         offset_detail::BuildJointOffsetParameterization(
-            std::vector<GroupKey>{ 10, 20, 20 },
+            std::vector<std::size_t>{ 10, 20, 20 },
             reordered_atom_offset)
     };
     ASSERT_TRUE(reordered.has_value());
@@ -2466,7 +2472,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
 TEST(EstimatorSecondStageDefenseTest,
     GroupMedianModelListUsesComponentMediansAndKeepsGroupsSeparate)
 {
-    const std::vector<GroupKey> group_key_list{ 10, 10, 10, 20, 20, 30 };
+    const std::vector<std::size_t> group_id_list{ 10, 10, 10, 20, 20, 30 };
     const std::vector<rg::GaussianModel3D> model_list{
         rg::GaussianModel3D{ 1.0, 0.20, 1.0 },
         rg::GaussianModel3D{ 9.0, 0.60, 3.0 },
@@ -2478,7 +2484,7 @@ TEST(EstimatorSecondStageDefenseTest,
 
     const auto median_model_list{
         median_detail::BuildGroupMedianModelList(
-            group_key_list,
+            group_id_list,
             model_list)
     };
 
@@ -2515,7 +2521,7 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     const auto median_model_list{
         median_detail::BuildGroupMedianModelList(
-            std::vector<GroupKey>{ 10, 10, 20 },
+            std::vector<std::size_t>{ 10, 10, 20 },
             model_list)
     };
 
@@ -2525,7 +2531,7 @@ TEST(EstimatorSecondStageDefenseTest,
     ExpectGaussianModelsNear(median_model_list.at(2), invalid_model, 1.0e-12);
     EXPECT_THROW(
         median_detail::BuildGroupMedianModelList(
-            std::vector<GroupKey>{ 10 },
+            std::vector<std::size_t>{ 10 },
             model_list),
         std::invalid_argument);
 }
@@ -2533,7 +2539,7 @@ TEST(EstimatorSecondStageDefenseTest,
 TEST(EstimatorSecondStageDefenseTest,
     SharedOffsetDampedModelsInterpolatePhysicalGroupOffset)
 {
-    const std::vector<GroupKey> group_key_list{ 10, 10, 20 };
+    const std::vector<std::size_t> group_id_list{ 10, 10, 20 };
     const std::vector<rg::GaussianModel3D> previous_model_list{
         rg::GaussianModel3D{ 4.0, 0.40, 0.1 },
         rg::GaussianModel3D{ 6.0, 0.60, 0.9 },
@@ -2546,12 +2552,12 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     const auto previous_shared_offset_list{
         median_detail::BuildGroupMedianOffsetList(
-            group_key_list,
+            group_id_list,
             previous_model_list)
     };
     const auto raw_shared_offset_list{
         median_detail::BuildGroupMedianOffsetList(
-            group_key_list,
+            group_id_list,
             raw_model_list)
     };
 
@@ -2620,7 +2626,7 @@ TEST(EstimatorSecondStageDefenseTest,
 TEST(EstimatorSecondStageDefenseTest, GroupMedianModelsAreIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };
-    const std::vector<GroupKey> group_key_list{ 10, 10, 10 };
+    const std::vector<std::size_t> group_id_list{ 10, 10, 10 };
     const std::vector<rg::GaussianModel3D> model_list{
         rg::GaussianModel3D{ 3.0, 0.40, -0.2 },
         rg::GaussianModel3D{ 5.0, 0.60, 0.1 },
@@ -2639,12 +2645,12 @@ TEST(EstimatorSecondStageDefenseTest, GroupMedianModelsAreIntensityScaleInvarian
 
     const auto median_model_list{
         median_detail::BuildGroupMedianModelList(
-            group_key_list,
+            group_id_list,
             model_list)
     };
     const auto scaled_median_model_list{
         median_detail::BuildGroupMedianModelList(
-            group_key_list,
+            group_id_list,
             scaled_model_list)
     };
     ASSERT_EQ(median_model_list.size(), scaled_median_model_list.size());
@@ -2669,7 +2675,7 @@ TEST(EstimatorSecondStageDefenseTest,
 {
     const auto median_model_list{
         median_detail::BuildGroupMedianModelList(
-            std::vector<GroupKey>{ 10, 10, 10 },
+            std::vector<std::size_t>{ 10, 10, 10 },
             std::vector<rg::GaussianModel3D>{
                 rg::GaussianModel3D{ 3.0, 0.70, 0.2 },
                 rg::GaussianModel3D{ 5.0, 0.80, 0.3 },
@@ -2722,7 +2728,7 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     const auto parameterization{
         polish_detail::BuildJointPolishParameterization(
-            std::vector<GroupKey>{ 20, 10, 20 },
+            std::vector<std::size_t>{ 20, 10, 20 },
             base_model_list)
     };
 
@@ -2751,7 +2757,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     };
     const auto parameterization{
         polish_detail::BuildJointPolishParameterization(
-            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
             base_model_list)
     };
 
@@ -2802,7 +2808,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     EXPECT_DOUBLE_EQ(candidate_model_list->at(4).GetOffset(), 6.0);
     EXPECT_FALSE(
         polish_detail::BuildJointPolishParameterization(
-            std::vector<GroupKey>{ 20 },
+            std::vector<std::size_t>{ 20 },
             base_model_list).has_value());
 }
 
@@ -2810,7 +2816,7 @@ TEST(
     EstimatorSecondStageDefenseTest,
     JointPolishDirectionAndProposalShareGroupOffset)
 {
-    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
@@ -2821,13 +2827,13 @@ TEST(
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_key_list,
+            group_id_list,
             base_model_list,
             target_model_list)
     };
     const auto parameterization{
         polish_detail::BuildJointPolishParameterization(
-            group_key_list,
+            group_id_list,
             base_model_list)
     };
     ASSERT_TRUE(parameterization.has_value());
@@ -2893,7 +2899,7 @@ TEST(
     EstimatorSecondStageDefenseTest,
     JointPolishProposalRejectsEmptyInvalidUnchangedAndOutOfRegionInputs)
 {
-    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
@@ -2904,7 +2910,7 @@ TEST(
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_key_list,
+            group_id_list,
             base_model_list,
             target_model_list)
     };
@@ -2951,7 +2957,7 @@ TEST(
     };
     auto unchanged_fixture{
         BuildJointPolishFixture(
-            group_key_list,
+            group_id_list,
             unchanged_model_list,
             unchanged_model_list)
     };
@@ -2987,7 +2993,7 @@ TEST(
     EstimatorSecondStageDefenseTest,
     JointPolishProposalUsesFitStateViewBaseForTrustRegionOrigin)
 {
-    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
@@ -2998,7 +3004,7 @@ TEST(
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_key_list,
+            group_id_list,
             base_model_list,
             target_model_list)
     };
@@ -3016,7 +3022,7 @@ TEST(
     EXPECT_DOUBLE_EQ(base_state_view.GetModel(0).GetAmplitude(), 10.0);
     const auto patched_parameterization{
         polish_detail::BuildJointPolishParameterization(
-            group_key_list,
+            group_id_list,
             std::vector<rg::GaussianModel3D>{
                 base_state_view.GetModel(0),
                 base_state_view.GetModel(1) })
@@ -3661,7 +3667,6 @@ TEST(EstimatorSecondStageDefenseTest,
         atom_index < previous_model_list.size();
         atom_index++)
     {
-        context.at(atom_index).group_key = 7;
         previous_state.at(atom_index).mdpde =
             rg::GaussianModel3DWithUncertainty{
                 previous_model_list.at(atom_index),
@@ -3753,8 +3758,6 @@ TEST(EstimatorSecondStageDefenseTest,
 {
     backtracking_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
-    context.at(0).group_key = 1;
-
     backtracking_detail::FitState previous_state(1);
     previous_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 8.0, 0.50, -0.10 },
@@ -3839,7 +3842,6 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
     context.selected_atom_list.resize(1);
     context.selected_atom_index_list_by_group.emplace_back(
         std::vector<std::size_t>{ 0 });
-    context.at(0).group_key = 4;
     context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
 
     const rg::GaussianModel3D previous_model{ 8.0, 0.50, -0.10 };
@@ -3904,7 +3906,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
     context.selected_atom_list.resize(1);
     context.selected_atom_index_list_by_group.emplace_back(
         std::vector<std::size_t>{ 0 });
-    context.at(0).group_key = 4;
     context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
 
     const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };

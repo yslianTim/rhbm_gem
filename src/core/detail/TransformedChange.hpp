@@ -85,21 +85,6 @@ inline double GetMaximumTransformedChange(const algorithm::ParameterChange & cha
     return GetMaximumTransformedChange(change.value_list);
 }
 
-inline double GetMaximumTransformedChange(const algorithm::ParameterChangeStats & stats)
-{
-    return GetMaximumTransformedChange(stats.percentile_list);
-}
-
-inline double GetMaximumTransformedChange(const std::vector<algorithm::ParameterChange> & change_list)
-{
-    double maximum_change{ 0.0 };
-    for (const auto & change : change_list)
-    {
-        maximum_change = std::max(maximum_change, GetMaximumTransformedChange(change));
-    }
-    return maximum_change;
-}
-
 inline bool IsTransformedChangeMaterial(
     const algorithm::ParameterChange & change,
     double minimum_change)
@@ -207,7 +192,7 @@ inline double GetMaximumTransformedChange(const TransformedChangeSummary & summa
 
 inline double GetMaximumTransformedPercentileChange(const TransformedChangeSummary & summary)
 {
-    return GetMaximumTransformedChange(summary.percentile_stats);
+    return GetMaximumTransformedChange(summary.percentile_stats.percentile_list);
 }
 
 inline bool IsTransformedChangeConverged(const TransformedChangeSummary & summary)
@@ -215,20 +200,15 @@ inline bool IsTransformedChangeConverged(const TransformedChangeSummary & summar
     return IsTransformedChangeConverged(summary.percentile_stats, summary.maximum_list);
 }
 
-inline bool IsTransformedPercentileConverged(const algorithm::ParameterChangeStats & stats)
+inline bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
     return std::all_of(
-        stats.percentile_list.begin(),
-        stats.percentile_list.end(),
+        summary.percentile_stats.percentile_list.begin(),
+        summary.percentile_stats.percentile_list.end(),
         [](double value)
         {
             return std::isfinite(value) && value < kTransformedChangeTolerance;
         });
-}
-
-inline bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
-{
-    return IsTransformedPercentileConverged(summary.percentile_stats);
 }
 
 } // namespace rhbm_gem::core::detail

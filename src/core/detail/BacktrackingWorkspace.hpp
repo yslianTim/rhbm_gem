@@ -70,23 +70,23 @@ public:
                 m_candidate_patch.atom_index_list.begin(),
                 m_candidate_patch.atom_index_list.end()),
             m_candidate_patch.atom_index_list.end());
-        std::vector<GroupKey> group_key_by_atom_position;
-        group_key_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
+        std::vector<std::size_t> group_id_by_atom_position;
+        group_id_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
         m_previous_model_list.reserve(m_candidate_patch.atom_index_list.size());
         m_endpoint_model_list.reserve(m_candidate_patch.atom_index_list.size());
         m_candidate_patch.mdpde_list.reserve(m_candidate_patch.atom_index_list.size());
         for (const auto atom_index : m_candidate_patch.atom_index_list)
         {
-            group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+            group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
             m_previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
             const auto & endpoint_mdpde{ GetEndpointMdpde(endpoint_state, atom_index) };
             m_endpoint_model_list.emplace_back(endpoint_mdpde.GetModel());
             m_candidate_patch.mdpde_list.emplace_back(endpoint_mdpde);
         }
         m_previous_shared_offset_list =
-            BuildGroupMedianOffsetList(group_key_by_atom_position, m_previous_model_list);
+            BuildGroupMedianOffsetList(group_id_by_atom_position, m_previous_model_list);
         m_endpoint_shared_offset_list =
-            BuildGroupMedianOffsetList(group_key_by_atom_position, m_endpoint_model_list);
+            BuildGroupMedianOffsetList(group_id_by_atom_position, m_endpoint_model_list);
     }
 
     BacktrackingWorkspace(const BacktrackingWorkspace &) = delete;

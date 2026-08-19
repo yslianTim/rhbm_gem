@@ -24,7 +24,6 @@
 
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -113,21 +112,21 @@ public:
 };
 
 inline std::optional<JointPolishParameterization> BuildJointPolishParameterization(
-    const std::vector<GroupKey> & group_key_by_atom_position,
+    const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
-    if (group_key_by_atom_position.empty() || group_key_by_atom_position.size() != base_model_list.size())
+    if (group_id_by_atom_position.empty() || group_id_by_atom_position.size() != base_model_list.size())
     {
         return std::nullopt;
     }
 
-    std::map<GroupKey, std::size_t> group_position_by_key;
-    for (const auto group_key : group_key_by_atom_position)
+    std::map<std::size_t, std::size_t> group_position_by_id;
+    for (const auto group_id : group_id_by_atom_position)
     {
-        group_position_by_key.emplace(group_key, 0);
+        group_position_by_id.emplace(group_id, 0);
     }
     std::size_t group_position{ 0 };
-    for (auto & group_entry : group_position_by_key)
+    for (auto & group_entry : group_position_by_id)
     {
         group_entry.second = group_position++;
     }
@@ -136,8 +135,8 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
     parameterization.group_position_by_atom.resize(base_model_list.size());
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
-            base_model_list.size() * kJointPolishShapeParameterSize + group_position_by_key.size()));
-    std::vector<std::vector<double>> offset_list_by_group(group_position_by_key.size());
+            base_model_list.size() * kJointPolishShapeParameterSize + group_position_by_id.size()));
+    std::vector<std::vector<double>> offset_list_by_group(group_position_by_id.size());
 
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
@@ -146,7 +145,7 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         };
         if (!transformed.has_value()) return std::nullopt;
         const auto atom_group_position{
-            group_position_by_key.at(group_key_by_atom_position.at(atom_position))
+            group_position_by_id.at(group_id_by_atom_position.at(atom_position))
         };
         parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
         parameterization.seed_parameter(
@@ -422,20 +421,20 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
     ReusableWeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
 {
-    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<std::size_t> group_id_by_atom_position;
     std::vector<GaussianModel3D> outer_previous_model_list;
     std::vector<GaussianModel3D> base_model_list;
-    group_key_by_atom_position.reserve(key.size());
+    group_id_by_atom_position.reserve(key.size());
     outer_previous_model_list.reserve(key.size());
     base_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
         outer_previous_model_list.emplace_back(base_state.GetBaseModel(atom_index));
         base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
-        BuildJointPolishParameterization(group_key_by_atom_position, base_model_list)
+        BuildJointPolishParameterization(group_id_by_atom_position, base_model_list)
     };
     if (!parameterization.has_value()) return std::nullopt;
 

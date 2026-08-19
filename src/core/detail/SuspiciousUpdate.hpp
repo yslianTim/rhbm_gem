@@ -11,7 +11,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/TransformedGaussianModel.hpp"
@@ -506,27 +505,27 @@ inline SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
 }
 
 inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
-    const std::vector<GroupKey> & group_key_by_position,
+    const std::vector<std::size_t> & group_id_by_position,
     const SuspiciousUpdateMask & suspicious_seed_mask)
 {
-    if (group_key_by_position.size() != suspicious_seed_mask.size())
+    if (group_id_by_position.size() != suspicious_seed_mask.size())
     {
         throw std::invalid_argument(
             "Suspicious shared-offset group input sizes are inconsistent.");
     }
 
-    std::set<GroupKey> suspicious_seed_group_key_set;
-    for (std::size_t position = 0; position < group_key_by_position.size(); position++)
+    std::set<std::size_t> suspicious_seed_group_id_set;
+    for (std::size_t position = 0; position < group_id_by_position.size(); position++)
     {
         if (suspicious_seed_mask.at(position) == 0) continue;
-        suspicious_seed_group_key_set.emplace(group_key_by_position.at(position));
+        suspicious_seed_group_id_set.emplace(group_id_by_position.at(position));
     }
 
-    SuspiciousUpdateMask rollback_mask(group_key_by_position.size(), 0);
-    for (std::size_t position = 0; position < group_key_by_position.size(); position++)
+    SuspiciousUpdateMask rollback_mask(group_id_by_position.size(), 0);
+    for (std::size_t position = 0; position < group_id_by_position.size(); position++)
     {
-        if (suspicious_seed_group_key_set.find(group_key_by_position.at(position)) !=
-            suspicious_seed_group_key_set.end())
+        if (suspicious_seed_group_id_set.find(group_id_by_position.at(position)) !=
+            suspicious_seed_group_id_set.end())
         {
             rollback_mask.at(position) = 1;
         }

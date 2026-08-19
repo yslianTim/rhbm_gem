@@ -11,7 +11,6 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -133,19 +132,19 @@ inline std::optional<GaussianModel3D> BuildGaussianParameterMedian(
 }
 
 inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
-    const std::vector<GroupKey> & group_key_by_atom_position,
+    const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    if (group_key_by_atom_position.size() != model_list.size())
+    if (group_id_by_atom_position.size() != model_list.size())
     {
         throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
     }
 
-    std::unordered_map<GroupKey, std::vector<std::size_t>> atom_position_list_by_group;
+    std::unordered_map<std::size_t, std::vector<std::size_t>> atom_position_list_by_group;
     atom_position_list_by_group.reserve(model_list.size());
     for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
     {
-        atom_position_list_by_group[group_key_by_atom_position.at(atom_position)]
+        atom_position_list_by_group[group_id_by_atom_position.at(atom_position)]
             .emplace_back(atom_position);
     }
 
@@ -171,15 +170,15 @@ inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
 }
 
 inline std::vector<double> BuildGroupMedianOffsetList(
-    const std::vector<GroupKey> & group_key_by_atom_position,
+    const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    if (group_key_by_atom_position.size() != model_list.size())
+    if (group_id_by_atom_position.size() != model_list.size())
     {
         throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
     }
 
-    std::unordered_map<GroupKey, std::vector<std::size_t>> atom_position_list_by_group;
+    std::unordered_map<std::size_t, std::vector<std::size_t>> atom_position_list_by_group;
     atom_position_list_by_group.reserve(model_list.size());
     std::vector<double> offset_list;
     offset_list.reserve(model_list.size());
@@ -187,7 +186,7 @@ inline std::vector<double> BuildGroupMedianOffsetList(
         atom_position < model_list.size();
         atom_position++)
     {
-        atom_position_list_by_group[group_key_by_atom_position.at(atom_position)]
+        atom_position_list_by_group[group_id_by_atom_position.at(atom_position)]
             .emplace_back(atom_position);
         offset_list.emplace_back(model_list.at(atom_position).GetOffset());
     }
