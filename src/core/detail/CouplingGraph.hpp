@@ -503,48 +503,36 @@ inline GraphTopology BuildSecondStageGraphTopology(
     {
         unselected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
     }
-    const auto evaluate_model = [](
-        const std::optional<TransformedModelInvariants> & invariants,
-        double distance)
-    {
-        if (!invariants.has_value())
-        {
-            return std::optional<Eigen::Vector3d>{};
-        }
-        return EvaluateTransformedJacobian(*invariants, distance);
-    };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
     std::vector<GraphParticipant> participant_list;
     participant_list.reserve(context.size());
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    for (std::size_t i = 0; i < context.size(); i++)
     {
-        const auto & atom_context{ context.at(atom_index) };
-        for (std::size_t sample_index = 0;
-            sample_index < atom_context.raw_sampling_entries.size();
-            sample_index++)
+        const auto & atom_context{ context.at(i) };
+        for (std::size_t j = 0; j < atom_context.raw_sampling_entries.size(); j++)
         {
-            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            const auto target_evaluation{ evaluate_model(
-                selected_model_invariants.at(atom_index),
+            const auto & sample{ atom_context.raw_sampling_entries.at(j) };
+            const auto target_evaluation{ EvaluateTransformedJacobian(
+                selected_model_invariants.at(i),
                 static_cast<double>(sample.point.distance)) };
             participant_list.clear();
             participant_list.emplace_back(
                 GraphParticipant{
-                    atom_index,
+                    i,
                     target_evaluation.has_value() ? *target_evaluation : invalid_jacobian
                 });
-            for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
-                neighbor_iter != atom_context.NeighborEnd(sample_index);
-                ++neighbor_iter)
+            for (auto iter = atom_context.NeighborBegin(j);
+                iter != atom_context.NeighborEnd(j);
+                ++iter)
             {
-                const auto & neighbor_atom_sample{ *neighbor_iter };
+                const auto & neighbor_atom_sample{ *iter };
                 const auto neighbor_evaluation{ neighbor_atom_sample.is_selected ?
-                    evaluate_model(
+                    EvaluateTransformedJacobian(
                         selected_model_invariants.at(neighbor_atom_sample.atom_index),
                         neighbor_atom_sample.distance) :
-                    evaluate_model(
+                    EvaluateTransformedJacobian(
                         unselected_model_invariants.at(neighbor_atom_sample.atom_index),
                         neighbor_atom_sample.distance) };
                 const auto jacobian{
@@ -566,16 +554,10 @@ inline GraphTopology BuildSecondStageGraphTopology(
                 for (const auto selected_index :
                     context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
-                    participant_list.emplace_back(
-                        GraphParticipant{
-                            selected_index,
-                            jacobian
-                        });
+                    participant_list.emplace_back(GraphParticipant{ selected_index, jacobian });
                 }
             }
-            builder.AddSample(
-                SampleRef{ atom_index, sample_index },
-                participant_list);
+            builder.AddSample(SampleRef{ i, j }, participant_list);
             completed_work++;
             update_progress();
         }
@@ -989,26 +971,9 @@ inline std::vector<SampleRef> BuildGraphAffectedSampleUnion(
             iter->second.begin(),
             iter->second.end());
     }
-    std::sort(
-        sample_id_list.begin(),
-        sample_id_list.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            if (lhs.atom_index != rhs.atom_index)
-            {
-                return lhs.atom_index < rhs.atom_index;
-            }
-            return lhs.sample_index < rhs.sample_index;
-        });
+    std::sort(sample_id_list.begin(), sample_id_list.end());
     sample_id_list.erase(
-        std::unique(
-            sample_id_list.begin(),
-            sample_id_list.end(),
-            [](const auto & lhs, const auto & rhs)
-            {
-                return lhs.atom_index == rhs.atom_index &&
-                    lhs.sample_index == rhs.sample_index;
-            }),
+        std::unique(sample_id_list.begin(), sample_id_list.end()),
         sample_id_list.end());
     return sample_id_list;
 }

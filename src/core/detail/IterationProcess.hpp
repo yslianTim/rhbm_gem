@@ -821,11 +821,15 @@ inline IterationState BuildIterationState(
     const auto initial_audit_objective{
         EvaluateAuditObjective(context, iteration_state.objective_domain, initial_model_snapshot)
     };
-    iteration_state.best_audit_state = BuildBestAuditState(
-        iteration_state.previous_state,
-        UsesPolish(iteration_state.previous_polish_provenance),
-        0,
-        initial_audit_objective);
+    if (initial_audit_objective.has_value())
+    {
+        TryUpdateBestAuditState(
+            iteration_state.previous_state,
+            UsesPolish(iteration_state.previous_polish_provenance),
+            0,
+            *initial_audit_objective,
+            iteration_state.best_audit_state);
+    }
     return iteration_state;
 }
 
@@ -1026,11 +1030,16 @@ inline IterationResult RunIteration(
                     iteration_state.objective_domain,
                     assembled_model_snapshot)
             };
-            iteration_state.best_audit_state = BuildBestAuditState(
-                assembled_state,
-                assembled_uses_polish,
-                iteration_state.accepted_iteration_count + 1,
-                reset_audit_objective);
+            iteration_state.best_audit_state.reset();
+            if (reset_audit_objective.has_value())
+            {
+                TryUpdateBestAuditState(
+                    assembled_state,
+                    assembled_uses_polish,
+                    iteration_state.accepted_iteration_count + 1,
+                    *reset_audit_objective,
+                    iteration_state.best_audit_state);
+            }
             iteration_state.active_index_list = std::move(remaining_active_index_list);
             performance_counters.RecordSolverWorkspaceReset();
             ResetClusterSolverWorkspace(

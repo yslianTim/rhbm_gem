@@ -1666,65 +1666,39 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     EXPECT_EQ(audit_state->source_iteration, 7U);
 }
 
-TEST(EstimatorSecondStageDefenseTest, BestAuditStateBuildHandlesUnavailableObjective)
-{
-    const audit_detail::FitState state;
-    const auto objective{
-        audit_detail::BuildObjectiveBreakdown(1.0, 0.0, 0.0)
-    };
-    ASSERT_TRUE(objective.has_value());
-
-    const auto available{
-        audit_detail::BuildBestAuditState(
-            state,
-            true,
-            4,
-            objective)
-    };
-    ASSERT_TRUE(available.has_value());
-    EXPECT_DOUBLE_EQ(
-        available->objective.GetTotalObjective(),
-        objective->GetTotalObjective());
-    EXPECT_TRUE(available->uses_polish);
-    EXPECT_EQ(available->source_iteration, 4U);
-
-    const std::optional<audit_detail::ObjectiveBreakdown> unavailable;
-    const auto empty{
-        audit_detail::BuildBestAuditState(
-            state,
-            false,
-            0,
-            unavailable)
-    };
-    EXPECT_FALSE(empty.has_value());
-}
-
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
 {
     const audit_detail::ObjectiveTolerance tolerance{
         1.0e-8,
         1.0e-3
     };
+    const audit_detail::ObjectiveBreakdown best_one{ 1.0, 0.0, 0.0 };
+    const audit_detail::ObjectiveBreakdown best_below{ 0.99, 0.0, 0.0 };
+    const audit_detail::ObjectiveBreakdown best_infinite{
+        std::numeric_limits<double>::infinity(),
+        0.0,
+        0.0
+    };
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.0005, 1.0, std::optional<double>{ 1.0 }, tolerance));
+        1.0005, 1.0, &best_one, tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.002, 1.0, std::optional<double>{ 1.0 }, tolerance));
+        1.002, 1.0, &best_one, tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.0, 1.0, std::optional<double>{ 0.99 }, tolerance));
+        1.0, 1.0, &best_below, tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         std::numeric_limits<double>::infinity(),
         1.0,
-        std::nullopt,
+        nullptr,
         tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0,
         std::numeric_limits<double>::infinity(),
-        std::nullopt,
+        nullptr,
         tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0,
         1.0,
-        std::optional<double>{ std::numeric_limits<double>::infinity() },
+        &best_infinite,
         tolerance));
 }
 
@@ -1737,29 +1711,29 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0e-8,
         0.0,
-        std::nullopt,
+        nullptr,
         tolerance));
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         -2.0 + 1.0e-8 + 2.0e-3,
         -2.0,
-        std::nullopt,
+        nullptr,
         tolerance));
     const auto boundary{ 2.0 + 1.0e-8 + 2.0e-3 };
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         boundary,
         2.0,
-        std::nullopt,
+        nullptr,
         tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         boundary + 1.0e-9,
         2.0,
-        std::nullopt,
+        nullptr,
         tolerance));
     EXPECT_THROW(
         audit_detail::IsAuditObjectiveAcceptableForProgress(
             1.0,
             1.0,
-            std::nullopt,
+            nullptr,
             audit_detail::ObjectiveTolerance{ 0.0, -1.0 }),
         std::invalid_argument);
 }

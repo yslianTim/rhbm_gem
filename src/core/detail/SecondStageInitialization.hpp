@@ -50,38 +50,43 @@ struct SecondStageSeedSelection
     GaussianModel3DWithUncertainty model{};
 };
 
-inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
-    const SecondStageSeedCandidates & candidates)
+inline std::optional<SecondStageSeedSelection> SelectValidSecondStageSeedCandidate(
+    SecondStageSeedSource source,
+    const std::optional<GaussianModel3DWithUncertainty> & candidate)
 {
-    const auto select = [](
-        SecondStageSeedSource source,
-        const std::optional<GaussianModel3DWithUncertainty> & candidate)
-        -> std::optional<SecondStageSeedSelection>
+    if (!candidate.has_value() || !IsValidSecondStageGaussianModel(candidate->GetModel()))
     {
-        if (!candidate.has_value() ||
-            !IsValidSecondStageGaussianModel(candidate->GetModel()))
-        {
-            return std::nullopt;
-        }
-        return SecondStageSeedSelection{ source, *candidate };
-    };
+        return std::nullopt;
+    }
+    return SecondStageSeedSelection{ source, *candidate };
+}
 
+inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
+{
     if (const auto selected{
-            select(SecondStageSeedSource::GroupPosterior, candidates.group_posterior) })
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupPosterior,
+                candidates.group_posterior) })
     {
         return selected;
     }
     if (const auto selected{
-            select(SecondStageSeedSource::GroupPrior, candidates.group_prior) })
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupPrior,
+                candidates.group_prior) })
     {
         return selected;
     }
     if (const auto selected{
-            select(SecondStageSeedSource::GroupMedian, candidates.group_median) })
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupMedian,
+                candidates.group_median) })
     {
         return selected;
     }
-    return select(SecondStageSeedSource::GlobalMedian, candidates.global_median);
+    return SelectValidSecondStageSeedCandidate(
+        SecondStageSeedSource::GlobalMedian,
+        candidates.global_median);
 }
 
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
@@ -268,8 +273,7 @@ inline std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameter
     };
 }
 
-inline SecondStageInitialStateBuildResult BuildInitialFitState(
-    SecondStageContext & context)
+inline SecondStageInitialStateBuildResult BuildInitialFitState(SecondStageContext & context)
 {
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
@@ -302,13 +306,8 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
     std::vector<std::optional<GaussianModel3DWithUncertainty>> median_by_group(models_by_group.size());
     for (std::size_t group_id = 0; group_id < models_by_group.size(); group_id++)
     {
-        const auto median_model{
-            BuildValidGaussianParameterMedian(models_by_group.at(group_id))
-        };
-        if (median_model.has_value())
-        {
-            median_by_group.at(group_id) = *median_model;
-        }
+        median_by_group.at(group_id) =
+            BuildValidGaussianParameterMedian(models_by_group.at(group_id));
     }
     const auto global_median{ BuildValidGaussianParameterMedian(global_models) };
 
@@ -317,12 +316,7 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
         const auto & atom_context{ context.at(i) };
-        std::optional<GaussianModel3DWithUncertainty> group_median;
-        if (atom_context.group_id < median_by_group.size() &&
-            median_by_group.at(atom_context.group_id).has_value())
-        {
-            group_median = *median_by_group.at(atom_context.group_id);
-        }
+        const auto & group_median{ median_by_group.at(atom_context.group_id) };
         const auto selection{
             SelectSecondStageSeed(
                 SecondStageSeedCandidates{
@@ -334,8 +328,7 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
         };
         if (!selection.has_value())
         {
-            build_result.failure =
-                SecondStageInitialStateBuildResult::Failure::SelectedSeedUnavailable;
+            build_result.failure = SecondStageInitialStateBuildResult::Failure::SelectedSeedUnavailable;
             return build_result;
         }
 

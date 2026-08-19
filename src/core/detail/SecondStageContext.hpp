@@ -18,6 +18,21 @@ struct SampleRef
 {
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
+
+    friend bool operator<(const SampleRef & lhs, const SampleRef & rhs)
+    {
+        if (lhs.atom_index != rhs.atom_index)
+        {
+            return lhs.atom_index < rhs.atom_index;
+        }
+        return lhs.sample_index < rhs.sample_index;
+    }
+
+    friend bool operator==(const SampleRef & lhs, const SampleRef & rhs)
+    {
+        return lhs.atom_index == rhs.atom_index &&
+            lhs.sample_index == rhs.sample_index;
+    }
 };
 
 struct NeighborAtomSample

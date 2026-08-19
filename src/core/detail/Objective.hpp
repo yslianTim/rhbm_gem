@@ -151,6 +151,12 @@ inline double CalculateObjectiveTolerance(double reference, ObjectiveTolerance t
     return tolerance.absolute_tolerance + tolerance.relative_tolerance * std::abs(reference);
 }
 
+inline bool IsObjectiveDeteriorated(double candidate, double reference, ObjectiveTolerance tolerance)
+{
+    if (!std::isfinite(reference)) return true;
+    return candidate > reference + CalculateObjectiveTolerance(reference, tolerance);
+}
+
 inline std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
     double fit_range_residual_objective,
     double tail_validation_loss,
@@ -183,37 +189,14 @@ inline bool IsBetterAuditObjective(double candidate, double best, ObjectiveToler
 inline bool IsAuditObjectiveAcceptableForProgress(
     double candidate,
     double previous,
-    std::optional<double> best,
-    ObjectiveTolerance tolerance)
-{
-    ValidateObjectiveTolerance(tolerance);
-    if (!std::isfinite(candidate) || !std::isfinite(previous))
-    {
-        return false;
-    }
-    const auto is_deteriorated = [&](double reference)
-    {
-        if (!std::isfinite(reference)) return true;
-        return candidate > reference + CalculateObjectiveTolerance(reference, tolerance);
-    };
-    return !is_deteriorated(previous) && (!best.has_value() || !is_deteriorated(*best));
-}
-
-inline bool IsAuditObjectiveAcceptableForProgress(
-    double candidate,
-    double previous,
     const ObjectiveBreakdown * best,
     ObjectiveTolerance tolerance)
 {
     ValidateObjectiveTolerance(tolerance);
     if (!std::isfinite(candidate) || !std::isfinite(previous)) return false;
-    const auto is_deteriorated = [&](double reference)
-    {
-        if (!std::isfinite(reference)) return true;
-        return candidate > reference + CalculateObjectiveTolerance(reference, tolerance);
-    };
-    return !is_deteriorated(previous) &&
-        (best == nullptr || !is_deteriorated(best->GetTotalObjective()));
+    return !IsObjectiveDeteriorated(candidate, previous, tolerance) &&
+        (best == nullptr ||
+            !IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance));
 }
 
 struct ObjectiveScale
@@ -245,6 +228,19 @@ struct ObjectiveDomain
     std::size_t tail_sample_count{ 0 };
 };
 
+inline void AppendObjectiveScaleSummary(std::ostringstream & message, const std::vector<double> & scale_list)
+{
+    if (scale_list.empty())
+    {
+        message << "unavailable";
+        return;
+    }
+    message
+        << array_helper::ComputePercentile(scale_list, 0.5) << "/"
+        << array_helper::ComputePercentile(scale_list, 0.99) << "/"
+        << *std::max_element(scale_list.begin(), scale_list.end());
+}
+
 inline void LogObjectiveDomain(
     const ObjectiveDomain & domain,
     bool quiet_mode,
@@ -263,21 +259,6 @@ inline void LogObjectiveDomain(
             tail_scale_list.emplace_back(cluster_domain.scale->tail);
         }
     }
-    const auto append_scale_summary = [](
-        std::ostringstream & message,
-        const std::vector<double> & scale_list)
-    {
-        if (scale_list.empty())
-        {
-            message << "unavailable";
-            return;
-        }
-        message
-            << array_helper::ComputePercentile(scale_list, 0.5) << "/"
-            << array_helper::ComputePercentile(scale_list, 0.99) << "/"
-            << *std::max_element(scale_list.begin(), scale_list.end());
-    };
-
     std::ostringstream message;
     message
         << (is_terminal_reset ?
@@ -288,9 +269,9 @@ inline void LogObjectiveDomain(
         << ", active atoms = " << domain.active_atom_count
         << ", unique fit/tail samples = " << domain.fit_sample_count << "/" << domain.tail_sample_count
         << ", fixed fit scale median/p99/max = ";
-    append_scale_summary(message, fit_scale_list);
+    AppendObjectiveScaleSummary(message, fit_scale_list);
     message << ", fixed tail scale median/p99/max = ";
-    append_scale_summary(message, tail_scale_list);
+    AppendObjectiveScaleSummary(message, tail_scale_list);
     message << ".";
     Logger::FinishProgressLine();
     Logger::Log(LogLevel::Info, message.str());
@@ -322,8 +303,7 @@ inline std::optional<double> BuildFixedObjectiveScale(
     const std::vector<double> & residual_list,
     const std::vector<double> & adjusted_response_list)
 {
-    if (residual_list.empty() ||
-        residual_list.size() != adjusted_response_list.size())
+    if (residual_list.empty() || residual_list.size() != adjusted_response_list.size())
     {
         return std::nullopt;
     }
@@ -335,8 +315,7 @@ inline std::optional<double> BuildFixedObjectiveScale(
             kObjectiveResidualScaleMin
         })
     };
-    return numeric_validation::IsFinitePositive(scale) ?
-        std::optional<double>{ scale } : std::nullopt;
+    return numeric_validation::IsFinitePositive(scale) ? std::optional<double>{ scale } : std::nullopt;
 }
 
 inline ObjectiveDomain BuildObjectiveDomain(
@@ -866,21 +845,6 @@ inline bool TryUpdateBestAuditState(
     return true;
 }
 
-inline BestAuditState BuildBestAuditState(
-    const FitState & state,
-    bool uses_polish,
-    std::size_t source_iteration,
-    const std::optional<ObjectiveBreakdown> & objective)
-{
-    if (!objective.has_value()) return std::nullopt;
-    return AuditedState{
-        *objective,
-        state,
-        uses_polish,
-        source_iteration
-    };
-}
-
 inline void ReconcileClusterObjectiveState(
     const ObjectiveByKey & previous_objective_by_key,
     ClusterObjectiveStateMap & state_by_key)
@@ -950,27 +914,21 @@ inline bool TryCommitClusterCandidate(
     diagnostic.previous_objective = previous_objective;
     diagnostic.best_objective = objective_state.best_objective;
 
-    const auto is_objective_deteriorated = [](
-        double candidate,
-        double reference)
-    {
-        if (!std::isfinite(reference)) return true;
-        return candidate > reference +
-            CalculateObjectiveTolerance(reference, kObjectiveProgressTolerance);
-    };
     if (!diagnostic.candidate_objective.has_value() || !diagnostic.previous_objective.has_value())
     {
         return false;
     }
     const auto candidate_objective_value{ diagnostic.candidate_objective->GetTotalObjective() };
     const auto previous_objective_value{ diagnostic.previous_objective->GetTotalObjective() };
-    diagnostic.rejected_by_previous = is_objective_deteriorated(
+    diagnostic.rejected_by_previous = IsObjectiveDeteriorated(
         candidate_objective_value,
-        previous_objective_value);
+        previous_objective_value,
+        kObjectiveProgressTolerance);
     diagnostic.rejected_by_best = objective_state.best_objective.has_value() &&
-        is_objective_deteriorated(
+        IsObjectiveDeteriorated(
             candidate_objective_value,
-            objective_state.best_objective->GetTotalObjective());
+            objective_state.best_objective->GetTotalObjective(),
+            kObjectiveProgressTolerance);
     if (diagnostic.rejected_by_previous || diagnostic.rejected_by_best) return false;
     if (requires_strict_improvement &&
         !IsBetterAuditObjective(
@@ -984,9 +942,7 @@ inline bool TryCommitClusterCandidate(
     auto is_better_than_best{ !objective_state.best_objective.has_value() };
     if (objective_state.best_objective.has_value())
     {
-        const auto best_objective_value{
-            objective_state.best_objective->GetTotalObjective()
-        };
+        const auto best_objective_value{ objective_state.best_objective->GetTotalObjective() };
         if (IsBetterAuditObjective(
                 candidate_objective_value,
                 best_objective_value,
