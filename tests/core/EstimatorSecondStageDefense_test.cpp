@@ -3717,25 +3717,25 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_TRUE(step.IsCandidateReady());
     EXPECT_DOUBLE_EQ(step.factor, 0.5);
     EXPECT_EQ(step.trial_number, 2U);
-    ASSERT_NE(step.candidate_patch, nullptr);
+    const auto & candidate_patch{ workspace.GetCandidatePatch() };
     EXPECT_EQ(
-        step.candidate_patch->atom_index_list,
+        candidate_patch.atom_index_list,
         (std::vector<std::size_t>{ 0, 1 }));
     EXPECT_DOUBLE_EQ(
-        step.candidate_patch->mdpde_list.at(0)
+        candidate_patch.mdpde_list.at(0)
             .GetStandardDeviationModel().GetAmplitude(),
         endpoint_uncertainty_list.at(0).GetAmplitude());
     EXPECT_DOUBLE_EQ(
-        step.candidate_patch->mdpde_list.at(1)
+        candidate_patch.mdpde_list.at(1)
             .GetStandardDeviationModel().GetWidth(),
         endpoint_uncertainty_list.at(1).GetWidth());
 
     const auto candidate_state{ workspace.MaterializeCandidateState() };
-    for (const auto atom_index : step.candidate_patch->atom_index_list)
+    for (const auto atom_index : candidate_patch.atom_index_list)
     {
         ExpectGaussianModelsNear(
             candidate_state.at(atom_index).mdpde.GetModel(),
-            step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
+            candidate_patch.mdpde_list.at(atom_index).GetModel(),
             1.0e-12);
     }
 
@@ -3765,14 +3765,14 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     const auto view_step{ view_workspace.BuildNextCandidate() };
     ASSERT_TRUE(view_step.IsCandidateReady());
-    ASSERT_NE(view_step.candidate_patch, nullptr);
+    const auto & view_candidate_patch{ view_workspace.GetCandidatePatch() };
     for (std::size_t atom_index = 0;
         atom_index < previous_model_list.size();
         atom_index++)
     {
         ExpectGaussianModelsNear(
-            step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
-            view_step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
+            candidate_patch.mdpde_list.at(atom_index).GetModel(),
+            view_candidate_patch.mdpde_list.at(atom_index).GetModel(),
             1.0e-12);
     }
 }
@@ -3807,7 +3807,6 @@ TEST(EstimatorSecondStageDefenseTest,
         invalid_step.status,
         backtracking_detail::BacktrackingStepStatus::InvalidCandidate);
     EXPECT_EQ(invalid_step.trial_number, 1U);
-    EXPECT_EQ(invalid_step.candidate_patch, nullptr);
 
     endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
@@ -3827,7 +3826,6 @@ TEST(EstimatorSecondStageDefenseTest,
         change_exhausted_step.status,
         backtracking_detail::BacktrackingStepStatus::Exhausted);
     EXPECT_EQ(change_exhausted_step.trial_number, 1U);
-    EXPECT_EQ(change_exhausted_step.candidate_patch, nullptr);
 
     backtracking_detail::SecondStageContext empty_context;
     backtracking_detail::FitState empty_state;

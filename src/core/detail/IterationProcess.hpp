@@ -59,7 +59,6 @@ struct IterationState
     SuspiciousUpdateMask rollback_atom_mask{};
     std::vector<std::size_t> active_index_list{};
     CouplingGraphPartition graph_partition{};
-    std::vector<ClusterKey> cluster_key_list{};
     ClusterSolverWorkspaceMap solver_workspace_by_key{};
     ObjectiveDomain objective_domain{};
     BestAuditState best_audit_state{};
@@ -806,9 +805,9 @@ inline IterationState BuildIterationState(
     iteration_state.terminal_failure_state = TerminalFailureState(context.size());
     iteration_state.active_index_list = iteration_state.terminal_failure_state.BuildEligibleActiveIndexList();
     iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.active_index_list);
-    iteration_state.cluster_key_list = BuildGraphClusterKeyList(iteration_state.graph_partition);
+    const auto cluster_key_list{ BuildGraphClusterKeyList(iteration_state.graph_partition) };
     ResetClusterSolverWorkspace(
-        iteration_state.cluster_key_list,
+        cluster_key_list,
         iteration_state.solver_workspace_by_key);
     const auto initial_model_snapshot{
         BuildSecondStageModelSnapshot(context, iteration_state.previous_state)
@@ -816,7 +815,7 @@ inline IterationState BuildIterationState(
     iteration_state.objective_domain = BuildObjectiveDomain(
         context,
         initial_model_snapshot,
-        iteration_state.cluster_key_list,
+        cluster_key_list,
         options.distance_min,
         options.distance_max);
     const auto initial_audit_objective{
@@ -841,7 +840,7 @@ inline IterationResult RunIteration(
     const auto & previous_state{ iteration_state.previous_state };
     const auto & active_index_list{ iteration_state.active_index_list };
     const auto & graph_partition{ iteration_state.graph_partition };
-    const auto & cluster_key_list{ iteration_state.cluster_key_list };
+    const auto cluster_key_list{ BuildGraphClusterKeyList(graph_partition) };
     const auto & objective_domain{ iteration_state.objective_domain };
 
     const auto residual_baseline{
@@ -1035,10 +1034,9 @@ inline IterationResult RunIteration(
                 iteration_state.accepted_iteration_count + 1,
                 reset_audit_objective);
             iteration_state.active_index_list = std::move(remaining_active_index_list);
-            iteration_state.cluster_key_list = std::move(remaining_cluster_key_list);
             performance_counters.RecordSolverWorkspaceReset();
             ResetClusterSolverWorkspace(
-                iteration_state.cluster_key_list,
+                remaining_cluster_key_list,
                 iteration_state.solver_workspace_by_key);
             iteration_state.graph_partition = std::move(remaining_graph_partition);
             objective_domain_changed = true;

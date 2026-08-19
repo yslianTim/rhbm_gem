@@ -102,10 +102,7 @@ inline std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::
 
 inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
 {
-    return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
-        std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
-        std::isfinite(model.GetOffset()) &&
-        EncodeTransformedCoordinates(model).has_value();
+    return EncodeTransformedCoordinates(model).has_value();
 }
 
 inline std::optional<GaussianModel3D> BuildGaussianParameterMedian(
@@ -135,7 +132,7 @@ inline std::optional<GaussianModel3D> BuildGaussianParameterMedian(
         std::optional<GaussianModel3D>{ median_model } : std::nullopt;
 }
 
-inline std::unordered_map<GroupKey, GaussianModel3D> BuildGroupMedianModelByGroup(
+inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
@@ -144,44 +141,31 @@ inline std::unordered_map<GroupKey, GaussianModel3D> BuildGroupMedianModelByGrou
         throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
     }
 
-    std::unordered_map<GroupKey, std::vector<GaussianModel3D>> model_list_by_group;
-    model_list_by_group.reserve(model_list.size());
+    std::unordered_map<GroupKey, std::vector<std::size_t>> atom_position_list_by_group;
+    atom_position_list_by_group.reserve(model_list.size());
     for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
     {
-        model_list_by_group[group_key_by_atom_position.at(atom_position)]
-            .emplace_back(model_list.at(atom_position));
+        atom_position_list_by_group[group_key_by_atom_position.at(atom_position)]
+            .emplace_back(atom_position);
     }
 
-    std::unordered_map<GroupKey, GaussianModel3D> median_model_by_group;
-    median_model_by_group.reserve(model_list_by_group.size());
-    for (const auto & [group_key, group_model_list] : model_list_by_group)
+    auto group_median_model_list{ model_list };
+    std::vector<GaussianModel3D> group_model_list;
+    group_model_list.reserve(model_list.size());
+    for (const auto & entry : atom_position_list_by_group)
     {
-        const auto median_model{ BuildGaussianParameterMedian(group_model_list) };
-        if (median_model.has_value())
+        const auto & atom_position_list{ entry.second };
+        group_model_list.clear();
+        for (const auto atom_position : atom_position_list)
         {
-            median_model_by_group.emplace(group_key, *median_model);
+            group_model_list.emplace_back(model_list.at(atom_position));
         }
-    }
-
-    return median_model_by_group;
-}
-
-inline std::vector<GaussianModel3D> BuildGroupMedianModelList(
-    const std::vector<GroupKey> & group_key_by_atom_position,
-    const std::vector<GaussianModel3D> & model_list)
-{
-    const auto median_model_by_group{
-        BuildGroupMedianModelByGroup(group_key_by_atom_position, model_list)
-    };
-    std::vector<GaussianModel3D> group_median_model_list;
-    group_median_model_list.reserve(model_list.size());
-    for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
-    {
-        const auto median_iter{ median_model_by_group.find(
-            group_key_by_atom_position.at(atom_position)) };
-        group_median_model_list.emplace_back(
-            median_iter != median_model_by_group.end() ?
-                median_iter->second : model_list.at(atom_position));
+        const auto median_model{ BuildGaussianParameterMedian(group_model_list) };
+        if (!median_model.has_value()) continue;
+        for (const auto atom_position : atom_position_list)
+        {
+            group_median_model_list.at(atom_position) = *median_model;
+        }
     }
     return group_median_model_list;
 }
@@ -190,18 +174,44 @@ inline std::vector<double> BuildGroupMedianOffsetList(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    const auto median_model_by_group{
-        BuildGroupMedianModelByGroup(group_key_by_atom_position, model_list)
-    };
+    if (group_key_by_atom_position.size() != model_list.size())
+    {
+        throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
+    }
+
+    std::unordered_map<GroupKey, std::vector<std::size_t>> atom_position_list_by_group;
+    atom_position_list_by_group.reserve(model_list.size());
     std::vector<double> offset_list;
     offset_list.reserve(model_list.size());
-    for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
+    for (std::size_t atom_position = 0;
+        atom_position < model_list.size();
+        atom_position++)
     {
-        const auto median_iter{ median_model_by_group.find(
-            group_key_by_atom_position.at(atom_position)) };
-        offset_list.emplace_back(
-            median_iter != median_model_by_group.end() ?
-                median_iter->second.GetOffset() : model_list.at(atom_position).GetOffset());
+        atom_position_list_by_group[group_key_by_atom_position.at(atom_position)]
+            .emplace_back(atom_position);
+        offset_list.emplace_back(model_list.at(atom_position).GetOffset());
+    }
+
+    std::vector<double> valid_offset_list;
+    valid_offset_list.reserve(model_list.size());
+    for (const auto & entry : atom_position_list_by_group)
+    {
+        valid_offset_list.clear();
+        for (const auto atom_position : entry.second)
+        {
+            const auto & model{ model_list.at(atom_position) };
+            if (IsValidSecondStageGaussianModel(model))
+            {
+                valid_offset_list.emplace_back(model.GetOffset());
+            }
+        }
+        if (valid_offset_list.empty()) continue;
+        const auto median{ array_helper::ComputeMedian(valid_offset_list) };
+        if (!std::isfinite(median)) continue;
+        for (const auto atom_position : entry.second)
+        {
+            offset_list.at(atom_position) = median;
+        }
     }
     return offset_list;
 }
@@ -234,9 +244,16 @@ inline std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelL
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value()) return std::nullopt;
 
         Eigen::Vector3d shape_coordinates{
-            (*previous_coordinates + damping * (*raw_coordinates - *previous_coordinates)).eval()
+            (*previous_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) +
+                damping * (
+                    (*raw_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) -
+                    (*previous_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex))),
+            (*previous_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex)) +
+                damping * (
+                    (*raw_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex)) -
+                    (*previous_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex))),
+            0.0
         };
-        shape_coordinates(static_cast<Eigen::Index>(kOffsetToPeakRatioChangeIndex)) = 0.0;
         const auto shape_model{ DecodeTransformedCoordinates(shape_coordinates) };
         if (!shape_model.has_value()) return std::nullopt;
 

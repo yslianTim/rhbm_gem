@@ -30,7 +30,6 @@ struct BacktrackingStep
     BacktrackingStepStatus status{ BacktrackingStepStatus::Exhausted };
     double factor{ 0.0 };
     std::size_t trial_number{ 0 };
-    const FitStatePatch * candidate_patch{ nullptr };
 
     bool IsCandidateReady() const { return status == BacktrackingStepStatus::CandidateReady; }
 };
@@ -102,8 +101,7 @@ public:
             return BacktrackingStep{
                 BacktrackingStepStatus::Exhausted,
                 factor,
-                m_trial_number,
-                nullptr
+                m_trial_number
             };
         }
         m_next_factor *= 0.5;
@@ -113,8 +111,7 @@ public:
             return BacktrackingStep{
                 BacktrackingStepStatus::InvalidCandidate,
                 factor,
-                m_trial_number,
-                nullptr
+                m_trial_number
             };
         }
         const auto maximum_transformed_change{ GetMaximumTransformedChange() };
@@ -123,16 +120,14 @@ public:
             return BacktrackingStep{
                 BacktrackingStepStatus::Exhausted,
                 factor,
-                m_trial_number,
-                nullptr
+                m_trial_number
             };
         }
         m_trial_number++;
         return BacktrackingStep{
             BacktrackingStepStatus::CandidateReady,
             factor,
-            m_trial_number,
-            &m_candidate_patch
+            m_trial_number
         };
     }
 
@@ -150,6 +145,11 @@ public:
     FitStatePatch TakeCandidatePatch()
     {
         return std::move(m_candidate_patch);
+    }
+
+    const FitStatePatch & GetCandidatePatch() const
+    {
+        return m_candidate_patch;
     }
 
     FitState MaterializeCandidateState() const

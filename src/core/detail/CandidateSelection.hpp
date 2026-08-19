@@ -464,7 +464,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
             [&](const BacktrackingStep & step)
             {
                 const auto factor{ step.factor };
-                const auto * backtracked_patch{ step.candidate_patch };
+                const auto & backtracked_patch{ backtracking_workspace.GetCandidatePatch() };
                 ObjectiveAttemptDiagnostic trial_diagnostic;
                 trial_diagnostic.effective_damping = base_proposal->effective_damping * factor;
                 trial_diagnostic.trust_region_radius = trust_region_radius;
@@ -472,7 +472,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
                 trial_diagnostic.backtracking_trial_count = step.trial_number;
                 const FitStateView backtracked_state_view{
                     previous_state,
-                    *backtracked_patch
+                    backtracked_patch
                 };
                 const CandidateEvaluationOverlay backtracked_overlay{
                     context,
@@ -787,10 +787,10 @@ inline bool TryBacktrackCombinedCandidate(
         [&](const BacktrackingStep & step)
         {
             const auto factor{ step.factor };
-            const auto * candidate_patch{ step.candidate_patch };
+            const auto & candidate_patch{ backtracking_workspace.GetCandidatePatch() };
             const FitStateView candidate_state_view{
                 previous_state,
-                *candidate_patch
+                candidate_patch
             };
             const CandidateEvaluationOverlay candidate_overlay{
                 context,
