@@ -216,22 +216,23 @@ inline std::vector<double> BuildGroupMedianOffsetList(
     return offset_list;
 }
 
-inline std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
+inline bool TryBuildSharedOffsetDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
     const std::vector<double> & previous_shared_offset_list,
     const std::vector<double> & raw_shared_offset_list,
-    double damping)
+    double damping,
+    std::vector<GaussianModel3D> & candidate_model_list)
 {
+    candidate_model_list.clear();
     if (raw_model_list.size() != previous_model_list.size() ||
         previous_shared_offset_list.size() != previous_model_list.size() ||
         raw_shared_offset_list.size() != previous_model_list.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
-        return std::nullopt;
+        return false;
     }
 
-    std::vector<GaussianModel3D> candidate_model_list;
     candidate_model_list.reserve(previous_model_list.size());
     for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
@@ -241,7 +242,11 @@ inline std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelL
         const auto raw_coordinates{
             EncodeTransformedCoordinates(raw_model_list.at(atom_position))
         };
-        if (!previous_coordinates.has_value() || !raw_coordinates.has_value()) return std::nullopt;
+        if (!previous_coordinates.has_value() || !raw_coordinates.has_value())
+        {
+            candidate_model_list.clear();
+            return false;
+        }
 
         Eigen::Vector3d shape_coordinates{
             (*previous_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) +
@@ -255,17 +260,25 @@ inline std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelL
             0.0
         };
         const auto shape_model{ DecodeTransformedCoordinates(shape_coordinates) };
-        if (!shape_model.has_value()) return std::nullopt;
+        if (!shape_model.has_value())
+        {
+            candidate_model_list.clear();
+            return false;
+        }
 
         const auto previous_shared_offset{ previous_shared_offset_list.at(atom_position) };
         const auto raw_shared_offset{ raw_shared_offset_list.at(atom_position) };
         const auto candidate_model{
             shape_model->WithOffset(previous_shared_offset + damping * (raw_shared_offset - previous_shared_offset))
         };
-        if (!IsValidSecondStageGaussianModel(candidate_model)) return std::nullopt;
+        if (!IsValidSecondStageGaussianModel(candidate_model))
+        {
+            candidate_model_list.clear();
+            return false;
+        }
         candidate_model_list.emplace_back(candidate_model);
     }
-    return candidate_model_list;
+    return true;
 }
 
 } // namespace rhbm_gem::core::detail

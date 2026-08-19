@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -142,15 +141,8 @@ public:
         }
     }
 
-    FitStatePatch TakeCandidatePatch()
-    {
-        return std::move(m_candidate_patch);
-    }
-
-    const FitStatePatch & GetCandidatePatch() const
-    {
-        return m_candidate_patch;
-    }
+    FitStatePatch TakeCandidatePatch() { return std::move(m_candidate_patch); }
+    const FitStatePatch & GetCandidatePatch() const { return m_candidate_patch; }
 
     FitState MaterializeCandidateState() const
     {
@@ -168,14 +160,12 @@ public:
                 "Local fitting backtracking provenance sizes are inconsistent.");
         }
         auto provenance{ previous_provenance };
-        for (std::size_t atom_position = 0;
-            atom_position < m_candidate_patch.atom_index_list.size();
-            atom_position++)
+        for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
         {
-            if (HasMaterialChange(atom_position))
+            if (HasMaterialChange(i))
             {
-                provenance.at(m_candidate_patch.atom_index_list.at(atom_position)) =
-                    endpoint_provenance.at(m_candidate_patch.atom_index_list.at(atom_position));
+                provenance.at(m_candidate_patch.atom_index_list.at(i)) =
+                    endpoint_provenance.at(m_candidate_patch.atom_index_list.at(i));
             }
         }
         return provenance;
@@ -192,13 +182,11 @@ public:
                 "Local fitting active backtracking provenance sizes are inconsistent.");
         }
         auto provenance{ previous_provenance };
-        for (std::size_t atom_position = 0;
-            atom_position < m_candidate_patch.atom_index_list.size();
-            atom_position++)
+        for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
         {
-            if (HasMaterialChange(atom_position))
+            if (HasMaterialChange(i))
             {
-                provenance.at(atom_position) = endpoint_provenance.at(atom_position);
+                provenance.at(i) = endpoint_provenance.at(i);
             }
         }
         return provenance;
@@ -207,26 +195,26 @@ public:
 private:
     bool BuildCandidate(double factor)
     {
-        const auto candidate_model_list{
-            BuildSharedOffsetDampedModelList(
+        std::vector<GaussianModel3D> candidate_model_list;
+        if (!TryBuildSharedOffsetDampedModelList(
                 m_previous_model_list,
                 m_endpoint_model_list,
                 m_previous_shared_offset_list,
                 m_endpoint_shared_offset_list,
-                factor)
-        };
-        if (!candidate_model_list.has_value()) return false;
+                factor,
+                candidate_model_list))
+        {
+            return false;
+        }
 
-        for (std::size_t atom_position = 0;
-            atom_position < m_candidate_patch.atom_index_list.size();
-            atom_position++)
+        for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
         {
             const auto endpoint_uncertainty{
-                m_candidate_patch.mdpde_list.at(atom_position).GetStandardDeviationModel()
+                m_candidate_patch.mdpde_list.at(i).GetStandardDeviationModel()
             };
-            m_candidate_patch.mdpde_list.at(atom_position) =
+            m_candidate_patch.mdpde_list.at(i) =
                 GaussianModel3DWithUncertainty{
-                    candidate_model_list->at(atom_position),
+                    candidate_model_list.at(i),
                     endpoint_uncertainty
                 };
         }
@@ -246,16 +234,14 @@ private:
     double GetMaximumTransformedChange() const
     {
         double maximum_change{ 0.0 };
-        for (std::size_t atom_position = 0;
-            atom_position < m_candidate_patch.atom_index_list.size();
-            atom_position++)
+        for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
         {
             maximum_change = std::max(
                 maximum_change,
                 detail::GetMaximumTransformedChange(
                     CalculateTransformedChange(
-                        m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
-                        m_previous_model_list.at(atom_position))));
+                        m_candidate_patch.mdpde_list.at(i).GetModel(),
+                        m_previous_model_list.at(i))));
         }
         return maximum_change;
     }

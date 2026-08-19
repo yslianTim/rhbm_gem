@@ -112,15 +112,14 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         BuildGroupMedianOffsetList(group_key_by_atom_position, raw_model_list)
     };
 
-    const auto seed_model_list{
-        BuildSharedOffsetDampedModelList(
+    std::vector<GaussianModel3D> seed_model_list;
+    if (!TryBuildSharedOffsetDampedModelList(
             previous_model_list,
             raw_model_list,
             previous_shared_offset_list,
             raw_shared_offset_list,
-            0.0)
-    };
-    if (!seed_model_list.has_value())
+            0.0,
+            seed_model_list))
     {
         return BaseProposalBuildResult{
             std::nullopt,
@@ -129,7 +128,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         };
     }
     const auto seed_step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, *seed_model_list)
+        CalculateModelTrustRegionStepNorm(previous_model_list, seed_model_list)
     };
     if (!seed_step_norm.has_value())
     {
@@ -150,20 +149,19 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
 
     double damping{ 1.0 };
     std::optional<double> attempted_step_norm;
+    std::vector<GaussianModel3D> candidate_model_list;
     while (damping >= std::numeric_limits<double>::epsilon())
     {
-        auto candidate_model_list{
-            BuildSharedOffsetDampedModelList(
+        if (TryBuildSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
                 previous_shared_offset_list,
                 raw_shared_offset_list,
-                damping)
-        };
-        if (candidate_model_list.has_value())
+                damping,
+                candidate_model_list))
         {
             const auto step_norm{
-                CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list)
+                CalculateModelTrustRegionStepNorm(previous_model_list, candidate_model_list)
             };
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
@@ -178,7 +176,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
                     const auto atom_index{ key.at(atom_position) };
                     proposal.patch.mdpde_list.emplace_back(
                         GaussianModel3DWithUncertainty{
-                            candidate_model_list->at(atom_position),
+                            candidate_model_list.at(atom_position),
                             raw_state.at(atom_index).mdpde
                                 .GetStandardDeviationModel()
                         });

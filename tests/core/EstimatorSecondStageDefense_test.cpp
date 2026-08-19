@@ -2583,34 +2583,33 @@ TEST(EstimatorSecondStageDefenseTest,
             raw_model_list)
     };
 
+    std::vector<rg::GaussianModel3D> candidate_model_list;
     for (const auto damping : std::array<double, 3>{ 0.0, 0.25, 1.0 })
     {
-        const auto candidate_model_list{
-            median_detail::BuildSharedOffsetDampedModelList(
-                previous_model_list,
-                raw_model_list,
-                previous_shared_offset_list,
-                raw_shared_offset_list,
-                damping)
-        };
-        ASSERT_TRUE(candidate_model_list.has_value());
+        ASSERT_TRUE(median_detail::TryBuildSharedOffsetDampedModelList(
+            previous_model_list,
+            raw_model_list,
+            previous_shared_offset_list,
+            raw_shared_offset_list,
+            damping,
+            candidate_model_list));
         const auto expected_first_group_offset{ 0.5 + damping * 0.1 };
         const auto expected_second_group_offset{ -1.0 + damping * 3.0 };
         EXPECT_NEAR(
-            candidate_model_list->at(0).GetOffset(),
+            candidate_model_list.at(0).GetOffset(),
             expected_first_group_offset,
             1.0e-12);
         EXPECT_NEAR(
-            candidate_model_list->at(1).GetOffset(),
+            candidate_model_list.at(1).GetOffset(),
             expected_first_group_offset,
             1.0e-12);
         EXPECT_NEAR(
-            candidate_model_list->at(2).GetOffset(),
+            candidate_model_list.at(2).GetOffset(),
             expected_second_group_offset,
             1.0e-12);
 
         for (std::size_t atom_position = 0;
-            atom_position < candidate_model_list->size();
+            atom_position < candidate_model_list.size();
             atom_position++)
         {
             const auto previous_coordinates{
@@ -2623,7 +2622,7 @@ TEST(EstimatorSecondStageDefenseTest,
             };
             const auto candidate_coordinates{
                 change_detail::EncodeTransformedCoordinates(
-                    candidate_model_list->at(atom_position))
+                    candidate_model_list.at(atom_position))
             };
             ASSERT_TRUE(previous_coordinates.has_value());
             ASSERT_TRUE(raw_coordinates.has_value());
