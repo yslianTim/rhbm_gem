@@ -200,7 +200,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         for (auto atom : atom_list)
         {
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-            auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
+            auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
             root_helper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
@@ -867,7 +867,7 @@ void GausPainter::PaintLocalGausSummary(
                 FittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
                         FittingStage::Third)
@@ -910,7 +910,9 @@ void GausPainter::PaintLocalGausSummary(
                 graph->Draw("L X0");
             }
 
-            auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
+            auto gaus_mean{
+                plot_builder->CreateAtomGroupGausFunctionMean(FittingStage::Third, group_key)
+            };
             auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key) };
             root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
@@ -1540,7 +1542,9 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             auto component_id{ component_entry->GetComponentId() };
             component_id_map.emplace(residue, component_id);
 
-            auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
+            auto gaus_mean{
+                plot_builder->CreateAtomGroupGausFunctionMean(FittingStage::Third, group_key)
+            };
             auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key) };
             gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
@@ -1553,7 +1557,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             for (auto atom : entry_iter->GetAtomObjectList(FittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(FittingStage::Third)
                 };

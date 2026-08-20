@@ -869,10 +869,11 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
     return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, offset);
 }
 
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(GroupKey group_key) const
+std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
+    FittingStage stage, GroupKey group_key) const
 {
     if (IsModelObjectAvailable() == false) return nullptr;
-    const auto & mean{ GetModelView().GetAtomGroupMean(FittingStage::Third, group_key) };
+    const auto & mean{ GetModelView().GetAtomGroupMean(stage, group_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
     auto offset{ mean.GetOffset() };
