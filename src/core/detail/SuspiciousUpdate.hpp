@@ -6,7 +6,6 @@
 #include <functional>
 #include <limits>
 #include <optional>
-#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -45,13 +44,11 @@ inline bool HasSuspiciousAtom(
     const std::vector<std::size_t> & atom_index_list,
     const SuspiciousUpdateMask & suspicious_mask)
 {
-    return std::any_of(
-        atom_index_list.begin(),
-        atom_index_list.end(),
-        [&](std::size_t atom_index)
-        {
-            return suspicious_mask.at(atom_index) != 0;
-        });
+    for (const auto atom_index : atom_index_list)
+    {
+        if (suspicious_mask.at(atom_index) != 0) return true;
+    }
+    return false;
 }
 
 inline std::vector<std::size_t> CollectSuspiciousAtomIndices(
@@ -504,8 +501,7 @@ inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
 {
     if (group_id_by_position.size() != suspicious_seed_mask.size())
     {
-        throw std::invalid_argument(
-            "Suspicious shared-offset group input sizes are inconsistent.");
+        throw std::invalid_argument("Suspicious shared-offset group input sizes are inconsistent.");
     }
 
     std::set<std::size_t> suspicious_seed_group_id_set;

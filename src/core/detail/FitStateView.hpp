@@ -17,11 +17,6 @@ namespace rhbm_gem::core::detail {
 
 using FitState = std::vector<LocalGaussianResult>;
 
-inline const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index)
-{
-    return state.at(atom_index).mdpde.GetModel();
-}
-
 struct FitStatePatch
 {
     ClusterKey atom_index_list{};
@@ -115,16 +110,20 @@ public:
     std::size_t size() const { return m_base_state.size(); }
 };
 
-inline const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index)
+inline const GaussianModel3D & GetFitModel(const auto & state, std::size_t atom_index)
 {
-    return state.GetModel(atom_index);
-}
-
-inline const GaussianModel3D & GetFitModel(
-    const std::vector<GaussianModel3D> & state,
-    std::size_t atom_index)
-{
-    return state.at(atom_index);
+    if constexpr (requires { state.GetModel(atom_index); })
+    {
+        return state.GetModel(atom_index);
+    }
+    else if constexpr (requires { state.at(atom_index).mdpde.GetModel(); })
+    {
+        return state.at(atom_index).mdpde.GetModel();
+    }
+    else
+    {
+        return state.at(atom_index);
+    }
 }
 
 using PolishProvenance = std::vector<char>;

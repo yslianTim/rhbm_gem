@@ -467,17 +467,10 @@ inline GraphTopology BuildSecondStageGraphTopology(
     const std::size_t total_work{ total_sample_count + 1 };
     std::size_t completed_work{ 0 };
     const std::string progress_message{ " Build local-fitting coupling topology" };
-    int last_progress_percent{ -1 };
-    const auto update_progress = [&]()
+    if (!quiet_mode)
     {
-        if (quiet_mode) return;
-        const auto progress_percent{ static_cast<int>(
-            100.0 * static_cast<double>(completed_work) / static_cast<double>(total_work)) };
-        if (progress_percent == last_progress_percent) return;
-        last_progress_percent = progress_percent;
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
-    };
-    update_progress();
+    }
 
     CouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
@@ -539,7 +532,10 @@ inline GraphTopology BuildSecondStageGraphTopology(
             }
             builder.AddSample(SampleRef{ i, j }, participant_list);
             completed_work++;
-            update_progress();
+            if (!quiet_mode)
+            {
+                Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
+            }
         }
     }
 
@@ -553,7 +549,10 @@ inline GraphTopology BuildSecondStageGraphTopology(
     }
     const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
     completed_work++;
-    update_progress();
+    if (!quiet_mode)
+    {
+        Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
+    }
     return topology;
 }
 

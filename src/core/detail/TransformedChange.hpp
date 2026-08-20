@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -95,13 +94,11 @@ inline bool IsTransformedChangeMaterial(
         throw std::invalid_argument(
             "Local fitting transformed change input is inconsistent.");
     }
-    return std::any_of(
-        change.value_list.begin(),
-        change.value_list.end(),
-        [minimum_change](double value)
-        {
-            return std::isfinite(value) && value >= minimum_change;
-        });
+    for (const auto value : change.value_list)
+    {
+        if (std::isfinite(value) && value >= minimum_change) return true;
+    }
+    return false;
 }
 
 inline std::vector<double> SummarizeMaximumTransformedChanges(
@@ -192,13 +189,11 @@ inline bool IsTransformedChangeConverged(const TransformedChangeSummary & summar
 
 inline bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
-    return std::all_of(
-        summary.percentile_stats.percentile_list.begin(),
-        summary.percentile_stats.percentile_list.end(),
-        [](double value)
-        {
-            return std::isfinite(value) && value < kTransformedChangeTolerance;
-        });
+    for (const auto value : summary.percentile_stats.percentile_list)
+    {
+        if (!std::isfinite(value) || value >= kTransformedChangeTolerance) return false;
+    }
+    return true;
 }
 
 } // namespace rhbm_gem::core::detail

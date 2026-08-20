@@ -6,7 +6,6 @@
 #include <limits>
 #include <ranges>
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -225,7 +224,7 @@ private:
 
     static const GaussianModel3DWithUncertainty & GetEndpointMdpde(const auto & state, std::size_t atom_index)
     {
-        if constexpr (std::is_same_v<std::decay_t<decltype(state)>, FitStateView>)
+        if constexpr (requires { state.GetMdpde(atom_index); })
         {
             return state.GetMdpde(atom_index);
         }

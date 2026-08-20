@@ -231,6 +231,19 @@ inline std::optional<ResidualSample> EvaluateResidualSample(
     return ResidualSample{ adjusted_response, residual };
 }
 
+struct SnapshotResidualEvaluator
+{
+    const SecondStageContext & context;
+    const SecondStageModelSnapshot & model_snapshot;
+
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const
+    {
+        return EvaluateResidualSample(context, model_snapshot.selected, sample_ref, model_snapshot);
+    }
+
+    const FittedGaussianSnapshot & GetState() const { return model_snapshot.selected; }
+};
+
 inline ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state)
 {
     ResidualBaseline baseline{

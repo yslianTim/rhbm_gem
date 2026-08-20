@@ -7,7 +7,6 @@
 #include <iomanip>
 #include <limits>
 #include <optional>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -814,7 +813,9 @@ inline IterationState BuildIterationState(
         options.distance_min,
         options.distance_max);
     const auto initial_audit_objective{
-        EvaluateAuditObjective(context, iteration_state.objective_domain, initial_model_snapshot)
+        EvaluateAuditObjective(
+            iteration_state.objective_domain,
+            SnapshotResidualEvaluator{ context, initial_model_snapshot })
     };
     if (initial_audit_objective.has_value())
     {
@@ -886,27 +887,28 @@ inline IterationResult RunIteration(
     auto working_cluster_objective_state{
         iteration_state.cluster_objective_state
     };
-    const auto candidate_phase_start{ performance_counters.StartCandidatePhase() };
-    auto selection{
-        SelectClusterCandidates(
-            context,
-            residual_baseline,
-            graph_partition,
-            raw_iteration_result.health_by_key,
-            previous_state,
-            iteration_state.previous_polish_provenance,
-            raw_state,
-            raw_iteration_result.rollback_atom_mask,
-            joint_offset_ridge_multiplier_list,
-            iteration_state.unchanged_state_exhausted_key_list,
-            objective_domain,
-            previous_objective_by_key,
-            working_cluster_objective_state,
-            iteration_state.trust_region_state,
-            iteration_state.solver_workspace_by_key,
-            options.thread_size,
-            performance_counters)
+    const CandidateSelectionInputs candidate_inputs{
+        .context = context,
+        .residual_baseline = residual_baseline,
+        .partition = graph_partition,
+        .health_by_key = raw_iteration_result.health_by_key,
+        .previous_state = previous_state,
+        .previous_polish_provenance = iteration_state.previous_polish_provenance,
+        .raw_state = raw_state,
+        .rollback_atom_mask = raw_iteration_result.rollback_atom_mask,
+        .ridge_multiplier_list = joint_offset_ridge_multiplier_list,
+        .unchanged_state_exhausted_key_list =
+            std::span<const ClusterKey>{ iteration_state.unchanged_state_exhausted_key_list },
+        .objective_domain = objective_domain,
+        .previous_objective_by_key = previous_objective_by_key,
+        .cluster_objective_state = working_cluster_objective_state,
+        .trust_region_state = iteration_state.trust_region_state,
+        .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
+        .thread_size = options.thread_size,
+        .performance_counters = performance_counters
     };
+    const auto candidate_phase_start{ performance_counters.StartCandidatePhase() };
+    auto selection{ SelectClusterCandidates(candidate_inputs) };
     performance_counters.FinishCandidatePhase(candidate_phase_start);
     performance_counters.RecordFullStateMaterialization();
 
@@ -931,20 +933,12 @@ inline IterationResult RunIteration(
     {
         combined_objective_accepted =
             TryBacktrackCombinedCandidate(
-                context,
-                residual_baseline,
-                graph_partition,
-                previous_state,
-                iteration_state.previous_polish_provenance,
-                objective_domain,
-                previous_objective_by_key,
+                candidate_inputs,
                 combined_check.previous_objective.has_value() ?
                     &*combined_check.previous_objective : nullptr,
                 best_audit_objective,
                 iteration_state.cluster_objective_state,
-                working_cluster_objective_state,
-                selection,
-                performance_counters);
+                selection);
     }
     if (!combined_objective_accepted)
     {
@@ -1011,19 +1005,17 @@ inline IterationResult RunIteration(
             iteration_state.cluster_objective_state.clear();
             const auto remaining_objective_by_key{
                 BuildObjectiveByKey(
-                    context,
                     remaining_graph_partition,
                     iteration_state.objective_domain,
-                    assembled_model_snapshot)
+                    SnapshotResidualEvaluator{ context, assembled_model_snapshot })
             };
             ReconcileClusterObjectiveState(
                 remaining_objective_by_key,
                 iteration_state.cluster_objective_state);
             const auto reset_audit_objective{
                 EvaluateAuditObjective(
-                    context,
                     iteration_state.objective_domain,
-                    assembled_model_snapshot)
+                    SnapshotResidualEvaluator{ context, assembled_model_snapshot })
             };
             iteration_state.best_audit_state.reset();
             if (reset_audit_objective.has_value())
@@ -1120,9 +1112,8 @@ inline IterationResult RunIteration(
                 BuildSecondStageModelSnapshot(context, assembled_state)
             };
             candidate_audit_objective = EvaluateAuditObjective(
-                context,
                 iteration_state.objective_domain,
-                candidate_model_snapshot);
+                SnapshotResidualEvaluator{ context, candidate_model_snapshot });
         }
         if (candidate_audit_objective.has_value())
         {

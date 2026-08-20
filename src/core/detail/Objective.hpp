@@ -598,28 +598,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const SecondStageContext & context,
-    const SecondStageModelSnapshot & model_snapshot,
-    const ClusterKey & changed_key,
-    const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain)
-{
-    return EvaluateObjectiveContributionImpl(
-        model_snapshot.selected,
-        changed_key,
-        sample_ref_list,
-        domain,
-        [&](const SampleRef & sample_ref)
-        {
-            return EvaluateResidualSample(
-                context,
-                model_snapshot.selected,
-                sample_ref,
-                model_snapshot);
-        });
-}
-
-inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const auto & evaluator,
     const ClusterKey & changed_key,
     const std::vector<SampleRef> & sample_ref_list,
@@ -674,28 +652,10 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const SecondStageContext & context,
     const ObjectiveDomain & domain,
-    const SecondStageModelSnapshot & model_snapshot)
+    const auto & evaluator)
 {
-    return EvaluateAuditObjectiveImpl(
-        domain,
-        model_snapshot.selected,
-        [&](const SampleRef & sample_ref)
-        {
-            return EvaluateResidualSample(
-                context,
-                model_snapshot.selected,
-                sample_ref,
-                model_snapshot);
-        });
-}
-
-inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const ObjectiveDomain & domain,
-    const ResidualBaseline & baseline)
-{
-    return EvaluateAuditObjectiveImpl(domain, baseline.GetState(), baseline);
+    return EvaluateAuditObjectiveImpl(domain, evaluator.GetState(), evaluator);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
@@ -740,32 +700,16 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
 }
 
 inline ObjectiveByKey BuildObjectiveByKey(
-    const SecondStageContext & context,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
-    const SecondStageModelSnapshot & model_snapshot)
+    const auto & evaluator)
 {
     ObjectiveByKey objective_by_key;
     for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
     {
         objective_by_key.emplace(
             key,
-            EvaluateObjectiveContribution(context, model_snapshot, key, sample_ref_list, domain));
-    }
-    return objective_by_key;
-}
-
-inline ObjectiveByKey BuildObjectiveByKey(
-    const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain,
-    const ResidualBaseline & baseline)
-{
-    ObjectiveByKey objective_by_key;
-    for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
-    {
-        objective_by_key.emplace(
-            key,
-            EvaluateObjectiveContribution(baseline, key, sample_ref_list, domain));
+            EvaluateObjectiveContribution(evaluator, key, sample_ref_list, domain));
     }
     return objective_by_key;
 }

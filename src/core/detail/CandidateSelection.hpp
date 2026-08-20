@@ -7,6 +7,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -60,6 +61,27 @@ struct CandidateSelection
     std::optional<ObjectiveBreakdown> combined_backtracking_objective{};
     bool combined_backtracking_exhausted{ false };
     PolishProgress polish_progress{};
+};
+
+struct CandidateSelectionInputs
+{
+    const SecondStageContext & context;
+    const ResidualBaseline & residual_baseline;
+    const CouplingGraphPartition & partition;
+    const ClusterHealthMap & health_by_key;
+    const FitState & previous_state;
+    const PolishProvenance & previous_polish_provenance;
+    const FitState & raw_state;
+    const SuspiciousUpdateMask & rollback_atom_mask;
+    const std::vector<double> & ridge_multiplier_list;
+    std::span<const ClusterKey> unchanged_state_exhausted_key_list;
+    const ObjectiveDomain & objective_domain;
+    const ObjectiveByKey & previous_objective_by_key;
+    ClusterObjectiveStateMap & cluster_objective_state;
+    const TrustRegionStateSet & trust_region_state;
+    ClusterSolverWorkspaceMap & solver_workspace_by_key;
+    int thread_size;
+    PerformanceCounters & performance_counters;
 };
 
 struct BaseProposal
@@ -306,24 +328,35 @@ inline bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
 }
 
 inline ClusterCandidateResult SelectClusterCandidate(
-    const SecondStageContext & context,
-    const ResidualBaseline & residual_baseline,
+    const CandidateSelectionInputs & inputs,
     const ClusterKey & key,
     const std::vector<SampleRef> & objective_sample_ref_list,
-    bool is_polish_eligible,
-    bool is_unchanged_state_exhausted,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    const FitState & raw_state,
-    bool contains_suspicious_atom,
-    const std::vector<double> & ridge_multiplier_list,
-    const ObjectiveDomain & objective_domain,
-    const ObjectiveBreakdown * previous_objective,
-    const ClusterObjectiveState & previous_objective_state,
-    double trust_region_radius,
-    ClusterSolverWorkspace & solver_workspace,
-    PerformanceCounters & performance_counters)
+    ClusterSolverWorkspace & solver_workspace)
 {
+    const auto & context{ inputs.context };
+    const auto & residual_baseline{ inputs.residual_baseline };
+    const auto & previous_state{ inputs.previous_state };
+    const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
+    const auto & raw_state{ inputs.raw_state };
+    const auto & ridge_multiplier_list{ inputs.ridge_multiplier_list };
+    const auto & objective_domain{ inputs.objective_domain };
+    const auto & previous_objective_entry{ inputs.previous_objective_by_key.at(key) };
+    const auto * previous_objective{
+        previous_objective_entry.has_value() ? &*previous_objective_entry : nullptr
+    };
+    const auto & previous_objective_state{ inputs.cluster_objective_state.at(key) };
+    const auto trust_region_radius{ inputs.trust_region_state.GetRadius(key) };
+    const auto contains_suspicious_atom{
+        HasSuspiciousAtom(key, inputs.rollback_atom_mask)
+    };
+    const auto is_polish_eligible{
+        inputs.health_by_key.at(key).IsStationarityEligible() && !contains_suspicious_atom
+    };
+    const auto is_unchanged_state_exhausted{
+        std::ranges::find(inputs.unchanged_state_exhausted_key_list, key) !=
+            inputs.unchanged_state_exhausted_key_list.end()
+    };
+    auto & performance_counters{ inputs.performance_counters };
     ClusterCandidateResult result;
     result.objective_state = previous_objective_state;
     result.polish_provenance.reserve(key.size());
@@ -601,25 +634,13 @@ inline ClusterCandidateResult SelectClusterCandidate(
     return result;
 }
 
-inline CandidateSelection SelectClusterCandidates(
-    const SecondStageContext & context,
-    const ResidualBaseline & residual_baseline,
-    const CouplingGraphPartition & partition,
-    const ClusterHealthMap & health_by_key,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    const FitState & raw_state,
-    const SuspiciousUpdateMask & rollback_atom_mask,
-    const std::vector<double> & ridge_multiplier_list,
-    const std::vector<ClusterKey> & unchanged_state_exhausted_key_list,
-    const ObjectiveDomain & objective_domain,
-    const ObjectiveByKey & previous_objective_by_key,
-    ClusterObjectiveStateMap & cluster_objective_state,
-    const TrustRegionStateSet & trust_region_state,
-    ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    int thread_size,
-    PerformanceCounters & performance_counters)
+inline CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
 {
+    const auto & partition{ inputs.partition };
+    auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
+    auto & cluster_objective_state{ inputs.cluster_objective_state };
+    const auto & previous_state{ inputs.previous_state };
+    const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
     using PartitionEntry = std::pair<const ClusterKey, std::vector<SampleRef>>;
     using CandidateWork = std::pair<const PartitionEntry *, ClusterSolverWorkspace *>;
     std::vector<CandidateWork> candidate_work_list;
@@ -631,7 +652,6 @@ inline CandidateSelection SelectClusterCandidates(
 
     std::vector<ClusterCandidateResult> result_list(candidate_work_list.size());
     std::vector<std::exception_ptr> exception_list(candidate_work_list.size());
-    const auto & previous_cluster_objective_state{ cluster_objective_state };
     const auto select_candidate = [&](std::size_t position)
     {
         try
@@ -639,33 +659,12 @@ inline CandidateSelection SelectClusterCandidates(
             const auto & entry{ *candidate_work_list.at(position).first };
             const auto & key{ entry.first };
             const auto & sample_ref_list{ entry.second };
-            const auto contains_suspicious_atom{ HasSuspiciousAtom(key, rollback_atom_mask) };
-            const auto is_polish_eligible{
-                health_by_key.at(key).IsStationarityEligible() && !contains_suspicious_atom
-            };
-            const auto is_unchanged_state_exhausted{
-                std::ranges::find(unchanged_state_exhausted_key_list, key) !=
-                    unchanged_state_exhausted_key_list.end()
-            };
-            const auto & previous_objective{ previous_objective_by_key.at(key) };
             result_list.at(position) = SelectClusterCandidate(
-                context,
-                residual_baseline,
+                inputs,
                 key,
                 sample_ref_list,
-                is_polish_eligible,
-                is_unchanged_state_exhausted,
-                previous_state,
-                previous_polish_provenance,
-                raw_state,
-                contains_suspicious_atom,
-                ridge_multiplier_list,
-                objective_domain,
-                previous_objective.has_value() ? &*previous_objective : nullptr,
-                previous_cluster_objective_state.at(key),
-                trust_region_state.GetRadius(key),
-                *candidate_work_list.at(position).second,
-                performance_counters);
+                *candidate_work_list.at(position).second
+            );
         }
         catch (...)
         {
@@ -673,10 +672,10 @@ inline CandidateSelection SelectClusterCandidates(
         }
     };
 #ifdef USE_OPENMP
-    if (thread_size > 1 && candidate_work_list.size() > 1)
+    if (inputs.thread_size > 1 && candidate_work_list.size() > 1)
     {
         eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
-#pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#pragma omp parallel for schedule(dynamic) num_threads(inputs.thread_size)
         for (std::size_t position = 0; position < candidate_work_list.size(); position++)
         {
             select_candidate(position);
@@ -743,20 +742,21 @@ inline CandidateSelection SelectClusterCandidates(
 }
 
 inline bool TryBacktrackCombinedCandidate(
-    const SecondStageContext & context,
-    const ResidualBaseline & residual_baseline,
-    const CouplingGraphPartition & partition,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    const ObjectiveDomain & objective_domain,
-    const ObjectiveByKey & previous_objective_by_key,
+    const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown * previous_audit_objective,
     const ObjectiveBreakdown * best_audit_objective,
     const ClusterObjectiveStateMap & committed_objective_state,
-    ClusterObjectiveStateMap & working_objective_state,
-    CandidateSelection & selection,
-    PerformanceCounters & performance_counters)
+    CandidateSelection & selection)
 {
+    const auto & context{ inputs.context };
+    const auto & residual_baseline{ inputs.residual_baseline };
+    const auto & partition{ inputs.partition };
+    const auto & previous_state{ inputs.previous_state };
+    const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
+    const auto & objective_domain{ inputs.objective_domain };
+    const auto & previous_objective_by_key{ inputs.previous_objective_by_key };
+    auto & working_objective_state{ inputs.cluster_objective_state };
+    auto & performance_counters{ inputs.performance_counters };
     std::vector<std::size_t> changed_atom_index_list;
     for (const auto & key : selection.accepted_key_list)
     {

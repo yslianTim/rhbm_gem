@@ -3940,9 +3940,11 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
         };
         const auto snapshot_objective{
             audit_detail::EvaluateAuditObjective(
-                context,
                 domain,
-                baseline.model_snapshot)
+                audit_detail::SnapshotResidualEvaluator{
+                    context,
+                    baseline.model_snapshot
+                })
         };
         const auto baseline_objective{
             audit_detail::EvaluateAuditObjective(domain, baseline)
