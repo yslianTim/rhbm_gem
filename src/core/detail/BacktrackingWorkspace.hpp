@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -29,8 +30,6 @@ struct BacktrackingStep
     BacktrackingStepStatus status{ BacktrackingStepStatus::Exhausted };
     double factor{ 0.0 };
     std::size_t trial_number{ 0 };
-
-    bool IsCandidateReady() const { return status == BacktrackingStepStatus::CandidateReady; }
 };
 
 class BacktrackingWorkspace
@@ -62,13 +61,9 @@ public:
                 "Local fitting backtracking minimum transformed change is invalid.");
         }
         m_candidate_patch.atom_index_list = active_index_list;
-        std::sort(
-            m_candidate_patch.atom_index_list.begin(),
-            m_candidate_patch.atom_index_list.end());
+        std::ranges::sort(m_candidate_patch.atom_index_list);
         m_candidate_patch.atom_index_list.erase(
-            std::unique(
-                m_candidate_patch.atom_index_list.begin(),
-                m_candidate_patch.atom_index_list.end()),
+            std::ranges::unique(m_candidate_patch.atom_index_list).begin(),
             m_candidate_patch.atom_index_list.end());
         std::vector<std::size_t> group_id_by_atom_position;
         group_id_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
@@ -128,17 +123,6 @@ public:
             factor,
             m_trial_number
         };
-    }
-
-    template <typename Evaluator>
-    BacktrackingStep FindAcceptedCandidate(Evaluator && evaluator)
-    {
-        while (true)
-        {
-            const auto step{ BuildNextCandidate() };
-            if (!step.IsCandidateReady()) return step;
-            if (evaluator(step)) return step;
-        }
     }
 
     FitStatePatch TakeCandidatePatch() { return std::move(m_candidate_patch); }

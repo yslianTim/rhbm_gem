@@ -65,11 +65,8 @@ public:
             atom_context.raw_sampling_entries.at(sample_ref.sample_index)
         };
         auto adjusted_response{ baseline->adjusted_response };
-        for (auto neighbor_iter = atom_context.NeighborBegin(sample_ref.sample_index);
-            neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
-            ++neighbor_iter)
+        for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_ref.sample_index))
         {
-            const auto & neighbor_atom_sample{ *neighbor_iter };
             const GaussianModel3D * candidate_model{ nullptr };
             const GaussianModel3D * baseline_model{ nullptr };
             if (neighbor_atom_sample.is_selected)

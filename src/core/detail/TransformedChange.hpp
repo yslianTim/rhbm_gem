@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -77,7 +78,7 @@ inline double GetMaximumTransformedChange(const std::vector<double> & value_list
         throw std::invalid_argument(
             "Local fitting transformed change input is inconsistent.");
     }
-    return *std::max_element(value_list.begin(), value_list.end());
+    return std::ranges::max(value_list);
 }
 
 inline bool IsTransformedChangeMaterial(

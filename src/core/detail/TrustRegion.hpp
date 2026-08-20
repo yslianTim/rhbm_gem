@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <map>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -79,10 +80,7 @@ inline RejectedClusterPartition PartitionRejectedClusters(
     RejectedClusterPartition partition;
     for (const auto & key : rejected_key_list)
     {
-        if (std::find(
-                exhausted_key_list.begin(),
-                exhausted_key_list.end(),
-                key) != exhausted_key_list.end())
+        if (std::ranges::find(exhausted_key_list, key) != exhausted_key_list.end())
         {
             partition.exhausted_key_list.emplace_back(key);
         }
@@ -123,10 +121,8 @@ inline AllRejectedResolution ResolveAllRejected(
             partition.retryable_key_list.end(),
             [&](const ClusterKey & key)
             {
-                return std::find(
-                    radius_update.saturated_key_list.begin(),
-                    radius_update.saturated_key_list.end(),
-                    key) != radius_update.saturated_key_list.end();
+                return std::ranges::find(radius_update.saturated_key_list, key) !=
+                    radius_update.saturated_key_list.end();
             })
     };
     if (!all_retryable_saturated)

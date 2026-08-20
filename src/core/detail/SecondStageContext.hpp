@@ -1,7 +1,9 @@
 #pragma once
 
+#include <compare>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,20 +21,7 @@ struct SampleRef
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
 
-    friend bool operator<(const SampleRef & lhs, const SampleRef & rhs)
-    {
-        if (lhs.atom_index != rhs.atom_index)
-        {
-            return lhs.atom_index < rhs.atom_index;
-        }
-        return lhs.sample_index < rhs.sample_index;
-    }
-
-    friend bool operator==(const SampleRef & lhs, const SampleRef & rhs)
-    {
-        return lhs.atom_index == rhs.atom_index &&
-            lhs.sample_index == rhs.sample_index;
-    }
+    friend auto operator<=>(const SampleRef &, const SampleRef &) = default;
 };
 
 struct NeighborAtomSample
@@ -62,16 +51,12 @@ struct AtomContext
     double alpha_r{ 0.0 };
     int neighbor_count_for_peeling{ 0 };
 
-    auto NeighborBegin(std::size_t sample_index) const
+    std::span<const NeighborAtomSample> Neighbors(std::size_t sample_index) const
     {
-        return neighbor_atom_sample_list.begin() +
-            static_cast<std::ptrdiff_t>(neighbor_atom_sample_offset_list.at(sample_index));
-    }
-
-    auto NeighborEnd(std::size_t sample_index) const
-    {
-        return neighbor_atom_sample_list.begin() +
-            static_cast<std::ptrdiff_t>(neighbor_atom_sample_offset_list.at(sample_index + 1));
+        const auto begin{ neighbor_atom_sample_offset_list.at(sample_index) };
+        const auto end{ neighbor_atom_sample_offset_list.at(sample_index + 1) };
+        return std::span<const NeighborAtomSample>{ neighbor_atom_sample_list }
+            .subspan(begin, end - begin);
     }
 };
 

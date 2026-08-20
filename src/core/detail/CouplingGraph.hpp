@@ -7,6 +7,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -152,13 +153,7 @@ class CouplingGraphBuilder
 
     static void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list)
     {
-        std::sort(
-            participant_list.begin(),
-            participant_list.end(),
-            [](const auto & lhs, const auto & rhs)
-            {
-                return lhs.atom_index < rhs.atom_index;
-            });
+        std::ranges::sort(participant_list, {}, &GraphParticipant::atom_index);
 
         std::size_t normalized_size{ 0 };
         for (std::size_t index = 0; index < participant_list.size(); index++)
@@ -293,8 +288,7 @@ class CouplingGraphBuilder
         topology.summary.cut_edge_count = topology.summary.candidate_edge_count - topology.summary.retained_edge_count;
         topology.summary.weight_median = array_helper::ComputePercentile(weight_list, 0.5);
         topology.summary.weight_percentile_95 = array_helper::ComputePercentile(weight_list, 0.95);
-        topology.summary.weight_maximum = weight_list.empty() ? 0.0 :
-            *std::max_element(weight_list.begin(), weight_list.end());
+        topology.summary.weight_maximum = weight_list.empty() ? 0.0 : std::ranges::max(weight_list);
         return topology;
     }
 
@@ -514,11 +508,8 @@ inline GraphTopology BuildSecondStageGraphTopology(
                 static_cast<double>(sample.point.distance)) };
             participant_list.clear();
             participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
-            for (auto iter = atom_context.NeighborBegin(j);
-                iter != atom_context.NeighborEnd(j);
-                ++iter)
+            for (const auto & neighbor_atom_sample : atom_context.Neighbors(j))
             {
-                const auto & neighbor_atom_sample{ *iter };
                 const auto neighbor_jacobian{ neighbor_atom_sample.is_selected ?
                     EvaluateCouplingGraphJacobian(
                         selected_model_invariants.at(neighbor_atom_sample.atom_index),
@@ -898,7 +889,7 @@ inline CouplingGraphPartition BuildGraphPartition(
     }
     for (auto & entry : key_by_root)
     {
-        std::sort(entry.second.begin(), entry.second.end());
+        std::ranges::sort(entry.second);
     }
 
     std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
@@ -917,8 +908,8 @@ inline CouplingGraphPartition BuildGraphPartition(
             if (position == inactive_position) continue;
             root_list.emplace_back(component_set.Find(position));
         }
-        std::sort(root_list.begin(), root_list.end());
-        root_list.erase(std::unique(root_list.begin(), root_list.end()), root_list.end());
+        std::ranges::sort(root_list);
+        root_list.erase(std::ranges::unique(root_list).begin(), root_list.end());
         if (root_list.size() > 1) partition.boundary_sample_count++;
         for (const auto root : root_list)
         {
@@ -958,9 +949,9 @@ inline std::vector<SampleRef> BuildGraphAffectedSampleUnion(
             iter->second.begin(),
             iter->second.end());
     }
-    std::sort(sample_id_list.begin(), sample_id_list.end());
+    std::ranges::sort(sample_id_list);
     sample_id_list.erase(
-        std::unique(sample_id_list.begin(), sample_id_list.end()),
+        std::ranges::unique(sample_id_list).begin(),
         sample_id_list.end());
     return sample_id_list;
 }

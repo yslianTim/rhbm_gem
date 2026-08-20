@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -957,9 +958,8 @@ inline IterationResult RunIteration(
         {
             for (const auto & key : selection.accepted_key_list)
             {
-                if (std::find(
-                        selection.backtracking_exhausted_key_list.begin(),
-                        selection.backtracking_exhausted_key_list.end(),
+                if (std::ranges::find(
+                        selection.backtracking_exhausted_key_list,
                         key) == selection.backtracking_exhausted_key_list.end())
                 {
                     selection.backtracking_exhausted_key_list.emplace_back(key);
@@ -1098,9 +1098,8 @@ inline IterationResult RunIteration(
             for (const auto & key :
                 result.diagnostics.trust_region_update.rejected_cluster_partition.exhausted_key_list)
             {
-                if (std::find(
-                        iteration_state.unchanged_state_exhausted_key_list.begin(),
-                        iteration_state.unchanged_state_exhausted_key_list.end(),
+                if (std::ranges::find(
+                        iteration_state.unchanged_state_exhausted_key_list,
                         key) == iteration_state.unchanged_state_exhausted_key_list.end())
                 {
                     iteration_state.unchanged_state_exhausted_key_list.emplace_back(key);

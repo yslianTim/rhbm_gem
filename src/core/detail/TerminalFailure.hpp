@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <map>
 #include <ostream>
+#include <ranges>
 #include <variant>
 #include <vector>
 
@@ -112,7 +113,7 @@ inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     TerminalPersistentFailureMap terminal_failure_by_key;
     for (const auto & [key, health] : health_by_key)
     {
-        if (std::find(accepted_key_list.begin(), accepted_key_list.end(), key) ==
+        if (std::ranges::find(accepted_key_list, key) ==
             accepted_key_list.end())
         {
             continue;

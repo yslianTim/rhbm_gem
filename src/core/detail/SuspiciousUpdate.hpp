@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -35,13 +37,8 @@ constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 
 inline std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask)
 {
-    return static_cast<std::size_t>(std::count_if(
-        suspicious_mask.begin(),
-        suspicious_mask.end(),
-        [](char is_suspicious)
-        {
-            return is_suspicious != 0;
-        }));
+    return static_cast<std::size_t>(
+        std::ranges::count_if(suspicious_mask, std::identity{}));
 }
 
 inline bool HasSuspiciousAtom(
@@ -221,13 +218,10 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
 
     if (profile_samples.empty()) return analysis;
     ZeroOffsetProfileDiagnostics diagnostics;
-    std::sort(
-        profile_samples.begin(),
-        profile_samples.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            return lhs.first < rhs.first;
-        });
+    std::ranges::sort(
+        profile_samples,
+        {},
+        &std::pair<double, double>::first);
 
     diagnostics.distance_range = profile_samples.back().first - profile_samples.front().first;
     for (std::size_t i = 0; i < profile_samples.size();)

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -237,7 +238,7 @@ inline void AppendObjectiveScaleSummary(std::ostringstream & message, const std:
     message
         << array_helper::ComputePercentile(scale_list, 0.5) << "/"
         << array_helper::ComputePercentile(scale_list, 0.99) << "/"
-        << *std::max_element(scale_list.begin(), scale_list.end());
+        << std::ranges::max(scale_list);
 }
 
 inline void LogObjectiveDomain(

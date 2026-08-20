@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <map>
+#include <ranges>
 #include <stdexcept>
 
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
@@ -32,13 +33,9 @@ using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
 inline bool AreClustersStationarityEligible(const ClusterHealthMap & health_by_key)
 {
-    return std::all_of(
-        health_by_key.begin(),
-        health_by_key.end(),
-        [](const auto & entry)
-        {
-            return entry.second.IsStationarityEligible();
-        });
+    return std::ranges::all_of(
+        health_by_key | std::views::values,
+        &ClusterHealth::IsStationarityEligible);
 }
 
 inline bool IsLocalRefitStatusStationarityEligible(RHBMEstimationStatus status)

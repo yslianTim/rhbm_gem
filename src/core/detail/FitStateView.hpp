@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -27,10 +28,8 @@ struct FitStatePatch
 
     static FitStatePatch FromState(const FitState & state, ClusterKey atom_index_list)
     {
-        std::sort(atom_index_list.begin(), atom_index_list.end());
-        atom_index_list.erase(
-            std::unique(atom_index_list.begin(), atom_index_list.end()),
-            atom_index_list.end());
+        std::ranges::sort(atom_index_list);
+        atom_index_list.erase(std::ranges::unique(atom_index_list).begin(), atom_index_list.end());
 
         FitStatePatch patch;
         patch.atom_index_list = std::move(atom_index_list);
@@ -44,12 +43,7 @@ struct FitStatePatch
 
     const GaussianModel3DWithUncertainty * Find(std::size_t atom_index) const
     {
-        const auto iter{
-            std::lower_bound(
-                atom_index_list.begin(),
-                atom_index_list.end(),
-                atom_index)
-        };
+        const auto iter{ std::ranges::lower_bound(atom_index_list, atom_index) };
         if (iter == atom_index_list.end() || *iter != atom_index)
         {
             return nullptr;
@@ -117,7 +111,7 @@ public:
         return state;
     }
 
-    std::size_t GetSize() const { return m_base_state.size(); }
+    std::size_t size() const { return m_base_state.size(); }
 };
 
 inline const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index)

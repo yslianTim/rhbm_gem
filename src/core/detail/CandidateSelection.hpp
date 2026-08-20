@@ -6,6 +6,7 @@
 #include <exception>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -219,13 +220,9 @@ inline void RejectCombinedCandidate(
         selection.rejected_key_list.end(),
         selection.accepted_key_list.begin(),
         selection.accepted_key_list.end());
-    std::sort(
-        selection.rejected_key_list.begin(),
-        selection.rejected_key_list.end());
+    std::ranges::sort(selection.rejected_key_list);
     selection.rejected_key_list.erase(
-        std::unique(
-            selection.rejected_key_list.begin(),
-            selection.rejected_key_list.end()),
+        std::ranges::unique(selection.rejected_key_list).begin(),
         selection.rejected_key_list.end());
     selection.accepted_key_list.clear();
     selection.grow_trust_region_key_list.clear();
@@ -458,43 +455,46 @@ inline ClusterCandidateResult SelectClusterCandidate(
     if (!accepted_base_candidate)
     {
         result.diagnostic.accepted_backtracking_factor.reset();
-        const auto step{ backtracking_workspace.FindAcceptedCandidate(
-            [&](const BacktrackingStep & step)
+        BacktrackingStep step;
+        for (step = backtracking_workspace.BuildNextCandidate();
+            step.status == BacktrackingStepStatus::CandidateReady;
+            step = backtracking_workspace.BuildNextCandidate())
+        {
+            const auto factor{ step.factor };
+            const auto & backtracked_patch{ backtracking_workspace.GetCandidatePatch() };
+            ObjectiveAttemptDiagnostic trial_diagnostic;
+            trial_diagnostic.effective_damping = base_proposal->effective_damping * factor;
+            trial_diagnostic.trust_region_radius = trust_region_radius;
+            trial_diagnostic.trust_region_step_norm = base_proposal->step_norm * factor;
+            trial_diagnostic.backtracking_trial_count = step.trial_number;
+            const FitStateView backtracked_state_view{
+                previous_state,
+                backtracked_patch
+            };
+            const CandidateEvaluationOverlay backtracked_overlay{
+                context,
+                residual_baseline,
+                backtracked_state_view
+            };
+            if (TryCommitClusterCandidate(
+                    backtracked_overlay,
+                    key,
+                    objective_sample_ref_list,
+                    previous_objective,
+                    false,
+                    objective_domain,
+                    result.objective_state,
+                    trial_diagnostic,
+                    performance_counters))
             {
-                const auto factor{ step.factor };
-                const auto & backtracked_patch{ backtracking_workspace.GetCandidatePatch() };
-                ObjectiveAttemptDiagnostic trial_diagnostic;
-                trial_diagnostic.effective_damping = base_proposal->effective_damping * factor;
-                trial_diagnostic.trust_region_radius = trust_region_radius;
-                trial_diagnostic.trust_region_step_norm = base_proposal->step_norm * factor;
-                trial_diagnostic.backtracking_trial_count = step.trial_number;
-                const FitStateView backtracked_state_view{
-                    previous_state,
-                    backtracked_patch
-                };
-                const CandidateEvaluationOverlay backtracked_overlay{
-                    context,
-                    residual_baseline,
-                    backtracked_state_view
-                };
-                if (TryCommitClusterCandidate(
-                        backtracked_overlay,
-                        key,
-                        objective_sample_ref_list,
-                        previous_objective,
-                        false,
-                        objective_domain,
-                        result.objective_state,
-                        trial_diagnostic,
-                        performance_counters))
-                {
-                    trial_diagnostic.accepted_backtracking_factor = factor;
-                    result.diagnostic = std::move(trial_diagnostic);
-                    return true;
-                }
+                trial_diagnostic.accepted_backtracking_factor = factor;
                 result.diagnostic = std::move(trial_diagnostic);
-                return false;
-            }) };
+                accepted_base_candidate = true;
+                accepted_by_backtracking = true;
+                break;
+            }
+            result.diagnostic = std::move(trial_diagnostic);
+        }
         if (step.status == BacktrackingStepStatus::Exhausted)
         {
             result.diagnostic.backtracking_exhausted = true;
@@ -503,15 +503,13 @@ inline ClusterCandidateResult SelectClusterCandidate(
         {
             result.diagnostic.is_invalid_model = true;
         }
-        else
+        if (accepted_base_candidate)
         {
             result.polish_provenance =
                 backtracking_workspace.BuildActiveCandidatePolishProvenance(
                     result.polish_provenance,
                     non_polished_endpoint_provenance);
             base_patch = backtracking_workspace.TakeCandidatePatch();
-            accepted_base_candidate = true;
-            accepted_by_backtracking = true;
         }
     }
     else
@@ -649,10 +647,8 @@ inline CandidateSelection SelectClusterCandidates(
                 health_by_key.at(key).IsStationarityEligible() && !contains_suspicious_atom
             };
             const auto is_unchanged_state_exhausted{
-                std::find(
-                    unchanged_state_exhausted_key_list.begin(),
-                    unchanged_state_exhausted_key_list.end(),
-                    key) != unchanged_state_exhausted_key_list.end()
+                std::ranges::find(unchanged_state_exhausted_key_list, key) !=
+                    unchanged_state_exhausted_key_list.end()
             };
             const auto & previous_objective{ previous_objective_by_key.at(key) };
             result_list.at(position) = SelectClusterCandidate(
@@ -783,64 +779,62 @@ inline bool TryBacktrackCombinedCandidate(
     };
     selection.combined_backtracking_trial_count = 1;
     ClusterObjectiveStateMap accepted_trial_objective_state;
-    const auto step{ backtracking_workspace.FindAcceptedCandidate(
-        [&](const BacktrackingStep & step)
+    BacktrackingStep step;
+    for (step = backtracking_workspace.BuildNextCandidate();
+        step.status == BacktrackingStepStatus::CandidateReady;
+        step = backtracking_workspace.BuildNextCandidate())
+    {
+        const auto factor{ step.factor };
+        const auto & candidate_patch{ backtracking_workspace.GetCandidatePatch() };
+        const FitStateView candidate_state_view{ previous_state, candidate_patch};
+        const CandidateEvaluationOverlay candidate_overlay{
+            context,
+            residual_baseline,
+            candidate_state_view
+        };
+        selection.combined_backtracking_trial_count = step.trial_number;
+        auto trial_objective_state{ committed_objective_state };
+        auto local_criteria_accepted{ true };
+        for (const auto & key : selection.accepted_key_list)
         {
-            const auto factor{ step.factor };
-            const auto & candidate_patch{ backtracking_workspace.GetCandidatePatch() };
-            const FitStateView candidate_state_view{
-                previous_state,
-                candidate_patch
-            };
-            const CandidateEvaluationOverlay candidate_overlay{
-                context,
-                residual_baseline,
-                candidate_state_view
-            };
-            selection.combined_backtracking_trial_count = step.trial_number;
-            auto trial_objective_state{ committed_objective_state };
-            auto local_criteria_accepted{ true };
-            for (const auto & key : selection.accepted_key_list)
+            ObjectiveAttemptDiagnostic diagnostic;
+            diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
+            diagnostic.accepted_backtracking_factor = factor;
+            const auto & previous_objective{ previous_objective_by_key.at(key) };
+            if (!TryCommitClusterCandidate(
+                    candidate_overlay,
+                    key,
+                    partition.sample_id_list_by_key.at(key),
+                    previous_objective.has_value() ? &*previous_objective : nullptr,
+                    false,
+                    objective_domain,
+                    trial_objective_state.at(key),
+                    diagnostic,
+                    performance_counters))
             {
-                ObjectiveAttemptDiagnostic diagnostic;
-                diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
-                diagnostic.accepted_backtracking_factor = factor;
-                const auto & previous_objective{ previous_objective_by_key.at(key) };
-                if (!TryCommitClusterCandidate(
-                        candidate_overlay,
-                        key,
-                        partition.sample_id_list_by_key.at(key),
-                        previous_objective.has_value() ? &*previous_objective : nullptr,
-                        false,
-                        objective_domain,
-                        trial_objective_state.at(key),
-                        diagnostic,
-                        performance_counters))
-                {
-                    local_criteria_accepted = false;
-                    break;
-                }
+                local_criteria_accepted = false;
+                break;
             }
-            const auto combined_check{
-                local_criteria_accepted ?
-                    EvaluateCombinedObjective(
-                        candidate_overlay,
-                        affected_sample_ref_list,
-                        objective_domain,
-                        best_audit_objective,
-                        previous_audit_objective,
-                        performance_counters) :
-                    std::optional<ObjectiveBreakdown>{}
-            };
-            if (combined_check.has_value())
-            {
-                selection.combined_backtracking_factor = factor;
-                selection.combined_backtracking_objective = combined_check;
-                accepted_trial_objective_state = std::move(trial_objective_state);
-                return true;
-            }
-            return false;
-        }) };
+        }
+        const auto combined_check{
+            local_criteria_accepted ?
+                EvaluateCombinedObjective(
+                    candidate_overlay,
+                    affected_sample_ref_list,
+                    objective_domain,
+                    best_audit_objective,
+                    previous_audit_objective,
+                    performance_counters) :
+                std::optional<ObjectiveBreakdown>{}
+        };
+        if (combined_check.has_value())
+        {
+            selection.combined_backtracking_factor = factor;
+            selection.combined_backtracking_objective = combined_check;
+            accepted_trial_objective_state = std::move(trial_objective_state);
+            break;
+        }
+    }
     if (step.status == BacktrackingStepStatus::Exhausted)
     {
         selection.combined_backtracking_exhausted = true;

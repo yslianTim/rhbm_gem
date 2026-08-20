@@ -7,6 +7,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <sstream>
 #include <unordered_map>
@@ -112,7 +113,7 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        std::sort(offset_list.begin(), offset_list.end());
+        std::ranges::sort(offset_list);
         const auto middle{ offset_list.size() / 2 };
         const auto median{ offset_list.size() % 2 == 0 ?
             0.5 * offset_list.at(middle - 1) + 0.5 * offset_list.at(middle) :
@@ -189,9 +190,8 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 group_basis(target_offset_column) += target_basis;
             }
 
-            for (auto iter = atom_context.NeighborBegin(sample_index); iter != atom_context.NeighborEnd(sample_index); ++iter)
+            for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
             {
-                const auto & neighbor_atom_sample{ *iter };
                 const auto & neighbor_model{
                     ResolveNeighborAtomModel(neighbor_atom_sample, model_snapshot)
                 };

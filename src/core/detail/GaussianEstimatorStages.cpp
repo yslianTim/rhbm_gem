@@ -19,9 +19,9 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -75,7 +75,7 @@ void AppendOffsetSummary(std::ostringstream & stream, const FitState & state)
     {
         median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
         percentile_absolute_offset = array_helper::ComputePercentile(absolute_offset_list, 0.99);
-        maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
+        maximum_absolute_offset = std::ranges::max(absolute_offset_list);
     }
     stream << std::scientific << std::setprecision(2)
         << "; offsets finite = " << finite_count << " of " << state.size()

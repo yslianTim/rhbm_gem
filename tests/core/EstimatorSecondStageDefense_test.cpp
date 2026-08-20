@@ -3690,7 +3690,6 @@ TEST(EstimatorSecondStageDefenseTest,
     ASSERT_EQ(
         step.status,
         backtracking_detail::BacktrackingStepStatus::CandidateReady);
-    EXPECT_TRUE(step.IsCandidateReady());
     EXPECT_DOUBLE_EQ(step.factor, 0.5);
     EXPECT_EQ(step.trial_number, 2U);
     const auto & candidate_patch{ workspace.GetCandidatePatch() };
@@ -3742,7 +3741,9 @@ TEST(EstimatorSecondStageDefenseTest,
         1.0e-4
     };
     const auto view_step{ view_workspace.BuildNextCandidate() };
-    ASSERT_TRUE(view_step.IsCandidateReady());
+    ASSERT_EQ(
+        view_step.status,
+        backtracking_detail::BacktrackingStepStatus::CandidateReady);
     const auto & view_candidate_patch{ view_workspace.GetCandidatePatch() };
     for (std::size_t atom_index = 0;
         atom_index < previous_model_list.size();
@@ -3819,7 +3820,7 @@ TEST(EstimatorSecondStageDefenseTest,
     do
     {
         factor_step = factor_workspace.BuildNextCandidate();
-        if (factor_step.IsCandidateReady())
+        if (factor_step.status == backtracking_detail::BacktrackingStepStatus::CandidateReady)
         {
             ready_count++;
             EXPECT_DOUBLE_EQ(factor_step.factor, expected_factor);
@@ -3828,7 +3829,7 @@ TEST(EstimatorSecondStageDefenseTest,
             expected_trial_number++;
         }
     }
-    while (factor_step.IsCandidateReady());
+    while (factor_step.status == backtracking_detail::BacktrackingStepStatus::CandidateReady);
     EXPECT_EQ(
         factor_step.status,
         backtracking_detail::BacktrackingStepStatus::Exhausted);

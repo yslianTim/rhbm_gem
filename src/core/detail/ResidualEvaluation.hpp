@@ -18,24 +18,13 @@ namespace rhbm_gem::core::detail {
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 
-inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state)
+inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const auto & state)
 {
     FittedGaussianSnapshot snapshot;
     snapshot.reserve(state.size());
-    for (const auto & result : state)
+    for (std::size_t i = 0; i < state.size(); i++)
     {
-        snapshot.emplace_back(result.mdpde.GetModel());
-    }
-    return snapshot;
-}
-
-inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state)
-{
-    FittedGaussianSnapshot snapshot;
-    snapshot.reserve(state.GetSize());
-    for (std::size_t i = 0; i < state.GetSize(); i++)
-    {
-        snapshot.emplace_back(state.GetModel(i));
+        snapshot.emplace_back(GetFitModel(state, i));
     }
     return snapshot;
 }
@@ -149,11 +138,8 @@ inline double CalculateSecondStageAdjustedResponse(
     auto response_value{
         static_cast<double>(atom_context.raw_sampling_entries.at(sample_index).response)
     };
-    for (auto iter = atom_context.NeighborBegin(sample_index);
-        iter != atom_context.NeighborEnd(sample_index);
-        ++iter)
+    for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
     {
-        const auto & neighbor_atom_sample{ *iter };
         response_value -= ResolveNeighborAtomModel(
             neighbor_atom_sample,
             model_snapshot).ResponseAtDistance(neighbor_atom_sample.distance);

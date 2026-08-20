@@ -15,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -163,7 +164,7 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        std::sort(offset_list.begin(), offset_list.end());
+        std::ranges::sort(offset_list);
         const auto middle{ offset_list.size() / 2 };
         const auto median{
             offset_list.size() % 2 == 0 ?
@@ -317,11 +318,8 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         {
             return std::nullopt;
         }
-        for (auto iter = atom_context.NeighborBegin(sample_ref.sample_index);
-            iter != atom_context.NeighborEnd(sample_ref.sample_index);
-            ++iter)
+        for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_ref.sample_index))
         {
-            const auto & neighbor_atom_sample{ *iter };
             const auto appended{
                 neighbor_atom_sample.is_selected ?
                     append_model(
