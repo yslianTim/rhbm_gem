@@ -18,14 +18,12 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
-#include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -167,11 +165,12 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
-                BaseProposal proposal;
-                proposal.patch.atom_index_list = key;
+                BaseProposal proposal{
+                    .patch{ .atom_index_list = key },
+                    .effective_damping = damping,
+                    .step_norm = *step_norm
+                };
                 proposal.patch.mdpde_list.reserve(key.size());
-                proposal.effective_damping = damping;
-                proposal.step_norm = *step_norm;
                 for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
                 {
                     const auto atom_index{ key.at(atom_position) };
@@ -622,24 +621,22 @@ inline CandidateSelection SelectClusterCandidates(
     PerformanceCounters & performance_counters)
 {
     using PartitionEntry = std::pair<const ClusterKey, std::vector<SampleRef>>;
-    std::vector<const PartitionEntry *> partition_entry_list;
-    std::vector<ClusterSolverWorkspace *> solver_workspace_list;
-    partition_entry_list.reserve(partition.sample_id_list_by_key.size());
-    solver_workspace_list.reserve(partition.sample_id_list_by_key.size());
+    using CandidateWork = std::pair<const PartitionEntry *, ClusterSolverWorkspace *>;
+    std::vector<CandidateWork> candidate_work_list;
+    candidate_work_list.reserve(partition.sample_id_list_by_key.size());
     for (const auto & entry : partition.sample_id_list_by_key)
     {
-        partition_entry_list.emplace_back(&entry);
-        solver_workspace_list.emplace_back(&solver_workspace_by_key.at(entry.first));
+        candidate_work_list.emplace_back(&entry, &solver_workspace_by_key.at(entry.first));
     }
 
-    std::vector<ClusterCandidateResult> result_list(partition_entry_list.size());
-    std::vector<std::exception_ptr> exception_list(partition_entry_list.size());
+    std::vector<ClusterCandidateResult> result_list(candidate_work_list.size());
+    std::vector<std::exception_ptr> exception_list(candidate_work_list.size());
     const auto & previous_cluster_objective_state{ cluster_objective_state };
     const auto select_candidate = [&](std::size_t position)
     {
         try
         {
-            const auto & entry{ *partition_entry_list.at(position) };
+            const auto & entry{ *candidate_work_list.at(position).first };
             const auto & key{ entry.first };
             const auto & sample_ref_list{ entry.second };
             const auto contains_suspicious_atom{ HasSuspiciousAtom(key, rollback_atom_mask) };
@@ -667,7 +664,7 @@ inline CandidateSelection SelectClusterCandidates(
                 previous_objective.has_value() ? &*previous_objective : nullptr,
                 previous_cluster_objective_state.at(key),
                 trust_region_state.GetRadius(key),
-                *solver_workspace_list.at(position),
+                *candidate_work_list.at(position).second,
                 performance_counters);
         }
         catch (...)
@@ -676,11 +673,11 @@ inline CandidateSelection SelectClusterCandidates(
         }
     };
 #ifdef USE_OPENMP
-    if (thread_size > 1 && partition_entry_list.size() > 1)
+    if (thread_size > 1 && candidate_work_list.size() > 1)
     {
         eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
-        for (std::size_t position = 0; position < partition_entry_list.size(); position++)
+        for (std::size_t position = 0; position < candidate_work_list.size(); position++)
         {
             select_candidate(position);
         }
@@ -688,7 +685,7 @@ inline CandidateSelection SelectClusterCandidates(
     else
 #endif
     {
-        for (std::size_t position = 0; position < partition_entry_list.size(); position++)
+        for (std::size_t position = 0; position < candidate_work_list.size(); position++)
         {
             select_candidate(position);
         }
@@ -698,13 +695,14 @@ inline CandidateSelection SelectClusterCandidates(
         if (exception) std::rethrow_exception(exception);
     }
 
-    CandidateSelection selection;
-    selection.assembled_state = previous_state;
-    selection.assembled_polish_provenance = previous_polish_provenance;
+    CandidateSelection selection{
+        .assembled_state = previous_state,
+        .assembled_polish_provenance = previous_polish_provenance
+    };
     for (std::size_t position = 0; position < result_list.size(); position++)
     {
         auto & result{ result_list.at(position) };
-        const auto & key{ partition_entry_list.at(position)->first };
+        const auto & key{ candidate_work_list.at(position).first->first };
         cluster_objective_state.at(key) = std::move(result.objective_state);
         selection.polish_progress.eligible_count += result.polish_progress.eligible_count;
         selection.polish_progress.accepted_count += result.polish_progress.accepted_count;

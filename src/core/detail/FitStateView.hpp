@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <ranges>
 #include <stdexcept>
@@ -124,6 +125,13 @@ inline const GaussianModel3D & GetFitModel(
     std::size_t atom_index)
 {
     return state.at(atom_index);
+}
+
+using PolishProvenance = std::vector<char>;
+
+inline bool UsesPolish(const PolishProvenance & provenance)
+{
+    return std::ranges::any_of(provenance, std::identity{});
 }
 
 } // namespace rhbm_gem::core::detail

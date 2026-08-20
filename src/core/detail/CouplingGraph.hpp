@@ -21,7 +21,7 @@
 
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
-#include "core/detail/TransformedGaussianEvaluation.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -926,13 +926,8 @@ inline CouplingGraphPartition BuildGraphPartition(
 
 inline std::vector<ClusterKey> BuildGraphClusterKeyList(const CouplingGraphPartition & partition)
 {
-    std::vector<ClusterKey> cluster_key_list;
-    cluster_key_list.reserve(partition.sample_id_list_by_key.size());
-    for (const auto & entry : partition.sample_id_list_by_key)
-    {
-        cluster_key_list.emplace_back(entry.first);
-    }
-    return cluster_key_list;
+    const auto key_view{ partition.sample_id_list_by_key | std::views::keys };
+    return { key_view.begin(), key_view.end() };
 }
 
 inline std::vector<SampleRef> BuildGraphAffectedSampleUnion(

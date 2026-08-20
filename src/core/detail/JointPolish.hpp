@@ -6,7 +6,7 @@
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
-#include "core/detail/TransformedGaussianEvaluation.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/TrustRegion.hpp"
 
 #include <algorithm>
@@ -493,11 +493,12 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
                     return std::nullopt;
                 }
 
-                JointPolishProposal proposal;
-                proposal.patch.atom_index_list = key;
+                JointPolishProposal proposal{
+                    .patch{ .atom_index_list = key },
+                    .effective_damping = damping,
+                    .step_norm = *step_norm
+                };
                 proposal.patch.mdpde_list.reserve(key.size());
-                proposal.effective_damping = damping;
-                proposal.step_norm = *step_norm;
                 for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
                 {
                     const auto atom_index{ key.at(atom_position) };

@@ -152,10 +152,9 @@ inline bool IsTransformedChangeConverged(
     return true;
 }
 
-template <typename CurrentState, typename PreviousState>
 inline TransformedChangeSummary SummarizeTransformedChanges(
-    const CurrentState & current_state,
-    const PreviousState & previous_state,
+    const auto & current_state,
+    const auto & previous_state,
     const std::vector<std::size_t> & index_list)
 {
     std::vector<algorithm::ParameterChange> change_list;

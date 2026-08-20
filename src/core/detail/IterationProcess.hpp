@@ -30,7 +30,6 @@
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -383,12 +382,6 @@ inline std::string FormatProgressMaximum(double value)
     return stream.str();
 }
 
-inline std::string FormatProgressMaximum(const std::optional<double> & value)
-{
-    if (!value.has_value()) return "-";
-    return FormatProgressMaximum(*value);
-}
-
 inline constexpr std::array<std::string_view, 6> kProgressHeaderList
 {
     "Try/Acc",
@@ -399,10 +392,9 @@ inline constexpr std::array<std::string_view, 6> kProgressHeaderList
     "dMax A/R"
 };
 
-template <typename CellType>
 inline std::string FormatProgressRow(
     const ProgressColumnWidths & column_widths,
-    const std::array<CellType, 6> & cell_list)
+    const auto & cell_list)
 {
     std::ostringstream stream;
     for (std::size_t i = 0; i < cell_list.size(); i++)
@@ -463,9 +455,11 @@ inline void LogIterationProgress(
         std::to_string(progress.polish_progress.eligible_count) + "/" +
             std::to_string(progress.polish_progress.accepted_count) + "/" +
             std::to_string(progress.polish_progress.rejected_count) + "/" +
-            std::to_string(progress.polish_progress.skipped_count),
+        std::to_string(progress.polish_progress.skipped_count),
         std::to_string(progress.suspicious_atom_count),
-        FormatProgressMaximum(progress.accepted_maximum_transformed_change) + "/" +
+        (progress.accepted_maximum_transformed_change.has_value() ?
+            FormatProgressMaximum(*progress.accepted_maximum_transformed_change) :
+            std::string{ "-" }) + "/" +
             FormatProgressMaximum(progress.raw_maximum_transformed_change)
     };
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));

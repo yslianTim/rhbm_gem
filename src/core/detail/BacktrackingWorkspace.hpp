@@ -12,7 +12,6 @@
 
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
@@ -45,11 +44,10 @@ class BacktrackingWorkspace
     FitStatePatch m_candidate_patch{};
 
 public:
-    template <typename EndpointState>
     BacktrackingWorkspace(
         const SecondStageContext & context,
         const FitState & previous_state,
-        const EndpointState & endpoint_state,
+        const auto & endpoint_state,
         const std::vector<std::size_t> & active_index_list,
         double minimum_transformed_change)
         : m_previous_state{ previous_state },
@@ -225,10 +223,9 @@ private:
         return maximum_change;
     }
 
-    template <typename EndpointState>
-    static const GaussianModel3DWithUncertainty & GetEndpointMdpde(const EndpointState & state, std::size_t atom_index)
+    static const GaussianModel3DWithUncertainty & GetEndpointMdpde(const auto & state, std::size_t atom_index)
     {
-        if constexpr (std::is_same_v<std::decay_t<EndpointState>, FitStateView>)
+        if constexpr (std::is_same_v<std::decay_t<decltype(state)>, FitStateView>)
         {
             return state.GetMdpde(atom_index);
         }

@@ -128,6 +128,16 @@ struct ResidualBaseline
 {
     SecondStageModelSnapshot model_snapshot{};
     std::vector<std::vector<std::optional<ResidualSample>>> sample_list{};
+
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const
+    {
+        return sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index);
+    }
+
+    const FittedGaussianSnapshot & GetState() const
+    {
+        return model_snapshot.selected;
+    }
 };
 
 inline double CalculateSecondStageAdjustedResponse(
@@ -200,10 +210,9 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     return adjusted_sampling_entries;
 }
 
-template <typename State>
 inline std::optional<ResidualSample> EvaluateResidualSample(
     const SecondStageContext & context,
-    const State & state,
+    const auto & state,
     const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {

@@ -518,8 +518,7 @@ inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
     SuspiciousUpdateMask rollback_mask(group_id_by_position.size(), 0);
     for (std::size_t position = 0; position < group_id_by_position.size(); position++)
     {
-        if (suspicious_seed_group_id_set.find(group_id_by_position.at(position)) !=
-            suspicious_seed_group_id_set.end())
+        if (suspicious_seed_group_id_set.contains(group_id_by_position.at(position)))
         {
             rollback_mask.at(position) = 1;
         }

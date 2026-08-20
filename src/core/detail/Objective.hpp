@@ -18,7 +18,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -71,32 +70,123 @@ struct AuditedState
 
 using BestAuditState = std::optional<AuditedState>;
 
-struct FinalStateSelection
+class CandidateEvaluationOverlay
 {
-    const FitState & state;
-    bool uses_polish{ false };
-    const AuditedState * audit_state{ nullptr };
-};
+    const SecondStageContext & m_context;
+    const ResidualBaseline & m_baseline;
+    const FitStateView & m_candidate_state;
+    std::vector<char> m_changed_group_mask{};
+    std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
 
-inline FinalStateSelection SelectFinalState(
-    const FitState & latest_validated_state,
-    bool latest_validated_uses_polish,
-    const BestAuditState & audited_state)
-{
-    if (audited_state.has_value())
+public:
+    CandidateEvaluationOverlay(
+        const SecondStageContext & context,
+        const ResidualBaseline & baseline,
+        const FitStateView & candidate_state)
+        : m_context{ context },
+          m_baseline{ baseline },
+          m_candidate_state{ candidate_state },
+          m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
+          m_changed_group_median(context.selected_atom_index_list_by_group.size())
     {
-        return FinalStateSelection{
-            audited_state->state,
-            audited_state->uses_polish,
-            &*audited_state
-        };
+        for (const auto atom_index : m_candidate_state.GetOverrideAtomIndexList())
+        {
+            m_changed_group_mask.at(m_context.at(atom_index).group_id) = 1;
+        }
+        std::vector<GaussianModel3D> model_list;
+        for (std::size_t group_id = 0; group_id < m_changed_group_mask.size(); group_id++)
+        {
+            if (m_changed_group_mask.at(group_id) == 0) continue;
+            const auto & atom_index_list{
+                m_context.selected_atom_index_list_by_group.at(group_id)
+            };
+            model_list.clear();
+            model_list.reserve(atom_index_list.size());
+            for (const auto atom_index : atom_index_list)
+            {
+                model_list.emplace_back(m_candidate_state.GetModel(atom_index));
+            }
+            m_changed_group_median.at(group_id) = BuildGaussianParameterMedian(model_list);
+        }
     }
-    return FinalStateSelection{
-        latest_validated_state,
-        latest_validated_uses_polish,
-        nullptr
-    };
-}
+
+    std::optional<ResidualSample> Evaluate(const SampleRef & sample_ref) const
+    {
+        const auto & baseline{
+            m_baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index)
+        };
+        if (!baseline.has_value()) return std::nullopt;
+        const auto & atom_context{ m_context.at(sample_ref.atom_index) };
+        const auto & sample{
+            atom_context.raw_sampling_entries.at(sample_ref.sample_index)
+        };
+        auto adjusted_response{ baseline->adjusted_response };
+        for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_ref.sample_index))
+        {
+            const GaussianModel3D * candidate_model{ nullptr };
+            const GaussianModel3D * baseline_model{ nullptr };
+            if (neighbor_atom_sample.is_selected)
+            {
+                if (m_candidate_state.FindOverride(neighbor_atom_sample.atom_index) == nullptr)
+                {
+                    continue;
+                }
+                baseline_model = &GetFitModel(
+                    m_baseline.model_snapshot.selected,
+                    neighbor_atom_sample.atom_index);
+                candidate_model = &m_candidate_state.GetModel(neighbor_atom_sample.atom_index);
+            }
+            else
+            {
+                const auto & unselected_atom_contributor{
+                    m_context.unselected_atom_list.at(neighbor_atom_sample.atom_index)
+                };
+                if (!unselected_atom_contributor.selected_group_id.has_value() ||
+                    m_changed_group_mask.at(*unselected_atom_contributor.selected_group_id) == 0)
+                {
+                    continue;
+                }
+                baseline_model = &GetFitModel(
+                    m_baseline.model_snapshot.unselected,
+                    neighbor_atom_sample.atom_index);
+                const auto & median{
+                    m_changed_group_median.at(*unselected_atom_contributor.selected_group_id)
+                };
+                if (median.has_value())
+                {
+                    candidate_model = &*median;
+                }
+                else
+                {
+                    candidate_model = &unselected_atom_contributor.initial_seed.GetModel();
+                }
+            }
+            adjusted_response +=
+                baseline_model->ResponseAtDistance(neighbor_atom_sample.distance) -
+                candidate_model->ResponseAtDistance(neighbor_atom_sample.distance);
+        }
+        const auto expected_response{
+            m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
+                baseline->adjusted_response - baseline->residual :
+                m_candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(static_cast<double>(sample.point.distance))
+        };
+        const auto residual{ adjusted_response - expected_response };
+        if (!std::isfinite(adjusted_response) || !std::isfinite(residual))
+        {
+            return std::nullopt;
+        }
+        return ResidualSample{ adjusted_response, residual };
+    }
+
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const
+    {
+        return Evaluate(sample_ref);
+    }
+
+    const FitStateView & GetState() const { return m_candidate_state; }
+    const FitStateView & GetCandidateState() const { return m_candidate_state; }
+    const ResidualBaseline & GetBaseline() const { return m_baseline; }
+};
 
 enum class PreObjectiveFailureReason
 {
@@ -396,11 +486,10 @@ inline ObjectiveDomain BuildObjectiveDomain(
 }
 
 
-template <typename ResidualEvaluator>
 inline std::optional<ResidualObjectiveContribution> EvaluateResidualObjectiveContributionImpl(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
-    const ResidualEvaluator & residual_evaluator)
+    const auto & residual_evaluator)
 {
     if (domain.active_atom_count == 0) return std::nullopt;
     ResidualObjectiveContribution contribution;
@@ -459,9 +548,8 @@ inline std::optional<ResidualObjectiveContribution> EvaluateResidualObjectiveCon
     return contribution;
 }
 
-template <typename State>
 inline std::optional<double> EvaluateOffsetPlausibilityPenalty(
-    const State & state,
+    const auto & state,
     const ClusterKey & changed_key,
     const ObjectiveDomain & domain)
 {
@@ -490,13 +578,12 @@ inline std::optional<double> EvaluateOffsetPlausibilityPenalty(
     return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
 }
 
-template <typename State, typename ResidualEvaluator>
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
-    const State & state,
+    const auto & state,
     const ClusterKey & changed_key,
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
-    const ResidualEvaluator & residual_evaluator)
+    const auto & residual_evaluator)
 {
     const auto residual_contribution{
         EvaluateResidualObjectiveContributionImpl(sample_ref_list, domain, residual_evaluator)
@@ -533,44 +620,23 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const ResidualBaseline & baseline,
+    const auto & evaluator,
     const ClusterKey & changed_key,
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
     return EvaluateObjectiveContributionImpl(
-        baseline.model_snapshot.selected,
+        evaluator.GetState(),
         changed_key,
         sample_ref_list,
         domain,
-        [&](const SampleRef & sample_ref)
-        {
-            return baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index);
-        });
+        evaluator);
 }
 
-inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const CandidateEvaluationOverlay & overlay,
-    const ClusterKey & changed_key,
-    const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain)
-{
-    return EvaluateObjectiveContributionImpl(
-        overlay.GetCandidateState(),
-        changed_key,
-        sample_ref_list,
-        domain,
-        [&](const SampleRef & sample_ref)
-        {
-            return overlay.Evaluate(sample_ref);
-        });
-}
-
-template <typename ResidualEvaluator>
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     const ObjectiveDomain & domain,
     const FittedGaussianSnapshot & selected_state,
-    const ResidualEvaluator & residual_evaluator)
+    const auto & residual_evaluator)
 {
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
@@ -629,13 +695,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const ResidualBaseline & baseline)
 {
-    return EvaluateAuditObjectiveImpl(
-        domain,
-        baseline.model_snapshot.selected,
-        [&](const SampleRef & sample_ref)
-        {
-            return baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index);
-        });
+    return EvaluateAuditObjectiveImpl(domain, baseline.GetState(), baseline);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
@@ -819,9 +879,9 @@ inline void ReconcileClusterObjectiveState(
             next_state_by_key.emplace(key, std::move(state_iter->second));
             continue;
         }
-        ClusterObjectiveState state;
-        state.best_objective = previous_objective;
-        next_state_by_key.emplace(key, std::move(state));
+        next_state_by_key.emplace(
+            key,
+            ClusterObjectiveState{ .best_objective = previous_objective });
     }
     state_by_key = std::move(next_state_by_key);
 }
