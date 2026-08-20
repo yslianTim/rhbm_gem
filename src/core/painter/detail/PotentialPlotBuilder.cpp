@@ -858,10 +858,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() const
 {
-    if (IsAtomLocalEntryAvailable() == false)
-    {
-        return nullptr;
-    }
+    if (IsAtomLocalEntryAvailable() == false) return nullptr;
     const auto atom_local_entry{ AtomLocalPotentialView::RequireFor(*m_atom_object) };
     const auto & model{
         atom_local_entry.GetEstimateMDPDE(FittingStage::Third)
@@ -872,15 +869,10 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
     return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, offset);
 }
 
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
-    GroupKey group_key) const
+std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(GroupKey group_key) const
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    const auto & mean{ GetModelView().GetAtomGroupMean(
-        FittingStage::Third, group_key) };
+    if (IsModelObjectAvailable() == false) return nullptr;
+    const auto & mean{ GetModelView().GetAtomGroupMean(FittingStage::Third, group_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
     auto offset{ mean.GetOffset() };
@@ -890,10 +882,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     FittingStage stage, GroupKey group_key) const
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
+    if (IsModelObjectAvailable() == false) return nullptr;
     const auto & prior{ GetModelView().GetAtomGroupPrior(stage, group_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
@@ -901,18 +890,11 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width, offset);
 }
 
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctionPrior(
-    AtomKey atom_key) const
+std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
+    if (IsModelObjectAvailable() == false) return nullptr;
     const auto prior{ ComputeComponentAtomAveragePrior(GetModelView(), atom_key) };
-    if (!prior.has_value())
-    {
-        return nullptr;
-    }
+    if (!prior.has_value()) return nullptr;
     const auto & model{ prior->GetModel() };
     return root_helper::CreateGaus3DFunctionIn1D(
         "component_atom_average_gaus_prior",
