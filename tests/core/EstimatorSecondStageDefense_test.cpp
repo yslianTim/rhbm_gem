@@ -3706,7 +3706,9 @@ TEST(EstimatorSecondStageDefenseTest,
             .GetStandardDeviationModel().GetWidth(),
         endpoint_uncertainty_list.at(1).GetWidth());
 
-    const auto candidate_state{ workspace.MaterializeCandidateState() };
+    const auto candidate_state{
+        backtracking_detail::FitStateView{ previous_state, candidate_patch }.Materialize()
+    };
     for (const auto atom_index : candidate_patch.atom_index_list)
     {
         ExpectGaussianModelsNear(

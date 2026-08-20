@@ -851,7 +851,11 @@ inline bool TryBacktrackCombinedCandidate(
         return false;
     }
 
-    selection.assembled_state = backtracking_workspace.MaterializeCandidateState();
+    selection.assembled_state =
+        FitStateView{
+            previous_state,
+            backtracking_workspace.GetCandidatePatch()
+        }.Materialize();
     performance_counters.RecordFullStateMaterialization();
     selection.assembled_polish_provenance =
         backtracking_workspace.BuildCandidatePolishProvenance(

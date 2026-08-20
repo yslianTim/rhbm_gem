@@ -80,11 +80,6 @@ inline double GetMaximumTransformedChange(const std::vector<double> & value_list
     return *std::max_element(value_list.begin(), value_list.end());
 }
 
-inline double GetMaximumTransformedChange(const algorithm::ParameterChange & change)
-{
-    return GetMaximumTransformedChange(change.value_list);
-}
-
 inline bool IsTransformedChangeMaterial(
     const algorithm::ParameterChange & change,
     double minimum_change)
@@ -188,11 +183,6 @@ inline TransformedChangeSummary SummarizeTransformedChanges(
 inline double GetMaximumTransformedChange(const TransformedChangeSummary & summary)
 {
     return GetMaximumTransformedChange(summary.maximum_list);
-}
-
-inline double GetMaximumTransformedPercentileChange(const TransformedChangeSummary & summary)
-{
-    return GetMaximumTransformedChange(summary.percentile_stats.percentile_list);
 }
 
 inline bool IsTransformedChangeConverged(const TransformedChangeSummary & summary)

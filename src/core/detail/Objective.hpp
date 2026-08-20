@@ -849,7 +849,7 @@ inline bool TryCommitClusterCandidate(
             key)
     };
     const auto maximum_transformed_change{
-        GetMaximumTransformedPercentileChange(transformed_change_summary)
+        GetMaximumTransformedChange(transformed_change_summary.percentile_stats.percentile_list)
     };
     const auto domain_iter{ domain.cluster_by_key.find(key) };
     diagnostic.scale.reset();

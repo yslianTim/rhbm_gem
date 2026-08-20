@@ -144,11 +144,6 @@ public:
     FitStatePatch TakeCandidatePatch() { return std::move(m_candidate_patch); }
     const FitStatePatch & GetCandidatePatch() const { return m_candidate_patch; }
 
-    FitState MaterializeCandidateState() const
-    {
-        return FitStateView{ m_previous_state, m_candidate_patch }.Materialize();
-    }
-
     PolishProvenance BuildCandidatePolishProvenance(
         const PolishProvenance & previous_provenance,
         const PolishProvenance & endpoint_provenance) const
@@ -241,7 +236,7 @@ private:
                 detail::GetMaximumTransformedChange(
                     CalculateTransformedChange(
                         m_candidate_patch.mdpde_list.at(i).GetModel(),
-                        m_previous_model_list.at(i))));
+                        m_previous_model_list.at(i)).value_list));
         }
         return maximum_change;
     }
