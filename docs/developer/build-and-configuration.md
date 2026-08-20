@@ -9,7 +9,7 @@ All executable runtime targets from a build tree (CLI and C++ test executables) 
 
 ## Dependency Strategy
 
-This project uses CMake + C++17 with a single dependency-provider switch:
+This project uses CMake + C++20 with GNU extensions enabled by default and a single dependency-provider switch:
 
 - `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled.
 - `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, and Boost; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
@@ -262,6 +262,12 @@ cmake --build --preset release
 
 In VS Code, `CMake: Build Debug + RelWithDebInfo + Release` is the default build
 task, so `Cmd/Ctrl + Shift + B` runs the same all-variants build script.
+
+`CMakePresets.json` is the single source of truth for the standard configure and
+build settings. The VS Code default build task is the recommended project
+workflow; workspace-level CMake Tools settings should not override the presets.
+The shared Ninja progress format is defined by the build presets so the same
+output is used from VS Code and the command line.
 
 For coverage, external regression data, or other option-specific validation,
 continue to use explicit `cmake -S/-B` build directories as shown in the

@@ -52,8 +52,16 @@
   ],
   "buildPresets": [
     {
+      "name": "common-build",
+      "hidden": true,
+      "environment": {
+        "NINJA_STATUS": "[%f/%t %p] "
+      }
+    },
+    {
       "name": "debug",
       "displayName": "Build Debug",
+      "inherits": "common-build",
       "configurePreset": "debug",
       "configuration": "Debug",
       "targets": "rhbm_gem_cli",
@@ -62,6 +70,7 @@
     {
       "name": "relwithdebinfo",
       "displayName": "Build RelWithDebInfo",
+      "inherits": "common-build",
       "configurePreset": "relwithdebinfo",
       "configuration": "RelWithDebInfo",
       "targets": "rhbm_gem_cli",
@@ -70,6 +79,7 @@
     {
       "name": "release",
       "displayName": "Build Release",
+      "inherits": "common-build",
       "configurePreset": "release",
       "configuration": "Release",
       "targets": "rhbm_gem_cli",

@@ -32,7 +32,7 @@ The goal is stable, maintainable, and diagnosable software.
 
 ## 4. Build and Dependency Policy
 
-- `[Required]` Keep code portable within CMake + C++17 baseline.
+- `[Required]` Keep code portable within the CMake + C++20 baseline; GNU extensions are enabled by default.
 - `[Required]` Compile cleanly under project warning settings; do not hide real issues with broad suppressions.
 - `[Required]` Keep optional dependencies behind explicit feature gates and provide clean behavior when disabled.
 - `[Required]` Public headers must be self-contained.

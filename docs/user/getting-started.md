@@ -12,7 +12,7 @@ If you need coverage, build-matrix validation, or advanced CMake settings, use [
 
 ## Environment Setup
 
-RHBM-GEM uses CMake + C++17. Choose your platform first, then install any optional dependencies you need.
+RHBM-GEM uses CMake + C++20 with GNU extensions enabled by default. Choose your platform first, then install any optional dependencies you need.
 
 | If you need... | Prepare... |
 | --- | --- |

@@ -1,5 +1,5 @@
 add_library(rhbm_gem)
-target_compile_features(rhbm_gem PUBLIC cxx_std_17)
+target_compile_features(rhbm_gem PUBLIC cxx_std_20)
 
 set(RHBM_GEM_COMMAND_SOURCES
     core/command/RHBMTestCommand.cpp

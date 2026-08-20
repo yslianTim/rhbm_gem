@@ -79,7 +79,12 @@ public:
         std::wstring wpath{ database_path.wstring() };
         auto return_code{ sqlite3_open16(wpath.c_str(), &m_database_ptr) };
     #else
-        std::string path_utf8{ database_path.u8string() };
+        const auto path_u8 = database_path.u8string();
+
+        const std::string path_utf8{
+            reinterpret_cast<const char*>(path_u8.data()),
+            path_u8.size()
+        };
         auto return_code{ sqlite3_open_v2(path_utf8.c_str(), &m_database_ptr,
                                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
                                         nullptr) };
