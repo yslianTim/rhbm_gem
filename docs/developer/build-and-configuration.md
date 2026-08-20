@@ -269,6 +269,18 @@ workflow; workspace-level CMake Tools settings should not override the presets.
 The shared Ninja progress format is defined by the build presets so the same
 output is used from VS Code and the command line.
 
+VS Code IntelliSense is provided by the CMake Tools configuration provider in
+`.vscode/c_cpp_properties.json`. Select a Debug, RelWithDebInfo, or Release
+configure preset before editing. Do not add compiler paths or third-party
+include paths there; CMake Tools supplies them from the active CMake target.
+The common configure preset also exports `compile_commands.json` for each
+standard build directory, which keeps auxiliary tooling aligned with CMake.
+
+When the LLVM `clangd` extension is enabled, `.clangd` points it to the Debug
+core build database. The standard presets share the same compiler, C++20 mode,
+defines, and dependency paths; only optimization/debug flags differ. Keep the
+Debug preset configured when using clangd for the default core source tree.
+
 For coverage, external regression data, or other option-specific validation,
 continue to use explicit `cmake -S/-B` build directories as shown in the
 sections above. This keeps those specialized configurations independent from

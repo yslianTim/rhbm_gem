@@ -16,7 +16,8 @@
         "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
         "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
         "RHBM_GEM_OPENMP_MODE": "AUTO",
-        "RHBM_GEM_ROOT_MODE": "AUTO"
+        "RHBM_GEM_ROOT_MODE": "AUTO",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
