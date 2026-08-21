@@ -7,7 +7,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -26,10 +25,6 @@
 
 #include <Eigen/Dense>
 
-#ifdef USE_OPENMP
-#include <omp.h>
-#endif
-
 namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
@@ -43,34 +38,11 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     return execution_options;
 }
 
-double CalculateZeroOffsetResponse(
-    const LocalPotentialSample & sample,
-    const GaussianModel3D & model)
-{
-    const auto distance{ static_cast<double>(sample.point.distance) };
-    const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
-    return static_cast<double>(sample.response) - model_offset;
-}
-
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
     training_options.execution_options = MakeExecutionOptions(options);
     return training_options;
-}
-
-std::size_t GetMinimumDatasetResponseCount(const std::vector<RHBMMemberDataset> & dataset_list)
-{
-    std::size_t minimum_response_count{ std::numeric_limits<std::size_t>::max() };
-    for (const auto & dataset : dataset_list)
-    {
-        const auto response_count{ static_cast<std::size_t>(dataset.y.size()) };
-        if (response_count < minimum_response_count)
-        {
-            minimum_response_count = response_count;
-        }
-    }
-    return minimum_response_count;
 }
 
 LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
@@ -81,7 +53,9 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     adjusted_sampling_entries.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
-        const auto response{ static_cast<float>(CalculateZeroOffsetResponse(sample, model)) };
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
+        const auto response{ sample.response - static_cast<float>(model_offset) };
         adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
     }
     return adjusted_sampling_entries;
@@ -179,13 +153,6 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     return member_results;
 }
 
-void LogGroupPriorSpotSummary(const ModelObject & model_object)
-{
-    Logger::Log(
-        LogLevel::Info,
-        model_object.GetAnalysisView().GetGroupPriorSpotSummary(FittingStage::Third));
-}
-
 void OutputLocalFittingResultTable(
     const ModelObject & model_object,
     bool peeling_applied,
@@ -267,25 +234,25 @@ double TrainAlphaR(
 
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(sample_entries_list.size());
+    std::size_t response_count_min{ std::numeric_limits<std::size_t>::max() };
     for (const auto & sample_entries : sample_entries_list)
     {
         dataset_list.emplace_back(
             rhbm_helper::BuildMemberDataset(
-                sample_entries,
-                options.distance_min,
-                options.distance_max));
+                sample_entries, options.distance_min, options.distance_max));
+        const auto response_count{ static_cast<std::size_t>(dataset_list.back().y.size()) };
+        if (response_count < response_count_min) response_count_min = response_count;
     }
     auto training_options{ MakeTrainingOptions(options) };
     if (!dataset_list.empty())
     {
-        const auto minimum_response_count{ GetMinimumDatasetResponseCount(dataset_list) };
-        if (minimum_response_count < 2)
+        if (response_count_min < 2)
         {
             return training_options.alpha_min;
         }
-        if (training_options.subset_size > minimum_response_count)
+        if (training_options.subset_size > response_count_min)
         {
-            training_options.subset_size = minimum_response_count;
+            training_options.subset_size = response_count_min;
         }
     }
     return rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options).best_alpha;
@@ -660,7 +627,8 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupPotentialFitting(model_object, options, FittingStage::Third);
     if (!options.quiet_mode)
     {
-        LogGroupPriorSpotSummary(model_object);
+        Logger::Log(LogLevel::Info,
+            model_object.GetAnalysisView().GetGroupPriorSpotSummary(FittingStage::Third));
     }
     if (options.local_fitting_result_csv_path.has_value())
     {
