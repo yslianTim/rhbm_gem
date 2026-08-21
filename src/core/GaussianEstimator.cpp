@@ -45,6 +45,12 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options
     return training_options;
 }
 
+float CalculateAdjustedResponse(double sample_response, double distance, const GaussianModel3D & offset_model)
+{
+    const auto evaluation{ offset_model.EvaluateAtDistance(distance) };
+    return static_cast<float>(sample_response - (evaluation.response - evaluation.signal));
+}
+
 LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
@@ -54,8 +60,9 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
-        const auto response{ sample.response - static_cast<float>(model_offset) };
+        const auto response{
+            CalculateAdjustedResponse(static_cast<double>(sample.response), distance, model)
+        };
         adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
     }
     return adjusted_sampling_entries;
@@ -83,31 +90,12 @@ LocalGaussianResult DecodeLocalGaussianResult(
     };
 }
 
-GroupGaussianResult DecodeGroupGaussianResult(
-    double alpha_g,
-    const RHBMGroupEstimationResult & result,
-    double offset)
-{
-    const auto prior{
-        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
-    };
-    return GroupGaussianResult{
-        alpha_g,
-        linearization_service::DecodeParameterVector(result.mu_mean).WithOffset(offset),
-        linearization_service::DecodeParameterVector(result.mu_mdpde).WithOffset(offset),
-        GaussianModel3DWithUncertainty{
-            prior.GetModel().WithOffset(offset),
-            prior.GetStandardDeviationModel()
-        }
-    };
-}
-
 std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     const RHBMGroupEstimationResult & result,
-    const std::vector<LocalGaussianResult> & member_result_list)
+    const std::vector<double> & member_offset_list)
 {
     const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
-    if (member_result_list.size() != member_count)
+    if (member_offset_list.size() != member_count)
     {
         throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
     }
@@ -127,9 +115,7 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     for (Eigen::Index i = 0; i < result.beta_posterior_matrix.cols(); i++)
     {
         const auto member_index{ static_cast<std::size_t>(i) };
-        const auto offset{
-            member_result_list.at(member_index).mdpde.GetModel().GetOffset()
-        };
+        const auto offset{ member_offset_list.at(member_index) };
         const auto gaussian{
             linearization_service::DecodeParameterVector(
                 result.beta_posterior_matrix.col(i),
@@ -151,6 +137,34 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         });
     }
     return member_results;
+}
+
+GroupGaussianResult DecodeGroupGaussianResult(
+    double alpha_g,
+    const RHBMGroupEstimationResult & result,
+    const std::vector<double> & member_offset_list)
+{
+    const auto group_offset{ array_helper::ComputeMedian(member_offset_list) };
+    const auto prior{
+        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
+    };
+    const auto mean{
+        linearization_service::DecodeParameterVector(result.mu_mean).WithOffset(group_offset)
+    };
+    const auto mdpde{
+        linearization_service::DecodeParameterVector(result.mu_mdpde).WithOffset(group_offset)
+    };
+    auto member_results{ DecodeMemberGaussianResults(result, member_offset_list) };
+    return GroupGaussianResult{
+        alpha_g,
+        mean,
+        mdpde,
+        GaussianModel3DWithUncertainty{
+            prior.GetModel().WithOffset(group_offset),
+            prior.GetStandardDeviationModel()
+        },
+        std::move(member_results)
+    };
 }
 
 void OutputLocalFittingResultTable(
@@ -349,13 +363,11 @@ RHBMMemberDataset BuildLocalGaussianPreparedDataset(
         {
             throw std::invalid_argument("Prepared local Gaussian sample index is out of range.");
         }
-        const auto offset_evaluation{
-            offset_model.EvaluateAtDistance(design_template.distance_list.at(row))
-        };
         const auto adjusted_response{
-            static_cast<double>(static_cast<float>(
-                sample_response_list.at(sample_index) -
-                (offset_evaluation.response - offset_evaluation.signal)))
+            static_cast<double>(CalculateAdjustedResponse(
+                sample_response_list.at(sample_index),
+                design_template.distance_list.at(row),
+                offset_model))
         };
         if (adjusted_response <= 0.0) continue;
         numeric_validation::RequireFinite(
@@ -446,10 +458,12 @@ GroupGaussianResult EstimateGroupGaussian(
     member_offset_list.reserve(member_result_list.size());
     for (std::size_t i = 0; i < member_result_list.size(); i++)
     {
+        const auto & member_result{ member_result_list.at(i) };
+        const auto & member_model{ member_result.mdpde.GetModel() };
         const auto sampling_entries{
             BuildSamplesForZeroOffsetGaussianFit(
                 sample_entries_list.at(i),
-                member_result_list.at(i).mdpde.GetModel())
+                member_model)
         };
         auto dataset{
             rhbm_helper::BuildMemberDataset(
@@ -459,18 +473,15 @@ GroupGaussianResult EstimateGroupGaussian(
         };
         fit_result_list.emplace_back(
             rhbm_helper::EstimateBetaMDPDE(
-                member_result_list.at(i).alpha_r,
+                member_result.alpha_r,
                 dataset,
                 execution_options));
         dataset_list.emplace_back(std::move(dataset));
-        member_offset_list.emplace_back(member_result_list.at(i).mdpde.GetModel().GetOffset());
+        member_offset_list.emplace_back(member_model.GetOffset());
     }
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
-    const auto group_offset{ array_helper::ComputeMedian(member_offset_list) };
-    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, group_offset) };
-    result.member_results = DecodeMemberGaussianResults(raw_result, member_result_list);
-    return result;
+    return DecodeGroupGaussianResult(alpha_g, raw_result, member_offset_list);
 }
 
 void RunLocalAlphaTraining(
