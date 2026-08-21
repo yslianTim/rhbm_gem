@@ -254,6 +254,16 @@ double GaussianModel3DWithUncertainty::GetDisplayParameter(int par_id) const
     return m_model.GetDisplayParameter(par_id);
 }
 
+double GaussianModel3DWithUncertainty::GetModelParameter(int par_id) const
+{
+    return m_model.GetModelParameter(par_id);
+}
+
+double GaussianModel3DWithUncertainty::GetModelStandardDeviation(int par_id) const
+{
+    return m_standard_deviation.GetModelParameter(par_id);
+}
+
 double GaussianModel3DWithUncertainty::GetDisplayStandardDeviation(int par_id) const
 {
     switch (par_id)

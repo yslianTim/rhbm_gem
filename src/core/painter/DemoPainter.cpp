@@ -601,7 +601,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
             auto group_key_list{ data_internal::GetMainChainGroupKeyList(k) };
             amplitude_graph[j][k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 0);
             width_graph[j][k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 1);
-            correlation_graph[j][k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, 1, 0);
+            correlation_graph[j][k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, FittingStage::Third, 1, 0);
             for (int p = 0; p < amplitude_graph[j][k]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[j][k]->GetPointY(p));
@@ -749,7 +749,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
         auto group_key_list{ data_internal::GetMainChainGroupKeyList(k) };
         amplitude_graph[k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 0);
         width_graph[k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 1);
-        correlation_graph[k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, 1, 0);
+        correlation_graph[k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, FittingStage::Third, 1, 0);
         for (int p = 0; p < amplitude_graph[k]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[k]->GetPointY(p));
@@ -1808,7 +1808,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (auto & [spot, group_key_list] : group_key_list_map[i])
         {
-            graph_map[i][spot] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, 0, 1);
+            graph_map[i][spot] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, FittingStage::Third, 0, 1);
             for (int p = 0; p < graph_map[i][spot]->GetN(); p++)
             {
                 if (i == model_list.size() - 1)

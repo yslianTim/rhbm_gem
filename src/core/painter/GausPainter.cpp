@@ -67,24 +67,6 @@ size_t CountOutlierAtoms(
     return outlier_count;
 }
 
-double ComputeAtomGausEstimateMinimum(
-    const ModelObject & model_object,
-    int par_id,
-    Element element)
-{
-    std::vector<double> gaus_estimate_list;
-    gaus_estimate_list.reserve(model_object.GetSelectedAtomCount());
-    for (const auto * atom : model_object.GetSelectedAtoms())
-    {
-        if (atom->GetElement() != element) continue;
-        gaus_estimate_list.emplace_back(
-            AtomLocalPotentialView::RequireFor(*atom)
-                .GetEstimateMDPDE(FittingStage::Third)
-                .GetDisplayParameter(par_id));
-    }
-    return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
-}
-
 } // namespace
 
 class GausPainter
@@ -102,10 +84,8 @@ private:
     void AddModel(ModelObject & data_object);
     void PaintMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
-    void PaintGausScatterPlot(
-        ModelObject * model_object,
-        const std::string & name,
-        bool do_normalize=false);
+    void PaintGausScatterPlot(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausScatterPlot(ModelObject * model_object, const std::string & name);
     void PaintGausRankMainChain(ModelObject * model_object, const std::string & name);
     void PaintLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSummary(ModelObject * model_object, const std::string & name);
@@ -150,7 +130,8 @@ void GausPainter::Run()
         auto label{ painter_internal::BuildPainterOutputLabel(*model_object) };
 
         PaintAtomXYPosition(model_object, "atom_position_"+ label);
-        PaintGausScatterPlot(model_object, "gaus_scatter_"+ label, false);
+        PaintGausScatterPlot(model_object, "gaus_scatter_"+ label);
+        PaintGroupGausScatterPlot(model_object, "group_gaus_scatter_"+ label);
         PaintMapValueMainChain(model_object, "map_value_main_chain_"+ label);
         PaintGausRankMainChain(model_object, "gaus_rank_main_chain_"+ label);
         PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
@@ -428,17 +409,20 @@ void GausPainter::PaintAtomXYPosition(
     #endif
 }
 
-void GausPainter::PaintGausScatterPlot(
-    ModelObject * model_object, const std::string & name, bool do_normalize)
+void GausPainter::PaintGausScatterPlot(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintGausScatterPlot");
-    (void)model_object;
-    (void)do_normalize;
+
+    const char * x_axis_title[3]{
+        "Amplitude #font[2]{A}", "Offset #font[2]{C}", "Offset #font[2]{C}"
+    };
+    const char * y_axis_title[3]{
+        "Width #font[2]{#tau}", "Amplitude #font[2]{A}", "Width #font[2]{#tau}"
+    };
 
     #ifdef HAVE_ROOT
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    auto amplitude_min{ ComputeAtomGausEstimateMinimum(*model_object, 0, Element::OXYGEN) };
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
@@ -447,98 +431,307 @@ void GausPainter::PaintGausScatterPlot(
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    std::unique_ptr<TH2> frame;
-    std::unordered_map<Element, std::unique_ptr<TGraphErrors>> graph_map;
-    std::vector<double> x_array, y_array;
-    x_array.reserve(model_object->GetSelectedAtomCount());
-    y_array.reserve(model_object->GetSelectedAtomCount());
-    for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
+    for (int k = 0; k < 3; k++)
     {
-        auto graph
+        std::unique_ptr<TH2> frame;
+        std::unordered_map<Element, std::unique_ptr<TGraphErrors>> graph_map;
+        std::vector<double> x_array, y_array;
+        x_array.reserve(model_object->GetSelectedAtomCount());
+        y_array.reserve(model_object->GetSelectedAtomCount());
+        for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
         {
-            (do_normalize == true) ?
-            plot_builder->CreateNormalizedAtomGausEstimateScatterGraph(element_type, amplitude_min) :
-            plot_builder->CreateAtomGausEstimateScatterGraph(element_type)
-        };
-        auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
-        auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
-        short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
-            ChemicalDataHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
-        };
-        auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
-        root_helper::SetMarkerAttribute(graph.get(),
-            ChemicalDataHelper::GetDisplayMarker(element_type), marker_size,
-            marker_color, transparency);
-        for (int p = 0; p < graph->GetN(); p++)
-        {
-            auto x{ graph->GetPointX(p) };
-            auto y{ graph->GetPointY(p) };
-            x_array.emplace_back(x);
-            y_array.emplace_back(y);
+            auto graph{ plot_builder->CreateAtomGausEstimateScatterGraph(element_type, FittingStage::Third, k) };
+            auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
+            auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
+            short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
+                ChemicalDataHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
+            };
+            auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
+            root_helper::SetMarkerAttribute(graph.get(),
+                ChemicalDataHelper::GetDisplayMarker(element_type), marker_size,
+                marker_color, transparency);
+            for (int p = 0; p < graph->GetN(); p++)
+            {
+                auto x{ graph->GetPointX(p) };
+                auto y{ graph->GetPointY(p) };
+                x_array.emplace_back(x);
+                y_array.emplace_back(y);
+            }
+            if (graph->GetN() == 0) continue;
+            graph_map.emplace(element_type, std::move(graph));
         }
-        if (graph->GetN() == 0) continue;
-        graph_map.emplace(element_type, std::move(graph));
+
+        //auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
+        auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.1, 0.999) };
+        double x_min{ std::get<0>(x_range) };
+        double x_max{ std::get<1>(x_range) };
+
+        //auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
+        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.1, 0.999) };
+        double y_min{ std::get<0>(y_range) };
+        double y_max{ std::get<1>(y_range) };
+
+        canvas->cd();
+        root_helper::SetPadMarginInCanvas(gPad, 0.12, 0.20, 0.12, 0.10);
+        root_helper::SetPadLayout(gPad, 1, 1, 0, 0);
+
+        frame = root_helper::CreateHist2D("frame","", 500, x_min, x_max, 500, y_min, y_max);
+        root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 1.1f);
+        root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 50.0f, 1.4f);
+        root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 45.0f, 0.01f);
+        root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 45.0f, 0.01f);
+        frame->SetStats(0);
+        frame->GetXaxis()->SetTitle(x_axis_title[k]);
+        frame->GetYaxis()->SetTitle(y_axis_title[k]);
+        frame->GetXaxis()->CenterTitle();
+        frame->GetYaxis()->CenterTitle();
+        frame->Draw();
+        auto legend{ root_helper::CreateLegend(0.81, 0.12, 0.98, 0.90, false) };
+        root_helper::SetLegendDefaultStyle(legend.get());
+        root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
+        root_helper::SetFillAttribute(legend.get(), 4000);
+        for (int i = 1; i <= 90; i++)
+        {
+            auto element{ ChemicalDataHelper::GetElementFromAtomicNumber(i) };
+            if (graph_map.find(element) == graph_map.end()) continue;
+            auto & graph{ graph_map.at(element) };
+            graph->Draw("P X0");
+            legend->AddEntry(graph.get(),
+                            Form("#font[102]{%s} (%d)",
+                                ChemicalDataHelper::GetElementLabelMap().at(element).data(),
+                                graph->GetN()), "p");
+        }
+        legend->Draw();
+
+        auto title_text{ root_helper::CreatePaveText(0.12, 0.91, 0.98, 0.99, "nbNDC ARC", false) };
+        root_helper::SetPaveTextDefaultStyle(title_text.get());
+        root_helper::SetPaveAttribute(title_text.get(), 0, 0.2);
+        root_helper::SetLineAttribute(title_text.get(), 1, 0);
+        root_helper::SetFillAttribute(title_text.get(), 1001, kAzure-7);
+        root_helper::SetTextAttribute(title_text.get(), 50.0f, 23, 22, 0.0, kYellow-10);
+        title_text->AddText("Atom-Based Main/Side-Chain #font[2]{A}#minus#font[2]{#tau} Scatter Plot");
+        title_text->Draw();
+
+        root_helper::PrintCanvasPad(canvas.get(), file_path);
     }
-
-    //auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
-    auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.1, 0.999) };
-    double x_min{ std::get<0>(x_range) };
-    double x_max{ std::get<1>(x_range) };
-
-    //auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
-    auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.1, 0.999) };
-    double y_min{ std::get<0>(y_range) };
-    double y_max{ std::get<1>(y_range) };
-
-    canvas->cd();
-    root_helper::SetPadMarginInCanvas(gPad, 0.12, 0.20, 0.12, 0.10);
-    root_helper::SetPadLayout(gPad, 1, 1, 0, 0);
-
-    frame = root_helper::CreateHist2D("frame","", 500, x_min, x_max, 500, y_min, y_max);
-    root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 1.1f);
-    root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 50.0f, 1.4f);
-    root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 45.0f, 0.01f);
-    root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 45.0f, 0.01f);
-    frame->SetStats(0);
-    frame->GetXaxis()->SetTitle("Amplitude #font[2]{A}");
-    frame->GetYaxis()->SetTitle("Width #font[2]{#tau}");
-    frame->GetXaxis()->CenterTitle();
-    frame->GetYaxis()->CenterTitle();
-    frame->Draw();
-    auto legend{ root_helper::CreateLegend(0.81, 0.12, 0.98, 0.90, false) };
-    root_helper::SetLegendDefaultStyle(legend.get());
-    root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
-    root_helper::SetFillAttribute(legend.get(), 4000);
-    for (int i = 1; i <= 90; i++)
-    {
-        auto element{ ChemicalDataHelper::GetElementFromAtomicNumber(i) };
-        if (graph_map.find(element) == graph_map.end()) continue;
-        auto & graph{ graph_map.at(element) };
-        graph->Draw("P X0");
-        legend->AddEntry(graph.get(),
-                         Form("#font[102]{%s} (%d)",
-                            ChemicalDataHelper::GetElementLabelMap().at(element).data(),
-                            graph->GetN()), "p");
-    }
-    legend->Draw();
-
-    auto title_text{ root_helper::CreatePaveText(0.12, 0.91, 0.98, 0.99, "nbNDC ARC", false) };
-    root_helper::SetPaveTextDefaultStyle(title_text.get());
-    root_helper::SetPaveAttribute(title_text.get(), 0, 0.2);
-    root_helper::SetLineAttribute(title_text.get(), 1, 0);
-    root_helper::SetFillAttribute(title_text.get(), 1001, kAzure-7);
-    root_helper::SetTextAttribute(title_text.get(), 50.0f, 23, 22, 0.0, kYellow-10);
-    title_text->AddText("Atom-Based Main/Side-Chain #font[2]{A}#minus#font[2]{#tau} Scatter Plot");
-    title_text->Draw();
-
-    root_helper::PrintCanvasPad(canvas.get(), file_path);
     root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
-void GausPainter::PaintGausRankMainChain(
-    ModelObject * model_object, const std::string & name)
+void GausPainter::PaintGroupGausScatterPlot(ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausScatterPlot");
+
+    const int plot_size{ 3 };
+    const char * x_axis_title[plot_size]{
+        "Amplitude #font[2]{A}", "Offset #font[2]{C}", "Offset #font[2]{C}"
+    };
+    const char * y_axis_title[plot_size]{
+        "Width #font[2]{#tau}", "Amplitude #font[2]{A}", "Width #font[2]{#tau}"
+    };
+    const int par_x[plot_size]{ 0, 2, 2 };
+    const int par_y[plot_size]{ 1, 0, 1 };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+
+    #ifdef HAVE_ROOT
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
+
+    std::map<Spot, std::vector<GroupKey>> group_key_list_map;
+    for (size_t i = 0; i < spot_list.size(); i++)
+    {
+        auto spot{ spot_list.at(i) };
+        group_key_list_map.emplace(spot, data_internal::GetMainChainGroupKeyList(i));
+        auto & group_key_list{ group_key_list_map.at(spot) };
+        for (auto it = group_key_list.begin(); it != group_key_list.end(); )
+        {
+            if (!entry_iter->HasAtomGroup(FittingStage::Third, *it))
+            {
+                it = group_key_list.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    gStyle->SetLineScalePS(3.0);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ root_helper::CreateCanvas("test","", 1000, 1000) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
+
+    const int pad_size{ 5 };
+    
+    std::unique_ptr<TPad> pad[pad_size];
+    pad[0] = root_helper::CreatePad("pad0","", 0.00, 0.90, 1.00, 1.00); // The title pad
+    pad[1] = root_helper::CreatePad("pad1","", 0.00, 0.00, 0.80, 0.70); // The main pad
+    pad[2] = root_helper::CreatePad("pad2","", 0.00, 0.70, 0.80, 0.90); // The top pad
+    pad[3] = root_helper::CreatePad("pad3","", 0.80, 0.00, 1.00, 0.70); // The right pad
+    pad[4] = root_helper::CreatePad("pad4","", 0.80, 0.70, 1.00, 0.90); // The legend pad
+
+    for (int k = 0; k < plot_size; k++)
+    {
+        std::map<Spot, std::unique_ptr<TGraphErrors>> correlation_graph_map;
+        std::vector<double> x_array, y_array;
+        x_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
+        y_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
+        for (auto & [spot, group_key_list] : group_key_list_map)
+        {
+            auto correlation_graph{
+                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, FittingStage::Third, par_x[k], par_y[k])
+            };
+            for (int p = 0; p < correlation_graph->GetN(); p++)
+            {
+                x_array.emplace_back(correlation_graph->GetPointX(p));
+                y_array.emplace_back(correlation_graph->GetPointY(p));
+            }
+            auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
+            auto spot_marker{ painter_internal::GetMainChainSpotOpenMarker(spot) };
+            auto spot_line{ painter_internal::GetMainChainSpotLineStyle(spot) };
+            root_helper::SetMarkerAttribute(correlation_graph.get(), spot_marker, 1.5f, spot_color);
+            root_helper::SetLineAttribute(correlation_graph.get(), spot_line, 1, spot_color);
+            correlation_graph_map[spot] = std::move(correlation_graph);
+        }
+
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
+        double x_min{ std::get<0>(x_range) };
+        double x_max{ std::get<1>(x_range) };
+
+        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
+        double y_min{ std::get<0>(y_range) };
+        double y_max{ std::get<1>(y_range) };
+
+        std::map<Spot, std::unique_ptr<TH2D>> hist_right_map;
+        std::map<Spot, std::unique_ptr<TH2D>> hist_top_map;
+        auto spot_count{ spot_list.size() };
+        std::vector<std::string> spot_label_list;
+        spot_label_list.reserve(spot_count);
+        for (size_t i = 0; i < spot_count; i++)
+        {
+            auto spot{ spot_list.at(i) };
+            auto spot_label{ painter_internal::GetMainChainSpotLabel(spot) };
+            auto x_value{ static_cast<double>(i) };
+            spot_label_list.emplace_back(spot_label);
+            std::string name_x{ "x_hist_"+ spot_label };
+            std::string name_y{ "y_hist_"+ spot_label };
+            auto x_hist{
+                root_helper::CreateHist2D(
+                    name_x.data(),"",
+                    static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5,
+                    100, std::get<0>(y_range), std::get<1>(y_range))
+            };
+            auto y_hist{
+                root_helper::CreateHist2D(
+                    name_y.data(),"",
+                    100, std::get<0>(x_range), std::get<1>(x_range),
+                    static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5)
+            };
+            for (int p = 0; p < correlation_graph_map.at(spot)->GetN(); p++)
+            {
+                x_hist->Fill(x_value, correlation_graph_map.at(spot)->GetPointY(p));
+                y_hist->Fill(correlation_graph_map.at(spot)->GetPointX(p), x_value);
+            }
+            auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
+            root_helper::SetLineAttribute(x_hist.get(), 1, 1, spot_color);
+            root_helper::SetLineAttribute(y_hist.get(), 1, 1, spot_color);
+            root_helper::SetFillAttribute(x_hist.get(), 1001, spot_color, 0.3f);
+            root_helper::SetFillAttribute(y_hist.get(), 1001, spot_color, 0.3f);
+            x_hist->SetBarWidth(0.6f);
+            y_hist->SetBarWidth(0.6f);
+            hist_right_map[spot] = std::move(x_hist);
+            hist_top_map[spot] = std::move(y_hist);
+        }
+
+        canvas->cd();
+        for (int i = 0; i < pad_size; i++)
+        {
+            root_helper::SetPadDefaultStyle(pad[i].get());
+            pad[i]->Draw();
+        }
+
+        pad[0]->cd();
+        auto title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC ARC", false) };
+        root_helper::SetPaveTextMarginInCanvas(gPad, title_text.get(), 0.04, 0.04, 0.01, 0.01);
+        root_helper::SetPaveTextDefaultStyle(title_text.get());
+        root_helper::SetPaveAttribute(title_text.get(), 0, 0.2);
+        root_helper::SetLineAttribute(title_text.get(), 1, 0);
+        root_helper::SetFillAttribute(title_text.get(), 1001, kAzure-7);
+        root_helper::SetTextAttribute(title_text.get(), 50.0f, 23, 22, 0.0, kYellow-10);
+        title_text->AddText("Group-Based Main-Chain Scatter Plot");
+        title_text->Draw();
+
+        pad[1]->cd();
+        root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.01, 0.12, 0.02);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto frame_main{ root_helper::CreateHist2D("frame","", 500, x_min, x_max, 500, y_min, y_max) };
+        RemodelFrameInPad(frame_main.get(), pad[1].get(), 0.03, 0.015);
+        root_helper::SetAxisTitleAttribute(frame_main->GetXaxis(), 50.0f, 1.1f);
+        root_helper::SetAxisTitleAttribute(frame_main->GetYaxis(), 50.0f, 1.4f);
+        root_helper::SetAxisLabelAttribute(frame_main->GetXaxis(), 45.0f, 0.01f);
+        root_helper::SetAxisLabelAttribute(frame_main->GetYaxis(), 45.0f, 0.01f);
+        frame_main->SetStats(0);
+        frame_main->GetXaxis()->SetTitle(x_axis_title[k]);
+        frame_main->GetYaxis()->SetTitle(y_axis_title[k]);
+        frame_main->GetXaxis()->CenterTitle();
+        frame_main->GetYaxis()->CenterTitle();
+        frame_main->Draw();
+        for (auto & [spot, graph] : correlation_graph_map) graph->Draw("P X0");
+
+        pad[2]->cd();
+        root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.01, 0.02, 0.02);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto frame_top{ root_helper::CreateHist2D("frame1","", 500, x_min, x_max, 500, y_min, y_max) };
+        RemodelFrameInPad(frame_top.get(), pad[2].get(), 0.0, 0.0);
+        painter_internal::RemodelAxisLabels(frame_top->GetYaxis(), spot_label_list, 0.0, 22);
+        root_helper::SetAxisTitleAttribute(frame_top->GetXaxis(), 0.0f);
+        root_helper::SetAxisTitleAttribute(frame_top->GetYaxis(), 40.0f, 1.2f);
+        root_helper::SetAxisLabelAttribute(frame_top->GetXaxis(), 0.0f);
+        root_helper::SetAxisLabelAttribute(frame_top->GetYaxis(), 35.0f, 0.04f, 103);
+        frame_top->GetXaxis()->SetLimits(x_min, x_max);
+        frame_top->GetYaxis()->SetTitle("Element");
+        frame_top->Draw();
+        for (auto & [spot, hist] : hist_top_map) hist->Draw("CANDLEY3 SAME");
+
+        pad[3]->cd();
+        root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto frame_right{ root_helper::CreateHist2D("frame2","", 500, x_min, x_max, 500, y_min, y_max) };
+        RemodelFrameInPad(frame_right.get(), pad[3].get(), 0.0, 0.0);
+        painter_internal::RemodelAxisLabels(frame_right->GetXaxis(), spot_label_list, 0.0, -1);
+        root_helper::SetAxisTitleAttribute(frame_right->GetXaxis(), 40.0f, 1.0f);
+        root_helper::SetAxisTitleAttribute(frame_right->GetYaxis(), 0.0f);
+        root_helper::SetAxisLabelAttribute(frame_right->GetXaxis(), 35.0f, 0.005f, 103);
+        root_helper::SetAxisLabelAttribute(frame_right->GetYaxis(), 0.0f);
+        frame_right->GetXaxis()->SetTitle("Element");
+        frame_right->Draw();
+        for (auto & [spot, hist] : hist_right_map) hist->Draw("CANDLE3 SAME");
+
+        pad[4]->cd();
+        auto legend{ root_helper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
+        root_helper::SetLegendDefaultStyle(legend.get());
+        root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
+        root_helper::SetFillAttribute(legend.get(), 4000);
+        for (auto & [spot, graph] : correlation_graph_map)
+        {
+            legend->AddEntry(graph.get(),
+                            Form("#font[102]{%s}",
+                                ChemicalDataHelper::GetLabel(spot).data()), "p");
+        }
+        legend->Draw();
+
+        root_helper::PrintCanvasPad(canvas.get(), file_path);
+    }
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+
+void GausPainter::PaintGausRankMainChain(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintGausRankMainChain");
@@ -678,8 +871,7 @@ void GausPainter::PaintGausRankMainChain(
     #endif
 }
 
-void GausPainter::PaintLocalGausSummary(
-    ModelObject * model_object, const std::string & name)
+void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintLocalGausSummary");
@@ -1061,7 +1253,7 @@ void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::s
                 group_key_list_vector.emplace_back(group_key);
             }
             auto correlation_graph{
-                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list_vector, 0, 1)
+                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list_vector, FittingStage::Third, 0, 1)
             };
             for (int p = 0; p < amplitude_graph->GetN(); p++)
             {
@@ -1986,8 +2178,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     for (size_t i = 0; i < spot_list.size(); i++)
     {
         auto spot{ spot_list.at(i) };
-        group_key_list_map.emplace(
-            spot, data_internal::GetMainChainGroupKeyList(i));
+        group_key_list_map.emplace(spot, data_internal::GetMainChainGroupKeyList(i));
         auto & group_key_list{ group_key_list_map.at(spot) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
@@ -2026,15 +2217,13 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     for (auto & [spot, group_key_list] : group_key_list_map)
     {
         auto amplitude_graph{
-            plot_builder->CreateAtomGausEstimateToResidueGraph(
-                group_key_list, 0)
+            plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 0)
         };
         auto width_graph{
-            plot_builder->CreateAtomGausEstimateToResidueGraph(
-                group_key_list, 1)
+            plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, 1)
         };
         auto correlation_graph{
-            plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, 1, 0)
+            plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, FittingStage::Third, 1, 0)
         };
         for (int p = 0; p < amplitude_graph->GetN(); p++)
         {

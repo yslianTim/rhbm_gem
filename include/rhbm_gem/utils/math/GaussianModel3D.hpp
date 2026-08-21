@@ -102,6 +102,8 @@ public:
     const GaussianModel3DUncertainty & GetStandardDeviationModel() const { return m_standard_deviation; }
     double GetDisplayParameter(int par_id) const;
     double GetDisplayStandardDeviation(int par_id) const;
+    double GetModelParameter(int par_id) const;
+    double GetModelStandardDeviation(int par_id) const;
     double IntensityStandardDeviation() const;
 };
 

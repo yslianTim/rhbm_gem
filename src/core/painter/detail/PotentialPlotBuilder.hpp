@@ -40,15 +40,14 @@ public:
     std::unique_ptr<::TH1D> CreateLinearModelDataHistogram(int dimension_id, bool apply_selection=true, bool use_peeling_sampling_entries=false) const;
     std::unique_ptr<::TH2D> CreateDistanceToMapValueHistogram(int x_bin_size=20, int y_bin_size=1000, bool apply_selection=true, bool use_peeling_sampling_entries=false) const;
     std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
-    std::unique_ptr<::TGraphErrors> CreateNormalizedAtomGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(bool use_standard=false, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);
+    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, FittingStage stage, int par1_id=0, int par2_id=1);
+    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, FittingStage stage, int choice=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);

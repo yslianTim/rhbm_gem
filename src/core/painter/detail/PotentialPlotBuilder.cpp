@@ -421,31 +421,20 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
     GroupKey group_key, int par1_id, int par2_id, bool select_outliers)
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto atom_list{ GetModelView().GetAtomObjectList(
-        FittingStage::Third, group_key) };
+    if (IsModelObjectAvailable() == false) return nullptr;
+    auto atom_list{ GetModelView().GetAtomObjectList(FittingStage::Third, group_key) };
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto atom : atom_list)
     {
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-        const auto & result{
-            entry.GetGaussianResult(FittingStage::Third)
-        };
+        const auto & result{ entry.GetGaussianResult(FittingStage::Third) };
         auto is_outlier{ result.posterior.has_value() && result.is_outlier };
-        if (select_outliers == true && is_outlier == false)
-        {
-            continue;
-        }
+        if (select_outliers == true && is_outlier == false) continue;
         graph->SetPoint(
             count,
-            entry.GetEstimateMDPDE(FittingStage::Third)
-                .GetDisplayParameter(par1_id),
-            entry.GetEstimateMDPDE(FittingStage::Third)
-                .GetDisplayParameter(par2_id));
+            entry.GetEstimateMDPDE(FittingStage::Third).GetDisplayParameter(par1_id),
+            entry.GetEstimateMDPDE(FittingStage::Third).GetDisplayParameter(par2_id));
         count++;
     }
     return graph;
@@ -453,71 +442,54 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
     const std::vector<GroupKey> & group_key_list,
-    int par1_id, int par2_id)
+    FittingStage stage, int par1_id, int par2_id)
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
+    if (IsModelObjectAvailable() == false) return nullptr;
     auto graph{ root_helper::CreateGraphErrors() };
-
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableAtomGroupKey(group_key) == false)
-        {
-            continue;
-        }
+        if (IsAvailableAtomGroupKey(group_key) == false) continue;
+        const auto & result{ GetModelView().GetAtomGroupPriorWithUncertainty(stage, group_key) };
         graph->SetPoint(
             count,
-            GetModelView().GetAtomGroupPrior(
-                FittingStage::Third, group_key).GetDisplayParameter(par1_id),
-            GetModelView().GetAtomGroupPrior(
-                FittingStage::Third, group_key).GetDisplayParameter(par2_id));
+            result.GetModelParameter(par1_id),
+            result.GetModelParameter(par2_id));
         graph->SetPointError(
             count,
-            GetModelView().GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, group_key)
-                .GetDisplayStandardDeviation(par1_id),
-            GetModelView().GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, group_key)
-                .GetDisplayStandardDeviation(par2_id));
+            result.GetModelStandardDeviation(par1_id),
+            result.GetModelStandardDeviation(par2_id));
         count++;
     }
     return graph;
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
-    Element element, bool reverse)
+    Element element, FittingStage stage, int choice)
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
+    if (IsModelObjectAvailable() == false) return nullptr;
 
     auto model_object{ m_model_object };
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto & atom : model_object->GetSelectedAtoms())
     {
-        if (atom->GetElement() != element)
-        {
-            continue;
-        }
+        if (atom->GetElement() != element) continue;
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-        if (reverse == false)
+        const auto & result{ entry.GetEstimateMDPDE(stage) };
+        switch (choice)
         {
-            graph->SetPoint(
-                count,
-                entry.GetEstimateMDPDE(FittingStage::Third).GetAmplitude(),
-                entry.GetEstimateMDPDE(FittingStage::Third).GetWidth());
-        }
-        else
-        {
-            graph->SetPoint(
-                count,
-                entry.GetEstimateMDPDE(FittingStage::Third).GetWidth(),
-                entry.GetEstimateMDPDE(FittingStage::Third).GetAmplitude());
+            case 0:
+                graph->SetPoint(count, result.GetAmplitude(), result.GetWidth());
+                break;
+            case 1:
+                graph->SetPoint(count, result.GetOffset(), result.GetAmplitude());
+                break;
+            case 2:
+                graph->SetPoint(count, result.GetOffset(), result.GetWidth());
+                break;
+            default:
+                throw std::runtime_error("Choice is invalid.");
         }
         count++;
     }
@@ -912,69 +884,11 @@ namespace rhbm_gem {
 
 #ifdef HAVE_ROOT
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEstimateScatterGraph(
-    Element element, double reference_amplitude, bool reverse)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto model_object{ m_model_object };
-    auto graph{ root_helper::CreateGraphErrors() };
-    std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
-    for (auto & atom : model_object->GetSelectedAtoms())
-    {
-        if (atom->GetSpot() != Spot::O) continue;
-        if (atom->GetSpecialAtomFlag() == false)
-        {
-            const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-            auto sequence_id{ atom->GetSequenceID() };
-            auto amplitude_estimate{
-                entry.GetEstimateMDPDE(FittingStage::Third).GetAmplitude()
-            };
-            amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
-        }
-    }
-    auto count{ 0 };
-    for (auto & atom : model_object->GetSelectedAtoms())
-    {
-        if (atom->GetElement() != element) continue;
-        auto sequence_id{ atom->GetSequenceID() };
-        const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-        auto normalized_amplitude{
-            entry.GetEstimateMDPDE(FittingStage::Third).GetAmplitude()
-        };
-        if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
-        {
-            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
-        }
-        if (reverse == false)
-        {
-            graph->SetPoint(
-                count,
-                normalized_amplitude,
-                entry.GetEstimateMDPDE(FittingStage::Third).GetWidth());
-        }
-        else
-        {
-            graph->SetPoint(
-                count,
-                entry.GetEstimateMDPDE(FittingStage::Third).GetWidth(),
-                normalized_amplitude);
-        }
-        count++;
-    }
-    return graph;
-}
-
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
     size_t main_chain_element_id, Residue residue)
 {
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
+    if (IsModelObjectAvailable() == false) return {};
     auto model_object{ m_model_object };
 
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
