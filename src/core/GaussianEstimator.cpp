@@ -368,10 +368,13 @@ RHBMMemberDataset BuildLocalGaussianPreparedDataset(
         throw std::invalid_argument("Prepared local Gaussian design inputs are inconsistent.");
     }
 
-    std::vector<std::size_t> retained_row_list;
-    std::vector<double> transformed_response_list;
-    retained_row_list.reserve(design_template.distance_list.size());
-    transformed_response_list.reserve(design_template.distance_list.size());
+    const auto candidate_count{
+        static_cast<Eigen::Index>(design_template.distance_list.size())
+    };
+    RHBMMemberDataset dataset;
+    dataset.X = RHBMDesignMatrix::Zero(candidate_count, 2);
+    dataset.y = RHBMResponseVector::Zero(candidate_count);
+    Eigen::Index retained_count{ 0 };
     for (std::size_t row = 0; row < design_template.distance_list.size(); row++)
     {
         const auto sample_index{ design_template.source_sample_index_list.at(row) };
@@ -392,12 +395,12 @@ RHBMMemberDataset BuildLocalGaussianPreparedDataset(
             adjusted_response,
             "response",
             "Member dataset contains non-finite value.");
-        retained_row_list.emplace_back(row);
-        transformed_response_list.emplace_back(std::log(adjusted_response));
+        dataset.X.row(retained_count) = design_template.design_matrix.row(
+            static_cast<Eigen::Index>(row));
+        dataset.y(retained_count) = std::log(adjusted_response);
+        retained_count++;
     }
 
-    const auto retained_count{ static_cast<Eigen::Index>(retained_row_list.size()) };
-    RHBMMemberDataset dataset;
     if (retained_count == 0)
     {
         dataset.X = RHBMDesignMatrix::Zero(1, 2);
@@ -405,16 +408,8 @@ RHBMMemberDataset BuildLocalGaussianPreparedDataset(
     }
     else
     {
-        dataset.X = RHBMDesignMatrix::Zero(retained_count, 2);
-        dataset.y = RHBMResponseVector::Zero(retained_count);
-        for (Eigen::Index output_row = 0; output_row < retained_count; output_row++)
-        {
-            const auto template_row{
-                static_cast<Eigen::Index>(retained_row_list.at(static_cast<std::size_t>(output_row)))
-            };
-            dataset.X.row(output_row) = design_template.design_matrix.row(template_row);
-            dataset.y(output_row) = transformed_response_list.at(static_cast<std::size_t>(output_row));
-        }
+        dataset.X.conservativeResize(retained_count, 2);
+        dataset.y.conservativeResize(retained_count);
     }
 
     return dataset;
@@ -475,39 +470,36 @@ GroupGaussianResult EstimateGroupGaussian(
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
     }
 
-    auto execution_options{ MakeExecutionOptions(options) };
-    const auto range_min{ options.distance_min };
-    const auto range_max{ options.distance_max };
+    const auto execution_options{ MakeExecutionOptions(options) };
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(sample_entries_list.size());
-    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    std::vector<RHBMBetaEstimateResult> fit_result_list;
+    fit_result_list.reserve(member_result_list.size());
+    std::vector<double> member_offset_list;
+    member_offset_list.reserve(member_result_list.size());
+    for (std::size_t i = 0; i < member_result_list.size(); i++)
     {
         const auto sampling_entries{
             BuildSamplesForZeroOffsetGaussianFit(
                 sample_entries_list.at(i),
                 member_result_list.at(i).mdpde.GetModel())
         };
-        dataset_list.emplace_back(
-            rhbm_helper::BuildMemberDataset(sampling_entries, range_min, range_max));
-    }
-    std::vector<RHBMBetaEstimateResult> fit_result_list;
-    fit_result_list.reserve(member_result_list.size());
-    for (std::size_t i = 0; i < member_result_list.size(); i++)
-    {
+        auto dataset{
+            rhbm_helper::BuildMemberDataset(
+                sampling_entries,
+                options.distance_min,
+                options.distance_max)
+        };
         fit_result_list.emplace_back(
             rhbm_helper::EstimateBetaMDPDE(
                 member_result_list.at(i).alpha_r,
-                dataset_list.at(i),
+                dataset,
                 execution_options));
+        dataset_list.emplace_back(std::move(dataset));
+        member_offset_list.emplace_back(member_result_list.at(i).mdpde.GetModel().GetOffset());
     }
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
-    std::vector<double> member_offset_list;
-    member_offset_list.reserve(member_result_list.size());
-    for (const auto & member_result : member_result_list)
-    {
-        member_offset_list.emplace_back(member_result.mdpde.GetModel().GetOffset());
-    }
     const auto group_offset{ array_helper::ComputeMedian(member_offset_list) };
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, group_offset) };
     result.member_results = DecodeMemberGaussianResults(raw_result, member_result_list);
