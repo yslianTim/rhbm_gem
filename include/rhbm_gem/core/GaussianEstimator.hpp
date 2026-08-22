@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <vector>
@@ -66,6 +67,25 @@ GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
     double alpha_g,
+    const FitOptions & options);
+
+void RunLocalAlphaTraining(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage);
+
+void RunFixedOffsetLocalFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage);
+
+void RunGroupPotentialFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage);
+
+bool RunSecondStageLocalFitting(
+    ModelObject & model_object,
     const FitOptions & options);
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);

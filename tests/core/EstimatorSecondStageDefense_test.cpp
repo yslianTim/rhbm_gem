@@ -15,7 +15,6 @@
 #include <variant>
 #include <vector>
 
-#include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"

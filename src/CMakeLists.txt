@@ -19,7 +19,6 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
     core/GaussianEstimator.cpp
-    core/detail/GaussianEstimatorStages.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp
