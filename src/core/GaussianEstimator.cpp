@@ -110,11 +110,8 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     const std::vector<double> & member_offset_list)
 {
     const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
-    if (member_offset_list.size() != member_count)
-    {
-        throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
-    }
-    if (result.capital_sigma_posterior_list.size() != member_count)
+    if (member_offset_list.size() != member_count ||
+        result.capital_sigma_posterior_list.size() != member_count)
     {
         throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
     }
@@ -169,7 +166,6 @@ GroupGaussianResult DecodeGroupGaussianResult(
     const auto mdpde{
         linearization_service::DecodeParameterVector(result.mu_mdpde).WithOffset(group_offset)
     };
-    auto member_results{ DecodeMemberGaussianResults(result, member_offset_list) };
     return GroupGaussianResult{
         alpha_g,
         mean,
@@ -178,7 +174,7 @@ GroupGaussianResult DecodeGroupGaussianResult(
             prior.GetModel().WithOffset(group_offset),
             prior.GetStandardDeviationModel()
         },
-        std::move(member_results)
+        DecodeMemberGaussianResults(result, member_offset_list)
     };
 }
 
@@ -270,7 +266,7 @@ double TrainAlphaR(
             rhbm_helper::BuildMemberDataset(
                 sample_entries, options.distance_min, options.distance_max));
         const auto response_count{ static_cast<std::size_t>(dataset_list.back().y.size()) };
-        if (response_count < response_count_min) response_count_min = response_count;
+        response_count_min = std::min(response_count_min, response_count);
     }
     auto training_options{ MakeTrainingOptions(options) };
     if (!dataset_list.empty())
@@ -279,10 +275,9 @@ double TrainAlphaR(
         {
             return training_options.alpha_min;
         }
-        if (training_options.subset_size > response_count_min)
-        {
-            training_options.subset_size = response_count_min;
-        }
+        training_options.subset_size = std::min(
+            training_options.subset_size,
+            response_count_min);
     }
     return rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options).best_alpha;
 }
@@ -900,7 +895,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         if (iteration_state.active_index_list.empty())
         {
             ApplyFitState(model_object, context, iteration_state.previous_state);
-            if (iteration_state.terminal_failure_state.Summary().HasFailures())
+            if (iteration_state.terminal_failure_state.HasFailures())
             {
                 LogTerminalFallback(options.quiet_mode, iteration_state);
             }
