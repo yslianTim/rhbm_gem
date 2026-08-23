@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -17,11 +18,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 namespace rhbm_gem::core::detail {
-
-static double CalculateSecondStageAdjustedResponse(
-    const AtomContext & atom_context,
-    std::size_t sample_index,
-    const SecondStageModelSnapshot & model_snapshot);
 
 namespace {
 
@@ -31,6 +27,24 @@ constexpr std::array<double, kTransformedChangeSize>
     kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
 constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
+
+double CalculateSecondStageAdjustedResponse(
+    const AtomContext & atom_context,
+    std::size_t sample_index,
+    const SecondStageModelSnapshot & model_snapshot)
+{
+    auto response_value{
+        static_cast<double>(
+            atom_context.raw_sampling_entries.at(sample_index).response)
+    };
+    for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
+    {
+        response_value -= ResolveNeighborAtomModel(
+            neighbor_atom_sample,
+            model_snapshot).ResponseAtDistance(neighbor_atom_sample.distance);
+    }
+    return response_value;
+}
 
 template<typename State>
 FittedGaussianSnapshot BuildFittedGaussianSnapshotImpl(const State & state)
@@ -843,23 +857,6 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
         throw std::invalid_argument("Local fitting context and state sizes are inconsistent.");
     }
     return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshot(state));
-}
-
-static double CalculateSecondStageAdjustedResponse(
-    const AtomContext & atom_context,
-    std::size_t sample_index,
-    const SecondStageModelSnapshot & model_snapshot)
-{
-    auto response_value{
-        static_cast<double>(atom_context.raw_sampling_entries.at(sample_index).response)
-    };
-    for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
-    {
-        response_value -= ResolveNeighborAtomModel(
-            neighbor_atom_sample,
-            model_snapshot).ResponseAtDistance(neighbor_atom_sample.distance);
-    }
-    return response_value;
 }
 
 SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(

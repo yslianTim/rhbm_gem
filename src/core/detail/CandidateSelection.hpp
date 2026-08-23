@@ -328,13 +328,6 @@ struct ClusterObjectiveState
 using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
 using ObjectiveByKey = std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
 
-struct CombinedCandidateObjectiveCheck
-{
-    bool accepted{ true };
-    std::optional<ObjectiveBreakdown> previous_objective{};
-    std::optional<ObjectiveBreakdown> candidate_objective{};
-};
-
 ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot,
@@ -360,17 +353,6 @@ ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
     const SnapshotResidualEvaluator & evaluator);
-
-CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
-    const SecondStageContext & context,
-    const ResidualBaseline & baseline,
-    const CouplingGraphPartition & partition,
-    const FitState & previous_state,
-    const FitState & candidate_state,
-    const std::vector<ClusterKey> & accepted_key_list,
-    const ObjectiveDomain & objective_domain,
-    const ObjectiveBreakdown * best_objective,
-    PerformanceCounters & performance_counters);
 
 bool TryUpdateBestAuditState(
     const FitState & candidate_state,
@@ -483,24 +465,13 @@ struct CandidateSelectionInputs
     const ObjectiveDomain & objective_domain;
     const ObjectiveByKey & previous_objective_by_key;
     ClusterObjectiveStateMap & cluster_objective_state;
+    const BestAuditState & best_audit_state;
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
     int thread_size;
     PerformanceCounters & performance_counters;
 };
 
-void RejectCombinedCandidate(
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    CandidateSelection & selection);
-
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs);
-
-bool TryBacktrackCombinedCandidate(
-    const CandidateSelectionInputs & inputs,
-    const ObjectiveBreakdown * previous_audit_objective,
-    const ObjectiveBreakdown * best_audit_objective,
-    const ClusterObjectiveStateMap & committed_objective_state,
-    CandidateSelection & selection);
 
 } // namespace rhbm_gem::core::detail

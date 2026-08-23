@@ -13,6 +13,7 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -1627,49 +1628,6 @@ static std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
     return candidate_objective;
 }
 
-CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
-    const SecondStageContext & context,
-    const ResidualBaseline & baseline,
-    const CouplingGraphPartition & partition,
-    const FitState & previous_state,
-    const FitState & candidate_state,
-    const std::vector<ClusterKey> & accepted_key_list,
-    const ObjectiveDomain & objective_domain,
-    const ObjectiveBreakdown * best_objective,
-    PerformanceCounters & performance_counters)
-{
-    CombinedCandidateObjectiveCheck result;
-    if (partition.boundary_sample_count == 0 || accepted_key_list.empty()) return result;
-
-    result.previous_objective = EvaluateAuditObjective(objective_domain, baseline);
-
-    ClusterKey changed_atom_index_list;
-    for (const auto & key : accepted_key_list)
-    {
-        changed_atom_index_list.insert(changed_atom_index_list.end(), key.begin(), key.end());
-    }
-    const auto combined_patch{
-        FitStatePatch::FromState(candidate_state, std::move(changed_atom_index_list))
-    };
-    const FitStateView combined_state_view{ previous_state, combined_patch };
-    const CandidateEvaluationOverlay combined_overlay{ context, baseline, combined_state_view };
-    const auto affected_sample_ref_list{
-        BuildGraphAffectedSampleUnion(partition, accepted_key_list)
-    };
-    const auto combined_check{
-        EvaluateCombinedObjective(
-            combined_overlay,
-            affected_sample_ref_list,
-            objective_domain,
-            best_objective,
-            result.previous_objective.has_value() ? &*result.previous_objective : nullptr,
-            performance_counters)
-    };
-    result.accepted = combined_check.has_value();
-    result.candidate_objective = combined_check;
-    return result;
-}
-
 bool TryUpdateBestAuditState(
     const FitState & candidate_state,
     bool candidate_uses_polish,
@@ -1939,7 +1897,7 @@ static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     };
 }
 
-void RejectCombinedCandidate(
+static void RejectCombinedCandidate(
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     CandidateSelection & selection)
@@ -2341,11 +2299,12 @@ static ClusterCandidateResult SelectClusterCandidate(
     return result;
 }
 
-CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
+static CandidateSelection SelectIndividualClusterCandidates(
+    const CandidateSelectionInputs & inputs,
+    ClusterObjectiveStateMap & working_objective_state)
 {
     const auto & partition{ inputs.partition };
     auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
-    auto & cluster_objective_state{ inputs.cluster_objective_state };
     const auto & previous_state{ inputs.previous_state };
     const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
     using PartitionEntry = std::pair<const ClusterKey, std::vector<SampleRef>>;
@@ -2409,7 +2368,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     {
         auto & result{ result_list.at(position) };
         const auto & key{ candidate_work_list.at(position).first->first };
-        cluster_objective_state.at(key) = std::move(result.objective_state);
+        working_objective_state.at(key) = std::move(result.objective_state);
         selection.polish_progress.eligible_count += result.polish_progress.eligible_count;
         selection.polish_progress.accepted_count += result.polish_progress.accepted_count;
         selection.polish_progress.rejected_count += result.polish_progress.rejected_count;
@@ -2448,11 +2407,14 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     return selection;
 }
 
-bool TryBacktrackCombinedCandidate(
+static bool TryBacktrackCombinedCandidate(
     const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown * previous_audit_objective,
     const ObjectiveBreakdown * best_audit_objective,
     const ClusterObjectiveStateMap & committed_objective_state,
+    const FitStatePatch & endpoint_patch,
+    const std::vector<SampleRef> & affected_sample_ref_list,
+    ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection)
 {
     const auto & context{ inputs.context };
@@ -2462,24 +2424,7 @@ bool TryBacktrackCombinedCandidate(
     const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
     const auto & objective_domain{ inputs.objective_domain };
     const auto & previous_objective_by_key{ inputs.previous_objective_by_key };
-    auto & working_objective_state{ inputs.cluster_objective_state };
     auto & performance_counters{ inputs.performance_counters };
-    std::vector<std::size_t> changed_atom_index_list;
-    for (const auto & key : selection.accepted_key_list)
-    {
-        changed_atom_index_list.insert(
-            changed_atom_index_list.end(),
-            key.begin(),
-            key.end());
-    }
-    const auto affected_sample_ref_list{
-        BuildGraphAffectedSampleUnion(partition, selection.accepted_key_list)
-    };
-    const auto endpoint_patch{
-        FitStatePatch::FromState(
-            selection.assembled_state,
-            changed_atom_index_list)
-    };
     BacktrackingWorkspace backtracking_workspace{
         context,
         previous_state,
@@ -2567,6 +2512,101 @@ bool TryBacktrackCombinedCandidate(
     selection.grow_trust_region_key_list.clear();
     working_objective_state = std::move(accepted_trial_objective_state);
     return true;
+}
+
+CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
+{
+    auto working_objective_state{ inputs.cluster_objective_state };
+    const auto candidate_phase_start{ inputs.performance_counters.StartCandidatePhase() };
+    auto selection{
+        SelectIndividualClusterCandidates(inputs, working_objective_state)
+    };
+    inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
+    inputs.performance_counters.RecordFullStateMaterialization();
+
+    auto combined_objective_accepted{ true };
+    if (inputs.partition.boundary_sample_count != 0 && !selection.accepted_key_list.empty())
+    {
+        ClusterKey changed_atom_index_list;
+        for (const auto & key : selection.accepted_key_list)
+        {
+            changed_atom_index_list.insert(
+                changed_atom_index_list.end(),
+                key.begin(),
+                key.end());
+        }
+        const auto endpoint_patch{
+            FitStatePatch::FromState(
+                selection.assembled_state,
+                std::move(changed_atom_index_list))
+        };
+        const auto affected_sample_ref_list{
+            BuildGraphAffectedSampleUnion(inputs.partition, selection.accepted_key_list)
+        };
+        const auto previous_audit_objective{
+            EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
+        };
+        const auto * best_audit_objective{
+            inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
+        };
+        const FitStateView endpoint_state_view{
+            inputs.previous_state,
+            endpoint_patch
+        };
+        const CandidateEvaluationOverlay endpoint_overlay{
+            inputs.context,
+            inputs.residual_baseline,
+            endpoint_state_view
+        };
+        selection.combined_backtracking_objective =
+            EvaluateCombinedObjective(
+                endpoint_overlay,
+                affected_sample_ref_list,
+                inputs.objective_domain,
+                best_audit_objective,
+                previous_audit_objective.has_value() ?
+                    &*previous_audit_objective : nullptr,
+                inputs.performance_counters);
+        combined_objective_accepted = selection.combined_backtracking_objective.has_value();
+        if (!combined_objective_accepted)
+        {
+            combined_objective_accepted = TryBacktrackCombinedCandidate(
+                inputs,
+                previous_audit_objective.has_value() ?
+                    &*previous_audit_objective : nullptr,
+                best_audit_objective,
+                inputs.cluster_objective_state,
+                endpoint_patch,
+                affected_sample_ref_list,
+                working_objective_state,
+                selection);
+        }
+    }
+
+    if (!combined_objective_accepted)
+    {
+        if (selection.combined_backtracking_exhausted)
+        {
+            for (const auto & key : selection.accepted_key_list)
+            {
+                if (std::ranges::find(
+                        selection.backtracking_exhausted_key_list,
+                        key) == selection.backtracking_exhausted_key_list.end())
+                {
+                    selection.backtracking_exhausted_key_list.emplace_back(key);
+                }
+            }
+        }
+        RejectCombinedCandidate(
+            inputs.previous_state,
+            inputs.previous_polish_provenance,
+            selection);
+    }
+    else
+    {
+        inputs.cluster_objective_state = std::move(working_objective_state);
+    }
+    return selection;
 }
 
 } // namespace rhbm_gem::core::detail

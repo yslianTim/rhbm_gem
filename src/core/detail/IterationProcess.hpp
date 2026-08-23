@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/CandidateSelection.hpp"
+#include "core/detail/JointFitting.hpp"
 
 #include <cstddef>
 #include <map>
@@ -32,8 +32,7 @@ struct SecondStageSeedSelection
     GaussianModel3DWithUncertainty model{};
 };
 
-std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
-    const SecondStageSeedCandidates & candidates);
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates);
 
 constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 
@@ -47,14 +46,12 @@ struct PersistentTerminalFailureState
     std::size_t stable_iteration_count{ 0 };
 };
 
-using PersistentTerminalFailureStateMap =
-    std::map<ClusterKey, PersistentTerminalFailureState>;
-using TerminalPersistentFailureMap =
-    std::map<ClusterKey, PersistentTerminalFailureReason>;
+using PersistentTerminalFailureStateMap = std::map<ClusterKey, PersistentTerminalFailureState>;
+using TerminalPersistentFailureMap = std::map<ClusterKey, PersistentTerminalFailureReason>;
 
 TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
-    const SuspiciousUpdateMask & suspicious_atom_mask,
+    const std::vector<char> & suspicious_atom_mask,
     const ClusterHealthMap & health_by_key,
     const FitState & assembled_state,
     const FitState & previous_state,

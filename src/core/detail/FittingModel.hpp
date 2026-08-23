@@ -9,12 +9,18 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
 class AtomObject;
+
+namespace core {
+struct FitOptions;
+}
 }
 
 namespace rhbm_gem::core::detail {

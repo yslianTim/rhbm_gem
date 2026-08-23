@@ -1,5 +1,7 @@
 #include "core/detail/IterationProcess.hpp"
 
+#include "core/detail/CandidateSelection.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -17,6 +19,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -33,6 +36,8 @@
 #endif
 
 namespace rhbm_gem::core::detail {
+
+namespace {
 
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{
@@ -86,18 +91,6 @@ struct TerminalSummary
         return AtomCount() > 0;
     }
 };
-
-static std::vector<ClusterKey> AccumulateTerminalFailureSummary(
-    const TerminalPersistentFailureMap & terminal_failure_by_key,
-    TerminalSummary & terminal_summary);
-
-static void ApplyTerminalFallbackClusters(
-    const std::vector<ClusterKey> & terminal_key_list,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    std::vector<char> & terminal_atom_mask,
-    FitState & assembled_state,
-    PolishProvenance & assembled_polish_provenance);
 
 struct TerminalFailureState
 {
@@ -199,62 +192,6 @@ struct LocalAtomRefitResult
     bool is_stationarity_eligible{ false };
 };
 
-std::vector<std::size_t> TerminalFailureState::BuildEligibleActiveIndexList()
-    const
-{
-    std::vector<std::size_t> active_index_list;
-    active_index_list.reserve(terminal_atom_mask.size());
-    for (std::size_t atom_index = 0;
-        atom_index < terminal_atom_mask.size();
-        atom_index++)
-    {
-        if (terminal_atom_mask.at(atom_index) == 0)
-        {
-            active_index_list.emplace_back(atom_index);
-        }
-    }
-    return active_index_list;
-}
-
-bool TerminalFailureState::IsolatePersistentFailures(
-    const std::vector<ClusterKey> & accepted_key_list,
-    SuspiciousUpdateMask & suspicious_atom_mask,
-    const ClusterHealthMap & health_by_key,
-    FitState & assembled_state,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    PolishProvenance & assembled_polish_provenance)
-{
-    const auto terminal_failure_by_key{
-        UpdatePersistentTerminalFailureState(
-            accepted_key_list,
-            suspicious_atom_mask,
-            health_by_key,
-            assembled_state,
-            previous_state,
-            persistent_state_by_key)
-    };
-    const auto terminal_key_list{
-        AccumulateTerminalFailureSummary(
-            terminal_failure_by_key,
-            terminal_summary)
-    };
-    ApplyTerminalFallbackClusters(
-        terminal_key_list,
-        previous_state,
-        previous_polish_provenance,
-        terminal_atom_mask,
-        assembled_state,
-        assembled_polish_provenance);
-    if (!terminal_key_list.empty())
-    {
-        ClearSuspiciousUpdateMaskForClusters(
-            terminal_key_list,
-            suspicious_atom_mask);
-    }
-    return !terminal_key_list.empty();
-}
-
 static std::optional<SecondStageSeedSelection>
 SelectValidSecondStageSeedCandidate(
     SecondStageSeedSource source,
@@ -266,6 +203,8 @@ SelectValidSecondStageSeedCandidate(
     }
     return SecondStageSeedSelection{ source, *candidate };
 }
+
+} // namespace
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
 {
@@ -294,6 +233,8 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageS
         SecondStageSeedSource::GlobalMedian,
         candidates.global_median);
 }
+
+namespace {
 
 static SecondStageContext BuildSecondStageContext(
     const ModelObject & model_object,
@@ -715,9 +656,11 @@ static std::vector<ClusterKey> AccumulateTerminalFailureSummary(
     return terminal_key_list;
 }
 
+} // namespace
+
 TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
-    const SuspiciousUpdateMask & suspicious_atom_mask,
+    const std::vector<char> & suspicious_atom_mask,
     const ClusterHealthMap & health_by_key,
     const FitState & assembled_state,
     const FitState & previous_state,
@@ -727,8 +670,7 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     TerminalPersistentFailureMap terminal_failure_by_key;
     for (const auto & [key, health] : health_by_key)
     {
-        if (std::ranges::find(accepted_key_list, key) ==
-            accepted_key_list.end())
+        if (std::ranges::find(accepted_key_list, key) == accepted_key_list.end())
         {
             continue;
         }
@@ -774,6 +716,8 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     return terminal_failure_by_key;
 }
 
+namespace {
+
 static void ApplyTerminalFallbackClusters(
     const std::vector<ClusterKey> & terminal_key_list,
     const FitState & previous_state,
@@ -791,6 +735,58 @@ static void ApplyTerminalFallbackClusters(
             assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
         }
     }
+}
+
+std::vector<std::size_t> TerminalFailureState::BuildEligibleActiveIndexList()
+    const
+{
+    std::vector<std::size_t> active_index_list;
+    active_index_list.reserve(terminal_atom_mask.size());
+    for (std::size_t atom_index = 0; atom_index < terminal_atom_mask.size(); atom_index++)
+    {
+        if (terminal_atom_mask.at(atom_index) == 0)
+        {
+            active_index_list.emplace_back(atom_index);
+        }
+    }
+    return active_index_list;
+}
+
+bool TerminalFailureState::IsolatePersistentFailures(
+    const std::vector<ClusterKey> & accepted_key_list,
+    SuspiciousUpdateMask & suspicious_atom_mask,
+    const ClusterHealthMap & health_by_key,
+    FitState & assembled_state,
+    const FitState & previous_state,
+    const PolishProvenance & previous_polish_provenance,
+    PolishProvenance & assembled_polish_provenance)
+{
+    const auto terminal_failure_by_key{
+        UpdatePersistentTerminalFailureState(
+            accepted_key_list,
+            suspicious_atom_mask,
+            health_by_key,
+            assembled_state,
+            previous_state,
+            persistent_state_by_key)
+    };
+    const auto terminal_key_list{
+        AccumulateTerminalFailureSummary(terminal_failure_by_key, terminal_summary)
+    };
+    ApplyTerminalFallbackClusters(
+        terminal_key_list,
+        previous_state,
+        previous_polish_provenance,
+        terminal_atom_mask,
+        assembled_state,
+        assembled_polish_provenance);
+    if (!terminal_key_list.empty())
+    {
+        ClearSuspiciousUpdateMaskForClusters(
+            terminal_key_list,
+            suspicious_atom_mask);
+    }
+    return !terminal_key_list.empty();
 }
 
 static void AppendObjectiveBreakdown(
@@ -1080,8 +1076,6 @@ static std::string FormatProgressMaximum(double value)
     return stream.str();
 }
 
-namespace {
-
 constexpr std::array<std::string_view, 6> kProgressHeaderList
 {
     "Try/Acc",
@@ -1107,8 +1101,6 @@ std::string FormatProgressRow(
     }
     return stream.str();
 }
-
-} // namespace
 
 static ProgressColumnWidths BuildProgressColumnWidths(
     std::size_t atom_size)
@@ -1580,9 +1572,6 @@ static IterationResult RunIteration(
     const auto raw_fixed_point_change_summary{
         SummarizeTransformedChanges(raw_state, previous_state, active_index_list)
     };
-    auto working_cluster_objective_state{
-        iteration_state.cluster_objective_state
-    };
     const CandidateSelectionInputs candidate_inputs{
         .context = context,
         .residual_baseline = residual_baseline,
@@ -1597,68 +1586,14 @@ static IterationResult RunIteration(
             std::span<const ClusterKey>{ iteration_state.unchanged_state_exhausted_key_list },
         .objective_domain = objective_domain,
         .previous_objective_by_key = previous_objective_by_key,
-        .cluster_objective_state = working_cluster_objective_state,
+        .cluster_objective_state = iteration_state.cluster_objective_state,
+        .best_audit_state = iteration_state.best_audit_state,
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
         .thread_size = options.thread_size,
         .performance_counters = performance_counters
     };
-    const auto candidate_phase_start{ performance_counters.StartCandidatePhase() };
     auto selection{ SelectClusterCandidates(candidate_inputs) };
-    performance_counters.FinishCandidatePhase(candidate_phase_start);
-    performance_counters.RecordFullStateMaterialization();
-
-    const auto * best_audit_objective{
-        iteration_state.best_audit_state.has_value() ? &iteration_state.best_audit_state->objective : nullptr
-    };
-    const auto combined_check{
-        EvaluateCombinedCandidateObjective(
-            context,
-            residual_baseline,
-            graph_partition,
-            previous_state,
-            selection.assembled_state,
-            selection.accepted_key_list,
-            objective_domain,
-            best_audit_objective,
-            performance_counters)
-    };
-    selection.combined_backtracking_objective = combined_check.candidate_objective;
-    auto combined_objective_accepted{ combined_check.accepted };
-    if (!combined_objective_accepted)
-    {
-        combined_objective_accepted =
-            TryBacktrackCombinedCandidate(
-                candidate_inputs,
-                combined_check.previous_objective.has_value() ?
-                    &*combined_check.previous_objective : nullptr,
-                best_audit_objective,
-                iteration_state.cluster_objective_state,
-                selection);
-    }
-    if (!combined_objective_accepted)
-    {
-        if (selection.combined_backtracking_exhausted)
-        {
-            for (const auto & key : selection.accepted_key_list)
-            {
-                if (std::ranges::find(
-                        selection.backtracking_exhausted_key_list,
-                        key) == selection.backtracking_exhausted_key_list.end())
-                {
-                    selection.backtracking_exhausted_key_list.emplace_back(key);
-                }
-            }
-        }
-        RejectCombinedCandidate(
-            previous_state,
-            iteration_state.previous_polish_provenance,
-            selection);
-    }
-    else
-    {
-        iteration_state.cluster_objective_state = std::move(working_cluster_objective_state);
-    }
 
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
@@ -1856,8 +1791,6 @@ static IterationResult RunIteration(
     return result;
 }
 
-namespace {
-
 void ApplyFitState(
     ModelObject & model_object,
     const SecondStageContext & context,
@@ -2049,9 +1982,6 @@ void LogSecondStageSummary(
     Logger::Log(LogLevel::Info, message.str());
 }
 
-
-} // namespace
-
 static bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
     auto context{ BuildSecondStageContext(model_object, options) };
@@ -2241,6 +2171,8 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
     }
     return false;
 }
+
+} // namespace
 
 } // namespace rhbm_gem::core::detail
 
