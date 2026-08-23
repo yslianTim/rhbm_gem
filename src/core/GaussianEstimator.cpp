@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include "core/detail/FittingModel.hpp"
-#include "core/detail/IterationProcess.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -296,7 +295,24 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     const GaussianModel3D & offset_model)
 {
-    return detail::EstimateLocalGaussianFromSamples(sample_entries, alpha_r, options, offset_model);
+    const auto design_template{
+        detail::BuildLocalGaussianDesignTemplate(
+            sample_entries,
+            options.distance_min,
+            options.distance_max)
+    };
+    std::vector<double> sample_response_list;
+    sample_response_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        sample_response_list.emplace_back(static_cast<double>(sample.response));
+    }
+    return detail::EstimateLocalGaussianPrepared(
+        design_template,
+        sample_response_list,
+        alpha_r,
+        options,
+        offset_model);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
@@ -444,18 +460,6 @@ void RunGroupPotentialFitting(
             }
         }
     }
-}
-
-bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
-{
-    const auto fitted{
-        detail::RunSecondStageIterationProcess(model_object, options)
-    };
-    if (fitted)
-    {
-        RunGroupPotentialFitting(model_object, options, FittingStage::Second);
-    }
-    return fitted;
 }
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)

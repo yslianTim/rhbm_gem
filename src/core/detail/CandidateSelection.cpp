@@ -7,8 +7,11 @@
 #include <limits>
 #include <ranges>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
+
+#include <Eigen/Dense>
 
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -17,6 +20,56 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 namespace rhbm_gem::core::detail {
+
+namespace {
+
+constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
+constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
+constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
+constexpr double kSuspiciousProfileScaleMin{ 1.0e-12 };
+constexpr std::size_t kSuspiciousProfileMinimumRadiusCount{ 3 };
+constexpr double kSuspiciousProfileDistanceTolerance{ 1.0e-6 };
+constexpr double kSuspiciousProfileReboundCenterRatio{ 1.5 };
+constexpr double kSuspiciousProfileReboundReferenceRatio{ 0.25 };
+constexpr double kSuspiciousProfileUpwardExcursionReferenceRatio{ 0.20 };
+constexpr int kSuspiciousProfileMaximumUpwardExcursions{ 1 };
+constexpr double kSuspiciousWidthGrowthLimit{ 1.5 };
+constexpr double kSuspiciousWidthRangeLimitRatio{ 1.5 };
+constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
+
+constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
+constexpr double kFitRangeWeight{ 1.0 };
+constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
+constexpr double kOffsetPeakRatioMax{ 1.0 };
+constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
+constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
+constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+
+enum class SuspiciousProfileAnalysisMode
+{
+    Candidate,
+    PreviousBaseline
+};
+
+struct BaseProposalBuildResult
+{
+    std::optional<FitStateProposal> proposal{};
+    PreObjectiveFailureReason failure_reason{ PreObjectiveFailureReason::None };
+    std::optional<double> attempted_step_norm{};
+};
+
+struct ClusterCandidateResult
+{
+    std::optional<FitStatePatch> accepted_patch{};
+    PolishProvenance polish_provenance{};
+    ClusterObjectiveState objective_state{};
+    ObjectiveAttemptDiagnostic diagnostic{};
+    PolishProgress polish_progress{};
+    bool grow_trust_region{ false };
+};
+
+} // namespace
 
 TrustRegionStateSet::TrustRegionStateSet(TrustRegionOptions options)
     : m_options{ options }
@@ -385,8 +438,7 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(
 BacktrackingStep BacktrackingWorkspace::BuildNextCandidate()
 {
     const auto factor{ m_next_factor };
-    if (!std::isfinite(factor) ||
-        factor < std::numeric_limits<double>::epsilon())
+    if (!std::isfinite(factor) || factor < std::numeric_limits<double>::epsilon())
     {
         return BacktrackingStep{
             BacktrackingStepStatus::Exhausted,
@@ -425,22 +477,19 @@ PolishProvenance BacktrackingWorkspace::BuildCandidatePolishProvenance(
     const PolishProvenance & previous_provenance,
     const PolishProvenance & endpoint_provenance) const
 {
-    if (previous_provenance.size() != m_previous_state.size() ||
-        endpoint_provenance.size() != m_previous_state.size())
+    if (previous_provenance.size() != m_previous_state_size ||
+        endpoint_provenance.size() != m_previous_state_size)
     {
         throw std::invalid_argument(
             "Local fitting backtracking provenance sizes are inconsistent.");
     }
     auto provenance{ previous_provenance };
-    for (std::size_t i = 0;
-        i < m_candidate_patch.atom_index_list.size();
-        i++)
+    for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
     {
         if (HasMaterialChange(i))
         {
             provenance.at(m_candidate_patch.atom_index_list.at(i)) =
-                endpoint_provenance.at(
-                    m_candidate_patch.atom_index_list.at(i));
+                endpoint_provenance.at(m_candidate_patch.atom_index_list.at(i));
         }
     }
     return provenance;
@@ -451,18 +500,14 @@ BacktrackingWorkspace::BuildActiveCandidatePolishProvenance(
     const PolishProvenance & previous_provenance,
     const PolishProvenance & endpoint_provenance) const
 {
-    if (previous_provenance.size() !=
-            m_candidate_patch.atom_index_list.size() ||
-        endpoint_provenance.size() !=
-            m_candidate_patch.atom_index_list.size())
+    if (previous_provenance.size() != m_candidate_patch.atom_index_list.size() ||
+        endpoint_provenance.size() != m_candidate_patch.atom_index_list.size())
     {
         throw std::invalid_argument(
             "Local fitting active backtracking provenance sizes are inconsistent.");
     }
     auto provenance{ previous_provenance };
-    for (std::size_t i = 0;
-        i < m_candidate_patch.atom_index_list.size();
-        i++)
+    for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
     {
         if (HasMaterialChange(i))
         {
@@ -486,9 +531,7 @@ bool BacktrackingWorkspace::BuildCandidate(double factor)
         return false;
     }
 
-    for (std::size_t i = 0;
-        i < m_candidate_patch.atom_index_list.size();
-        i++)
+    for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
     {
         const auto endpoint_uncertainty{
             m_candidate_patch.mdpde_list.at(i).GetStandardDeviationModel()
@@ -502,25 +545,20 @@ bool BacktrackingWorkspace::BuildCandidate(double factor)
     return true;
 }
 
-bool BacktrackingWorkspace::HasMaterialChange(
-    std::size_t atom_position) const
+bool BacktrackingWorkspace::HasMaterialChange(std::size_t atom_position) const
 {
     const auto change{
         CalculateTransformedChange(
             m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
             m_previous_model_list.at(atom_position))
     };
-    return IsTransformedChangeMaterial(
-        change,
-        m_minimum_transformed_change);
+    return IsTransformedChangeMaterial(change, m_minimum_transformed_change);
 }
 
 double BacktrackingWorkspace::GetMaximumTransformedChange() const
 {
     double maximum_change{ 0.0 };
-    for (std::size_t i = 0;
-        i < m_candidate_patch.atom_index_list.size();
-        i++)
+    for (std::size_t i = 0; i < m_candidate_patch.atom_index_list.size(); i++)
     {
         maximum_change = std::max(
             maximum_change,
@@ -595,11 +633,10 @@ AllRejectedResolution ResolveAllRejected(
 
 std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask)
 {
-    return static_cast<std::size_t>(
-        std::ranges::count_if(suspicious_mask, std::identity{}));
+    return static_cast<std::size_t>(std::ranges::count_if(suspicious_mask, std::identity{}));
 }
 
-bool HasSuspiciousAtom(
+static bool HasSuspiciousAtom(
     const std::vector<std::size_t> & atom_index_list,
     const SuspiciousUpdateMask & suspicious_mask)
 {
@@ -652,7 +689,7 @@ void ClearSuspiciousUpdateMaskForClusters(
     }
 }
 
-bool HasSuspiciousCenterSignFlip(
+static bool HasSuspiciousCenterSignFlip(
     double previous_innermost_response,
     double candidate_innermost_response,
     double previous_residual_scale)
@@ -678,7 +715,7 @@ bool HasSuspiciousCenterSignFlip(
         candidate_innermost_response < -negative_threshold;
 }
 
-double CalculateZeroOffsetResponse(
+static double CalculateZeroOffsetResponse(
     const LocalPotentialSample & sample,
     const GaussianModel3D & model)
 {
@@ -687,13 +724,13 @@ double CalculateZeroOffsetResponse(
     return static_cast<double>(sample.response) - model_offset;
 }
 
-bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
+static bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
 {
     const auto scale{ std::max({ std::abs(lhs), std::abs(rhs), 1.0 }) };
     return std::abs(lhs - rhs) <= kSuspiciousProfileDistanceTolerance * scale;
 }
 
-SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
+static SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model,
     const FitOptions & options,
@@ -756,7 +793,7 @@ SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     return analysis;
 }
 
-bool HasUsableSuspiciousProfileBaseline(
+static bool HasUsableSuspiciousProfileBaseline(
     const GaussianModel3D & previous_model,
     const ZeroOffsetProfileDiagnostics & previous_profile)
 {
@@ -789,7 +826,7 @@ bool HasUsableSuspiciousProfileBaseline(
     return true;
 }
 
-bool HasSuspiciousOffsetMagnitude(
+static bool HasSuspiciousOffsetMagnitude(
     const GaussianModel3D & previous_model,
     const GaussianModel3D & candidate_model,
     double previous_profile_max_abs_response)
@@ -815,7 +852,7 @@ bool HasSuspiciousOffsetMagnitude(
     return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
 }
 
-bool HasSuspiciousRadialRebound(
+static bool HasSuspiciousRadialRebound(
     const ZeroOffsetProfileDiagnostics & previous_profile,
     const ZeroOffsetProfileDiagnostics & candidate_profile)
 {
@@ -867,7 +904,7 @@ bool HasSuspiciousRadialRebound(
     return upward_excursion_count > kSuspiciousProfileMaximumUpwardExcursions;
 }
 
-bool HasSuspiciousWidthGrowth(
+static bool HasSuspiciousWidthGrowth(
     const GaussianModel3D & previous_model,
     const GaussianModel3D & candidate_model,
     const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile)
@@ -879,7 +916,7 @@ bool HasSuspiciousWidthGrowth(
     return distance_range > 0.0 && candidate_model.GetWidth() > kSuspiciousWidthRangeLimitRatio * distance_range;
 }
 
-bool HasSuspiciousAmplitudeOffsetCompensation(
+static bool HasSuspiciousAmplitudeOffsetCompensation(
     const GaussianModel3D & previous_model,
     const GaussianModel3D & candidate_model,
     const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile)
@@ -893,8 +930,7 @@ bool HasSuspiciousAmplitudeOffsetCompensation(
     };
     const auto reference_scale{
         std::max({
-            previous_profile.has_value() ?
-                std::abs(previous_profile->innermost_response) : 0.0,
+            previous_profile.has_value() ? std::abs(previous_profile->innermost_response) : 0.0,
             std::abs(previous_model.SignalAtDistance(0.0)),
             kSuspiciousProfileScaleMin
         })
@@ -1044,7 +1080,7 @@ double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t ac
     return static_cast<double>(cluster_atom_count) / static_cast<double>(active_atom_count);
 }
 
-void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
+static void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
 {
     if (!std::isfinite(tolerance.absolute_tolerance) || tolerance.absolute_tolerance < 0.0 ||
         !std::isfinite(tolerance.relative_tolerance) || tolerance.relative_tolerance < 0.0)
@@ -1054,12 +1090,17 @@ void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
     }
 }
 
-double CalculateObjectiveTolerance(double reference, ObjectiveTolerance tolerance)
+static double CalculateObjectiveTolerance(
+    double reference,
+    ObjectiveTolerance tolerance)
 {
     return tolerance.absolute_tolerance + tolerance.relative_tolerance * std::abs(reference);
 }
 
-bool IsObjectiveDeteriorated(double candidate, double reference, ObjectiveTolerance tolerance)
+static bool IsObjectiveDeteriorated(
+    double candidate,
+    double reference,
+    ObjectiveTolerance tolerance)
 {
     if (!std::isfinite(reference)) return true;
     return candidate > reference + CalculateObjectiveTolerance(reference, tolerance);
@@ -1107,7 +1148,7 @@ bool IsAuditObjectiveAcceptableForProgress(
             !IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance));
 }
 
-void AppendObjectiveScaleSummary(std::ostringstream & message, const std::vector<double> & scale_list)
+static void AppendObjectiveScaleSummary(std::ostringstream & message, const std::vector<double> & scale_list)
 {
     if (scale_list.empty())
     {
@@ -1156,7 +1197,7 @@ void LogObjectiveDomain(
     Logger::Log(LogLevel::Info, message.str());
 }
 
-std::optional<double> BuildFixedObjectiveScale(
+static std::optional<double> BuildFixedObjectiveScale(
     const std::vector<double> & residual_list,
     const std::vector<double> & adjusted_response_list)
 {
@@ -1283,8 +1324,7 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
         const auto residual_sample{ residual_evaluator(sample_ref) };
         if (!residual_sample.has_value()) return std::nullopt;
         const auto is_fit_range{
-            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index)
-                .at(sample_ref.sample_index) != 0
+            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
         };
         const auto sample_count{
             is_fit_range ? owner_iter->second.fit_sample_ref_list.size() :
@@ -1292,8 +1332,7 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
         };
         if (sample_count == 0) return std::nullopt;
         const auto scale{
-            is_fit_range ? owner_iter->second.scale->fit :
-                owner_iter->second.scale->tail
+            is_fit_range ? owner_iter->second.scale->fit : owner_iter->second.scale->tail
         };
         const auto loss{
             algorithm::CalculateCauchyLoss(
@@ -1306,8 +1345,7 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
         };
         if (is_fit_range)
         {
-            contribution.fit_range_residual_objective +=
-                kFitRangeWeight * coefficient * loss;
+            contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
         }
         else
         {
@@ -1333,20 +1371,16 @@ std::optional<double> EvaluateOffsetPlausibilityPenalty(
     for (const auto atom_index : changed_key)
     {
         const auto owner_iter{
-            domain.cluster_by_key.find(
-                domain.owner_key_by_atom_index.at(atom_index))
+            domain.cluster_by_key.find(domain.owner_key_by_atom_index.at(atom_index))
         };
-        if (owner_iter == domain.cluster_by_key.end() ||
-            !owner_iter->second.scale.has_value())
+        if (owner_iter == domain.cluster_by_key.end() || !owner_iter->second.scale.has_value())
         {
             return std::nullopt;
         }
         const auto & model{ GetFitModel(state, atom_index) };
         if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
         const auto peak_signal{ model.SignalAtDistance(0.0) };
-        const auto offset_peak{
-            model.GetOffset() * model.OffsetBasisAtDistance(0.0)
-        };
+        const auto offset_peak{ model.GetOffset() * model.OffsetBasisAtDistance(0.0) };
         if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
         {
             return std::nullopt;
@@ -1359,15 +1393,12 @@ std::optional<double> EvaluateOffsetPlausibilityPenalty(
                 kObjectiveResidualScaleMin
             })
         };
-        const auto offset_excess{
-            std::max(0.0, offset_ratio - kOffsetPeakRatioMax)
-        };
+        const auto offset_excess{ std::max(0.0, offset_ratio - kOffsetPeakRatioMax) };
         penalty +=
             kOffsetPlausibilityPenaltyWeight * offset_excess * offset_excess /
             static_cast<double>(domain.active_atom_count);
     }
-    return std::isfinite(penalty) ?
-        std::optional<double>{ penalty } : std::nullopt;
+    return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
 }
 
 template<typename Evaluator>
@@ -1382,10 +1413,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     };
     if (!residual_contribution.has_value()) return std::nullopt;
     const auto offset_penalty{
-        EvaluateOffsetPlausibilityPenalty(
-            evaluator.GetState(),
-            changed_key,
-            domain)
+        EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), changed_key, domain)
     };
     if (!offset_penalty.has_value()) return std::nullopt;
     return BuildObjectiveBreakdown(
@@ -1425,10 +1453,8 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
                 domain)
         };
         if (!offset_contribution.has_value()) return std::nullopt;
-        fit_range_residual_objective +=
-            fit_contribution->fit_range_residual_objective;
-        fit_range_residual_objective +=
-            tail_contribution->fit_range_residual_objective;
+        fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
+        fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
         tail_validation_loss += fit_contribution->tail_validation_loss;
         tail_validation_loss += tail_contribution->tail_validation_loss;
         offset_plausibility_penalty += *offset_contribution;
@@ -1495,10 +1521,9 @@ ObjectiveByKey BuildObjectiveByKey(
 BacktrackingWorkspace::BacktrackingWorkspace(
     const SecondStageContext & context,
     const FitState & previous_state,
-    const FitState & endpoint_state,
-    const std::vector<std::size_t> & active_index_list,
+    const FitStatePatch & endpoint_patch,
     double minimum_transformed_change)
-    : m_previous_state{ previous_state },
+    : m_previous_state_size{ previous_state.size() },
       m_minimum_transformed_change{ minimum_transformed_change }
 {
     if (!std::isfinite(m_minimum_transformed_change) ||
@@ -1507,24 +1532,22 @@ BacktrackingWorkspace::BacktrackingWorkspace(
         throw std::invalid_argument(
             "Local fitting backtracking minimum transformed change is invalid.");
     }
-    m_candidate_patch.atom_index_list = active_index_list;
-    std::ranges::sort(m_candidate_patch.atom_index_list);
-    m_candidate_patch.atom_index_list.erase(
-        std::ranges::unique(m_candidate_patch.atom_index_list).begin(),
-        m_candidate_patch.atom_index_list.end());
+    m_candidate_patch = endpoint_patch;
     std::vector<std::size_t> group_id_by_atom_position;
     group_id_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
     m_previous_model_list.reserve(m_candidate_patch.atom_index_list.size());
     m_endpoint_model_list.reserve(m_candidate_patch.atom_index_list.size());
-    m_candidate_patch.mdpde_list.reserve(m_candidate_patch.atom_index_list.size());
-    for (const auto atom_index : m_candidate_patch.atom_index_list)
+    for (std::size_t atom_position = 0;
+        atom_position < m_candidate_patch.atom_index_list.size();
+        atom_position++)
     {
+        const auto atom_index{ m_candidate_patch.atom_index_list.at(atom_position) };
         group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
-        m_previous_model_list.emplace_back(
-            previous_state.at(atom_index).mdpde.GetModel());
-        const auto & endpoint_mdpde{ endpoint_state.at(atom_index).mdpde };
+        m_previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
+        const auto & endpoint_mdpde{
+            m_candidate_patch.mdpde_list.at(atom_position)
+        };
         m_endpoint_model_list.emplace_back(endpoint_mdpde.GetModel());
-        m_candidate_patch.mdpde_list.emplace_back(endpoint_mdpde);
     }
     m_previous_shared_offset_list = BuildGroupMedianOffsetList(
         group_id_by_atom_position,
@@ -1534,22 +1557,7 @@ BacktrackingWorkspace::BacktrackingWorkspace(
         m_endpoint_model_list);
 }
 
-BacktrackingWorkspace::BacktrackingWorkspace(
-    const SecondStageContext & context,
-    const FitState & previous_state,
-    const FitStateView & endpoint_state,
-    const std::vector<std::size_t> & active_index_list,
-    double minimum_transformed_change)
-    : BacktrackingWorkspace{
-          context,
-          previous_state,
-          endpoint_state.Materialize(),
-          active_index_list,
-          minimum_transformed_change }
-{
-}
-
-std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
+static std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
@@ -1590,7 +1598,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
             previous_changed->offset_plausibility_penalty);
 }
 
-std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
+static std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
@@ -1706,7 +1714,7 @@ void ReconcileClusterObjectiveState(
     state_by_key = std::move(next_state_by_key);
 }
 
-bool TryCommitClusterCandidate(
+static bool TryCommitClusterCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & key,
     const std::vector<SampleRef> & objective_sample_ref_list,
@@ -1809,7 +1817,7 @@ bool TryCommitClusterCandidate(
     return true;
 }
 
-BaseProposalBuildResult BuildSharedOffsetBaseProposal(
+static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     const SecondStageContext & context,
     const FitState & outer_previous_state,
     const FitState & raw_state,
@@ -1953,7 +1961,7 @@ void RejectCombinedCandidate(
     selection.polish_progress.accepted_count = 0;
 }
 
-std::optional<FitStatePatch> BuildDampedCandidatePatch(
+static std::optional<FitStatePatch> BuildDampedCandidatePatch(
     const FitState & previous_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & endpoint_transformed_estimation_list,
@@ -2015,7 +2023,8 @@ std::optional<FitStatePatch> BuildDampedCandidatePatch(
     return candidate_patch;
 }
 
-bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
+static bool ShouldGrowTrustRegion(
+    const ObjectiveAttemptDiagnostic & diagnostic)
 {
     return diagnostic.candidate_objective.has_value() &&
         diagnostic.previous_objective.has_value() &&
@@ -2028,7 +2037,7 @@ bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
             kObjectiveStrictTolerance);
 }
 
-ClusterCandidateResult SelectClusterCandidate(
+static ClusterCandidateResult SelectClusterCandidate(
     const CandidateSelectionInputs & inputs,
     const ClusterKey & key,
     const std::vector<SampleRef> & objective_sample_ref_list,
@@ -2103,12 +2112,10 @@ ClusterCandidateResult SelectClusterCandidate(
         for (const auto atom_index : key)
         {
             const auto previous_estimation{
-                EncodeTransformedCoordinates(
-                    previous_state.at(atom_index).mdpde.GetModel())
+                EncodeTransformedCoordinates(previous_state.at(atom_index).mdpde.GetModel())
             };
             const auto raw_estimation{
-                EncodeTransformedCoordinates(
-                    raw_state.at(atom_index).mdpde.GetModel())
+                EncodeTransformedCoordinates(raw_state.at(atom_index).mdpde.GetModel())
             };
             if (!previous_estimation.has_value() || !raw_estimation.has_value())
             {
@@ -2162,8 +2169,7 @@ ClusterCandidateResult SelectClusterCandidate(
     BacktrackingWorkspace backtracking_workspace{
         context,
         previous_state,
-        base_state_view,
-        key,
+        base_patch,
         kTransformedChangeTolerance
     };
     CandidateEvaluationOverlay base_overlay{
@@ -2469,11 +2475,15 @@ bool TryBacktrackCombinedCandidate(
     const auto affected_sample_ref_list{
         BuildGraphAffectedSampleUnion(partition, selection.accepted_key_list)
     };
+    const auto endpoint_patch{
+        FitStatePatch::FromState(
+            selection.assembled_state,
+            changed_atom_index_list)
+    };
     BacktrackingWorkspace backtracking_workspace{
         context,
         previous_state,
-        selection.assembled_state,
-        changed_atom_index_list,
+        endpoint_patch,
         kTransformedChangeTolerance
     };
     selection.combined_backtracking_trial_count = 1;

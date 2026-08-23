@@ -1,6 +1,7 @@
 #include "core/detail/FittingModel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
 #include <limits>
@@ -10,12 +11,26 @@
 #include <utility>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 namespace rhbm_gem::core::detail {
 
+static double CalculateSecondStageAdjustedResponse(
+    const AtomContext & atom_context,
+    std::size_t sample_index,
+    const SecondStageModelSnapshot & model_snapshot);
+
 namespace {
+
+constexpr double kTransformedChangePercentile{ 0.99 };
+constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
+constexpr std::array<double, kTransformedChangeSize>
+    kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
+constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
+constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
 template<typename State>
 FittedGaussianSnapshot BuildFittedGaussianSnapshotImpl(const State & state)
@@ -478,7 +493,7 @@ bool TryBuildSharedOffsetDampedModelList(
     return true;
 }
 
-std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(
+static std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(
     const GaussianModel3D & model,
     double distance)
 {
@@ -579,7 +594,7 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     return execution_options;
 }
 
-float CalculateAdjustedResponse(
+static float CalculateAdjustedResponse(
     double sample_response,
     double distance,
     const GaussianModel3D & offset_model)
@@ -608,7 +623,7 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     return adjusted_sampling_entries;
 }
 
-LocalGaussianResult DecodeLocalGaussianResult(
+static LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result,
     double offset)
@@ -742,32 +757,6 @@ LocalGaussianResult EstimateLocalGaussianPrepared(
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 
-LocalGaussianResult EstimateLocalGaussianFromSamples(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const FitOptions & options,
-    const GaussianModel3D & offset_model)
-{
-    const auto design_template{
-        BuildLocalGaussianDesignTemplate(
-            sample_entries,
-            options.distance_min,
-            options.distance_max)
-    };
-    std::vector<double> sample_response_list;
-    sample_response_list.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        sample_response_list.emplace_back(static_cast<double>(sample.response));
-    }
-    return EstimateLocalGaussianPrepared(
-        design_template,
-        sample_response_list,
-        alpha_r,
-        options,
-        offset_model);
-}
-
 bool UsesPolish(const PolishProvenance & provenance)
 {
     return std::ranges::any_of(provenance, std::identity{});
@@ -782,7 +771,7 @@ const GaussianModel3D & ResolveNeighborAtomModel(
         GetFitModel(model_snapshot.unselected, neighbor_atom_sample.atom_index);
 }
 
-FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
+static FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
     const SecondStageContext & context,
     const FittedGaussianSnapshot & selected_snapshot)
 {
@@ -856,7 +845,7 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshot(state));
 }
 
-double CalculateSecondStageAdjustedResponse(
+static double CalculateSecondStageAdjustedResponse(
     const AtomContext & atom_context,
     std::size_t sample_index,
     const SecondStageModelSnapshot & model_snapshot)
@@ -950,7 +939,7 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
     return baseline;
 }
 
-algorithm::ParameterChange MakeInfiniteTransformedChange()
+static algorithm::ParameterChange MakeInfiniteTransformedChange()
 {
     return algorithm::ParameterChange{
         std::vector<double>(
@@ -1109,7 +1098,7 @@ bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
         step_norm >= kTrustRegionGrowthBoundaryRatio * radius;
 }
 
-double CalculateScaledTransformedStepNorm(
+static double CalculateScaledTransformedStepNorm(
     const Eigen::Vector3d & previous_estimation,
     const Eigen::Vector3d & candidate_estimation)
 {

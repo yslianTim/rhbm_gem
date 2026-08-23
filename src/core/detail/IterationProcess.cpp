@@ -1,13 +1,18 @@
 #include "core/detail/IterationProcess.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <exception>
 #include <iomanip>
 #include <limits>
+#include <ostream>
 #include <ranges>
 #include <span>
+#include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -28,6 +33,171 @@
 #endif
 
 namespace rhbm_gem::core::detail {
+
+constexpr double kNeighborContributionDistanceMax{ 2.5 };
+constexpr double kNeighborAtomSearchRange{
+    2.0 * kNeighborContributionDistanceMax
+};
+
+struct SecondStageSeedSelectionRecord
+{
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3D original_model{};
+    GaussianModel3D selected_model{};
+};
+
+struct UnselectedSecondStageSeedSelectionRecord
+{
+    int atom_serial_id{ 0 };
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3D selected_model{};
+};
+
+struct SecondStageInitialStateBuildResult
+{
+    FitState state{};
+    std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
+    std::vector<UnselectedSecondStageSeedSelectionRecord>
+        unselected_selection_record_list{};
+    enum class Failure
+    {
+        None,
+        SelectedSeedUnavailable,
+        UnselectedSeedUnavailable
+    } failure{ Failure::None };
+};
+
+struct TerminalSummary
+{
+    std::size_t suspicious_cluster_count{ 0 };
+    std::size_t suspicious_atom_count{ 0 };
+    std::size_t joint_offset_failure_cluster_count{ 0 };
+    std::size_t joint_offset_failure_atom_count{ 0 };
+    std::map<JointOffsetSolveStatus, std::size_t>
+        joint_offset_failure_status_count{};
+
+    std::size_t AtomCount() const
+    {
+        return suspicious_atom_count + joint_offset_failure_atom_count;
+    }
+
+    bool HasFailures() const
+    {
+        return AtomCount() > 0;
+    }
+};
+
+static std::vector<ClusterKey> AccumulateTerminalFailureSummary(
+    const TerminalPersistentFailureMap & terminal_failure_by_key,
+    TerminalSummary & terminal_summary);
+
+static void ApplyTerminalFallbackClusters(
+    const std::vector<ClusterKey> & terminal_key_list,
+    const FitState & previous_state,
+    const PolishProvenance & previous_polish_provenance,
+    std::vector<char> & terminal_atom_mask,
+    FitState & assembled_state,
+    PolishProvenance & assembled_polish_provenance);
+
+struct TerminalFailureState
+{
+    PersistentTerminalFailureStateMap persistent_state_by_key{};
+    std::vector<char> terminal_atom_mask{};
+    TerminalSummary terminal_summary{};
+    TerminalFailureState() = default;
+
+    explicit TerminalFailureState(std::size_t atom_count)
+        : terminal_atom_mask(atom_count, 0)
+    {
+    }
+
+    bool HasFailures() const { return terminal_summary.HasFailures(); }
+    std::size_t AtomCount() const { return terminal_summary.AtomCount(); }
+
+    std::vector<std::size_t> BuildEligibleActiveIndexList() const;
+
+    bool IsolatePersistentFailures(
+        const std::vector<ClusterKey> & accepted_key_list,
+        SuspiciousUpdateMask & suspicious_atom_mask,
+        const ClusterHealthMap & health_by_key,
+        FitState & assembled_state,
+        const FitState & previous_state,
+        const PolishProvenance & previous_polish_provenance,
+        PolishProvenance & assembled_polish_provenance);
+};
+
+constexpr std::size_t kMaximumIterations{ 100 };
+constexpr std::size_t kAuditPatience{ 3 };
+
+struct IterationDiagnostics
+{
+    std::vector<ClusterCandidateDiagnostic>
+        accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic>
+        rejected_cluster_diagnostic_list{};
+    std::size_t combined_backtracking_trial_count{ 0 };
+    std::optional<double> combined_backtracking_factor{};
+    bool combined_backtracking_exhausted{ false };
+    TrustRegionIterationUpdate trust_region_update{};
+};
+
+struct IterationState
+{
+    FitState previous_state{};
+    PolishProvenance previous_polish_provenance{};
+    SuspiciousUpdateMask rollback_atom_mask{};
+    std::vector<std::size_t> active_index_list{};
+    CouplingGraphPartition graph_partition{};
+    ClusterSolverWorkspaceMap solver_workspace_by_key{};
+    ObjectiveDomain objective_domain{};
+    BestAuditState best_audit_state{};
+    TerminalFailureState terminal_failure_state{};
+    ClusterObjectiveStateMap cluster_objective_state{};
+    TrustRegionStateSet trust_region_state{};
+    std::vector<ClusterKey> unchanged_state_exhausted_key_list{};
+    std::size_t accepted_iteration_count{ 0 };
+    std::size_t audit_patience_count{ 0 };
+};
+
+struct IterationProgress
+{
+    std::size_t attempt_number{ 0 };
+    std::size_t accepted_iteration_count{ 0 };
+    std::size_t active_atom_count{ 0 };
+    std::size_t terminal_atom_count{ 0 };
+    std::size_t accepted_cluster_count{ 0 };
+    std::size_t rejected_cluster_count{ 0 };
+    PolishProgress polish_progress{};
+    std::size_t suspicious_atom_count{ 0 };
+    std::optional<double> accepted_maximum_transformed_change{};
+    double raw_maximum_transformed_change{ 0.0 };
+};
+
+using ProgressColumnWidths = std::array<std::size_t, 6>;
+
+struct IterationResult
+{
+    IterationDiagnostics diagnostics{};
+    IterationProgress progress{};
+    std::optional<AllRejectedResolution> all_rejected_resolution{};
+    bool objective_domain_changed{ false };
+    bool converged{ false };
+    bool audit_patience_exhausted{ false };
+    algorithm::ParameterChangeStats transformed_change_stats{};
+};
+
+struct RawIterationResult
+{
+    FitState state{};
+    SuspiciousUpdateMask rollback_atom_mask{};
+    ClusterHealthMap health_by_key{};
+};
+
+struct LocalAtomRefitResult
+{
+    LocalGaussianResult result{};
+    bool is_stationarity_eligible{ false };
+};
 
 std::vector<std::size_t> TerminalFailureState::BuildEligibleActiveIndexList()
     const
@@ -85,7 +255,8 @@ bool TerminalFailureState::IsolatePersistentFailures(
     return !terminal_key_list.empty();
 }
 
-std::optional<SecondStageSeedSelection> SelectValidSecondStageSeedCandidate(
+static std::optional<SecondStageSeedSelection>
+SelectValidSecondStageSeedCandidate(
     SecondStageSeedSource source,
     const std::optional<GaussianModel3DWithUncertainty> & candidate)
 {
@@ -124,7 +295,7 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageS
         candidates.global_median);
 }
 
-SecondStageContext BuildSecondStageContext(
+static SecondStageContext BuildSecondStageContext(
     const ModelObject & model_object,
     const FitOptions & options)
 {
@@ -251,7 +422,7 @@ SecondStageContext BuildSecondStageContext(
     return context;
 }
 
-void StoreSecondStageNeighborCounts(
+static void StoreSecondStageNeighborCounts(
     ModelObject & model_object,
     const SecondStageContext & context)
 {
@@ -264,7 +435,8 @@ void StoreSecondStageNeighborCounts(
     }
 }
 
-std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
+static std::optional<GaussianModel3DWithUncertainty>
+BuildValidGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list)
 {
     const auto median_model{ BuildGaussianParameterMedian(model_list) };
@@ -275,7 +447,8 @@ std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
     };
 }
 
-SecondStageInitialStateBuildResult BuildInitialFitState(SecondStageContext & context)
+static SecondStageInitialStateBuildResult BuildInitialFitState(
+    SecondStageContext & context)
 {
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
@@ -381,7 +554,8 @@ SecondStageInitialStateBuildResult BuildInitialFitState(SecondStageContext & con
     return build_result;
 }
 
-const char * GetSecondStageSeedSourceText(SecondStageSeedSource source)
+static const char * GetSecondStageSeedSourceText(
+    SecondStageSeedSource source)
 {
     switch (source)
     {
@@ -397,7 +571,7 @@ const char * GetSecondStageSeedSourceText(SecondStageSeedSource source)
     throw std::logic_error("Unknown second-stage seed source.");
 }
 
-void LogSecondStageSeedSelections(
+static void LogSecondStageSeedSelections(
     const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
     bool quiet_mode)
 {
@@ -447,7 +621,7 @@ void LogSecondStageSeedSelections(
     }
 }
 
-void LogUnselectedSecondStageSeedSelections(
+static void LogUnselectedSecondStageSeedSelections(
     const std::vector<UnselectedSecondStageSeedSelectionRecord> & selection_record_list,
     bool quiet_mode)
 {
@@ -489,7 +663,9 @@ void LogUnselectedSecondStageSeedSelections(
     }
 }
 
-void AppendTerminalSummary(std::ostream & stream, const TerminalSummary & summary)
+static void AppendTerminalSummary(
+    std::ostream & stream,
+    const TerminalSummary & summary)
 {
     if (summary.suspicious_atom_count > 0)
     {
@@ -516,7 +692,7 @@ void AppendTerminalSummary(std::ostream & stream, const TerminalSummary & summar
     }
 }
 
-std::vector<ClusterKey> AccumulateTerminalFailureSummary(
+static std::vector<ClusterKey> AccumulateTerminalFailureSummary(
     const TerminalPersistentFailureMap & terminal_failure_by_key,
     TerminalSummary & terminal_summary)
 {
@@ -598,7 +774,7 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     return terminal_failure_by_key;
 }
 
-void ApplyTerminalFallbackClusters(
+static void ApplyTerminalFallbackClusters(
     const std::vector<ClusterKey> & terminal_key_list,
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
@@ -617,7 +793,7 @@ void ApplyTerminalFallbackClusters(
     }
 }
 
-void AppendObjectiveBreakdown(
+static void AppendObjectiveBreakdown(
     std::ostringstream & stream,
     const std::optional<ObjectiveBreakdown> & breakdown)
 {
@@ -633,7 +809,8 @@ void AppendObjectiveBreakdown(
         << breakdown->GetTotalObjective();
 }
 
-std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReason reason)
+static std::string_view GetPreObjectiveFailureReasonText(
+    PreObjectiveFailureReason reason)
 {
     switch (reason)
     {
@@ -649,7 +826,7 @@ std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReason reas
     return "unknown";
 }
 
-void LogRejectedClusterDiagnostics(
+static void LogRejectedClusterDiagnostics(
     bool quiet_mode,
     const std::vector<ClusterCandidateDiagnostic> & diagnostic_list)
 {
@@ -777,7 +954,8 @@ void LogRejectedClusterDiagnostics(
     }
 }
 
-std::string_view GetAllRejectedResolutionText(AllRejectedResolution resolution)
+static std::string_view GetAllRejectedResolutionText(
+    AllRejectedResolution resolution)
 {
     switch (resolution)
     {
@@ -795,7 +973,7 @@ std::string_view GetAllRejectedResolutionText(AllRejectedResolution resolution)
     return "all-rejected-no-retry-progress";
 }
 
-void LogAllRejectedResolution(
+static void LogAllRejectedResolution(
     bool quiet_mode,
     const TrustRegionIterationUpdate & trust_region_update,
     AllRejectedResolution resolution)
@@ -818,7 +996,7 @@ void LogAllRejectedResolution(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
-void LogAcceptedBacktrackingDiagnostics(
+static void LogAcceptedBacktrackingDiagnostics(
     bool quiet_mode,
     const IterationDiagnostics & diagnostics)
 {
@@ -895,7 +1073,7 @@ void LogAcceptedBacktrackingDiagnostics(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
-std::string FormatProgressMaximum(double value)
+static std::string FormatProgressMaximum(double value)
 {
     std::ostringstream stream;
     stream << std::scientific << std::setprecision(2) << value;
@@ -932,7 +1110,8 @@ std::string FormatProgressRow(
 
 } // namespace
 
-ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
+static ProgressColumnWidths BuildProgressColumnWidths(
+    std::size_t atom_size)
 {
     const auto maximum_iteration_text{ std::to_string(kMaximumIterations) };
     const auto maximum_atom_text{ std::to_string(atom_size) };
@@ -959,13 +1138,15 @@ ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
     return column_widths;
 }
 
-void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths)
+static void LogProgressHeader(
+    bool quiet_mode,
+    const ProgressColumnWidths & column_widths)
 {
     if (quiet_mode) return;
     Logger::Log(LogLevel::Info, FormatProgressRow(column_widths, kProgressHeaderList));
 }
 
-void LogIterationProgress(
+static void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
     const IterationProgress & progress)
@@ -992,7 +1173,7 @@ void LogIterationProgress(
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
 
-std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
+static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const AtomContext & atom_context,
     const LocalGaussianResult & previous_result,
     const GaussianModel3D & offset_model,
@@ -1061,7 +1242,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     return LocalAtomRefitResult{ std::move(result), false };
 }
 
-RawIterationResult RunRawIteration(
+static RawIterationResult RunRawIteration(
     const SecondStageContext & context,
     const std::vector<ClusterKey> & cluster_key_list,
     const FitState & previous_state,
@@ -1301,7 +1482,7 @@ RawIterationResult RunRawIteration(
     };
 }
 
-IterationState BuildIterationState(
+static IterationState BuildIterationState(
     const SecondStageContext & context,
     const GraphTopology & graph_topology,
     FitState initial_state,
@@ -1344,7 +1525,7 @@ IterationState BuildIterationState(
     return iteration_state;
 }
 
-IterationResult RunIteration(
+static IterationResult RunIteration(
     const SecondStageContext & context,
     const GraphTopology & graph_topology,
     const FitOptions & options,
@@ -1871,7 +2052,7 @@ void LogSecondStageSummary(
 
 } // namespace
 
-bool RunSecondStageIterationProcess(ModelObject & model_object, const FitOptions & options)
+static bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
     auto context{ BuildSecondStageContext(model_object, options) };
     StoreSecondStageNeighborCounts(model_object, context);
@@ -2062,3 +2243,17 @@ bool RunSecondStageIterationProcess(ModelObject & model_object, const FitOptions
 }
 
 } // namespace rhbm_gem::core::detail
+
+namespace rhbm_gem::core {
+
+bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+{
+    const auto fitted{ detail::RunSecondStageIterations(model_object, options) };
+    if (fitted)
+    {
+        RunGroupPotentialFitting(model_object, options, FittingStage::Second);
+    }
+    return fitted;
+}
+
+} // namespace rhbm_gem::core

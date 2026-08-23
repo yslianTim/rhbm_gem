@@ -22,28 +22,9 @@ struct JointFittingConditioning
     double pivot_ratio{ 0.0 };
 };
 
-struct JointFittingGroupLayout
-{
-    std::vector<std::size_t> group_position_by_atom{};
-    std::size_t group_count{ 0 };
-};
-
-std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    std::size_t atom_count);
-
-std::optional<double> CalculateJointFittingGroupMedian(
-    std::vector<double> & value_list);
-
 JointFittingConditioning EvaluateJointFittingConditioning(
     const Eigen::SparseMatrix<double> & design_matrix,
     double pivot_ratio_threshold);
-
-double CalculateJointFittingRidgeDiagonal(
-    double column_square_sum,
-    double ridge_ratio,
-    double multiplier);
-
 
 enum class JointOffsetSolveStatus
 {
@@ -121,17 +102,6 @@ bool AreClustersStationarityEligible(const ClusterHealthMap & health_by_key);
 bool IsLocalRefitStatusStationarityEligible(RHBMEstimationStatus status);
 
 
-constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kJointOffsetRobustLossCutoffMultiplier{ 1.345 };
-constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
-constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
-constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
-constexpr double kJointOffsetConditioningRidgeMultiplier{ 10.0 };
-constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
-constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
-constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
-constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-
 struct JointOffsetParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
@@ -155,21 +125,6 @@ struct JointOffsetSolveResult
     Eigen::VectorXd offset{};
 };
 
-algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
-    const SecondStageContext & context,
-    const std::vector<std::size_t> & active_index_list,
-    const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<double> & ridge_multiplier_list,
-    const JointOffsetParameterization & parameterization,
-    bool log_debug_diagnostics);
-
-double CalculateWeightedRidgeSurrogateObjective(
-    const algorithm::WeightedRidgeSystem & system,
-    const Eigen::VectorXd & weight,
-    const Eigen::VectorXd & offset);
-
-bool IsJointOffsetObjectiveDeteriorated(double updated_objective, double current_objective);
-
 JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,
@@ -180,12 +135,6 @@ JointOffsetSolveResult EstimateJointOffsets(
 
 
 constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
-constexpr double kJointPolishResidualScaleMin{ 1.0e-12 };
-constexpr double kJointPolishRobustLossCutoffMultiplier{ 1.345 };
-constexpr double kJointPolishRidgeRatio{ 1.0e-3 };
-constexpr double kJointPolishConditioningRidgeMultiplier{ 10.0 };
-constexpr double kJointPolishConditioningPivotRatioThreshold{ 1.0e-8 };
-constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
 struct JointPolishParameterization
 {

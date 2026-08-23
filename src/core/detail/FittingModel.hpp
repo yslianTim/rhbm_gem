@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -11,12 +10,12 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
-#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+
+namespace rhbm_gem {
+class AtomObject;
+}
 
 namespace rhbm_gem::core::detail {
 
@@ -57,10 +56,6 @@ struct SharedOffsetResponse
     double offset_jacobian{ 0.0 };
 };
 
-std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(
-    const GaussianModel3D & model,
-    double distance);
-
 std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
     const GaussianModel3D & model,
     double distance);
@@ -92,19 +87,9 @@ struct LocalGaussianDesignTemplate
 
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options);
 
-float CalculateAdjustedResponse(
-    double sample_response,
-    double distance,
-    const GaussianModel3D & offset_model);
-
 LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model);
-
-LocalGaussianResult DecodeLocalGaussianResult(
-    double alpha_r,
-    const RHBMBetaEstimateResult & fit_result,
-    double offset);
 
 LocalGaussianDesignTemplate BuildLocalGaussianDesignTemplate(
     const LocalPotentialSampleList & sample_entries,
@@ -119,12 +104,6 @@ RHBMMemberDataset BuildLocalGaussianPreparedDataset(
 LocalGaussianResult EstimateLocalGaussianPrepared(
     const LocalGaussianDesignTemplate & design_template,
     const std::vector<double> & sample_response_list,
-    double alpha_r,
-    const FitOptions & options,
-    const GaussianModel3D & offset_model);
-
-LocalGaussianResult EstimateLocalGaussianFromSamples(
-    const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const FitOptions & options,
     const GaussianModel3D & offset_model);
@@ -290,10 +269,6 @@ const GaussianModel3D & ResolveNeighborAtomModel(
     const NeighborAtomSample & neighbor_atom_sample,
     const SecondStageModelSnapshot & model_snapshot);
 
-FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
-    const SecondStageContext & context,
-    const FittedGaussianSnapshot & selected_snapshot);
-
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     FittedGaussianSnapshot selected_snapshot);
@@ -323,11 +298,6 @@ struct ResidualBaseline
         return model_snapshot.selected;
     }
 };
-
-double CalculateSecondStageAdjustedResponse(
-    const AtomContext & atom_context,
-    std::size_t sample_index,
-    const SecondStageModelSnapshot & model_snapshot);
 
 SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
     const SecondStageContext & context,
@@ -367,17 +337,13 @@ struct SnapshotResidualEvaluator
 ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state);
 
 
-constexpr double kTransformedChangePercentile{ 0.99 };
 constexpr double kTransformedChangeTolerance{ 1.0e-4 };
-constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
 
 struct TransformedChangeSummary
 {
     algorithm::ParameterChangeStats percentile_stats{};
     std::vector<double> maximum_list{};
 };
-
-algorithm::ParameterChange MakeInfiniteTransformedChange();
 
 algorithm::ParameterChange CalculateTransformedChange(
     const GaussianModel3D & current,
@@ -414,10 +380,6 @@ bool IsTransformedChangeConverged(const TransformedChangeSummary & summary);
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 
 
-constexpr std::array<double, kTransformedChangeSize> kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
-constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
-constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
-
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
 
 bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius);
@@ -427,10 +389,6 @@ struct TrustRegionDamping
     double effective_damping{ 1.0 };
     double step_norm{ 0.0 };
 };
-
-double CalculateScaledTransformedStepNorm(
-    const Eigen::Vector3d & previous_estimation,
-    const Eigen::Vector3d & candidate_estimation);
 
 TrustRegionDamping LimitTrustRegionDamping(
     const std::vector<Eigen::Vector3d> & previous_estimation_list,

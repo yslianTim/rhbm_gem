@@ -17,6 +17,28 @@
 
 namespace rhbm_gem::core::detail {
 
+namespace {
+
+constexpr int kRobustLossMaximumIterations{ 50 };
+constexpr double kJointOffsetRobustLossCutoffMultiplier{ 1.345 };
+constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
+constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
+constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
+constexpr double kJointOffsetConditioningRidgeMultiplier{ 10.0 };
+constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
+constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
+constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
+constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
+
+constexpr double kJointPolishResidualScaleMin{ 1.0e-12 };
+constexpr double kJointPolishRobustLossCutoffMultiplier{ 1.345 };
+constexpr double kJointPolishRidgeRatio{ 1.0e-3 };
+constexpr double kJointPolishConditioningRidgeMultiplier{ 10.0 };
+constexpr double kJointPolishConditioningPivotRatioThreshold{ 1.0e-8 };
+constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
+
+} // namespace
+
 bool ReusableWeightedRidgeSolver::Solve(
     const algorithm::WeightedRidgeSystem & system,
     const Eigen::VectorXd & weight,
@@ -126,6 +148,14 @@ JointPolishParameterization::DecodeSeedModels() const
     return DecodeParameter(seed_parameter);
 }
 
+namespace {
+
+struct JointFittingGroupLayout
+{
+    std::vector<std::size_t> group_position_by_atom{};
+    std::size_t group_count{ 0 };
+};
+
 std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
     const std::vector<std::size_t> & group_id_by_atom_position,
     std::size_t atom_count)
@@ -173,6 +203,8 @@ std::optional<double> CalculateJointFittingGroupMedian(
     return std::isfinite(median) ?
         std::optional<double>{ median } : std::nullopt;
 }
+
+} // namespace
 
 JointFittingConditioning EvaluateJointFittingConditioning(
     const Eigen::SparseMatrix<double> & design_matrix,
@@ -242,7 +274,7 @@ JointFittingConditioning EvaluateJointFittingConditioning(
     };
 }
 
-double CalculateJointFittingRidgeDiagonal(
+static double CalculateJointFittingRidgeDiagonal(
     double column_square_sum,
     double ridge_ratio,
     double multiplier)
@@ -367,7 +399,7 @@ std::optional<JointOffsetParameterization> BuildJointOffsetParameterization(
     return parameterization;
 }
 
-algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
+static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
@@ -606,7 +638,7 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     return system;
 }
 
-double CalculateWeightedRidgeSurrogateObjective(
+static double CalculateWeightedRidgeSurrogateObjective(
     const algorithm::WeightedRidgeSystem & system,
     const Eigen::VectorXd & weight,
     const Eigen::VectorXd & offset)
@@ -629,7 +661,9 @@ double CalculateWeightedRidgeSurrogateObjective(
     return std::isfinite(objective) ? objective : std::numeric_limits<double>::infinity();
 }
 
-bool IsJointOffsetObjectiveDeteriorated(double updated_objective, double current_objective)
+static bool IsJointOffsetObjectiveDeteriorated(
+    double updated_objective,
+    double current_objective)
 {
     if (!std::isfinite(updated_objective)) return true;
     if (!std::isfinite(current_objective)) return false;

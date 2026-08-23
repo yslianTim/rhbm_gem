@@ -4,16 +4,47 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem::core::detail {
+
+namespace {
+
+class DisjointSet
+{
+    std::vector<std::size_t> m_parent_list{};
+    std::vector<std::size_t> m_component_size_list{};
+
+public:
+    explicit DisjointSet(std::size_t item_count);
+
+    std::size_t Find(std::size_t index);
+
+    void Merge(std::size_t left, std::size_t right);
+
+    std::size_t ComponentSize(std::size_t index);
+};
+
+struct DisjointSetComponentSummary
+{
+    std::size_t component_count{ 0 };
+    std::size_t maximum_component_size{ 0 };
+};
+
+DisjointSetComponentSummary SummarizeDisjointSetComponents(
+    DisjointSet & component_set,
+    std::size_t item_count);
+
+void UpdateGraphComponentSummary(GraphTopology & topology);
 
 DisjointSet::DisjointSet(std::size_t item_count)
     : m_parent_list(item_count),
@@ -45,6 +76,8 @@ std::size_t DisjointSet::ComponentSize(std::size_t index)
 {
     return m_component_size_list.at(Find(index));
 }
+
+} // namespace
 
 void CouplingGraphBuilder::NormalizeParticipantList(
     std::vector<GraphParticipant> & participant_list)
@@ -358,6 +391,8 @@ GraphTopology CouplingGraphBuilder::BuildTopology(
         options.maximum_residue_count);
 }
 
+namespace {
+
 DisjointSetComponentSummary SummarizeDisjointSetComponents(
     DisjointSet & component_set,
     std::size_t item_count)
@@ -384,6 +419,8 @@ Eigen::Vector3d EvaluateCouplingGraphJacobian(
     if (!invariants.has_value()) return invalid_jacobian;
     return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
 }
+
+} // namespace
 
 GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
@@ -688,6 +725,8 @@ GraphTopology ApplyGraphResidueCutoff(
     return topology;
 }
 
+namespace {
+
 void UpdateGraphComponentSummary(GraphTopology & topology)
 {
     const auto atom_count{ topology.adjacency_list.size() };
@@ -734,6 +773,8 @@ void UpdateGraphComponentSummary(GraphTopology & topology)
     topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
         static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
 }
+
+} // namespace
 
 CouplingGraphPartition BuildGraphPartition(
     const GraphTopology & topology,

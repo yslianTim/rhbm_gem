@@ -10,11 +10,8 @@
 #include <map>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <utility>
 #include <vector>
-
-#include <Eigen/Dense>
 
 namespace rhbm_gem::core::detail {
 
@@ -70,16 +67,10 @@ class TrustRegionStateSet
 
 public:
     explicit TrustRegionStateSet(TrustRegionOptions options = {});
-
     void Reconcile(const std::vector<ClusterKey> & key_list);
-
     double GetRadius(const ClusterKey & key) const;
-
-    TrustRegionRadiusUpdate Shrink(
-        const std::vector<ClusterKey> & key_list);
-
+    TrustRegionRadiusUpdate Shrink(const std::vector<ClusterKey> & key_list);
     void Grow(const std::vector<ClusterKey> & key_list);
-
     TrustRegionIterationUpdate UpdateAfterIteration(
         const std::vector<ClusterKey> & grow_key_list,
         const std::vector<ClusterKey> & rejected_key_list,
@@ -102,13 +93,7 @@ enum class SuspiciousGaussianReason
 
 using SuspiciousUpdateMask = std::vector<char>;
 
-constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
-
 std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask);
-
-bool HasSuspiciousAtom(
-    const std::vector<std::size_t> & atom_index_list,
-    const SuspiciousUpdateMask & suspicious_mask);
 
 std::vector<std::size_t> CollectSuspiciousAtomIndices(
     const std::vector<std::size_t> & atom_index_list,
@@ -119,19 +104,6 @@ std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(const Suspicio
 void ClearSuspiciousUpdateMaskForClusters(
     const std::vector<std::vector<std::size_t>> & cluster_key_list,
     SuspiciousUpdateMask & suspicious_mask);
-
-constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
-constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
-constexpr double kSuspiciousProfileScaleMin{ 1.0e-12 };
-constexpr std::size_t kSuspiciousProfileMinimumRadiusCount{ 3 };
-constexpr double kSuspiciousProfileDistanceTolerance{ 1.0e-6 };
-constexpr double kSuspiciousProfileReboundCenterRatio{ 1.5 };
-constexpr double kSuspiciousProfileReboundReferenceRatio{ 0.25 };
-constexpr double kSuspiciousProfileUpwardExcursionReferenceRatio{ 0.20 };
-constexpr int kSuspiciousProfileMaximumUpwardExcursions{ 1 };
-constexpr double kSuspiciousWidthGrowthLimit{ 1.5 };
-constexpr double kSuspiciousWidthRangeLimitRatio{ 1.5 };
-constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 
 struct ZeroOffsetProfileDiagnostics
 {
@@ -148,12 +120,6 @@ struct SuspiciousProfileAnalysis
     std::optional<ZeroOffsetProfileDiagnostics> profile{};
 };
 
-enum class SuspiciousProfileAnalysisMode
-{
-    Candidate,
-    PreviousBaseline
-};
-
 struct SuspiciousUpdateBaseline
 {
     GaussianModel3D previous_model{};
@@ -165,46 +131,6 @@ enum class SuspiciousUpdateMode
     OffsetOnly,
     PostRefit
 };
-
-bool HasSuspiciousCenterSignFlip(
-    double previous_innermost_response,
-    double candidate_innermost_response,
-    double previous_residual_scale);
-
-double CalculateZeroOffsetResponse(
-    const LocalPotentialSample & sample,
-    const GaussianModel3D & model);
-
-bool IsSameSuspiciousProfileRadius(double lhs, double rhs);
-
-SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & model,
-    const FitOptions & options,
-    SuspiciousProfileAnalysisMode mode);
-
-bool HasUsableSuspiciousProfileBaseline(
-    const GaussianModel3D & previous_model,
-    const ZeroOffsetProfileDiagnostics & previous_profile);
-
-bool HasSuspiciousOffsetMagnitude(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    double previous_profile_max_abs_response);
-
-bool HasSuspiciousRadialRebound(
-    const ZeroOffsetProfileDiagnostics & previous_profile,
-    const ZeroOffsetProfileDiagnostics & candidate_profile);
-
-bool HasSuspiciousWidthGrowth(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile);
-
-bool HasSuspiciousAmplitudeOffsetCompensation(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile);
 
 SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
     const LocalPotentialSampleList & sample_entries,
@@ -227,7 +153,6 @@ SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
 SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
     const std::vector<std::size_t> & group_id_by_position,
     const SuspiciousUpdateMask & suspicious_seed_mask);
-
 
 class PerformanceCounters
 {
@@ -253,47 +178,22 @@ public:
     ~PerformanceCounters();
 
     void RecordFullStateMaterialization();
-
     void RecordGaussianCacheMisses();
-
     void RecordGaussianCacheHits();
-
-    void RecordObjectiveSampleEvaluation(
-        std::size_t recomputed_sample_count,
-        std::size_t total_sample_count);
-
-    [[nodiscard]] std::chrono::steady_clock::time_point
-    StartIterationPhase() const;
-
-    void FinishIterationPhase(
-        std::chrono::steady_clock::time_point start_time);
-
-    [[nodiscard]] std::chrono::steady_clock::time_point
-    StartCandidatePhase() const;
-
-    void FinishCandidatePhase(
-        std::chrono::steady_clock::time_point start_time);
-
+    void RecordObjectiveSampleEvaluation(std::size_t recomputed_sample_count, std::size_t total_sample_count);
+    [[nodiscard]] std::chrono::steady_clock::time_point StartIterationPhase() const;
+    void FinishIterationPhase(std::chrono::steady_clock::time_point start_time);
+    [[nodiscard]] std::chrono::steady_clock::time_point StartCandidatePhase() const;
+    void FinishCandidatePhase(std::chrono::steady_clock::time_point start_time);
     void RecordSolverWorkspaceReset();
 
 private:
-    static double CalculateElapsedMilliseconds(
-        std::chrono::steady_clock::time_point start_time);
-
-    static std::size_t CountRawSamplingEntries(
-        const SecondStageContext & context);
-
+    static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
+    static std::size_t CountRawSamplingEntries(const SecondStageContext & context);
     std::size_t CountCurrentSolverSymbolicAnalyses() const;
 };
 
-
 constexpr double kTailValidationWeight{ 0.25 };
-constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
-constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
-constexpr double kFitRangeWeight{ 1.0 };
-constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
-constexpr double kOffsetPeakRatioMax{ 1.0 };
-constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
 
 struct ObjectiveBreakdown
 {
@@ -317,9 +217,6 @@ struct ObjectiveTolerance
     double absolute_tolerance{ 0.0 };
     double relative_tolerance{ 0.0 };
 };
-
-constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
-constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 
 struct AuditedState
 {
@@ -345,9 +242,7 @@ public:
         const ResidualBaseline & baseline,
         const FitStateView & candidate_state);
 
-    std::optional<ResidualSample> operator()(
-        const SampleRef & sample_ref) const;
-
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
     const FitStateView & GetState() const { return m_candidate_state; }
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
 };
@@ -389,12 +284,6 @@ struct ObjectiveAttemptDiagnostic
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
 
-void ValidateObjectiveTolerance(ObjectiveTolerance tolerance);
-
-double CalculateObjectiveTolerance(double reference, ObjectiveTolerance tolerance);
-
-bool IsObjectiveDeteriorated(double candidate, double reference, ObjectiveTolerance tolerance);
-
 std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
     double fit_range_residual_objective,
     double tail_validation_loss,
@@ -425,8 +314,6 @@ struct ObjectiveDomain
     std::size_t tail_sample_count{ 0 };
 };
 
-void AppendObjectiveScaleSummary(std::ostringstream & message, const std::vector<double> & scale_list);
-
 void LogObjectiveDomain(
     const ObjectiveDomain & domain,
     bool quiet_mode,
@@ -448,10 +335,6 @@ struct CombinedCandidateObjectiveCheck
     std::optional<ObjectiveBreakdown> candidate_objective{};
 };
 
-std::optional<double> BuildFixedObjectiveScale(
-    const std::vector<double> & residual_list,
-    const std::vector<double> & adjusted_response_list);
-
 ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot,
@@ -468,13 +351,6 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const SnapshotResidualEvaluator & evaluator);
 
-std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const std::vector<SampleRef> & affected_sample_ref_list,
-    const ObjectiveDomain & domain,
-    const ObjectiveBreakdown & baseline,
-    PerformanceCounters & performance_counters);
-
 ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
@@ -484,14 +360,6 @@ ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
     const SnapshotResidualEvaluator & evaluator);
-
-std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const std::vector<SampleRef> & affected_sample_ref_list,
-    const ObjectiveDomain & domain,
-    const ObjectiveBreakdown * best_objective,
-    const ObjectiveBreakdown * previous_objective,
-    PerformanceCounters & performance_counters);
 
 CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     const SecondStageContext & context,
@@ -515,18 +383,6 @@ void ReconcileClusterObjectiveState(
     const ObjectiveByKey & previous_objective_by_key,
     ClusterObjectiveStateMap & state_by_key);
 
-bool TryCommitClusterCandidate(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & objective_sample_ref_list,
-    const ObjectiveBreakdown * previous_objective,
-    bool requires_strict_improvement,
-    const ObjectiveDomain & domain,
-    ClusterObjectiveState & objective_state,
-    ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters & performance_counters);
-
-
 enum class BacktrackingStepStatus
 {
     CandidateReady,
@@ -543,7 +399,7 @@ struct BacktrackingStep
 
 class BacktrackingWorkspace
 {
-    const FitState & m_previous_state;
+    std::size_t m_previous_state_size{ 0 };
     double m_minimum_transformed_change{ 0.0 };
     double m_next_factor{ 0.5 };
     std::size_t m_trial_number{ 1 };
@@ -557,22 +413,12 @@ public:
     BacktrackingWorkspace(
         const SecondStageContext & context,
         const FitState & previous_state,
-        const FitState & endpoint_state,
-        const std::vector<std::size_t> & active_index_list,
-        double minimum_transformed_change);
-
-    BacktrackingWorkspace(
-        const SecondStageContext & context,
-        const FitState & previous_state,
-        const FitStateView & endpoint_state,
-        const std::vector<std::size_t> & active_index_list,
+        const FitStatePatch & endpoint_patch,
         double minimum_transformed_change);
 
     BacktrackingWorkspace(const BacktrackingWorkspace &) = delete;
     BacktrackingWorkspace & operator=(const BacktrackingWorkspace &) = delete;
-
     BacktrackingStep BuildNextCandidate();
-
     FitStatePatch TakeCandidatePatch() { return std::move(m_candidate_patch); }
     const FitStatePatch & GetCandidatePatch() const { return m_candidate_patch; }
 
@@ -586,13 +432,10 @@ public:
 
 private:
     bool BuildCandidate(double factor);
-
     bool HasMaterialChange(std::size_t atom_position) const;
-
     double GetMaximumTransformedChange() const;
 
 };
-
 
 struct ClusterCandidateDiagnostic
 {
@@ -646,50 +489,10 @@ struct CandidateSelectionInputs
     PerformanceCounters & performance_counters;
 };
 
-struct BaseProposalBuildResult
-{
-    std::optional<FitStateProposal> proposal{};
-    PreObjectiveFailureReason failure_reason{ PreObjectiveFailureReason::None };
-    std::optional<double> attempted_step_norm{};
-};
-
-BaseProposalBuildResult BuildSharedOffsetBaseProposal(
-    const SecondStageContext & context,
-    const FitState & outer_previous_state,
-    const FitState & raw_state,
-    const ClusterKey & key,
-    double trust_region_radius);
-
-struct ClusterCandidateResult
-{
-    std::optional<FitStatePatch> accepted_patch{};
-    std::vector<char> polish_provenance{};
-    ClusterObjectiveState objective_state{};
-    ObjectiveAttemptDiagnostic diagnostic{};
-    PolishProgress polish_progress{};
-    bool grow_trust_region{ false };
-};
-
 void RejectCombinedCandidate(
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     CandidateSelection & selection);
-
-std::optional<FitStatePatch> BuildDampedCandidatePatch(
-    const FitState & previous_state,
-    const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
-    const std::vector<Eigen::Vector3d> & endpoint_transformed_estimation_list,
-    const FitState & uncertainty_state,
-    const std::vector<std::size_t> & active_index_list,
-    double damping);
-
-bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic);
-
-ClusterCandidateResult SelectClusterCandidate(
-    const CandidateSelectionInputs & inputs,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & objective_sample_ref_list,
-    ClusterSolverWorkspace & solver_workspace);
 
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs);
 

@@ -3667,11 +3667,15 @@ TEST(EstimatorSecondStageDefenseTest,
             };
     }
 
+    const auto endpoint_patch{
+        backtracking_detail::FitStatePatch::FromState(
+            endpoint_state,
+            std::vector<std::size_t>{ 1, 0 })
+    };
     backtracking_detail::BacktrackingWorkspace workspace{
         context,
         previous_state,
-        endpoint_state,
-        std::vector<std::size_t>{ 1, 0 },
+        endpoint_patch,
         1.0e-4
     };
     const auto step{ workspace.BuildNextCandidate() };
@@ -3710,38 +3714,6 @@ TEST(EstimatorSecondStageDefenseTest,
             std::vector<char>{ 1, 0 })
     };
     EXPECT_EQ(merged_provenance, (std::vector<char>{ 1, 0 }));
-
-    backtracking_detail::FitStatePatch endpoint_patch;
-    endpoint_patch.atom_index_list = { 0, 1 };
-    endpoint_patch.mdpde_list = {
-        endpoint_state.at(0).mdpde,
-        endpoint_state.at(1).mdpde
-    };
-    const backtracking_detail::FitStateView endpoint_view{
-        previous_state,
-        endpoint_patch
-    };
-    backtracking_detail::BacktrackingWorkspace view_workspace{
-        context,
-        previous_state,
-        endpoint_view,
-        std::vector<std::size_t>{ 0, 1 },
-        1.0e-4
-    };
-    const auto view_step{ view_workspace.BuildNextCandidate() };
-    ASSERT_EQ(
-        view_step.status,
-        backtracking_detail::BacktrackingStepStatus::CandidateReady);
-    const auto & view_candidate_patch{ view_workspace.GetCandidatePatch() };
-    for (std::size_t atom_index = 0;
-        atom_index < previous_model_list.size();
-        atom_index++)
-    {
-        ExpectGaussianModelsNear(
-            candidate_patch.mdpde_list.at(atom_index).GetModel(),
-            view_candidate_patch.mdpde_list.at(atom_index).GetModel(),
-            1.0e-12);
-    }
 }
 
 TEST(EstimatorSecondStageDefenseTest,
@@ -3760,11 +3732,15 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
     };
+    const auto invalid_endpoint_patch{
+        backtracking_detail::FitStatePatch::FromState(
+            endpoint_state,
+            std::vector<std::size_t>{ 0 })
+    };
     backtracking_detail::BacktrackingWorkspace invalid_workspace{
         context,
         previous_state,
-        endpoint_state,
-        std::vector<std::size_t>{ 0 },
+        invalid_endpoint_patch,
         1.0e-4
     };
     const auto invalid_step{ invalid_workspace.BuildNextCandidate() };
@@ -3777,11 +3753,15 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
     };
+    const auto endpoint_patch{
+        backtracking_detail::FitStatePatch::FromState(
+            endpoint_state,
+            std::vector<std::size_t>{ 0 })
+    };
     backtracking_detail::BacktrackingWorkspace change_exhausted_workspace{
         context,
         previous_state,
-        endpoint_state,
-        std::vector<std::size_t>{ 0 },
+        endpoint_patch,
         1.0e6
     };
     const auto change_exhausted_step{
@@ -3797,8 +3777,7 @@ TEST(EstimatorSecondStageDefenseTest,
     backtracking_detail::BacktrackingWorkspace factor_workspace{
         empty_context,
         empty_state,
-        empty_state,
-        std::vector<std::size_t>{},
+        backtracking_detail::FitStatePatch{},
         0.0
     };
     std::size_t ready_count{ 0 };

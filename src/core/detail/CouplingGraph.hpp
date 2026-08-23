@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <map>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -30,31 +29,6 @@ struct GraphSampleDependency
     SampleRef sample_id{};
     std::vector<std::size_t> contributor_atom_index_list{};
 };
-
-class DisjointSet
-{
-    std::vector<std::size_t> m_parent_list{};
-    std::vector<std::size_t> m_component_size_list{};
-
-public:
-    explicit DisjointSet(std::size_t item_count);
-
-    std::size_t Find(std::size_t index);
-
-    void Merge(std::size_t left, std::size_t right);
-
-    std::size_t ComponentSize(std::size_t index);
-};
-
-struct DisjointSetComponentSummary
-{
-    std::size_t component_count{ 0 };
-    std::size_t maximum_component_size{ 0 };
-};
-
-DisjointSetComponentSummary SummarizeDisjointSetComponents(
-    DisjointSet & component_set,
-    std::size_t item_count);
 
 struct CouplingGraphSummary
 {
@@ -115,9 +89,6 @@ struct CouplingGraphPartition
     std::size_t boundary_sample_count{ 0 };
 };
 
-GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count);
-void UpdateGraphComponentSummary(GraphTopology & topology);
-
 class CouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
@@ -128,11 +99,8 @@ class CouplingGraphBuilder
     std::vector<GraphSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
-    static void NormalizeParticipantList(
-        std::vector<GraphParticipant> & participant_list);
-
+    static void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list);
     static void ValidateBuildOptions(const CouplingGraphOptions & options);
-
     static double FrobeniusNorm(const Eigen::Matrix3d & matrix);
 
     std::vector<CouplingGraphSummary::ThresholdSensitivity> BuildThresholdSensitivity(
@@ -145,10 +113,7 @@ class CouplingGraphBuilder
 
 public:
     explicit CouplingGraphBuilder(std::size_t atom_count);
-
-    void AddSample(
-        SampleRef sample_id,
-        std::vector<GraphParticipant> & participant_list);
+    void AddSample(SampleRef sample_id, std::vector<GraphParticipant> & participant_list);
 
 private:
     GraphTopology BuildWeightedOrBinary(
@@ -163,10 +128,6 @@ public:
         const CouplingGraphOptions & options = {});
 };
 
-Eigen::Vector3d EvaluateCouplingGraphJacobian(
-    const std::optional<TransformedModelInvariants> & invariants,
-    double distance);
-
 GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
     const FitState & initial_state,
@@ -174,11 +135,7 @@ GraphTopology BuildSecondStageGraphTopology(
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);
 
-GraphTopology ApplyGraphResidueCutoff(
-    GraphTopology topology,
-    std::size_t maximum_residue_count);
-
-void UpdateGraphComponentSummary(GraphTopology & topology);
+GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count);
 
 CouplingGraphPartition BuildGraphPartition(
     const GraphTopology & topology,
