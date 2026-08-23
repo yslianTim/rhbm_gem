@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
-#include "core/detail/LocalGaussianPreparation.hpp"
+#include "core/detail/FittingModel.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>

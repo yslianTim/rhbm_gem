@@ -19,6 +19,11 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
     core/GaussianEstimator.cpp
+    core/detail/FittingModel.cpp
+    core/detail/CouplingGraph.cpp
+    core/detail/JointFitting.cpp
+    core/detail/CandidateSelection.cpp
+    core/detail/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp

@@ -15,22 +15,11 @@
 #include <variant>
 #include <vector>
 
-#include "core/detail/BacktrackingWorkspace.hpp"
+#include "core/detail/FittingModel.hpp"
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/TransformedGaussianModel.hpp"
-#include "core/detail/ClusterHealth.hpp"
-#include "core/detail/ClusterSolverWorkspace.hpp"
-#include "core/detail/JointFittingSolverPolicy.hpp"
-#include "core/detail/JointOffset.hpp"
-#include "core/detail/JointOffsetSolveStatus.hpp"
-#include "core/detail/JointPolish.hpp"
-#include "core/detail/Objective.hpp"
-#include "core/detail/ResidualEvaluation.hpp"
-#include "core/detail/SecondStageInitialization.hpp"
-#include "core/detail/SuspiciousUpdate.hpp"
-#include "core/detail/TerminalFailure.hpp"
-#include "core/detail/TrustRegion.hpp"
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/JointFitting.hpp"
+#include "core/detail/CandidateSelection.hpp"
+#include "core/detail/IterationProcess.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
