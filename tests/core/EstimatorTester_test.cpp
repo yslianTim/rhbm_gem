@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
+#include "core/detail/LocalGaussianPreparation.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
@@ -26,6 +27,7 @@
 
 namespace {
 namespace rt = rhbm_gem::core;
+namespace rt_detail = rhbm_gem::core::detail;
 namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
 using rg::FittingStage;
@@ -346,10 +348,10 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
             range_max)
     };
     const auto design_template{
-        rt::BuildLocalGaussianDesignTemplate(samples, range_min, range_max)
+        rt_detail::BuildLocalGaussianDesignTemplate(samples, range_min, range_max)
     };
     const auto prepared_dataset{
-        rt::BuildLocalGaussianPreparedDataset(
+        rt_detail::BuildLocalGaussianPreparedDataset(
             design_template,
             response_list,
             offset_model)
@@ -367,7 +369,7 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
             range_max)
     };
     const auto prepared_fallback{
-        rt::BuildLocalGaussianPreparedDataset(
+        rt_detail::BuildLocalGaussianPreparedDataset(
             design_template,
             response_list,
             offset_model)

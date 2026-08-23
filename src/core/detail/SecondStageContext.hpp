@@ -1,6 +1,5 @@
 #pragma once
 
-#include <compare>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -10,6 +9,8 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+
+#include "core/detail/LocalGaussianPreparation.hpp"
 
 namespace rhbm_gem::core::detail {
 

@@ -22,6 +22,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/FitStateView.hpp"
+#include "core/detail/LocalGaussianPreparation.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "data/detail/AtomClassifier.hpp"

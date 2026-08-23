@@ -6,6 +6,7 @@
 #include "core/detail/Objective.hpp"
 #include "core/detail/TerminalFailure.hpp"
 #include "core/detail/IterationProcess.hpp"
+#include "core/detail/LocalGaussianPreparation.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
@@ -45,25 +46,11 @@ namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 
-RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
-{
-    RHBMExecutionOptions execution_options;
-    execution_options.quiet_mode = false;
-    execution_options.thread_size = options.thread_size;
-    return execution_options;
-}
-
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
-    training_options.execution_options = MakeExecutionOptions(options);
+    training_options.execution_options = detail::MakeExecutionOptions(options);
     return training_options;
-}
-
-float CalculateAdjustedResponse(double sample_response, double distance, const GaussianModel3D & offset_model)
-{
-    const auto evaluation{ offset_model.EvaluateAtDistance(distance) };
-    return static_cast<float>(sample_response - (evaluation.response - evaluation.signal));
 }
 
 LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
@@ -76,33 +63,14 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
         const auto response{
-            CalculateAdjustedResponse(static_cast<double>(sample.response), distance, model)
+            detail::CalculateAdjustedResponse(
+                static_cast<double>(sample.response),
+                distance,
+                model)
         };
         adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
     }
     return adjusted_sampling_entries;
-}
-
-LocalGaussianResult DecodeLocalGaussianResult(
-    double alpha_r,
-    const RHBMBetaEstimateResult & fit_result,
-    double offset = 0.0)
-{
-    const auto ols_model{
-        linearization_service::DecodeParameterVector(fit_result.beta_ols).WithOffset(offset)
-    };
-    const auto mdpde_model{
-        linearization_service::DecodeParameterVector(fit_result.beta_mdpde).WithOffset(offset)
-    };
-    return LocalGaussianResult{
-        alpha_r,
-        GaussianModel3DWithUncertainty{ ols_model, GaussianModel3DUncertainty{} },
-        GaussianModel3DWithUncertainty{ mdpde_model, GaussianModel3DUncertainty{} },
-        std::nullopt,
-        false,
-        0.0,
-        fit_result
-    };
 }
 
 std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
@@ -547,118 +515,6 @@ double TrainAlphaG(
     return rhbm_trainer::CrossValidationAlphaG(beta_group_list, training_options).best_alpha;
 }
 
-LocalGaussianDesignTemplate BuildLocalGaussianDesignTemplate(
-    const LocalPotentialSampleList & sample_entries,
-    double range_min,
-    double range_max)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
-
-    LocalGaussianDesignTemplate design_template;
-    design_template.source_sample_count = sample_entries.size();
-    design_template.source_sample_index_list.reserve(sample_entries.size());
-    design_template.distance_list.reserve(sample_entries.size());
-    for (std::size_t sample_index = 0; sample_index < sample_entries.size(); sample_index++)
-    {
-        const auto distance{
-            static_cast<double>(sample_entries.at(sample_index).point.distance)
-        };
-        if (distance < range_min || distance > range_max) continue;
-        design_template.source_sample_index_list.emplace_back(sample_index);
-        design_template.distance_list.emplace_back(distance);
-    }
-
-    const auto row_count{
-        static_cast<Eigen::Index>(design_template.distance_list.size())
-    };
-    design_template.design_matrix = RHBMDesignMatrix::Zero(row_count, 2);
-    for (Eigen::Index row = 0; row < row_count; row++)
-    {
-        const auto distance{
-            design_template.distance_list.at(static_cast<std::size_t>(row))
-        };
-        design_template.design_matrix(row, 0) = 1.0;
-        design_template.design_matrix(row, 1) = -0.5 * distance * distance;
-    }
-    return design_template;
-}
-
-RHBMMemberDataset BuildLocalGaussianPreparedDataset(
-    const LocalGaussianDesignTemplate & design_template,
-    const std::vector<double> & sample_response_list,
-    const GaussianModel3D & offset_model)
-{
-    numeric_validation::RequireFinite(offset_model.GetOffset(), "offset");
-    if (sample_response_list.size() != design_template.source_sample_count ||
-        design_template.source_sample_index_list.size() != design_template.distance_list.size() ||
-        design_template.design_matrix.rows() != static_cast<Eigen::Index>(design_template.distance_list.size()) ||
-        design_template.design_matrix.cols() != 2)
-    {
-        throw std::invalid_argument("Prepared local Gaussian design inputs are inconsistent.");
-    }
-
-    const auto candidate_count{
-        static_cast<Eigen::Index>(design_template.distance_list.size())
-    };
-    RHBMMemberDataset dataset;
-    dataset.X = RHBMDesignMatrix::Zero(candidate_count, 2);
-    dataset.y = RHBMResponseVector::Zero(candidate_count);
-    Eigen::Index retained_count{ 0 };
-    for (std::size_t row = 0; row < design_template.distance_list.size(); row++)
-    {
-        const auto sample_index{ design_template.source_sample_index_list.at(row) };
-        if (sample_index >= sample_response_list.size())
-        {
-            throw std::invalid_argument("Prepared local Gaussian sample index is out of range.");
-        }
-        const auto adjusted_response{
-            static_cast<double>(CalculateAdjustedResponse(
-                sample_response_list.at(sample_index),
-                design_template.distance_list.at(row),
-                offset_model))
-        };
-        if (adjusted_response <= 0.0) continue;
-        numeric_validation::RequireFinite(
-            adjusted_response,
-            "response",
-            "Member dataset contains non-finite value.");
-        dataset.X.row(retained_count) = design_template.design_matrix.row(
-            static_cast<Eigen::Index>(row));
-        dataset.y(retained_count) = std::log(adjusted_response);
-        retained_count++;
-    }
-
-    if (retained_count == 0)
-    {
-        dataset.X = RHBMDesignMatrix::Zero(1, 2);
-        dataset.y = RHBMResponseVector::Zero(1);
-    }
-    else
-    {
-        dataset.X.conservativeResize(retained_count, 2);
-        dataset.y.conservativeResize(retained_count);
-    }
-
-    return dataset;
-}
-
-LocalGaussianResult EstimateLocalGaussianPrepared(
-    const LocalGaussianDesignTemplate & design_template,
-    const std::vector<double> & sample_response_list,
-    double alpha_r,
-    const FitOptions & options,
-    const GaussianModel3D & offset_model)
-{
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    auto dataset{
-        BuildLocalGaussianPreparedDataset(design_template, sample_response_list, offset_model)
-    };
-    const auto result{
-        rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, MakeExecutionOptions(options))
-    };
-    return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
-}
-
 LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
@@ -666,7 +522,10 @@ LocalGaussianResult EstimateLocalGaussian(
     const GaussianModel3D & offset_model)
 {
     const auto design_template{
-        BuildLocalGaussianDesignTemplate(sample_entries, options.distance_min, options.distance_max)
+        detail::BuildLocalGaussianDesignTemplate(
+            sample_entries,
+            options.distance_min,
+            options.distance_max)
     };
     std::vector<double> sample_response_list;
     sample_response_list.reserve(sample_entries.size());
@@ -674,7 +533,7 @@ LocalGaussianResult EstimateLocalGaussian(
     {
         sample_response_list.emplace_back(static_cast<double>(sample.response));
     }
-    return EstimateLocalGaussianPrepared(
+    return detail::EstimateLocalGaussianPrepared(
         design_template,
         sample_response_list,
         alpha_r,
@@ -697,7 +556,7 @@ GroupGaussianResult EstimateGroupGaussian(
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
     }
 
-    const auto execution_options{ MakeExecutionOptions(options) };
+    const auto execution_options{ detail::MakeExecutionOptions(options) };
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(sample_entries_list.size());
     std::vector<RHBMBetaEstimateResult> fit_result_list;
