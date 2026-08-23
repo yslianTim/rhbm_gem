@@ -40,6 +40,26 @@ inline float CalculateAdjustedResponse(
     return static_cast<float>(sample_response - (evaluation.response - evaluation.signal));
 }
 
+inline LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & model)
+{
+    LocalPotentialSampleList adjusted_sampling_entries;
+    adjusted_sampling_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto response{
+            CalculateAdjustedResponse(
+                static_cast<double>(sample.response),
+                distance,
+                model)
+        };
+        adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
+    }
+    return adjusted_sampling_entries;
+}
+
 inline LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result,
@@ -172,6 +192,32 @@ inline LocalGaussianResult EstimateLocalGaussianPrepared(
         rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, MakeExecutionOptions(options))
     };
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
+}
+
+inline LocalGaussianResult EstimateLocalGaussianFromSamples(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options,
+    const GaussianModel3D & offset_model)
+{
+    const auto design_template{
+        BuildLocalGaussianDesignTemplate(
+            sample_entries,
+            options.distance_min,
+            options.distance_max)
+    };
+    std::vector<double> sample_response_list;
+    sample_response_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        sample_response_list.emplace_back(static_cast<double>(sample.response));
+    }
+    return EstimateLocalGaussianPrepared(
+        design_template,
+        sample_response_list,
+        alpha_r,
+        options,
+        offset_model);
 }
 
 } // namespace rhbm_gem::core::detail

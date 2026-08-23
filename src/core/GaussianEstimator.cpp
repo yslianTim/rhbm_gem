@@ -53,26 +53,6 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options
     return training_options;
 }
 
-LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & model)
-{
-    LocalPotentialSampleList adjusted_sampling_entries;
-    adjusted_sampling_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto response{
-            detail::CalculateAdjustedResponse(
-                static_cast<double>(sample.response),
-                distance,
-                model)
-        };
-        adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
-    }
-    return adjusted_sampling_entries;
-}
-
 std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     const RHBMGroupEstimationResult & result,
     const std::vector<double> & member_offset_list)
@@ -521,24 +501,7 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     const GaussianModel3D & offset_model)
 {
-    const auto design_template{
-        detail::BuildLocalGaussianDesignTemplate(
-            sample_entries,
-            options.distance_min,
-            options.distance_max)
-    };
-    std::vector<double> sample_response_list;
-    sample_response_list.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        sample_response_list.emplace_back(static_cast<double>(sample.response));
-    }
-    return detail::EstimateLocalGaussianPrepared(
-        design_template,
-        sample_response_list,
-        alpha_r,
-        options,
-        offset_model);
+    return detail::EstimateLocalGaussianFromSamples(sample_entries, alpha_r, options, offset_model);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
@@ -568,7 +531,7 @@ GroupGaussianResult EstimateGroupGaussian(
         const auto & member_result{ member_result_list.at(i) };
         const auto & member_model{ member_result.mdpde.GetModel() };
         const auto sampling_entries{
-            BuildSamplesForZeroOffsetGaussianFit(
+            detail::BuildSamplesForZeroOffsetGaussianFit(
                 sample_entries_list.at(i),
                 member_model)
         };
