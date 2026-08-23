@@ -189,7 +189,6 @@ struct TerminalFailureState
     {
     }
 
-    const TerminalSummary & Summary() const { return terminal_summary; }
     bool HasFailures() const { return terminal_summary.HasFailures(); }
     std::size_t AtomCount() const { return terminal_summary.AtomCount(); }
 

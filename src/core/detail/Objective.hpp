@@ -110,7 +110,7 @@ public:
         }
     }
 
-    std::optional<ResidualSample> Evaluate(const SampleRef & sample_ref) const
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const
     {
         const auto & baseline{
             m_baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index)
@@ -178,13 +178,7 @@ public:
         return ResidualSample{ adjusted_response, residual };
     }
 
-    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const
-    {
-        return Evaluate(sample_ref);
-    }
-
     const FitStateView & GetState() const { return m_candidate_state; }
-    const FitStateView & GetCandidateState() const { return m_candidate_state; }
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
 };
 
@@ -578,18 +572,19 @@ inline std::optional<double> EvaluateOffsetPlausibilityPenalty(
     return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
 }
 
-inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
-    const auto & state,
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
+    const auto & evaluator,
     const ClusterKey & changed_key,
     const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain,
-    const auto & residual_evaluator)
+    const ObjectiveDomain & domain)
 {
     const auto residual_contribution{
-        EvaluateResidualObjectiveContributionImpl(sample_ref_list, domain, residual_evaluator)
+        EvaluateResidualObjectiveContributionImpl(sample_ref_list, domain, evaluator)
     };
     if (!residual_contribution.has_value()) return std::nullopt;
-    const auto offset_penalty{ EvaluateOffsetPlausibilityPenalty(state, changed_key, domain) };
+    const auto offset_penalty{
+        EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), changed_key, domain)
+    };
     if (!offset_penalty.has_value()) return std::nullopt;
     return BuildObjectiveBreakdown(
         residual_contribution->fit_range_residual_objective,
@@ -597,24 +592,9 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
         *offset_penalty);
 }
 
-inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const auto & evaluator,
-    const ClusterKey & changed_key,
-    const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain)
-{
-    return EvaluateObjectiveContributionImpl(
-        evaluator.GetState(),
-        changed_key,
-        sample_ref_list,
-        domain,
-        evaluator);
-}
-
-inline std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
+inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
-    const FittedGaussianSnapshot & selected_state,
-    const auto & residual_evaluator)
+    const auto & evaluator)
 {
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
@@ -625,18 +605,18 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
             EvaluateResidualObjectiveContributionImpl(
                 cluster_domain.fit_sample_ref_list,
                 domain,
-                residual_evaluator)
+                evaluator)
         };
         if (!fit_contribution.has_value()) return std::nullopt;
         const auto tail_contribution{
             EvaluateResidualObjectiveContributionImpl(
                 cluster_domain.tail_sample_ref_list,
                 domain,
-                residual_evaluator)
+                evaluator)
         };
         if (!tail_contribution.has_value()) return std::nullopt;
         const auto offset_contribution{
-            EvaluateOffsetPlausibilityPenalty(selected_state, key, domain)
+            EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), key, domain)
         };
         if (!offset_contribution.has_value()) return std::nullopt;
         fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
@@ -651,13 +631,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
         offset_plausibility_penalty);
 }
 
-inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const ObjectiveDomain & domain,
-    const auto & evaluator)
-{
-    return EvaluateAuditObjectiveImpl(domain, evaluator.GetState(), evaluator);
-}
-
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
@@ -666,7 +639,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     PerformanceCounters & performance_counters)
 {
     const auto & changed_key{
-        candidate_overlay.GetCandidateState().GetOverrideAtomIndexList()
+        candidate_overlay.GetState().GetOverrideAtomIndexList()
     };
     const auto unique_sample_count{ domain.fit_sample_count + domain.tail_sample_count };
     performance_counters.RecordObjectiveSampleEvaluation(
@@ -849,7 +822,7 @@ inline bool TryCommitClusterCandidate(
         unique_sample_count);
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
-            candidate_overlay.GetCandidateState(),
+            candidate_overlay.GetState(),
             candidate_overlay.GetBaseline().model_snapshot.selected,
             key)
     };

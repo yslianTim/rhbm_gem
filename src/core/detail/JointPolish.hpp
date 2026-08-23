@@ -403,14 +403,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     return direction;
 }
 
-struct JointPolishProposal
-{
-    FitStatePatch patch{};
-    double effective_damping{ 0.0 };
-    double step_norm{ 0.0 };
-};
-
-inline std::optional<JointPolishProposal> BuildJointPolishProposal(
+inline std::optional<FitStateProposal> BuildJointPolishProposal(
     const SecondStageContext & context,
     const FitStateView & base_state,
     const ClusterKey & key,
@@ -493,7 +486,7 @@ inline std::optional<JointPolishProposal> BuildJointPolishProposal(
                     return std::nullopt;
                 }
 
-                JointPolishProposal proposal{
+                FitStateProposal proposal{
                     .patch{ .atom_index_list = key },
                     .effective_damping = damping,
                     .step_norm = *step_norm

@@ -32,7 +32,7 @@
 
 namespace rhbm_gem::core::detail {
 
-struct RejectedClusterDiagnostic
+struct ClusterCandidateDiagnostic
 {
     ClusterKey key{};
     ObjectiveAttemptDiagnostic attempt{};
@@ -52,8 +52,8 @@ struct CandidateSelection
     PolishProvenance assembled_polish_provenance{};
     std::vector<ClusterKey> accepted_key_list{};
     std::vector<ClusterKey> rejected_key_list{};
-    std::vector<RejectedClusterDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<RejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<ClusterKey> grow_trust_region_key_list{};
     std::vector<ClusterKey> backtracking_exhausted_key_list{};
     std::size_t combined_backtracking_trial_count{ 0 };
@@ -84,16 +84,9 @@ struct CandidateSelectionInputs
     PerformanceCounters & performance_counters;
 };
 
-struct BaseProposal
-{
-    FitStatePatch patch{};
-    double effective_damping{ 0.0 };
-    double step_norm{ 0.0 };
-};
-
 struct BaseProposalBuildResult
 {
-    std::optional<BaseProposal> proposal{};
+    std::optional<FitStateProposal> proposal{};
     PreObjectiveFailureReason failure_reason{ PreObjectiveFailureReason::None };
     std::optional<double> attempted_step_norm{};
 };
@@ -187,7 +180,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
-                BaseProposal proposal{
+                FitStateProposal proposal{
                     .patch{ .atom_index_list = key },
                     .effective_damping = damping,
                     .step_norm = *step_norm
@@ -373,7 +366,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
         return result;
     }
 
-    std::optional<BaseProposal> base_proposal;
+    std::optional<FitStateProposal> base_proposal;
     if (!contains_suspicious_atom)
     {
         auto proposal_result{
@@ -435,7 +428,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
         };
         if (base_patch.has_value())
         {
-            base_proposal = BaseProposal{
+            base_proposal = FitStateProposal{
                 std::move(*base_patch),
                 trust_region_damping.effective_damping,
                 trust_region_damping.step_norm
@@ -715,7 +708,7 @@ inline CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs
                 selection.backtracking_exhausted_key_list.emplace_back(key);
             }
             selection.rejected_cluster_diagnostic_list.emplace_back(
-                RejectedClusterDiagnostic{
+                ClusterCandidateDiagnostic{
                     key,
                     std::move(result.diagnostic)
                 });
@@ -723,7 +716,7 @@ inline CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs
         }
         selection.accepted_key_list.emplace_back(key);
         selection.accepted_cluster_diagnostic_list.emplace_back(
-            RejectedClusterDiagnostic{
+            ClusterCandidateDiagnostic{
                 key,
                 std::move(result.diagnostic)
             });

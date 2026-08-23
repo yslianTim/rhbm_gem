@@ -62,6 +62,13 @@ struct FitStatePatch
     }
 };
 
+struct FitStateProposal
+{
+    FitStatePatch patch{};
+    double effective_damping{ 0.0 };
+    double step_norm{ 0.0 };
+};
+
 class FitStateView
 {
     const FitState & m_base_state;

@@ -631,6 +631,17 @@ void RunGroupPotentialFitting(
 
 namespace {
 
+void RunRegularPotentialFittingStage(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage)
+{
+    RunLocalAlphaTraining(model_object, options, stage);
+    RunFixedOffsetLocalFitting(model_object, options, stage);
+    RunGroupAlphaTraining(model_object, options, stage);
+    RunGroupPotentialFitting(model_object, options, stage);
+}
+
 using detail::FitState;
 
 void ApplyFitState(
@@ -720,7 +731,7 @@ void LogTerminalFallback(
         << " accepted iterations with last validated states retained";
     detail::AppendTerminalSummary(
         warning_message,
-        iteration_state.terminal_failure_state.Summary());
+        iteration_state.terminal_failure_state.terminal_summary);
     AppendOffsetSummary(warning_message, iteration_state.previous_state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -757,7 +768,7 @@ void LogMaximumIterations(bool quiet_mode, const detail::IterationState & iterat
     warning_message << "Reached maximum iteration size";
     detail::AppendTerminalSummary(
         warning_message,
-        iteration_state.terminal_failure_state.Summary());
+        iteration_state.terminal_failure_state.terminal_summary);
     const auto * audit_state{
         iteration_state.best_audit_state.has_value() ? &*iteration_state.best_audit_state : nullptr
     };
@@ -1023,19 +1034,13 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
 {
     model_object.EditAnalysis().InitializeLocalFittingSeedModels();
     
-    RunLocalAlphaTraining(model_object, options, FittingStage::First);
-    RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
-    RunGroupAlphaTraining(model_object, options, FittingStage::First);
-    RunGroupPotentialFitting(model_object, options, FittingStage::First);
+    RunRegularPotentialFittingStage(model_object, options, FittingStage::First);
 
     model_object.EditAnalysis().CopyFittingStageState(FittingStage::First, FittingStage::Second);
     const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
 
     model_object.EditAnalysis().CopyFittingStageState(FittingStage::Second, FittingStage::Third);
-    RunLocalAlphaTraining(model_object, options, FittingStage::Third);
-    RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
-    RunGroupAlphaTraining(model_object, options, FittingStage::Third);
-    RunGroupPotentialFitting(model_object, options, FittingStage::Third);
+    RunRegularPotentialFittingStage(model_object, options, FittingStage::Third);
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,

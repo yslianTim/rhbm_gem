@@ -43,8 +43,8 @@ constexpr std::size_t kAuditPatience{ 3 };
 
 struct IterationDiagnostics
 {
-    std::vector<RejectedClusterDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<RejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::size_t combined_backtracking_trial_count{ 0 };
     std::optional<double> combined_backtracking_factor{};
     bool combined_backtracking_exhausted{ false };
@@ -130,7 +130,7 @@ inline std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReas
 
 inline void LogRejectedClusterDiagnostics(
     bool quiet_mode,
-    const std::vector<RejectedClusterDiagnostic> & diagnostic_list)
+    const std::vector<ClusterCandidateDiagnostic> & diagnostic_list)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug || diagnostic_list.empty())
     {
@@ -309,7 +309,7 @@ inline void LogAcceptedBacktrackingDiagnostics(
         std::any_of(
             diagnostics.accepted_cluster_diagnostic_list.begin(),
             diagnostics.accepted_cluster_diagnostic_list.end(),
-            [](const RejectedClusterDiagnostic & diagnostic)
+            [](const ClusterCandidateDiagnostic & diagnostic)
             {
                 return diagnostic.attempt.backtracking_trial_count > 1;
             })

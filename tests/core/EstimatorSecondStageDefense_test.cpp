@@ -3895,7 +3895,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             sample_ref,
             baseline.model_snapshot)
     };
-    const auto overlaid{ overlay.Evaluate(sample_ref) };
+    const auto overlaid{ overlay(sample_ref) };
     ASSERT_TRUE(direct.has_value());
     ASSERT_TRUE(overlaid.has_value());
     EXPECT_DOUBLE_EQ(direct->adjusted_response, overlaid->adjusted_response);

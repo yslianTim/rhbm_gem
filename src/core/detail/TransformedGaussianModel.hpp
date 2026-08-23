@@ -287,27 +287,26 @@ struct SharedOffsetResponse
     double offset_jacobian{ 0.0 };
 };
 
-inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
+inline std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(
     const GaussianModel3D & model,
     double distance)
 {
-    if (!EncodeTransformedCoordinates(model).has_value() || !std::isfinite(distance) || distance < 0.0)
-    {
-        return std::nullopt;
-    }
+    if (!std::isfinite(distance) || distance < 0.0) return std::nullopt;
 
     const auto width{ model.GetWidth() };
-    const auto signal{ model.SignalAtDistance(distance) };
-    const auto offset_basis{ model.OffsetBasisAtDistance(distance) };
-    const auto response{ signal + model.GetOffset() * offset_basis };
-    if (!std::isfinite(signal) || !std::isfinite(offset_basis) || !std::isfinite(response))
+    const auto evaluation{ model.EvaluateAtDistance(distance) };
+    if (!std::isfinite(evaluation.signal) ||
+        !std::isfinite(evaluation.offset_basis) ||
+        !std::isfinite(evaluation.response))
     {
         return std::nullopt;
     }
 
     const double center_offset_basis_scale{ std::sqrt(2.0 / M_PI) };
     const auto normalized_distance{ distance / width };
-    auto log_width_derivative{ signal * normalized_distance * normalized_distance };
+    auto log_width_derivative{
+        evaluation.signal * normalized_distance * normalized_distance
+    };
     if (distance < 1.0e-5)
     {
         log_width_derivative -= model.GetOffset() * center_offset_basis_scale / width;
@@ -318,14 +317,22 @@ inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
         log_width_derivative -= model.GetOffset() * center_offset_basis_scale / width * std::exp(exponent);
     }
 
-    Eigen::Vector2d shape_jacobian{ signal, log_width_derivative };
+    const Eigen::Vector2d shape_jacobian{ evaluation.signal, log_width_derivative };
     if (!shape_jacobian.allFinite()) return std::nullopt;
 
     return SharedOffsetResponse{
-        response,
+        evaluation.response,
         shape_jacobian,
-        offset_basis
+        evaluation.offset_basis
     };
+}
+
+inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
+    const GaussianModel3D & model,
+    double distance)
+{
+    if (!EncodeTransformedCoordinates(model).has_value()) return std::nullopt;
+    return EvaluateValidSharedOffsetResponse(model, distance);
 }
 
 struct TransformedModelInvariants
@@ -351,38 +358,7 @@ inline std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
     const TransformedModelInvariants & invariants,
     double distance)
 {
-    if (!std::isfinite(distance) || distance < 0.0) return std::nullopt;
-
-    const auto evaluation{ invariants.model.EvaluateAtDistance(distance) };
-    if (!std::isfinite(evaluation.signal) ||
-        !std::isfinite(evaluation.offset_basis) ||
-        !std::isfinite(evaluation.response))
-    {
-        return std::nullopt;
-    }
-
-    const auto width{ invariants.model.GetWidth() };
-    const double center_offset_basis_scale{ std::sqrt(2.0 / M_PI) };
-    const auto normalized_distance{ distance / width };
-    auto log_width_derivative{ evaluation.signal * normalized_distance * normalized_distance };
-    if (distance < 1.0e-5)
-    {
-        log_width_derivative -= invariants.model.GetOffset() * center_offset_basis_scale / width;
-    }
-    else
-    {
-        const auto exponent{ -0.5 * normalized_distance * normalized_distance };
-        log_width_derivative -= invariants.model.GetOffset() * center_offset_basis_scale / width * std::exp(exponent);
-    }
-
-    const Eigen::Vector2d shape_jacobian{ evaluation.signal, log_width_derivative };
-    if (!shape_jacobian.allFinite()) return std::nullopt;
-
-    return SharedOffsetResponse{
-        evaluation.response,
-        shape_jacobian,
-        evaluation.offset_basis
-    };
+    return EvaluateValidSharedOffsetResponse(invariants.model, distance);
 }
 
 inline std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
