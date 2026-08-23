@@ -79,6 +79,28 @@ public:
     }
 };
 
+struct DisjointSetComponentSummary
+{
+    std::size_t component_count{ 0 };
+    std::size_t maximum_component_size{ 0 };
+};
+
+inline DisjointSetComponentSummary SummarizeDisjointSetComponents(
+    DisjointSet & component_set,
+    std::size_t item_count)
+{
+    DisjointSetComponentSummary summary;
+    for (std::size_t item_index = 0; item_index < item_count; item_index++)
+    {
+        if (component_set.Find(item_index) != item_index) continue;
+        summary.component_count++;
+        summary.maximum_component_size = std::max(
+            summary.maximum_component_size,
+            component_set.ComponentSize(item_index));
+    }
+    return summary;
+}
+
 struct CouplingGraphSummary
 {
     struct ThresholdSensitivity
@@ -241,25 +263,18 @@ class CouplingGraphBuilder
                 component_set.Merge(weighted_edge.left_atom_index, weighted_edge.right_atom_index);
             }
 
-            std::size_t component_count{ 0 };
-            std::size_t maximum_component_size{ 0 };
-            for (std::size_t atom_index = 0; atom_index < m_atom_count; atom_index++)
-            {
-                if (component_set.Find(atom_index) != atom_index) continue;
-                component_count++;
-                maximum_component_size = std::max(
-                    maximum_component_size,
-                    component_set.ComponentSize(atom_index));
-            }
+            const auto component_summary{
+                SummarizeDisjointSetComponents(component_set, m_atom_count)
+            };
             sensitivity_list.emplace_back(
                 CouplingGraphSummary::ThresholdSensitivity{
                     minimum_weight,
                     retained_edge_count,
                     weighted_edge_list.size() - retained_edge_count,
-                    component_count,
-                    maximum_component_size,
+                    component_summary.component_count,
+                    component_summary.maximum_component_size,
                     m_atom_count == 0 ? 0.0 :
-                        static_cast<double>(maximum_component_size) / static_cast<double>(m_atom_count)
+                        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(m_atom_count)
                 });
         }
         return sensitivity_list;
@@ -310,11 +325,6 @@ public:
             {
                 throw std::invalid_argument(
                     "Local fitting coupling participant index is out of range.");
-            }
-            if (i > 0 && participant_list.at(i - 1).atom_index == participant.atom_index)
-            {
-                throw std::invalid_argument(
-                    "Local fitting coupling sample participants must be unique.");
             }
             if (!participant.jacobian.allFinite())
             {
@@ -742,21 +752,14 @@ inline GraphTopology ApplyGraphResidueCutoff(
         topology.adjacency_list.at(edge.right_atom_index).emplace_back(edge.left_atom_index);
     }
 
-    std::size_t cluster_count{ 0 };
-    std::size_t observed_maximum_residue_count{ 0 };
-    for (std::size_t residue_index = 0; residue_index < residue_index_by_key.size(); residue_index++)
-    {
-        if (residue_component_set.Find(residue_index) != residue_index) continue;
-        cluster_count++;
-        observed_maximum_residue_count = std::max(
-            observed_maximum_residue_count,
-            residue_component_set.ComponentSize(residue_index));
-    }
+    const auto residue_component_summary{
+        SummarizeDisjointSetComponents(residue_component_set, residue_index_by_key.size())
+    };
     topology.residue_cutoff_summary =
         GraphTopology::ResidueCutoffSummary{
             residue_index_by_key.size(),
-            observed_maximum_residue_count,
-            cluster_count,
+            residue_component_summary.maximum_component_size,
+            residue_component_summary.component_count,
             cut_edge_count,
             maximum_residue_count
         };
@@ -802,20 +805,13 @@ inline void UpdateGraphComponentSummary(GraphTopology & topology)
         }
     }
 
-    std::size_t component_count{ 0 };
-    std::size_t maximum_component_size{ 0 };
-    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-    {
-        if (component_set.Find(atom_index) != atom_index) continue;
-        component_count++;
-        maximum_component_size = std::max(
-            maximum_component_size,
-            component_set.ComponentSize(atom_index));
-    }
-    topology.summary.component_count = component_count;
-    topology.summary.maximum_component_size = maximum_component_size;
+    const auto component_summary{
+        SummarizeDisjointSetComponents(component_set, atom_count)
+    };
+    topology.summary.component_count = component_summary.component_count;
+    topology.summary.maximum_component_size = component_summary.maximum_component_size;
     topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
-        static_cast<double>(maximum_component_size) / static_cast<double>(atom_count);
+        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
 }
 
 inline CouplingGraphPartition BuildGraphPartition(

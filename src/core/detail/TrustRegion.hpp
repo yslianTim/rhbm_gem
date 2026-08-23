@@ -243,6 +243,26 @@ struct TrustRegionDamping
     double step_norm{ 0.0 };
 };
 
+inline double CalculateScaledTransformedStepNorm(
+    const Eigen::Vector3d & previous_estimation,
+    const Eigen::Vector3d & candidate_estimation)
+{
+    double step_norm{ 0.0 };
+    for (std::size_t parameter_index = 0;
+        parameter_index < kTransformedChangeSize;
+        parameter_index++)
+    {
+        const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+        step_norm = std::max(
+            step_norm,
+            std::abs(
+                candidate_estimation(eigen_index) -
+                previous_estimation(eigen_index)) /
+                kTrustRegionParameterScale.at(parameter_index));
+    }
+    return step_norm;
+}
+
 inline TrustRegionDamping LimitTrustRegionDamping(
     const std::vector<Eigen::Vector3d> & previous_estimation_list,
     const std::vector<Eigen::Vector3d> & candidate_estimation_list,
@@ -270,16 +290,11 @@ inline TrustRegionDamping LimitTrustRegionDamping(
     double undamped_step_norm{ 0.0 };
     for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
-        for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
-        {
-            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
-            undamped_step_norm = std::max(
-                undamped_step_norm,
-                std::abs(
-                    candidate_estimation_list.at(i)(eigen_index) -
-                    previous_estimation_list.at(i)(eigen_index)) /
-                    kTrustRegionParameterScale.at(parameter_index));
-        }
+        undamped_step_norm = std::max(
+            undamped_step_norm,
+            CalculateScaledTransformedStepNorm(
+                previous_estimation_list.at(i),
+                candidate_estimation_list.at(i)));
     }
 
     const auto effective_damping{
@@ -314,14 +329,9 @@ inline std::optional<double> CalculateModelTrustRegionStepNorm(
         {
             return std::nullopt;
         }
-        for (std::size_t index = 0; index < kTransformedChangeSize; index++)
-        {
-            const auto eigen_index{ static_cast<Eigen::Index>(index) };
-            step_norm = std::max(
-                step_norm,
-                std::abs((*candidate)(eigen_index) - (*previous)(eigen_index)) /
-                    kTrustRegionParameterScale.at(index));
-        }
+        step_norm = std::max(
+            step_norm,
+            CalculateScaledTransformedStepNorm(*previous, *candidate));
     }
     return std::isfinite(step_norm) ? std::optional<double>{ step_norm } : std::nullopt;
 }

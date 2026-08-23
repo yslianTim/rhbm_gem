@@ -1,8 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
@@ -14,6 +19,60 @@ struct JointFittingConditioning
     bool guard_required{ false };
     double pivot_ratio{ 0.0 };
 };
+
+struct JointFittingGroupLayout
+{
+    std::vector<std::size_t> group_position_by_atom{};
+    std::size_t group_count{ 0 };
+};
+
+inline std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
+    const std::vector<std::size_t> & group_id_by_atom_position,
+    std::size_t atom_count)
+{
+    if (group_id_by_atom_position.empty() ||
+        group_id_by_atom_position.size() != atom_count)
+    {
+        return std::nullopt;
+    }
+
+    std::map<std::size_t, std::size_t> group_position_by_id;
+    for (const auto group_id : group_id_by_atom_position)
+    {
+        group_position_by_id.emplace(group_id, 0);
+    }
+    std::size_t group_position{ 0 };
+    for (auto & group_entry : group_position_by_id)
+    {
+        group_entry.second = group_position++;
+    }
+
+    JointFittingGroupLayout layout;
+    layout.group_position_by_atom.reserve(atom_count);
+    for (const auto group_id : group_id_by_atom_position)
+    {
+        layout.group_position_by_atom.emplace_back(
+            group_position_by_id.at(group_id));
+    }
+    layout.group_count = group_position_by_id.size();
+    return layout;
+}
+
+inline std::optional<double> CalculateJointFittingGroupMedian(
+    std::vector<double> & value_list)
+{
+    if (value_list.empty()) return std::nullopt;
+
+    std::ranges::sort(value_list);
+    const auto middle{ value_list.size() / 2 };
+    const auto median{
+        value_list.size() % 2 == 0 ?
+            0.5 * value_list.at(middle - 1) + 0.5 * value_list.at(middle) :
+            value_list.at(middle)
+    };
+    return std::isfinite(median) ?
+        std::optional<double>{ median } : std::nullopt;
+}
 
 inline JointFittingConditioning EvaluateJointFittingConditioning(
     const Eigen::SparseMatrix<double> & design_matrix,

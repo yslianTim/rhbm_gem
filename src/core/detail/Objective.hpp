@@ -296,12 +296,6 @@ struct ObjectiveClusterDomain
     std::optional<ObjectiveScale> scale{};
 };
 
-struct ResidualObjectiveContribution
-{
-    double fit_range_residual_objective{ 0.0 };
-    double tail_validation_loss{ 0.0 };
-};
-
 struct ObjectiveDomain
 {
     std::map<ClusterKey, ObjectiveClusterDomain> cluster_by_key{};
@@ -480,13 +474,13 @@ inline ObjectiveDomain BuildObjectiveDomain(
 }
 
 
-inline std::optional<ResidualObjectiveContribution> EvaluateResidualObjectiveContributionImpl(
+inline std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
     const auto & residual_evaluator)
 {
     if (domain.active_atom_count == 0) return std::nullopt;
-    ResidualObjectiveContribution contribution;
+    ObjectiveBreakdown contribution;
     for (const auto & sample_ref : sample_ref_list)
     {
         const auto & owner_key{
@@ -579,7 +573,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const ObjectiveDomain & domain)
 {
     const auto residual_contribution{
-        EvaluateResidualObjectiveContributionImpl(sample_ref_list, domain, evaluator)
+        EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
     };
     if (!residual_contribution.has_value()) return std::nullopt;
     const auto offset_penalty{
@@ -602,14 +596,14 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
         const auto fit_contribution{
-            EvaluateResidualObjectiveContributionImpl(
+            EvaluateResidualObjectiveContribution(
                 cluster_domain.fit_sample_ref_list,
                 domain,
                 evaluator)
         };
         if (!fit_contribution.has_value()) return std::nullopt;
         const auto tail_contribution{
-            EvaluateResidualObjectiveContributionImpl(
+            EvaluateResidualObjectiveContribution(
                 cluster_domain.tail_sample_ref_list,
                 domain,
                 evaluator)

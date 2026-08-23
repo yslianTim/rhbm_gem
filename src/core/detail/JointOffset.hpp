@@ -7,7 +7,6 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <ranges>
 #include <stdexcept>
 #include <sstream>
 #include <unordered_map>
@@ -75,26 +74,13 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
     const Eigen::VectorXd & atom_offset)
 {
     const auto atom_count{ static_cast<std::size_t>(atom_offset.size()) };
-    if (group_id_by_atom_position.empty() || group_id_by_atom_position.size() != atom_count)
-    {
-        return std::nullopt;
-    }
-
-    std::map<std::size_t, std::size_t> group_position_by_id;
-    for (const auto group_id : group_id_by_atom_position)
-    {
-        group_position_by_id.emplace(group_id, 0);
-    }
-    std::size_t group_position{ 0 };
-    for (auto & group_entry : group_position_by_id)
-    {
-        group_entry.second = group_position++;
-    }
+    auto group_layout{ BuildJointFittingGroupLayout(group_id_by_atom_position, atom_count) };
+    if (!group_layout.has_value()) return std::nullopt;
 
     JointOffsetParameterization parameterization;
-    parameterization.group_position_by_atom.resize(atom_count);
-    parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_id.size()));
-    std::vector<std::vector<double>> offset_list_by_group(group_position_by_id.size());
+    parameterization.group_position_by_atom = std::move(group_layout->group_position_by_atom);
+    parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_layout->group_count));
+    std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
 
     for (std::size_t atom_position = 0; atom_position < atom_count; atom_position++)
     {
@@ -102,9 +88,8 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         if (!std::isfinite(offset)) return std::nullopt;
 
         const auto atom_group_position{
-            group_position_by_id.at(group_id_by_atom_position.at(atom_position))
+            parameterization.group_position_by_atom.at(atom_position)
         };
-        parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
         offset_list_by_group.at(atom_group_position).emplace_back(offset);
     }
 
@@ -113,14 +98,9 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        std::ranges::sort(offset_list);
-        const auto middle{ offset_list.size() / 2 };
-        const auto median{ offset_list.size() % 2 == 0 ?
-            0.5 * offset_list.at(middle - 1) + 0.5 * offset_list.at(middle) :
-            offset_list.at(middle)
-        };
-        if (!std::isfinite(median)) return std::nullopt;
-        parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = median;
+        const auto median{ CalculateJointFittingGroupMedian(offset_list) };
+        if (!median.has_value()) return std::nullopt;
+        parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = *median;
     }
     return parameterization;
 }

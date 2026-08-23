@@ -13,9 +13,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <map>
 #include <optional>
-#include <ranges>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -116,28 +114,17 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
-    if (group_id_by_atom_position.empty() || group_id_by_atom_position.size() != base_model_list.size())
-    {
-        return std::nullopt;
-    }
-
-    std::map<std::size_t, std::size_t> group_position_by_id;
-    for (const auto group_id : group_id_by_atom_position)
-    {
-        group_position_by_id.emplace(group_id, 0);
-    }
-    std::size_t group_position{ 0 };
-    for (auto & group_entry : group_position_by_id)
-    {
-        group_entry.second = group_position++;
-    }
+    auto group_layout{
+        BuildJointFittingGroupLayout(group_id_by_atom_position, base_model_list.size())
+    };
+    if (!group_layout.has_value()) return std::nullopt;
 
     JointPolishParameterization parameterization;
-    parameterization.group_position_by_atom.resize(base_model_list.size());
+    parameterization.group_position_by_atom = std::move(group_layout->group_position_by_atom);
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
-            base_model_list.size() * kJointPolishShapeParameterSize + group_position_by_id.size()));
-    std::vector<std::vector<double>> offset_list_by_group(group_position_by_id.size());
+            base_model_list.size() * kJointPolishShapeParameterSize + group_layout->group_count));
+    std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
 
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
@@ -146,9 +133,8 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         };
         if (!transformed.has_value()) return std::nullopt;
         const auto atom_group_position{
-            group_position_by_id.at(group_id_by_atom_position.at(atom_position))
+            parameterization.group_position_by_atom.at(atom_position)
         };
-        parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
         parameterization.seed_parameter(
             parameterization.ShapeColumn(atom_position, 0)) =
             (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
@@ -164,18 +150,12 @@ inline std::optional<JointPolishParameterization> BuildJointPolishParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        std::ranges::sort(offset_list);
-        const auto middle{ offset_list.size() / 2 };
-        const auto median{
-            offset_list.size() % 2 == 0 ?
-                0.5 * offset_list.at(middle - 1) + 0.5 * offset_list.at(middle) :
-                offset_list.at(middle)
-        };
-        if (!std::isfinite(median)) return std::nullopt;
+        const auto median{ CalculateJointFittingGroupMedian(offset_list) };
+        if (!median.has_value()) return std::nullopt;
         parameterization.seed_parameter(
             static_cast<Eigen::Index>(
                 parameterization.group_position_by_atom.size() * kJointPolishShapeParameterSize +
-                current_group_position)) = median;
+                current_group_position)) = *median;
     }
     return parameterization;
 }
