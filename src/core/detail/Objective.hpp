@@ -821,7 +821,7 @@ inline bool TryCommitClusterCandidate(
             key)
     };
     const auto maximum_transformed_change{
-        GetMaximumTransformedChange(transformed_change_summary.percentile_stats.percentile_list)
+        GetMaximumTransformedChange(transformed_change_summary)
     };
     const auto domain_iter{ domain.cluster_by_key.find(key) };
     diagnostic.scale.reset();
