@@ -104,10 +104,16 @@ Each outer attempt performs the following sequence:
    joint amplitude/width/offset polish. Keep the polish only when it strictly
    improves the base candidate on the same objective scale.
 8. Build the accepted-induced interaction graph from shared boundary samples.
-   Revalidate and, if necessary, backtrack each connected component independently
-   with one common factor for that component. A failed component rolls back only
-   its members, so unrelated components and remote singleton clusters remain
-   eligible for commit.
+   Revalidate each connected component. If its endpoint fails and all members
+   are stationarity-eligible without suspicious atoms, first attempt one joint
+   correction over the direct boundary contributors: only their transformed
+   amplitude and width may change, while one component-local offset column is
+   shared by every closure atom with the same group key. The candidate must fit
+   every member trust radius and strictly improve the previous component
+   objective. An unavailable or rejected correction falls through to the
+   unchanged common-factor component backtracking. A failed component rolls
+   back only its members, so unrelated components and remote singleton clusters
+   remain eligible for commit.
 9. Run the unchanged global previous/best audit on the complete assembled state.
    If tolerance-level deterioration from independent reconciliation units causes
    aggregate rejection, remove non-improving units from worst to best until the
@@ -464,20 +470,24 @@ from the current partition and rebuilt with adaptive topology or terminal
 isolation. Without a multi-cluster accepted component, candidate selection stays
 on the existing fast path.
 
-Joint-offset and joint-polish solvers retain their sparse pattern analysis for
-the lifetime of a partition and refresh only numeric values, weights,
-responses, and ridge terms. Cluster candidate workers own independent solver
-state and patches. With OpenMP, more than one cluster, and `thread_size > 1`,
-base proposal, local backtracking, polish, and local objective evaluation run
-per cluster in parallel while Eigen uses one thread. Results are committed in
-the partition's fixed cluster order; the serial path calls the same worker and
-merge code.
+Joint-offset, joint-polish, and boundary-correction solvers retain their sparse
+pattern analysis for the lifetime of a partition and refresh only numeric
+values, weights, responses, and ridge terms. Boundary-correction workspaces use
+the deterministic member/interface/closure/sample signature as their key and
+are cleared with the other solver workspaces when the partition changes.
+Independent boundary components are corrected serially in cluster-key order.
+Cluster candidate workers own independent solver state and patches. With
+OpenMP, more than one cluster, and `thread_size > 1`, base proposal, local
+backtracking, polish, and local objective evaluation run per cluster in
+parallel while Eigen uses one thread. Results are committed in the partition's
+fixed cluster order; the serial path calls the same worker and merge code.
 
 Non-quiet runs also emit non-blocking performance counters for complete-state
 materializations, Gaussian cache hits/misses, recomputed/reused objective
 samples, symbolic solver analyses, adaptive topology rebuilds and partition
 changes, boundary reconciliation attempts/backtracks/rejections, and
-boundary reconciliation elapsed time. The existing
+boundary joint-correction attempts/acceptances/fallbacks, symbolic analyses,
+and elapsed time. The existing
 iteration/candidate/topology/total elapsed-time field remains unchanged.
 These counters are diagnostic evidence rather than acceptance thresholds.
 
@@ -506,7 +516,11 @@ loss, weights, sample counts, fixed scales, and backtracking
 trials/factor/exhaustion. Accepted local factors are logged at debug level.
 Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
 record with its cluster, atom, and boundary-sample counts plus trials, factor,
-accepted/rejected, and exhausted status. An all-rejected debug record reports
+accepted/rejected, exhausted status, and accepted source. An attempted repair
+also emits `Boundary-interface joint correction` with its interface/closure/
+parameter counts, solver status, damping, maximum normalized trust step,
+previous/candidate component objective, and acceptance result. An all-rejected
+debug record reports
 `exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
 terminal classification can be audited directly. Terminal, convergence, and
 summary messages finish the active progress line before normal line output.

@@ -107,9 +107,19 @@ JointPolishParameterization::DecodeParameter(
         atom_position < group_position_by_atom.size();
         atom_position++)
     {
+        auto active_shape_coordinates{
+            base_shape_coordinate_by_atom.at(atom_position)
+        };
+        if (HasShapeColumn(atom_position))
+        {
+            active_shape_coordinates(0) =
+                parameter(ShapeColumn(atom_position, 0));
+            active_shape_coordinates(1) =
+                parameter(ShapeColumn(atom_position, 1));
+        }
         const Eigen::Vector3d shape_coordinates{
-            parameter(ShapeColumn(atom_position, 0)),
-            parameter(ShapeColumn(atom_position, 1)),
+            active_shape_coordinates(0),
+            active_shape_coordinates(1),
             0.0
         };
         const auto shape_model{
@@ -810,6 +820,21 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
+    return BuildActiveSetJointPolishParameterization(
+        group_id_by_atom_position,
+        base_model_list,
+        std::vector<char>(base_model_list.size(), 1));
+}
+
+std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
+    const std::vector<std::size_t> & group_id_by_atom_position,
+    const std::vector<GaussianModel3D> & base_model_list,
+    const std::vector<char> & shape_active_mask)
+{
+    if (shape_active_mask.size() != base_model_list.size())
+    {
+        return std::nullopt;
+    }
     auto group_layout{
         BuildJointFittingGroupLayout(group_id_by_atom_position, base_model_list.size())
     };
@@ -817,10 +842,18 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
 
     JointPolishParameterization parameterization;
     parameterization.group_position_by_atom = std::move(group_layout->group_position_by_atom);
+    parameterization.shape_position_by_atom.resize(base_model_list.size());
+    parameterization.base_shape_coordinate_by_atom.reserve(base_model_list.size());
+    for (const auto is_shape_active : shape_active_mask)
+    {
+        if (is_shape_active != 0) parameterization.shape_atom_count++;
+    }
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
-            base_model_list.size() * kJointPolishShapeParameterSize + group_layout->group_count));
+            parameterization.shape_atom_count * kJointPolishShapeParameterSize +
+                group_layout->group_count));
     std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
+    std::size_t shape_position{ 0 };
 
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
@@ -831,12 +864,21 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
         const auto atom_group_position{
             parameterization.group_position_by_atom.at(atom_position)
         };
-        parameterization.seed_parameter(
-            parameterization.ShapeColumn(atom_position, 0)) =
-            (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
-        parameterization.seed_parameter(
-            parameterization.ShapeColumn(atom_position, 1)) =
-            (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex));
+        parameterization.base_shape_coordinate_by_atom.emplace_back(
+            (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)),
+            (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex)));
+        parameterization.shape_position_by_atom.at(atom_position) =
+            shape_active_mask.at(atom_position) != 0 ?
+                shape_position++ : parameterization.shape_atom_count;
+        if (parameterization.HasShapeColumn(atom_position))
+        {
+            parameterization.seed_parameter(
+                parameterization.ShapeColumn(atom_position, 0)) =
+                (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
+            parameterization.seed_parameter(
+                parameterization.ShapeColumn(atom_position, 1)) =
+                (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex));
+        }
         offset_list_by_group.at(atom_group_position).emplace_back(
             base_model_list.at(atom_position).GetOffset());
     }
@@ -850,7 +892,7 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
         if (!median.has_value()) return std::nullopt;
         parameterization.seed_parameter(
             static_cast<Eigen::Index>(
-                parameterization.group_position_by_atom.size() * kJointPolishShapeParameterSize +
+                parameterization.shape_atom_count * kJointPolishShapeParameterSize +
                 current_group_position)) = *median;
     }
     return parameterization;
@@ -865,7 +907,10 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const JointPolishParameterization & parameterization,
     ReusableWeightedRidgeSolver & reusable_solver)
 {
-    if (key.empty() || sample_ref_list.empty() || parameterization.group_position_by_atom.size() != key.size())
+    if (key.empty() || sample_ref_list.empty() ||
+        parameterization.group_position_by_atom.size() != key.size() ||
+        parameterization.shape_position_by_atom.size() != key.size() ||
+        parameterization.base_shape_coordinate_by_atom.size() != key.size())
     {
         return std::nullopt;
     }
@@ -882,13 +927,17 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         const auto atom_index{ key.at(local_position) };
         local_position_by_atom_index.emplace(atom_index, local_position);
         const auto ridge_multiplier{ ridge_multiplier_list.at(atom_index) };
-        for (std::size_t parameter_index = 0;
-            parameter_index < kJointPolishShapeParameterSize;
-            parameter_index++)
+        if (parameterization.HasShapeColumn(local_position))
         {
-            ridge_multiplier_by_column(
-                parameterization.ShapeColumn(local_position, parameter_index)) =
-                ridge_multiplier;
+            for (std::size_t parameter_index = 0;
+                parameter_index < kJointPolishShapeParameterSize;
+                parameter_index++)
+            {
+                ridge_multiplier_by_column(
+                    parameterization.ShapeColumn(
+                        local_position,
+                        parameter_index)) = ridge_multiplier;
+            }
         }
         const auto offset_column{ parameterization.OffsetColumn(local_position) };
         offset_column_by_group_id.emplace(
@@ -939,18 +988,26 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
 
             if (local_position_iter == local_position_by_atom_index.end()) return true;
             const auto local_position{ local_position_iter->second };
-            for (std::size_t parameter_index = 0;
-                parameter_index < kJointPolishShapeParameterSize;
-                parameter_index++)
+            if (parameterization.HasShapeColumn(local_position))
             {
-                const auto column_index{
-                    parameterization.ShapeColumn(local_position, parameter_index)
-                };
-                const auto derivative{
-                    evaluation->shape_jacobian(static_cast<Eigen::Index>(parameter_index))
-                };
-                if (std::abs(derivative) <= std::numeric_limits<double>::epsilon()) continue;
-                triplet_list.emplace_back(row_index, column_index, derivative);
+                for (std::size_t parameter_index = 0;
+                    parameter_index < kJointPolishShapeParameterSize;
+                    parameter_index++)
+                {
+                    const auto column_index{
+                        parameterization.ShapeColumn(
+                            local_position,
+                            parameter_index)
+                    };
+                    const auto derivative{
+                        evaluation->shape_jacobian(static_cast<Eigen::Index>(parameter_index))
+                    };
+                    if (std::abs(derivative) <= std::numeric_limits<double>::epsilon())
+                    {
+                        continue;
+                    }
+                    triplet_list.emplace_back(row_index, column_index, derivative);
+                }
             }
             if (std::abs(evaluation->offset_jacobian) > std::numeric_limits<double>::epsilon())
             {
@@ -1187,6 +1244,227 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
         damping *= 0.5;
     }
     return std::nullopt;
+}
+
+const char * GetBoundaryJointCorrectionStatusText(
+    BoundaryJointCorrectionStatus status)
+{
+    switch (status)
+    {
+    case BoundaryJointCorrectionStatus::CandidateReady:
+        return "candidate-ready";
+    case BoundaryJointCorrectionStatus::InvalidInput:
+        return "invalid-input";
+    case BoundaryJointCorrectionStatus::InvalidSeed:
+        return "invalid-seed";
+    case BoundaryJointCorrectionStatus::SystemBuildFailed:
+        return "system-build-failed";
+    case BoundaryJointCorrectionStatus::TrustRegionUnavailable:
+        return "trust-region-unavailable";
+    case BoundaryJointCorrectionStatus::NoMaterialChange:
+        return "no-material-change";
+    }
+    return "invalid-input";
+}
+
+BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
+    const SecondStageContext & context,
+    const FitState & previous_state,
+    const FitStateView & endpoint_state,
+    const std::vector<std::size_t> & interface_atom_index_list,
+    const std::vector<std::size_t> & offset_closure_atom_index_list,
+    const std::vector<SampleRef> & sample_ref_list,
+    const std::vector<double> & ridge_multiplier_list,
+    const std::vector<BoundaryJointTrustRegion> & trust_region_list,
+    ReusableWeightedRidgeSolver & reusable_solver)
+{
+    BoundaryJointCorrectionResult result;
+    if (interface_atom_index_list.empty() ||
+        offset_closure_atom_index_list.empty() ||
+        sample_ref_list.empty() ||
+        previous_state.size() != context.size() ||
+        endpoint_state.size() != context.size() ||
+        ridge_multiplier_list.size() != context.size() ||
+        trust_region_list.empty() ||
+        !std::ranges::is_sorted(interface_atom_index_list) ||
+        !std::ranges::is_sorted(offset_closure_atom_index_list))
+    {
+        return result;
+    }
+    for (const auto atom_index : interface_atom_index_list)
+    {
+        if (atom_index >= context.size() ||
+            !std::ranges::binary_search(offset_closure_atom_index_list, atom_index))
+        {
+            return result;
+        }
+    }
+
+    std::vector<std::size_t> group_id_by_atom_position;
+    std::vector<GaussianModel3D> endpoint_model_list;
+    std::vector<char> shape_active_mask;
+    group_id_by_atom_position.reserve(offset_closure_atom_index_list.size());
+    endpoint_model_list.reserve(offset_closure_atom_index_list.size());
+    shape_active_mask.reserve(offset_closure_atom_index_list.size());
+    for (const auto atom_index : offset_closure_atom_index_list)
+    {
+        if (atom_index >= context.size()) return result;
+        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
+        endpoint_model_list.emplace_back(endpoint_state.GetModel(atom_index));
+        shape_active_mask.emplace_back(
+            std::ranges::binary_search(
+                interface_atom_index_list,
+                atom_index) ? 1 : 0);
+    }
+    const auto parameterization{
+        BuildActiveSetJointPolishParameterization(
+            group_id_by_atom_position,
+            endpoint_model_list,
+            shape_active_mask)
+    };
+    if (!parameterization.has_value())
+    {
+        result.status = BoundaryJointCorrectionStatus::InvalidSeed;
+        return result;
+    }
+    result.parameter_count = static_cast<std::size_t>(parameterization->seed_parameter.size());
+    const auto seed_model_list{ parameterization->DecodeSeedModels() };
+    if (!seed_model_list.has_value())
+    {
+        result.status = BoundaryJointCorrectionStatus::InvalidSeed;
+        return result;
+    }
+    const auto direction{
+        BuildJointPolishDirection(
+            context,
+            endpoint_state,
+            offset_closure_atom_index_list,
+            sample_ref_list,
+            ridge_multiplier_list,
+            *parameterization,
+            reusable_solver)
+    };
+    if (!direction.has_value())
+    {
+        result.status = BoundaryJointCorrectionStatus::SystemBuildFailed;
+        return result;
+    }
+
+    double damping{ 1.0 };
+    bool found_trust_region_candidate{ false };
+    while (damping >= std::numeric_limits<double>::epsilon())
+    {
+        const auto candidate_model_list{
+            parameterization->DecodeModels(*direction, damping)
+        };
+        if (!candidate_model_list.has_value())
+        {
+            damping *= 0.5;
+            continue;
+        }
+        double maximum_normalized_trust_step{ 0.0 };
+        bool trust_region_accepted{ true };
+        for (const auto & trust_region : trust_region_list)
+        {
+            if (!std::isfinite(trust_region.radius) ||
+                trust_region.radius <= 0.0 || trust_region.key.empty())
+            {
+                return result;
+            }
+            std::vector<GaussianModel3D> previous_model_list;
+            std::vector<GaussianModel3D> candidate_cluster_model_list;
+            previous_model_list.reserve(trust_region.key.size());
+            candidate_cluster_model_list.reserve(trust_region.key.size());
+            for (const auto atom_index : trust_region.key)
+            {
+                if (atom_index >= context.size()) return result;
+                previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
+                const auto closure_iter{
+                    std::ranges::lower_bound(
+                        offset_closure_atom_index_list,
+                        atom_index)
+                };
+                if (closure_iter != offset_closure_atom_index_list.end() && *closure_iter == atom_index)
+                {
+                    const auto position{ static_cast<std::size_t>(
+                        std::distance(
+                            offset_closure_atom_index_list.begin(),
+                            closure_iter)) };
+                    candidate_cluster_model_list.emplace_back(candidate_model_list->at(position));
+                }
+                else
+                {
+                    candidate_cluster_model_list.emplace_back(endpoint_state.GetModel(atom_index));
+                }
+            }
+            const auto step_norm{
+                CalculateModelTrustRegionStepNorm(
+                    previous_model_list,
+                    candidate_cluster_model_list)
+            };
+            if (!step_norm.has_value())
+            {
+                trust_region_accepted = false;
+                break;
+            }
+            maximum_normalized_trust_step = std::max(
+                maximum_normalized_trust_step,
+                *step_norm / trust_region.radius);
+            if (!IsTrustRegionStepWithinRadius(*step_norm, trust_region.radius))
+            {
+                trust_region_accepted = false;
+                break;
+            }
+        }
+        if (!trust_region_accepted)
+        {
+            damping *= 0.5;
+            continue;
+        }
+        found_trust_region_candidate = true;
+        bool has_material_change{ false };
+        for (std::size_t position = 0; position < candidate_model_list->size(); position++)
+        {
+            const auto change{
+                CalculateTransformedChange(
+                    candidate_model_list->at(position),
+                    endpoint_model_list.at(position))
+            };
+            if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
+            {
+                has_material_change = true;
+                break;
+            }
+        }
+        if (!has_material_change)
+        {
+            result.status = BoundaryJointCorrectionStatus::NoMaterialChange;
+            return result;
+        }
+
+        FitStatePatch patch;
+        patch.atom_index_list = offset_closure_atom_index_list;
+        patch.mdpde_list.reserve(offset_closure_atom_index_list.size());
+        for (std::size_t position = 0; position < offset_closure_atom_index_list.size(); position++)
+        {
+            const auto atom_index{
+                offset_closure_atom_index_list.at(position)
+            };
+            patch.mdpde_list.emplace_back(GaussianModel3DWithUncertainty{
+                candidate_model_list->at(position),
+                endpoint_state.GetMdpde(atom_index).GetStandardDeviationModel()
+            });
+        }
+        result.status = BoundaryJointCorrectionStatus::CandidateReady;
+        result.patch = std::move(patch);
+        result.damping = damping;
+        result.maximum_normalized_trust_step = maximum_normalized_trust_step;
+        return result;
+    }
+    result.status = found_trust_region_candidate ?
+        BoundaryJointCorrectionStatus::NoMaterialChange :
+        BoundaryJointCorrectionStatus::TrustRegionUnavailable;
+    return result;
 }
 
 } // namespace rhbm_gem::core::detail

@@ -158,6 +158,7 @@ class PerformanceCounters
 {
     const bool m_quiet_mode;
     const ClusterSolverWorkspaceMap & m_solver_workspace_by_key;
+    const BoundaryJointCorrectionWorkspaceMap & m_boundary_joint_correction_workspace_by_key;
     const std::chrono::steady_clock::time_point m_start_time;
     const std::size_t m_cached_sample_count;
     std::atomic<std::size_t> m_full_state_materialization_count{ 0 };
@@ -171,16 +172,21 @@ class PerformanceCounters
     std::size_t m_boundary_reconciliation_attempt_count{ 0 };
     std::size_t m_boundary_reconciliation_backtracked_count{ 0 };
     std::size_t m_boundary_reconciliation_rejected_count{ 0 };
+    std::size_t m_boundary_joint_correction_attempt_count{ 0 };
+    std::size_t m_boundary_joint_correction_accepted_count{ 0 };
+    std::size_t m_boundary_joint_correction_fallback_count{ 0 };
     double m_iteration_phase_milliseconds{ 0.0 };
     double m_candidate_phase_milliseconds{ 0.0 };
     double m_topology_rebuild_milliseconds{ 0.0 };
     double m_boundary_reconciliation_milliseconds{ 0.0 };
+    double m_boundary_joint_correction_milliseconds{ 0.0 };
 
 public:
     PerformanceCounters(
         bool quiet_mode,
         const SecondStageContext & context,
-        const ClusterSolverWorkspaceMap & solver_workspace_by_key);
+        const ClusterSolverWorkspaceMap & solver_workspace_by_key,
+        const BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key);
 
     ~PerformanceCounters();
 
@@ -199,6 +205,7 @@ public:
         std::size_t backtracked_count,
         std::size_t rejected_count,
         double elapsed_milliseconds);
+    void RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds);
 
 private:
     static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
@@ -446,6 +453,14 @@ struct PolishProgress
     std::size_t skipped_count{ 0 };
 };
 
+enum class BoundaryComponentAcceptedSource
+{
+    None,
+    Endpoint,
+    JointCorrection,
+    Backtracking
+};
+
 struct BoundaryComponentReconciliationDiagnostic
 {
     std::vector<ClusterKey> key_list{};
@@ -453,6 +468,15 @@ struct BoundaryComponentReconciliationDiagnostic
     std::size_t boundary_sample_count{ 0 };
     std::size_t trial_count{ 1 };
     std::optional<double> accepted_factor{};
+    BoundaryComponentAcceptedSource accepted_source{ BoundaryComponentAcceptedSource::None };
+    std::optional<BoundaryJointCorrectionStatus> joint_correction_status{};
+    std::size_t interface_atom_count{ 0 };
+    std::size_t offset_closure_atom_count{ 0 };
+    std::size_t joint_parameter_count{ 0 };
+    std::optional<double> joint_damping{};
+    std::optional<double> maximum_normalized_trust_step{};
+    std::optional<double> previous_component_objective{};
+    std::optional<double> candidate_component_objective{};
     bool accepted{ false };
     bool exhausted{ false };
 };
@@ -490,6 +514,7 @@ struct CandidateSelectionInputs
     const BestAuditState & best_audit_state;
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
+    BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
     int thread_size;
     PerformanceCounters & performance_counters;
 };

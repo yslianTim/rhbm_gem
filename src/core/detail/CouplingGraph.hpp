@@ -91,6 +91,7 @@ struct CouplingGraphPartition
     {
         SampleRef sample_id{};
         std::vector<ClusterKey> cluster_key_list{};
+        std::vector<std::size_t> contributor_atom_index_list{};
 
         friend bool operator==(
             const BoundarySampleDependency &,
@@ -106,6 +107,8 @@ struct BoundaryReconciliationComponent
 {
     std::vector<ClusterKey> key_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
+    std::vector<std::size_t> interface_atom_index_list{};
+    std::vector<std::size_t> offset_closure_atom_index_list{};
     std::size_t boundary_sample_count{ 0 };
 
     friend bool operator==(
@@ -180,6 +183,7 @@ std::vector<SampleRef> BuildGraphAffectedSampleUnion(
     const std::vector<ClusterKey> & key_list);
 
 std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponents(
+    const SecondStageContext & context,
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & accepted_key_list);
 

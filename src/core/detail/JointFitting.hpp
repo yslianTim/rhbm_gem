@@ -73,6 +73,21 @@ struct ClusterSolverWorkspace
 
 using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
 
+struct BoundaryJointCorrectionWorkspaceKey
+{
+    std::vector<ClusterKey> member_key_list{};
+    std::vector<std::size_t> interface_atom_index_list{};
+    std::vector<std::size_t> offset_closure_atom_index_list{};
+    std::vector<SampleRef> affected_sample_ref_list{};
+
+    friend auto operator<=>(
+        const BoundaryJointCorrectionWorkspaceKey &,
+        const BoundaryJointCorrectionWorkspaceKey &) = default;
+};
+
+using BoundaryJointCorrectionWorkspaceMap =
+    std::map<BoundaryJointCorrectionWorkspaceKey, ReusableWeightedRidgeSolver>;
+
 void ResetClusterSolverWorkspace(
     const std::vector<ClusterKey> & cluster_key_list,
     ClusterSolverWorkspaceMap & workspace_by_key);
@@ -139,23 +154,31 @@ constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
 struct JointPolishParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
+    std::vector<std::size_t> shape_position_by_atom{};
+    std::vector<Eigen::Vector2d> base_shape_coordinate_by_atom{};
+    std::size_t shape_atom_count{ 0 };
     Eigen::VectorXd seed_parameter{};
 
 private:
-    std::optional<std::vector<GaussianModel3D>> DecodeParameter(
-        const Eigen::VectorXd & parameter) const;
+    std::optional<std::vector<GaussianModel3D>> DecodeParameter(const Eigen::VectorXd & parameter) const;
 
 public:
     Eigen::Index ShapeColumn(std::size_t atom_position, std::size_t shape_parameter_index) const
     {
         return static_cast<Eigen::Index>(
-            atom_position * kJointPolishShapeParameterSize + shape_parameter_index);
+            shape_position_by_atom.at(atom_position) *
+                kJointPolishShapeParameterSize + shape_parameter_index);
+    }
+
+    bool HasShapeColumn(std::size_t atom_position) const
+    {
+        return shape_position_by_atom.at(atom_position) < shape_atom_count;
     }
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
         return static_cast<Eigen::Index>(
-            group_position_by_atom.size() * kJointPolishShapeParameterSize +
+            shape_atom_count * kJointPolishShapeParameterSize +
             group_position_by_atom.at(atom_position));
     }
 
@@ -169,6 +192,11 @@ public:
 std::optional<JointPolishParameterization> BuildJointPolishParameterization(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list);
+
+std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
+    const std::vector<std::size_t> & group_id_by_atom_position,
+    const std::vector<GaussianModel3D> & base_model_list,
+    const std::vector<char> & shape_active_mask);
 
 std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const SecondStageContext & context,
@@ -187,5 +215,43 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
     const std::vector<double> & ridge_multiplier_list,
     ReusableWeightedRidgeSolver & reusable_solver,
     double trust_region_radius);
+
+enum class BoundaryJointCorrectionStatus
+{
+    CandidateReady,
+    InvalidInput,
+    InvalidSeed,
+    SystemBuildFailed,
+    TrustRegionUnavailable,
+    NoMaterialChange
+};
+
+const char * GetBoundaryJointCorrectionStatusText(BoundaryJointCorrectionStatus status);
+
+struct BoundaryJointTrustRegion
+{
+    ClusterKey key{};
+    double radius{ 0.0 };
+};
+
+struct BoundaryJointCorrectionResult
+{
+    BoundaryJointCorrectionStatus status{ BoundaryJointCorrectionStatus::InvalidInput };
+    std::optional<FitStatePatch> patch{};
+    double damping{ 0.0 };
+    double maximum_normalized_trust_step{ 0.0 };
+    std::size_t parameter_count{ 0 };
+};
+
+BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
+    const SecondStageContext & context,
+    const FitState & previous_state,
+    const FitStateView & endpoint_state,
+    const std::vector<std::size_t> & interface_atom_index_list,
+    const std::vector<std::size_t> & offset_closure_atom_index_list,
+    const std::vector<SampleRef> & sample_ref_list,
+    const std::vector<double> & ridge_multiplier_list,
+    const std::vector<BoundaryJointTrustRegion> & trust_region_list,
+    ReusableWeightedRidgeSolver & reusable_solver);
 
 } // namespace rhbm_gem::core::detail

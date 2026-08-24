@@ -6,6 +6,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -922,11 +923,18 @@ CouplingGraphPartition BuildGraphPartition(
     }
 
     std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
-    std::vector<std::pair<SampleRef, std::vector<std::size_t>>> boundary_root_list_by_sample;
+    struct BoundaryRoots
+    {
+        SampleRef sample_id{};
+        std::vector<std::size_t> root_list{};
+        std::vector<std::size_t> contributor_atom_index_list{};
+    };
+    std::vector<BoundaryRoots> boundary_root_list_by_sample;
     CouplingGraphPartition partition;
     for (const auto & dependency : topology.sample_dependency_list)
     {
         std::vector<std::size_t> root_list;
+        std::vector<std::size_t> active_contributor_atom_index_list;
         for (const auto atom_index : dependency.contributor_atom_index_list)
         {
             if (atom_index >= atom_count)
@@ -936,13 +944,22 @@ CouplingGraphPartition BuildGraphPartition(
             }
             const auto position{ active_position_by_atom_index.at(atom_index) };
             if (position == inactive_position) continue;
+            active_contributor_atom_index_list.emplace_back(atom_index);
             root_list.emplace_back(component_set.Find(position));
         }
+        std::ranges::sort(active_contributor_atom_index_list);
+        active_contributor_atom_index_list.erase(
+            std::ranges::unique(active_contributor_atom_index_list).begin(),
+            active_contributor_atom_index_list.end());
         std::ranges::sort(root_list);
         root_list.erase(std::ranges::unique(root_list).begin(), root_list.end());
         if (root_list.size() > 1)
         {
-            boundary_root_list_by_sample.emplace_back(dependency.sample_id, root_list);
+            boundary_root_list_by_sample.emplace_back(BoundaryRoots{
+                dependency.sample_id,
+                root_list,
+                active_contributor_atom_index_list
+            });
         }
         for (const auto root : root_list)
         {
@@ -951,15 +968,16 @@ CouplingGraphPartition BuildGraphPartition(
     }
 
     partition.boundary_sample_dependency_list.reserve(boundary_root_list_by_sample.size());
-    for (auto & [sample_id, root_list] : boundary_root_list_by_sample)
+    for (auto & boundary_roots : boundary_root_list_by_sample)
     {
         CouplingGraphPartition::BoundarySampleDependency boundary_dependency;
-        boundary_dependency.sample_id = sample_id;
-        boundary_dependency.cluster_key_list.reserve(root_list.size());
-        for (const auto root : root_list)
+        boundary_dependency.sample_id = boundary_roots.sample_id;
+        boundary_dependency.cluster_key_list.reserve(boundary_roots.root_list.size());
+        for (const auto root : boundary_roots.root_list)
         {
             boundary_dependency.cluster_key_list.emplace_back(key_by_root.at(root));
         }
+        boundary_dependency.contributor_atom_index_list = std::move(boundary_roots.contributor_atom_index_list);
         partition.boundary_sample_dependency_list.emplace_back(std::move(boundary_dependency));
     }
     std::ranges::sort(
@@ -1003,6 +1021,7 @@ std::vector<SampleRef> BuildGraphAffectedSampleUnion(
 }
 
 std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponents(
+    const SecondStageContext & context,
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & accepted_key_list)
 {
@@ -1065,6 +1084,16 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         static_cast<void>(root);
         if (key_list.size() < 2) continue;
         std::size_t boundary_sample_count{ 0 };
+        std::vector<std::size_t> interface_atom_index_list;
+        std::vector<std::size_t> component_atom_index_list;
+        for (const auto & key : key_list)
+        {
+            component_atom_index_list.insert(
+                component_atom_index_list.end(),
+                key.begin(),
+                key.end());
+        }
+        std::ranges::sort(component_atom_index_list);
         for (const auto & dependency : partition.boundary_sample_dependency_list)
         {
             const auto accepted_contributor_count{
@@ -1075,11 +1104,48 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
                         return std::ranges::find(key_list, key) != key_list.end();
                     })
             };
-            if (accepted_contributor_count > 1) boundary_sample_count++;
+            if (accepted_contributor_count <= 1) continue;
+            boundary_sample_count++;
+            for (const auto atom_index : dependency.contributor_atom_index_list)
+            {
+                if (std::ranges::binary_search(component_atom_index_list, atom_index))
+                {
+                    interface_atom_index_list.emplace_back(atom_index);
+                }
+            }
+        }
+        std::ranges::sort(interface_atom_index_list);
+        interface_atom_index_list.erase(
+            std::ranges::unique(interface_atom_index_list).begin(),
+            interface_atom_index_list.end());
+        std::set<std::size_t> touched_group_id_set;
+        for (const auto atom_index : interface_atom_index_list)
+        {
+            if (atom_index >= context.size())
+            {
+                throw std::invalid_argument(
+                    "Boundary reconciliation interface atom is out of range.");
+            }
+            touched_group_id_set.emplace(context.at(atom_index).group_id);
+        }
+        std::vector<std::size_t> offset_closure_atom_index_list;
+        for (const auto atom_index : component_atom_index_list)
+        {
+            if (atom_index >= context.size())
+            {
+                throw std::invalid_argument(
+                    "Boundary reconciliation component atom is out of range.");
+            }
+            if (touched_group_id_set.contains(context.at(atom_index).group_id))
+            {
+                offset_closure_atom_index_list.emplace_back(atom_index);
+            }
         }
         component_list.emplace_back(BoundaryReconciliationComponent{
             key_list,
             BuildGraphAffectedSampleUnion(partition, key_list),
+            std::move(interface_atom_index_list),
+            std::move(offset_closure_atom_index_list),
             boundary_sample_count
         });
     }

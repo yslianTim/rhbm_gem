@@ -1144,6 +1144,35 @@ std::unique_ptr<rg::ModelObject> BuildBoundaryComponentConflictDefenseModel(
         rg::GaussianModel3D{ 5.5 * intensity_scale, 0.55, 0.0 });
 }
 
+std::unique_ptr<rg::ModelObject> BuildBoundaryJointCorrectionDefenseModel(
+    double intensity_scale = 1.0)
+{
+    return BuildDefenseModel(
+        {
+            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+            std::array<float, 3>{ 3.4F, 0.0F, 0.0F }
+        },
+        { Spot::C, Spot::O },
+        { Element::CARBON, Element::OXYGEN },
+        {
+            rg::GaussianModel3D{
+                10.0 * intensity_scale,
+                0.65,
+                0.2 * intensity_scale
+            },
+            rg::GaussianModel3D{
+                2.0 * intensity_scale,
+                0.65,
+                -0.1 * intensity_scale
+            }
+        },
+        rg::GaussianModel3D{
+            5.5 * intensity_scale,
+            0.6,
+            0.0
+        });
+}
+
 std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
@@ -2941,6 +2970,206 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
 
 TEST(
     EstimatorSecondStageDefenseTest,
+    ActiveSetJointPolishKeepsClosureOnlyShapesAndSharesOffsets)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.10 },
+        rg::GaussianModel3D{ 7.0, 0.60, 0.20 }
+    };
+    const auto parameterization{
+        polish_detail::BuildActiveSetJointPolishParameterization(
+            { 10, 10, 20 },
+            base_model_list,
+            { 1, 0, 1 })
+    };
+    ASSERT_TRUE(parameterization.has_value());
+    EXPECT_EQ(parameterization->shape_atom_count, 2U);
+    EXPECT_TRUE(parameterization->HasShapeColumn(0));
+    EXPECT_FALSE(parameterization->HasShapeColumn(1));
+    EXPECT_TRUE(parameterization->HasShapeColumn(2));
+    EXPECT_EQ(parameterization->seed_parameter.size(), 6);
+
+    Eigen::VectorXd direction{
+        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
+    };
+    direction(parameterization->ShapeColumn(0, 0)) = 0.2;
+    direction(parameterization->ShapeColumn(2, 1)) = -0.1;
+    direction(parameterization->OffsetColumn(0)) = 0.4;
+    direction(parameterization->OffsetColumn(2)) = -0.2;
+    const auto candidate_model_list{
+        parameterization->DecodeModels(direction, 1.0)
+    };
+    ASSERT_TRUE(candidate_model_list.has_value());
+    EXPECT_NE(
+        candidate_model_list->at(0).GetAmplitude(),
+        base_model_list.at(0).GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        candidate_model_list->at(1).GetAmplitude(),
+        base_model_list.at(1).GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        candidate_model_list->at(1).GetWidth(),
+        base_model_list.at(1).GetWidth());
+    EXPECT_NE(
+        candidate_model_list->at(2).GetWidth(),
+        base_model_list.at(2).GetWidth());
+    EXPECT_DOUBLE_EQ(
+        candidate_model_list->at(0).GetOffset(),
+        candidate_model_list->at(1).GetOffset());
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryJointCorrectionUsesActiveShapesClosureOffsetsAndPerClusterTrust)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.10 },
+        rg::GaussianModel3D{ 7.0, 0.60, 0.20 }
+    };
+    const std::vector<rg::GaussianModel3D> target_model_list{
+        rg::GaussianModel3D{ 6.8, 0.60, 0.30 },
+        rg::GaussianModel3D{ 4.5, 0.70, 0.30 },
+        rg::GaussianModel3D{ 6.4, 0.56, -0.15 }
+    };
+    auto fixture{
+        BuildJointPolishFixture(
+            { 10, 10, 20 },
+            base_model_list,
+            target_model_list)
+    };
+    const polish_detail::FitStatePatch endpoint_patch;
+    const polish_detail::FitStateView endpoint_state{
+        fixture.state,
+        endpoint_patch
+    };
+    polish_detail::ReusableWeightedRidgeSolver solver;
+    const auto result{
+        polish_detail::BuildBoundaryJointCorrection(
+            fixture.context,
+            fixture.state,
+            endpoint_state,
+            { 0, 2 },
+            { 0, 1, 2 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            {
+                { { 0, 1 }, 4.0 },
+                { { 2 }, 0.5 }
+            },
+            solver)
+    };
+    ASSERT_EQ(
+        result.status,
+        polish_detail::BoundaryJointCorrectionStatus::CandidateReady);
+    ASSERT_TRUE(result.patch.has_value());
+    EXPECT_EQ(result.parameter_count, 6U);
+    EXPECT_LE(result.maximum_normalized_trust_step, 1.0 + 1.0e-12);
+    ASSERT_EQ(result.patch->mdpde_list.size(), 3U);
+    const auto & closure_only_candidate{
+        result.patch->mdpde_list.at(1).GetModel()
+    };
+    EXPECT_DOUBLE_EQ(
+        closure_only_candidate.GetAmplitude(),
+        base_model_list.at(1).GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        closure_only_candidate.GetWidth(),
+        base_model_list.at(1).GetWidth());
+    EXPECT_DOUBLE_EQ(
+        result.patch->mdpde_list.at(0).GetModel().GetOffset(),
+        closure_only_candidate.GetOffset());
+    EXPECT_DOUBLE_EQ(
+        result.patch->mdpde_list.at(1)
+            .GetStandardDeviationModel().GetAmplitude(),
+        fixture.state.at(1).mdpde
+            .GetStandardDeviationModel().GetAmplitude());
+
+    polish_detail::ReusableWeightedRidgeSolver invalid_solver;
+    EXPECT_EQ(
+        polish_detail::BuildBoundaryJointCorrection(
+            fixture.context,
+            fixture.state,
+            endpoint_state,
+            {},
+            { 0, 1, 2 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            { { { 0, 1, 2 }, 4.0 } },
+            invalid_solver).status,
+        polish_detail::BoundaryJointCorrectionStatus::InvalidInput);
+
+    polish_detail::ReusableWeightedRidgeSolver unavailable_solver;
+    EXPECT_EQ(
+        polish_detail::BuildBoundaryJointCorrection(
+            fixture.context,
+            fixture.state,
+            endpoint_state,
+            { 0, 2 },
+            { 0, 1, 2 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            {
+                { { 0, 1 }, 1.0e-8 },
+                { { 2 }, 1.0e-8 }
+            },
+            unavailable_solver).status,
+        polish_detail::BoundaryJointCorrectionStatus::TrustRegionUnavailable);
+
+    auto non_finite_fixture{ fixture };
+    non_finite_fixture.context.at(0).raw_sampling_entries.at(0).response =
+        std::numeric_limits<float>::infinity();
+    polish_detail::ReusableWeightedRidgeSolver non_finite_solver;
+    EXPECT_EQ(
+        polish_detail::BuildBoundaryJointCorrection(
+            non_finite_fixture.context,
+            non_finite_fixture.state,
+            endpoint_state,
+            { 0, 2 },
+            { 0, 1, 2 },
+            non_finite_fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            {
+                { { 0, 1 }, 4.0 },
+                { { 2 }, 0.5 }
+            },
+            non_finite_solver).status,
+        polish_detail::BoundaryJointCorrectionStatus::SystemBuildFailed);
+
+    const std::vector<rg::GaussianModel3D> stationary_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.0 },
+        rg::GaussianModel3D{ 4.5, 0.70, 0.0 },
+        rg::GaussianModel3D{ 7.0, 0.60, 0.0 }
+    };
+    auto stationary_fixture{
+        BuildJointPolishFixture(
+            { 10, 20, 30 },
+            stationary_model_list,
+            stationary_model_list)
+    };
+    const polish_detail::FitStateView stationary_endpoint_state{
+        stationary_fixture.state,
+        endpoint_patch
+    };
+    polish_detail::ReusableWeightedRidgeSolver stationary_solver;
+    EXPECT_EQ(
+        polish_detail::BuildBoundaryJointCorrection(
+            stationary_fixture.context,
+            stationary_fixture.state,
+            stationary_endpoint_state,
+            { 0, 2 },
+            { 0, 1, 2 },
+            stationary_fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            {
+                { { 0, 1 }, 4.0 },
+                { { 2 }, 0.5 }
+            },
+            stationary_solver).status,
+        polish_detail::BoundaryJointCorrectionStatus::NoMaterialChange);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
     JointPolishDirectionAndProposalShareGroupOffset)
 {
     const std::vector<std::size_t> group_id_list{ 20, 20 };
@@ -3581,6 +3810,16 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(
         partition.boundary_sample_dependency_list.front().cluster_key_list,
         (std::vector<audit_detail::ClusterKey>{ { 0, 1 }, { 2 } }));
+    EXPECT_EQ(
+        partition.boundary_sample_dependency_list.front()
+            .contributor_atom_index_list,
+        (std::vector<std::size_t>{ 1, 2 }));
+    auto contributor_changed_partition{ partition };
+    contributor_changed_partition.boundary_sample_dependency_list.front()
+        .contributor_atom_index_list = { 1 };
+    EXPECT_NE(
+        contributor_changed_partition.boundary_sample_dependency_list,
+        partition.boundary_sample_dependency_list);
     EXPECT_EQ(partition.sample_id_list_by_key.at({ 0, 1 }).size(), 2U);
     EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 1U);
 
@@ -3614,6 +3853,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
     const audit_detail::ClusterKey key_c{ 2 };
     const audit_detail::ClusterKey key_d{ 3 };
     const audit_detail::ClusterKey key_e{ 4 };
+    const audit_detail::ClusterKey key_f{ 5 };
     const coupling_detail::SampleRef sample_ab{ 0, 0 };
     const coupling_detail::SampleRef sample_bc{ 1, 0 };
     const coupling_detail::SampleRef sample_de{ 3, 0 };
@@ -3623,20 +3863,30 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         { key_b, { sample_ab, sample_bc } },
         { key_c, { sample_bc } },
         { key_d, { sample_de } },
-        { key_e, { sample_de } }
+        { key_e, { sample_de } },
+        { key_f, {} }
     };
     partition.boundary_sample_dependency_list = {
-        { sample_ab, { key_a, key_b } },
-        { sample_bc, { key_b, key_c } },
-        { sample_de, { key_d, key_e } }
+        { sample_ab, { key_a, key_b }, { 0, 1 } },
+        { sample_bc, { key_b, key_c }, { 1, 2 } },
+        { sample_de, { key_d, key_e }, { 3, 4 } }
     };
     partition.boundary_sample_count =
         partition.boundary_sample_dependency_list.size();
 
+    coupling_detail::SecondStageContext context;
+    context.selected_atom_list.resize(6);
+    context.at(0).group_id = 0;
+    context.at(1).group_id = 1;
+    context.at(2).group_id = 0;
+    context.at(3).group_id = 2;
+    context.at(4).group_id = 2;
+    context.at(5).group_id = 0;
     const auto component_list{
         coupling_detail::BuildBoundaryReconciliationComponents(
+            context,
             partition,
-            { key_e, key_c, key_a, key_d, key_b })
+            { key_f, key_e, key_c, key_a, key_d, key_b })
     };
     ASSERT_EQ(component_list.size(), 2U);
     EXPECT_EQ(
@@ -3647,19 +3897,33 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         (std::vector<coupling_detail::SampleRef>{ sample_ab, sample_bc }));
     EXPECT_EQ(component_list.at(0).boundary_sample_count, 2U);
     EXPECT_EQ(
+        component_list.at(0).interface_atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2 }));
+    EXPECT_EQ(
+        component_list.at(0).offset_closure_atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2 }));
+    EXPECT_EQ(
         component_list.at(1).key_list,
         (std::vector<audit_detail::ClusterKey>{ key_d, key_e }));
     EXPECT_EQ(
         component_list.at(1).affected_sample_ref_list,
         (std::vector<coupling_detail::SampleRef>{ sample_de }));
     EXPECT_EQ(component_list.at(1).boundary_sample_count, 1U);
+    EXPECT_EQ(
+        component_list.at(1).interface_atom_index_list,
+        (std::vector<std::size_t>{ 3, 4 }));
+    EXPECT_EQ(
+        component_list.at(1).offset_closure_atom_index_list,
+        (std::vector<std::size_t>{ 3, 4 }));
 
     EXPECT_TRUE(
         coupling_detail::BuildBoundaryReconciliationComponents(
+            context,
             partition,
             { key_c, key_a }).empty());
     EXPECT_EQ(
         coupling_detail::BuildBoundaryReconciliationComponents(
+            context,
             partition,
             { key_c, key_b, key_a }),
         std::vector<coupling_detail::BoundaryReconciliationComponent>{
@@ -5070,6 +5334,105 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnc
     EXPECT_NE(
         out.find("Boundary-component reconciliation:"),
         std::string::npos);
+    EXPECT_NE(
+        out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
+        std::string::npos);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryJointCorrectionRepairsFailedEndpointAndRetainsFallback)
+{
+    auto model{ BuildBoundaryJointCorrectionDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(out.find("accepted_source=joint-correction"), std::string::npos);
+    EXPECT_NE(
+        out.find(
+            "Boundary-interface joint correction: interface/closure/parameters = 2/2/6"),
+        std::string::npos);
+    EXPECT_NE(out.find("status=candidate-ready"), std::string::npos);
+    EXPECT_NE(out.find("accepted=yes."), std::string::npos);
+    EXPECT_NE(
+        out.find("boundary_joint_correction_attempts/accepted/fallback=2/1/1"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("trials/factor/accepted/exhausted = 6/-/no/yes"),
+        std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryJointCorrectionMatchesSerialParallelAndIntensityScaling)
+{
+    constexpr double intensity_scale{ 100.0 };
+    auto serial_model{ BuildBoundaryJointCorrectionDefenseModel() };
+    auto parallel_model{ BuildBoundaryJointCorrectionDefenseModel() };
+    auto scaled_model{
+        BuildBoundaryJointCorrectionDefenseModel(intensity_scale)
+    };
+    auto serial_options{ MakeSecondStageOptions() };
+    auto parallel_options{ MakeSecondStageOptions() };
+    auto scaled_options{ MakeSecondStageOptions() };
+    serial_options.thread_size = 1;
+    parallel_options.thread_size = 2;
+    scaled_options.quiet_mode = false;
+
+    EXPECT_EQ(
+        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
+        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*scaled_model, scaled_options);
+    const std::string scaled_out{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(
+        scaled_out.find(
+            "boundary_joint_correction_attempts/accepted/fallback=2/1/1"),
+        std::string::npos);
+
+    const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
+    const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
+    const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
+    ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
+    ASSERT_EQ(serial_atoms.size(), scaled_atoms.size());
+    for (std::size_t i = 0; i < serial_atoms.size(); i++)
+    {
+        const auto serial{ GetEstimateModel(*serial_atoms.at(i)) };
+        const auto parallel{ GetEstimateModel(*parallel_atoms.at(i)) };
+        const auto scaled{ GetEstimateModel(*scaled_atoms.at(i)) };
+        ExpectGaussianModelsNear(serial, parallel, 1.0e-12);
+        EXPECT_NEAR(
+            serial.GetAmplitude() * intensity_scale,
+            scaled.GetAmplitude(),
+            std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 5.0e-5));
+        EXPECT_NEAR(serial.GetWidth(), scaled.GetWidth(), 5.0e-6);
+        EXPECT_NEAR(
+            serial.GetOffset() * intensity_scale,
+            scaled.GetOffset(),
+            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 1.0e-4));
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, QuietBoundaryJointCorrectionIsSilent)
+{
+    auto model{ BuildBoundaryJointCorrectionDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = true;
+
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+
+    EXPECT_TRUE(out.empty());
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(

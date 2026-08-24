@@ -141,6 +141,7 @@ struct IterationState
     std::vector<std::size_t> active_index_list{};
     CouplingGraphPartition graph_partition{};
     ClusterSolverWorkspaceMap solver_workspace_by_key{};
+    BoundaryJointCorrectionWorkspaceMap boundary_joint_correction_workspace_by_key{};
     ObjectiveDomain objective_domain{};
     BestAuditState best_audit_state{};
     TerminalFailureState terminal_failure_state{};
@@ -1090,6 +1091,21 @@ static void LogAcceptedBacktrackingDiagnostics(
     }
     for (const auto & diagnostic : diagnostics.boundary_reconciliation_diagnostic_list)
     {
+        const auto accepted_source_text = [&]() -> std::string_view
+        {
+            switch (diagnostic.accepted_source)
+            {
+            case BoundaryComponentAcceptedSource::None:
+                return "none";
+            case BoundaryComponentAcceptedSource::Endpoint:
+                return "endpoint";
+            case BoundaryComponentAcceptedSource::JointCorrection:
+                return "joint-correction";
+            case BoundaryComponentAcceptedSource::Backtracking:
+                return "backtracking";
+            }
+            return "none";
+        };
         std::ostringstream message;
         message
             << "Boundary-component reconciliation: clusters/atoms/boundary-samples = "
@@ -1108,8 +1124,58 @@ static void LogAcceptedBacktrackingDiagnostics(
         }
         message
             << "/" << (diagnostic.accepted ? "yes" : "no")
-            << "/" << (diagnostic.exhausted ? "yes" : "no") << ".";
+            << "/" << (diagnostic.exhausted ? "yes" : "no")
+            << ", accepted_source=" << accepted_source_text() << ".";
         Logger::Log(LogLevel::Debug, message.str());
+        if (!diagnostic.joint_correction_status.has_value()) continue;
+        std::ostringstream correction_message;
+        correction_message << std::scientific << std::setprecision(2)
+            << "Boundary-interface joint correction: interface/closure/parameters = "
+            << diagnostic.interface_atom_count << "/"
+            << diagnostic.offset_closure_atom_count << "/"
+            << diagnostic.joint_parameter_count
+            << ", status="
+            << GetBoundaryJointCorrectionStatusText(*diagnostic.joint_correction_status)
+            << ", damping/trust=";
+        if (diagnostic.joint_damping.has_value())
+        {
+            correction_message << *diagnostic.joint_damping;
+        }
+        else
+        {
+            correction_message << "-";
+        }
+        correction_message << "/";
+        if (diagnostic.maximum_normalized_trust_step.has_value())
+        {
+            correction_message << *diagnostic.maximum_normalized_trust_step;
+        }
+        else
+        {
+            correction_message << "-";
+        }
+        correction_message << ", previous/candidate=";
+        if (diagnostic.previous_component_objective.has_value())
+        {
+            correction_message << *diagnostic.previous_component_objective;
+        }
+        else
+        {
+            correction_message << "-";
+        }
+        correction_message << "/";
+        if (diagnostic.candidate_component_objective.has_value())
+        {
+            correction_message << *diagnostic.candidate_component_objective;
+        }
+        else
+        {
+            correction_message << "-";
+        }
+        correction_message << ", accepted="
+            << (diagnostic.accepted_source ==
+                BoundaryComponentAcceptedSource::JointCorrection ? "yes" : "no") << ".";
+        Logger::Log(LogLevel::Debug, correction_message.str());
     }
 }
 
@@ -1616,6 +1682,7 @@ static void ResetIterationStateForPartition(
     ResetClusterSolverWorkspace(
         cluster_key_list,
         iteration_state.solver_workspace_by_key);
+    iteration_state.boundary_joint_correction_workspace_by_key.clear();
     iteration_state.graph_partition = std::move(partition);
     iteration_state.unchanged_state_exhausted_key_list.clear();
     iteration_state.audit_patience_count = 0;
@@ -1824,14 +1891,14 @@ static IterationResult RunIteration(
         .raw_state = raw_state,
         .rollback_atom_mask = raw_iteration_result.rollback_atom_mask,
         .ridge_multiplier_list = joint_offset_ridge_multiplier_list,
-        .unchanged_state_exhausted_key_list =
-            std::span<const ClusterKey>{ iteration_state.unchanged_state_exhausted_key_list },
+        .unchanged_state_exhausted_key_list = std::span<const ClusterKey>{ iteration_state.unchanged_state_exhausted_key_list },
         .objective_domain = objective_domain,
         .previous_objective_by_key = previous_objective_by_key,
         .cluster_objective_state = iteration_state.cluster_objective_state,
         .best_audit_state = iteration_state.best_audit_state,
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
+        .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
         .thread_size = options.thread_size,
         .performance_counters = performance_counters
     };
@@ -2256,7 +2323,8 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
     PerformanceCounters performance_counters{
         options.quiet_mode,
         context,
-        iteration_state.solver_workspace_by_key
+        iteration_state.solver_workspace_by_key,
+        iteration_state.boundary_joint_correction_workspace_by_key
     };
     if (iteration_state.best_audit_state.has_value())
     {

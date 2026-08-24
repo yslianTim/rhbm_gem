@@ -187,9 +187,12 @@ TrustRegionIterationUpdate TrustRegionStateSet::UpdateAfterIteration(
 PerformanceCounters::PerformanceCounters(
     bool quiet_mode,
     const SecondStageContext & context,
-    const ClusterSolverWorkspaceMap & solver_workspace_by_key)
+    const ClusterSolverWorkspaceMap & solver_workspace_by_key,
+    const BoundaryJointCorrectionWorkspaceMap &
+        boundary_joint_correction_workspace_by_key)
     : m_quiet_mode{ quiet_mode },
       m_solver_workspace_by_key{ solver_workspace_by_key },
+      m_boundary_joint_correction_workspace_by_key{ boundary_joint_correction_workspace_by_key },
       m_start_time{ std::chrono::steady_clock::now() },
       m_cached_sample_count{ CountRawSamplingEntries(context) }
 {
@@ -225,9 +228,15 @@ PerformanceCounters::~PerformanceCounters()
         << m_boundary_reconciliation_attempt_count << "/"
         << m_boundary_reconciliation_backtracked_count << "/"
         << m_boundary_reconciliation_rejected_count
+        << ", boundary_joint_correction_attempts/accepted/fallback="
+        << m_boundary_joint_correction_attempt_count << "/"
+        << m_boundary_joint_correction_accepted_count << "/"
+        << m_boundary_joint_correction_fallback_count
         << ", boundary_reconciliation_ms="
         << std::fixed << std::setprecision(3)
         << m_boundary_reconciliation_milliseconds
+        << ", boundary_joint_correction_ms="
+        << m_boundary_joint_correction_milliseconds
         << ", iteration/candidate/topology/total_ms="
         << std::fixed << std::setprecision(3)
         << m_iteration_phase_milliseconds << "/"
@@ -309,6 +318,20 @@ void PerformanceCounters::RecordBoundaryReconciliation(
     m_boundary_reconciliation_milliseconds += elapsed_milliseconds;
 }
 
+void PerformanceCounters::RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds)
+{
+    m_boundary_joint_correction_attempt_count++;
+    if (accepted)
+    {
+        m_boundary_joint_correction_accepted_count++;
+    }
+    else
+    {
+        m_boundary_joint_correction_fallback_count++;
+    }
+    m_boundary_joint_correction_milliseconds += elapsed_milliseconds;
+}
+
 double PerformanceCounters::CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time)
 {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
@@ -332,6 +355,12 @@ std::size_t PerformanceCounters::CountCurrentSolverSymbolicAnalyses() const
         static_cast<void>(key);
         count += workspace.joint_offset.GetSymbolicAnalysisCount();
         count += workspace.joint_polish.GetSymbolicAnalysisCount();
+    }
+    for (const auto & [key, workspace] :
+        m_boundary_joint_correction_workspace_by_key)
+    {
+        static_cast<void>(key);
+        count += workspace.GetSymbolicAnalysisCount();
     }
     return count;
 }
@@ -2565,6 +2594,189 @@ static void RemoveTrustGrowthForKeys(
     }
 }
 
+static bool OverlayFitStatePatch(FitStatePatch & base_patch, const FitStatePatch & overlay_patch)
+{
+    for (std::size_t position = 0; position < overlay_patch.atom_index_list.size(); position++)
+    {
+        const auto atom_index{ overlay_patch.atom_index_list.at(position) };
+        const auto iter{
+            std::ranges::lower_bound(base_patch.atom_index_list, atom_index)
+        };
+        if (iter == base_patch.atom_index_list.end() || *iter != atom_index)
+        {
+            return false;
+        }
+        base_patch.mdpde_list.at(static_cast<std::size_t>(std::distance(
+            base_patch.atom_index_list.begin(),
+            iter))) = overlay_patch.mdpde_list.at(position);
+    }
+    return true;
+}
+
+static bool IsBoundaryJointCorrectionEligible(
+    const CandidateSelectionInputs & inputs,
+    const BoundaryReconciliationComponent & component,
+    const ObjectiveBreakdown * previous_audit_objective)
+{
+    if (previous_audit_objective == nullptr ||
+        component.interface_atom_index_list.empty() ||
+        component.offset_closure_atom_index_list.empty() ||
+        HasSuspiciousAtom(
+            FlattenClusterKeyList(component.key_list),
+            inputs.rollback_atom_mask))
+    {
+        return false;
+    }
+    return std::ranges::all_of(
+        component.key_list,
+        [&](const auto & key)
+        {
+            return inputs.health_by_key.at(key).IsStationarityEligible();
+        });
+}
+
+static bool TryBoundaryJointCorrection(
+    const CandidateSelectionInputs & inputs,
+    const BoundaryReconciliationComponent & component,
+    const ObjectiveBreakdown & previous_audit_objective,
+    const FitStatePatch & endpoint_patch,
+    ClusterObjectiveStateMap & working_objective_state,
+    CandidateSelection & selection,
+    BoundaryComponentReconciliationDiagnostic & diagnostic)
+{
+    const FitStateView endpoint_state_view{
+        inputs.previous_state,
+        endpoint_patch
+    };
+    std::vector<BoundaryJointTrustRegion> trust_region_list;
+    trust_region_list.reserve(component.key_list.size());
+    for (const auto & key : component.key_list)
+    {
+        trust_region_list.emplace_back(BoundaryJointTrustRegion{
+            key,
+            inputs.trust_region_state.GetRadius(key)
+        });
+    }
+    const BoundaryJointCorrectionWorkspaceKey workspace_key{
+        component.key_list,
+        component.interface_atom_index_list,
+        component.offset_closure_atom_index_list,
+        component.affected_sample_ref_list
+    };
+    auto & solver{
+        inputs.boundary_joint_correction_workspace_by_key.try_emplace(workspace_key).first->second
+    };
+    const auto start_time{ std::chrono::steady_clock::now() };
+    auto correction_result{
+        BuildBoundaryJointCorrection(
+            inputs.context,
+            inputs.previous_state,
+            endpoint_state_view,
+            component.interface_atom_index_list,
+            component.offset_closure_atom_index_list,
+            component.affected_sample_ref_list,
+            inputs.ridge_multiplier_list,
+            trust_region_list,
+            solver)
+    };
+    diagnostic.joint_correction_status = correction_result.status;
+    diagnostic.joint_parameter_count = correction_result.parameter_count;
+    if (correction_result.status == BoundaryJointCorrectionStatus::CandidateReady)
+    {
+        diagnostic.joint_damping = correction_result.damping;
+        diagnostic.maximum_normalized_trust_step = correction_result.maximum_normalized_trust_step;
+    }
+    if (correction_result.status != BoundaryJointCorrectionStatus::CandidateReady ||
+        !correction_result.patch.has_value())
+    {
+        inputs.performance_counters.RecordBoundaryJointCorrection(
+            false,
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start_time).count());
+        return false;
+    }
+
+    auto corrected_component_patch{ endpoint_patch };
+    if (!OverlayFitStatePatch(
+            corrected_component_patch,
+            *correction_result.patch))
+    {
+        inputs.performance_counters.RecordBoundaryJointCorrection(
+            false,
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start_time).count());
+        return false;
+    }
+    const FitStateView corrected_state_view{
+        inputs.previous_state,
+        corrected_component_patch
+    };
+    const CandidateEvaluationOverlay corrected_overlay{
+        inputs.context,
+        inputs.residual_baseline,
+        corrected_state_view
+    };
+    const auto raw_candidate_objective{
+        EvaluateObjectiveDelta(
+            corrected_overlay,
+            component.affected_sample_ref_list,
+            inputs.objective_domain,
+            previous_audit_objective,
+            inputs.performance_counters)
+    };
+    if (raw_candidate_objective.has_value())
+    {
+        diagnostic.candidate_component_objective = raw_candidate_objective->GetTotalObjective();
+    }
+    const auto candidate_evaluation{
+        EvaluateBoundaryComponentCandidate(
+            inputs,
+            component,
+            corrected_overlay,
+            &previous_audit_objective,
+            1,
+            1.0)
+    };
+    const auto is_strict_improvement{
+        candidate_evaluation.has_value() &&
+        IsBetterAuditObjective(
+            candidate_evaluation->audit_objective->GetTotalObjective(),
+            previous_audit_objective.GetTotalObjective(),
+            kObjectiveStrictTolerance)
+    };
+    if (!is_strict_improvement)
+    {
+        inputs.performance_counters.RecordBoundaryJointCorrection(
+            false,
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start_time).count());
+        return false;
+    }
+
+    corrected_component_patch.ApplyTo(selection.assembled_state);
+    for (const auto atom_index : component.offset_closure_atom_index_list)
+    {
+        const auto change{
+            CalculateTransformedChange(
+                selection.assembled_state.at(atom_index).mdpde.GetModel(),
+                endpoint_state_view.GetModel(atom_index))
+        };
+        if (IsTransformedChangeMaterial(change, kTransformedChangeTolerance))
+        {
+            selection.assembled_polish_provenance.at(atom_index) = 1;
+        }
+    }
+    CommitBoundaryObjectiveState(*candidate_evaluation, working_objective_state);
+    RemoveTrustGrowthForKeys(component.key_list, selection);
+    diagnostic.accepted = true;
+    diagnostic.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
+    inputs.performance_counters.RecordBoundaryJointCorrection(
+        true,
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - start_time).count());
+    return true;
+}
+
 static void ReconcileBoundaryComponent(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
@@ -2576,6 +2788,12 @@ static void ReconcileBoundaryComponent(
     diagnostic.key_list = component.key_list;
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
     diagnostic.boundary_sample_count = component.boundary_sample_count;
+    diagnostic.interface_atom_count = component.interface_atom_index_list.size();
+    diagnostic.offset_closure_atom_count = component.offset_closure_atom_index_list.size();
+    if (previous_audit_objective != nullptr)
+    {
+        diagnostic.previous_component_objective = previous_audit_objective->GetTotalObjective();
+    }
     const auto endpoint_patch{ BuildSelectionPatch(selection, component.key_list) };
     const FitStateView endpoint_state_view{
         inputs.previous_state,
@@ -2600,6 +2818,22 @@ static void ReconcileBoundaryComponent(
         CommitBoundaryObjectiveState(*endpoint_evaluation, working_objective_state);
         diagnostic.accepted = true;
         diagnostic.accepted_factor = 1.0;
+        diagnostic.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
+        diagnostic.candidate_component_objective = endpoint_evaluation->audit_objective->GetTotalObjective();
+        selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
+        return;
+    }
+
+    if (IsBoundaryJointCorrectionEligible(inputs, component, previous_audit_objective) &&
+        TryBoundaryJointCorrection(
+            inputs,
+            component,
+            *previous_audit_objective,
+            endpoint_patch,
+            working_objective_state,
+            selection,
+            diagnostic))
+    {
         selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
         return;
     }
@@ -2662,6 +2896,8 @@ static void ReconcileBoundaryComponent(
     RemoveTrustGrowthForKeys(component.key_list, selection);
     diagnostic.accepted = true;
     diagnostic.accepted_factor = step.factor;
+    diagnostic.accepted_source = BoundaryComponentAcceptedSource::Backtracking;
+    diagnostic.candidate_component_objective = accepted_evaluation->audit_objective->GetTotalObjective();
     selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
 }
 
@@ -2713,6 +2949,7 @@ static std::vector<CandidateReconciliationUnit> BuildCandidateReconciliationUnit
     std::vector<CandidateReconciliationUnit> unit_list;
     const auto boundary_component_list{
         BuildBoundaryReconciliationComponents(
+            inputs.context,
             inputs.partition,
             selection.accepted_key_list)
     };
@@ -2781,6 +3018,7 @@ static void MarkBoundaryDiagnosticRejected(
     if (iter == selection.boundary_reconciliation_diagnostic_list.end()) return;
     iter->accepted = false;
     iter->accepted_factor.reset();
+    iter->accepted_source = BoundaryComponentAcceptedSource::None;
     iter->exhausted = exhausted;
 }
 
@@ -2845,6 +3083,7 @@ static void SalvageFinalSelectionAudit(
 
     const auto remaining_key_list{ selection.accepted_key_list };
     for (const auto & component : BuildBoundaryReconciliationComponents(
+        inputs.context,
         inputs.partition,
         remaining_key_list))
     {
@@ -2872,6 +3111,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
 
     const auto boundary_component_list{
         BuildBoundaryReconciliationComponents(
+            inputs.context,
             inputs.partition,
             selection.accepted_key_list)
     };
