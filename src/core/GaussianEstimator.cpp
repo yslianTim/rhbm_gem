@@ -478,9 +478,9 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
         Logger::Log(LogLevel::Info,
             model_object.GetAnalysisView().GetGroupPriorSpotSummary(FittingStage::Third));
     }
-    if (options.local_fitting_result_csv_path.has_value())
+    if (options.result_csv_path.has_value())
     {
-        OutputLocalFittingResultTable(model_object, peeling_applied, *options.local_fitting_result_csv_path);
+        OutputLocalFittingResultTable(model_object, peeling_applied, *options.result_csv_path);
     }
 }
 

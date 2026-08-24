@@ -91,13 +91,29 @@ std::string EnsureTrailingSlash(const std::filesystem::path & path)
     return result;
 }
 
+std::string EnsureSanitizedTag(const std::string & tag)
+{
+    std::string sanitized_tag;
+    sanitized_tag.reserve(tag.size());
+    for (const char raw_character : tag)
+    {
+        const auto character{ static_cast<unsigned char>(raw_character) };
+        const bool is_ascii_alphanumeric{
+            (character >= '0' && character <= '9')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= 'a' && character <= 'z')
+        };
+        sanitized_tag.push_back(
+            is_ascii_alphanumeric || character == '.' || character == '_' || character == '-'
+            ? static_cast<char>(character) : '_');
+    }
+    return sanitized_tag;
+}
+
 bool EnsureFileExists(const std::filesystem::path & path,
                       const std::string & log_prefix)
 {
-    if (std::filesystem::exists(path))
-    {
-        return true;
-    }
+    if (std::filesystem::exists(path)) return true;
     Logger::Log(LogLevel::Error, log_prefix + " does not exist: " + path.string());
     return false;
 }

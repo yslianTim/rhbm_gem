@@ -20,7 +20,7 @@ struct FitOptions
     int thread_size{ 1 };
     bool quiet_mode{ false };
     bool exclude_hydrogen{ false };
-    std::optional<std::filesystem::path> local_fitting_result_csv_path{};
+    std::optional<std::filesystem::path> result_csv_path{};
 };
 
 double TrainAlphaR(
@@ -58,10 +58,7 @@ void RunGroupPotentialFitting(
     const FitOptions & options,
     FittingStage stage);
 
-bool RunSecondStageLocalFitting(
-    ModelObject & model_object,
-    const FitOptions & options);
-
+bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);
 
 } // namespace core
