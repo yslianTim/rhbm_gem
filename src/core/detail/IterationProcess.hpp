@@ -34,6 +34,28 @@ struct SecondStageSeedSelection
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates);
 
+constexpr double kAdaptiveTopologyRebuildDriftThreshold{ 0.10 };
+constexpr std::size_t kAdaptiveTopologyRebuildAcceptedIterationInterval{ 3 };
+
+enum class AdaptiveTopologyRebuildTrigger
+{
+    None,
+    Drift,
+    Interval
+};
+
+struct AdaptiveTopologyRebuildDecision
+{
+    AdaptiveTopologyRebuildTrigger trigger{ AdaptiveTopologyRebuildTrigger::None };
+    double maximum_transformed_drift{ 0.0 };
+};
+
+AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
+    const FitState & accepted_state,
+    const FitState & topology_reference_state,
+    const std::vector<std::size_t> & active_index_list,
+    std::size_t accepted_iterations_since_rebuild);
+
 constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 
 using PersistentSuspiciousRollbackReason = std::vector<std::size_t>;

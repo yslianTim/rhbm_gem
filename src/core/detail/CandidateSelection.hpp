@@ -166,8 +166,11 @@ class PerformanceCounters
     std::atomic<std::size_t> m_objective_recomputed_sample_count{ 0 };
     std::atomic<std::size_t> m_objective_reused_sample_count{ 0 };
     std::size_t m_retired_solver_symbolic_analysis_count{ 0 };
+    std::size_t m_topology_rebuild_attempt_count{ 0 };
+    std::size_t m_topology_partition_change_count{ 0 };
     double m_iteration_phase_milliseconds{ 0.0 };
     double m_candidate_phase_milliseconds{ 0.0 };
+    double m_topology_rebuild_milliseconds{ 0.0 };
 
 public:
     PerformanceCounters(
@@ -186,6 +189,7 @@ public:
     [[nodiscard]] std::chrono::steady_clock::time_point StartCandidatePhase() const;
     void FinishCandidatePhase(std::chrono::steady_clock::time_point start_time);
     void RecordSolverWorkspaceReset();
+    void RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed);
 
 private:
     static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);

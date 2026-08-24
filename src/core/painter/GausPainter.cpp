@@ -470,8 +470,8 @@ void GausPainter::PaintGausScatterPlot(ModelObject * model_object, const std::st
         double x_min{ std::get<0>(x_range) };
         double x_max{ std::get<1>(x_range) };
 
-        //auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
-        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.1, 0.999) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
+        //auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.1, 0.999) };
         double y_min{ std::get<0>(y_range) };
         double y_max{ std::get<1>(y_range) };
 

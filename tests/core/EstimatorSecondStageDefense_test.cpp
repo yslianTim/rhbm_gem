@@ -2391,6 +2391,108 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
     }
 }
 
+TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndIntervalTriggers)
+{
+    const audit_detail::FitState reference_state{
+        MakeGaussianResult(rg::GaussianModel3D{ 8.0, 0.50, 0.10 })
+    };
+    auto small_drift_state{ reference_state };
+    auto large_drift_state{ reference_state };
+    const auto reference_coordinates{
+        change_detail::EncodeTransformedCoordinates(
+            reference_state.at(0).mdpde.GetModel())
+    };
+    ASSERT_TRUE(reference_coordinates.has_value());
+    auto small_coordinates{ *reference_coordinates };
+    auto large_coordinates{ *reference_coordinates };
+    small_coordinates(change_detail::kLogWidthChangeIndex) += 0.099;
+    large_coordinates(change_detail::kLogWidthChangeIndex) += 0.101;
+    const auto small_model{
+        change_detail::DecodeTransformedCoordinates(small_coordinates)
+    };
+    const auto large_model{
+        change_detail::DecodeTransformedCoordinates(large_coordinates)
+    };
+    ASSERT_TRUE(small_model.has_value());
+    ASSERT_TRUE(large_model.has_value());
+    small_drift_state.at(0) = MakeGaussianResult(*small_model);
+    large_drift_state.at(0) = MakeGaussianResult(*large_model);
+
+    const auto none{
+        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+            small_drift_state,
+            reference_state,
+            { 0 },
+            2)
+    };
+    EXPECT_EQ(none.trigger, audit_detail::AdaptiveTopologyRebuildTrigger::None);
+    EXPECT_NEAR(none.maximum_transformed_drift, 0.099, 1.0e-12);
+
+    const auto interval{
+        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+            small_drift_state,
+            reference_state,
+            { 0 },
+            3)
+    };
+    EXPECT_EQ(
+        interval.trigger,
+        audit_detail::AdaptiveTopologyRebuildTrigger::Interval);
+
+    const auto drift{
+        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+            large_drift_state,
+            reference_state,
+            { 0 },
+            1)
+    };
+    EXPECT_EQ(drift.trigger, audit_detail::AdaptiveTopologyRebuildTrigger::Drift);
+    EXPECT_NEAR(drift.maximum_transformed_drift, 0.101, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTriggerIsIntensityScaleInvariant)
+{
+    constexpr double intensity_scale{ 100.0 };
+    const audit_detail::FitState reference_state{
+        MakeGaussianResult(rg::GaussianModel3D{ 8.0, 0.50, 0.10 })
+    };
+    const audit_detail::FitState accepted_state{
+        MakeGaussianResult(rg::GaussianModel3D{ 9.0, 0.60, 0.15 })
+    };
+    const audit_detail::FitState scaled_reference_state{
+        MakeGaussianResult(rg::GaussianModel3D{
+            8.0 * intensity_scale,
+            0.50,
+            0.10 * intensity_scale })
+    };
+    const audit_detail::FitState scaled_accepted_state{
+        MakeGaussianResult(rg::GaussianModel3D{
+            9.0 * intensity_scale,
+            0.60,
+            0.15 * intensity_scale })
+    };
+
+    const auto base{
+        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+            accepted_state,
+            reference_state,
+            { 0 },
+            1)
+    };
+    const auto scaled{
+        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+            scaled_accepted_state,
+            scaled_reference_state,
+            { 0 },
+            1)
+    };
+    EXPECT_EQ(base.trigger, scaled.trigger);
+    EXPECT_NEAR(
+        base.maximum_transformed_drift,
+        scaled.maximum_transformed_drift,
+        1.0e-12);
+}
+
 TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference)
 {
     constexpr double step{ 1.0e-6 };
@@ -3284,6 +3386,70 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
         cancelled_builder.BuildTopology(MakeUniqueResidueKeys(2))
     };
     EXPECT_FALSE(HasCouplingNeighbor(cancelled_topology, 0, 1));
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphAdaptiveHysteresisAddsAndRemovesEdges)
+{
+    const auto build_topology = [](
+        double edge_weight,
+        const coupling_detail::GraphTopology * previous_topology)
+    {
+        const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
+        const auto self_scale{ std::sqrt(1.0 / edge_weight - 1.0) };
+        coupling_detail::CouplingGraphBuilder builder{ 2 };
+        AddCouplingGraphSample(
+            builder,
+            { 0, 0 },
+            { { 0, unit }, { 1, unit } });
+        AddCouplingGraphSample(
+            builder,
+            { 0, 1 },
+            { { 0, self_scale * unit } });
+        AddCouplingGraphSample(
+            builder,
+            { 1, 0 },
+            { { 1, self_scale * unit } });
+        coupling_detail::CouplingGraphOptions options;
+        options.minimum_weight = 0.06;
+        options.retained_edge_minimum_weight = 0.04;
+        return builder.BuildTopology(
+            MakeUniqueResidueKeys(2),
+            options,
+            previous_topology);
+    };
+
+    coupling_detail::GraphTopology absent_previous;
+    absent_previous.adjacency_list.resize(2);
+    const auto absent_midpoint{ build_topology(0.05, &absent_previous) };
+    EXPECT_FALSE(HasCouplingNeighbor(absent_midpoint, 0, 1));
+    const auto added{ build_topology(0.061, &absent_previous) };
+    EXPECT_TRUE(HasCouplingNeighbor(added, 0, 1));
+    const auto retained_midpoint{ build_topology(0.05, &added) };
+    EXPECT_TRUE(HasCouplingNeighbor(retained_midpoint, 0, 1));
+    const auto removed{ build_topology(0.039, &retained_midpoint) };
+    EXPECT_FALSE(HasCouplingNeighbor(removed, 0, 1));
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesAdaptiveHysteresisInputs)
+{
+    coupling_detail::CouplingGraphBuilder builder{ 1 };
+    coupling_detail::CouplingGraphOptions options;
+    options.minimum_weight = 0.05;
+    options.retained_edge_minimum_weight = 0.051;
+    EXPECT_THROW(
+        builder.BuildTopology(MakeUniqueResidueKeys(1), options),
+        std::invalid_argument);
+
+    coupling_detail::CouplingGraphBuilder previous_size_builder{ 1 };
+    options.retained_edge_minimum_weight = 0.04;
+    coupling_detail::GraphTopology wrong_size_previous;
+    wrong_size_previous.adjacency_list.resize(2);
+    EXPECT_THROW(
+        previous_size_builder.BuildTopology(
+            MakeUniqueResidueKeys(1),
+            options,
+            &wrong_size_previous),
+        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
@@ -5015,6 +5181,16 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     EXPECT_NE(out.find("Polish E/A/R/S"), std::string::npos);
     EXPECT_NE(out.find("Suspicious"), std::string::npos);
     EXPECT_NE(out.find("dMax A/R"), std::string::npos);
+    EXPECT_EQ(count_occurrences("Local-fitting residue cutoff:"), 1U);
+    EXPECT_NE(
+        out.find("Adaptive local-fitting topology rebuild:"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("% Rebuild local-fitting coupling topology"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("topology_rebuilds/partition_changes="),
+        std::string::npos);
 
     const auto header_start{ out.find("Try/Acc") };
     ASSERT_NE(header_start, std::string::npos);
@@ -5119,4 +5295,7 @@ TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)
 
     EXPECT_EQ(out.find("Try/Acc"), std::string::npos);
     EXPECT_EQ(std::count(out.begin(), out.end(), '\r'), 0);
+    EXPECT_EQ(
+        out.find("Rebuild local-fitting coupling topology"),
+        std::string::npos);
 }

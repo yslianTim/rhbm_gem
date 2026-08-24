@@ -129,6 +129,15 @@ void CouplingGraphBuilder::ValidateBuildOptions(
         throw std::invalid_argument(
             "Local fitting coupling minimum weight must be in [0, 1].");
     }
+    if (options.retained_edge_minimum_weight.has_value() &&
+        (!std::isfinite(*options.retained_edge_minimum_weight) ||
+         *options.retained_edge_minimum_weight < 0.0 ||
+         *options.retained_edge_minimum_weight > options.minimum_weight))
+    {
+        throw std::invalid_argument(
+            "Local fitting coupling retained-edge minimum weight must be in "
+            "[0, minimum weight].");
+    }
     if (options.maximum_residue_count == 0)
     {
         throw std::invalid_argument(
@@ -201,8 +210,15 @@ CouplingGraphBuilder::BuildThresholdSensitivity(
 
 GraphTopology CouplingGraphBuilder::BuildFromWeights(
     const std::vector<GraphWeightedEdge> & weighted_edge_list,
-    double minimum_weight)
+    const CouplingGraphOptions & options,
+    const GraphTopology * previous_topology)
 {
+    if (previous_topology != nullptr &&
+        previous_topology->adjacency_list.size() != m_atom_count)
+    {
+        throw std::invalid_argument(
+            "Previous local fitting coupling topology has an inconsistent atom count.");
+    }
     GraphTopology topology;
     topology.adjacency_list.resize(m_atom_count);
     topology.sample_dependency_list = std::move(m_sample_dependency_list);
@@ -214,6 +230,20 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
     {
         const auto weight{ weighted_edge.weight };
         weight_list.emplace_back(weight);
+        auto minimum_weight{ options.minimum_weight };
+        if (previous_topology != nullptr &&
+            options.retained_edge_minimum_weight.has_value())
+        {
+            const auto & previous_neighbor_list{
+                previous_topology->adjacency_list.at(weighted_edge.left_atom_index)
+            };
+            if (std::ranges::find(
+                    previous_neighbor_list,
+                    weighted_edge.right_atom_index) != previous_neighbor_list.end())
+            {
+                minimum_weight = *options.retained_edge_minimum_weight;
+            }
+        }
         if (weight < minimum_weight) continue;
 
         topology.retained_edge_list.emplace_back(weighted_edge);
@@ -294,8 +324,8 @@ void CouplingGraphBuilder::AddSample(
 }
 
 GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
-    double minimum_weight,
-    const std::vector<double> & sensitivity_minimum_weight_list)
+    const CouplingGraphOptions & options,
+    const GraphTopology * previous_topology)
 {
     if (m_has_invalid_jacobian) return BuildBinary();
 
@@ -346,11 +376,11 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
         weighted_edge_list.emplace_back(
             GraphWeightedEdge{ pair.first, pair.second, weight });
     }
-    auto topology{ BuildFromWeights(weighted_edge_list, minimum_weight) };
+    auto topology{ BuildFromWeights(weighted_edge_list, options, previous_topology) };
     topology.summary.uses_weighted_graph = true;
     topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
         weighted_edge_list,
-        sensitivity_minimum_weight_list);
+        options.sensitivity_minimum_weight_list);
     return topology;
 }
 
@@ -366,12 +396,15 @@ GraphTopology CouplingGraphBuilder::BuildBinary()
             1.0
         });
     }
-    return BuildFromWeights(weighted_edge_list, 0.0);
+    CouplingGraphOptions options;
+    options.minimum_weight = 0.0;
+    return BuildFromWeights(weighted_edge_list, options, nullptr);
 }
 
 GraphTopology CouplingGraphBuilder::BuildTopology(
     std::vector<ResidueKey> residue_key_by_atom_index,
-    const CouplingGraphOptions & options)
+    const CouplingGraphOptions & options,
+    const GraphTopology * previous_topology)
 {
     ValidateBuildOptions(options);
     if (residue_key_by_atom_index.size() != m_atom_count)
@@ -380,9 +413,7 @@ GraphTopology CouplingGraphBuilder::BuildTopology(
             "Local fitting coupling residue key count must match atom count.");
     }
 
-    auto topology{ BuildWeightedOrBinary(
-        options.minimum_weight,
-        options.sensitivity_minimum_weight_list) };
+    auto topology{ BuildWeightedOrBinary(options, previous_topology) };
     topology.residue_key_by_atom_index =
         std::move(residue_key_by_atom_index);
     topology.summary.configured_minimum_weight = options.minimum_weight;
@@ -422,10 +453,12 @@ Eigen::Vector3d EvaluateCouplingGraphJacobian(
 
 } // namespace
 
-GraphTopology BuildSecondStageGraphTopology(
+static GraphTopology BuildSecondStageGraphTopologyImpl(
     const SecondStageContext & context,
-    const FitState & initial_state,
-    bool quiet_mode)
+    const FitState & state,
+    bool quiet_mode,
+    const CouplingGraphOptions & options,
+    const GraphTopology * previous_topology)
 {
     std::size_t total_sample_count{ 0 };
     for (const auto & atom_context : context)
@@ -434,7 +467,11 @@ GraphTopology BuildSecondStageGraphTopology(
     }
     const std::size_t total_work{ total_sample_count + 1 };
     std::size_t completed_work{ 0 };
-    const std::string progress_message{ " Build local-fitting coupling topology" };
+    const std::string progress_message{
+        previous_topology == nullptr ?
+            " Build local-fitting coupling topology" :
+            " Rebuild local-fitting coupling topology"
+    };
     if (!quiet_mode)
     {
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
@@ -442,7 +479,7 @@ GraphTopology BuildSecondStageGraphTopology(
 
     CouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, initial_state)
+        BuildSecondStageModelSnapshot(context, state)
     };
     std::vector<std::optional<TransformedModelInvariants>> selected_model_invariants;
     selected_model_invariants.reserve(model_snapshot.selected.size());
@@ -515,13 +552,48 @@ GraphTopology BuildSecondStageGraphTopology(
             atom_context.atom->GetChainID(),
             atom_context.atom->GetSequenceID());
     }
-    const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
+    const auto topology{
+        builder.BuildTopology(
+            std::move(residue_key_by_atom_index),
+            options,
+            previous_topology)
+    };
     completed_work++;
     if (!quiet_mode)
     {
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
     }
     return topology;
+}
+
+GraphTopology BuildSecondStageGraphTopology(
+    const SecondStageContext & context,
+    const FitState & initial_state,
+    bool quiet_mode)
+{
+    return BuildSecondStageGraphTopologyImpl(
+        context,
+        initial_state,
+        quiet_mode,
+        CouplingGraphOptions{},
+        nullptr);
+}
+
+GraphTopology BuildAdaptiveSecondStageGraphTopology(
+    const SecondStageContext & context,
+    const FitState & accepted_state,
+    const GraphTopology & previous_topology,
+    bool quiet_mode)
+{
+    CouplingGraphOptions options;
+    options.minimum_weight = 0.06;
+    options.retained_edge_minimum_weight = 0.04;
+    return BuildSecondStageGraphTopologyImpl(
+        context,
+        accepted_state,
+        quiet_mode,
+        options,
+        &previous_topology);
 }
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)

@@ -213,10 +213,14 @@ PerformanceCounters::~PerformanceCounters()
         << m_objective_recomputed_sample_count.load() << "/"
         << m_objective_reused_sample_count.load()
         << ", solver_symbolic_analyses=" << symbolic_analysis_count
-        << ", iteration/candidate/total_ms="
+        << ", topology_rebuilds/partition_changes="
+        << m_topology_rebuild_attempt_count << "/"
+        << m_topology_partition_change_count
+        << ", iteration/candidate/topology/total_ms="
         << std::fixed << std::setprecision(3)
         << m_iteration_phase_milliseconds << "/"
         << m_candidate_phase_milliseconds << "/"
+        << m_topology_rebuild_milliseconds << "/"
         << total_milliseconds << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
@@ -285,6 +289,15 @@ void PerformanceCounters::RecordSolverWorkspaceReset()
 {
     m_retired_solver_symbolic_analysis_count +=
         CountCurrentSolverSymbolicAnalyses();
+}
+
+void PerformanceCounters::RecordTopologyRebuild(
+    double elapsed_milliseconds,
+    bool partition_changed)
+{
+    m_topology_rebuild_attempt_count++;
+    if (partition_changed) m_topology_partition_change_count++;
+    m_topology_rebuild_milliseconds += elapsed_milliseconds;
 }
 
 double PerformanceCounters::CalculateElapsedMilliseconds(

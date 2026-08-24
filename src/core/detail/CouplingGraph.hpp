@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -77,6 +78,7 @@ struct GraphTopology
 struct CouplingGraphOptions
 {
     double minimum_weight{ 0.05 };
+    std::optional<double> retained_edge_minimum_weight{};
     std::vector<double> sensitivity_minimum_weight_list{
         0.05, 0.075, 0.10, 0.15, 0.20, 0.30
     };
@@ -109,7 +111,8 @@ class CouplingGraphBuilder
 
     GraphTopology BuildFromWeights(
         const std::vector<GraphWeightedEdge> & weighted_edge_list,
-        double minimum_weight);
+        const CouplingGraphOptions & options,
+        const GraphTopology * previous_topology);
 
 public:
     explicit CouplingGraphBuilder(std::size_t atom_count);
@@ -117,20 +120,27 @@ public:
 
 private:
     GraphTopology BuildWeightedOrBinary(
-        double minimum_weight,
-        const std::vector<double> & sensitivity_minimum_weight_list);
+        const CouplingGraphOptions & options,
+        const GraphTopology * previous_topology);
 
     GraphTopology BuildBinary();
 
 public:
     GraphTopology BuildTopology(
         std::vector<ResidueKey> residue_key_by_atom_index,
-        const CouplingGraphOptions & options = {});
+        const CouplingGraphOptions & options = {},
+        const GraphTopology * previous_topology = nullptr);
 };
 
 GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
     const FitState & initial_state,
+    bool quiet_mode);
+
+GraphTopology BuildAdaptiveSecondStageGraphTopology(
+    const SecondStageContext & context,
+    const FitState & accepted_state,
+    const GraphTopology & previous_topology,
     bool quiet_mode);
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);

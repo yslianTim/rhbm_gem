@@ -66,6 +66,22 @@ topology records atoms that jointly affect objective samples. Each iteration
 partitions the active portion of this topology into deterministic cluster keys,
 so independent clusters can be evaluated and accepted separately.
 
+The initial weighted topology retains the fixed minimum edge weight `0.05`.
+After accepted iterations, the stage adaptively rebuilds the topology from the
+latest validated atom models when either the maximum transformed-coordinate
+drift from the last topology reference state reaches `0.10`, or three accepted
+iterations have elapsed since the last rebuild. Rejected attempts and
+trust-radius retries do not advance this interval. An iteration that already
+changes the objective domain through terminal isolation skips the adaptive
+rebuild without clearing the accumulated drift or interval.
+
+Adaptive rebuilds use edge hysteresis. A previously absent edge must have
+weight at least `0.06` to enter the graph, while an edge present in the previous
+post-residue-cutoff adjacency remains until its weight falls below `0.04`.
+The existing ten-residue cluster limit is then applied in descending current
+edge-weight order. Binary fallback remains the conservative response to an
+invalid Jacobian.
+
 ## Iteration flow
 
 Each outer attempt performs the following sequence:
@@ -91,8 +107,9 @@ Each outer attempt performs the following sequence:
    the combined-objective guard. If the guard rejects the endpoint, jointly
    backtrack every changed cluster with one common factor and commit only a
    factor that passes every local guard and the global guard.
-9. Update trust radii, persistent-failure state, the global audit state, and the
-   stopping conditions.
+9. Update trust radii and persistent-failure state. After an accepted state,
+   conditionally rebuild the adaptive topology before updating the global audit
+   state and applying the stopping conditions.
 
 The neighbor-adjusted response for atom `i` and one of its samples is:
 
@@ -317,6 +334,17 @@ and all atom-count normalizations. Per-cluster previous/best references and the
 global best-audit baseline are reset to that state; objective values from the
 old and new domains are never compared.
 
+An adaptive topology rebuild always becomes the next hysteresis reference,
+even when its active partition is unchanged. In that case the objective scales,
+best audit, trust radii, and solver workspaces remain intact. When the complete
+cluster-key and sample mapping changes, the current accepted state initializes
+new fit/tail scales, cluster objectives, and the best-audit baseline. Exact
+cluster keys retain their trust radii; merged or split keys start at the initial
+radius. Solver workspaces and exhausted-backtracking keys are reset, audit
+patience is cleared, and convergence is disabled for that attempt so the new
+partition executes at least one complete iteration. Objectives from before the
+partition change are never compared with the new domain.
+
 ## Global audit and stopping
 
 The global audit uses the fixed per-cluster fit/tail scales and retains the
@@ -426,7 +454,8 @@ merge code.
 
 Non-quiet runs also emit non-blocking performance counters for complete-state
 materializations, Gaussian cache hits/misses, recomputed/reused objective
-samples, symbolic solver analyses, and iteration/candidate/total elapsed time.
+samples, symbolic solver analyses, adaptive topology rebuilds and partition
+changes, and iteration/candidate/topology/total elapsed time.
 These counters are diagnostic evidence rather than acceptance thresholds.
 
 ## Logging
@@ -456,6 +485,15 @@ logged at debug level. An all-rejected debug record reports
 `exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
 terminal classification can be audited directly. Terminal, convergence, and
 summary messages finish the active progress line before normal line output.
+
+Adaptive rebuild diagnostics use a distinct
+`Adaptive local-fitting topology rebuild` record so the one-time initial
+coupling and residue-cutoff summaries remain stable. Each record reports the
+accepted iteration, drift or interval trigger, maximum drift, old/new cluster
+and boundary-sample counts, added/removed adjacency edges, and whether the
+partition and objective domain changed. Non-quiet runs also show a
+`Rebuild local-fitting coupling topology` percentage progress bar with the
+same sample-based work accounting as the initial topology build.
 
 Non-quiet runs end with this summary format:
 

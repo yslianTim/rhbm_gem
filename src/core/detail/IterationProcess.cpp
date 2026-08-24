@@ -4,12 +4,14 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <exception>
 #include <iomanip>
 #include <limits>
 #include <ostream>
 #include <ranges>
+#include <set>
 #include <span>
 #include <sstream>
 #include <stdexcept>
@@ -137,6 +139,7 @@ struct IterationDiagnostics
 struct IterationState
 {
     FitState previous_state{};
+    FitState topology_reference_state{};
     PolishProvenance previous_polish_provenance{};
     SuspiciousUpdateMask rollback_atom_mask{};
     std::vector<std::size_t> active_index_list{};
@@ -149,6 +152,7 @@ struct IterationState
     TrustRegionStateSet trust_region_state{};
     std::vector<ClusterKey> unchanged_state_exhausted_key_list{};
     std::size_t accepted_iteration_count{ 0 };
+    std::size_t accepted_iterations_since_topology_rebuild{ 0 };
     std::size_t audit_patience_count{ 0 };
 };
 
@@ -232,6 +236,41 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageS
     return SelectValidSecondStageSeedCandidate(
         SecondStageSeedSource::GlobalMedian,
         candidates.global_median);
+}
+
+AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
+    const FitState & accepted_state,
+    const FitState & topology_reference_state,
+    const std::vector<std::size_t> & active_index_list,
+    std::size_t accepted_iterations_since_rebuild)
+{
+    const auto drift_summary{
+        SummarizeTransformedChanges(
+            accepted_state,
+            topology_reference_state,
+            active_index_list)
+    };
+    const auto maximum_transformed_drift{
+        GetMaximumTransformedChange(drift_summary)
+    };
+    if (maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)
+    {
+        return AdaptiveTopologyRebuildDecision{
+            AdaptiveTopologyRebuildTrigger::Drift,
+            maximum_transformed_drift
+        };
+    }
+    if (accepted_iterations_since_rebuild >= kAdaptiveTopologyRebuildAcceptedIterationInterval)
+    {
+        return AdaptiveTopologyRebuildDecision{
+            AdaptiveTopologyRebuildTrigger::Interval,
+            maximum_transformed_drift
+        };
+    }
+    return AdaptiveTopologyRebuildDecision{
+        AdaptiveTopologyRebuildTrigger::None,
+        maximum_transformed_drift
+    };
 }
 
 namespace {
@@ -1474,6 +1513,204 @@ static RawIterationResult RunRawIteration(
     };
 }
 
+using GraphEdgeSet = std::set<std::pair<std::size_t, std::size_t>>;
+
+static GraphEdgeSet BuildGraphEdgeSet(const GraphTopology & topology)
+{
+    GraphEdgeSet edge_set;
+    for (std::size_t atom_index = 0; atom_index < topology.adjacency_list.size(); atom_index++)
+    {
+        for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
+        {
+            if (atom_index < neighbor_index)
+            {
+                edge_set.emplace(atom_index, neighbor_index);
+            }
+        }
+    }
+    return edge_set;
+}
+
+static std::size_t CountGraphEdgeDifference(const GraphEdgeSet & source, const GraphEdgeSet & destination)
+{
+    return static_cast<std::size_t>(
+        std::ranges::count_if(
+            source,
+            [&](const auto & edge)
+            {
+                return !destination.contains(edge);
+            }));
+}
+
+static bool AreGraphPartitionsEqual(
+    const CouplingGraphPartition & lhs,
+    const CouplingGraphPartition & rhs)
+{
+    return lhs.boundary_sample_count == rhs.boundary_sample_count &&
+        lhs.sample_id_list_by_key == rhs.sample_id_list_by_key;
+}
+
+static std::string_view GetAdaptiveTopologyTriggerText(
+    AdaptiveTopologyRebuildTrigger trigger)
+{
+    switch (trigger)
+    {
+        case AdaptiveTopologyRebuildTrigger::Drift: return "drift";
+        case AdaptiveTopologyRebuildTrigger::Interval: return "interval";
+        case AdaptiveTopologyRebuildTrigger::None: return "none";
+    }
+    return "unknown";
+}
+
+static void ResetIterationStateForPartition(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const FitState & accepted_state,
+    bool accepted_uses_polish,
+    std::size_t source_iteration,
+    CouplingGraphPartition partition,
+    IterationState & iteration_state,
+    PerformanceCounters & performance_counters)
+{
+    const auto cluster_key_list{ BuildGraphClusterKeyList(partition) };
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, accepted_state)
+    };
+    iteration_state.objective_domain = BuildObjectiveDomain(
+        context,
+        model_snapshot,
+        cluster_key_list,
+        options.distance_min,
+        options.distance_max);
+    iteration_state.cluster_objective_state.clear();
+    const auto objective_by_key{
+        BuildObjectiveByKey(
+            partition,
+            iteration_state.objective_domain,
+            SnapshotResidualEvaluator{ context, model_snapshot })
+    };
+    ReconcileClusterObjectiveState(
+        objective_by_key,
+        iteration_state.cluster_objective_state);
+    const auto audit_objective{
+        EvaluateAuditObjective(
+            iteration_state.objective_domain,
+            SnapshotResidualEvaluator{ context, model_snapshot })
+    };
+    iteration_state.best_audit_state.reset();
+    if (audit_objective.has_value())
+    {
+        TryUpdateBestAuditState(
+            accepted_state,
+            accepted_uses_polish,
+            source_iteration,
+            *audit_objective,
+            iteration_state.best_audit_state);
+    }
+    iteration_state.trust_region_state.Reconcile(cluster_key_list);
+    performance_counters.RecordSolverWorkspaceReset();
+    ResetClusterSolverWorkspace(
+        cluster_key_list,
+        iteration_state.solver_workspace_by_key);
+    iteration_state.graph_partition = std::move(partition);
+    iteration_state.unchanged_state_exhausted_key_list.clear();
+    iteration_state.audit_patience_count = 0;
+}
+
+static bool TryRebuildAdaptiveTopology(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const FitState & accepted_state,
+    bool accepted_uses_polish,
+    GraphTopology & graph_topology,
+    IterationState & iteration_state,
+    PerformanceCounters & performance_counters)
+{
+    const auto decision{
+        EvaluateAdaptiveTopologyRebuildTrigger(
+            accepted_state,
+            iteration_state.topology_reference_state,
+            iteration_state.active_index_list,
+            iteration_state.accepted_iterations_since_topology_rebuild)
+    };
+    if (decision.trigger == AdaptiveTopologyRebuildTrigger::None) return false;
+
+    if (!options.quiet_mode) Logger::FinishProgressLine();
+    const auto rebuild_start{ std::chrono::steady_clock::now() };
+    auto rebuilt_topology{
+        BuildAdaptiveSecondStageGraphTopology(
+            context,
+            accepted_state,
+            graph_topology,
+            options.quiet_mode)
+    };
+    auto rebuilt_partition{
+        BuildGraphPartition(
+            rebuilt_topology,
+            iteration_state.active_index_list)
+    };
+    const auto partition_changed{
+        !AreGraphPartitionsEqual(
+            iteration_state.graph_partition,
+            rebuilt_partition)
+    };
+    const auto previous_edge_set{ BuildGraphEdgeSet(graph_topology) };
+    const auto rebuilt_edge_set{ BuildGraphEdgeSet(rebuilt_topology) };
+    const auto removed_edge_count{
+        CountGraphEdgeDifference(previous_edge_set, rebuilt_edge_set)
+    };
+    const auto added_edge_count{
+        CountGraphEdgeDifference(rebuilt_edge_set, previous_edge_set)
+    };
+    const auto elapsed_milliseconds{
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rebuild_start).count()
+    };
+    performance_counters.RecordTopologyRebuild(elapsed_milliseconds, partition_changed);
+
+    if (!options.quiet_mode)
+    {
+        Logger::FinishProgressLine();
+        std::ostringstream message;
+        message
+            << "Adaptive local-fitting topology rebuild: accepted_iteration="
+            << iteration_state.accepted_iteration_count
+            << ", trigger=" << GetAdaptiveTopologyTriggerText(decision.trigger)
+            << std::scientific << std::setprecision(2)
+            << ", drift=" << decision.maximum_transformed_drift
+            << ", clusters="
+            << iteration_state.graph_partition.sample_id_list_by_key.size()
+            << "/" << rebuilt_partition.sample_id_list_by_key.size()
+            << ", boundary_samples="
+            << iteration_state.graph_partition.boundary_sample_count
+            << "/" << rebuilt_partition.boundary_sample_count
+            << ", edges_added/removed="
+            << added_edge_count << "/" << removed_edge_count
+            << ", partition_changed="
+            << (partition_changed ? "yes" : "no")
+            << ", objective_domain_reset="
+            << (partition_changed ? "yes" : "no") << ".";
+        Logger::Log(LogLevel::Info, message.str());
+    }
+
+    graph_topology = std::move(rebuilt_topology);
+    iteration_state.topology_reference_state = accepted_state;
+    iteration_state.accepted_iterations_since_topology_rebuild = 0;
+    performance_counters.RecordFullStateMaterialization();
+    if (partition_changed)
+    {
+        ResetIterationStateForPartition(
+            context,
+            options,
+            accepted_state,
+            accepted_uses_polish,
+            iteration_state.accepted_iteration_count,
+            std::move(rebuilt_partition),
+            iteration_state,
+            performance_counters);
+    }
+    return partition_changed;
+}
+
 static IterationState BuildIterationState(
     const SecondStageContext & context,
     const GraphTopology & graph_topology,
@@ -1482,6 +1719,7 @@ static IterationState BuildIterationState(
 {
     IterationState iteration_state;
     iteration_state.previous_state = std::move(initial_state);
+    iteration_state.topology_reference_state = iteration_state.previous_state;
     iteration_state.previous_polish_provenance.assign(context.size(), 0);
     iteration_state.rollback_atom_mask.assign(context.size(), 0);
     iteration_state.terminal_failure_state = TerminalFailureState(context.size());
@@ -1519,7 +1757,7 @@ static IterationState BuildIterationState(
 
 static IterationResult RunIteration(
     const SecondStageContext & context,
-    const GraphTopology & graph_topology,
+    GraphTopology & graph_topology,
     const FitOptions & options,
     std::size_t attempt_number,
     IterationState & iteration_state,
@@ -1597,6 +1835,12 @@ static IterationResult RunIteration(
 
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
+    auto trust_region_iteration_update{
+        iteration_state.trust_region_state.UpdateAfterIteration(
+            selection.grow_trust_region_key_list,
+            selection.rejected_key_list,
+            selection.backtracking_exhausted_key_list)
+    };
     const auto has_new_terminal_failures{
         iteration_state.terminal_failure_state.IsolatePersistentFailures(
             selection.accepted_key_list,
@@ -1621,49 +1865,16 @@ static IterationResult RunIteration(
             auto remaining_graph_partition{
                 BuildGraphPartition(graph_topology, remaining_active_index_list)
             };
-            auto remaining_cluster_key_list{
-                BuildGraphClusterKeyList(remaining_graph_partition)
-            };
-            const auto assembled_model_snapshot{
-                BuildSecondStageModelSnapshot(context, assembled_state)
-            };
-            iteration_state.objective_domain = BuildObjectiveDomain(
-                context,
-                assembled_model_snapshot,
-                remaining_cluster_key_list,
-                options.distance_min,
-                options.distance_max);
-            iteration_state.cluster_objective_state.clear();
-            const auto remaining_objective_by_key{
-                BuildObjectiveByKey(
-                    remaining_graph_partition,
-                    iteration_state.objective_domain,
-                    SnapshotResidualEvaluator{ context, assembled_model_snapshot })
-            };
-            ReconcileClusterObjectiveState(
-                remaining_objective_by_key,
-                iteration_state.cluster_objective_state);
-            const auto reset_audit_objective{
-                EvaluateAuditObjective(
-                    iteration_state.objective_domain,
-                    SnapshotResidualEvaluator{ context, assembled_model_snapshot })
-            };
-            iteration_state.best_audit_state.reset();
-            if (reset_audit_objective.has_value())
-            {
-                TryUpdateBestAuditState(
-                    assembled_state,
-                    assembled_uses_polish,
-                    iteration_state.accepted_iteration_count + 1,
-                    *reset_audit_objective,
-                    iteration_state.best_audit_state);
-            }
             iteration_state.active_index_list = std::move(remaining_active_index_list);
-            performance_counters.RecordSolverWorkspaceReset();
-            ResetClusterSolverWorkspace(
-                remaining_cluster_key_list,
-                iteration_state.solver_workspace_by_key);
-            iteration_state.graph_partition = std::move(remaining_graph_partition);
+            ResetIterationStateForPartition(
+                context,
+                options,
+                assembled_state,
+                assembled_uses_polish,
+                iteration_state.accepted_iteration_count + 1,
+                std::move(remaining_graph_partition),
+                iteration_state,
+                performance_counters);
             objective_domain_changed = true;
         }
         else
@@ -1671,13 +1882,6 @@ static IterationResult RunIteration(
             iteration_state.active_index_list.clear();
         }
     }
-
-    auto trust_region_iteration_update{
-        iteration_state.trust_region_state.UpdateAfterIteration(
-            selection.grow_trust_region_key_list,
-            selection.rejected_key_list,
-            selection.backtracking_exhausted_key_list)
-    };
 
     IterationResult result;
     result.objective_domain_changed = objective_domain_changed;
@@ -1733,6 +1937,20 @@ static IterationResult RunIteration(
             iteration_state.active_index_list)
     };
     iteration_state.accepted_iteration_count++;
+    iteration_state.accepted_iterations_since_topology_rebuild++;
+    if (!has_new_terminal_failures &&
+        TryRebuildAdaptiveTopology(
+            context,
+            options,
+            assembled_state,
+            assembled_uses_polish,
+            graph_topology,
+            iteration_state,
+            performance_counters))
+    {
+        objective_domain_changed = true;
+    }
+    result.objective_domain_changed = objective_domain_changed;
     bool improved_best_audit{ false };
     if (!objective_domain_changed)
     {
@@ -1779,6 +1997,8 @@ static IterationResult RunIteration(
     result.transformed_change_stats = transformed_change_summary.percentile_stats;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     result.converged =
+        !objective_domain_changed &&
+        !has_new_terminal_failures &&
         is_stationarity_eligible &&
         !has_suspicious_offset_fallback &&
         selection.rejected_key_list.empty() &&
@@ -2024,7 +2244,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             options.quiet_mode);
         initial_state = std::move(initial_state_build_result.state);
     }
-    const auto graph_topology{
+    auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };
     LogGraphTopology(graph_topology, options.quiet_mode);
