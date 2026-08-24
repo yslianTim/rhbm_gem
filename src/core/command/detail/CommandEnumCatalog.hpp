@@ -22,9 +22,8 @@ struct CommandEnumTraits;
 template <>
 struct CommandEnumTraits<PainterType>
 {
-    inline static constexpr std::array<CommandEnumDefinition<PainterType, 2>, 5> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PainterType, 2>, 4> kOptions{{
         { PainterType::GAUS, "GAUS", { "0", "gaus" } },
-        { PainterType::QSCORE, "QSCORE", { "1", "qscore" } },
         { PainterType::ATOM, "ATOM", { "4", "atom" } },
         { PainterType::COMPARISON, "COMPARISON", { "2", "comparison" } },
         { PainterType::DEMO, "DEMO", { "3", "demo" } }

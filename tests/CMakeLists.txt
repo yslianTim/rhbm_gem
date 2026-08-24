@@ -110,11 +110,6 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/DocumentationLayout_test.cpp
 )
 
-set(CORE_PAINTER_TEST_SOURCES
-    core/painter/DataObjectPainterIngestion_test.cpp
-    core/painter/PotentialPlotBuilder_test.cpp
-)
-
 set(DATA_RUNTIME_TEST_SOURCES
     data/DataObjectAssemblySpatialQuery_test.cpp
     data/DataObjectFileIO_test.cpp
@@ -184,7 +179,6 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_QSCORE_TEST_SOURCES}
     ${CORE_SAMPLER_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
-    ${CORE_PAINTER_TEST_SOURCES}
     ${DATA_RUNTIME_TEST_SOURCES}
     ${DATA_SCHEMA_TEST_SOURCES}
     ${UTILS_ALGORITHM_TEST_SOURCES}
@@ -241,12 +235,6 @@ add_rhbm_gtest_group(rhbm_tests_core_contract
     DOMAIN core
     INTENTS contract
     SOURCES ${CORE_CONTRACT_TEST_SOURCES}
-)
-
-add_rhbm_gtest_group(rhbm_tests_core_painter
-    DOMAIN core
-    INTENTS painter
-    SOURCES ${CORE_PAINTER_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_data_runtime

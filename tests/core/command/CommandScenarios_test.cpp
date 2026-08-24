@@ -564,19 +564,6 @@ TEST(CommandScenariosTest, PotentialDisplayAllowsWellFormedReferenceGroupsPastPr
     EXPECT_FALSE(HasDiagnosticForOption(result.issues, "--ref-group"));
 }
 
-TEST(CommandScenariosTest, PotentialDisplayQScoreDoesNotRequireMapAtPrepare)
-{
-    PotentialDisplayRequest request{};
-    request.painter_choice = PainterType::QSCORE;
-    request.model_key_tag_list = { "model_key" };
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "-m,--map"));
-    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "request"));
-}
-
 TEST(CommandScenariosTest, PotentialDisplayGausDoesNotRequireMapAtPrepare)
 {
     PotentialDisplayRequest request{};

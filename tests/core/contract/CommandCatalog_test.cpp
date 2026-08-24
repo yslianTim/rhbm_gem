@@ -72,11 +72,9 @@ template <>
 struct EnumMappingTraits<PainterType>
 {
     static constexpr std::string_view kFirstBindingToken{ "GAUS" };
-    static constexpr std::array<EnumMappingExpectation<PainterType>, 5> kExpectations{{
+    static constexpr std::array<EnumMappingExpectation<PainterType>, 3> kExpectations{{
         { "gaus", PainterType::GAUS },
         { "0", PainterType::GAUS },
-        { "qscore", PainterType::QSCORE },
-        { "1", PainterType::QSCORE },
         { "atom", PainterType::ATOM },
     }};
 };
@@ -201,6 +199,8 @@ TEST(CommandCatalogTest, PainterTypeDoesNotExposeRemovedModelAliases)
     const auto cli_map{ BuildCliMapFromTraits<PainterType>() };
 
     EXPECT_EQ(cli_map.find("model"), cli_map.end());
+    EXPECT_EQ(cli_map.find("qscore"), cli_map.end());
+    EXPECT_EQ(cli_map.find("1"), cli_map.end());
 }
 
 TYPED_TEST(CommandEnumMappingTest, CliAndBindingMappingsStayInSync)

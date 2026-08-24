@@ -29,7 +29,7 @@ def assert_module_surface() -> None:
     assert hasattr(m, "CommandResult")
     assert hasattr(m, "RunCommand")
     assert hasattr(m, "PainterType")
-    assert hasattr(m.PainterType, "QSCORE")
+    assert not hasattr(m.PainterType, "QSCORE")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
@@ -143,8 +143,8 @@ def assert_request_objects_are_usable() -> None:
 
     display = m.PotentialDisplayRequest()
     assert not hasattr(display, "map_file_path")
-    display.painter_choice = m.PainterType.QSCORE
-    assert display.painter_choice == m.PainterType.QSCORE
+    display.painter_choice = m.PainterType.GAUS
+    assert display.painter_choice == m.PainterType.GAUS
 
 
 def has_issue(report, option_name: str) -> bool:

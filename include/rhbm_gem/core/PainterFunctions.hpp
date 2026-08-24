@@ -15,7 +15,6 @@ using ReferenceModelGroupMap = std::unordered_map<std::string, std::vector<Model
 
 void PaintAtom(const ModelObjectList & model_objects, const std::string & output_folder);
 void PaintGaus(const ModelObjectList & model_objects, const std::string & output_folder);
-void PaintQScore(const ModelObjectList & model_objects, const std::string & output_folder);
 void PaintComparison(
     const ModelObjectList & model_objects,
     const ReferenceModelGroupMap & reference_model_groups,

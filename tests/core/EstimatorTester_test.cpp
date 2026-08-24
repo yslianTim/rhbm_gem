@@ -512,7 +512,7 @@ TEST(
     options.quiet_mode = false;
     command_test::ScopedTempDir temp_dir{ "local_fitting_result_table" };
     const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
-    options.local_fitting_result_csv_path = csv_path;
+    options.result_csv_path = csv_path;
     testing::internal::CaptureStdout();
     rt::RunPotentialFittingWorkflow(*model, options);
     const std::string out{ testing::internal::GetCapturedStdout() };

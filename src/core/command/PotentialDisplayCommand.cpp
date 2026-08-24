@@ -197,11 +197,6 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             PaintGaus(model_objects, output_folder);
             break;
         }
-        case PainterType::QSCORE:
-        {
-            PaintQScore(model_objects, output_folder);
-            break;
-        }
         case PainterType::COMPARISON:
         {
             const auto reference_model_groups{
@@ -231,7 +226,6 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             Logger::Log(LogLevel::Warning,
                         "Available Painter Choices:\n"
                         "  [0] GausPainter\n"
-                        "  [1] QScorePainter\n"
                         "  [2] ComparisonPainter\n"
                         "  [3] DemoPainter\n"
                         "  [4] AtomPainter");

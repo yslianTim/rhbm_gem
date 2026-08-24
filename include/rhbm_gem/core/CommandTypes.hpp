@@ -13,7 +13,6 @@ namespace rhbm_gem::core {
 enum class PainterType : int
 {
     GAUS       = 0,
-    QSCORE     = 1,
     COMPARISON = 2,
     DEMO       = 3,
     ATOM       = 4
