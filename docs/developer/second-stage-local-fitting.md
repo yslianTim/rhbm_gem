@@ -103,11 +103,18 @@ Each outer attempt performs the following sequence:
 7. For a stationarity-eligible cluster without suspicious atoms, attempt one
    joint amplitude/width/offset polish. Keep the polish only when it strictly
    improves the base candidate on the same objective scale.
-8. If clusters share boundary samples, validate the assembled candidates with
-   the combined-objective guard. If the guard rejects the endpoint, jointly
-   backtrack every changed cluster with one common factor and commit only a
-   factor that passes every local guard and the global guard.
-9. Update trust radii and persistent-failure state. After an accepted state,
+8. Build the accepted-induced interaction graph from shared boundary samples.
+   Revalidate and, if necessary, backtrack each connected component independently
+   with one common factor for that component. A failed component rolls back only
+   its members, so unrelated components and remote singleton clusters remain
+   eligible for commit.
+9. Run the unchanged global previous/best audit on the complete assembled state.
+   If tolerance-level deterioration from independent reconciliation units causes
+   aggregate rejection, remove non-improving units from worst to best until the
+   first passing subset is found. If only strictly improving units remain but the
+   historical best gate still fails, roll back the attempt without weakening the
+   gate.
+10. Update trust radii and persistent-failure state. After an accepted state,
    conditionally rebuild the adaptive topology before updating the global audit
    state and applying the stopping conditions.
 
@@ -201,7 +208,7 @@ matches the corresponding full-global difference when only that cluster
 changes.
 
 Candidate scoring uses a provisional copy of the cluster objective state. A
-rejected base, polish, backtracking trial, or combined candidate does not
+rejected base, polish, backtracking trial, or boundary-component candidate does not
 advance the previous or best references. The best objective and maximum
 transformed change are retained to break objective ties.
 
@@ -238,7 +245,7 @@ explicit diagnostic reason.
 
 If the endpoint is valid but fails its local objective guard, the same cluster
 attempt evaluates factors `1/2, 1/4, 1/8, ...` between the previous and endpoint
-states. Local and combined backtracking preserve one physical offset per
+states. Local and boundary-component backtracking preserve one physical offset per
 `GroupKey`; shapes remain interpolated in transformed coordinates. Search stops
 when the largest transformed change is below
 `kTransformedChangeTolerance`. The first passing trial is committed
@@ -256,13 +263,24 @@ non-backtracked accepted cluster grows its radius only when the objective
 strictly improves and its step is close to the current boundary. Trust-region
 updates are isolated by cluster.
 
-When the assembled state fails the combined-objective guard, all changed
-clusters are interpolated from the original committed state with one common
-factor. Each factor starts from the committed objective references and must
-pass all affected local criteria plus the unique-owner global objective before
-the cluster states are atomically committed. Failed factors leave no partial
-cluster commits. A global-backtracked state does not grow trust radii; polish
-provenance is retained only for atoms with a material polished endpoint change.
+Accepted clusters are connected only when they both affect the same boundary
+sample. Rejected clusters do not bridge components. Each multi-cluster component
+first revalidates the factor-`1.0` assembled endpoint against every member's local
+criteria and a unique-owner component audit relative to the committed state. A
+failed endpoint evaluates common factors `1/2, 1/4, 1/8, ...` for that component
+alone. Exhaustion rolls back only its member clusters; independent components and
+remote singleton clusters retain their accepted endpoints. A component-backtracked
+state does not grow its members' trust radii, and polish provenance is retained
+only for atoms with a material polished endpoint change.
+
+After component reconciliation, the complete assembled state must still pass the
+unchanged global previous/best audit. On aggregate failure, independent components
+and singleton clusters are scored by their exact global objective delta. Only
+non-improving units are removed, from worst delta to best, with the full audit
+recomputed after each removal. The first passing subset is committed atomically.
+If all remaining units strictly improve the previous objective but cannot satisfy
+the historical best gate, the complete remaining attempt is marked exhausted;
+objective tolerances are never relaxed.
 
 ## Numerical defenses and terminal isolation
 
@@ -337,8 +355,9 @@ old and new domains are never compared.
 An adaptive topology rebuild always becomes the next hysteresis reference,
 even when its active partition is unchanged. In that case the objective scales,
 best audit, trust radii, and solver workspaces remain intact. When the complete
-cluster-key and sample mapping changes, the current accepted state initializes
-new fit/tail scales, cluster objectives, and the best-audit baseline. Exact
+cluster-key, sample, or boundary-dependency mapping changes, the current accepted
+state initializes new fit/tail scales, cluster objectives, and the best-audit
+baseline. Exact
 cluster keys retain their trust radii; merged or split keys start at the initial
 radius. Solver workspaces and exhausted-backtracking keys are reset, audit
 patience is cleared, and convergence is disabled for that attempt so the new
@@ -438,10 +457,12 @@ adjusted-response cache for refits, and one residual/objective baseline.
 Cluster candidates are represented by atom-local state patches. Candidate
 evaluation overlays a patch on the previous state, recomputes medians only for
 groups touched by the patch, and evaluates the objective as baseline plus the
-changed sample and offset delta. For a combined guard, affected sample IDs are
-sorted and deduplicated so a boundary sample is recomputed once. A complete
-candidate state is materialized only when patches are assembled or a combined
-backtracking candidate is accepted.
+changed sample and offset delta. For a boundary-component guard, affected sample
+IDs are sorted and deduplicated so a boundary sample is recomputed once. The
+boundary dependency and deterministic accepted-induced components are derived
+from the current partition and rebuilt with adaptive topology or terminal
+isolation. Without a multi-cluster accepted component, candidate selection stays
+on the existing fast path.
 
 Joint-offset and joint-polish solvers retain their sparse pattern analysis for
 the lifetime of a partition and refresh only numeric values, weights,
@@ -455,7 +476,9 @@ merge code.
 Non-quiet runs also emit non-blocking performance counters for complete-state
 materializations, Gaussian cache hits/misses, recomputed/reused objective
 samples, symbolic solver analyses, adaptive topology rebuilds and partition
-changes, and iteration/candidate/topology/total elapsed time.
+changes, boundary reconciliation attempts/backtracks/rejections, and
+boundary reconciliation elapsed time. The existing
+iteration/candidate/topology/total elapsed-time field remains unchanged.
 These counters are diagnostic evidence rather than acceptance thresholds.
 
 ## Logging
@@ -472,7 +495,7 @@ values in `dMax A/R`.
 | `Try/Acc` | One-based outer attempt / cumulative accepted iterations |
 | `Atom A/T` | Remaining active / cumulative terminal atoms |
 | `Cluster A/R` | Accepted / rejected candidate clusters |
-| `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after the combined-objective guard; `E = A + R + S` |
+| `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after component reconciliation and the final global guard; `E = A + R + S` |
 | `Suspicious` | Atoms rolled back by the suspicious-offset checks in this attempt |
 | `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
 
@@ -480,8 +503,10 @@ Objective-domain startup diagnostics report the weights, cluster and unique
 fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
 diagnostics use `fit/tail-weighted/offset/total` order and also report raw tail
 loss, weights, sample counts, fixed scales, and backtracking
-trials/factor/exhaustion. Accepted local and combined backtracking factors are
-logged at debug level. An all-rejected debug record reports
+trials/factor/exhaustion. Accepted local factors are logged at debug level.
+Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
+record with its cluster, atom, and boundary-sample counts plus trials, factor,
+accepted/rejected, and exhausted status. An all-rejected debug record reports
 `exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
 terminal classification can be audited directly. Terminal, convergence, and
 summary messages finish the active progress line before normal line output.

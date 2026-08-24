@@ -126,13 +126,9 @@ constexpr std::size_t kAuditPatience{ 3 };
 
 struct IterationDiagnostics
 {
-    std::vector<ClusterCandidateDiagnostic>
-        accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic>
-        rejected_cluster_diagnostic_list{};
-    std::size_t combined_backtracking_trial_count{ 0 };
-    std::optional<double> combined_backtracking_factor{};
-    bool combined_backtracking_exhausted{ false };
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
+    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
     TrustRegionIterationUpdate trust_region_update{};
 };
 
@@ -1048,10 +1044,10 @@ static void LogAcceptedBacktrackingDiagnostics(
                 return diagnostic.attempt.backtracking_trial_count > 1;
             })
     };
-    if (!has_local_backtracking && diagnostics.combined_backtracking_trial_count <= 1)
-    {
-        return;
-    }
+    const auto has_boundary_reconciliation_diagnostic{
+        !diagnostics.boundary_reconciliation_diagnostic_list.empty()
+    };
+    if (!has_local_backtracking && !has_boundary_reconciliation_diagnostic) return;
     Logger::FinishProgressLine();
     for (const auto & cluster_diagnostic : diagnostics.accepted_cluster_diagnostic_list)
     {
@@ -1092,20 +1088,29 @@ static void LogAcceptedBacktrackingDiagnostics(
         message << ".";
         Logger::Log(LogLevel::Debug, message.str());
     }
-    if (diagnostics.combined_backtracking_trial_count <= 1) return;
-    std::ostringstream message;
-    message << "Combined-objective backtracking: trials/factor/exhausted = "
-        << diagnostics.combined_backtracking_trial_count << "/";
-    if (diagnostics.combined_backtracking_factor.has_value())
+    for (const auto & diagnostic : diagnostics.boundary_reconciliation_diagnostic_list)
     {
-        message << *diagnostics.combined_backtracking_factor;
+        std::ostringstream message;
+        message
+            << "Boundary-component reconciliation: clusters/atoms/boundary-samples = "
+            << diagnostic.key_list.size() << "/"
+            << diagnostic.atom_count << "/"
+            << diagnostic.boundary_sample_count
+            << ", trials/factor/accepted/exhausted = "
+            << diagnostic.trial_count << "/";
+        if (diagnostic.accepted_factor.has_value())
+        {
+            message << *diagnostic.accepted_factor;
+        }
+        else
+        {
+            message << "-";
+        }
+        message
+            << "/" << (diagnostic.accepted ? "yes" : "no")
+            << "/" << (diagnostic.exhausted ? "yes" : "no") << ".";
+        Logger::Log(LogLevel::Debug, message.str());
     }
-    else
-    {
-        message << "-";
-    }
-    message << "/" << (diagnostics.combined_backtracking_exhausted ? "yes" : "no") << ".";
-    Logger::Log(LogLevel::Debug, message.str());
 }
 
 static std::string FormatProgressMaximum(double value)
@@ -1542,11 +1547,10 @@ static std::size_t CountGraphEdgeDifference(const GraphEdgeSet & source, const G
             }));
 }
 
-static bool AreGraphPartitionsEqual(
-    const CouplingGraphPartition & lhs,
-    const CouplingGraphPartition & rhs)
+static bool AreGraphPartitionsEqual(const CouplingGraphPartition & lhs, const CouplingGraphPartition & rhs)
 {
     return lhs.boundary_sample_count == rhs.boundary_sample_count &&
+        lhs.boundary_sample_dependency_list == rhs.boundary_sample_dependency_list &&
         lhs.sample_id_list_by_key == rhs.sample_id_list_by_key;
 }
 
@@ -1890,9 +1894,7 @@ static IterationResult RunIteration(
         result.diagnostics.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
     }
     result.diagnostics.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
-    result.diagnostics.combined_backtracking_trial_count = selection.combined_backtracking_trial_count;
-    result.diagnostics.combined_backtracking_factor = selection.combined_backtracking_factor;
-    result.diagnostics.combined_backtracking_exhausted = selection.combined_backtracking_exhausted;
+    result.diagnostics.boundary_reconciliation_diagnostic_list = selection.boundary_reconciliation_diagnostic_list;
     result.diagnostics.trust_region_update = std::move(trust_region_iteration_update);
     iteration_state.rollback_atom_mask = std::move(raw_iteration_result.rollback_atom_mask);
     result.progress = IterationProgress{
@@ -1954,7 +1956,7 @@ static IterationResult RunIteration(
     bool improved_best_audit{ false };
     if (!objective_domain_changed)
     {
-        auto candidate_audit_objective{ selection.combined_backtracking_objective };
+        auto candidate_audit_objective{ selection.final_audit_objective };
         if (!candidate_audit_objective.has_value())
         {
             const auto candidate_model_snapshot{

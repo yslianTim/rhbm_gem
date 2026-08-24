@@ -168,9 +168,13 @@ class PerformanceCounters
     std::size_t m_retired_solver_symbolic_analysis_count{ 0 };
     std::size_t m_topology_rebuild_attempt_count{ 0 };
     std::size_t m_topology_partition_change_count{ 0 };
+    std::size_t m_boundary_reconciliation_attempt_count{ 0 };
+    std::size_t m_boundary_reconciliation_backtracked_count{ 0 };
+    std::size_t m_boundary_reconciliation_rejected_count{ 0 };
     double m_iteration_phase_milliseconds{ 0.0 };
     double m_candidate_phase_milliseconds{ 0.0 };
     double m_topology_rebuild_milliseconds{ 0.0 };
+    double m_boundary_reconciliation_milliseconds{ 0.0 };
 
 public:
     PerformanceCounters(
@@ -190,6 +194,11 @@ public:
     void FinishCandidatePhase(std::chrono::steady_clock::time_point start_time);
     void RecordSolverWorkspaceReset();
     void RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed);
+    void RecordBoundaryReconciliation(
+        std::size_t attempt_count,
+        std::size_t backtracked_count,
+        std::size_t rejected_count,
+        double elapsed_milliseconds);
 
 private:
     static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
@@ -437,6 +446,17 @@ struct PolishProgress
     std::size_t skipped_count{ 0 };
 };
 
+struct BoundaryComponentReconciliationDiagnostic
+{
+    std::vector<ClusterKey> key_list{};
+    std::size_t atom_count{ 0 };
+    std::size_t boundary_sample_count{ 0 };
+    std::size_t trial_count{ 1 };
+    std::optional<double> accepted_factor{};
+    bool accepted{ false };
+    bool exhausted{ false };
+};
+
 struct CandidateSelection
 {
     FitState assembled_state{};
@@ -447,10 +467,8 @@ struct CandidateSelection
     std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<ClusterKey> grow_trust_region_key_list{};
     std::vector<ClusterKey> backtracking_exhausted_key_list{};
-    std::size_t combined_backtracking_trial_count{ 0 };
-    std::optional<double> combined_backtracking_factor{};
-    std::optional<ObjectiveBreakdown> combined_backtracking_objective{};
-    bool combined_backtracking_exhausted{ false };
+    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
+    std::optional<ObjectiveBreakdown> final_audit_objective{};
     PolishProgress polish_progress{};
 };
 

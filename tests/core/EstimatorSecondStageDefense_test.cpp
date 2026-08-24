@@ -1107,6 +1107,43 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildBoundaryComponentConflictDefenseModel(
+    double intensity_scale = 1.0)
+{
+    std::vector<std::array<float, 3>> position_list;
+    std::vector<Spot> spot_list;
+    std::vector<Element> element_list;
+    std::vector<rg::GaussianModel3D> truth_model_list;
+    for (std::size_t i = 0; i < 13; i++)
+    {
+        const auto x_position{
+            i < 11 ? 0.45F * static_cast<float>(i) :
+                20.0F + 0.45F * static_cast<float>(i - 11)
+        };
+        position_list.push_back({ x_position, 0.0F, 0.0F });
+        spot_list.push_back(i % 2 == 0 ? Spot::C : Spot::O);
+        element_list.push_back(
+            i % 2 == 0 ? Element::CARBON : Element::OXYGEN);
+        const auto truth_model{
+            i >= 11 ? rg::GaussianModel3D{ 7.5, 0.70, 0.10 } :
+            i % 2 == 0 ?
+                rg::GaussianModel3D{ 10.0, 0.85, 0.25 } :
+                rg::GaussianModel3D{ 2.0, 0.40, -0.15 }
+        };
+        truth_model_list.emplace_back(rg::GaussianModel3D{
+            truth_model.GetAmplitude() * intensity_scale,
+            truth_model.GetWidth(),
+            truth_model.GetOffset() * intensity_scale
+        });
+    }
+    return BuildDefenseModel(
+        position_list,
+        spot_list,
+        element_list,
+        truth_model_list,
+        rg::GaussianModel3D{ 5.5 * intensity_scale, 0.55, 0.0 });
+}
+
 std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
@@ -3537,6 +3574,13 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
     EXPECT_EQ(partition.boundary_sample_count, 1U);
+    ASSERT_EQ(partition.boundary_sample_dependency_list.size(), 1U);
+    EXPECT_EQ(
+        partition.boundary_sample_dependency_list.front().sample_id,
+        (coupling_detail::SampleRef{ 1, 0 }));
+    EXPECT_EQ(
+        partition.boundary_sample_dependency_list.front().cluster_key_list,
+        (std::vector<audit_detail::ClusterKey>{ { 0, 1 }, { 2 } }));
     EXPECT_EQ(partition.sample_id_list_by_key.at({ 0, 1 }).size(), 2U);
     EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 1U);
 
@@ -3561,6 +3605,66 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 0 }), 1U);
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 2 }), 1U);
     EXPECT_EQ(inactive_partition.boundary_sample_count, 0U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAcceptedSharedSamples)
+{
+    const audit_detail::ClusterKey key_a{ 0 };
+    const audit_detail::ClusterKey key_b{ 1 };
+    const audit_detail::ClusterKey key_c{ 2 };
+    const audit_detail::ClusterKey key_d{ 3 };
+    const audit_detail::ClusterKey key_e{ 4 };
+    const coupling_detail::SampleRef sample_ab{ 0, 0 };
+    const coupling_detail::SampleRef sample_bc{ 1, 0 };
+    const coupling_detail::SampleRef sample_de{ 3, 0 };
+    coupling_detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key = {
+        { key_a, { sample_ab } },
+        { key_b, { sample_ab, sample_bc } },
+        { key_c, { sample_bc } },
+        { key_d, { sample_de } },
+        { key_e, { sample_de } }
+    };
+    partition.boundary_sample_dependency_list = {
+        { sample_ab, { key_a, key_b } },
+        { sample_bc, { key_b, key_c } },
+        { sample_de, { key_d, key_e } }
+    };
+    partition.boundary_sample_count =
+        partition.boundary_sample_dependency_list.size();
+
+    const auto component_list{
+        coupling_detail::BuildBoundaryReconciliationComponents(
+            partition,
+            { key_e, key_c, key_a, key_d, key_b })
+    };
+    ASSERT_EQ(component_list.size(), 2U);
+    EXPECT_EQ(
+        component_list.at(0).key_list,
+        (std::vector<audit_detail::ClusterKey>{ key_a, key_b, key_c }));
+    EXPECT_EQ(
+        component_list.at(0).affected_sample_ref_list,
+        (std::vector<coupling_detail::SampleRef>{ sample_ab, sample_bc }));
+    EXPECT_EQ(component_list.at(0).boundary_sample_count, 2U);
+    EXPECT_EQ(
+        component_list.at(1).key_list,
+        (std::vector<audit_detail::ClusterKey>{ key_d, key_e }));
+    EXPECT_EQ(
+        component_list.at(1).affected_sample_ref_list,
+        (std::vector<coupling_detail::SampleRef>{ sample_de }));
+    EXPECT_EQ(component_list.at(1).boundary_sample_count, 1U);
+
+    EXPECT_TRUE(
+        coupling_detail::BuildBoundaryReconciliationComponents(
+            partition,
+            { key_c, key_a }).empty());
+    EXPECT_EQ(
+        coupling_detail::BuildBoundaryReconciliationComponents(
+            partition,
+            { key_c, key_b, key_a }),
+        std::vector<coupling_detail::BoundaryReconciliationComponent>{
+            component_list.front()
+        });
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAndBounded)
@@ -3873,6 +3977,9 @@ TEST(EstimatorSecondStageDefenseTest,
             candidate_patch.mdpde_list.at(atom_index).GetModel(),
             1.0e-12);
     }
+    EXPECT_DOUBLE_EQ(
+        candidate_state.at(0).mdpde.GetModel().GetOffset(),
+        candidate_state.at(1).mdpde.GetModel().GetOffset());
 
     const auto merged_provenance{
         workspace.BuildCandidatePolishProvenance(
@@ -4816,6 +4923,63 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAnd
     }
 }
 
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryComponentReconciliationMatchesSerialAndParallelSelection)
+{
+    auto serial_model{ BuildBoundaryComponentConflictDefenseModel() };
+    auto parallel_model{ BuildBoundaryComponentConflictDefenseModel() };
+    auto serial_options{ MakeSecondStageOptions() };
+    auto parallel_options{ MakeSecondStageOptions() };
+    serial_options.thread_size = 1;
+    parallel_options.thread_size = 2;
+
+    EXPECT_EQ(
+        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
+        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+    const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
+    const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
+    ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
+    for (std::size_t i = 0; i < serial_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*serial_atoms.at(i)),
+            GetEstimateModel(*parallel_atoms.at(i)),
+            1.0e-12);
+    }
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryComponentReconciliationIsIntensityScaleInvariant)
+{
+    constexpr double intensity_scale{ 100.0 };
+    auto base_model{ BuildBoundaryComponentConflictDefenseModel() };
+    auto scaled_model{
+        BuildBoundaryComponentConflictDefenseModel(intensity_scale)
+    };
+
+    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+    const auto & base_atoms{ base_model->GetSelectedAtoms() };
+    const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
+    ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
+    for (std::size_t i = 0; i < base_atoms.size(); i++)
+    {
+        const auto base{ GetEstimateModel(*base_atoms.at(i)) };
+        const auto scaled{ GetEstimateModel(*scaled_atoms.at(i)) };
+        EXPECT_NEAR(
+            base.GetAmplitude() * intensity_scale,
+            scaled.GetAmplitude(),
+            std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 5.0e-5));
+        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 1.0e-6);
+        EXPECT_NEAR(
+            base.GetOffset() * intensity_scale,
+            scaled.GetOffset(),
+            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 5.0e-5));
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };
@@ -4903,6 +5067,42 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnc
     EXPECT_NE(out.find("candidate/retained/cut edges = 1/0/1"), std::string::npos);
     EXPECT_NE(out.find("clusters = 2"), std::string::npos);
     EXPECT_NE(out.find("unique fit/tail samples = 48/0"), std::string::npos);
+    EXPECT_NE(
+        out.find("Boundary-component reconciliation:"),
+        std::string::npos);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    BoundaryComponentReconciliationBacktracksAndPreservesRemoteCluster)
+{
+    auto model{ BuildBoundaryComponentConflictDefenseModel() };
+    const auto initial_remote_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13)
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+    EXPECT_NE(
+        out.find(
+            "Boundary-component reconciliation: clusters/atoms/boundary-samples = 2/11/"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("trials/factor/accepted/exhausted = 2/0.5/yes/no"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("trials/factor/accepted/exhausted = 1/-/no/yes"),
+        std::string::npos);
+    EXPECT_NE(out.find("| 1/2"), std::string::npos);
+    EXPECT_LT(
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13),
+        initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(
@@ -5190,6 +5390,15 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         std::string::npos);
     EXPECT_NE(
         out.find("topology_rebuilds/partition_changes="),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("boundary_reconciliations/backtracked/rejected="),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("boundary_reconciliation_ms="),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("iteration/candidate/topology/total_ms="),
         std::string::npos);
 
     const auto header_start{ out.find("Try/Acc") };

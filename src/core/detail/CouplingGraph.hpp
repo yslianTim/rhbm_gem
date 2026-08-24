@@ -87,8 +87,30 @@ struct CouplingGraphOptions
 
 struct CouplingGraphPartition
 {
+    struct BoundarySampleDependency
+    {
+        SampleRef sample_id{};
+        std::vector<ClusterKey> cluster_key_list{};
+
+        friend bool operator==(
+            const BoundarySampleDependency &,
+            const BoundarySampleDependency &) = default;
+    };
+
     std::map<ClusterKey, std::vector<SampleRef>> sample_id_list_by_key{};
+    std::vector<BoundarySampleDependency> boundary_sample_dependency_list{};
     std::size_t boundary_sample_count{ 0 };
+};
+
+struct BoundaryReconciliationComponent
+{
+    std::vector<ClusterKey> key_list{};
+    std::vector<SampleRef> affected_sample_ref_list{};
+    std::size_t boundary_sample_count{ 0 };
+
+    friend bool operator==(
+        const BoundaryReconciliationComponent &,
+        const BoundaryReconciliationComponent &) = default;
 };
 
 class CouplingGraphBuilder
@@ -156,5 +178,9 @@ std::vector<ClusterKey> BuildGraphClusterKeyList(const CouplingGraphPartition & 
 std::vector<SampleRef> BuildGraphAffectedSampleUnion(
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & key_list);
+
+std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponents(
+    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & accepted_key_list);
 
 } // namespace rhbm_gem::core::detail

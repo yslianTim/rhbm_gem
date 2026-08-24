@@ -922,6 +922,7 @@ CouplingGraphPartition BuildGraphPartition(
     }
 
     std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
+    std::vector<std::pair<SampleRef, std::vector<std::size_t>>> boundary_root_list_by_sample;
     CouplingGraphPartition partition;
     for (const auto & dependency : topology.sample_dependency_list)
     {
@@ -939,12 +940,33 @@ CouplingGraphPartition BuildGraphPartition(
         }
         std::ranges::sort(root_list);
         root_list.erase(std::ranges::unique(root_list).begin(), root_list.end());
-        if (root_list.size() > 1) partition.boundary_sample_count++;
+        if (root_list.size() > 1)
+        {
+            boundary_root_list_by_sample.emplace_back(dependency.sample_id, root_list);
+        }
         for (const auto root : root_list)
         {
             sample_id_list_by_root[root].emplace_back(dependency.sample_id);
         }
     }
+
+    partition.boundary_sample_dependency_list.reserve(boundary_root_list_by_sample.size());
+    for (auto & [sample_id, root_list] : boundary_root_list_by_sample)
+    {
+        CouplingGraphPartition::BoundarySampleDependency boundary_dependency;
+        boundary_dependency.sample_id = sample_id;
+        boundary_dependency.cluster_key_list.reserve(root_list.size());
+        for (const auto root : root_list)
+        {
+            boundary_dependency.cluster_key_list.emplace_back(key_by_root.at(root));
+        }
+        partition.boundary_sample_dependency_list.emplace_back(std::move(boundary_dependency));
+    }
+    std::ranges::sort(
+        partition.boundary_sample_dependency_list,
+        {},
+        &CouplingGraphPartition::BoundarySampleDependency::sample_id);
+    partition.boundary_sample_count = partition.boundary_sample_dependency_list.size();
 
     for (auto & [root, key] : key_by_root)
     {
@@ -978,6 +1000,91 @@ std::vector<SampleRef> BuildGraphAffectedSampleUnion(
         std::ranges::unique(sample_id_list).begin(),
         sample_id_list.end());
     return sample_id_list;
+}
+
+std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponents(
+    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & accepted_key_list)
+{
+    auto sorted_accepted_key_list{ accepted_key_list };
+    std::ranges::sort(sorted_accepted_key_list);
+    sorted_accepted_key_list.erase(
+        std::ranges::unique(sorted_accepted_key_list).begin(),
+        sorted_accepted_key_list.end());
+    if (sorted_accepted_key_list.size() < 2 || partition.boundary_sample_dependency_list.empty())
+    {
+        return {};
+    }
+
+    std::map<ClusterKey, std::size_t> accepted_position_by_key;
+    for (std::size_t position = 0; position < sorted_accepted_key_list.size(); position++)
+    {
+        const auto & key{ sorted_accepted_key_list.at(position) };
+        if (!partition.sample_id_list_by_key.contains(key))
+        {
+            throw std::invalid_argument(
+                "Boundary reconciliation accepted key is absent from the graph partition.");
+        }
+        accepted_position_by_key.emplace(key, position);
+    }
+
+    DisjointSet component_set{ sorted_accepted_key_list.size() };
+    std::vector<char> participates_in_boundary_component(sorted_accepted_key_list.size(), 0);
+    for (const auto & dependency : partition.boundary_sample_dependency_list)
+    {
+        std::vector<std::size_t> accepted_position_list;
+        for (const auto & key : dependency.cluster_key_list)
+        {
+            const auto iter{ accepted_position_by_key.find(key) };
+            if (iter != accepted_position_by_key.end())
+            {
+                accepted_position_list.emplace_back(iter->second);
+            }
+        }
+        if (accepted_position_list.size() < 2) continue;
+        const auto first_position{ accepted_position_list.front() };
+        participates_in_boundary_component.at(first_position) = 1;
+        for (std::size_t i = 1; i < accepted_position_list.size(); i++)
+        {
+            participates_in_boundary_component.at(accepted_position_list.at(i)) = 1;
+            component_set.Merge(first_position, accepted_position_list.at(i));
+        }
+    }
+
+    std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
+    for (std::size_t position = 0; position < sorted_accepted_key_list.size(); position++)
+    {
+        if (participates_in_boundary_component.at(position) == 0) continue;
+        key_list_by_root[component_set.Find(position)].emplace_back(sorted_accepted_key_list.at(position));
+    }
+
+    std::vector<BoundaryReconciliationComponent> component_list;
+    component_list.reserve(key_list_by_root.size());
+    for (auto & [root, key_list] : key_list_by_root)
+    {
+        static_cast<void>(root);
+        if (key_list.size() < 2) continue;
+        std::size_t boundary_sample_count{ 0 };
+        for (const auto & dependency : partition.boundary_sample_dependency_list)
+        {
+            const auto accepted_contributor_count{
+                std::ranges::count_if(
+                    dependency.cluster_key_list,
+                    [&](const auto & key)
+                    {
+                        return std::ranges::find(key_list, key) != key_list.end();
+                    })
+            };
+            if (accepted_contributor_count > 1) boundary_sample_count++;
+        }
+        component_list.emplace_back(BoundaryReconciliationComponent{
+            key_list,
+            BuildGraphAffectedSampleUnion(partition, key_list),
+            boundary_sample_count
+        });
+    }
+    std::ranges::sort(component_list, {}, &BoundaryReconciliationComponent::key_list);
+    return component_list;
 }
 
 } // namespace rhbm_gem::core::detail

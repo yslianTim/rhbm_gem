@@ -70,6 +70,12 @@ struct ClusterCandidateResult
     bool grow_trust_region{ false };
 };
 
+struct IndividualCandidateSelection
+{
+    CandidateSelection selection{};
+    std::map<ClusterKey, PolishProgress> polish_progress_by_key{};
+};
+
 } // namespace
 
 TrustRegionStateSet::TrustRegionStateSet(TrustRegionOptions options)
@@ -87,8 +93,7 @@ TrustRegionStateSet::TrustRegionStateSet(TrustRegionOptions options)
         !std::isfinite(m_options.growth_factor) ||
         m_options.growth_factor <= 1.0)
     {
-        throw std::invalid_argument(
-            "Local fitting trust-region options are invalid.");
+        throw std::invalid_argument("Local fitting trust-region options are invalid.");
     }
 }
 
@@ -216,6 +221,13 @@ PerformanceCounters::~PerformanceCounters()
         << ", topology_rebuilds/partition_changes="
         << m_topology_rebuild_attempt_count << "/"
         << m_topology_partition_change_count
+        << ", boundary_reconciliations/backtracked/rejected="
+        << m_boundary_reconciliation_attempt_count << "/"
+        << m_boundary_reconciliation_backtracked_count << "/"
+        << m_boundary_reconciliation_rejected_count
+        << ", boundary_reconciliation_ms="
+        << std::fixed << std::setprecision(3)
+        << m_boundary_reconciliation_milliseconds
         << ", iteration/candidate/topology/total_ms="
         << std::fixed << std::setprecision(3)
         << m_iteration_phase_milliseconds << "/"
@@ -227,23 +239,17 @@ PerformanceCounters::~PerformanceCounters()
 
 void PerformanceCounters::RecordFullStateMaterialization()
 {
-    m_full_state_materialization_count.fetch_add(
-        1,
-        std::memory_order_relaxed);
+    m_full_state_materialization_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void PerformanceCounters::RecordGaussianCacheMisses()
 {
-    m_gaussian_cache_miss_count.fetch_add(
-        m_cached_sample_count,
-        std::memory_order_relaxed);
+    m_gaussian_cache_miss_count.fetch_add(m_cached_sample_count, std::memory_order_relaxed);
 }
 
 void PerformanceCounters::RecordGaussianCacheHits()
 {
-    m_gaussian_cache_hit_count.fetch_add(
-        m_cached_sample_count,
-        std::memory_order_relaxed);
+    m_gaussian_cache_hit_count.fetch_add(m_cached_sample_count, std::memory_order_relaxed);
 }
 
 void PerformanceCounters::RecordObjectiveSampleEvaluation(
@@ -259,56 +265,56 @@ void PerformanceCounters::RecordObjectiveSampleEvaluation(
         std::memory_order_relaxed);
 }
 
-std::chrono::steady_clock::time_point
-PerformanceCounters::StartIterationPhase() const
+std::chrono::steady_clock::time_point PerformanceCounters::StartIterationPhase() const
 {
     return std::chrono::steady_clock::now();
 }
 
-void PerformanceCounters::FinishIterationPhase(
-    std::chrono::steady_clock::time_point start_time)
+void PerformanceCounters::FinishIterationPhase(std::chrono::steady_clock::time_point start_time)
 {
-    m_iteration_phase_milliseconds +=
-        CalculateElapsedMilliseconds(start_time);
+    m_iteration_phase_milliseconds += CalculateElapsedMilliseconds(start_time);
 }
 
-std::chrono::steady_clock::time_point
-PerformanceCounters::StartCandidatePhase() const
+std::chrono::steady_clock::time_point PerformanceCounters::StartCandidatePhase() const
 {
     return std::chrono::steady_clock::now();
 }
 
-void PerformanceCounters::FinishCandidatePhase(
-    std::chrono::steady_clock::time_point start_time)
+void PerformanceCounters::FinishCandidatePhase(std::chrono::steady_clock::time_point start_time)
 {
-    m_candidate_phase_milliseconds +=
-        CalculateElapsedMilliseconds(start_time);
+    m_candidate_phase_milliseconds += CalculateElapsedMilliseconds(start_time);
 }
 
 void PerformanceCounters::RecordSolverWorkspaceReset()
 {
-    m_retired_solver_symbolic_analysis_count +=
-        CountCurrentSolverSymbolicAnalyses();
+    m_retired_solver_symbolic_analysis_count += CountCurrentSolverSymbolicAnalyses();
 }
 
-void PerformanceCounters::RecordTopologyRebuild(
-    double elapsed_milliseconds,
-    bool partition_changed)
+void PerformanceCounters::RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed)
 {
     m_topology_rebuild_attempt_count++;
     if (partition_changed) m_topology_partition_change_count++;
     m_topology_rebuild_milliseconds += elapsed_milliseconds;
 }
 
-double PerformanceCounters::CalculateElapsedMilliseconds(
-    std::chrono::steady_clock::time_point start_time)
+void PerformanceCounters::RecordBoundaryReconciliation(
+    std::size_t attempt_count,
+    std::size_t backtracked_count,
+    std::size_t rejected_count,
+    double elapsed_milliseconds)
 {
-    return std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - start_time).count();
+    m_boundary_reconciliation_attempt_count += attempt_count;
+    m_boundary_reconciliation_backtracked_count += backtracked_count;
+    m_boundary_reconciliation_rejected_count += rejected_count;
+    m_boundary_reconciliation_milliseconds += elapsed_milliseconds;
 }
 
-std::size_t PerformanceCounters::CountRawSamplingEntries(
-    const SecondStageContext & context)
+double PerformanceCounters::CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time)
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+}
+
+std::size_t PerformanceCounters::CountRawSamplingEntries(const SecondStageContext & context)
 {
     std::size_t count{ 0 };
     for (const auto & atom_context : context)
@@ -337,21 +343,15 @@ CandidateEvaluationOverlay::CandidateEvaluationOverlay(
     : m_context{ context },
       m_baseline{ baseline },
       m_candidate_state{ candidate_state },
-      m_changed_group_mask(
-          context.selected_atom_index_list_by_group.size(),
-          0),
-      m_changed_group_median(
-          context.selected_atom_index_list_by_group.size())
+      m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
+      m_changed_group_median(context.selected_atom_index_list_by_group.size())
 {
-    for (const auto atom_index :
-        m_candidate_state.GetOverrideAtomIndexList())
+    for (const auto atom_index : m_candidate_state.GetOverrideAtomIndexList())
     {
         m_changed_group_mask.at(m_context.at(atom_index).group_id) = 1;
     }
     std::vector<GaussianModel3D> model_list;
-    for (std::size_t group_id = 0;
-        group_id < m_changed_group_mask.size();
-        group_id++)
+    for (std::size_t group_id = 0; group_id < m_changed_group_mask.size(); group_id++)
     {
         if (m_changed_group_mask.at(group_id) == 0) continue;
         const auto & atom_index_list{
@@ -361,20 +361,16 @@ CandidateEvaluationOverlay::CandidateEvaluationOverlay(
         model_list.reserve(atom_index_list.size());
         for (const auto atom_index : atom_index_list)
         {
-            model_list.emplace_back(
-                m_candidate_state.GetModel(atom_index));
+            model_list.emplace_back(m_candidate_state.GetModel(atom_index));
         }
-        m_changed_group_median.at(group_id) =
-            BuildGaussianParameterMedian(model_list);
+        m_changed_group_median.at(group_id) = BuildGaussianParameterMedian(model_list);
     }
 }
 
-std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(
-    const SampleRef & sample_ref) const
+std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(const SampleRef & sample_ref) const
 {
     const auto & baseline{
-        m_baseline.sample_list.at(sample_ref.atom_index)
-            .at(sample_ref.sample_index)
+        m_baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index)
     };
     if (!baseline.has_value()) return std::nullopt;
     const auto & atom_context{ m_context.at(sample_ref.atom_index) };
@@ -389,26 +385,22 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(
         const GaussianModel3D * baseline_model{ nullptr };
         if (neighbor_atom_sample.is_selected)
         {
-            if (m_candidate_state.FindOverride(
-                    neighbor_atom_sample.atom_index) == nullptr)
+            if (m_candidate_state.FindOverride(neighbor_atom_sample.atom_index) == nullptr)
             {
                 continue;
             }
             baseline_model = &GetFitModel(
                 m_baseline.model_snapshot.selected,
                 neighbor_atom_sample.atom_index);
-            candidate_model = &m_candidate_state.GetModel(
-                neighbor_atom_sample.atom_index);
+            candidate_model = &m_candidate_state.GetModel(neighbor_atom_sample.atom_index);
         }
         else
         {
             const auto & unselected_atom_contributor{
-                m_context.unselected_atom_list.at(
-                    neighbor_atom_sample.atom_index)
+                m_context.unselected_atom_list.at(neighbor_atom_sample.atom_index)
             };
             if (!unselected_atom_contributor.selected_group_id.has_value() ||
-                m_changed_group_mask.at(
-                    *unselected_atom_contributor.selected_group_id) == 0)
+                m_changed_group_mask.at(*unselected_atom_contributor.selected_group_id) == 0)
             {
                 continue;
             }
@@ -416,8 +408,7 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(
                 m_baseline.model_snapshot.unselected,
                 neighbor_atom_sample.atom_index);
             const auto & median{
-                m_changed_group_median.at(
-                    *unselected_atom_contributor.selected_group_id)
+                m_changed_group_median.at(*unselected_atom_contributor.selected_group_id)
             };
             if (median.has_value())
             {
@@ -425,15 +416,12 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(
             }
             else
             {
-                candidate_model =
-                    &unselected_atom_contributor.initial_seed.GetModel();
+                candidate_model = &unselected_atom_contributor.initial_seed.GetModel();
             }
         }
         adjusted_response +=
-            baseline_model->ResponseAtDistance(
-                neighbor_atom_sample.distance) -
-            candidate_model->ResponseAtDistance(
-                neighbor_atom_sample.distance);
+            baseline_model->ResponseAtDistance(neighbor_atom_sample.distance) -
+            candidate_model->ResponseAtDistance(neighbor_atom_sample.distance);
     }
     const auto expected_response{
         m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
@@ -1910,26 +1898,102 @@ static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     };
 }
 
-static void RejectCombinedCandidate(
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
+static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const ClusterKey & key)
+{
+    return std::ranges::find(key_list, key) != key_list.end();
+}
+
+static void EraseClusterKey(std::vector<ClusterKey> & key_list, const ClusterKey & key)
+{
+    const auto removed{ std::ranges::remove(key_list, key) };
+    key_list.erase(removed.begin(), removed.end());
+}
+
+static ClusterKey FlattenClusterKeyList(const std::vector<ClusterKey> & key_list)
+{
+    ClusterKey atom_index_list;
+    for (const auto & key : key_list)
+    {
+        atom_index_list.insert(
+            atom_index_list.end(),
+            key.begin(),
+            key.end());
+    }
+    std::ranges::sort(atom_index_list);
+    atom_index_list.erase(
+        std::ranges::unique(atom_index_list).begin(),
+        atom_index_list.end());
+    return atom_index_list;
+}
+
+static void RejectSelectionKeys(
+    const CandidateSelectionInputs & inputs,
+    const std::vector<ClusterKey> & key_list,
+    bool exhausted,
+    ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection)
 {
-    selection.assembled_state = previous_state;
-    selection.assembled_polish_provenance = previous_polish_provenance;
-    selection.rejected_key_list.insert(
-        selection.rejected_key_list.end(),
-        selection.accepted_key_list.begin(),
-        selection.accepted_key_list.end());
+    for (const auto & key : key_list)
+    {
+        if (!ContainsClusterKey(selection.accepted_key_list, key)) continue;
+        for (const auto atom_index : key)
+        {
+            selection.assembled_state.at(atom_index) = inputs.previous_state.at(atom_index);
+            selection.assembled_polish_provenance.at(atom_index) = inputs.previous_polish_provenance.at(atom_index);
+        }
+        EraseClusterKey(selection.accepted_key_list, key);
+        EraseClusterKey(selection.grow_trust_region_key_list, key);
+        selection.rejected_key_list.emplace_back(key);
+        if (exhausted)
+        {
+            selection.backtracking_exhausted_key_list.emplace_back(key);
+        }
+        working_objective_state.at(key) = inputs.cluster_objective_state.at(key);
+
+        const auto diagnostic_iter{
+            std::ranges::find(
+                selection.accepted_cluster_diagnostic_list,
+                key,
+                &ClusterCandidateDiagnostic::key)
+        };
+        if (diagnostic_iter != selection.accepted_cluster_diagnostic_list.end())
+        {
+            diagnostic_iter->attempt.backtracking_exhausted = exhausted;
+            selection.rejected_cluster_diagnostic_list.emplace_back(std::move(*diagnostic_iter));
+            selection.accepted_cluster_diagnostic_list.erase(diagnostic_iter);
+        }
+    }
+    std::ranges::sort(selection.accepted_key_list);
     std::ranges::sort(selection.rejected_key_list);
     selection.rejected_key_list.erase(
         std::ranges::unique(selection.rejected_key_list).begin(),
         selection.rejected_key_list.end());
-    selection.accepted_key_list.clear();
-    selection.grow_trust_region_key_list.clear();
-    selection.combined_backtracking_objective.reset();
-    selection.polish_progress.rejected_count += selection.polish_progress.accepted_count;
-    selection.polish_progress.accepted_count = 0;
+    std::ranges::sort(selection.backtracking_exhausted_key_list);
+    selection.backtracking_exhausted_key_list.erase(
+        std::ranges::unique(selection.backtracking_exhausted_key_list).begin(),
+        selection.backtracking_exhausted_key_list.end());
+}
+
+static PolishProgress SummarizeFinalPolishProgress(
+    const std::map<ClusterKey, PolishProgress> & progress_by_key,
+    const std::vector<ClusterKey> & accepted_key_list)
+{
+    PolishProgress summary;
+    for (const auto & [key, progress] : progress_by_key)
+    {
+        summary.eligible_count += progress.eligible_count;
+        summary.rejected_count += progress.rejected_count;
+        summary.skipped_count += progress.skipped_count;
+        if (ContainsClusterKey(accepted_key_list, key))
+        {
+            summary.accepted_count += progress.accepted_count;
+        }
+        else
+        {
+            summary.rejected_count += progress.accepted_count;
+        }
+    }
+    return summary;
 }
 
 static std::optional<FitStatePatch> BuildDampedCandidatePatch(
@@ -2312,7 +2376,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     return result;
 }
 
-static CandidateSelection SelectIndividualClusterCandidates(
+static IndividualCandidateSelection SelectIndividualClusterCandidates(
     const CandidateSelectionInputs & inputs,
     ClusterObjectiveStateMap & working_objective_state)
 {
@@ -2373,7 +2437,9 @@ static CandidateSelection SelectIndividualClusterCandidates(
         if (exception) std::rethrow_exception(exception);
     }
 
-    CandidateSelection selection{
+    IndividualCandidateSelection individual_selection;
+    auto & selection{ individual_selection.selection };
+    selection = CandidateSelection{
         .assembled_state = previous_state,
         .assembled_polish_provenance = previous_polish_provenance
     };
@@ -2381,6 +2447,7 @@ static CandidateSelection SelectIndividualClusterCandidates(
     {
         auto & result{ result_list.at(position) };
         const auto & key{ candidate_work_list.at(position).first->first };
+        individual_selection.polish_progress_by_key.emplace(key, result.polish_progress);
         working_objective_state.at(key) = std::move(result.objective_state);
         selection.polish_progress.eligible_count += result.polish_progress.eligible_count;
         selection.polish_progress.accepted_count += result.polish_progress.accepted_count;
@@ -2417,208 +2484,468 @@ static CandidateSelection SelectIndividualClusterCandidates(
                 result.polish_provenance.at(key_position);
         }
     }
-    return selection;
+    return individual_selection;
 }
 
-static bool TryBacktrackCombinedCandidate(
+struct BoundaryCandidateEvaluation
+{
+    ClusterObjectiveStateMap objective_state_by_key{};
+    std::optional<ObjectiveBreakdown> audit_objective{};
+};
+
+static FitStatePatch BuildSelectionPatch(
+    const CandidateSelection & selection,
+    const std::vector<ClusterKey> & key_list)
+{
+    return FitStatePatch::FromState(
+        selection.assembled_state,
+        FlattenClusterKeyList(key_list));
+}
+
+static std::optional<BoundaryCandidateEvaluation>
+EvaluateBoundaryComponentCandidate(
     const CandidateSelectionInputs & inputs,
+    const BoundaryReconciliationComponent & component,
+    const CandidateEvaluationOverlay & candidate_overlay,
     const ObjectiveBreakdown * previous_audit_objective,
-    const ObjectiveBreakdown * best_audit_objective,
-    const ClusterObjectiveStateMap & committed_objective_state,
-    const FitStatePatch & endpoint_patch,
-    const std::vector<SampleRef> & affected_sample_ref_list,
+    std::size_t trial_count,
+    double factor)
+{
+    BoundaryCandidateEvaluation evaluation;
+    for (const auto & key : component.key_list)
+    {
+        auto objective_state{ inputs.cluster_objective_state.at(key) };
+        ObjectiveAttemptDiagnostic diagnostic;
+        diagnostic.backtracking_trial_count = trial_count;
+        diagnostic.accepted_backtracking_factor = factor;
+        const auto & previous_objective{ inputs.previous_objective_by_key.at(key) };
+        if (!TryCommitClusterCandidate(
+                candidate_overlay,
+                key,
+                inputs.partition.sample_id_list_by_key.at(key),
+                previous_objective.has_value() ? &*previous_objective : nullptr,
+                false,
+                inputs.objective_domain,
+                objective_state,
+                diagnostic,
+                inputs.performance_counters))
+        {
+            return std::nullopt;
+        }
+        evaluation.objective_state_by_key.emplace(key, std::move(objective_state));
+    }
+    evaluation.audit_objective = EvaluateCombinedObjective(
+        candidate_overlay,
+        component.affected_sample_ref_list,
+        inputs.objective_domain,
+        nullptr,
+        previous_audit_objective,
+        inputs.performance_counters);
+    if (!evaluation.audit_objective.has_value()) return std::nullopt;
+    return evaluation;
+}
+
+static void CommitBoundaryObjectiveState(
+    const BoundaryCandidateEvaluation & evaluation,
+    ClusterObjectiveStateMap & working_objective_state)
+{
+    for (const auto & [key, objective_state] : evaluation.objective_state_by_key)
+    {
+        working_objective_state.at(key) = objective_state;
+    }
+}
+
+static void RemoveTrustGrowthForKeys(
+    const std::vector<ClusterKey> & key_list,
+    CandidateSelection & selection)
+{
+    for (const auto & key : key_list)
+    {
+        EraseClusterKey(selection.grow_trust_region_key_list, key);
+    }
+}
+
+static void ReconcileBoundaryComponent(
+    const CandidateSelectionInputs & inputs,
+    const BoundaryReconciliationComponent & component,
+    const ObjectiveBreakdown * previous_audit_objective,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection)
 {
-    const auto & context{ inputs.context };
-    const auto & residual_baseline{ inputs.residual_baseline };
-    const auto & partition{ inputs.partition };
-    const auto & previous_state{ inputs.previous_state };
-    const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
-    const auto & objective_domain{ inputs.objective_domain };
-    const auto & previous_objective_by_key{ inputs.previous_objective_by_key };
-    auto & performance_counters{ inputs.performance_counters };
+    BoundaryComponentReconciliationDiagnostic diagnostic;
+    diagnostic.key_list = component.key_list;
+    diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
+    diagnostic.boundary_sample_count = component.boundary_sample_count;
+    const auto endpoint_patch{ BuildSelectionPatch(selection, component.key_list) };
+    const FitStateView endpoint_state_view{
+        inputs.previous_state,
+        endpoint_patch
+    };
+    const CandidateEvaluationOverlay endpoint_overlay{
+        inputs.context,
+        inputs.residual_baseline,
+        endpoint_state_view
+    };
+    const auto endpoint_evaluation{
+        EvaluateBoundaryComponentCandidate(
+            inputs,
+            component,
+            endpoint_overlay,
+            previous_audit_objective,
+            1,
+            1.0)
+    };
+    if (endpoint_evaluation.has_value())
+    {
+        CommitBoundaryObjectiveState(*endpoint_evaluation, working_objective_state);
+        diagnostic.accepted = true;
+        diagnostic.accepted_factor = 1.0;
+        selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
+        return;
+    }
+
     BacktrackingWorkspace backtracking_workspace{
-        context,
-        previous_state,
+        inputs.context,
+        inputs.previous_state,
         endpoint_patch,
         kTransformedChangeTolerance
     };
-    selection.combined_backtracking_trial_count = 1;
-    ClusterObjectiveStateMap accepted_trial_objective_state;
     BacktrackingStep step;
+    std::optional<BoundaryCandidateEvaluation> accepted_evaluation;
     for (step = backtracking_workspace.BuildNextCandidate();
         step.status == BacktrackingStepStatus::CandidateReady;
         step = backtracking_workspace.BuildNextCandidate())
     {
-        const auto factor{ step.factor };
-        const auto & candidate_patch{ backtracking_workspace.GetCandidatePatch() };
-        const FitStateView candidate_state_view{ previous_state, candidate_patch};
+        diagnostic.trial_count = step.trial_number;
+        const FitStateView candidate_state_view{
+            inputs.previous_state,
+            backtracking_workspace.GetCandidatePatch()
+        };
         const CandidateEvaluationOverlay candidate_overlay{
-            context,
-            residual_baseline,
+            inputs.context,
+            inputs.residual_baseline,
             candidate_state_view
         };
-        selection.combined_backtracking_trial_count = step.trial_number;
-        auto trial_objective_state{ committed_objective_state };
-        auto local_criteria_accepted{ true };
-        for (const auto & key : selection.accepted_key_list)
-        {
-            ObjectiveAttemptDiagnostic diagnostic;
-            diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
-            diagnostic.accepted_backtracking_factor = factor;
-            const auto & previous_objective{ previous_objective_by_key.at(key) };
-            if (!TryCommitClusterCandidate(
-                    candidate_overlay,
-                    key,
-                    partition.sample_id_list_by_key.at(key),
-                    previous_objective.has_value() ? &*previous_objective : nullptr,
-                    false,
-                    objective_domain,
-                    trial_objective_state.at(key),
-                    diagnostic,
-                    performance_counters))
-            {
-                local_criteria_accepted = false;
-                break;
-            }
-        }
-        const auto combined_check{
-            local_criteria_accepted ?
-                EvaluateCombinedObjective(
-                    candidate_overlay,
-                    affected_sample_ref_list,
-                    objective_domain,
-                    best_audit_objective,
-                    previous_audit_objective,
-                    performance_counters) :
-                std::optional<ObjectiveBreakdown>{}
-        };
-        if (combined_check.has_value())
-        {
-            selection.combined_backtracking_factor = factor;
-            selection.combined_backtracking_objective = combined_check;
-            accepted_trial_objective_state = std::move(trial_objective_state);
-            break;
-        }
+        accepted_evaluation = EvaluateBoundaryComponentCandidate(
+            inputs,
+            component,
+            candidate_overlay,
+            previous_audit_objective,
+            step.trial_number,
+            step.factor);
+        if (accepted_evaluation.has_value()) break;
     }
-    if (step.status == BacktrackingStepStatus::Exhausted)
+    if (!accepted_evaluation.has_value())
     {
-        selection.combined_backtracking_exhausted = true;
-        return false;
-    }
-    if (step.status == BacktrackingStepStatus::InvalidCandidate)
-    {
-        return false;
+        diagnostic.exhausted = step.status == BacktrackingStepStatus::Exhausted;
+        RejectSelectionKeys(
+            inputs,
+            component.key_list,
+            diagnostic.exhausted,
+            working_objective_state,
+            selection);
+        selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
+        return;
     }
 
-    selection.assembled_state =
-        FitStateView{
-            previous_state,
-            backtracking_workspace.GetCandidatePatch()
-        }.Materialize();
-    performance_counters.RecordFullStateMaterialization();
-    selection.assembled_polish_provenance =
+    backtracking_workspace.GetCandidatePatch().ApplyTo(selection.assembled_state);
+    const auto reconciled_provenance{
         backtracking_workspace.BuildCandidatePolishProvenance(
-            previous_polish_provenance,
-            selection.assembled_polish_provenance);
-    selection.grow_trust_region_key_list.clear();
-    working_objective_state = std::move(accepted_trial_objective_state);
-    return true;
+            inputs.previous_polish_provenance,
+            selection.assembled_polish_provenance)
+    };
+    for (const auto atom_index : FlattenClusterKeyList(component.key_list))
+    {
+        selection.assembled_polish_provenance.at(atom_index) = reconciled_provenance.at(atom_index);
+    }
+    CommitBoundaryObjectiveState(*accepted_evaluation, working_objective_state);
+    RemoveTrustGrowthForKeys(component.key_list, selection);
+    diagnostic.accepted = true;
+    diagnostic.accepted_factor = step.factor;
+    selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
+}
+
+static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
+    const CandidateSelectionInputs & inputs,
+    const ObjectiveBreakdown * previous_audit_objective,
+    const CandidateSelection & selection)
+{
+    if (selection.accepted_key_list.empty()) return std::nullopt;
+    const auto candidate_patch{
+        BuildSelectionPatch(selection, selection.accepted_key_list)
+    };
+    const FitStateView candidate_state_view{
+        inputs.previous_state,
+        candidate_patch
+    };
+    const CandidateEvaluationOverlay candidate_overlay{
+        inputs.context,
+        inputs.residual_baseline,
+        candidate_state_view
+    };
+    const auto affected_sample_ref_list{
+        BuildGraphAffectedSampleUnion(inputs.partition, selection.accepted_key_list)
+    };
+    const auto * best_audit_objective{
+        inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
+    };
+    return EvaluateCombinedObjective(
+        candidate_overlay,
+        affected_sample_ref_list,
+        inputs.objective_domain,
+        best_audit_objective,
+        previous_audit_objective,
+        inputs.performance_counters);
+}
+
+struct CandidateReconciliationUnit
+{
+    std::vector<ClusterKey> key_list{};
+    std::vector<SampleRef> affected_sample_ref_list{};
+    std::optional<ObjectiveBreakdown> candidate_audit_objective{};
+};
+
+static std::vector<CandidateReconciliationUnit> BuildCandidateReconciliationUnits(
+    const CandidateSelectionInputs & inputs,
+    const ObjectiveBreakdown & previous_audit_objective,
+    const CandidateSelection & selection)
+{
+    std::vector<CandidateReconciliationUnit> unit_list;
+    const auto boundary_component_list{
+        BuildBoundaryReconciliationComponents(
+            inputs.partition,
+            selection.accepted_key_list)
+    };
+    for (const auto & component : boundary_component_list)
+    {
+        unit_list.emplace_back(CandidateReconciliationUnit{
+            component.key_list,
+            component.affected_sample_ref_list,
+            std::nullopt
+        });
+    }
+    for (const auto & key : selection.accepted_key_list)
+    {
+        const auto belongs_to_boundary_component{
+            std::ranges::any_of(
+                boundary_component_list,
+                [&](const auto & component)
+                {
+                    return ContainsClusterKey(component.key_list, key);
+                })
+        };
+        if (belongs_to_boundary_component) continue;
+        unit_list.emplace_back(CandidateReconciliationUnit{
+            { key },
+            inputs.partition.sample_id_list_by_key.at(key),
+            std::nullopt
+        });
+    }
+    for (auto & unit : unit_list)
+    {
+        const auto candidate_patch{ BuildSelectionPatch(selection, unit.key_list) };
+        const FitStateView candidate_state_view{
+            inputs.previous_state,
+            candidate_patch
+        };
+        const CandidateEvaluationOverlay candidate_overlay{
+            inputs.context,
+            inputs.residual_baseline,
+            candidate_state_view
+        };
+        unit.candidate_audit_objective = EvaluateObjectiveDelta(
+            candidate_overlay,
+            unit.affected_sample_ref_list,
+            inputs.objective_domain,
+            previous_audit_objective,
+            inputs.performance_counters);
+    }
+    std::ranges::sort(
+        unit_list,
+        {},
+        &CandidateReconciliationUnit::key_list);
+    return unit_list;
+}
+
+static void MarkBoundaryDiagnosticRejected(
+    const std::vector<ClusterKey> & key_list,
+    bool exhausted,
+    CandidateSelection & selection)
+{
+    const auto iter{
+        std::ranges::find(
+            selection.boundary_reconciliation_diagnostic_list,
+            key_list,
+            &BoundaryComponentReconciliationDiagnostic::key_list)
+    };
+    if (iter == selection.boundary_reconciliation_diagnostic_list.end()) return;
+    iter->accepted = false;
+    iter->accepted_factor.reset();
+    iter->exhausted = exhausted;
+}
+
+static void SalvageFinalSelectionAudit(
+    const CandidateSelectionInputs & inputs,
+    const ObjectiveBreakdown & previous_audit_objective,
+    ClusterObjectiveStateMap & working_objective_state,
+    CandidateSelection & selection)
+{
+    auto unit_list{
+        BuildCandidateReconciliationUnits(inputs, previous_audit_objective, selection)
+    };
+    unit_list.erase(
+        std::remove_if(
+            unit_list.begin(),
+            unit_list.end(),
+            [&](const auto & unit)
+            {
+                return unit.candidate_audit_objective.has_value() &&
+                    IsBetterAuditObjective(
+                        unit.candidate_audit_objective->GetTotalObjective(),
+                        previous_audit_objective.GetTotalObjective(),
+                        kObjectiveStrictTolerance);
+            }),
+        unit_list.end());
+    std::ranges::sort(
+        unit_list,
+        [&](const auto & lhs, const auto & rhs)
+        {
+            const auto lhs_objective{
+                lhs.candidate_audit_objective.has_value() ?
+                    lhs.candidate_audit_objective->GetTotalObjective() :
+                    std::numeric_limits<double>::infinity()
+            };
+            const auto rhs_objective{
+                rhs.candidate_audit_objective.has_value() ?
+                    rhs.candidate_audit_objective->GetTotalObjective() :
+                    std::numeric_limits<double>::infinity()
+            };
+            if (lhs_objective != rhs_objective)
+            {
+                return lhs_objective > rhs_objective;
+            }
+            return lhs.key_list < rhs.key_list;
+        });
+
+    for (const auto & unit : unit_list)
+    {
+        MarkBoundaryDiagnosticRejected(unit.key_list, false, selection);
+        RejectSelectionKeys(
+            inputs,
+            unit.key_list,
+            false,
+            working_objective_state,
+            selection);
+        selection.final_audit_objective = EvaluateFinalSelectionAudit(
+            inputs,
+            &previous_audit_objective,
+            selection);
+        if (selection.final_audit_objective.has_value()) return;
+    }
+
+    const auto remaining_key_list{ selection.accepted_key_list };
+    for (const auto & component : BuildBoundaryReconciliationComponents(
+        inputs.partition,
+        remaining_key_list))
+    {
+        MarkBoundaryDiagnosticRejected(component.key_list, true, selection);
+    }
+    RejectSelectionKeys(
+        inputs,
+        remaining_key_list,
+        true,
+        working_objective_state,
+        selection);
+    selection.final_audit_objective.reset();
 }
 
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
 {
     auto working_objective_state{ inputs.cluster_objective_state };
     const auto candidate_phase_start{ inputs.performance_counters.StartCandidatePhase() };
-    auto selection{
+    auto individual_selection{
         SelectIndividualClusterCandidates(inputs, working_objective_state)
     };
     inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
+    auto selection{ std::move(individual_selection.selection) };
     inputs.performance_counters.RecordFullStateMaterialization();
 
-    auto combined_objective_accepted{ true };
-    if (inputs.partition.boundary_sample_count != 0 && !selection.accepted_key_list.empty())
+    const auto boundary_component_list{
+        BuildBoundaryReconciliationComponents(
+            inputs.partition,
+            selection.accepted_key_list)
+    };
+    if (!boundary_component_list.empty())
     {
-        ClusterKey changed_atom_index_list;
-        for (const auto & key : selection.accepted_key_list)
-        {
-            changed_atom_index_list.insert(
-                changed_atom_index_list.end(),
-                key.begin(),
-                key.end());
-        }
-        const auto endpoint_patch{
-            FitStatePatch::FromState(
-                selection.assembled_state,
-                std::move(changed_atom_index_list))
-        };
-        const auto affected_sample_ref_list{
-            BuildGraphAffectedSampleUnion(inputs.partition, selection.accepted_key_list)
-        };
+        const auto boundary_reconciliation_start{ std::chrono::steady_clock::now() };
         const auto previous_audit_objective{
             EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
         };
-        const auto * best_audit_objective{
-            inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
-        };
-        const FitStateView endpoint_state_view{
-            inputs.previous_state,
-            endpoint_patch
-        };
-        const CandidateEvaluationOverlay endpoint_overlay{
-            inputs.context,
-            inputs.residual_baseline,
-            endpoint_state_view
-        };
-        selection.combined_backtracking_objective =
-            EvaluateCombinedObjective(
-                endpoint_overlay,
-                affected_sample_ref_list,
-                inputs.objective_domain,
-                best_audit_objective,
-                previous_audit_objective.has_value() ?
-                    &*previous_audit_objective : nullptr,
-                inputs.performance_counters);
-        combined_objective_accepted = selection.combined_backtracking_objective.has_value();
-        if (!combined_objective_accepted)
+        for (const auto & component : boundary_component_list)
         {
-            combined_objective_accepted = TryBacktrackCombinedCandidate(
+            ReconcileBoundaryComponent(
                 inputs,
+                component,
                 previous_audit_objective.has_value() ?
                     &*previous_audit_objective : nullptr,
-                best_audit_objective,
-                inputs.cluster_objective_state,
-                endpoint_patch,
-                affected_sample_ref_list,
                 working_objective_state,
                 selection);
         }
-    }
-
-    if (!combined_objective_accepted)
-    {
-        if (selection.combined_backtracking_exhausted)
+        if (!previous_audit_objective.has_value())
         {
-            for (const auto & key : selection.accepted_key_list)
+            const auto remaining_key_list{ selection.accepted_key_list };
+            RejectSelectionKeys(
+                inputs,
+                remaining_key_list,
+                true,
+                working_objective_state,
+                selection);
+        }
+        else
+        {
+            selection.final_audit_objective = EvaluateFinalSelectionAudit(
+                inputs,
+                &*previous_audit_objective,
+                selection);
+            if (!selection.final_audit_objective.has_value() &&
+                !selection.accepted_key_list.empty())
             {
-                if (std::ranges::find(
-                        selection.backtracking_exhausted_key_list,
-                        key) == selection.backtracking_exhausted_key_list.end())
-                {
-                    selection.backtracking_exhausted_key_list.emplace_back(key);
-                }
+                SalvageFinalSelectionAudit(
+                    inputs,
+                    *previous_audit_objective,
+                    working_objective_state,
+                    selection);
             }
         }
-        RejectCombinedCandidate(
-            inputs.previous_state,
-            inputs.previous_polish_provenance,
-            selection);
+        const auto backtracked_component_count{
+            std::ranges::count_if(
+                selection.boundary_reconciliation_diagnostic_list,
+                [](const auto & diagnostic)
+                {
+                    return diagnostic.accepted &&
+                        diagnostic.accepted_factor.has_value() &&
+                        *diagnostic.accepted_factor < 1.0;
+                })
+        };
+        const auto rejected_component_count{
+            std::ranges::count_if(
+                selection.boundary_reconciliation_diagnostic_list,
+                [](const auto & diagnostic)
+                {
+                    return !diagnostic.accepted;
+                })
+        };
+        inputs.performance_counters.RecordBoundaryReconciliation(
+            selection.boundary_reconciliation_diagnostic_list.size(),
+            static_cast<std::size_t>(backtracked_component_count),
+            static_cast<std::size_t>(rejected_component_count),
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - boundary_reconciliation_start).count());
     }
-    else
-    {
-        inputs.cluster_objective_state = std::move(working_objective_state);
-    }
+    inputs.cluster_objective_state = std::move(working_objective_state);
+    selection.polish_progress = SummarizeFinalPolishProgress(
+        individual_selection.polish_progress_by_key,
+        selection.accepted_key_list);
     return selection;
 }
 
