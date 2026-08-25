@@ -102,11 +102,18 @@ struct ClusterHealth
 
     JointOffsetSolveStatus joint_offset_status;
     bool is_refit_stationarity_eligible{ true };
+    bool is_boundary_correction_eligible{ true };
 
     bool IsStationarityEligible() const
     {
         return joint_offset_status == JointOffsetSolveStatus::Converged &&
             is_refit_stationarity_eligible;
+    }
+
+    bool IsBoundaryCorrectionEligible() const
+    {
+        return !IsJointOffsetSolveHardFailure(joint_offset_status) &&
+            is_boundary_correction_eligible;
     }
 };
 

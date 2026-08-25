@@ -105,7 +105,7 @@ Each outer attempt performs the following sequence:
    improves the base candidate on the same objective scale.
 8. Build the accepted-induced interaction graph from shared boundary samples.
    Revalidate each connected component. If its endpoint fails and all members
-   are stationarity-eligible without suspicious atoms, first attempt one joint
+   have usable non-hard refits without suspicious atoms, first attempt one joint
    correction over the direct boundary contributors: only their transformed
    amplitude and width may change, while one component-local offset column is
    shared by every closure atom with the same group key. The candidate must fit
@@ -113,7 +113,11 @@ Each outer attempt performs the following sequence:
    objective. An unavailable or rejected correction falls through to the
    unchanged common-factor component backtracking. A failed component rolls
    back only its members, so unrelated components and remote singleton clusters
-   remain eligible for commit.
+   remain eligible for commit. Then build maximal eligible boundary components
+   from the safe accepted state and the best finite objective-rejected proposal
+   retained for each rejected cluster. Components containing at least one such
+   proposal receive the same endpoint, joint-correction, and common-factor
+   checks. A failed rescue leaves the safe accepted state unchanged.
 9. Run the unchanged global previous/best audit on the complete assembled state.
    If tolerance-level deterioration from independent reconciliation units causes
    aggregate rejection, remove non-improving units from worst to best until the
@@ -269,8 +273,8 @@ non-backtracked accepted cluster grows its radius only when the objective
 strictly improves and its step is close to the current boundary. Trust-region
 updates are isolated by cluster.
 
-Accepted clusters are connected only when they both affect the same boundary
-sample. Rejected clusters do not bridge components. Each multi-cluster component
+Accepted clusters are first connected only when they both affect the same boundary
+sample. Each multi-cluster component
 first revalidates the factor-`1.0` assembled endpoint against every member's local
 criteria and a unique-owner component audit relative to the committed state. A
 failed endpoint evaluates common factors `1/2, 1/4, 1/8, ...` for that component
@@ -278,6 +282,24 @@ alone. Exhaustion rolls back only its member clusters; independent components an
 remote singleton clusters retain their accepted endpoints. A component-backtracked
 state does not grow its members' trust radii, and polish provenance is retained
 only for atoms with a material polished endpoint change.
+
+After this accepted-only pass, every rejected cluster that produced finite
+objective values retains its lowest-objective trust-region proposal in memory.
+Clusters with suspicious atoms, hard joint-offset failures, offset-only refit
+fallbacks, invalid proposals, unavailable objectives, or unchanged-state
+exhaustion are excluded. The remaining rejected proposals and safe accepted
+clusters form maximal eligible boundary components. A component containing at
+least one rejected proposal is re-evaluated as a combined endpoint, then receives
+joint correction and common-factor backtracking when needed. Successful rescue
+promotes the rejected members without trust-radius growth or shrink. Failed
+rescue is transactional: previously accepted members retain their safe state.
+
+Boundary correction eligibility is intentionally broader than local polish
+eligibility. A valid guarded refit and a non-hard joint-offset result are enough;
+IRLS objective deterioration, IRLS iteration exhaustion, and valid non-success
+local estimation statuses may participate. Local joint polish still requires
+full stationarity. Hard solver failures, suspicious atoms, and offset-only
+fallbacks remain fixed contributors and never enter a correction patch.
 
 After component reconciliation, the complete assembled state must still pass the
 unchanged global previous/best audit. On aggregate failure, independent components
@@ -465,10 +487,10 @@ evaluation overlays a patch on the previous state, recomputes medians only for
 groups touched by the patch, and evaluates the objective as baseline plus the
 changed sample and offset delta. For a boundary-component guard, affected sample
 IDs are sorted and deduplicated so a boundary sample is recomputed once. The
-boundary dependency and deterministic accepted-induced components are derived
+   boundary dependency and deterministic accepted/rescue-induced components are derived
 from the current partition and rebuilt with adaptive topology or terminal
-isolation. Without a multi-cluster accepted component, candidate selection stays
-on the existing fast path.
+   isolation. Without a multi-cluster accepted or rescue component, candidate
+   selection stays on the existing fast path.
 
 Joint-offset, joint-polish, and boundary-correction solvers retain their sparse
 pattern analysis for the lifetime of a partition and refresh only numeric
@@ -487,7 +509,8 @@ materializations, Gaussian cache hits/misses, recomputed/reused objective
 samples, symbolic solver analyses, adaptive topology rebuilds and partition
 changes, boundary reconciliation attempts/backtracks/rejections, and
 boundary joint-correction attempts/acceptances/fallbacks, symbolic analyses,
-and elapsed time. The existing
+boundary rescue attempts/acceptances/fallbacks/rejections, rescue exclusion
+reasons, and elapsed time. The existing
 iteration/candidate/topology/total elapsed-time field remains unchanged.
 These counters are diagnostic evidence rather than acceptance thresholds.
 

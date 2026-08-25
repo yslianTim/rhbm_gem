@@ -191,6 +191,7 @@ struct LocalAtomRefitResult
 {
     LocalGaussianResult result{};
     bool is_stationarity_eligible{ false };
+    bool is_boundary_correction_eligible{ false };
 };
 
 static std::optional<SecondStageSeedSelection>
@@ -1053,6 +1054,17 @@ static void LogAcceptedBacktrackingDiagnostics(
     for (const auto & cluster_diagnostic : diagnostics.accepted_cluster_diagnostic_list)
     {
         const auto & diagnostic{ cluster_diagnostic.attempt };
+        if (cluster_diagnostic.boundary_rescued)
+        {
+            std::ostringstream rescue_message;
+            rescue_message
+                << "Accepted local fitting cluster after boundary rescue: atoms = "
+                << cluster_diagnostic.key.size()
+                << ", key first/last = "
+                << cluster_diagnostic.key.front() << "/"
+                << cluster_diagnostic.key.back() << ".";
+            Logger::Log(LogLevel::Debug, rescue_message.str());
+        }
         if (diagnostic.backtracking_trial_count <= 1) continue;
         std::ostringstream message;
         message
@@ -1112,6 +1124,11 @@ static void LogAcceptedBacktrackingDiagnostics(
             << diagnostic.key_list.size() << "/"
             << diagnostic.atom_count << "/"
             << diagnostic.boundary_sample_count
+            << ", accepted/rescue-candidates/rescued = "
+            << diagnostic.accepted_cluster_count << "/"
+            << diagnostic.rescue_candidate_cluster_count << "/"
+            << diagnostic.rescued_cluster_count
+            << ", mode=" << (diagnostic.is_rescue_attempt ? "rescue" : "accepted-only")
             << ", trials/factor/accepted/exhausted = "
             << diagnostic.trial_count << "/";
         if (diagnostic.accepted_factor.has_value())
@@ -1320,7 +1337,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
             };
             return LocalAtomRefitResult{
                 std::move(candidate_result),
-                is_stationarity_eligible
+                is_stationarity_eligible,
+                true
             };
         }
     }
@@ -1341,7 +1359,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     {
         return std::nullopt;
     }
-    return LocalAtomRefitResult{ std::move(result), false };
+    return LocalAtomRefitResult{ std::move(result), false, false };
 }
 
 static RawIterationResult RunRawIteration(
@@ -1554,12 +1572,17 @@ static RawIterationResult RunRawIteration(
             if (!refit_result.has_value())
             {
                 health.is_refit_stationarity_eligible = false;
+                health.is_boundary_correction_eligible = false;
                 has_post_refit_suspicious_atom = true;
                 continue;
             }
             if (!refit_result->is_stationarity_eligible)
             {
                 health.is_refit_stationarity_eligible = false;
+            }
+            if (!refit_result->is_boundary_correction_eligible)
+            {
+                health.is_boundary_correction_eligible = false;
             }
             iteration_state.at(atom_index) = std::move(refit_result->result);
         }

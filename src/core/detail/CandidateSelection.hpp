@@ -175,6 +175,14 @@ class PerformanceCounters
     std::size_t m_boundary_joint_correction_attempt_count{ 0 };
     std::size_t m_boundary_joint_correction_accepted_count{ 0 };
     std::size_t m_boundary_joint_correction_fallback_count{ 0 };
+    std::size_t m_boundary_rescue_attempt_count{ 0 };
+    std::size_t m_boundary_rescue_accepted_count{ 0 };
+    std::size_t m_boundary_rescue_fallback_count{ 0 };
+    std::size_t m_boundary_rescue_rejected_count{ 0 };
+    std::size_t m_boundary_rescue_suspicious_exclusion_count{ 0 };
+    std::size_t m_boundary_rescue_hard_failure_exclusion_count{ 0 };
+    std::size_t m_boundary_rescue_invalid_proposal_exclusion_count{ 0 };
+    std::size_t m_boundary_rescue_objective_unavailable_exclusion_count{ 0 };
     double m_iteration_phase_milliseconds{ 0.0 };
     double m_candidate_phase_milliseconds{ 0.0 };
     double m_topology_rebuild_milliseconds{ 0.0 };
@@ -206,6 +214,12 @@ public:
         std::size_t rejected_count,
         double elapsed_milliseconds);
     void RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds);
+    void RecordBoundaryRescue(bool accepted, bool used_fallback);
+    void RecordBoundaryRescueExclusions(
+        std::size_t suspicious_count,
+        std::size_t hard_failure_count,
+        std::size_t invalid_proposal_count,
+        std::size_t objective_unavailable_count);
 
 private:
     static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
@@ -443,6 +457,7 @@ struct ClusterCandidateDiagnostic
 {
     ClusterKey key{};
     ObjectiveAttemptDiagnostic attempt{};
+    bool boundary_rescued{ false };
 };
 
 struct PolishProgress
@@ -477,6 +492,10 @@ struct BoundaryComponentReconciliationDiagnostic
     std::optional<double> maximum_normalized_trust_step{};
     std::optional<double> previous_component_objective{};
     std::optional<double> candidate_component_objective{};
+    std::size_t accepted_cluster_count{ 0 };
+    std::size_t rescue_candidate_cluster_count{ 0 };
+    std::size_t rescued_cluster_count{ 0 };
+    bool is_rescue_attempt{ false };
     bool accepted{ false };
     bool exhausted{ false };
 };
