@@ -2727,11 +2727,11 @@ static bool TryBoundaryJointCorrection(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
     const ObjectiveBreakdown & previous_audit_objective,
+    const ObjectiveBreakdown & improvement_reference_objective,
     const FitStatePatch & endpoint_patch,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection,
-    BoundaryComponentReconciliationDiagnostic & diagnostic,
-    bool record_joint_correction_performance)
+    BoundaryComponentReconciliationDiagnostic & diagnostic)
 {
     const FitStateView endpoint_state_view{
         inputs.previous_state,
@@ -2758,12 +2758,12 @@ static bool TryBoundaryJointCorrection(
     const auto start_time{ std::chrono::steady_clock::now() };
     const auto record_performance = [&](bool accepted)
     {
-        if (!record_joint_correction_performance) return;
         inputs.performance_counters.RecordBoundaryJointCorrection(
             accepted,
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start_time).count());
     };
+    diagnostic.joint_reference_component_objective = improvement_reference_objective.GetTotalObjective();
     auto correction_result{
         BuildBoundaryJointCorrection(
             inputs.context,
@@ -2817,7 +2817,7 @@ static bool TryBoundaryJointCorrection(
     };
     if (raw_candidate_objective.has_value())
     {
-        diagnostic.candidate_component_objective = raw_candidate_objective->GetTotalObjective();
+        diagnostic.joint_candidate_component_objective = raw_candidate_objective->GetTotalObjective();
     }
     const auto candidate_evaluation{
         EvaluateBoundaryComponentCandidate(
@@ -2832,7 +2832,7 @@ static bool TryBoundaryJointCorrection(
         candidate_evaluation.has_value() &&
         IsBetterAuditObjective(
             candidate_evaluation->audit_objective->GetTotalObjective(),
-            previous_audit_objective.GetTotalObjective(),
+            improvement_reference_objective.GetTotalObjective(),
             kObjectiveStrictTolerance)
     };
     if (!is_strict_improvement)
@@ -2858,6 +2858,7 @@ static bool TryBoundaryJointCorrection(
     RemoveTrustGrowthForKeys(component.key_list, selection);
     diagnostic.accepted = true;
     diagnostic.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
+    diagnostic.candidate_component_objective = candidate_evaluation->audit_objective->GetTotalObjective();
     record_performance(true);
     return true;
 }
@@ -2900,6 +2901,21 @@ static void ReconcileBoundaryComponent(
     };
     if (endpoint_evaluation.has_value())
     {
+        diagnostic.endpoint_component_objective = endpoint_evaluation->audit_objective->GetTotalObjective();
+        if (IsBoundaryJointCorrectionEligible(inputs, component, previous_audit_objective) &&
+            TryBoundaryJointCorrection(
+                inputs,
+                component,
+                *previous_audit_objective,
+                *endpoint_evaluation->audit_objective,
+                endpoint_patch,
+                working_objective_state,
+                selection,
+                diagnostic))
+        {
+            selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
+            return;
+        }
         CommitBoundaryObjectiveState(*endpoint_evaluation, working_objective_state);
         diagnostic.accepted = true;
         diagnostic.accepted_factor = 1.0;
@@ -2914,11 +2930,11 @@ static void ReconcileBoundaryComponent(
             inputs,
             component,
             *previous_audit_objective,
+            *previous_audit_objective,
             endpoint_patch,
             working_objective_state,
             selection,
-            diagnostic,
-            true))
+            diagnostic))
     {
         selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
         return;
@@ -3120,12 +3136,29 @@ static bool TryRescueBoundaryComponent(
     };
     if (endpoint_evaluation.has_value())
     {
-        endpoint_patch.ApplyTo(selection.assembled_state);
-        CommitBoundaryObjectiveState(*endpoint_evaluation, working_objective_state);
-        diagnostic.accepted = true;
-        diagnostic.accepted_factor = 1.0;
-        diagnostic.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
-        diagnostic.candidate_component_objective = endpoint_evaluation->audit_objective->GetTotalObjective();
+        diagnostic.endpoint_component_objective =
+            endpoint_evaluation->audit_objective->GetTotalObjective();
+        if (!IsBoundaryJointCorrectionEligible(
+                inputs,
+                component,
+                &previous_audit_objective) ||
+            !TryBoundaryJointCorrection(
+                inputs,
+                component,
+                previous_audit_objective,
+                *endpoint_evaluation->audit_objective,
+                endpoint_patch,
+                working_objective_state,
+                selection,
+                diagnostic))
+        {
+            endpoint_patch.ApplyTo(selection.assembled_state);
+            CommitBoundaryObjectiveState(*endpoint_evaluation, working_objective_state);
+            diagnostic.accepted = true;
+            diagnostic.accepted_factor = 1.0;
+            diagnostic.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
+            diagnostic.candidate_component_objective = endpoint_evaluation->audit_objective->GetTotalObjective();
+        }
     }
     else if (IsBoundaryJointCorrectionEligible(
             inputs,
@@ -3135,11 +3168,11 @@ static bool TryRescueBoundaryComponent(
             inputs,
             component,
             previous_audit_objective,
+            previous_audit_objective,
             endpoint_patch,
             working_objective_state,
             selection,
-            diagnostic,
-            false))
+            diagnostic))
     {
     }
     else

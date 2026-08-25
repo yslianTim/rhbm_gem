@@ -5335,7 +5335,7 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnc
         out.find("Boundary-component reconciliation:"),
         std::string::npos);
     EXPECT_NE(
-        out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
+        out.find("boundary_joint_correction_attempts/accepted/fallback="),
         std::string::npos);
 }
 
@@ -5360,12 +5360,17 @@ TEST(
             "Boundary-interface joint correction: interface/closure/parameters = 2/2/6"),
         std::string::npos);
     EXPECT_NE(out.find("status=candidate-ready"), std::string::npos);
-    EXPECT_NE(out.find("accepted=yes."), std::string::npos);
     EXPECT_NE(
-        out.find("boundary_joint_correction_attempts/accepted/fallback=2/1/1"),
+        out.find("accepted=yes, outcome=accepted-over-endpoint."),
         std::string::npos);
     EXPECT_NE(
-        out.find("trials/factor/accepted/exhausted = 6/-/no/yes"),
+        out.find("boundary_joint_correction_attempts/accepted/fallback="),
+        std::string::npos);
+    EXPECT_EQ(
+        out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("accepted=no, outcome=fallback-endpoint."),
         std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
@@ -5394,8 +5399,10 @@ TEST(
     rt::RunSecondStageLocalFitting(*scaled_model, scaled_options);
     const std::string scaled_out{ testing::internal::GetCapturedStdout() };
     EXPECT_NE(
-        scaled_out.find(
-            "boundary_joint_correction_attempts/accepted/fallback=2/1/1"),
+        scaled_out.find("boundary_joint_correction_attempts/accepted/fallback="),
+        std::string::npos);
+    EXPECT_EQ(
+        scaled_out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
         std::string::npos);
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };

@@ -1142,7 +1142,25 @@ static void LogAcceptedBacktrackingDiagnostics(
         message
             << "/" << (diagnostic.accepted ? "yes" : "no")
             << "/" << (diagnostic.exhausted ? "yes" : "no")
-            << ", accepted_source=" << accepted_source_text() << ".";
+            << ", accepted_source=" << accepted_source_text()
+            << ", objectives previous/endpoint/final=";
+        const auto append_objective = [&](const std::optional<double> & objective)
+        {
+            if (objective.has_value())
+            {
+                message << *objective;
+            }
+            else
+            {
+                message << "-";
+            }
+        };
+        append_objective(diagnostic.previous_component_objective);
+        message << "/";
+        append_objective(diagnostic.endpoint_component_objective);
+        message << "/";
+        append_objective(diagnostic.candidate_component_objective);
+        message << ".";
         Logger::Log(LogLevel::Debug, message.str());
         if (!diagnostic.joint_correction_status.has_value()) continue;
         std::ostringstream correction_message;
@@ -1171,27 +1189,39 @@ static void LogAcceptedBacktrackingDiagnostics(
         {
             correction_message << "-";
         }
-        correction_message << ", previous/candidate=";
-        if (diagnostic.previous_component_objective.has_value())
+        correction_message << ", reference/candidate=";
+        if (diagnostic.joint_reference_component_objective.has_value())
         {
-            correction_message << *diagnostic.previous_component_objective;
+            correction_message << *diagnostic.joint_reference_component_objective;
         }
         else
         {
             correction_message << "-";
         }
         correction_message << "/";
-        if (diagnostic.candidate_component_objective.has_value())
+        if (diagnostic.joint_candidate_component_objective.has_value())
         {
-            correction_message << *diagnostic.candidate_component_objective;
+            correction_message << *diagnostic.joint_candidate_component_objective;
         }
         else
         {
             correction_message << "-";
         }
-        correction_message << ", accepted="
-            << (diagnostic.accepted_source ==
-                BoundaryComponentAcceptedSource::JointCorrection ? "yes" : "no") << ".";
+        const auto correction_accepted{
+            diagnostic.accepted_source == BoundaryComponentAcceptedSource::JointCorrection
+        };
+        std::string_view correction_outcome{ "failed" };
+        if (correction_accepted)
+        {
+            correction_outcome = diagnostic.endpoint_component_objective.has_value() ?
+                "accepted-over-endpoint" : "accepted-over-previous";
+        }
+        else if (diagnostic.accepted_source == BoundaryComponentAcceptedSource::Endpoint)
+        {
+            correction_outcome = "fallback-endpoint";
+        }
+        correction_message << ", accepted=" << (correction_accepted ? "yes" : "no")
+            << ", outcome=" << correction_outcome << ".";
         Logger::Log(LogLevel::Debug, correction_message.str());
     }
 }

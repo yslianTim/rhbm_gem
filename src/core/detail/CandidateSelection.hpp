@@ -491,6 +491,9 @@ struct BoundaryComponentReconciliationDiagnostic
     std::optional<double> joint_damping{};
     std::optional<double> maximum_normalized_trust_step{};
     std::optional<double> previous_component_objective{};
+    std::optional<double> endpoint_component_objective{};
+    std::optional<double> joint_reference_component_objective{};
+    std::optional<double> joint_candidate_component_objective{};
     std::optional<double> candidate_component_objective{};
     std::size_t accepted_cluster_count{ 0 };
     std::size_t rescue_candidate_cluster_count{ 0 };
