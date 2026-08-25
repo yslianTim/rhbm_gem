@@ -13,6 +13,14 @@ The stage keeps candidate states in memory and writes one validated terminal
 state to `ModelObject`. Individual outer iterations do not partially update the
 stored atom estimates.
 
+`FitOptions::second_stage_boundary_halo_depth` controls boundary-correction
+shape expansion and defaults to one physical-dependency hop. A value of zero
+keeps the direct-interface behavior. Final uncut-component polish is enabled by
+`FitOptions::enable_second_stage_dependency_polish`; its nonlinear round limit
+is `FitOptions::second_stage_dependency_polish_max_iterations`, which defaults
+to three. An enabled polish with a zero round limit is rejected before any model
+write. These settings intentionally have no command-line flags.
+
 ## Model context and initialization
 
 The fitting context contains, for each selected atom:
@@ -105,9 +113,14 @@ Each outer attempt performs the following sequence:
    improves the base candidate on the same objective scale.
 8. Build the accepted-induced interaction graph from shared boundary samples.
    Revalidate each connected component. Every eligible component attempts one
-   joint correction over the direct boundary contributors: only their
-   transformed amplitude and width may change, while one component-local offset
-   column is shared by every closure atom with the same group key. A valid
+   joint correction over the boundary shape-active set. This starts with the
+   direct boundary contributors and expands by the configured number of hops.
+   A hop follows only the raw sample target and directly selected neighbors and
+   remains inside the boundary component; it does not follow virtual edges
+   induced by an unselected contributor's group median. Shape-active atoms may
+   change transformed amplitude and width. The offset closure is then rebuilt
+   from their group keys, with one component-local offset column shared by all
+   same-group closure atoms; closure-only shapes remain fixed. A valid
    endpoint remains the fallback and is replaced only when the correction fits
    every member trust radius and strictly improves that endpoint. For an invalid
    endpoint, the correction must strictly improve the previous component
@@ -310,6 +323,12 @@ fallbacks remain fixed contributors and never enter a correction patch.
 Every eligible accepted-only or rescue boundary component receives at most one
 correction attempt per outer iteration.
 
+Before a joint-correction candidate is accepted, neighbor-adjusted profiles are
+rebuilt from its formally resolved selected and unselected snapshots. Every
+materially changed atom must pass the post-refit suspicious-profile guards.
+Failure keeps the exact endpoint. Accepted-only reconciliation and rejected
+cluster rescue use the same halo construction and correction path.
+
 After component reconciliation, the complete assembled state must still pass the
 unchanged global previous/best audit. On aggregate failure, independent components
 and singleton clusters are scored by their exact global objective delta. Only
@@ -318,6 +337,44 @@ recomputed after each removal. The first passing subset is committed atomically.
 If all remaining units strictly improve the previous objective but cannot satisfy
 the historical best gate, the complete remaining attempt is marked exhausted;
 objective tolerances are never relaxed.
+
+## Final uncut dependency polish
+
+After the existing stop policy selects the best-audit or latest-validated base
+state, but before peeling entries or atom models are written, the stage attempts
+one final dependency polish. Current clusters are first treated as indivisible
+DSU units. They are then merged using the complete
+`GraphTopology::sample_dependency_list`, without the weighted-edge threshold or
+ten-residue cutoff. This deliberately retains virtual dependencies introduced
+when an unselected contributor resolves through a selected-group median.
+Terminal and suspicious-isolated atoms are not variables, but their fixed models
+remain in every sample response. Components with fewer than two active atoms are
+skipped, and samples whose target no longer has an objective owner are excluded.
+
+Each component is solved serially in fixed key order. All active member atoms
+have `log(amplitude)` and `log(width)` variables, and each group represented in
+that component has one shared physical offset. The same group in two independent
+components is not tied across components. Sparse weighted-ridge directions,
+robust weights, conditioning guards, and each original cluster's trust radius
+are reused from boundary correction. Up to the configured number of nonlinear
+rounds is attempted. A round linearizes at its latest endpoint, while every
+cumulative trust step is measured from the pre-polish base state.
+
+Direction construction fixes the current unselected-contributor snapshot.
+Candidate validation uses the formal resolver again, so selected-group medians,
+unselected responses, residuals, and the nonlinear objective reflect the
+candidate. A component patch requires valid Gaussian parameters, post-refit
+suspicious guards, every member trust radius, all member-cluster objective
+guards, and strict component-objective improvement. Solver or validation failure
+falls back only that component.
+
+Accepted component patches are assembled and subjected to a complete global
+audit. If it fails, exact full-audit deltas are used to remove the worst
+non-improving component patches. Unless the surviving state strictly improves
+the pre-polish global objective, the complete polish is discarded and the base
+state is written unchanged. A successful final polish updates the final audit
+and provenance but does not increment the outer accepted-iteration count or
+change the stop reason.
 
 ## Numerical defenses and terminal isolation
 
@@ -519,7 +576,8 @@ samples, symbolic solver analyses, adaptive topology rebuilds and partition
 changes, boundary reconciliation attempts/backtracks/rejections, and
 boundary joint-correction attempts/acceptances/fallbacks, symbolic analyses,
 boundary rescue attempts/acceptances/fallbacks/rejections, rescue exclusion
-reasons, and elapsed time. The existing
+reasons, final dependency-polish component/atom/parameter/round counts,
+acceptances/fallbacks, and elapsed time. The existing
 iteration/candidate/topology/total elapsed-time field remains unchanged.
 These counters are diagnostic evidence rather than acceptance thresholds.
 
@@ -550,8 +608,9 @@ Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
 record with its cluster, atom, and boundary-sample counts plus trials, factor,
 accepted/rejected, exhausted status, accepted source, and previous/endpoint/final
 component objectives. An attempted correction also emits
-`Boundary-interface joint correction` with its interface/closure/parameter
-counts, solver status,
+`Boundary-interface joint correction` with its
+direct-interface/shape-active/offset-closure/parameter counts, suspicious count,
+solver status,
 damping, maximum normalized trust step, strict-improvement reference/candidate
 objectives, acceptance result, and endpoint-fallback outcome. An all-rejected
 debug record reports
@@ -567,6 +626,12 @@ and boundary-sample counts, added/removed adjacency edges, and whether the
 partition and objective domain changed. Non-quiet runs also show a
 `Rebuild local-fitting coupling topology` percentage progress bar with the
 same sample-based work accounting as the initial topology build.
+
+Finalization emits a separate `Final dependency polish` record with aggregate
+component, atom, parameter, round, acceptance/fallback, objective-before/after,
+and elapsed-time values. Debug logging adds one record per component, including
+symbolic-analysis and suspicious-candidate counts. These records are emitted
+before the existing stable final summary.
 
 Non-quiet runs end with this summary format:
 

@@ -1271,7 +1271,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & endpoint_state,
-    const std::vector<std::size_t> & interface_atom_index_list,
+    const std::vector<std::size_t> & shape_active_atom_index_list,
     const std::vector<std::size_t> & offset_closure_atom_index_list,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
@@ -1279,19 +1279,19 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     ReusableWeightedRidgeSolver & reusable_solver)
 {
     BoundaryJointCorrectionResult result;
-    if (interface_atom_index_list.empty() ||
+    if (shape_active_atom_index_list.empty() ||
         offset_closure_atom_index_list.empty() ||
         sample_ref_list.empty() ||
         previous_state.size() != context.size() ||
         endpoint_state.size() != context.size() ||
         ridge_multiplier_list.size() != context.size() ||
         trust_region_list.empty() ||
-        !std::ranges::is_sorted(interface_atom_index_list) ||
+        !std::ranges::is_sorted(shape_active_atom_index_list) ||
         !std::ranges::is_sorted(offset_closure_atom_index_list))
     {
         return result;
     }
-    for (const auto atom_index : interface_atom_index_list)
+    for (const auto atom_index : shape_active_atom_index_list)
     {
         if (atom_index >= context.size() ||
             !std::ranges::binary_search(offset_closure_atom_index_list, atom_index))
@@ -1313,7 +1313,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         endpoint_model_list.emplace_back(endpoint_state.GetModel(atom_index));
         shape_active_mask.emplace_back(
             std::ranges::binary_search(
-                interface_atom_index_list,
+                shape_active_atom_index_list,
                 atom_index) ? 1 : 0);
     }
     const auto parameterization{

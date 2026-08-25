@@ -76,7 +76,7 @@ using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
 struct BoundaryJointCorrectionWorkspaceKey
 {
     std::vector<ClusterKey> member_key_list{};
-    std::vector<std::size_t> interface_atom_index_list{};
+    std::vector<std::size_t> shape_active_atom_index_list{};
     std::vector<std::size_t> offset_closure_atom_index_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
 
@@ -254,7 +254,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & endpoint_state,
-    const std::vector<std::size_t> & interface_atom_index_list,
+    const std::vector<std::size_t> & shape_active_atom_index_list,
     const std::vector<std::size_t> & offset_closure_atom_index_list,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,

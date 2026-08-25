@@ -108,12 +108,24 @@ struct BoundaryReconciliationComponent
     std::vector<ClusterKey> key_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
     std::vector<std::size_t> interface_atom_index_list{};
+    std::vector<std::size_t> shape_active_atom_index_list{};
     std::vector<std::size_t> offset_closure_atom_index_list{};
     std::size_t boundary_sample_count{ 0 };
 
     friend bool operator==(
         const BoundaryReconciliationComponent &,
         const BoundaryReconciliationComponent &) = default;
+};
+
+struct DependencyPolishComponent
+{
+    std::vector<ClusterKey> key_list{};
+    std::vector<SampleRef> affected_sample_ref_list{};
+    std::vector<std::size_t> atom_index_list{};
+
+    friend bool operator==(
+        const DependencyPolishComponent &,
+        const DependencyPolishComponent &) = default;
 };
 
 class CouplingGraphBuilder
@@ -186,5 +198,15 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
     const SecondStageContext & context,
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & accepted_key_list);
+
+BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
+    const SecondStageContext & context,
+    BoundaryReconciliationComponent component,
+    std::size_t halo_depth);
+
+std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
+    const GraphTopology & topology,
+    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & owner_key_by_atom_index);
 
 } // namespace rhbm_gem::core::detail

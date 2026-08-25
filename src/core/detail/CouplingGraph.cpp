@@ -1144,12 +1144,245 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         component_list.emplace_back(BoundaryReconciliationComponent{
             key_list,
             BuildGraphAffectedSampleUnion(partition, key_list),
+            interface_atom_index_list,
             std::move(interface_atom_index_list),
             std::move(offset_closure_atom_index_list),
             boundary_sample_count
         });
     }
     std::ranges::sort(component_list, {}, &BoundaryReconciliationComponent::key_list);
+    return component_list;
+}
+
+BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
+    const SecondStageContext & context,
+    BoundaryReconciliationComponent component,
+    std::size_t halo_depth)
+{
+    std::vector<std::size_t> component_atom_index_list;
+    for (const auto & key : component.key_list)
+    {
+        component_atom_index_list.insert(
+            component_atom_index_list.end(),
+            key.begin(),
+            key.end());
+    }
+    std::ranges::sort(component_atom_index_list);
+    component_atom_index_list.erase(
+        std::ranges::unique(component_atom_index_list).begin(),
+        component_atom_index_list.end());
+
+    auto shape_active_atom_index_list{ component.interface_atom_index_list };
+    std::ranges::sort(shape_active_atom_index_list);
+    shape_active_atom_index_list.erase(
+        std::ranges::unique(shape_active_atom_index_list).begin(),
+        shape_active_atom_index_list.end());
+    for (const auto atom_index : shape_active_atom_index_list)
+    {
+        if (!std::ranges::binary_search(component_atom_index_list, atom_index))
+        {
+            throw std::invalid_argument(
+                "Boundary halo interface atom is absent from its component.");
+        }
+    }
+
+    for (std::size_t depth = 0; depth < halo_depth; depth++)
+    {
+        const auto previous_size{ shape_active_atom_index_list.size() };
+        auto expanded_atom_index_list{ shape_active_atom_index_list };
+        for (const auto & sample_ref : component.affected_sample_ref_list)
+        {
+            if (sample_ref.atom_index >= context.size())
+            {
+                throw std::invalid_argument(
+                    "Boundary halo sample owner is out of range.");
+            }
+            const auto & atom_context{ context.at(sample_ref.atom_index) };
+            if (sample_ref.sample_index >= atom_context.raw_sampling_entries.size())
+            {
+                throw std::invalid_argument(
+                    "Boundary halo sample index is out of range.");
+            }
+            std::vector<std::size_t> direct_participant_list;
+            if (std::ranges::binary_search(
+                    component_atom_index_list,
+                    sample_ref.atom_index))
+            {
+                direct_participant_list.emplace_back(sample_ref.atom_index);
+            }
+            for (const auto & neighbor : atom_context.Neighbors(sample_ref.sample_index))
+            {
+                if (!neighbor.is_selected ||
+                    !std::ranges::binary_search(
+                        component_atom_index_list,
+                        neighbor.atom_index))
+                {
+                    continue;
+                }
+                direct_participant_list.emplace_back(neighbor.atom_index);
+            }
+            std::ranges::sort(direct_participant_list);
+            direct_participant_list.erase(
+                std::ranges::unique(direct_participant_list).begin(),
+                direct_participant_list.end());
+            const auto touches_active_shape{
+                std::ranges::any_of(
+                    direct_participant_list,
+                    [&](const auto atom_index)
+                    {
+                        return std::ranges::binary_search(
+                            shape_active_atom_index_list,
+                            atom_index);
+                    })
+            };
+            if (!touches_active_shape) continue;
+            expanded_atom_index_list.insert(
+                expanded_atom_index_list.end(),
+                direct_participant_list.begin(),
+                direct_participant_list.end());
+        }
+        std::ranges::sort(expanded_atom_index_list);
+        expanded_atom_index_list.erase(
+            std::ranges::unique(expanded_atom_index_list).begin(),
+            expanded_atom_index_list.end());
+        shape_active_atom_index_list = std::move(expanded_atom_index_list);
+        if (shape_active_atom_index_list.size() == previous_size) break;
+    }
+
+    std::set<std::size_t> touched_group_id_set;
+    for (const auto atom_index : shape_active_atom_index_list)
+    {
+        if (atom_index >= context.size())
+        {
+            throw std::invalid_argument(
+                "Boundary halo shape-active atom is out of range.");
+        }
+        touched_group_id_set.emplace(context.at(atom_index).group_id);
+    }
+    std::vector<std::size_t> offset_closure_atom_index_list;
+    for (const auto atom_index : component_atom_index_list)
+    {
+        if (atom_index >= context.size())
+        {
+            throw std::invalid_argument(
+                "Boundary halo component atom is out of range.");
+        }
+        if (touched_group_id_set.contains(context.at(atom_index).group_id))
+        {
+            offset_closure_atom_index_list.emplace_back(atom_index);
+        }
+    }
+    component.shape_active_atom_index_list =
+        std::move(shape_active_atom_index_list);
+    component.offset_closure_atom_index_list =
+        std::move(offset_closure_atom_index_list);
+    return component;
+}
+
+std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
+    const GraphTopology & topology,
+    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & owner_key_by_atom_index)
+{
+    const auto key_list{ BuildGraphClusterKeyList(partition) };
+    if (key_list.empty()) return {};
+    if (owner_key_by_atom_index.size() != topology.adjacency_list.size())
+    {
+        throw std::invalid_argument(
+            "Dependency polish owner mapping has an inconsistent atom count.");
+    }
+
+    const auto inactive_position{ key_list.size() };
+    std::vector<std::size_t> key_position_by_atom_index(
+        topology.adjacency_list.size(),
+        inactive_position);
+    for (std::size_t key_position = 0; key_position < key_list.size(); key_position++)
+    {
+        for (const auto atom_index : key_list.at(key_position))
+        {
+            if (atom_index >= key_position_by_atom_index.size())
+            {
+                throw std::invalid_argument(
+                    "Dependency polish cluster atom is out of range.");
+            }
+            key_position_by_atom_index.at(atom_index) = key_position;
+        }
+    }
+
+    DisjointSet component_set{ key_list.size() };
+    for (const auto & dependency : topology.sample_dependency_list)
+    {
+        std::vector<std::size_t> participant_key_position_list;
+        for (const auto atom_index : dependency.contributor_atom_index_list)
+        {
+            if (atom_index >= key_position_by_atom_index.size())
+            {
+                throw std::invalid_argument(
+                    "Dependency polish sample contributor is out of range.");
+            }
+            const auto key_position{ key_position_by_atom_index.at(atom_index) };
+            if (key_position == inactive_position ||
+                owner_key_by_atom_index.at(atom_index).empty())
+            {
+                continue;
+            }
+            participant_key_position_list.emplace_back(key_position);
+        }
+        std::ranges::sort(participant_key_position_list);
+        participant_key_position_list.erase(
+            std::ranges::unique(participant_key_position_list).begin(),
+            participant_key_position_list.end());
+        if (participant_key_position_list.empty()) continue;
+        const auto first_position{ participant_key_position_list.front() };
+        for (std::size_t i = 1; i < participant_key_position_list.size(); i++)
+        {
+            component_set.Merge(first_position, participant_key_position_list.at(i));
+        }
+    }
+
+    std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
+    for (std::size_t key_position = 0; key_position < key_list.size(); key_position++)
+    {
+        key_list_by_root[component_set.Find(key_position)].emplace_back(
+            key_list.at(key_position));
+    }
+
+    std::vector<DependencyPolishComponent> component_list;
+    for (auto & [root, component_key_list] : key_list_by_root)
+    {
+        static_cast<void>(root);
+        std::vector<std::size_t> atom_index_list;
+        for (const auto & key : component_key_list)
+        {
+            atom_index_list.insert(
+                atom_index_list.end(),
+                key.begin(),
+                key.end());
+        }
+        std::ranges::sort(atom_index_list);
+        if (atom_index_list.size() < 2) continue;
+
+        auto affected_sample_ref_list{
+            BuildGraphAffectedSampleUnion(partition, component_key_list)
+        };
+        affected_sample_ref_list.erase(
+            std::remove_if(
+                affected_sample_ref_list.begin(),
+                affected_sample_ref_list.end(),
+                [&](const auto & sample_ref)
+                {
+                    return sample_ref.atom_index >= owner_key_by_atom_index.size() ||
+                        owner_key_by_atom_index.at(sample_ref.atom_index).empty();
+                }),
+            affected_sample_ref_list.end());
+        if (affected_sample_ref_list.empty()) continue;
+        component_list.emplace_back(DependencyPolishComponent{
+            std::move(component_key_list),
+            std::move(affected_sample_ref_list),
+            std::move(atom_index_list)
+        });
+    }
+    std::ranges::sort(component_list, {}, &DependencyPolishComponent::key_list);
     return component_list;
 }
 

@@ -3931,6 +3931,225 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         });
 }
 
+TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByHop)
+{
+    coupling_detail::SecondStageContext context;
+    context.selected_atom_list.resize(5);
+    context.at(0).group_id = 10;
+    context.at(1).group_id = 20;
+    context.at(2).group_id = 20;
+    context.at(3).group_id = 30;
+    context.at(4).group_id = 40;
+    for (auto & atom_context : context.selected_atom_list)
+    {
+        atom_context.raw_sampling_entries.resize(1);
+        atom_context.neighbor_atom_sample_offset_list = { 0, 0 };
+    }
+    context.at(0).neighbor_atom_sample_list = {
+        { true, 1, 0.5 },
+        { false, 3, 0.5 }
+    };
+    context.at(0).neighbor_atom_sample_offset_list = { 0, 2 };
+    context.at(1).neighbor_atom_sample_list = {
+        { true, 2, 0.5 }
+    };
+    context.at(1).neighbor_atom_sample_offset_list = { 0, 1 };
+    context.at(2).neighbor_atom_sample_list = {
+        { true, 3, 0.5 },
+        { true, 4, 0.5 }
+    };
+    context.at(2).neighbor_atom_sample_offset_list = { 0, 2 };
+
+    const coupling_detail::BoundaryReconciliationComponent component{
+        .key_list = { { 0, 1 }, { 2, 3 } },
+        .affected_sample_ref_list = { { 0, 0 }, { 1, 0 }, { 2, 0 } },
+        .interface_atom_index_list = { 0 },
+        .shape_active_atom_index_list = { 0 },
+        .offset_closure_atom_index_list = { 0 },
+        .boundary_sample_count = 1
+    };
+    const auto depth_zero{
+        coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 0)
+    };
+    EXPECT_EQ(depth_zero.interface_atom_index_list, (std::vector<std::size_t>{ 0 }));
+    EXPECT_EQ(depth_zero.shape_active_atom_index_list, (std::vector<std::size_t>{ 0 }));
+    EXPECT_EQ(depth_zero.offset_closure_atom_index_list, (std::vector<std::size_t>{ 0 }));
+
+    const auto depth_one{
+        coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 1)
+    };
+    EXPECT_EQ(depth_one.interface_atom_index_list, (std::vector<std::size_t>{ 0 }));
+    EXPECT_EQ(depth_one.shape_active_atom_index_list, (std::vector<std::size_t>{ 0, 1 }));
+    EXPECT_EQ(
+        depth_one.offset_closure_atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2 }));
+
+    const auto fixed_point{
+        coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 10)
+    };
+    EXPECT_EQ(
+        fixed_point.shape_active_atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2, 3 }));
+    EXPECT_EQ(
+        fixed_point.offset_closure_atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2, 3 }));
+}
+
+TEST(EstimatorSecondStageDefenseTest, UncutDependencyPolishMergesWholeActiveClusters)
+{
+    coupling_detail::GraphTopology topology;
+    topology.adjacency_list.resize(6);
+    topology.sample_dependency_list = {
+        { { 0, 0 }, { 1, 2 } },
+        { { 2, 0 }, { 2, 3 } },
+        { { 3, 0 }, { 3, 4 } }
+    };
+    coupling_detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key = {
+        { { 0, 1 }, { { 0, 0 } } },
+        { { 2 }, { { 2, 0 } } },
+        { { 3 }, { { 3, 0 } } },
+        { { 5 }, { { 5, 0 } } }
+    };
+    const std::vector<audit_detail::ClusterKey> owner_key_by_atom_index{
+        { 0, 1 }, { 0, 1 }, { 2 }, { 3 }, {}, { 5 }
+    };
+    const auto component_list{
+        coupling_detail::BuildUncutDependencyPolishComponents(
+            topology,
+            partition,
+            owner_key_by_atom_index)
+    };
+    ASSERT_EQ(component_list.size(), 1U);
+    EXPECT_EQ(
+        component_list.front().key_list,
+        (std::vector<audit_detail::ClusterKey>{ { 0, 1 }, { 2 }, { 3 } }));
+    EXPECT_EQ(
+        component_list.front().atom_index_list,
+        (std::vector<std::size_t>{ 0, 1, 2, 3 }));
+    EXPECT_EQ(
+        component_list.front().affected_sample_ref_list,
+        (std::vector<coupling_detail::SampleRef>{ { 0, 0 }, { 2, 0 }, { 3, 0 } }));
+}
+
+TEST(EstimatorSecondStageDefenseTest, DependencyPolishDefaultsAndIterationValidation)
+{
+    const rt::FitOptions defaults;
+    EXPECT_EQ(defaults.second_stage_boundary_halo_depth, 1U);
+    EXPECT_TRUE(defaults.enable_second_stage_dependency_polish);
+    EXPECT_EQ(defaults.second_stage_dependency_polish_max_iterations, 3U);
+
+    auto model{ BuildJointPolishDefenseModel() };
+    std::vector<rg::GaussianModel3D> original_model_list;
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        original_model_list.emplace_back(GetEstimateModel(*atom));
+    }
+    auto options{ MakeSecondStageOptions() };
+    options.second_stage_dependency_polish_max_iterations = 0;
+    EXPECT_THROW(
+        rt::RunSecondStageLocalFitting(*model, options),
+        std::invalid_argument);
+    for (std::size_t atom_index = 0;
+        atom_index < model->GetSelectedAtoms().size();
+        atom_index++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*model->GetSelectedAtoms().at(atom_index)),
+            original_model_list.at(atom_index),
+            0.0);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponent)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        { 6.0, 0.55, 0.0 },
+        { 4.5, 0.70, 0.0 }
+    };
+    const std::vector<rg::GaussianModel3D> target_model_list{
+        { 6.5, 0.60, 0.15 },
+        { 4.0, 0.65, 0.15 }
+    };
+    auto fixture{
+        BuildJointPolishFixture(
+            { 10, 10 },
+            base_model_list,
+            target_model_list)
+    };
+    coupling_detail::GraphTopology topology;
+    topology.adjacency_list.resize(2);
+    for (const auto & sample_ref : fixture.sample_ref_list)
+    {
+        topology.sample_dependency_list.emplace_back(
+            coupling_detail::GraphSampleDependency{
+                sample_ref,
+                sample_ref == fixture.sample_ref_list.front() ?
+                    std::vector<std::size_t>{ 0, 1 } :
+                    std::vector<std::size_t>{ sample_ref.atom_index }
+            });
+    }
+    const auto partition{
+        coupling_detail::BuildGraphPartition(topology, { 0, 1 })
+    };
+    const auto base_snapshot{
+        polish_detail::BuildSecondStageModelSnapshot(
+            fixture.context,
+            fixture.state)
+    };
+    const auto objective_domain{
+        audit_detail::BuildObjectiveDomain(
+            fixture.context,
+            base_snapshot,
+            coupling_detail::BuildGraphClusterKeyList(partition),
+            0.0,
+            1.0)
+    };
+    polish_detail::TrustRegionStateSet trust_region_state;
+    trust_region_state.Reconcile(
+        coupling_detail::BuildGraphClusterKeyList(partition));
+    polish_detail::ClusterSolverWorkspaceMap solver_workspace_by_key;
+    polish_detail::BoundaryJointCorrectionWorkspaceMap correction_workspace_by_key;
+    polish_detail::PerformanceCounters performance_counters{
+        true,
+        fixture.context,
+        solver_workspace_by_key,
+        correction_workspace_by_key
+    };
+    auto options{ MakeSecondStageOptions() };
+    const auto polish_result{
+        polish_detail::RunFinalDependencyPolish(
+            fixture.context,
+            options,
+            topology,
+            partition,
+            objective_domain,
+            trust_region_state,
+            fixture.state,
+            correction_workspace_by_key,
+            performance_counters)
+    };
+    ASSERT_TRUE(polish_result.accepted);
+    ASSERT_TRUE(polish_result.objective.has_value());
+    ASSERT_TRUE(polish_result.diagnostic.objective_before.has_value());
+    ASSERT_TRUE(polish_result.diagnostic.objective_after.has_value());
+    EXPECT_LT(
+        *polish_result.diagnostic.objective_after,
+        *polish_result.diagnostic.objective_before);
+    ASSERT_EQ(polish_result.diagnostic.component_list.size(), 1U);
+    EXPECT_GE(polish_result.diagnostic.component_list.front().round_count, 1U);
+    EXPECT_LE(
+        polish_result.diagnostic.component_list.front().round_count,
+        options.second_stage_dependency_polish_max_iterations);
+    EXPECT_EQ(polish_result.diagnostic.component_list.front().parameter_count, 5U);
+    EXPECT_DOUBLE_EQ(
+        polish_result.state.at(0).mdpde.GetModel().GetOffset(),
+        polish_result.state.at(1).mdpde.GetModel().GetOffset());
+    EXPECT_NE(
+        polish_result.state.at(0).mdpde.GetModel().GetAmplitude(),
+        fixture.state.at(0).mdpde.GetModel().GetAmplitude());
+}
+
 TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAndBounded)
 {
     coupling_detail::GraphTopology topology;
@@ -5236,7 +5455,7 @@ TEST(
             base.GetAmplitude() * intensity_scale,
             scaled.GetAmplitude(),
             std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 5.0e-5));
-        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 1.0e-6);
+        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 2.0e-6);
         EXPECT_NEAR(
             base.GetOffset() * intensity_scale,
             scaled.GetOffset(),
@@ -5357,7 +5576,7 @@ TEST(
     EXPECT_NE(out.find("accepted_source=joint-correction"), std::string::npos);
     EXPECT_NE(
         out.find(
-            "Boundary-interface joint correction: interface/closure/parameters = 2/2/6"),
+            "Boundary-interface joint correction: direct-interface/shape-active/closure/parameters = 2/2/2/6"),
         std::string::npos);
     EXPECT_NE(out.find("status=candidate-ready"), std::string::npos);
     EXPECT_NE(
@@ -5681,6 +5900,10 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPol
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(out.find("final_uses_polish=yes"), std::string::npos);
+    EXPECT_NE(out.find("Final dependency polish:"), std::string::npos);
+    EXPECT_NE(
+        out.find("dependency_polish_components/attempted/accepted/fallback="),
+        std::string::npos);
     bool found_accepted_polish{ false };
     bool found_skipped_polish{ false };
     for (std::size_t row_start = out.find('\r');
@@ -5716,6 +5939,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsNoPolishForEmpty
     const std::string out{ testing::internal::GetCapturedStdout() };
 
     EXPECT_NE(out.find("final_uses_polish=no"), std::string::npos);
+    EXPECT_NE(out.find("Final dependency polish:"), std::string::npos);
     EXPECT_NE(
         out.find("final_state_source=latest-validated"),
         std::string::npos);

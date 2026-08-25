@@ -183,11 +183,19 @@ class PerformanceCounters
     std::size_t m_boundary_rescue_hard_failure_exclusion_count{ 0 };
     std::size_t m_boundary_rescue_invalid_proposal_exclusion_count{ 0 };
     std::size_t m_boundary_rescue_objective_unavailable_exclusion_count{ 0 };
+    std::size_t m_dependency_polish_component_count{ 0 };
+    std::size_t m_dependency_polish_attempt_count{ 0 };
+    std::size_t m_dependency_polish_accepted_count{ 0 };
+    std::size_t m_dependency_polish_fallback_count{ 0 };
+    std::size_t m_dependency_polish_atom_count{ 0 };
+    std::size_t m_dependency_polish_parameter_count{ 0 };
+    std::size_t m_dependency_polish_round_count{ 0 };
     double m_iteration_phase_milliseconds{ 0.0 };
     double m_candidate_phase_milliseconds{ 0.0 };
     double m_topology_rebuild_milliseconds{ 0.0 };
     double m_boundary_reconciliation_milliseconds{ 0.0 };
     double m_boundary_joint_correction_milliseconds{ 0.0 };
+    double m_dependency_polish_milliseconds{ 0.0 };
 
 public:
     PerformanceCounters(
@@ -220,6 +228,15 @@ public:
         std::size_t hard_failure_count,
         std::size_t invalid_proposal_count,
         std::size_t objective_unavailable_count);
+    void RecordDependencyPolish(
+        std::size_t component_count,
+        std::size_t attempt_count,
+        std::size_t accepted_count,
+        std::size_t fallback_count,
+        std::size_t atom_count,
+        std::size_t parameter_count,
+        std::size_t round_count,
+        double elapsed_milliseconds);
 
 private:
     static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
@@ -486,7 +503,9 @@ struct BoundaryComponentReconciliationDiagnostic
     BoundaryComponentAcceptedSource accepted_source{ BoundaryComponentAcceptedSource::None };
     std::optional<BoundaryJointCorrectionStatus> joint_correction_status{};
     std::size_t interface_atom_count{ 0 };
+    std::size_t shape_active_atom_count{ 0 };
     std::size_t offset_closure_atom_count{ 0 };
+    std::size_t suspicious_candidate_atom_count{ 0 };
     std::size_t joint_parameter_count{ 0 };
     std::optional<double> joint_damping{};
     std::optional<double> maximum_normalized_trust_step{};
@@ -521,6 +540,7 @@ struct CandidateSelection
 struct CandidateSelectionInputs
 {
     const SecondStageContext & context;
+    const FitOptions & options;
     const ResidualBaseline & residual_baseline;
     const CouplingGraphPartition & partition;
     const ClusterHealthMap & health_by_key;
@@ -542,5 +562,54 @@ struct CandidateSelectionInputs
 };
 
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs);
+
+struct FinalDependencyPolishDiagnostic
+{
+    std::size_t component_count{ 0 };
+    std::size_t attempted_component_count{ 0 };
+    std::size_t accepted_component_count{ 0 };
+    std::size_t fallback_component_count{ 0 };
+    std::size_t atom_count{ 0 };
+    std::size_t parameter_count{ 0 };
+    std::size_t round_count{ 0 };
+    std::size_t suspicious_candidate_atom_count{ 0 };
+    std::optional<double> objective_before{};
+    std::optional<double> objective_after{};
+    double elapsed_milliseconds{ 0.0 };
+    struct Component
+    {
+        std::vector<ClusterKey> key_list{};
+        std::size_t atom_count{ 0 };
+        std::size_t parameter_count{ 0 };
+        std::size_t round_count{ 0 };
+        std::size_t suspicious_candidate_atom_count{ 0 };
+        std::size_t symbolic_analysis_count{ 0 };
+        std::optional<double> objective_before{};
+        std::optional<double> objective_after{};
+        double elapsed_milliseconds{ 0.0 };
+        bool accepted{ false };
+        bool fallback{ true };
+    };
+    std::vector<Component> component_list{};
+};
+
+struct FinalDependencyPolishResult
+{
+    FitState state{};
+    std::optional<ObjectiveBreakdown> objective{};
+    FinalDependencyPolishDiagnostic diagnostic{};
+    bool accepted{ false };
+};
+
+FinalDependencyPolishResult RunFinalDependencyPolish(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const GraphTopology & topology,
+    const CouplingGraphPartition & partition,
+    const ObjectiveDomain & objective_domain,
+    const TrustRegionStateSet & trust_region_state,
+    const FitState & base_state,
+    BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
+    PerformanceCounters & performance_counters);
 
 } // namespace rhbm_gem::core::detail

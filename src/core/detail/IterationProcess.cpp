@@ -1165,8 +1165,9 @@ static void LogAcceptedBacktrackingDiagnostics(
         if (!diagnostic.joint_correction_status.has_value()) continue;
         std::ostringstream correction_message;
         correction_message << std::scientific << std::setprecision(2)
-            << "Boundary-interface joint correction: interface/closure/parameters = "
+            << "Boundary-interface joint correction: direct-interface/shape-active/closure/parameters = "
             << diagnostic.interface_atom_count << "/"
+            << diagnostic.shape_active_atom_count << "/"
             << diagnostic.offset_closure_atom_count << "/"
             << diagnostic.joint_parameter_count
             << ", status="
@@ -1220,7 +1221,9 @@ static void LogAcceptedBacktrackingDiagnostics(
         {
             correction_outcome = "fallback-endpoint";
         }
-        correction_message << ", accepted=" << (correction_accepted ? "yes" : "no")
+        correction_message << ", suspicious="
+            << diagnostic.suspicious_candidate_atom_count
+            << ", accepted=" << (correction_accepted ? "yes" : "no")
             << ", outcome=" << correction_outcome << ".";
         Logger::Log(LogLevel::Debug, correction_message.str());
     }
@@ -1936,6 +1939,7 @@ static IterationResult RunIteration(
     };
     const CandidateSelectionInputs candidate_inputs{
         .context = context,
+        .options = options,
         .residual_baseline = residual_baseline,
         .partition = graph_partition,
         .health_by_key = raw_iteration_result.health_by_key,
@@ -2155,6 +2159,163 @@ void ApplyFitState(
     }
 }
 
+static void LogFinalDependencyPolish(
+    bool quiet_mode,
+    const FinalDependencyPolishResult & polish_result)
+{
+    if (quiet_mode) return;
+    Logger::FinishProgressLine();
+    const auto & diagnostic{ polish_result.diagnostic };
+    std::ostringstream message;
+    message << std::scientific << std::setprecision(2)
+        << "Final dependency polish: components/attempted/accepted/fallback="
+        << diagnostic.component_count << "/"
+        << diagnostic.attempted_component_count << "/"
+        << diagnostic.accepted_component_count << "/"
+        << diagnostic.fallback_component_count
+        << ", atoms/parameters/rounds="
+        << diagnostic.atom_count << "/"
+        << diagnostic.parameter_count << "/"
+        << diagnostic.round_count
+        << ", objective before/after=";
+    if (diagnostic.objective_before.has_value())
+    {
+        message << *diagnostic.objective_before;
+    }
+    else
+    {
+        message << "-";
+    }
+    message << "/";
+    if (diagnostic.objective_after.has_value())
+    {
+        message << *diagnostic.objective_after;
+    }
+    else
+    {
+        message << "-";
+    }
+    message << ", accepted=" << (polish_result.accepted ? "yes" : "no")
+        << ", elapsed_ms=" << std::fixed << std::setprecision(3)
+        << diagnostic.elapsed_milliseconds << ".";
+    Logger::Log(LogLevel::Info, message.str());
+
+    if (Logger::GetLogLevel() < LogLevel::Debug) return;
+    for (std::size_t position = 0;
+        position < diagnostic.component_list.size();
+        position++)
+    {
+        const auto & component{ diagnostic.component_list.at(position) };
+        std::ostringstream component_message;
+        component_message << std::scientific << std::setprecision(2)
+            << "Final dependency polish component " << position + 1
+            << ": clusters/atoms/parameters/rounds="
+            << component.key_list.size() << "/"
+            << component.atom_count << "/"
+            << component.parameter_count << "/"
+            << component.round_count
+            << ", suspicious/symbolic="
+            << component.suspicious_candidate_atom_count << "/"
+            << component.symbolic_analysis_count
+            << ", objective before/after=";
+        if (component.objective_before.has_value())
+        {
+            component_message << *component.objective_before;
+        }
+        else
+        {
+            component_message << "-";
+        }
+        component_message << "/";
+        if (component.objective_after.has_value())
+        {
+            component_message << *component.objective_after;
+        }
+        else
+        {
+            component_message << "-";
+        }
+        component_message
+            << ", accepted/fallback="
+            << (component.accepted ? "yes" : "no") << "/"
+            << (component.fallback ? "yes" : "no")
+            << ", elapsed_ms=" << std::fixed << std::setprecision(3)
+            << component.elapsed_milliseconds << ".";
+        Logger::Log(LogLevel::Debug, component_message.str());
+    }
+}
+
+static void FinalizeSecondStageState(
+    ModelObject & model_object,
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const GraphTopology & graph_topology,
+    IterationState & iteration_state,
+    bool use_best_audit_state,
+    PerformanceCounters & performance_counters)
+{
+    const auto & base_state{
+        use_best_audit_state && iteration_state.best_audit_state.has_value() ?
+            iteration_state.best_audit_state->state :
+            iteration_state.previous_state
+    };
+    auto polish_result{
+        RunFinalDependencyPolish(
+            context,
+            options,
+            graph_topology,
+            iteration_state.graph_partition,
+            iteration_state.objective_domain,
+            iteration_state.trust_region_state,
+            base_state,
+            iteration_state.boundary_joint_correction_workspace_by_key,
+            performance_counters)
+    };
+    LogFinalDependencyPolish(options.quiet_mode, polish_result);
+    if (polish_result.accepted && polish_result.objective.has_value())
+    {
+        if (use_best_audit_state &&
+            iteration_state.best_audit_state.has_value())
+        {
+            iteration_state.best_audit_state->state = polish_result.state;
+            iteration_state.best_audit_state->objective = *polish_result.objective;
+            iteration_state.best_audit_state->uses_polish = true;
+        }
+        else
+        {
+            const auto previous_state{ iteration_state.previous_state };
+            iteration_state.previous_state = polish_result.state;
+            if (iteration_state.previous_polish_provenance.size() != context.size())
+            {
+                iteration_state.previous_polish_provenance.resize(context.size(), 0);
+            }
+            for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+            {
+                if (IsTransformedChangeMaterial(
+                        CalculateTransformedChange(
+                            iteration_state.previous_state.at(atom_index).mdpde.GetModel(),
+                            previous_state.at(atom_index).mdpde.GetModel()),
+                        kTransformedChangeTolerance))
+                {
+                    iteration_state.previous_polish_provenance.at(atom_index) = 1;
+                }
+            }
+            TryUpdateBestAuditState(
+                iteration_state.previous_state,
+                true,
+                iteration_state.accepted_iteration_count,
+                *polish_result.objective,
+                iteration_state.best_audit_state);
+        }
+    }
+    const auto & final_state{
+        use_best_audit_state && iteration_state.best_audit_state.has_value() ?
+            iteration_state.best_audit_state->state :
+            iteration_state.previous_state
+    };
+    ApplyFitState(model_object, context, final_state);
+}
+
 void AppendOffsetSummary(std::ostringstream & stream, const FitState & state)
 {
     std::size_t finite_count{ 0 };
@@ -2326,6 +2487,12 @@ void LogSecondStageSummary(
 
 static bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
+    if (options.enable_second_stage_dependency_polish &&
+        options.second_stage_dependency_polish_max_iterations == 0)
+    {
+        throw std::invalid_argument(
+            "Second-stage dependency polish maximum iterations must be positive when enabled.");
+    }
     auto context{ BuildSecondStageContext(model_object, options) };
     StoreSecondStageNeighborCounts(model_object, context);
     if (!options.quiet_mode)
@@ -2393,7 +2560,14 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
     {
         if (iteration_state.active_index_list.empty())
         {
-            ApplyFitState(model_object, context, iteration_state.previous_state);
+            FinalizeSecondStageState(
+                model_object,
+                context,
+                options,
+                graph_topology,
+                iteration_state,
+                false,
+                performance_counters);
             if (iteration_state.terminal_failure_state.HasFailures())
             {
                 LogTerminalFallback(options.quiet_mode, iteration_state);
@@ -2464,7 +2638,14 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 
         if (iteration_result.converged)
         {
-            ApplyFitState(model_object, context, iteration_state.previous_state);
+            FinalizeSecondStageState(
+                model_object,
+                context,
+                options,
+                graph_topology,
+                iteration_state,
+                false,
+                performance_counters);
             if (iteration_state.terminal_failure_state.HasFailures())
             {
                 LogTerminalFallback(options.quiet_mode, iteration_state);
@@ -2497,10 +2678,14 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         const auto * audit_state{
             iteration_state.best_audit_state.has_value() ? &*iteration_state.best_audit_state : nullptr
         };
-        const auto & final_state{
-            audit_state != nullptr ? audit_state->state : iteration_state.previous_state
-        };
-        ApplyFitState(model_object, context, final_state);
+        FinalizeSecondStageState(
+            model_object,
+            context,
+            options,
+            graph_topology,
+            iteration_state,
+            audit_state != nullptr,
+            performance_counters);
         if (maximum_iterations_reached)
         {
             LogMaximumIterations(options.quiet_mode, iteration_state);

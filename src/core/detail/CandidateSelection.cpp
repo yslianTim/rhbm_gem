@@ -249,11 +249,22 @@ PerformanceCounters::~PerformanceCounters()
         << m_boundary_rescue_hard_failure_exclusion_count << "/"
         << m_boundary_rescue_invalid_proposal_exclusion_count << "/"
         << m_boundary_rescue_objective_unavailable_exclusion_count
+        << ", dependency_polish_components/attempted/accepted/fallback="
+        << m_dependency_polish_component_count << "/"
+        << m_dependency_polish_attempt_count << "/"
+        << m_dependency_polish_accepted_count << "/"
+        << m_dependency_polish_fallback_count
+        << ", dependency_polish_atoms/parameters/rounds="
+        << m_dependency_polish_atom_count << "/"
+        << m_dependency_polish_parameter_count << "/"
+        << m_dependency_polish_round_count
         << ", boundary_reconciliation_ms="
         << std::fixed << std::setprecision(3)
         << m_boundary_reconciliation_milliseconds
         << ", boundary_joint_correction_ms="
         << m_boundary_joint_correction_milliseconds
+        << ", dependency_polish_ms="
+        << m_dependency_polish_milliseconds
         << ", iteration/candidate/topology/total_ms="
         << std::fixed << std::setprecision(3)
         << m_iteration_phase_milliseconds << "/"
@@ -373,6 +384,26 @@ void PerformanceCounters::RecordBoundaryRescueExclusions(
     m_boundary_rescue_hard_failure_exclusion_count += hard_failure_count;
     m_boundary_rescue_invalid_proposal_exclusion_count += invalid_proposal_count;
     m_boundary_rescue_objective_unavailable_exclusion_count += objective_unavailable_count;
+}
+
+void PerformanceCounters::RecordDependencyPolish(
+    std::size_t component_count,
+    std::size_t attempt_count,
+    std::size_t accepted_count,
+    std::size_t fallback_count,
+    std::size_t atom_count,
+    std::size_t parameter_count,
+    std::size_t round_count,
+    double elapsed_milliseconds)
+{
+    m_dependency_polish_component_count += component_count;
+    m_dependency_polish_attempt_count += attempt_count;
+    m_dependency_polish_accepted_count += accepted_count;
+    m_dependency_polish_fallback_count += fallback_count;
+    m_dependency_polish_atom_count += atom_count;
+    m_dependency_polish_parameter_count += parameter_count;
+    m_dependency_polish_round_count += round_count;
+    m_dependency_polish_milliseconds += elapsed_milliseconds;
 }
 
 double PerformanceCounters::CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time)
@@ -2707,7 +2738,7 @@ static bool IsBoundaryJointCorrectionEligible(
     const ObjectiveBreakdown * previous_audit_objective)
 {
     if (previous_audit_objective == nullptr ||
-        component.interface_atom_index_list.empty() ||
+        component.shape_active_atom_index_list.empty() ||
         component.offset_closure_atom_index_list.empty() ||
         HasSuspiciousAtom(
             FlattenClusterKeyList(component.key_list),
@@ -2721,6 +2752,65 @@ static bool IsBoundaryJointCorrectionEligible(
         {
             return inputs.health_by_key.at(key).IsBoundaryCorrectionEligible();
         });
+}
+
+static std::size_t CountSuspiciousPolishAtoms(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const std::vector<std::size_t> & atom_index_list,
+    const FitStateView & endpoint_state,
+    const FitStateView & candidate_state)
+{
+    const auto endpoint_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(endpoint_state))
+    };
+    const auto candidate_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(candidate_state))
+    };
+    std::size_t suspicious_atom_count{ 0 };
+    for (const auto atom_index : atom_index_list)
+    {
+        const auto change{
+            CalculateTransformedChange(
+                candidate_state.GetModel(atom_index),
+                endpoint_state.GetModel(atom_index))
+        };
+        if (!IsTransformedChangeMaterial(change, kTransformedChangeTolerance))
+        {
+            continue;
+        }
+        const auto endpoint_samples{
+            BuildSecondStageAdjustedSamples(
+                context.at(atom_index),
+                endpoint_snapshot)
+        };
+        const auto candidate_samples{
+            BuildSecondStageAdjustedSamples(
+                context.at(atom_index),
+                candidate_snapshot)
+        };
+        const auto baseline{
+            BuildPreviousSuspiciousProfileBaseline(
+                endpoint_samples,
+                endpoint_state.GetModel(atom_index),
+                options)
+        };
+        if (EvaluateSuspiciousGaussianUpdate(
+                candidate_samples,
+                candidate_state.GetModel(atom_index),
+                options,
+                baseline,
+                SuspiciousUpdateMode::PostRefit) !=
+            SuspiciousGaussianReason::None)
+        {
+            suspicious_atom_count++;
+        }
+    }
+    return suspicious_atom_count;
 }
 
 static bool TryBoundaryJointCorrection(
@@ -2748,7 +2838,7 @@ static bool TryBoundaryJointCorrection(
     }
     const BoundaryJointCorrectionWorkspaceKey workspace_key{
         component.key_list,
-        component.interface_atom_index_list,
+        component.shape_active_atom_index_list,
         component.offset_closure_atom_index_list,
         component.affected_sample_ref_list
     };
@@ -2769,7 +2859,7 @@ static bool TryBoundaryJointCorrection(
             inputs.context,
             inputs.previous_state,
             endpoint_state_view,
-            component.interface_atom_index_list,
+            component.shape_active_atom_index_list,
             component.offset_closure_atom_index_list,
             component.affected_sample_ref_list,
             inputs.ridge_multiplier_list,
@@ -2802,6 +2892,18 @@ static bool TryBoundaryJointCorrection(
         inputs.previous_state,
         corrected_component_patch
     };
+    diagnostic.suspicious_candidate_atom_count =
+        CountSuspiciousPolishAtoms(
+            inputs.context,
+            inputs.options,
+            component.offset_closure_atom_index_list,
+            endpoint_state_view,
+            corrected_state_view);
+    if (diagnostic.suspicious_candidate_atom_count != 0)
+    {
+        record_performance(false);
+        return false;
+    }
     const CandidateEvaluationOverlay corrected_overlay{
         inputs.context,
         inputs.residual_baseline,
@@ -2875,6 +2977,7 @@ static void ReconcileBoundaryComponent(
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
     diagnostic.boundary_sample_count = component.boundary_sample_count;
     diagnostic.interface_atom_count = component.interface_atom_index_list.size();
+    diagnostic.shape_active_atom_count = component.shape_active_atom_index_list.size();
     diagnostic.offset_closure_atom_count = component.offset_closure_atom_index_list.size();
     if (previous_audit_objective != nullptr)
     {
@@ -3110,6 +3213,7 @@ static bool TryRescueBoundaryComponent(
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
     diagnostic.boundary_sample_count = component.boundary_sample_count;
     diagnostic.interface_atom_count = component.interface_atom_index_list.size();
+    diagnostic.shape_active_atom_count = component.shape_active_atom_index_list.size();
     diagnostic.offset_closure_atom_count = component.offset_closure_atom_index_list.size();
     diagnostic.accepted_cluster_count = component.key_list.size() - rescue_key_list.size();
     diagnostic.rescue_candidate_cluster_count = rescue_key_list.size();
@@ -3250,6 +3354,27 @@ static bool TryRescueBoundaryComponent(
     return selection.boundary_reconciliation_diagnostic_list.back().accepted;
 }
 
+static std::vector<BoundaryReconciliationComponent>
+BuildExpandedBoundaryReconciliationComponents(
+    const CandidateSelectionInputs & inputs,
+    const std::vector<ClusterKey> & key_list)
+{
+    auto component_list{
+        BuildBoundaryReconciliationComponents(
+            inputs.context,
+            inputs.partition,
+            key_list)
+    };
+    for (auto & component : component_list)
+    {
+        component = ExpandBoundaryReconciliationHalo(
+            inputs.context,
+            std::move(component),
+            inputs.options.second_stage_boundary_halo_depth);
+    }
+    return component_list;
+}
+
 static bool RescueRejectedBoundaryClusters(
     const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown & previous_audit_objective,
@@ -3281,9 +3406,8 @@ static bool RescueRejectedBoundaryClusters(
         eligible_key_list.end());
 
     bool rescued_any{ false };
-    for (const auto & component : BuildBoundaryReconciliationComponents(
-        inputs.context,
-        inputs.partition,
+    for (const auto & component : BuildExpandedBoundaryReconciliationComponents(
+        inputs,
         eligible_key_list))
     {
         rescued_any = TryRescueBoundaryComponent(
@@ -3344,9 +3468,8 @@ static std::vector<CandidateReconciliationUnit> BuildCandidateReconciliationUnit
 {
     std::vector<CandidateReconciliationUnit> unit_list;
     const auto boundary_component_list{
-        BuildBoundaryReconciliationComponents(
-            inputs.context,
-            inputs.partition,
+        BuildExpandedBoundaryReconciliationComponents(
+            inputs,
             selection.accepted_key_list)
     };
     for (const auto & component : boundary_component_list)
@@ -3509,9 +3632,8 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     inputs.performance_counters.RecordFullStateMaterialization();
 
     const auto boundary_component_list{
-        BuildBoundaryReconciliationComponents(
-            inputs.context,
-            inputs.partition,
+        BuildExpandedBoundaryReconciliationComponents(
+            inputs,
             selection.accepted_key_list)
     };
     if (!boundary_component_list.empty())
@@ -3613,6 +3735,409 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
         individual_selection.polish_progress_by_key,
         selection.accepted_key_list);
     return selection;
+}
+
+FinalDependencyPolishResult RunFinalDependencyPolish(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const GraphTopology & topology,
+    const CouplingGraphPartition & partition,
+    const ObjectiveDomain & objective_domain,
+    const TrustRegionStateSet & trust_region_state,
+    const FitState & base_state,
+    BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
+    PerformanceCounters & performance_counters)
+{
+    FinalDependencyPolishResult result{ .state = base_state };
+    if (!options.enable_second_stage_dependency_polish) return result;
+
+    const auto polish_start{ std::chrono::steady_clock::now() };
+    const auto component_list{
+        BuildUncutDependencyPolishComponents(
+            topology,
+            partition,
+            objective_domain.owner_key_by_atom_index)
+    };
+    result.diagnostic.component_count = component_list.size();
+    result.diagnostic.component_list.reserve(component_list.size());
+    for (const auto & component : component_list)
+    {
+        std::set<std::size_t> group_id_set;
+        for (const auto atom_index : component.atom_index_list)
+        {
+            group_id_set.emplace(context.at(atom_index).group_id);
+        }
+        result.diagnostic.atom_count += component.atom_index_list.size();
+        result.diagnostic.parameter_count +=
+            2 * component.atom_index_list.size() + group_id_set.size();
+        result.diagnostic.component_list.emplace_back(
+            FinalDependencyPolishDiagnostic::Component{
+                .key_list = component.key_list,
+                .atom_count = component.atom_index_list.size(),
+                .parameter_count =
+                    2 * component.atom_index_list.size() + group_id_set.size()
+            });
+    }
+
+    const auto base_baseline{ BuildResidualBaseline(context, base_state) };
+    performance_counters.RecordGaussianCacheMisses();
+    const auto base_objective{
+        EvaluateAuditObjective(objective_domain, base_baseline)
+    };
+    if (base_objective.has_value())
+    {
+        result.objective = base_objective;
+        result.diagnostic.objective_before = base_objective->GetTotalObjective();
+        result.diagnostic.objective_after = base_objective->GetTotalObjective();
+    }
+
+    struct AcceptedComponentPatch
+    {
+        std::size_t component_position{ 0 };
+        FitStatePatch patch{};
+    };
+    std::vector<AcceptedComponentPatch> accepted_patch_list;
+    std::vector<double> ridge_multiplier_list(context.size(), 1.0);
+
+    if (base_objective.has_value())
+    {
+        for (std::size_t component_position = 0;
+            component_position < component_list.size();
+            component_position++)
+        {
+            const auto component_start{ std::chrono::steady_clock::now() };
+            const auto & component{ component_list.at(component_position) };
+            auto & diagnostic{
+                result.diagnostic.component_list.at(component_position)
+            };
+            diagnostic.objective_before = base_objective->GetTotalObjective();
+            result.diagnostic.attempted_component_count++;
+
+            try
+            {
+                FitStatePatch endpoint_patch{
+                    FitStatePatch::FromState(base_state, component.atom_index_list)
+                };
+                bool accepted_round{ false };
+                for (std::size_t round = 0;
+                    round < options.second_stage_dependency_polish_max_iterations;
+                    round++)
+                {
+                    result.diagnostic.round_count++;
+                    diagnostic.round_count++;
+                    const FitStateView endpoint_state_view{
+                        base_state,
+                        endpoint_patch
+                    };
+                    std::vector<BoundaryJointTrustRegion> trust_region_list;
+                    trust_region_list.reserve(component.key_list.size());
+                    for (const auto & key : component.key_list)
+                    {
+                        trust_region_list.emplace_back(BoundaryJointTrustRegion{
+                            key,
+                            trust_region_state.GetRadius(key)
+                        });
+                    }
+                    const BoundaryJointCorrectionWorkspaceKey workspace_key{
+                        component.key_list,
+                        component.atom_index_list,
+                        component.atom_index_list,
+                        component.affected_sample_ref_list,
+                    };
+                    auto & solver{
+                        workspace_by_key.try_emplace(workspace_key).first->second
+                    };
+                    const auto symbolic_analysis_count_before{
+                        solver.GetSymbolicAnalysisCount()
+                    };
+                    const auto correction_result{
+                        BuildBoundaryJointCorrection(
+                            context,
+                            base_state,
+                            endpoint_state_view,
+                            component.atom_index_list,
+                            component.atom_index_list,
+                            component.affected_sample_ref_list,
+                            ridge_multiplier_list,
+                            trust_region_list,
+                            solver)
+                    };
+                    diagnostic.symbolic_analysis_count +=
+                        solver.GetSymbolicAnalysisCount() -
+                        symbolic_analysis_count_before;
+                    if (correction_result.status !=
+                            BoundaryJointCorrectionStatus::CandidateReady ||
+                        !correction_result.patch.has_value())
+                    {
+                        break;
+                    }
+                    diagnostic.parameter_count = correction_result.parameter_count;
+                    const FitStateView candidate_state_view{
+                        base_state,
+                        *correction_result.patch
+                    };
+                    const auto has_invalid_model{
+                        std::ranges::any_of(
+                            component.atom_index_list,
+                            [&](const auto atom_index)
+                            {
+                                return !IsValidSecondStageGaussianModel(
+                                    candidate_state_view.GetModel(atom_index));
+                            })
+                    };
+                    if (has_invalid_model) break;
+
+                    const auto suspicious_atom_count{
+                        CountSuspiciousPolishAtoms(
+                            context,
+                            options,
+                            component.atom_index_list,
+                            endpoint_state_view,
+                            candidate_state_view)
+                    };
+                    diagnostic.suspicious_candidate_atom_count +=
+                        suspicious_atom_count;
+                    result.diagnostic.suspicious_candidate_atom_count +=
+                        suspicious_atom_count;
+                    if (suspicious_atom_count != 0) break;
+
+                    const CandidateEvaluationOverlay endpoint_overlay{
+                        context,
+                        base_baseline,
+                        endpoint_state_view
+                    };
+                    const CandidateEvaluationOverlay candidate_overlay{
+                        context,
+                        base_baseline,
+                        candidate_state_view
+                    };
+                    const auto endpoint_objective{
+                        EvaluateObjectiveDelta(
+                            endpoint_overlay,
+                            component.affected_sample_ref_list,
+                            objective_domain,
+                            *base_objective,
+                            performance_counters)
+                    };
+                    const auto candidate_objective{
+                        EvaluateObjectiveDelta(
+                            candidate_overlay,
+                            component.affected_sample_ref_list,
+                            objective_domain,
+                            *base_objective,
+                            performance_counters)
+                    };
+                    if (!endpoint_objective.has_value() ||
+                        !candidate_objective.has_value() ||
+                        !IsBetterAuditObjective(
+                            candidate_objective->GetTotalObjective(),
+                            endpoint_objective->GetTotalObjective(),
+                            kObjectiveStrictTolerance))
+                    {
+                        break;
+                    }
+
+                    const auto member_guard_passed{
+                        std::ranges::all_of(
+                            component.key_list,
+                            [&](const auto & key)
+                            {
+                                const auto sample_iter{
+                                    partition.sample_id_list_by_key.find(key)
+                                };
+                                if (sample_iter ==
+                                    partition.sample_id_list_by_key.end())
+                                {
+                                    return false;
+                                }
+                                auto owned_sample_ref_list{ sample_iter->second };
+                                owned_sample_ref_list.erase(
+                                    std::remove_if(
+                                        owned_sample_ref_list.begin(),
+                                        owned_sample_ref_list.end(),
+                                        [&](const auto & sample_ref)
+                                        {
+                                            return sample_ref.atom_index >=
+                                                    objective_domain.owner_key_by_atom_index.size() ||
+                                                objective_domain.owner_key_by_atom_index.at(
+                                                    sample_ref.atom_index).empty();
+                                        }),
+                                    owned_sample_ref_list.end());
+                                const auto base_contribution{
+                                    EvaluateObjectiveContribution(
+                                        base_baseline,
+                                        key,
+                                        owned_sample_ref_list,
+                                        objective_domain)
+                                };
+                                const auto candidate_contribution{
+                                    EvaluateObjectiveContribution(
+                                        candidate_overlay,
+                                        key,
+                                        owned_sample_ref_list,
+                                        objective_domain)
+                                };
+                                return base_contribution.has_value() &&
+                                    candidate_contribution.has_value() &&
+                                    !IsObjectiveDeteriorated(
+                                        candidate_contribution->GetTotalObjective(),
+                                        base_contribution->GetTotalObjective(),
+                                        kObjectiveProgressTolerance);
+                            })
+                    };
+                    if (!member_guard_passed) break;
+
+                    endpoint_patch = *correction_result.patch;
+                    diagnostic.objective_after =
+                        candidate_objective->GetTotalObjective();
+                    accepted_round = true;
+                }
+
+                if (accepted_round && diagnostic.objective_after.has_value() &&
+                    IsBetterAuditObjective(
+                        *diagnostic.objective_after,
+                        *diagnostic.objective_before,
+                        kObjectiveStrictTolerance))
+                {
+                    diagnostic.accepted = true;
+                    diagnostic.fallback = false;
+                    accepted_patch_list.emplace_back(AcceptedComponentPatch{
+                        component_position,
+                        std::move(endpoint_patch)
+                    });
+                }
+            }
+            catch (const std::exception &)
+            {
+                diagnostic.accepted = false;
+                diagnostic.fallback = true;
+            }
+            diagnostic.elapsed_milliseconds =
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - component_start).count();
+        }
+    }
+
+    const auto build_assembled_state = [&]()
+    {
+        auto state{ base_state };
+        for (const auto & accepted_patch : accepted_patch_list)
+        {
+            accepted_patch.patch.ApplyTo(state);
+        }
+        return state;
+    };
+    const auto evaluate_global_audit = [&](const FitState & state)
+    {
+        performance_counters.RecordFullStateMaterialization();
+        const auto snapshot{ BuildSecondStageModelSnapshot(context, state) };
+        const SnapshotResidualEvaluator evaluator{ context, snapshot };
+        return EvaluateAuditObjective(objective_domain, evaluator);
+    };
+
+    auto assembled_state{ build_assembled_state() };
+    auto assembled_objective{
+        accepted_patch_list.empty() ?
+            base_objective : evaluate_global_audit(assembled_state)
+    };
+    while (base_objective.has_value() &&
+        !accepted_patch_list.empty() &&
+        (!assembled_objective.has_value() ||
+            !IsBetterAuditObjective(
+                assembled_objective->GetTotalObjective(),
+                base_objective->GetTotalObjective(),
+                kObjectiveStrictTolerance)))
+    {
+        std::optional<std::size_t> removal_position;
+        std::optional<ObjectiveBreakdown> best_removal_objective;
+        FitState best_removal_state;
+        for (std::size_t candidate_position = 0;
+            candidate_position < accepted_patch_list.size();
+            candidate_position++)
+        {
+            auto candidate_state{ base_state };
+            for (std::size_t patch_position = 0;
+                patch_position < accepted_patch_list.size();
+                patch_position++)
+            {
+                if (patch_position == candidate_position) continue;
+                accepted_patch_list.at(patch_position).patch.ApplyTo(candidate_state);
+            }
+            const auto candidate_objective{
+                evaluate_global_audit(candidate_state)
+            };
+            if (!candidate_objective.has_value() ||
+                (assembled_objective.has_value() &&
+                    candidate_objective->GetTotalObjective() >=
+                        assembled_objective->GetTotalObjective()))
+            {
+                continue;
+            }
+            if (!best_removal_objective.has_value() ||
+                candidate_objective->GetTotalObjective() <
+                    best_removal_objective->GetTotalObjective())
+            {
+                removal_position = candidate_position;
+                best_removal_objective = candidate_objective;
+                best_removal_state = std::move(candidate_state);
+            }
+        }
+        if (!removal_position.has_value()) break;
+        auto & removed_diagnostic{
+            result.diagnostic.component_list.at(
+                accepted_patch_list.at(*removal_position).component_position)
+        };
+        removed_diagnostic.accepted = false;
+        removed_diagnostic.fallback = true;
+        accepted_patch_list.erase(
+            accepted_patch_list.begin() +
+            static_cast<std::ptrdiff_t>(*removal_position));
+        assembled_state = std::move(best_removal_state);
+        assembled_objective = best_removal_objective;
+    }
+
+    if (base_objective.has_value() &&
+        assembled_objective.has_value() &&
+        !accepted_patch_list.empty() &&
+        IsBetterAuditObjective(
+            assembled_objective->GetTotalObjective(),
+            base_objective->GetTotalObjective(),
+            kObjectiveStrictTolerance))
+    {
+        result.state = std::move(assembled_state);
+        result.objective = assembled_objective;
+        result.accepted = true;
+        result.diagnostic.objective_after =
+            assembled_objective->GetTotalObjective();
+    }
+    else
+    {
+        for (auto & diagnostic : result.diagnostic.component_list)
+        {
+            diagnostic.accepted = false;
+            diagnostic.fallback = true;
+        }
+    }
+    result.diagnostic.accepted_component_count =
+        static_cast<std::size_t>(std::ranges::count_if(
+            result.diagnostic.component_list,
+            [](const auto & diagnostic) { return diagnostic.accepted; }));
+    result.diagnostic.fallback_component_count =
+        result.diagnostic.component_count -
+        result.diagnostic.accepted_component_count;
+    result.diagnostic.elapsed_milliseconds =
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - polish_start).count();
+    performance_counters.RecordDependencyPolish(
+        result.diagnostic.component_count,
+        result.diagnostic.attempted_component_count,
+        result.diagnostic.accepted_component_count,
+        result.diagnostic.fallback_component_count,
+        result.diagnostic.atom_count,
+        result.diagnostic.parameter_count,
+        result.diagnostic.round_count,
+        result.diagnostic.elapsed_milliseconds);
+    return result;
 }
 
 } // namespace rhbm_gem::core::detail
