@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/JointFitting.hpp"
+#include "core/detail/CandidateSelection.hpp"
 
 #include <cstddef>
 #include <map>
@@ -56,27 +56,58 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
+constexpr std::size_t kPersistentQuarantineFailureIterationLimit{ 5 };
+constexpr std::size_t kQuarantineProbationCooldown{ 2 };
+constexpr std::size_t kQuarantineMaximumProbationCount{ 3 };
 
-using PersistentSuspiciousRollbackReason = std::vector<std::size_t>;
-using PersistentTerminalFailureReason =
-    std::variant<PersistentSuspiciousRollbackReason, JointOffsetSolveStatus>;
-
-struct PersistentTerminalFailureState
+enum class QuarantineTargetKind
 {
-    PersistentTerminalFailureReason reason{};
-    std::size_t stable_iteration_count{ 0 };
+    ShapeAtom,
+    OffsetGroup,
+    HardFailureCluster
 };
 
-using PersistentTerminalFailureStateMap = std::map<ClusterKey, PersistentTerminalFailureState>;
-using TerminalPersistentFailureMap = std::map<ClusterKey, PersistentTerminalFailureReason>;
+struct QuarantineTarget
+{
+    QuarantineTargetKind kind{ QuarantineTargetKind::ShapeAtom };
+    std::vector<std::size_t> atom_index_list{};
 
-TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
-    const std::vector<ClusterKey> & accepted_key_list,
-    const std::vector<char> & suspicious_atom_mask,
-    const ClusterHealthMap & health_by_key,
-    const FitState & assembled_state,
-    const FitState & previous_state,
-    PersistentTerminalFailureStateMap & state_by_key);
+    friend auto operator<=>(const QuarantineTarget &, const QuarantineTarget &) = default;
+};
+
+using QuarantineFailureReason =
+    std::variant<SuspiciousGaussianReason, JointOffsetSolveStatus>;
+
+struct QuarantineFailureObservation
+{
+    QuarantineTarget target{};
+    QuarantineFailureReason reason{};
+};
+
+struct QuarantineFailureState
+{
+    QuarantineFailureReason reason{};
+    std::size_t stable_iteration_count{ 0 };
+    std::size_t probation_count{ 0 };
+    std::size_t next_probation_iteration{ 0 };
+    bool quarantined{ false };
+    bool probation_active{ false };
+    bool probation_exhausted{ false };
+};
+
+using QuarantineFailureStateMap = std::map<QuarantineTarget, QuarantineFailureState>;
+
+struct QuarantineStateTransition
+{
+    std::vector<QuarantineTarget> entered_target_list{};
+    std::vector<QuarantineTarget> released_target_list{};
+    std::vector<QuarantineTarget> failed_probation_target_list{};
+};
+
+QuarantineStateTransition UpdateQuarantineFailureState(
+    const std::vector<QuarantineFailureObservation> & observation_list,
+    const std::vector<QuarantineTarget> & successful_probation_target_list,
+    std::size_t accepted_iteration_count,
+    QuarantineFailureStateMap & state_by_target);
 
 } // namespace rhbm_gem::core::detail

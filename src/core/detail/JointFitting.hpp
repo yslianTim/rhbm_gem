@@ -77,6 +77,7 @@ struct BoundaryJointCorrectionWorkspaceKey
 {
     std::vector<ClusterKey> member_key_list{};
     std::vector<std::size_t> shape_active_atom_index_list{};
+    std::vector<std::size_t> offset_active_atom_index_list{};
     std::vector<std::size_t> offset_closure_atom_index_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
 
@@ -102,6 +103,7 @@ struct ClusterHealth
 
     JointOffsetSolveStatus joint_offset_status;
     bool is_refit_stationarity_eligible{ true };
+    bool is_active_block_stationarity_eligible{ true };
     bool is_boundary_correction_eligible{ true };
 
     bool IsStationarityEligible() const
@@ -162,8 +164,11 @@ struct JointPolishParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
     std::vector<std::size_t> shape_position_by_atom{};
+    std::vector<std::size_t> offset_position_by_group{};
     std::vector<Eigen::Vector2d> base_shape_coordinate_by_atom{};
+    std::vector<double> base_offset_by_group{};
     std::size_t shape_atom_count{ 0 };
+    std::size_t offset_group_count{ 0 };
     Eigen::VectorXd seed_parameter{};
 
 private:
@@ -186,7 +191,13 @@ public:
     {
         return static_cast<Eigen::Index>(
             shape_atom_count * kJointPolishShapeParameterSize +
-            group_position_by_atom.at(atom_position));
+            offset_position_by_group.at(group_position_by_atom.at(atom_position)));
+    }
+
+    bool HasOffsetColumn(std::size_t atom_position) const
+    {
+        return offset_position_by_group.at(group_position_by_atom.at(atom_position)) <
+            offset_group_count;
     }
 
     std::optional<std::vector<GaussianModel3D>> DecodeModels(
@@ -203,7 +214,8 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
 std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list,
-    const std::vector<char> & shape_active_mask);
+    const std::vector<char> & shape_active_mask,
+    const std::vector<char> & offset_active_mask);
 
 std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const SecondStageContext & context,
@@ -255,6 +267,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const FitState & previous_state,
     const FitStateView & endpoint_state,
     const std::vector<std::size_t> & shape_active_atom_index_list,
+    const std::vector<std::size_t> & offset_active_atom_index_list,
     const std::vector<std::size_t> & offset_closure_atom_index_list,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,

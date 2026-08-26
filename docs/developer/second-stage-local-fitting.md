@@ -9,7 +9,7 @@ and unselected model atoms while updating each selected atom's amplitude,
 width, and offset. Unselected atoms contribute background responses but are
 never added to the optimizer state.
 
-The stage keeps candidate states in memory and writes one validated terminal
+The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the
 stored atom estimates.
 
@@ -18,7 +18,7 @@ shape expansion and defaults to one physical-dependency hop. A value of zero
 keeps the direct-interface behavior. Final uncut-component polish is enabled by
 `FitOptions::enable_second_stage_dependency_polish`; its nonlinear round limit
 is `FitOptions::second_stage_dependency_polish_max_iterations`, which defaults
-to three. An enabled polish with a zero round limit is rejected before any model
+to ten. An enabled polish with a zero round limit is rejected before any model
 write. These settings intentionally have no command-line flags.
 
 ## Model context and initialization
@@ -79,9 +79,9 @@ After accepted iterations, the stage adaptively rebuilds the topology from the
 latest validated atom models when either the maximum transformed-coordinate
 drift from the last topology reference state reaches `0.10`, or three accepted
 iterations have elapsed since the last rebuild. Rejected attempts and
-trust-radius retries do not advance this interval. An iteration that already
-changes the objective domain through terminal isolation skips the adaptive
-rebuild without clearing the accumulated drift or interval.
+trust-radius retries do not advance this interval. Quarantined parameter blocks
+remain in the graph and objective domain, so quarantine does not itself rebuild
+or renormalize either one.
 
 Adaptive rebuilds use edge hysteresis. A previously absent edge must have
 weight at least `0.06` to enter the graph, while an edge present in the previous
@@ -94,23 +94,34 @@ invalid Jacobian.
 
 Each outer attempt performs the following sequence:
 
-1. Build the active atom list by excluding terminal-fallback atoms.
-2. Partition the active coupling topology and reconcile the per-cluster
+1. Build the stage-local activity masks for shape blocks, shared-offset groups,
+   and hard-failure clusters. Quarantined blocks remain in the atom list as
+   fixed background.
+2. Partition the complete selected-atom coupling topology and reconcile the per-cluster
    objective and trust-region states.
 3. Jointly estimate one shared offset per represented group within each cluster
-   using robust IRLS and the fixed `kJointOffsetRidgeRatio`.
+   using robust IRLS and the fixed `kJointOffsetRidgeRatio`. Guard-aware damping
+   chooses the largest safe shared factor from `1, 1/2, ..., 1/256`; an
+   ineffective or unsafe step fixes only that offset group. A hard joint solve
+   fixes the cluster's offset blocks for the current attempt but does not block
+   shape refits.
 4. Build component-wise group-median models from the post-solve snapshot. For
-   each active atom, subtract its selected neighbors and all effective
+   each selected atom, subtract its selected neighbors and all effective
    unselected contributors from the observed sample responses.
 5. Refit the atom's local Gaussian with its trained `alpha_r`, using its
-   group-median model as the fixed offset model. These refits form the raw
-   fixed-point state.
+   group-median model as the fixed offset model. Keep that offset fixed while
+   damping only the log-amplitude/log-width path through the same factor list.
+   If no safe material shape step exists, preserve that atom's previous shape;
+   other shape and offset blocks in the component remain eligible. These refits
+   form the raw fixed-point state.
 6. Limit each cluster's raw proposal to its trust region and score the resulting
    endpoint candidate. If the endpoint fails the objective guard, backtrack in
    the three transformed coordinates within the same outer attempt.
-7. For a stationarity-eligible cluster without suspicious atoms, attempt one
-   joint amplitude/width/offset polish. Keep the polish only when it strictly
-   improves the base candidate on the same objective scale.
+7. For a stationarity-eligible cluster, attempt one joint
+   amplitude/width/offset polish over its active columns. Inactive shapes and
+   offset groups decode to the endpoint values and remain fixed background.
+   Keep the polish only when it strictly improves the base candidate on the
+   same objective scale.
 8. Build the accepted-induced interaction graph from shared boundary samples.
    Revalidate each connected component. Every eligible component attempts one
    joint correction over the boundary shape-active set. This starts with the
@@ -130,16 +141,20 @@ Each outer attempt performs the following sequence:
    eligible for commit. Then build maximal eligible boundary components from the
    safe accepted state and the best finite objective-rejected proposal retained
    for each rejected cluster. Components containing at least one such proposal
-   receive the same endpoint, routine joint-correction polish, and common-factor
-   checks. A failed correction retains a valid rescue endpoint, and a failed
-   rescue leaves the safe accepted state unchanged.
+   receive the same endpoint, active-column joint correction, and common-factor
+   checks. Cooperative rescue permits a member to deteriorate only within
+   `1e-8 + 1e-3 * abs(previous member objective)`; the component and tentative
+   assembled global objectives must both improve strictly, and the global
+   historical-best tolerance still applies. A failed correction retains a valid
+   rescue endpoint, and any failed rescue atomically leaves the safe accepted
+   state unchanged.
 9. Run the unchanged global previous/best audit on the complete assembled state.
    If tolerance-level deterioration from independent reconciliation units causes
    aggregate rejection, remove non-improving units from worst to best until the
    first passing subset is found. If only strictly improving units remain but the
    historical best gate still fails, roll back the attempt without weakening the
    gate.
-10. Update trust radii and persistent-failure state. After an accepted state,
+10. Update trust radii and the reversible quarantine/probation state. After an accepted state,
    conditionally rebuild the adaptive topology before updating the global audit
    state and applying the stopping conditions.
 
@@ -219,10 +234,11 @@ There is no width-prior term. Group posterior and prior models participate in
 seed selection only. The offset-plausibility residual floor uses the owning
 cluster's fixed fit scale.
 
-The global objective weights clusters by active atom count:
+The global objective weights clusters by selected atom count. Quarantined
+blocks remain included in this normalization:
 
 ```text
-global objective = sum((cluster atom count / active atom count) * cluster total)
+global objective = sum((cluster atom count / selected atom count) * cluster total)
 ```
 
 Owner assignment makes every sample appear once in this global sum, including
@@ -301,27 +317,31 @@ endpoints. A component-backtracked state does not grow its members' trust radii,
 and polish provenance is retained only for atoms with a material polished endpoint
 change.
 
-After this accepted-only pass, every rejected cluster that produced finite
-objective values retains its lowest-objective trust-region proposal in memory.
-Clusters with suspicious atoms, hard joint-offset failures, offset-only refit
-fallbacks, invalid proposals, unavailable objectives, or unchanged-state
-exhaustion are excluded. The remaining rejected proposals and safe accepted
-clusters form maximal eligible boundary components. A component containing at
-least one rejected proposal is re-evaluated as a combined endpoint, then receives
-one routine joint-correction attempt. A valid endpoint is replaced only by a
-strictly better correction. Common-factor backtracking is used only when the
-endpoint is invalid and the correction is unavailable or rejected. Successful
-rescue promotes the rejected members without trust-radius growth or shrink. Failed
-rescue is transactional: previously accepted members retain their safe state.
+After this accepted-only pass, every rejected cluster that produced a finite
+objective proposal retains its lowest-objective trust-region patch in memory.
+The rejected proposals and safe accepted clusters form maximal eligible
+boundary components. Suspicious and hard-failure atoms are not removed from a
+component; their inactive parameter blocks remain fixed while active neighbors
+can supply correction columns. A cooperative endpoint may contain a member
+whose objective is slightly worse than its previous value, but only within the
+normal progress tolerance. The endpoint or its joint/backtracked replacement
+must strictly improve the component audit, and the tentatively assembled state
+must then strictly improve the previous global audit without violating the
+historical-best tolerance. Member historical bests are updated only for actual
+member improvements and do not independently veto rescue. Successful rescue
+promotes the rejected members without trust-radius growth or shrink. Failed
+rescue is transactional: every component member retains its safe state.
 
 Boundary correction eligibility is intentionally broader than local polish
-eligibility. A valid guarded refit and a non-hard joint-offset result are enough;
-IRLS objective deterioration, IRLS iteration exhaustion, and valid non-success
-local estimation statuses may participate. Local joint polish still requires
-full stationarity. Hard solver failures, suspicious atoms, and offset-only
-fallbacks remain fixed contributors and never enter a correction patch.
-Every eligible accepted-only or rescue boundary component receives at most one
-correction attempt per outer iteration.
+eligibility. A component is eligible whenever at least one shape or shared-offset
+column remains active. Inactive shape columns use endpoint amplitude and width;
+an inactive offset group has no offset column and all group members use the
+endpoint offset. Candidate guards inspect only materially changed active blocks,
+while fixed-block invariants require every inactive value to remain bitwise at
+its endpoint. IRLS objective deterioration, IRLS iteration exhaustion, and valid
+non-success local estimation statuses may participate. Local joint polish still
+requires full stationarity. Every eligible accepted-only or rescue boundary
+component receives at most one correction attempt per outer iteration.
 
 Before a joint-correction candidate is accepted, neighbor-adjusted profiles are
 rebuilt from its formally resolved selected and unselected snapshots. Every
@@ -347,14 +367,15 @@ DSU units. They are then merged using the complete
 `GraphTopology::sample_dependency_list`, without the weighted-edge threshold or
 ten-residue cutoff. This deliberately retains virtual dependencies introduced
 when an unselected contributor resolves through a selected-group median.
-Terminal and suspicious-isolated atoms are not variables, but their fixed models
-remain in every sample response. Components with fewer than two active atoms are
-skipped, and samples whose target no longer has an objective owner are excluded.
+Quarantined shape blocks and offset groups are not variables, but their fixed
+models remain in every sample response and in the objective domain. A component
+is skipped only when it has no active shape or offset column.
 
-Each component is solved serially in fixed key order. All active member atoms
-have `log(amplitude)` and `log(width)` variables, and each group represented in
-that component has one shared physical offset. The same group in two independent
-components is not tied across components. Sparse weighted-ridge directions,
+Each component is solved serially in fixed key order. Shape-active member atoms
+have `log(amplitude)` and `log(width)` variables, and each offset-active group
+represented in that component has one shared physical offset. Inactive blocks
+decode from the endpoint. The same group in two independent components is not
+tied across components. Sparse weighted-ridge directions,
 robust weights, conditioning guards, and each original cluster's trust radius
 are reused from boundary correction. Up to the configured number of nonlinear
 rounds is attempted. A round linearizes at its latest endpoint, while every
@@ -376,18 +397,17 @@ state is written unchanged. A successful final polish updates the final audit
 and provenance but does not increment the outer accepted-iteration count or
 change the stop reason.
 
-## Numerical defenses and terminal isolation
+## Numerical defenses, partial active set, and quarantine
 
-- Joint-offset conditioning and column-collinearity guards can increase the
-  ridge multiplier for affected atoms.
-- Suspicious evaluation has two paths. An offset-only update checks finite
-  zero-offset responses, offset magnitude, center sign flip, and radial
-  rebound. A post-refit update first requires a valid second-stage model, then
-  applies the same guards plus width growth and amplitude-offset compensation.
-  A local-refit candidate uses the post-refit path. If that candidate fails,
-  the fallback preserves the previous amplitude and width, applies only the
-  jointly estimated offset, and uses the offset-only path. Width and
-  compensation are intentionally not reevaluated for this fallback.
+- Suspicious evaluation has offset-only and post-refit modes. Offset-only checks
+  finite zero-offset responses, offset magnitude, center sign flip, and radial
+  rebound. Post-refit first requires a valid model and additionally checks width
+  growth and amplitude-offset compensation. Guard precedence is unchanged.
+- Every assessment records the selected reason, guard mode, signed normalized
+  margin, damping trial count, and last factor. A one-threshold margin is
+  `observed / limit - 1`; AND predicates use the minimum constituent margin and
+  OR predicates use the maximum. Positive means violated, zero is the boundary,
+  negative is safe, and invalid or non-finite inputs use positive infinity.
 - The previous suspicious baseline is built in one fit-range scan. It records
   the innermost response, per-radius response medians, distance range, maximum
   absolute response, and residual scale `1.4826 * MAD`. Candidate profiles do
@@ -395,56 +415,51 @@ change the stop reason.
   fallback reuse the same previous baseline.
 - The center sign-flip guard treats the smallest sampled radius as the
   innermost response and only rejects a statistically significant
-  positive-to-negative change. It estimates the previous atom's fit-range
-  residual scale as `1.4826 * MAD`, requires the previous innermost response to
-  exceed `3 * scale`, and requires the candidate to be below the negative of
-  both that noise threshold and `0.25 * previous innermost response`.
-  Near-zero noise crossings and negative-to-positive changes do not trigger
-  this guard.
-- The radial rebound guard uses the same previous residual noise estimate. A
-  radial magnitude must exceed both `1.5 * abs(candidate innermost response)`
-  and `max(0.25 * abs(previous innermost response), 3 * scale, 1e-12)`.
-  Upward excursions use
-  `max(0.20 * abs(previous innermost response), 3 * scale, 1e-12)` and become
-  suspicious only after more than one excursion.
-- Sign flip and rebound require a trustworthy previous radial shape. Width
-  growth remains active for valid post-refit models and uses the available
-  fit-range distance span without depending on radial monotonicity.
-  Amplitude-offset compensation likewise does not require a trustworthy
-  radial shape; it uses the previous innermost response when available and the
-  previous center signal as its reference. Its offset response delta is
-  evaluated exactly as
-  `candidate.offset * candidate.OffsetBasisAtDistance(0) -
-  previous.offset * previous.OffsetBasisAtDistance(0)`.
-- An offset-only suspicious seed rolls back only atoms in the same coupling
-  cluster that share its `GroupKey`, matching the cluster-local shared offset
-  parameterization. It no longer propagates through a depth-limited atom
-  overlap graph. If both a post-refit candidate and its fallback fail, the
-  complete acceptance cluster is still rolled back atomically. On the next
-  attempt, affected active atoms receive
-  `kSuspiciousJointOffsetRidgeMultiplier`.
-- A failed or suspicious local refit falls back to the previous Gaussian
-  parameters with the newly estimated offset when that offset-only update
-  passes finite-response, offset-magnitude, sign-flip, and radial-rebound
-  guards. The owning cluster is then stationarity-ineligible for that attempt.
-  If the fallback fails one of those guards, the affected post-refit cluster is
-  rolled back.
-- Repeated stable hard solver failures or suspicious rollbacks become terminal
-  cluster fallbacks. Terminal atoms retain their previous validated states and
-  no longer participate in later solves.
-- Terminal isolation removes only the affected cluster, allowing independent
-  active clusters to continue fitting.
+  positive-to-negative change. It requires the previous response to exceed
+  `3 * scale`, and the candidate to be below the negative of both that noise
+  threshold and `0.25 * previous innermost response`. The radial rebound guard
+  uses the same noise estimate, its existing magnitude thresholds, and more
+  than one upward excursion. Sign flip and rebound require a trustworthy
+  previous radial shape; width growth and amplitude-offset compensation do not.
+- Guard-aware damping tries `1, 1/2, ..., 1/256` in transformed coordinates.
+  Shared-offset members use one common physical-offset factor, and any unsafe
+  member shrinks the whole group. Local refit then holds the accepted group
+  offset fixed and damps only log-amplitude/log-width. A safe step below
+  `kTransformedChangeTolerance` is treated as ineffective and leaves that block
+  fixed. Any damped material update is stationarity-ineligible for the attempt.
+- Failure is block-local. An unsafe offset update fixes the complete shared
+  offset group; an unsafe shape update fixes only that atom's amplitude/width;
+  and a hard joint-offset solve fixes the cluster's offset blocks while allowing
+  safe shape refits. No post-refit guard causes a complete-cluster rollback.
+- The same shape/offset/hard masks parameterize local polish, boundary
+  correction, rescue, and final dependency polish. Suspicious or quarantined
+  atoms and their samples remain in coupling components, residual evaluation,
+  and the objective domain. Only inactive columns are omitted, and their decoded
+  values must equal the endpoint.
+- A fixed shape may retain a guard-safe jointly estimated offset. Conversely, a
+  fixed offset group does not prevent safe shapes in that group or cluster from
+  changing. The next attempt applies the `10x` suspicious ridge multiplier to
+  affected atoms.
+- Stable near-convergence failures enter stage-local quarantine only after the
+  same target and reason occurs in five accepted iterations. Targets are an atom
+  shape block, a shared-offset group, or a hard-failure cluster. A changed reason
+  or missing observation resets the pre-quarantine count.
+- Quarantine never removes atoms or rebuilds the objective domain. After two
+  accepted iterations a target receives probation; a topology partition change
+  may trigger it early. Each target gets at most three probes. Probes use the
+  minimum trust radius `0.0625` and `10x` ridge. Overlapping probes are selected
+  in cluster, group, then atom priority.
+- A material probation proposal must pass guards, trust/fixed-block invariants,
+  member/component/global objective gates, and the historical-best gate. A
+  guard-safe non-material stationary result at the minimum radius may also
+  release the target. Failure restores the previous fixed block and increments
+  the probe count; after three failures the target remains fixed only until the
+  current second-stage call ends.
 - Rejected-cluster debug output distinguishes failures before objective
   evaluation from objective rejection. Pre-objective failures report their
   proposal reason, radius, available step norm, and `objective =
   not-evaluated`; `objective-unavailable` is reserved for an objective that was
   actually attempted but could not be calculated.
-
-When terminal isolation changes the active partition, the implementation uses
-the current validated state to rebuild the new clusters' fit and tail scales
-and all atom-count normalizations. Per-cluster previous/best references and the
-global best-audit baseline are reset to that state; objective values from the
-old and new domains are never compared.
 
 An adaptive topology rebuild always becomes the next hysteresis reference,
 even when its active partition is unchanged. In that case the objective scales,
@@ -466,19 +481,17 @@ earliest state that improves the best objective beyond the strict tolerance.
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
-- every selected atom has become terminal;
 - the accepted and raw fixed-point transformed changes both converge, all
-  active clusters are accepted, and no active cluster is suspicious or
-  unhealthy;
+  clusters are accepted, and no active block is suspicious or unhealthy;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
-- an all-rejected attempt reaches one of the terminal resolutions below;
+- an all-rejected attempt reaches one of the no-progress resolutions below;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
 On an all-rejected attempt, the iteration limit has the highest resolution
 priority. Otherwise, rejected clusters are partitioned into objective-
 backtracking-exhausted and radius-retryable sets. If any retryable radius
-shrinks, the stage continues. When none can shrink, the terminal reason is:
+shrinks, the stage continues. When none can shrink, the stop reason is:
 
 - `all-rejected-backtracking-exhausted` when every rejected cluster is
   exhausted;
@@ -497,9 +510,9 @@ all-reject, backtracking-exhaustion, no-retry-progress, and iteration-limit
 stops always write the best validated audit state when one is available;
 otherwise they write the latest validated state. Best tracking, best-relative
 guards, audit patience, iteration history, and stop reasons are independent of
-which validated state is ultimately written. Convergence and terminal
-isolation always write the latest validated state. Terminal reconciliation
-preserves validated progress from non-terminal clusters.
+which validated state is ultimately written. Unresolved quarantine targets are
+kept at their latest validated fixed values and do not prevent unrelated active
+blocks from converging or being written.
 
 ## Final state application and group fitting
 
@@ -543,8 +556,9 @@ atom-level peeling snapshot written during second-stage finalization.
 
 The fitting context stores numeric group IDs, selected group membership,
 unselected-contributor group IDs, flattened sample-neighbor edges, prepared
-refit design templates, and profile-radius ordering. These structures are
-rebuilt only when terminal isolation changes the partition.
+refit design templates, and profile-radius ordering. Quarantine changes only
+activity masks; these structures are rebuilt only when adaptive topology changes
+the partition.
 
 Each outer iteration builds one selected/unselected Gaussian snapshot, one
 adjusted-response cache for refits, and one residual/objective baseline.
@@ -553,10 +567,10 @@ evaluation overlays a patch on the previous state, recomputes medians only for
 groups touched by the patch, and evaluates the objective as baseline plus the
 changed sample and offset delta. For a boundary-component guard, affected sample
 IDs are sorted and deduplicated so a boundary sample is recomputed once. The
-   boundary dependency and deterministic accepted/rescue-induced components are derived
-from the current partition and rebuilt with adaptive topology or terminal
-   isolation. Without a multi-cluster accepted or rescue component, candidate
-   selection stays on the existing fast path.
+The boundary dependency and deterministic accepted/rescue-induced components
+are derived from the current partition and rebuilt with adaptive topology.
+Without a multi-cluster accepted or rescue component, candidate selection stays
+on the existing fast path.
 
 Joint-offset, joint-polish, and boundary-correction solvers retain their sparse
 pattern analysis for the lifetime of a partition and refresh only numeric
@@ -593,10 +607,10 @@ values in `dMax A/R`.
 | Column | Meaning after the current outer attempt |
 |---|---|
 | `Try/Acc` | One-based outer attempt / cumulative accepted iterations |
-| `Atom A/T` | Remaining active / cumulative terminal atoms |
+| `Atom A/Q` | Atoms without quarantine targets / atoms covered by current quarantine targets |
 | `Cluster A/R` | Accepted / rejected candidate clusters |
 | `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after component reconciliation and the final global guard; `E = A + R + S` |
-| `Suspicious` | Atoms rolled back by the suspicious-offset checks in this attempt |
+| `Suspicious` | Atoms with at least one shape, offset, or hard-failure block fixed in this attempt |
 | `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
 
 Objective-domain startup diagnostics report the weights, cluster and unique
@@ -606,17 +620,22 @@ loss, weights, sample counts, fixed scales, and backtracking
 trials/factor/exhaustion. Accepted local factors are logged at debug level.
 Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
 record with its cluster, atom, and boundary-sample counts plus trials, factor,
-accepted/rejected, exhausted status, accepted source, and previous/endpoint/final
-component objectives. An attempted correction also emits
+accepted/rejected, exhausted status, accepted source, previous/endpoint/final
+component objectives, locally deteriorated member count, and maximum local
+deterioration. Rescue records also include component and final assembled-global
+improvements. An attempted correction also emits
 `Boundary-interface joint correction` with its
-direct-interface/shape-active/offset-closure/parameter counts, suspicious count,
+direct-interface/shape-active/offset-active/offset-closure/parameter counts, suspicious count,
 solver status,
 damping, maximum normalized trust step, strict-improvement reference/candidate
 objectives, acceptance result, and endpoint-fallback outcome. An all-rejected
 debug record reports
 `exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
-terminal classification can be audited directly. Terminal, convergence, and
-summary messages finish the active progress line before normal line output.
+stop classification can be audited directly. Guard-aware debug records report
+each affected atom's reason, margin, mode-derived factor/trial count, and fixed
+shape/offset/hard block. Completion warnings report cumulative quarantine
+entries, releases, failed probation probes, and unresolved targets. Convergence
+and summary messages finish the active progress line before normal line output.
 
 Adaptive rebuild diagnostics use a distinct
 `Adaptive local-fitting topology rebuild` record so the one-time initial

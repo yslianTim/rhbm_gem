@@ -126,9 +126,13 @@ JointPolishParameterization::DecodeParameter(
             DecodeTransformedCoordinates(shape_coordinates)
         };
         if (!shape_model.has_value()) return std::nullopt;
-        const auto model{
-            shape_model->WithOffset(parameter(OffsetColumn(atom_position)))
+        const auto group_position{ group_position_by_atom.at(atom_position) };
+        const auto offset{
+            HasOffsetColumn(atom_position) ?
+                parameter(OffsetColumn(atom_position)) :
+                base_offset_by_group.at(group_position)
         };
+        const auto model{ shape_model->WithOffset(offset) };
         if (!EncodeTransformedCoordinates(model).has_value())
         {
             return std::nullopt;
@@ -823,15 +827,18 @@ std::optional<JointPolishParameterization> BuildJointPolishParameterization(
     return BuildActiveSetJointPolishParameterization(
         group_id_by_atom_position,
         base_model_list,
+        std::vector<char>(base_model_list.size(), 1),
         std::vector<char>(base_model_list.size(), 1));
 }
 
 std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list,
-    const std::vector<char> & shape_active_mask)
+    const std::vector<char> & shape_active_mask,
+    const std::vector<char> & offset_active_mask)
 {
-    if (shape_active_mask.size() != base_model_list.size())
+    if (shape_active_mask.size() != base_model_list.size() ||
+        offset_active_mask.size() != base_model_list.size())
     {
         return std::nullopt;
     }
@@ -844,14 +851,45 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     parameterization.group_position_by_atom = std::move(group_layout->group_position_by_atom);
     parameterization.shape_position_by_atom.resize(base_model_list.size());
     parameterization.base_shape_coordinate_by_atom.reserve(base_model_list.size());
+    parameterization.offset_position_by_group.resize(group_layout->group_count);
+    parameterization.base_offset_by_group.resize(group_layout->group_count);
     for (const auto is_shape_active : shape_active_mask)
     {
         if (is_shape_active != 0) parameterization.shape_atom_count++;
     }
+    std::vector<int> offset_activity_by_group(group_layout->group_count, -1);
+    for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
+    {
+        const auto group_position{
+            parameterization.group_position_by_atom.at(atom_position)
+        };
+        const auto is_active{ offset_active_mask.at(atom_position) != 0 ? 1 : 0 };
+        if (offset_activity_by_group.at(group_position) >= 0 &&
+            offset_activity_by_group.at(group_position) != is_active)
+        {
+            return std::nullopt;
+        }
+        offset_activity_by_group.at(group_position) = is_active;
+    }
+    for (std::size_t group_position = 0;
+        group_position < offset_activity_by_group.size();
+        group_position++)
+    {
+        if (offset_activity_by_group.at(group_position) != 0)
+        {
+            parameterization.offset_position_by_group.at(group_position) =
+                parameterization.offset_group_count++;
+        }
+        else
+        {
+            parameterization.offset_position_by_group.at(group_position) =
+                group_layout->group_count;
+        }
+    }
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
             parameterization.shape_atom_count * kJointPolishShapeParameterSize +
-                group_layout->group_count));
+                parameterization.offset_group_count));
     std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
     std::size_t shape_position{ 0 };
 
@@ -890,10 +928,15 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
         const auto median{ CalculateJointFittingGroupMedian(offset_list) };
         if (!median.has_value()) return std::nullopt;
-        parameterization.seed_parameter(
-            static_cast<Eigen::Index>(
-                parameterization.shape_atom_count * kJointPolishShapeParameterSize +
-                current_group_position)) = *median;
+        parameterization.base_offset_by_group.at(current_group_position) = *median;
+        if (parameterization.offset_position_by_group.at(current_group_position) <
+            parameterization.offset_group_count)
+        {
+            parameterization.seed_parameter(
+                static_cast<Eigen::Index>(
+                    parameterization.shape_atom_count * kJointPolishShapeParameterSize +
+                    parameterization.offset_position_by_group.at(current_group_position))) = *median;
+        }
     }
     return parameterization;
 }
@@ -910,7 +953,9 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     if (key.empty() || sample_ref_list.empty() ||
         parameterization.group_position_by_atom.size() != key.size() ||
         parameterization.shape_position_by_atom.size() != key.size() ||
-        parameterization.base_shape_coordinate_by_atom.size() != key.size())
+        parameterization.base_shape_coordinate_by_atom.size() != key.size() ||
+        parameterization.offset_position_by_group.size() !=
+            parameterization.base_offset_by_group.size())
     {
         return std::nullopt;
     }
@@ -939,13 +984,16 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                         parameter_index)) = ridge_multiplier;
             }
         }
-        const auto offset_column{ parameterization.OffsetColumn(local_position) };
-        offset_column_by_group_id.emplace(
-            context.at(atom_index).group_id,
-            offset_column);
-        ridge_multiplier_by_column(offset_column) = std::max(
-            ridge_multiplier_by_column(offset_column),
-            ridge_multiplier);
+        if (parameterization.HasOffsetColumn(local_position))
+        {
+            const auto offset_column{ parameterization.OffsetColumn(local_position) };
+            offset_column_by_group_id.emplace(
+                context.at(atom_index).group_id,
+                offset_column);
+            ridge_multiplier_by_column(offset_column) = std::max(
+                ridge_multiplier_by_column(offset_column),
+                ridge_multiplier);
+        }
     }
     auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
@@ -1009,7 +1057,8 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                     triplet_list.emplace_back(row_index, column_index, derivative);
                 }
             }
-            if (std::abs(evaluation->offset_jacobian) > std::numeric_limits<double>::epsilon())
+            if (parameterization.HasOffsetColumn(local_position) &&
+                std::abs(evaluation->offset_jacobian) > std::numeric_limits<double>::epsilon())
             {
                 triplet_list.emplace_back(
                     row_index,
@@ -1272,6 +1321,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const FitState & previous_state,
     const FitStateView & endpoint_state,
     const std::vector<std::size_t> & shape_active_atom_index_list,
+    const std::vector<std::size_t> & offset_active_atom_index_list,
     const std::vector<std::size_t> & offset_closure_atom_index_list,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
@@ -1279,7 +1329,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     ReusableWeightedRidgeSolver & reusable_solver)
 {
     BoundaryJointCorrectionResult result;
-    if (shape_active_atom_index_list.empty() ||
+    if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
         offset_closure_atom_index_list.empty() ||
         sample_ref_list.empty() ||
         previous_state.size() != context.size() ||
@@ -1287,6 +1337,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         ridge_multiplier_list.size() != context.size() ||
         trust_region_list.empty() ||
         !std::ranges::is_sorted(shape_active_atom_index_list) ||
+        !std::ranges::is_sorted(offset_active_atom_index_list) ||
         !std::ranges::is_sorted(offset_closure_atom_index_list))
     {
         return result;
@@ -1299,13 +1350,23 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             return result;
         }
     }
+    for (const auto atom_index : offset_active_atom_index_list)
+    {
+        if (atom_index >= context.size() ||
+            !std::ranges::binary_search(offset_closure_atom_index_list, atom_index))
+        {
+            return result;
+        }
+    }
 
     std::vector<std::size_t> group_id_by_atom_position;
     std::vector<GaussianModel3D> endpoint_model_list;
     std::vector<char> shape_active_mask;
+    std::vector<char> offset_active_mask;
     group_id_by_atom_position.reserve(offset_closure_atom_index_list.size());
     endpoint_model_list.reserve(offset_closure_atom_index_list.size());
     shape_active_mask.reserve(offset_closure_atom_index_list.size());
+    offset_active_mask.reserve(offset_closure_atom_index_list.size());
     for (const auto atom_index : offset_closure_atom_index_list)
     {
         if (atom_index >= context.size()) return result;
@@ -1315,12 +1376,17 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             std::ranges::binary_search(
                 shape_active_atom_index_list,
                 atom_index) ? 1 : 0);
+        offset_active_mask.emplace_back(
+            std::ranges::binary_search(
+                offset_active_atom_index_list,
+                atom_index) ? 1 : 0);
     }
     const auto parameterization{
         BuildActiveSetJointPolishParameterization(
             group_id_by_atom_position,
             endpoint_model_list,
-            shape_active_mask)
+            shape_active_mask,
+            offset_active_mask)
     };
     if (!parameterization.has_value())
     {

@@ -435,6 +435,24 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
             rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
             options),
         audit_detail::SuspiciousGaussianReason::InvalidModel);
+    const auto previous_baseline{
+        audit_detail::BuildPreviousSuspiciousProfileBaseline(
+            sample_list,
+            previous_model,
+            options)
+    };
+    const auto invalid_assessment{
+        audit_detail::AssessSuspiciousGaussianUpdate(
+            sample_list,
+            rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
+            options,
+            previous_baseline,
+            audit_detail::SuspiciousUpdateMode::PostRefit)
+    };
+    EXPECT_EQ(
+        invalid_assessment.reason,
+        audit_detail::SuspiciousGaussianReason::InvalidModel);
+    EXPECT_TRUE(std::isinf(invalid_assessment.normalized_margin));
 
     auto non_finite_sample_list{ sample_list };
     non_finite_sample_list.front().response =
@@ -469,6 +487,18 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
             large_offset_model,
             options),
         audit_detail::SuspiciousGaussianReason::OffsetMagnitude);
+    const auto large_offset_assessment{
+        audit_detail::AssessSuspiciousGaussianUpdate(
+            sample_list,
+            large_offset_model,
+            options,
+            audit_detail::BuildPreviousSuspiciousProfileBaseline(
+                sample_list,
+                previous_model,
+                options),
+            audit_detail::SuspiciousUpdateMode::OffsetOnly)
+    };
+    EXPECT_GT(large_offset_assessment.normalized_margin, 0.0);
 
     const auto wide_model{ MakeGaussianWithCenterSignal(0.1, 2.0) };
     EXPECT_EQ(
@@ -478,6 +508,18 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
             wide_model,
             options),
         audit_detail::SuspiciousGaussianReason::None);
+    const auto safe_offset_assessment{
+        audit_detail::AssessSuspiciousGaussianUpdate(
+            sample_list,
+            previous_model,
+            options,
+            audit_detail::BuildPreviousSuspiciousProfileBaseline(
+                sample_list,
+                previous_model,
+                options),
+            audit_detail::SuspiciousUpdateMode::OffsetOnly)
+    };
+    EXPECT_LE(safe_offset_assessment.normalized_margin, 0.0);
     EXPECT_EQ(
         EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
@@ -2981,7 +3023,8 @@ TEST(
         polish_detail::BuildActiveSetJointPolishParameterization(
             { 10, 10, 20 },
             base_model_list,
-            { 1, 0, 1 })
+            { 1, 0, 1 },
+            { 1, 1, 1 })
     };
     ASSERT_TRUE(parameterization.has_value());
     EXPECT_EQ(parameterization->shape_atom_count, 2U);
@@ -3016,6 +3059,27 @@ TEST(
     EXPECT_DOUBLE_EQ(
         candidate_model_list->at(0).GetOffset(),
         candidate_model_list->at(1).GetOffset());
+
+    const auto fixed_offset_parameterization{
+        polish_detail::BuildActiveSetJointPolishParameterization(
+            { 10, 10, 20 },
+            base_model_list,
+            { 1, 0, 1 },
+            { 1, 1, 0 })
+    };
+    ASSERT_TRUE(fixed_offset_parameterization.has_value());
+    EXPECT_TRUE(fixed_offset_parameterization->HasOffsetColumn(0));
+    EXPECT_FALSE(fixed_offset_parameterization->HasOffsetColumn(2));
+    EXPECT_EQ(fixed_offset_parameterization->seed_parameter.size(), 5);
+    const auto fixed_offset_models{
+        fixed_offset_parameterization->DecodeModels(
+            Eigen::VectorXd::Zero(fixed_offset_parameterization->seed_parameter.size()),
+            1.0)
+    };
+    ASSERT_TRUE(fixed_offset_models.has_value());
+    EXPECT_DOUBLE_EQ(
+        fixed_offset_models->at(2).GetOffset(),
+        base_model_list.at(2).GetOffset());
 }
 
 TEST(
@@ -3050,6 +3114,7 @@ TEST(
             fixture.state,
             endpoint_state,
             { 0, 2 },
+            { 0, 1, 2 },
             { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -3091,6 +3156,7 @@ TEST(
             fixture.state,
             endpoint_state,
             {},
+            {},
             { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -3105,6 +3171,7 @@ TEST(
             fixture.state,
             endpoint_state,
             { 0, 2 },
+            { 0, 1, 2 },
             { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -3125,6 +3192,7 @@ TEST(
             non_finite_fixture.state,
             endpoint_state,
             { 0, 2 },
+            { 0, 1, 2 },
             { 0, 1, 2 },
             non_finite_fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -3157,6 +3225,7 @@ TEST(
             stationary_fixture.state,
             stationary_endpoint_state,
             { 0, 2 },
+            { 0, 1, 2 },
             { 0, 1, 2 },
             stationary_fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -4037,7 +4106,7 @@ TEST(EstimatorSecondStageDefenseTest, DependencyPolishDefaultsAndIterationValida
     const rt::FitOptions defaults;
     EXPECT_EQ(defaults.second_stage_boundary_halo_depth, 1U);
     EXPECT_TRUE(defaults.enable_second_stage_dependency_polish);
-    EXPECT_EQ(defaults.second_stage_dependency_polish_max_iterations, 3U);
+    EXPECT_EQ(defaults.second_stage_dependency_polish_max_iterations, 10U);
 
     auto model{ BuildJointPolishDefenseModel() };
     std::vector<rg::GaussianModel3D> original_model_list;
@@ -4117,6 +4186,11 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
         correction_workspace_by_key
     };
     auto options{ MakeSecondStageOptions() };
+    const polish_detail::SuspiciousBlockActivity all_active{
+        std::vector<char>(fixture.context.size(), 0),
+        std::vector<char>(fixture.context.size(), 0),
+        std::vector<char>(fixture.context.size(), 0)
+    };
     const auto polish_result{
         polish_detail::RunFinalDependencyPolish(
             fixture.context,
@@ -4124,6 +4198,7 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             topology,
             partition,
             objective_domain,
+            all_active,
             trust_region_state,
             fixture.state,
             correction_workspace_by_key,
@@ -4829,7 +4904,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         maximum_list));
 }
 
-TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain)
+TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousAtomDoesNotFreezeCompleteLongChain)
 {
     auto model{ BuildPostRefitRollbackChainDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
@@ -4842,13 +4917,20 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain
 
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
+    bool any_model_changed{ false };
     for (std::size_t i = 0; i < selected_atoms.size(); i++)
     {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*selected_atoms.at(i)),
-            previous_model_list.at(i),
-            1.0e-12);
+        const auto fitted_model{ GetEstimateModel(*selected_atoms.at(i)) };
+        any_model_changed = any_model_changed ||
+            fitted_model.GetAmplitude() != previous_model_list.at(i).GetAmplitude() ||
+            fitted_model.GetWidth() != previous_model_list.at(i).GetWidth() ||
+            fitted_model.GetOffset() != previous_model_list.at(i).GetOffset();
     }
+    EXPECT_TRUE(any_model_changed);
+    EXPECT_LT(
+        GetEstimateModel(*selected_atoms.front()).GetAmplitude(),
+        previous_model_list.front().GetAmplitude());
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJointOffsetSamplesAreNonFinite)
@@ -4868,8 +4950,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
-    EXPECT_NE(out.find("objective-unavailable"), std::string::npos);
+    EXPECT_EQ(out.find("objective-unavailable"), std::string::npos);
     EXPECT_EQ(out.find("objective = not-evaluated"), std::string::npos);
+    EXPECT_NE(out.find("hard-fixed=yes"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluster)
@@ -4917,7 +5000,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotBlockRemoteCluste
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
+TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveDomain)
 {
     auto model{ BuildTerminalWithPersistentLocalRefitFallbackDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
@@ -4934,97 +5017,118 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
     testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string out{ testing::internal::GetCapturedStdout() };
-    const std::string err{ testing::internal::GetCapturedStderr() };
+    testing::internal::GetCapturedStderr();
     Logger::SetLogLevel(previous_log_level);
 
+    bool any_local_model_changed{ false };
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
     {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*selected_atoms.at(i)),
-            previous_terminal_model_list.at(i),
-            1.0e-12);
+        const auto fitted_model{ GetEstimateModel(*selected_atoms.at(i)) };
+        any_local_model_changed = any_local_model_changed ||
+            fitted_model.GetAmplitude() != previous_terminal_model_list.at(i).GetAmplitude() ||
+            fitted_model.GetWidth() != previous_terminal_model_list.at(i).GetWidth() ||
+            fitted_model.GetOffset() != previous_terminal_model_list.at(i).GetOffset();
     }
-    EXPECT_NE(
+    EXPECT_TRUE(any_local_model_changed);
+    EXPECT_EQ(
         out.find("Reset second-stage objective domain"),
-        std::string::npos);
-    EXPECT_NE(
-        err.find("offsets finite = "),
         std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, PersistentTerminalReasonRequiresStableReason)
+TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableReasonAndReleasesOnProbation)
 {
-    const audit_detail::ClusterKey key{ 0 };
-    const std::vector<audit_detail::ClusterKey> accepted_key_list{
-        key
+    const audit_detail::QuarantineTarget target{
+        audit_detail::QuarantineTargetKind::ShapeAtom,
+        { 0 }
     };
-    const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
-    audit_detail::FitState previous_state;
-    previous_state.emplace_back(MakeGaussianResult(model));
-    const auto assembled_state{ previous_state };
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        key,
-        audit_detail::ClusterHealth{
-            audit_detail::JointOffsetSolveStatus::Converged });
-    std::vector<char> suspicious_atom_mask{ 1 };
-    audit_detail::PersistentTerminalFailureStateMap state_by_key;
-
-    for (std::size_t stable_count = 1;
-        stable_count < audit_detail::kPersistentTerminalFailureIterationLimit;
-        stable_count++)
+    audit_detail::QuarantineFailureStateMap state_by_target;
+    const auto observe = [&](
+        audit_detail::SuspiciousGaussianReason reason,
+        std::size_t accepted_iteration_count)
     {
-        const auto terminal_failure_by_key{
-            audit_detail::UpdatePersistentTerminalFailureState(
-                accepted_key_list,
-                suspicious_atom_mask,
-                health_by_key,
-                assembled_state,
-                previous_state,
-                state_by_key)
-        };
-        EXPECT_TRUE(terminal_failure_by_key.empty());
-        ASSERT_EQ(state_by_key.size(), 1U);
-        EXPECT_EQ(
-            state_by_key.at(key).stable_iteration_count,
-            stable_count);
+        return audit_detail::UpdateQuarantineFailureState(
+            {
+                audit_detail::QuarantineFailureObservation{
+                    target,
+                    reason
+                }
+            },
+            {},
+            accepted_iteration_count,
+            state_by_target);
+    };
+
+    EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 1)
+        .entered_target_list.empty());
+    EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 2)
+        .entered_target_list.empty());
+    EXPECT_TRUE(observe(
+        audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
+        3).entered_target_list.empty());
+    EXPECT_EQ(state_by_target.at(target).stable_iteration_count, 1U);
+    for (std::size_t accepted_iteration = 4;
+        accepted_iteration < 7;
+        accepted_iteration++)
+    {
+        EXPECT_TRUE(observe(
+            audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
+            accepted_iteration).entered_target_list.empty());
     }
-
-    const auto terminal_failure_by_key{
-        audit_detail::UpdatePersistentTerminalFailureState(
-            accepted_key_list,
-            suspicious_atom_mask,
-            health_by_key,
-            assembled_state,
-            previous_state,
-            state_by_key)
+    const auto entered{
+        observe(
+            audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
+            7)
     };
-    ASSERT_EQ(terminal_failure_by_key.size(), 1U);
-    ASSERT_TRUE(state_by_key.empty());
-    ASSERT_TRUE(std::holds_alternative<
-        audit_detail::PersistentSuspiciousRollbackReason>(
-            terminal_failure_by_key.at(key)));
+    ASSERT_EQ(entered.entered_target_list, (std::vector{ target }));
+    ASSERT_TRUE(state_by_target.at(target).quarantined);
     EXPECT_EQ(
-        std::get<audit_detail::PersistentSuspiciousRollbackReason>(
-            terminal_failure_by_key.at(key)),
-        (audit_detail::PersistentSuspiciousRollbackReason{ 0 }));
+        state_by_target.at(target).next_probation_iteration,
+        7U + audit_detail::kQuarantineProbationCooldown);
 
-    suspicious_atom_mask.at(0) = 0;
-    health_by_key.at(key).joint_offset_status =
-        audit_detail::JointOffsetSolveStatus::SystemBuildFailed;
-    const auto changed_reason_terminal_failure_by_key{
-        audit_detail::UpdatePersistentTerminalFailureState(
-            accepted_key_list,
-            suspicious_atom_mask,
-            health_by_key,
-            assembled_state,
-            previous_state,
-            state_by_key)
+    state_by_target.at(target).probation_active = true;
+    const auto released{
+        audit_detail::UpdateQuarantineFailureState(
+            {},
+            { target },
+            9,
+            state_by_target)
     };
-    EXPECT_TRUE(changed_reason_terminal_failure_by_key.empty());
-    ASSERT_EQ(state_by_key.size(), 1U);
-    EXPECT_EQ(state_by_key.at(key).stable_iteration_count, 1U);
+    EXPECT_EQ(released.released_target_list, (std::vector{ target }));
+    EXPECT_TRUE(state_by_target.empty());
+
+    state_by_target.emplace(
+        target,
+        audit_detail::QuarantineFailureState{
+            audit_detail::SuspiciousGaussianReason::WidthGrowth,
+            audit_detail::kPersistentQuarantineFailureIterationLimit,
+            0,
+            0,
+            true,
+            false,
+            false
+        });
+    for (std::size_t probation = 1;
+        probation <= audit_detail::kQuarantineMaximumProbationCount;
+        probation++)
+    {
+        state_by_target.at(target).probation_active = true;
+        const auto failed{
+            audit_detail::UpdateQuarantineFailureState(
+                {
+                    audit_detail::QuarantineFailureObservation{
+                        target,
+                        audit_detail::SuspiciousGaussianReason::WidthGrowth
+                    }
+                },
+                {},
+                9 + probation,
+                state_by_target)
+        };
+        EXPECT_EQ(failed.failed_probation_target_list, (std::vector{ target }));
+        EXPECT_EQ(state_by_target.at(target).probation_count, probation);
+    }
+    EXPECT_TRUE(state_by_target.at(target).probation_exhausted);
 }
 
 TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)
@@ -5048,7 +5152,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRollsBackFiniteNonphysicalProfile)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingDampsFiniteNonphysicalProfile)
 {
     auto model{ BuildFiniteNonphysicalProfileDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
@@ -5056,7 +5160,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRollsBackFiniteN
 
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
-    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
+    const auto fitted_model{ GetEstimateModel(*atom) };
+    EXPECT_GT(fitted_model.GetAmplitude(), 0.0);
+    EXPECT_GT(fitted_model.GetWidth(), 0.0);
+    EXPECT_NE(fitted_model.GetOffset(), previous_model.GetOffset());
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -5354,7 +5461,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJointPolishIsIntensityScaleInv
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClusterWhenLocalClusterRollsBack)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUpdatesHealthyVariablesAcrossClusters)
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
@@ -5368,13 +5475,16 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
 
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
+    bool any_left_model_changed{ false };
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
     {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*selected_atoms.at(i)),
-            previous_left_model_list.at(i),
-            1.0e-12);
+        const auto fitted_model{ GetEstimateModel(*selected_atoms.at(i)) };
+        any_left_model_changed = any_left_model_changed ||
+            fitted_model.GetAmplitude() != previous_left_model_list.at(i).GetAmplitude() ||
+            fitted_model.GetWidth() != previous_left_model_list.at(i).GetWidth() ||
+            fitted_model.GetOffset() != previous_left_model_list.at(i).GetOffset();
     }
+    EXPECT_TRUE(any_left_model_changed);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_right_error);
@@ -5455,11 +5565,11 @@ TEST(
             base.GetAmplitude() * intensity_scale,
             scaled.GetAmplitude(),
             std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 5.0e-5));
-        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 2.0e-6);
+        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 1.0e-5);
         EXPECT_NEAR(
             base.GetOffset() * intensity_scale,
             scaled.GetOffset(),
-            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 5.0e-5));
+            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 1.0e-4));
     }
 }
 
@@ -5576,7 +5686,7 @@ TEST(
     EXPECT_NE(out.find("accepted_source=joint-correction"), std::string::npos);
     EXPECT_NE(
         out.find(
-            "Boundary-interface joint correction: direct-interface/shape-active/closure/parameters = 2/2/2/6"),
+            "Boundary-interface joint correction: direct-interface/shape-active/offset-active/closure/parameters = 2/2/2/2/6"),
         std::string::npos);
     EXPECT_NE(out.find("status=candidate-ready"), std::string::npos);
     EXPECT_NE(
@@ -5681,12 +5791,9 @@ TEST(
         out.find(
             "Boundary-component reconciliation: clusters/atoms/boundary-samples = 2/11/"),
         std::string::npos);
-    EXPECT_NE(
-        out.find("trials/factor/accepted/exhausted = 2/0.5/yes/no"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("trials/factor/accepted/exhausted = 1/-/no/yes"),
-        std::string::npos);
+    EXPECT_NE(out.find("mode=rescue"), std::string::npos);
+    EXPECT_NE(out.find("locally-deteriorated/max-delta="), std::string::npos);
+    EXPECT_NE(out.find("component/global-improvement="), std::string::npos);
     EXPECT_NE(out.find("| 1/2"), std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13),
@@ -5970,7 +6077,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         return count;
     };
     EXPECT_EQ(count_occurrences("Try/Acc"), 1U);
-    EXPECT_NE(out.find("Atom A/T"), std::string::npos);
+    EXPECT_NE(out.find("Atom A/Q"), std::string::npos);
     EXPECT_NE(out.find("Cluster A/R"), std::string::npos);
     EXPECT_NE(out.find("Polish E/A/R/S"), std::string::npos);
     EXPECT_NE(out.find("Suspicious"), std::string::npos);

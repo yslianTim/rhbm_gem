@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <optional>
 #include <span>
@@ -69,6 +70,7 @@ public:
     explicit TrustRegionStateSet(TrustRegionOptions options = {});
     void Reconcile(const std::vector<ClusterKey> & key_list);
     double GetRadius(const ClusterKey & key) const;
+    void ResetToMinimum(const std::vector<ClusterKey> & key_list);
     TrustRegionRadiusUpdate Shrink(const std::vector<ClusterKey> & key_list);
     void Grow(const std::vector<ClusterKey> & key_list);
     TrustRegionIterationUpdate UpdateAfterIteration(
@@ -92,6 +94,17 @@ enum class SuspiciousGaussianReason
 };
 
 using SuspiciousUpdateMask = std::vector<char>;
+
+struct SuspiciousBlockActivity
+{
+    SuspiciousUpdateMask shape_fixed_atom_mask{};
+    SuspiciousUpdateMask offset_fixed_atom_mask{};
+    SuspiciousUpdateMask hard_failure_atom_mask{};
+
+    SuspiciousUpdateMask BuildCombinedFixedAtomMask() const;
+    bool HasActiveShape(std::size_t atom_index) const;
+    bool HasActiveOffset(std::size_t atom_index) const;
+};
 
 std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask);
 
@@ -131,6 +144,24 @@ enum class SuspiciousUpdateMode
     OffsetOnly,
     PostRefit
 };
+
+struct SuspiciousGaussianAssessment
+{
+    SuspiciousGaussianReason reason{ SuspiciousGaussianReason::None };
+    SuspiciousUpdateMode mode{ SuspiciousUpdateMode::PostRefit };
+    double normalized_margin{ -std::numeric_limits<double>::infinity() };
+    std::size_t damping_trial_count{ 1 };
+    double damping_factor{ 1.0 };
+
+    bool IsSuspicious() const { return reason != SuspiciousGaussianReason::None; }
+};
+
+SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & candidate_model,
+    const FitOptions & options,
+    const SuspiciousUpdateBaseline & previous_baseline,
+    SuspiciousUpdateMode mode);
 
 SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
     const LocalPotentialSampleList & sample_entries,
@@ -504,6 +535,7 @@ struct BoundaryComponentReconciliationDiagnostic
     std::optional<BoundaryJointCorrectionStatus> joint_correction_status{};
     std::size_t interface_atom_count{ 0 };
     std::size_t shape_active_atom_count{ 0 };
+    std::size_t offset_active_atom_count{ 0 };
     std::size_t offset_closure_atom_count{ 0 };
     std::size_t suspicious_candidate_atom_count{ 0 };
     std::size_t joint_parameter_count{ 0 };
@@ -517,6 +549,10 @@ struct BoundaryComponentReconciliationDiagnostic
     std::size_t accepted_cluster_count{ 0 };
     std::size_t rescue_candidate_cluster_count{ 0 };
     std::size_t rescued_cluster_count{ 0 };
+    std::size_t locally_deteriorated_member_count{ 0 };
+    double maximum_local_deterioration{ 0.0 };
+    std::optional<double> component_improvement{};
+    std::optional<double> global_improvement{};
     bool is_rescue_attempt{ false };
     bool accepted{ false };
     bool exhausted{ false };
@@ -548,6 +584,8 @@ struct CandidateSelectionInputs
     const PolishProvenance & previous_polish_provenance;
     const FitState & raw_state;
     const SuspiciousUpdateMask & rollback_atom_mask;
+    const SuspiciousBlockActivity & block_activity;
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom;
     const std::vector<double> & ridge_multiplier_list;
     std::span<const ClusterKey> unchanged_state_exhausted_key_list;
     const ObjectiveDomain & objective_domain;
@@ -607,6 +645,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const GraphTopology & topology,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & objective_domain,
+    const SuspiciousBlockActivity & block_activity,
     const TrustRegionStateSet & trust_region_state,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
