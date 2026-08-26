@@ -223,68 +223,67 @@ PerformanceCounters::~PerformanceCounters()
     if (m_quiet_mode) return;
 
     const auto symbolic_analysis_count{
-        m_retired_solver_symbolic_analysis_count +
-        CountCurrentSolverSymbolicAnalyses()
+        m_retired_solver_symbolic_analysis_count + CountCurrentSolverSymbolicAnalyses()
     };
     const auto total_milliseconds{
         std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - m_start_time).count()
     };
-    std::ostringstream message;
-    message
-        << "Second-stage local fitting performance: full_state_materializations="
-        << m_full_state_materialization_count.load()
-        << ", gaussian_cache_hit/miss="
-        << m_gaussian_cache_hit_count.load() << "/"
-        << m_gaussian_cache_miss_count.load()
-        << ", objective_recomputed/reused_samples="
-        << m_objective_recomputed_sample_count.load() << "/"
-        << m_objective_reused_sample_count.load()
-        << ", solver_symbolic_analyses=" << symbolic_analysis_count
-        << ", topology_rebuilds/partition_changes="
-        << m_topology_rebuild_attempt_count << "/"
-        << m_topology_partition_change_count
-        << ", boundary_reconciliations/backtracked/rejected="
-        << m_boundary_reconciliation_attempt_count << "/"
-        << m_boundary_reconciliation_backtracked_count << "/"
-        << m_boundary_reconciliation_rejected_count
-        << ", boundary_joint_correction_attempts/accepted/fallback="
-        << m_boundary_joint_correction_attempt_count << "/"
-        << m_boundary_joint_correction_accepted_count << "/"
-        << m_boundary_joint_correction_fallback_count
-        << ", boundary_rescues/accepted/fallback/rejected="
-        << m_boundary_rescue_attempt_count << "/"
-        << m_boundary_rescue_accepted_count << "/"
-        << m_boundary_rescue_fallback_count << "/"
-        << m_boundary_rescue_rejected_count
-        << ", boundary_rescue_exclusions_suspicious/hard/invalid/no-objective="
-        << m_boundary_rescue_suspicious_exclusion_count << "/"
-        << m_boundary_rescue_hard_failure_exclusion_count << "/"
-        << m_boundary_rescue_invalid_proposal_exclusion_count << "/"
-        << m_boundary_rescue_objective_unavailable_exclusion_count
-        << ", dependency_polish_components/attempted/accepted/fallback="
-        << m_dependency_polish_component_count << "/"
-        << m_dependency_polish_attempt_count << "/"
-        << m_dependency_polish_accepted_count << "/"
-        << m_dependency_polish_fallback_count
-        << ", dependency_polish_atoms/parameters/rounds="
-        << m_dependency_polish_atom_count << "/"
-        << m_dependency_polish_parameter_count << "/"
-        << m_dependency_polish_round_count
-        << ", boundary_reconciliation_ms="
-        << std::fixed << std::setprecision(3)
-        << m_boundary_reconciliation_milliseconds
-        << ", boundary_joint_correction_ms="
-        << m_boundary_joint_correction_milliseconds
-        << ", dependency_polish_ms="
-        << m_dependency_polish_milliseconds
-        << ", iteration/candidate/topology/total_ms="
+    std::ostringstream message_info;
+    message_info
+        << " Second-Stage Local Fitting Performance :\n"
+        << " - boundary_reconciliation_ms = "
+        << std::fixed << std::setprecision(3) << m_boundary_reconciliation_milliseconds << "\n"
+        << " - boundary_joint_correction_ms = " << m_boundary_joint_correction_milliseconds << "\n"
+        << " - dependency_polish_ms = " << m_dependency_polish_milliseconds << "\n"
+        << " - iteration/candidate/topology/total_ms = "
         << std::fixed << std::setprecision(3)
         << m_iteration_phase_milliseconds << "/"
         << m_candidate_phase_milliseconds << "/"
         << m_topology_rebuild_milliseconds << "/"
-        << total_milliseconds << ".";
-    Logger::Log(LogLevel::Info, message.str());
+        << total_milliseconds << "\n";
+
+    std::ostringstream message_debug;
+    message_debug
+        << " - full_state_materializations = " << m_full_state_materialization_count.load() << "\n"
+        << " - gaussian_cache_hit/miss = "
+        << m_gaussian_cache_hit_count.load() << "/" << m_gaussian_cache_miss_count.load() << "\n"
+        << " - objective_recomputed/reused_samples = "
+        << m_objective_recomputed_sample_count.load() << "/"
+        << m_objective_reused_sample_count.load() <<"\n"
+        << " - solver_symbolic_analyses = " << symbolic_analysis_count << "\n"
+        << " - topology_rebuilds/partition_changes = "
+        << m_topology_rebuild_attempt_count << "/" << m_topology_partition_change_count<< "\n"
+        << " - boundary_reconciliations/backtracked/rejected = "
+        << m_boundary_reconciliation_attempt_count << "/"
+        << m_boundary_reconciliation_backtracked_count << "/"
+        << m_boundary_reconciliation_rejected_count << "\n"
+        << " - boundary_joint_correction_attempts/accepted/fallback = "
+        << m_boundary_joint_correction_attempt_count << "/"
+        << m_boundary_joint_correction_accepted_count << "/"
+        << m_boundary_joint_correction_fallback_count << "\n"
+        << " - boundary_rescues/accepted/fallback/rejected = "
+        << m_boundary_rescue_attempt_count << "/"
+        << m_boundary_rescue_accepted_count << "/"
+        << m_boundary_rescue_fallback_count << "/"
+        << m_boundary_rescue_rejected_count << "\n"
+        << " - boundary_rescue_exclusions_suspicious/hard/invalid/no-objective = "
+        << m_boundary_rescue_suspicious_exclusion_count << "/"
+        << m_boundary_rescue_hard_failure_exclusion_count << "/"
+        << m_boundary_rescue_invalid_proposal_exclusion_count << "/"
+        << m_boundary_rescue_objective_unavailable_exclusion_count << "\n"
+        << " - dependency_polish_components/attempted/accepted/fallback = "
+        << m_dependency_polish_component_count << "/"
+        << m_dependency_polish_attempt_count << "/"
+        << m_dependency_polish_accepted_count << "/"
+        << m_dependency_polish_fallback_count << "\n"
+        << " - dependency_polish_atoms/parameters/rounds = "
+        << m_dependency_polish_atom_count << "/"
+        << m_dependency_polish_parameter_count << "/"
+        << m_dependency_polish_round_count << "\n";
+        
+    Logger::Log(LogLevel::Info, message_info.str());
+    Logger::Log(LogLevel::Debug, message_debug.str());
 }
 
 void PerformanceCounters::RecordFullStateMaterialization()

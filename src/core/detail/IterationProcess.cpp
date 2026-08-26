@@ -3227,34 +3227,34 @@ void LogSecondStageSummary(
     };
     Logger::FinishProgressLine();
     std::ostringstream message;
-    message << "Second-stage local fitting summary: accepted_iterations="
-        << iteration_state.accepted_iteration_count << ", best_iteration=";
+    message << " Second-Stage Local Fitting Summary : \n"
+        << " - accepted_iterations = " << iteration_state.accepted_iteration_count << "\n"
+        << " - best_iteration = ";
     if (!best_audit_state.has_value())
     {
-        message << "unavailable";
+        message << "unavailable\n";
     }
     else if (best_audit_state->source_iteration != 0)
     {
-        message << best_audit_state->source_iteration;
+        message << best_audit_state->source_iteration << "\n";
     }
     else
     {
-        message << "initial";
+        message << "initial\n";
     }
-    message << ", stop_reason=" << stop_reason << ", best_audit_objective=";
+    message << " - stop_reason = " << stop_reason << "\n"
+    << " - best_audit_objective = ";
     if (best_audit_state.has_value())
     {
         message << std::scientific << std::setprecision(2)
-            << best_audit_state->objective.GetTotalObjective();
+            << best_audit_state->objective.GetTotalObjective() << "\n";
     }
     else
     {
-        message << "unavailable";
+        message << "unavailable\n";
     }
-    message << ", final_uses_polish=";
-    message << (final_uses_polish ? "yes" : "no");
-    message << ", final_state_source="
-        << (final_uses_best_audit ? "best-audit" : "latest-validated") << ".";
+    message << " - final_uses_polish = " << (final_uses_polish ? "yes" : "no") << "\n";
+    message << " - final_state_source = " << (final_uses_best_audit ? "best-audit" : "latest-validated") << "\n";
     Logger::Log(LogLevel::Info, message.str());
 }
 
