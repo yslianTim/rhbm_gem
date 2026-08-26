@@ -10,6 +10,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -19,6 +20,18 @@
 namespace rhbm_gem::core::detail {
 
 namespace {
+
+struct SizePairHash
+{
+    std::size_t operator()(
+        const std::pair<std::size_t, std::size_t> & pair) const noexcept
+    {
+        const auto left_hash{ std::hash<std::size_t>{}(pair.first) };
+        const auto right_hash{ std::hash<std::size_t>{}(pair.second) };
+        return left_hash ^ (right_hash + static_cast<std::size_t>(0x9e3779b9) +
+            (left_hash << 6) + (left_hash >> 2));
+    }
+};
 
 class DisjointSet
 {
@@ -66,9 +79,14 @@ std::size_t DisjointSet::Find(std::size_t index)
 
 void DisjointSet::Merge(std::size_t left, std::size_t right)
 {
-    const auto left_root{ Find(left) };
-    const auto right_root{ Find(right) };
+    auto left_root{ Find(left) };
+    auto right_root{ Find(right) };
     if (left_root == right_root) return;
+    if (m_component_size_list.at(left_root) <
+        m_component_size_list.at(right_root))
+    {
+        std::swap(left_root, right_root);
+    }
     m_parent_list.at(right_root) = left_root;
     m_component_size_list.at(left_root) += m_component_size_list.at(right_root);
 }
@@ -176,34 +194,109 @@ CouplingGraphBuilder::BuildThresholdSensitivity(
 {
     std::vector<CouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
     sensitivity_list.reserve(minimum_weight_list.size());
-    for (const auto minimum_weight : minimum_weight_list)
+    if (minimum_weight_list.empty()) return sensitivity_list;
+
+    struct ThresholdEntry
     {
-        DisjointSet component_set{ m_atom_count };
-        std::size_t retained_edge_count{ 0 };
-        for (const auto & weighted_edge : weighted_edge_list)
+        double minimum_weight{ 0.0 };
+        std::size_t original_index{ 0 };
+    };
+
+    std::vector<ThresholdEntry> threshold_entry_list;
+    threshold_entry_list.reserve(minimum_weight_list.size());
+    for (std::size_t index = 0; index < minimum_weight_list.size(); index++)
+    {
+        threshold_entry_list.emplace_back(
+            ThresholdEntry{ minimum_weight_list.at(index), index });
+    }
+    std::sort(
+        threshold_entry_list.begin(),
+        threshold_entry_list.end(),
+        [](const auto & lhs, const auto & rhs)
         {
-            const auto weight{ weighted_edge.weight };
-            if (weight < minimum_weight) continue;
-            retained_edge_count++;
+            if (lhs.minimum_weight != rhs.minimum_weight)
+            {
+                return lhs.minimum_weight > rhs.minimum_weight;
+            }
+            return lhs.original_index < rhs.original_index;
+        });
+
+    std::vector<double> threshold_list;
+    std::vector<std::size_t> bucket_index_by_original_index(
+        minimum_weight_list.size());
+    for (const auto & entry : threshold_entry_list)
+    {
+        if (threshold_list.empty() || threshold_list.back() != entry.minimum_weight)
+        {
+            threshold_list.emplace_back(entry.minimum_weight);
+        }
+        bucket_index_by_original_index.at(entry.original_index) =
+            threshold_list.size() - 1;
+    }
+
+    std::vector<std::vector<std::size_t>> edge_index_list_by_bucket(
+        threshold_list.size());
+    for (std::size_t edge_index = 0;
+        edge_index < weighted_edge_list.size();
+        edge_index++)
+    {
+        const auto bucket_iter{ std::lower_bound(
+            threshold_list.begin(),
+            threshold_list.end(),
+            weighted_edge_list.at(edge_index).weight,
+            [](const double threshold, const double weight)
+            {
+                return threshold > weight;
+            }) };
+        if (bucket_iter == threshold_list.end()) continue;
+        edge_index_list_by_bucket.at(
+            static_cast<std::size_t>(bucket_iter - threshold_list.begin()))
+            .emplace_back(edge_index);
+    }
+
+    struct ThresholdSnapshot
+    {
+        std::size_t retained_edge_count{ 0 };
+        DisjointSetComponentSummary component_summary{};
+    };
+    std::vector<ThresholdSnapshot> snapshot_list(threshold_list.size());
+    DisjointSet component_set{ m_atom_count };
+    std::size_t retained_edge_count{ 0 };
+    for (std::size_t bucket_index = 0;
+        bucket_index < threshold_list.size();
+        bucket_index++)
+    {
+        for (const auto edge_index : edge_index_list_by_bucket.at(bucket_index))
+        {
+            const auto & weighted_edge{ weighted_edge_list.at(edge_index) };
             component_set.Merge(
                 weighted_edge.left_atom_index,
                 weighted_edge.right_atom_index);
         }
-
-        const auto component_summary{
+        retained_edge_count += edge_index_list_by_bucket.at(bucket_index).size();
+        snapshot_list.at(bucket_index) = ThresholdSnapshot{
+            retained_edge_count,
             SummarizeDisjointSetComponents(component_set, m_atom_count)
+        };
+    }
+
+    for (std::size_t original_index = 0;
+        original_index < minimum_weight_list.size();
+        original_index++)
+    {
+        const auto & snapshot{
+            snapshot_list.at(bucket_index_by_original_index.at(original_index))
         };
         sensitivity_list.emplace_back(
             CouplingGraphSummary::ThresholdSensitivity{
-                minimum_weight,
-                retained_edge_count,
-                weighted_edge_list.size() - retained_edge_count,
-                component_summary.component_count,
-                component_summary.maximum_component_size,
+                minimum_weight_list.at(original_index),
+                snapshot.retained_edge_count,
+                weighted_edge_list.size() - snapshot.retained_edge_count,
+                snapshot.component_summary.component_count,
+                snapshot.component_summary.maximum_component_size,
                 m_atom_count == 0 ? 0.0 :
-                    static_cast<double>(
-                        component_summary.maximum_component_size) /
-                        static_cast<double>(m_atom_count)
+                    static_cast<double>(snapshot.component_summary.maximum_component_size) /
+                    static_cast<double>(m_atom_count)
             });
     }
     return sensitivity_list;
@@ -220,6 +313,32 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
         throw std::invalid_argument(
             "Previous local fitting coupling topology has an inconsistent atom count.");
     }
+
+    std::unordered_set<AtomPair, AtomPairHash> previous_edge_set;
+    const bool use_previous_edge_set{
+        previous_topology != nullptr &&
+        options.retained_edge_minimum_weight.has_value()
+    };
+    if (use_previous_edge_set)
+    {
+        std::size_t previous_edge_count{ 0 };
+        for (const auto & neighbor_list : previous_topology->adjacency_list)
+        {
+            previous_edge_count += neighbor_list.size();
+        }
+        previous_edge_set.reserve(previous_edge_count);
+        for (std::size_t atom_index = 0;
+            atom_index < previous_topology->adjacency_list.size();
+            atom_index++)
+        {
+            for (const auto neighbor_index :
+                previous_topology->adjacency_list.at(atom_index))
+            {
+                previous_edge_set.emplace(atom_index, neighbor_index);
+            }
+        }
+    }
+
     GraphTopology topology;
     topology.adjacency_list.resize(m_atom_count);
     topology.sample_dependency_list = std::move(m_sample_dependency_list);
@@ -232,18 +351,13 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
         const auto weight{ weighted_edge.weight };
         weight_list.emplace_back(weight);
         auto minimum_weight{ options.minimum_weight };
-        if (previous_topology != nullptr &&
-            options.retained_edge_minimum_weight.has_value())
+        if (use_previous_edge_set &&
+            previous_edge_set.contains(AtomPair{
+                weighted_edge.left_atom_index,
+                weighted_edge.right_atom_index
+            }))
         {
-            const auto & previous_neighbor_list{
-                previous_topology->adjacency_list.at(weighted_edge.left_atom_index)
-            };
-            if (std::ranges::find(
-                    previous_neighbor_list,
-                    weighted_edge.right_atom_index) != previous_neighbor_list.end())
-            {
-                minimum_weight = *options.retained_edge_minimum_weight;
-            }
+            minimum_weight = *options.retained_edge_minimum_weight;
         }
         if (weight < minimum_weight) continue;
 
@@ -266,6 +380,7 @@ CouplingGraphBuilder::CouplingGraphBuilder(std::size_t atom_count)
     : m_atom_count{ atom_count },
       m_self_gram_list(atom_count, Eigen::Matrix3d::Zero())
 {
+    m_pair_accumulator_by_pair.reserve(atom_count);
 }
 
 void CouplingGraphBuilder::AddSample(
@@ -310,13 +425,8 @@ void CouplingGraphBuilder::AddSample(
             const auto & left{ participant_list.at(i) };
             const auto & right{ participant_list.at(j) };
             const AtomPair pair{ left.atom_index, right.atom_index };
-            auto pair_iter{ m_pair_accumulator_by_pair.find(pair) };
-            if (pair_iter == m_pair_accumulator_by_pair.end())
-            {
-                pair_iter = m_pair_accumulator_by_pair.emplace(
-                    pair,
-                    Eigen::Matrix3d::Zero()).first;
-            }
+            auto [pair_iter, inserted]{ m_pair_accumulator_by_pair.try_emplace(pair) };
+            if (inserted) pair_iter->second.setZero();
             if (m_has_invalid_jacobian) continue;
             pair_iter->second +=
                 left.jacobian * right.jacobian.transpose();
@@ -330,13 +440,13 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
 {
     if (m_has_invalid_jacobian) return BuildBinary();
 
-    std::vector<double> self_gram_norm_list(m_atom_count, 0.0);
-    std::vector<char> self_gram_norm_is_built(m_atom_count, 0);
-    const auto get_self_gram_norm = [&](std::size_t atom_index)
+    std::vector<double> self_gram_scale_list(m_atom_count, 0.0);
+    std::vector<char> self_gram_scale_is_built(m_atom_count, 0);
+    const auto get_self_gram_scale = [&](std::size_t atom_index)
     {
-        if (self_gram_norm_is_built.at(atom_index) != 0)
+        if (self_gram_scale_is_built.at(atom_index) != 0)
         {
-            return self_gram_norm_list.at(atom_index);
+            return self_gram_scale_list.at(atom_index);
         }
         const auto & self_gram{ m_self_gram_list.at(atom_index) };
         if (!self_gram.allFinite())
@@ -344,9 +454,10 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
             return std::numeric_limits<double>::quiet_NaN();
         }
         const auto norm{ FrobeniusNorm(self_gram) };
-        self_gram_norm_is_built.at(atom_index) = 1;
-        self_gram_norm_list.at(atom_index) = norm;
-        return norm;
+        const auto scale{ std::sqrt(norm) };
+        self_gram_scale_is_built.at(atom_index) = 1;
+        self_gram_scale_list.at(atom_index) = scale;
+        return scale;
     };
 
     std::vector<GraphWeightedEdge> weighted_edge_list;
@@ -354,21 +465,21 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
     for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
     {
         if (!cross_gram.allFinite()) return BuildBinary();
-        const auto left_norm{ get_self_gram_norm(pair.first) };
-        const auto right_norm{ get_self_gram_norm(pair.second) };
-        if (!std::isfinite(left_norm) || !std::isfinite(right_norm))
+        const auto left_scale{ get_self_gram_scale(pair.first) };
+        const auto right_scale{ get_self_gram_scale(pair.second) };
+        if (!std::isfinite(left_scale) || !std::isfinite(right_scale))
         {
             return BuildBinary();
         }
         double weight{ 0.0 };
-        if (left_norm == 0.0 || right_norm == 0.0)
+        if (left_scale == 0.0 || right_scale == 0.0)
         {
             weighted_edge_list.emplace_back(
                 GraphWeightedEdge{ pair.first, pair.second, weight });
             continue;
         }
         const auto denominator{
-            std::sqrt(left_norm) * std::sqrt(right_norm)
+            left_scale * right_scale
         };
         if (!std::isfinite(denominator)) return BuildBinary();
         const auto raw_weight{ FrobeniusNorm(cross_gram) / denominator };
@@ -377,6 +488,17 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
         weighted_edge_list.emplace_back(
             GraphWeightedEdge{ pair.first, pair.second, weight });
     }
+    std::sort(
+        weighted_edge_list.begin(),
+        weighted_edge_list.end(),
+        [](const auto & lhs, const auto & rhs)
+        {
+            if (lhs.left_atom_index != rhs.left_atom_index)
+            {
+                return lhs.left_atom_index < rhs.left_atom_index;
+            }
+            return lhs.right_atom_index < rhs.right_atom_index;
+        });
     auto topology{ BuildFromWeights(weighted_edge_list, options, previous_topology) };
     topology.summary.uses_weighted_graph = true;
     topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
@@ -397,6 +519,17 @@ GraphTopology CouplingGraphBuilder::BuildBinary()
             1.0
         });
     }
+    std::sort(
+        weighted_edge_list.begin(),
+        weighted_edge_list.end(),
+        [](const auto & lhs, const auto & rhs)
+        {
+            if (lhs.left_atom_index != rhs.left_atom_index)
+            {
+                return lhs.left_atom_index < rhs.left_atom_index;
+            }
+            return lhs.right_atom_index < rhs.right_atom_index;
+        });
     CouplingGraphOptions options;
     options.minimum_weight = 0.0;
     return BuildFromWeights(weighted_edge_list, options, nullptr);
@@ -697,7 +830,21 @@ GraphTopology ApplyGraphResidueCutoff(
     }
 
     using ResiduePair = std::pair<std::size_t, std::size_t>;
-    std::map<ResiduePair, double> maximum_weight_by_residue_pair;
+    std::unordered_map<ResiduePair, double, SizePairHash>
+        maximum_weight_by_residue_pair;
+    std::size_t maximum_residue_pair_count{ 0 };
+    if (residue_index_by_key.size() > 1)
+    {
+        const auto residue_count{ residue_index_by_key.size() };
+        const auto residue_factor{ residue_count - 1 };
+        maximum_residue_pair_count =
+            residue_count > std::numeric_limits<std::size_t>::max() / residue_factor ?
+                std::numeric_limits<std::size_t>::max() :
+                residue_count * residue_factor / 2;
+    }
+    maximum_weight_by_residue_pair.reserve(std::min(
+        topology.retained_edge_list.size(),
+        maximum_residue_pair_count));
     for (const auto & edge : topology.retained_edge_list)
     {
         if (edge.left_atom_index >= atom_count || edge.right_atom_index >= atom_count)
@@ -764,6 +911,9 @@ GraphTopology ApplyGraphResidueCutoff(
     }
 
     topology.adjacency_list.assign(atom_count, {});
+    std::vector<std::size_t> adjacency_degree_list(atom_count, 0);
+    std::vector<const GraphWeightedEdge *> connected_edge_list;
+    connected_edge_list.reserve(topology.retained_edge_list.size());
     std::size_t cut_edge_count{ 0 };
     for (const auto & edge : topology.retained_edge_list)
     {
@@ -779,8 +929,21 @@ GraphTopology ApplyGraphResidueCutoff(
             cut_edge_count++;
             continue;
         }
-        topology.adjacency_list.at(edge.left_atom_index).emplace_back(edge.right_atom_index);
-        topology.adjacency_list.at(edge.right_atom_index).emplace_back(edge.left_atom_index);
+        connected_edge_list.emplace_back(&edge);
+        adjacency_degree_list.at(edge.left_atom_index)++;
+        adjacency_degree_list.at(edge.right_atom_index)++;
+    }
+    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
+    {
+        topology.adjacency_list.at(atom_index).reserve(
+            adjacency_degree_list.at(atom_index));
+    }
+    for (const auto * edge : connected_edge_list)
+    {
+        topology.adjacency_list.at(edge->left_atom_index).emplace_back(
+            edge->right_atom_index);
+        topology.adjacency_list.at(edge->right_atom_index).emplace_back(
+            edge->left_atom_index);
     }
 
     const auto residue_component_summary{
@@ -834,6 +997,7 @@ void UpdateGraphComponentSummary(GraphTopology & topology)
                 throw std::invalid_argument(
                     "Local fitting coupling edge index is out of range.");
             }
+            if (atom_index >= neighbor_index) continue;
             component_set.Merge(atom_index, neighbor_index);
         }
     }

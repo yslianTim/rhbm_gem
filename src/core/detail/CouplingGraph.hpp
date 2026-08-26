@@ -3,8 +3,10 @@
 #include "core/detail/FittingModel.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -132,9 +134,21 @@ class CouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
 
+    struct AtomPairHash
+    {
+        std::size_t operator()(const AtomPair & pair) const noexcept
+        {
+            const auto left_hash{ std::hash<std::size_t>{}(pair.first) };
+            const auto right_hash{ std::hash<std::size_t>{}(pair.second) };
+            return left_hash ^ (right_hash + static_cast<std::size_t>(0x9e3779b9) +
+                (left_hash << 6) + (left_hash >> 2));
+        }
+    };
+
     std::size_t m_atom_count{ 0 };
     std::vector<Eigen::Matrix3d> m_self_gram_list{};
-    std::map<AtomPair, Eigen::Matrix3d> m_pair_accumulator_by_pair{};
+    std::unordered_map<AtomPair, Eigen::Matrix3d, AtomPairHash>
+        m_pair_accumulator_by_pair{};
     std::vector<GraphSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
