@@ -188,6 +188,7 @@ struct RawIterationResult
     SuspiciousBlockActivity block_activity{};
     SuspiciousBlockActivity failure_block_activity{};
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom{};
+    std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
     ClusterHealthMap health_by_key{};
 };
 
@@ -198,6 +199,7 @@ struct LocalAtomRefitResult
     bool is_boundary_correction_eligible{ false };
     bool shape_fixed{ false };
     SuspiciousGaussianAssessment assessment{};
+    std::optional<RHBMEstimationStatus> attempted_refit_status{};
 };
 
 static std::optional<SecondStageSeedSelection>
@@ -275,6 +277,77 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
         AdaptiveTopologyRebuildTrigger::None,
         maximum_transformed_drift
     };
+}
+
+ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
+    bool stationarity_eligible,
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & raw_change)
+{
+    return ConvergenceSafeguardPredicates{
+        stationarity_eligible,
+        ConvergenceChangePredicates{
+            IsTransformedPercentileConverged(accepted_change),
+            IsTransformedMaximumConverged(accepted_change)
+        },
+        ConvergenceChangePredicates{
+            IsTransformedPercentileConverged(raw_change),
+            IsTransformedMaximumConverged(raw_change)
+        }
+    };
+}
+
+TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
+    const std::vector<std::size_t> & atom_index_list,
+    const SuspiciousBlockActivity & block_activity)
+{
+    TransformedChangeIndexListByParameter result;
+    for (const auto atom_index : atom_index_list)
+    {
+        if (block_activity.HasActiveShape(atom_index))
+        {
+            result.at(kLogPeakHeightChangeIndex).emplace_back(atom_index);
+            result.at(kLogWidthChangeIndex).emplace_back(atom_index);
+        }
+        if (block_activity.HasActiveOffset(atom_index))
+        {
+            result.at(kOffsetToPeakRatioChangeIndex).emplace_back(atom_index);
+        }
+    }
+    return result;
+}
+
+ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
+    const ClusterHealthMap & health_by_key)
+{
+    ConvergenceStationarityAudit result;
+    result.active_block_eligible = std::ranges::all_of(
+        health_by_key | std::views::values,
+        &ClusterHealth::is_active_block_stationarity_eligible);
+    result.full_cluster_eligible = AreClustersStationarityEligible(health_by_key);
+    for (const auto & health : health_by_key | std::views::values)
+    {
+        if (!health.is_active_block_stationarity_eligible)
+        {
+            result.active_block_ineligible_cluster_count++;
+        }
+        if (!health.is_refit_stationarity_eligible)
+        {
+            result.refit_ineligible_cluster_count++;
+        }
+        if (health.joint_offset_status != JointOffsetSolveStatus::Converged)
+        {
+            if (IsJointOffsetSolveHardFailure(health.joint_offset_status))
+            {
+                result.hard_joint_failure_cluster_count++;
+            }
+            else
+            {
+                result.soft_joint_nonconverged_cluster_count++;
+            }
+        }
+    }
+    return result;
 }
 
 namespace {
@@ -1676,6 +1749,193 @@ static void LogIterationProgress(
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
 
+static void AppendAuditValues(
+    std::ostringstream & message,
+    const std::vector<double> & value_list)
+{
+    for (std::size_t i = 0; i < value_list.size(); i++)
+    {
+        if (i != 0) message << "/";
+        message << value_list.at(i);
+    }
+}
+
+static void AppendAuditPopulation(
+    std::ostringstream & message,
+    const std::array<std::size_t, kTransformedChangeSize> & population_size_list)
+{
+    for (std::size_t i = 0; i < population_size_list.size(); i++)
+    {
+        if (i != 0) message << "/";
+        message << population_size_list.at(i);
+    }
+}
+
+static void LogConvergenceSafeguardAudit(
+    bool quiet_mode,
+    std::size_t attempt_number,
+    const IterationProgress & progress,
+    const ConvergenceSafeguardPredicates & predicates,
+    const ConvergenceSafeguardPredicates & shadow_predicates,
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & raw_change,
+    const TransformedChangeSummary & accepted_shadow_change,
+    const TransformedChangeSummary & raw_shadow_change,
+    const ConvergenceStationarityAudit & stationarity,
+    const IterationDiagnostics & diagnostics,
+    const SuspiciousBlockActivity & block_activity,
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
+    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
+    bool accepted_equals_raw,
+    bool assembled_uses_polish,
+    bool has_quarantine_transition,
+    bool objective_domain_changed)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+
+    const auto trust_limited_count{ static_cast<std::size_t>(std::ranges::count_if(
+        diagnostics.accepted_cluster_diagnostic_list,
+        [](const auto & diagnostic)
+        {
+            return diagnostic.attempt.effective_damping < 1.0;
+        })) };
+    const auto cluster_backtracked_count{ static_cast<std::size_t>(std::ranges::count_if(
+        diagnostics.accepted_cluster_diagnostic_list,
+        [](const auto & diagnostic)
+        {
+            return diagnostic.attempt.accepted_backtracking_factor.has_value() &&
+                *diagnostic.attempt.accepted_backtracking_factor < 1.0;
+        })) };
+    const auto boundary_backtracked_count{ static_cast<std::size_t>(std::ranges::count_if(
+        diagnostics.boundary_reconciliation_diagnostic_list,
+        [](const auto & diagnostic)
+        {
+            return diagnostic.accepted &&
+                diagnostic.accepted_source == BoundaryComponentAcceptedSource::Backtracking;
+        })) };
+    const auto accepted_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
+        diagnostics.boundary_reconciliation_diagnostic_list,
+        &BoundaryComponentReconciliationDiagnostic::accepted)) };
+    const auto rescued_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
+        diagnostics.boundary_reconciliation_diagnostic_list,
+        [](const auto & diagnostic)
+        {
+            return diagnostic.accepted && diagnostic.is_rescue_attempt;
+        })) };
+    const auto damped_atom_count{ static_cast<std::size_t>(std::ranges::count_if(
+        assessment_by_atom,
+        [](const auto & assessment)
+        {
+            return assessment.damping_factor != 1.0;
+        })) };
+    const auto shape_fixed_count{ static_cast<std::size_t>(
+        std::ranges::count(block_activity.shape_fixed_atom_mask, 1)) };
+    const auto offset_fixed_count{ static_cast<std::size_t>(
+        std::ranges::count(block_activity.offset_fixed_atom_mask, 1)) };
+    const auto hard_fixed_count{ static_cast<std::size_t>(
+        std::ranges::count(block_activity.hard_failure_atom_mask, 1)) };
+    std::array<std::size_t, 5> local_refit_status_count{};
+    std::size_t unavailable_local_refit_status_count{ 0 };
+    for (const auto status : local_refit_status_by_atom)
+    {
+        if (!status.has_value())
+        {
+            unavailable_local_refit_status_count++;
+            continue;
+        }
+        switch (*status)
+        {
+        case RHBMEstimationStatus::SUCCESS:
+            local_refit_status_count.at(0)++;
+            break;
+        case RHBMEstimationStatus::MAX_ITERATIONS_REACHED:
+            local_refit_status_count.at(1)++;
+            break;
+        case RHBMEstimationStatus::SINGLE_MEMBER:
+            local_refit_status_count.at(2)++;
+            break;
+        case RHBMEstimationStatus::INSUFFICIENT_DATA:
+            local_refit_status_count.at(3)++;
+            break;
+        case RHBMEstimationStatus::NUMERICAL_FALLBACK:
+            local_refit_status_count.at(4)++;
+            break;
+        }
+    }
+
+    std::ostringstream message;
+    message << std::scientific << std::setprecision(6)
+        << "Convergence safeguard audit: try=" << attempt_number
+        << ", acc=" << progress.accepted_iteration_count
+        << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
+        << ", quarantine=" << progress.quarantine_atom_count
+        << ", population=";
+    AppendAuditPopulation(message, accepted_change.population_size_list);
+    message << ", shadow-population=";
+    AppendAuditPopulation(message, accepted_shadow_change.population_size_list);
+    message
+        << ", predicates[s/a99/amax/r99/rmax]="
+        << predicates.stationarity_eligible << "/"
+        << predicates.accepted.percentile_converged << "/"
+        << predicates.accepted.maximum_converged << "/"
+        << predicates.raw.percentile_converged << "/"
+        << predicates.raw.maximum_converged
+        << ", shadow-predicates[s/a99/amax/r99/rmax]="
+        << shadow_predicates.stationarity_eligible << "/"
+        << shadow_predicates.accepted.percentile_converged << "/"
+        << shadow_predicates.accepted.maximum_converged << "/"
+        << shadow_predicates.raw.percentile_converged << "/"
+        << shadow_predicates.raw.maximum_converged
+        << ", accepted-p99=";
+    AppendAuditValues(message, accepted_change.percentile_stats.percentile_list);
+    message << ", accepted-max=";
+    AppendAuditValues(message, accepted_change.maximum_list);
+    message << ", raw-p99=";
+    AppendAuditValues(message, raw_change.percentile_stats.percentile_list);
+    message << ", raw-max=";
+    AppendAuditValues(message, raw_change.maximum_list);
+    message << ", shadow-accepted-p99=";
+    AppendAuditValues(message, accepted_shadow_change.percentile_stats.percentile_list);
+    message << ", shadow-accepted-max=";
+    AppendAuditValues(message, accepted_shadow_change.maximum_list);
+    message << ", shadow-raw-p99=";
+    AppendAuditValues(message, raw_shadow_change.percentile_stats.percentile_list);
+    message << ", shadow-raw-max=";
+    AppendAuditValues(message, raw_shadow_change.maximum_list);
+    message
+        << ", accepted-equals-raw=" << accepted_equals_raw
+        << ", path[trust/backtrack/polish/boundary/rescue]="
+        << trust_limited_count << "/"
+        << cluster_backtracked_count + boundary_backtracked_count << "/"
+        << assembled_uses_polish << "/"
+        << accepted_boundary_count << "/"
+        << rescued_boundary_count
+        << ", stationarity[current/full/active-ineligible/refit-ineligible/soft-joint/hard-joint]="
+        << stationarity.active_block_eligible << "/"
+        << stationarity.full_cluster_eligible << "/"
+        << stationarity.active_block_ineligible_cluster_count << "/"
+        << stationarity.refit_ineligible_cluster_count << "/"
+        << stationarity.soft_joint_nonconverged_cluster_count << "/"
+        << stationarity.hard_joint_failure_cluster_count
+        << ", local-status[success/max-iter/single/insufficient/numerical/unavailable]="
+        << local_refit_status_count.at(0) << "/"
+        << local_refit_status_count.at(1) << "/"
+        << local_refit_status_count.at(2) << "/"
+        << local_refit_status_count.at(3) << "/"
+        << local_refit_status_count.at(4) << "/"
+        << unavailable_local_refit_status_count
+        << ", fixed[shape/offset/hard]="
+        << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
+        << ", damped-atoms=" << damped_atom_count
+        << ", blockers[suspicious/rejected/quarantine-transition/domain-change]="
+        << progress.suspicious_atom_count << "/"
+        << progress.rejected_cluster_count << "/"
+        << has_quarantine_transition << "/"
+        << objective_domain_changed << ".";
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Debug, message.str());
+}
+
 constexpr std::size_t kGuardAwareDampingMaximumHalvings{ 8 };
 
 struct GuardAwareDampingResult
@@ -1787,6 +2047,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model, options)
     };
     std::optional<SuspiciousGaussianAssessment> failed_shape_assessment;
+    std::optional<RHBMEstimationStatus> attempted_refit_status;
     bool has_guard_safe_nonmaterial_stationarity{ false };
     try
     {
@@ -1798,6 +2059,10 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 options,
                 offset_model)
         };
+        if (candidate_result.fit_result.has_value())
+        {
+            attempted_refit_status = candidate_result.fit_result->status;
+        }
         const auto damped_candidate{
             FindGuardSafeShapeCandidate(
                 adjusted_sampling_entries,
@@ -1835,7 +2100,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 is_stationarity_eligible,
                 true,
                 false,
-                damped_candidate.assessment
+                damped_candidate.assessment,
+                attempted_refit_status
             };
         }
         has_guard_safe_nonmaterial_stationarity =
@@ -1882,7 +2148,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         has_guard_safe_nonmaterial_stationarity,
         true,
         true,
-        failed_shape_assessment.value_or(fallback_assessment)
+        failed_shape_assessment.value_or(fallback_assessment),
+        attempted_refit_status
     };
 }
 
@@ -1955,6 +2222,8 @@ static RawIterationResult RunRawIteration(
         SuspiciousUpdateMask(context.size(), 0)
     };
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
+    std::vector<std::optional<RHBMEstimationStatus>>
+        local_refit_status_by_atom(context.size());
     std::vector<std::size_t> group_id_by_atom_index;
     group_id_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
@@ -2244,6 +2513,8 @@ static RawIterationResult RunRawIteration(
                 };
                 continue;
             }
+            local_refit_status_by_atom.at(atom_index) =
+                refit_result->attempted_refit_status;
             if (!refit_result->is_stationarity_eligible)
             {
                 health.is_refit_stationarity_eligible = false;
@@ -2331,6 +2602,7 @@ static RawIterationResult RunRawIteration(
         std::move(block_activity),
         failure_block_activity,
         std::move(assessment_by_atom),
+        std::move(local_refit_status_by_atom),
         std::move(health_by_key)
     };
 }
@@ -2829,6 +3101,12 @@ static IterationResult RunIteration(
             previous_state,
             iteration_state.active_index_list)
     };
+    const auto safeguard_predicates{
+        EvaluateConvergenceSafeguardPredicates(
+            is_stationarity_eligible,
+            transformed_change_summary,
+            raw_fixed_point_change_summary)
+    };
     iteration_state.accepted_iteration_count++;
     iteration_state.accepted_iterations_since_topology_rebuild++;
     if (TryRebuildAdaptiveTopology(
@@ -2892,11 +3170,62 @@ static IterationResult RunIteration(
     result.converged =
         !objective_domain_changed &&
         !has_quarantine_transition &&
-        is_stationarity_eligible &&
         !has_suspicious_offset_fallback &&
         selection.rejected_key_list.empty() &&
-        IsTransformedChangeConverged(transformed_change_summary) &&
-        IsTransformedChangeConverged(raw_fixed_point_change_summary);
+        safeguard_predicates.Converged();
+
+    if (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug)
+    {
+        const auto active_block_change_index_list{
+            BuildActiveBlockChangeIndexLists(
+                iteration_state.active_index_list,
+                raw_iteration_result.block_activity)
+        };
+        const auto accepted_shadow_change_summary{
+            SummarizeTransformedChangesByParameter(
+                assembled_state,
+                previous_state,
+                active_block_change_index_list)
+        };
+        const auto raw_shadow_change_summary{
+            SummarizeTransformedChangesByParameter(
+                raw_state,
+                previous_state,
+                active_block_change_index_list)
+        };
+        const auto shadow_safeguard_predicates{
+            EvaluateConvergenceSafeguardPredicates(
+                is_stationarity_eligible,
+                accepted_shadow_change_summary,
+                raw_shadow_change_summary)
+        };
+        const auto accepted_raw_change_summary{
+            SummarizeTransformedChanges(
+                assembled_state,
+                raw_state,
+                iteration_state.active_index_list)
+        };
+        LogConvergenceSafeguardAudit(
+            options.quiet_mode,
+            attempt_number,
+            result.progress,
+            safeguard_predicates,
+            shadow_safeguard_predicates,
+            transformed_change_summary,
+            raw_fixed_point_change_summary,
+            accepted_shadow_change_summary,
+            raw_shadow_change_summary,
+            EvaluateConvergenceStationarityAudit(
+                raw_iteration_result.health_by_key),
+            result.diagnostics,
+            raw_iteration_result.block_activity,
+            raw_iteration_result.assessment_by_atom,
+            raw_iteration_result.local_refit_status_by_atom,
+            GetMaximumTransformedChange(accepted_raw_change_summary) == 0.0,
+            assembled_uses_polish,
+            has_quarantine_transition,
+            objective_domain_changed);
+    }
 
     iteration_state.previous_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);

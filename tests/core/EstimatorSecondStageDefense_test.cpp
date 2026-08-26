@@ -171,6 +171,29 @@ rg::LocalGaussianResult MakeGaussianResult(const rg::GaussianModel3D & model)
     return result;
 }
 
+std::vector<std::string> CollectLogLinesContaining(
+    std::string_view output,
+    std::string_view marker)
+{
+    std::vector<std::string> result;
+    std::size_t line_start{ 0 };
+    while (line_start < output.size())
+    {
+        const auto line_end{ output.find('\n', line_start) };
+        const auto line{ output.substr(
+            line_start,
+            line_end == std::string_view::npos ? output.size() - line_start :
+                line_end - line_start) };
+        if (line.find(marker) != std::string_view::npos)
+        {
+            result.emplace_back(line);
+        }
+        if (line_end == std::string_view::npos) break;
+        line_start = line_end + 1;
+    }
+    return result;
+}
+
 LocalPotentialSampleList BuildSamples(
     const rg::AtomObject & target_atom,
     const std::vector<rg::AtomObject *> & atom_list,
@@ -4904,6 +4927,185 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         maximum_list));
 }
 
+TEST(EstimatorSecondStageDefenseTest, ConvergenceSafeguardsKeepAcceptedRawAndStationarityIndependent)
+{
+    const auto make_summary = [](
+        double percentile,
+        double maximum)
+    {
+        change_detail::TransformedChangeSummary summary;
+        summary.percentile_stats.percentile_list.assign(
+            change_detail::kTransformedChangeSize,
+            percentile);
+        summary.maximum_list.assign(
+            change_detail::kTransformedChangeSize,
+            maximum);
+        summary.population_size_list.fill(100);
+        return summary;
+    };
+    const auto small{ make_summary(5.0e-5, 5.0e-4) };
+    const auto large{ make_summary(2.0e-4, 2.0e-3) };
+
+    const auto accepted_small{
+        audit_detail::EvaluateConvergenceSafeguardPredicates(true, small, large)
+    };
+    EXPECT_TRUE(accepted_small.stationarity_eligible);
+    EXPECT_TRUE(accepted_small.accepted.Converged());
+    EXPECT_FALSE(accepted_small.raw.Converged());
+    EXPECT_FALSE(accepted_small.Converged());
+
+    const auto raw_small{
+        audit_detail::EvaluateConvergenceSafeguardPredicates(true, large, small)
+    };
+    EXPECT_FALSE(raw_small.accepted.Converged());
+    EXPECT_TRUE(raw_small.raw.Converged());
+    EXPECT_FALSE(raw_small.Converged());
+
+    const auto nonstationary_small{
+        audit_detail::EvaluateConvergenceSafeguardPredicates(false, small, small)
+    };
+    EXPECT_TRUE(nonstationary_small.accepted.Converged());
+    EXPECT_TRUE(nonstationary_small.raw.Converged());
+    EXPECT_FALSE(nonstationary_small.Converged());
+}
+
+TEST(EstimatorSecondStageDefenseTest, TransformedPercentileAndMaximumHaveUniqueFailureCoverage)
+{
+    std::vector<alg::ParameterChange> isolated_tail(
+        1000,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    isolated_tail.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) =
+        2.0e-3;
+    change_detail::TransformedChangeIndexListByParameter all_indices;
+    for (auto & index_list : all_indices)
+    {
+        index_list.resize(isolated_tail.size());
+        for (std::size_t i = 0; i < index_list.size(); i++) index_list.at(i) = i;
+    }
+    const auto isolated_summary{
+        change_detail::SummarizeTransformedChangesByParameter(
+            isolated_tail,
+            all_indices)
+    };
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(isolated_summary));
+    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(isolated_summary));
+
+    std::vector<alg::ParameterChange> coherent_drift(
+        1000,
+        alg::ParameterChange{ std::vector<double>(3, 5.0e-4) });
+    const auto coherent_summary{
+        change_detail::SummarizeTransformedChangesByParameter(
+            coherent_drift,
+            all_indices)
+    };
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(coherent_summary));
+    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(coherent_summary));
+}
+
+TEST(EstimatorSecondStageDefenseTest, P99ImpliesMaximumOnlyThroughNinetyOneMembers)
+{
+    const auto summarize_single_tail = [](std::size_t count, double maximum)
+    {
+        std::vector<alg::ParameterChange> change_list(
+            count,
+            alg::ParameterChange{ std::vector<double>(3, 0.0) });
+        change_list.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) = maximum;
+        change_detail::TransformedChangeIndexListByParameter all_indices;
+        for (auto & index_list : all_indices)
+        {
+            index_list.resize(count);
+            for (std::size_t i = 0; i < count; i++) index_list.at(i) = i;
+        }
+        return change_detail::SummarizeTransformedChangesByParameter(
+            change_list,
+            all_indices);
+    };
+
+    const auto ninety_one{ summarize_single_tail(91, 9.999e-4) };
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(ninety_one));
+    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(ninety_one));
+
+    const auto ninety_two{ summarize_single_tail(92, 1.05e-3) };
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(ninety_two));
+    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(ninety_two));
+}
+
+TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlockDilution)
+{
+    constexpr std::size_t atom_count{ 1000 };
+    constexpr std::size_t fixed_atom_count{ 990 };
+    std::vector<alg::ParameterChange> change_list(
+        atom_count,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    for (std::size_t i = fixed_atom_count; i < atom_count; i++)
+    {
+        change_list.at(i).value_list.assign(3, 5.0e-4);
+    }
+    std::vector<std::size_t> atom_index_list(atom_count);
+    for (std::size_t i = 0; i < atom_count; i++) atom_index_list.at(i) = i;
+    change_detail::TransformedChangeIndexListByParameter all_indices;
+    for (auto & index_list : all_indices) index_list = atom_index_list;
+
+    audit_detail::SuspiciousBlockActivity block_activity{
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0)
+    };
+    for (std::size_t i = 0; i < fixed_atom_count; i++)
+    {
+        block_activity.shape_fixed_atom_mask.at(i) = 1;
+        block_activity.offset_fixed_atom_mask.at(i) = 1;
+    }
+    const auto shadow_indices{
+        audit_detail::BuildActiveBlockChangeIndexLists(
+            atom_index_list,
+            block_activity)
+    };
+    const auto all_selected{
+        change_detail::SummarizeTransformedChangesByParameter(change_list, all_indices)
+    };
+    const auto active_shadow{
+        change_detail::SummarizeTransformedChangesByParameter(change_list, shadow_indices)
+    };
+
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(all_selected));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(active_shadow));
+    EXPECT_EQ(active_shadow.population_size_list.at(0), 10U);
+    EXPECT_EQ(active_shadow.population_size_list.at(1), 10U);
+    EXPECT_EQ(active_shadow.population_size_list.at(2), 10U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ActiveBlockStationarityCanHideSoftJointNonconvergence)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        audit_detail::ClusterKey{ 0 },
+        audit_detail::ClusterHealth{ Status::IrlsMaximumIterationsReached });
+
+    const auto audit{
+        audit_detail::EvaluateConvergenceStationarityAudit(health_by_key)
+    };
+    EXPECT_TRUE(audit.active_block_eligible);
+    EXPECT_FALSE(audit.full_cluster_eligible);
+    EXPECT_EQ(audit.soft_joint_nonconverged_cluster_count, 1U);
+    EXPECT_EQ(audit.hard_joint_failure_cluster_count, 0U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentileAndMaximumPredicates)
+{
+    change_detail::TransformedChangeSummary summary;
+    summary.percentile_stats.percentile_list.assign(3, 0.0);
+    summary.maximum_list.assign(3, 0.0);
+    summary.population_size_list.fill(1);
+    summary.percentile_stats.percentile_list.at(0) =
+        std::numeric_limits<double>::infinity();
+    summary.maximum_list.at(1) = std::numeric_limits<double>::quiet_NaN();
+
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(summary));
+    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(summary));
+}
+
 TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousAtomDoesNotFreezeCompleteLongChain)
 {
     auto model{ BuildPostRefitRollbackChainDefenseModel() };
@@ -5509,6 +5711,95 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAnd
     ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
     for (std::size_t i = 0; i < serial_atoms.size(); i++)
     {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*serial_atoms.at(i)),
+            GetEstimateModel(*parallel_atoms.at(i)),
+            1.0e-12);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditTraceIsDeterministicAndBehaviorNeutral)
+{
+    auto info_model{ BuildSeparatedRollbackDefenseModel() };
+    auto debug_serial_model{ BuildSeparatedRollbackDefenseModel() };
+    auto debug_parallel_model{ BuildSeparatedRollbackDefenseModel() };
+    auto info_options{ MakeSecondStageOptions() };
+    auto debug_serial_options{ MakeSecondStageOptions() };
+    auto debug_parallel_options{ MakeSecondStageOptions() };
+    info_options.quiet_mode = false;
+    debug_serial_options.quiet_mode = false;
+    debug_parallel_options.quiet_mode = false;
+    info_options.thread_size = 1;
+    debug_serial_options.thread_size = 1;
+    debug_parallel_options.thread_size = 2;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    const auto info_result{
+        rt::RunSecondStageLocalFitting(*info_model, info_options)
+    };
+    const std::string info_output{ testing::internal::GetCapturedStdout() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    const auto debug_serial_result{
+        rt::RunSecondStageLocalFitting(*debug_serial_model, debug_serial_options)
+    };
+    const std::string debug_serial_output{
+        testing::internal::GetCapturedStdout()
+    };
+
+    testing::internal::CaptureStdout();
+    const auto debug_parallel_result{
+        rt::RunSecondStageLocalFitting(*debug_parallel_model, debug_parallel_options)
+    };
+    const std::string debug_parallel_output{
+        testing::internal::GetCapturedStdout()
+    };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(info_result, debug_serial_result);
+    EXPECT_EQ(debug_serial_result, debug_parallel_result);
+    EXPECT_TRUE(CollectLogLinesContaining(
+        info_output,
+        "Convergence safeguard audit:").empty());
+    const auto serial_audit_lines{ CollectLogLinesContaining(
+        debug_serial_output,
+        "Convergence safeguard audit:") };
+    const auto parallel_audit_lines{ CollectLogLinesContaining(
+        debug_parallel_output,
+        "Convergence safeguard audit:") };
+    EXPECT_FALSE(serial_audit_lines.empty());
+    EXPECT_EQ(serial_audit_lines, parallel_audit_lines);
+    EXPECT_TRUE(std::ranges::all_of(
+        serial_audit_lines,
+        [](const auto & line)
+        {
+            return line.find(
+                "local-status[success/max-iter/single/insufficient/numerical/unavailable]=") !=
+                std::string::npos;
+        }));
+    const auto info_summary_lines{ CollectLogLinesContaining(
+        info_output,
+        "Second-Stage Local Fitting Summary") };
+    const auto debug_summary_lines{ CollectLogLinesContaining(
+        debug_serial_output,
+        "Second-Stage Local Fitting Summary") };
+    EXPECT_FALSE(info_summary_lines.empty());
+    EXPECT_EQ(info_summary_lines, debug_summary_lines);
+
+    const auto & info_atoms{ info_model->GetSelectedAtoms() };
+    const auto & serial_atoms{ debug_serial_model->GetSelectedAtoms() };
+    const auto & parallel_atoms{ debug_parallel_model->GetSelectedAtoms() };
+    ASSERT_EQ(info_atoms.size(), serial_atoms.size());
+    ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
+    for (std::size_t i = 0; i < info_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*info_atoms.at(i)),
+            GetEstimateModel(*serial_atoms.at(i)),
+            1.0e-12);
         ExpectGaussianModelsNear(
             GetEstimateModel(*serial_atoms.at(i)),
             GetEstimateModel(*parallel_atoms.at(i)),

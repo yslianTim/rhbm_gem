@@ -56,6 +56,51 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
+struct ConvergenceChangePredicates
+{
+    bool percentile_converged{ false };
+    bool maximum_converged{ false };
+
+    bool Converged() const
+    {
+        return percentile_converged && maximum_converged;
+    }
+};
+
+struct ConvergenceSafeguardPredicates
+{
+    bool stationarity_eligible{ false };
+    ConvergenceChangePredicates accepted{};
+    ConvergenceChangePredicates raw{};
+
+    bool Converged() const
+    {
+        return stationarity_eligible && accepted.Converged() && raw.Converged();
+    }
+};
+
+ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
+    bool stationarity_eligible,
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & raw_change);
+
+TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
+    const std::vector<std::size_t> & atom_index_list,
+    const SuspiciousBlockActivity & block_activity);
+
+struct ConvergenceStationarityAudit
+{
+    bool active_block_eligible{ false };
+    bool full_cluster_eligible{ false };
+    std::size_t active_block_ineligible_cluster_count{ 0 };
+    std::size_t refit_ineligible_cluster_count{ 0 };
+    std::size_t soft_joint_nonconverged_cluster_count{ 0 };
+    std::size_t hard_joint_failure_cluster_count{ 0 };
+};
+
+ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
+    const ClusterHealthMap & health_by_key);
+
 constexpr std::size_t kPersistentQuarantineFailureIterationLimit{ 5 };
 constexpr std::size_t kQuarantineProbationCooldown{ 2 };
 constexpr std::size_t kQuarantineMaximumProbationCount{ 3 };

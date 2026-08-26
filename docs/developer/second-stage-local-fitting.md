@@ -9,6 +9,9 @@ and unselected model atoms while updating each selected atom's amplitude,
 width, and offset. Unselected atoms contribute background responses but are
 never added to the optimizer state.
 
+The implication and redundancy review of the stopping predicates is recorded
+in [Second-stage convergence safeguard audit](convergence-safeguard-audit.md).
+
 The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the
 stored atom estimates.

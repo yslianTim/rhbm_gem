@@ -22,7 +22,6 @@ namespace rhbm_gem::core::detail {
 namespace {
 
 constexpr double kTransformedChangePercentile{ 0.99 };
-constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr std::array<double, kTransformedChangeSize>
     kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
@@ -107,13 +106,15 @@ TransformedChangeSummary SummarizeTransformedChangesImpl(
     {
         local_index_list.at(i) = i;
     }
-    return TransformedChangeSummary{
+    TransformedChangeSummary summary{
         algorithm::SummarizeParameterChangeStats(
             change_list,
             local_index_list,
             kTransformedChangePercentile),
         SummarizeMaximumTransformedChanges(change_list, local_index_list)
     };
+    summary.population_size_list.fill(index_list.size());
+    return summary;
 }
 
 } // namespace
@@ -246,6 +247,66 @@ TransformedChangeSummary SummarizeTransformedChanges(
         current_state,
         previous_state,
         index_list);
+}
+
+TransformedChangeSummary SummarizeTransformedChangesByParameter(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const TransformedChangeIndexListByParameter & index_list_by_parameter)
+{
+    TransformedChangeSummary summary;
+    summary.percentile_stats.percentile_list.resize(kTransformedChangeSize, 0.0);
+    summary.maximum_list.resize(kTransformedChangeSize, 0.0);
+    for (std::size_t parameter_index = 0;
+        parameter_index < kTransformedChangeSize;
+        parameter_index++)
+    {
+        const auto & index_list{ index_list_by_parameter.at(parameter_index) };
+        summary.population_size_list.at(parameter_index) = index_list.size();
+        std::vector<double> parameter_change_list;
+        parameter_change_list.reserve(index_list.size());
+        for (const auto index : index_list)
+        {
+            if (index >= change_list.size() ||
+                change_list.at(index).value_list.size() != kTransformedChangeSize)
+            {
+                throw std::invalid_argument(
+                    "Local fitting masked transformed change input is inconsistent.");
+            }
+            parameter_change_list.emplace_back(
+                change_list.at(index).value_list.at(parameter_index));
+        }
+        summary.percentile_stats.percentile_list.at(parameter_index) =
+            array_helper::ComputePercentile(
+                parameter_change_list,
+                kTransformedChangePercentile);
+        summary.maximum_list.at(parameter_index) =
+            parameter_change_list.empty() ? 0.0 :
+                *std::ranges::max_element(parameter_change_list);
+    }
+    return summary;
+}
+
+TransformedChangeSummary SummarizeTransformedChangesByParameter(
+    const FitState & current_state,
+    const FitState & previous_state,
+    const TransformedChangeIndexListByParameter & index_list_by_parameter)
+{
+    if (current_state.size() != previous_state.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting masked transformed change state sizes are inconsistent.");
+    }
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(current_state.size());
+    for (std::size_t i = 0; i < current_state.size(); i++)
+    {
+        change_list.emplace_back(CalculateTransformedChange(
+            GetFitModel(current_state, i),
+            GetFitModel(previous_state, i)));
+    }
+    return SummarizeTransformedChangesByParameter(
+        change_list,
+        index_list_by_parameter);
 }
 
 std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model)
@@ -1075,6 +1136,23 @@ bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
     for (const auto value : summary.percentile_stats.percentile_list)
     {
         if (!std::isfinite(value) || value >= kTransformedChangeTolerance) return false;
+    }
+    return true;
+}
+
+bool IsTransformedMaximumConverged(const TransformedChangeSummary & summary)
+{
+    if (summary.maximum_list.size() != kTransformedChangeSize)
+    {
+        throw std::invalid_argument(
+            "Local fitting transformed maximum statistics are inconsistent.");
+    }
+    for (const auto value : summary.maximum_list)
+    {
+        if (!std::isfinite(value) || value >= kTransformedMaximumChangeTolerance)
+        {
+            return false;
+        }
     }
     return true;
 }

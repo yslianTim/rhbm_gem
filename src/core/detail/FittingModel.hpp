@@ -344,11 +344,16 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
 
 
 constexpr double kTransformedChangeTolerance{ 1.0e-4 };
+constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
+
+using TransformedChangeIndexListByParameter =
+    std::array<std::vector<std::size_t>, kTransformedChangeSize>;
 
 struct TransformedChangeSummary
 {
     algorithm::ParameterChangeStats percentile_stats{};
     std::vector<double> maximum_list{};
+    std::array<std::size_t, kTransformedChangeSize> population_size_list{};
 };
 
 algorithm::ParameterChange CalculateTransformedChange(
@@ -379,11 +384,22 @@ TransformedChangeSummary SummarizeTransformedChanges(
     const FittedGaussianSnapshot & previous_state,
     const std::vector<std::size_t> & index_list);
 
+TransformedChangeSummary SummarizeTransformedChangesByParameter(
+    const FitState & current_state,
+    const FitState & previous_state,
+    const TransformedChangeIndexListByParameter & index_list_by_parameter);
+
+TransformedChangeSummary SummarizeTransformedChangesByParameter(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const TransformedChangeIndexListByParameter & index_list_by_parameter);
+
 double GetMaximumTransformedChange(const TransformedChangeSummary & summary);
 
 bool IsTransformedChangeConverged(const TransformedChangeSummary & summary);
 
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
+
+bool IsTransformedMaximumConverged(const TransformedChangeSummary & summary);
 
 
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
