@@ -72,6 +72,15 @@ The 168-atom simulation regression is intentionally excluded unless configured
 with `RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON`. It uses hash-verified external
 inputs and can be selected with `-R fold_168_simulation_regression` or
 `-L benchmark:external`; see the developer build guide for configuration.
+When the developer-only
+`RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON` option is also enabled,
+the external test is registered as `counterfactual_fold_168_audit` and writes
+its continuation report to a separate benchmark artifact directory.
+The same developer option builds `RHBM-GEM-CONVERGENCE-EXPOSURE`. Its smoke,
+manifest/analyzer, and determinism checks are normal small CTest entries; the
+600-case targeted search is deliberately excluded from CTest and is run with
+the `convergence_exposure_corpus` build target. Full per-case artifacts remain
+under the specialized build directory.
 
 Run repository guards and install consumer smoke (lint lane):
 

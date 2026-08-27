@@ -116,6 +116,10 @@ rhbm_gem_apply_library_install_rpath(rhbm_gem)
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     target_compile_definitions(rhbm_gem PUBLIC RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
 endif()
+if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
+    target_compile_definitions(rhbm_gem PRIVATE
+        RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
+endif()
 install(
     TARGETS rhbm_gem rhbm_gem_dependencies
     EXPORT RHBM_GEMTargets

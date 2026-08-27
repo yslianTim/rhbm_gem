@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <numeric>
@@ -6882,3 +6883,141 @@ TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)
         out.find("Rebuild local-fitting coupling topology"),
         std::string::npos);
 }
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerStopsOnPolicyAgreement)
+{
+    audit_detail::CounterfactualContinuationState state;
+    const audit_detail::CounterfactualPolicyDecision decision{
+        std::array{ true, true, true, true, true }
+    };
+
+    const auto update{ audit_detail::UpdateCounterfactualContinuation(
+        decision, 7, 5, state) };
+
+    EXPECT_TRUE(update.triggered_now);
+    EXPECT_TRUE(update.policy_agreement);
+    EXPECT_TRUE(update.all_candidate_policies_reached);
+    EXPECT_FALSE(state.continuation_active);
+    EXPECT_EQ(state.trigger_attempt, 7U);
+    EXPECT_EQ(state.trigger_accepted_iteration, 5U);
+    EXPECT_TRUE(std::ranges::all_of(update.new_checkpoint, std::identity{}));
+}
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerSeparatesPolicyEffects)
+{
+    audit_detail::CounterfactualContinuationState state;
+    const auto trigger{ audit_detail::UpdateCounterfactualContinuation(
+        audit_detail::CounterfactualPolicyDecision{
+            std::array{ true, false, true, false, false } },
+        4,
+        4,
+        state) };
+
+    EXPECT_TRUE(trigger.triggered_now);
+    EXPECT_TRUE(state.continuation_active);
+    EXPECT_TRUE(trigger.new_checkpoint.at(static_cast<std::size_t>(
+        audit_detail::CounterfactualConvergencePolicy::Production)));
+    EXPECT_TRUE(trigger.new_checkpoint.at(static_cast<std::size_t>(
+        audit_detail::CounterfactualConvergencePolicy::CurrentActiveDof)));
+
+    const auto stationarity_checkpoint{
+        audit_detail::UpdateCounterfactualContinuation(
+            audit_detail::CounterfactualPolicyDecision{
+                std::array{ false, true, false, false, true } },
+            6,
+            5,
+            state)
+    };
+    EXPECT_TRUE(stationarity_checkpoint.new_checkpoint.at(
+        static_cast<std::size_t>(
+            audit_detail::CounterfactualConvergencePolicy::StrictCurrentPopulation)));
+    EXPECT_FALSE(stationarity_checkpoint.all_candidate_policies_reached);
+
+    const auto combined_checkpoint{
+        audit_detail::UpdateCounterfactualContinuation(
+            audit_detail::CounterfactualPolicyDecision{
+                std::array{ false, false, false, true, false } },
+            8,
+            6,
+            state)
+    };
+    EXPECT_TRUE(combined_checkpoint.all_candidate_policies_reached);
+    EXPECT_FALSE(state.continuation_active);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerDoesNotTriggerWithoutProductionStop)
+{
+    audit_detail::CounterfactualContinuationState state;
+    const auto update{ audit_detail::UpdateCounterfactualContinuation(
+        audit_detail::CounterfactualPolicyDecision{
+            std::array{ false, true, true, true, true } },
+        3,
+        2,
+        state) };
+
+    EXPECT_FALSE(update.triggered_now);
+    EXPECT_FALSE(state.triggered);
+    EXPECT_FALSE(state.continuation_active);
+    EXPECT_TRUE(std::ranges::none_of(update.new_checkpoint, std::identity{}));
+}
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerEnforcesBothBudgets)
+{
+    audit_detail::CounterfactualContinuationState state;
+    audit_detail::UpdateCounterfactualContinuation(
+        audit_detail::CounterfactualPolicyDecision{
+            std::array{ true, false, false, false, false } },
+        20,
+        7,
+        state);
+
+    EXPECT_FALSE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
+        state, 44, 16));
+    EXPECT_TRUE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
+        state, 45, 16));
+    EXPECT_TRUE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
+        state, 24, 17));
+}
+
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+TEST(EstimatorSecondStageDefenseTest, CounterfactualAuditDoesNotOverrideAuditPatience)
+{
+    const rg::GaussianModel3D exact_model{ 6.0, 0.5, 0.1 };
+    auto model{ BuildDefenseModel(
+        { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+        { Spot::C },
+        { Element::CARBON },
+        { exact_model },
+        exact_model) };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(
+        output.find("Counterfactual convergence checkpoint: schema=1"),
+        std::string::npos);
+    EXPECT_NE(output.find(" - stop_reason = audit-patience"), std::string::npos);
+    EXPECT_EQ(output.find("reason=budget-exhausted"), std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualAuditRunsWithoutDebugOutput)
+{
+    const rg::GaussianModel3D exact_model{ 6.0, 0.5, 0.1 };
+    auto model{ BuildDefenseModel(
+        { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+        { Spot::C },
+        { Element::CARBON },
+        { exact_model },
+        exact_model) };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = true;
+
+    EXPECT_NO_THROW(rt::RunSecondStageLocalFitting(*model, options));
+}
+#endif

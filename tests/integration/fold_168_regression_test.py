@@ -167,6 +167,19 @@ class Fold168RegressionTest(unittest.TestCase):
         self.assertIs(converged["final_uses_polish"], False)
         self.assertEqual(converged["final_state_source"], "latest-validated")
 
+        multiline = regression.parse_second_stage_summary(
+            " Second-Stage Local Fitting Summary : \n"
+            " - accepted_iterations = 7\n"
+            " - best_iteration = 4\n"
+            " - stop_reason = audit-patience\n"
+            " - best_audit_objective = 5.19e-01\n"
+            " - final_uses_polish = yes\n"
+            " - final_state_source = best-audit\n")
+        self.assertEqual(multiline["accepted_iterations"], 7)
+        self.assertEqual(multiline["best_iteration"], "4")
+        self.assertEqual(multiline["stop_reason"], "audit-patience")
+        self.assertIs(multiline["final_uses_polish"], True)
+
         no_retry_progress = regression.parse_second_stage_summary(
             "Second-stage local fitting summary: accepted_iterations=2, "
             "best_iteration=1, stop_reason=all-rejected-no-retry-progress, "

@@ -13,6 +13,8 @@ The implication and redundancy review of the stopping predicates is recorded
 in [Second-stage convergence safeguard audit](convergence-safeguard-audit.md).
 Its shadow-only follow-up is the
 [stationarity and active-coordinate population audit](stationarity-active-coordinate-audit.md).
+The third-round causal experiment is the
+[counterfactual convergence continuation audit](counterfactual-convergence-continuation-audit.md).
 
 The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the

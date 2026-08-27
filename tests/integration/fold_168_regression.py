@@ -50,6 +50,18 @@ SECOND_STAGE_SUMMARY_PATTERN = re.compile(
     r"final_state_source=(?P<final_state_source>"
     r"best-audit|latest-validated|unavailable)\."
 )
+SECOND_STAGE_MULTILINE_SUMMARY_PATTERN = re.compile(
+    r"Second-Stage Local Fitting Summary\s*:\s*\n"
+    r"\s*- accepted_iterations\s*=\s*(?P<accepted_iterations>\d+)\s*\n"
+    r"\s*- best_iteration\s*=\s*(?P<best_iteration>initial|unavailable|\d+)\s*\n"
+    r"\s*- stop_reason\s*=\s*(?P<stop_reason>[a-z-]+)\s*\n"
+    r"\s*- best_audit_objective\s*=\s*(?P<best_audit_objective>unavailable|"
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*\n"
+    r"\s*- final_uses_polish\s*=\s*(?P<final_uses_polish>yes|no|unavailable)\s*\n"
+    r"\s*- final_state_source\s*=\s*(?P<final_state_source>"
+    r"best-audit|latest-validated|unavailable)",
+    re.MULTILINE,
+)
 RESIDUE_CUTOFF_PATTERN = re.compile(
     r"Local-fitting residue cutoff: "
     r"residues=(?P<residue_count>\d+), "
@@ -144,7 +156,10 @@ def calculate_quality_metrics(atoms: Sequence[dict[str, Any]]) -> dict[str, floa
 
 
 def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
-    matches = list(SECOND_STAGE_SUMMARY_PATTERN.finditer(log_text))
+    matches = [
+        *SECOND_STAGE_SUMMARY_PATTERN.finditer(log_text),
+        *SECOND_STAGE_MULTILINE_SUMMARY_PATTERN.finditer(log_text),
+    ]
     if len(matches) != 1:
         raise RegressionError(
             "Expected exactly one parseable second-stage final summary, "

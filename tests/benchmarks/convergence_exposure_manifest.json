@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "seed_base": 410000,
+  "replicas_per_variant": 8,
+  "families": [
+    {
+      "name": "natural",
+      "topologies": ["unk-c", "o-o", "n-n", "c-c", "ca-c"],
+      "levels": [
+        {"noise_sigma": 0.0},
+        {"noise_sigma": 0.005},
+        {"noise_sigma": 0.01},
+        {"noise_sigma": 0.02},
+        {"noise_sigma": 0.05}
+      ]
+    },
+    {
+      "name": "stationarity",
+      "topologies": [
+        "near-collinear-pair",
+        "dual-near-collinear",
+        "eight-atom-chain",
+        "boundary-conflict",
+        "weak-peak-shared"
+      ],
+      "levels": [
+        {"separation": 0.00001, "noise_sigma": 0.0, "initial_perturbation": 0.00005},
+        {"separation": 0.00003, "noise_sigma": 0.0025, "initial_perturbation": 0.0002},
+        {"separation": 0.0001, "noise_sigma": 0.005, "initial_perturbation": 0.0008},
+        {"separation": 0.0003, "noise_sigma": 0.01, "initial_perturbation": 0.003},
+        {"separation": 0.001, "noise_sigma": 0.02, "initial_perturbation": 0.01}
+      ]
+    },
+    {
+      "name": "population",
+      "topologies": [
+        "shape-fixed-dilution",
+        "offset-fixed-dilution",
+        "quarantine-dilution",
+        "unbalanced-shared-groups",
+        "combined-fixed-group-imbalance"
+      ],
+      "levels": [
+        {"active_target": 4, "largest_group_ratio": 0.5},
+        {"active_target": 8, "largest_group_ratio": 0.65},
+        {"active_target": 16, "largest_group_ratio": 0.8},
+        {"active_target": 24, "largest_group_ratio": 0.9},
+        {"active_target": 32, "largest_group_ratio": 0.96}
+      ]
+    }
+  ]
+}

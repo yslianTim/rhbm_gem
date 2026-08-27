@@ -86,6 +86,54 @@ ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change);
 
+enum class CounterfactualConvergencePolicy : std::size_t
+{
+    Production,
+    StrictCurrentPopulation,
+    CurrentActiveDof,
+    StrictActiveDof,
+    StrictActiveMember,
+    Count
+};
+
+constexpr std::size_t kCounterfactualPolicyCount{
+    static_cast<std::size_t>(CounterfactualConvergencePolicy::Count) };
+constexpr std::size_t kCounterfactualAcceptedIterationBudget{ 10 };
+constexpr std::size_t kCounterfactualAttemptBudget{ 25 };
+
+struct CounterfactualPolicyDecision
+{
+    std::array<bool, kCounterfactualPolicyCount> converged{};
+};
+
+struct CounterfactualContinuationState
+{
+    bool triggered{ false };
+    bool continuation_active{ false };
+    std::size_t trigger_attempt{ 0 };
+    std::size_t trigger_accepted_iteration{ 0 };
+    std::array<bool, kCounterfactualPolicyCount> checkpoint_reached{};
+};
+
+struct CounterfactualContinuationUpdate
+{
+    bool triggered_now{ false };
+    bool policy_agreement{ false };
+    bool all_candidate_policies_reached{ false };
+    std::array<bool, kCounterfactualPolicyCount> new_checkpoint{};
+};
+
+CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
+    const CounterfactualPolicyDecision & decision,
+    std::size_t attempt_number,
+    std::size_t accepted_iteration_count,
+    CounterfactualContinuationState & state);
+
+bool IsCounterfactualContinuationBudgetExhausted(
+    const CounterfactualContinuationState & state,
+    std::size_t attempt_number,
+    std::size_t accepted_iteration_count);
+
 TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
     const std::vector<std::size_t> & atom_index_list,
     const SuspiciousBlockActivity & block_activity);

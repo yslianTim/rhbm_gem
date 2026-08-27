@@ -157,6 +157,11 @@ Fold-168 remains optional because the model and map are external to the
 repository. When hash-matching inputs are available, its Debug log can be
 aggregated without changing fitting options or stopping behavior.
 
+The trajectory-changing follow-up is the build-gated
+[counterfactual convergence continuation audit](counterfactual-convergence-continuation-audit.md).
+It suppresses only an exposed production convergence stop and evaluates policy
+checkpoints on isolated finalization workspaces.
+
 Verification on 2026-08-27:
 
 - all seven second-round C++ audit tests and the schema-2 analyzer fixture test

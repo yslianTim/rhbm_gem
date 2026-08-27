@@ -124,6 +124,11 @@ private:
 
 constexpr std::size_t kMaximumIterations{ 100 };
 constexpr std::size_t kAuditPatience{ 3 };
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+constexpr bool kCounterfactualConvergenceAuditEnabled{ true };
+#else
+constexpr bool kCounterfactualConvergenceAuditEnabled{ false };
+#endif
 
 struct IterationDiagnostics
 {
@@ -170,6 +175,29 @@ struct IterationProgress
 
 using ProgressColumnWidths = std::array<std::size_t, 6>;
 
+struct CounterfactualIterationEvidence
+{
+    bool available{ false };
+    CounterfactualPolicyDecision policy_decision{};
+    TransformedChangeSummary accepted_current{};
+    TransformedChangeSummary raw_current{};
+    TransformedChangeSummary accepted_member{};
+    TransformedChangeSummary raw_member{};
+    TransformedChangeSummary accepted_dof{};
+    TransformedChangeSummary raw_dof{};
+    std::vector<double> accepted_current_median{};
+    std::vector<double> raw_current_median{};
+    std::vector<double> accepted_member_median{};
+    std::vector<double> raw_member_median{};
+    std::vector<double> accepted_dof_median{};
+    std::vector<double> raw_dof_median{};
+    std::size_t multi_member_offset_group_count{ 0 };
+    std::size_t weak_peak_dominant_group_count{ 0 };
+    std::array<double, 4> weak_peak_ratio_summary{};
+    StrictConvergenceStationarityAudit strict_stationarity{};
+    ActiveCoordinateAuditPopulation active_population{};
+};
+
 struct IterationResult
 {
     IterationDiagnostics diagnostics{};
@@ -179,6 +207,7 @@ struct IterationResult
     bool converged{ false };
     bool audit_patience_exhausted{ false };
     algorithm::ParameterChangeStats transformed_change_stats{};
+    CounterfactualIterationEvidence counterfactual_evidence{};
 };
 
 struct RawIterationResult
@@ -297,6 +326,60 @@ ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
             IsTransformedMaximumConverged(raw_change)
         }
     };
+}
+
+CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
+    const CounterfactualPolicyDecision & decision,
+    std::size_t attempt_number,
+    std::size_t accepted_iteration_count,
+    CounterfactualContinuationState & state)
+{
+    CounterfactualContinuationUpdate update;
+    const auto production_index{
+        static_cast<std::size_t>(CounterfactualConvergencePolicy::Production) };
+    if (!state.triggered)
+    {
+        if (!decision.converged.at(production_index)) return update;
+        state.triggered = true;
+        state.trigger_attempt = attempt_number;
+        state.trigger_accepted_iteration = accepted_iteration_count;
+        update.triggered_now = true;
+    }
+
+    for (std::size_t index = 0; index < kCounterfactualPolicyCount; index++)
+    {
+        if (!state.checkpoint_reached.at(index) && decision.converged.at(index))
+        {
+            state.checkpoint_reached.at(index) = true;
+            update.new_checkpoint.at(index) = true;
+        }
+    }
+
+    const auto strict_current_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::StrictCurrentPopulation) };
+    const auto current_dof_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::CurrentActiveDof) };
+    const auto strict_dof_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::StrictActiveDof) };
+    update.all_candidate_policies_reached =
+        state.checkpoint_reached.at(strict_current_index) &&
+        state.checkpoint_reached.at(current_dof_index) &&
+        state.checkpoint_reached.at(strict_dof_index);
+    update.policy_agreement = update.triggered_now &&
+        update.all_candidate_policies_reached;
+    state.continuation_active = !update.all_candidate_policies_reached;
+    return update;
+}
+
+bool IsCounterfactualContinuationBudgetExhausted(
+    const CounterfactualContinuationState & state,
+    std::size_t attempt_number,
+    std::size_t accepted_iteration_count)
+{
+    if (!state.continuation_active) return false;
+    return attempt_number - state.trigger_attempt >= kCounterfactualAttemptBudget ||
+        accepted_iteration_count - state.trigger_accepted_iteration >=
+            kCounterfactualAcceptedIterationBudget;
 }
 
 TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
@@ -521,6 +604,143 @@ ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
             GetFitModel(previous_state, atom_index)));
     }
     return EvaluateActiveCoordinateChangeAudit(change_list, population);
+}
+
+struct ActiveCoordinateMedianAudit
+{
+    std::vector<double> member{};
+    std::vector<double> shared_dof{};
+};
+
+static std::vector<double> SummarizeTransformedChangeMedian(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const TransformedChangeIndexListByParameter & index_list_by_parameter)
+{
+    std::vector<double> median_list(kTransformedChangeSize, 0.0);
+    for (std::size_t parameter_index = 0;
+        parameter_index < kTransformedChangeSize;
+        parameter_index++)
+    {
+        std::vector<double> value_list;
+        value_list.reserve(index_list_by_parameter.at(parameter_index).size());
+        for (const auto atom_index : index_list_by_parameter.at(parameter_index))
+        {
+            value_list.emplace_back(
+                change_list.at(atom_index).value_list.at(parameter_index));
+        }
+        median_list.at(parameter_index) = array_helper::ComputeMedian(value_list);
+    }
+    return median_list;
+}
+
+static ActiveCoordinateMedianAudit EvaluateActiveCoordinateMedianAudit(
+    const FitState & current_state,
+    const FitState & previous_state,
+    const ActiveCoordinateAuditPopulation & population)
+{
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(current_state.size());
+    for (std::size_t atom_index = 0; atom_index < current_state.size(); atom_index++)
+    {
+        change_list.emplace_back(CalculateTransformedChange(
+            GetFitModel(current_state, atom_index),
+            GetFitModel(previous_state, atom_index)));
+    }
+    ActiveCoordinateMedianAudit result;
+    result.member = SummarizeTransformedChangeMedian(
+        change_list,
+        population.member_index_list_by_parameter);
+    result.shared_dof = result.member;
+    std::vector<double> offset_group_change_list;
+    offset_group_change_list.reserve(
+        population.active_offset_group_atom_index_list.size());
+    for (std::size_t group_position = 0;
+        group_position < population.active_offset_group_atom_index_list.size();
+        group_position++)
+    {
+        double maximum_change{ 0.0 };
+        bool finite{ population.mixed_offset_group_mask.at(group_position) == 0 };
+        for (const auto atom_index :
+            population.active_offset_group_atom_index_list.at(group_position))
+        {
+            const auto value{ change_list.at(atom_index).value_list.at(
+                kOffsetToPeakRatioChangeIndex) };
+            if (!std::isfinite(value))
+            {
+                finite = false;
+                break;
+            }
+            maximum_change = std::max(maximum_change, value);
+        }
+        offset_group_change_list.emplace_back(
+            finite ? maximum_change : std::numeric_limits<double>::infinity());
+    }
+    result.shared_dof.at(kOffsetToPeakRatioChangeIndex) =
+        array_helper::ComputeMedian(offset_group_change_list);
+    return result;
+}
+
+struct WeakPeakGroupAudit
+{
+    std::size_t multi_member_group_count{ 0 };
+    std::size_t weak_peak_dominant_group_count{ 0 };
+    std::array<double, 4> ratio_summary{};
+};
+
+static WeakPeakGroupAudit EvaluateWeakPeakGroupAudit(
+    const FitState & reference_state,
+    const std::vector<algorithm::ParameterChange> & raw_change_list,
+    const ActiveCoordinateAuditPopulation & population)
+{
+    WeakPeakGroupAudit result;
+    std::vector<double> ratio_list;
+    for (const auto & atom_index_list :
+        population.active_offset_group_atom_index_list)
+    {
+        if (atom_index_list.size() <= 1) continue;
+        result.multi_member_group_count++;
+        std::vector<double> height_list;
+        height_list.reserve(atom_index_list.size());
+        std::size_t minimum_height_atom_index{ atom_index_list.front() };
+        std::size_t maximum_change_atom_index{ atom_index_list.front() };
+        double minimum_height{ std::numeric_limits<double>::infinity() };
+        double maximum_change{ -1.0 };
+        for (const auto atom_index : atom_index_list)
+        {
+            const auto height{ std::abs(
+                GetFitModel(reference_state, atom_index).GetHeight()) };
+            height_list.emplace_back(height);
+            if (height < minimum_height)
+            {
+                minimum_height = height;
+                minimum_height_atom_index = atom_index;
+            }
+            const auto change{ raw_change_list.at(atom_index).value_list.at(
+                kOffsetToPeakRatioChangeIndex) };
+            if (change > maximum_change)
+            {
+                maximum_change = change;
+                maximum_change_atom_index = atom_index;
+            }
+        }
+        const auto median_height{ array_helper::ComputeMedian(height_list) };
+        ratio_list.emplace_back(
+            median_height > 0.0 ? minimum_height / median_height : 0.0);
+        if (minimum_height_atom_index == maximum_change_atom_index)
+        {
+            result.weak_peak_dominant_group_count++;
+        }
+    }
+    if (!ratio_list.empty())
+    {
+        result.ratio_summary = {
+            *std::ranges::min_element(ratio_list),
+            array_helper::ComputeMedian(ratio_list),
+            array_helper::ComputePercentile(ratio_list, 0.99),
+            *std::ranges::max_element(ratio_list)
+        };
+    }
+    return result;
 }
 
 ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
@@ -3407,7 +3627,9 @@ static IterationResult RunIteration(
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();
 
-    if (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug)
+    const auto debug_convergence_audit_enabled{
+        !options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug };
+    if (kCounterfactualConvergenceAuditEnabled || debug_convergence_audit_enabled)
     {
         for (std::size_t atom_index = 0;
             atom_index < raw_iteration_result.assessment_by_atom.size();
@@ -3643,7 +3865,8 @@ static IterationResult RunIteration(
         selection.rejected_key_list.empty() &&
         safeguard_predicates.Converged();
 
-    if (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug)
+    if (kCounterfactualConvergenceAuditEnabled ||
+        (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug))
     {
         std::vector<std::size_t> group_id_by_atom_index;
         group_id_by_atom_index.reserve(context.size());
@@ -3669,6 +3892,39 @@ static IterationResult RunIteration(
             EvaluateActiveCoordinateChangeAudit(
                 raw_state,
                 previous_state,
+                active_population)
+        };
+        TransformedChangeIndexListByParameter selected_index_list_by_parameter;
+        selected_index_list_by_parameter.fill(iteration_state.active_index_list);
+        const auto accepted_active_median_audit{
+            EvaluateActiveCoordinateMedianAudit(
+                assembled_state,
+                previous_state,
+                active_population)
+        };
+        const auto raw_active_median_audit{
+            EvaluateActiveCoordinateMedianAudit(
+                raw_state,
+                previous_state,
+                active_population)
+        };
+        std::vector<algorithm::ParameterChange> accepted_change_list;
+        std::vector<algorithm::ParameterChange> raw_change_list;
+        accepted_change_list.reserve(context.size());
+        raw_change_list.reserve(context.size());
+        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+        {
+            accepted_change_list.emplace_back(CalculateTransformedChange(
+                GetFitModel(assembled_state, atom_index),
+                GetFitModel(previous_state, atom_index)));
+            raw_change_list.emplace_back(CalculateTransformedChange(
+                GetFitModel(raw_state, atom_index),
+                GetFitModel(previous_state, atom_index)));
+        }
+        const auto weak_peak_group_audit{
+            EvaluateWeakPeakGroupAudit(
+                previous_state,
+                raw_change_list,
                 active_population)
         };
         const auto shadow_safeguard_predicates{
@@ -3701,6 +3957,18 @@ static IterationResult RunIteration(
                 accepted_active_change_audit.shared_dof,
                 raw_active_change_audit.shared_dof)
         };
+        const auto strict_current_predicates{
+            EvaluateConvergenceSafeguardPredicates(
+                strict_stationarity.strict_eligible,
+                transformed_change_summary,
+                raw_fixed_point_change_summary)
+        };
+        const auto current_dof_predicates{
+            EvaluateConvergenceSafeguardPredicates(
+                is_stationarity_eligible,
+                accepted_active_change_audit.shared_dof,
+                raw_active_change_audit.shared_dof)
+        };
         const auto accepted_raw_change_summary{
             SummarizeTransformedChanges(
                 assembled_state,
@@ -3718,6 +3986,37 @@ static IterationResult RunIteration(
         };
         const auto shared_dof_shadow_stop_candidate{
             orthogonal_blockers_clear && shared_dof_strict_predicates.Converged()
+        };
+        result.counterfactual_evidence = CounterfactualIterationEvidence{
+            true,
+            CounterfactualPolicyDecision{ std::array{
+                result.converged,
+                orthogonal_blockers_clear && strict_current_predicates.Converged(),
+                orthogonal_blockers_clear && current_dof_predicates.Converged(),
+                shared_dof_shadow_stop_candidate,
+                member_shadow_stop_candidate
+            } },
+            transformed_change_summary,
+            raw_fixed_point_change_summary,
+            accepted_active_change_audit.member,
+            raw_active_change_audit.member,
+            accepted_active_change_audit.shared_dof,
+            raw_active_change_audit.shared_dof,
+            SummarizeTransformedChangeMedian(
+                accepted_change_list,
+                selected_index_list_by_parameter),
+            SummarizeTransformedChangeMedian(
+                raw_change_list,
+                selected_index_list_by_parameter),
+            accepted_active_median_audit.member,
+            raw_active_median_audit.member,
+            accepted_active_median_audit.shared_dof,
+            raw_active_median_audit.shared_dof,
+            weak_peak_group_audit.multi_member_group_count,
+            weak_peak_group_audit.weak_peak_dominant_group_count,
+            weak_peak_group_audit.ratio_summary,
+            strict_stationarity,
+            active_population
         };
         LogConvergenceSafeguardAudit(
             options.quiet_mode,
@@ -3938,6 +4237,342 @@ static void FinalizeSecondStageState(
             iteration_state.previous_state
     };
     ApplyFitState(model_object, context, final_state);
+}
+
+struct CounterfactualCheckpointOutcome
+{
+    FitState finalized_state{};
+    std::optional<ObjectiveBreakdown> objective{};
+    bool final_polish_accepted{ false };
+    std::array<std::size_t, 3> comparison_domain_size{};
+};
+
+[[maybe_unused]] static CounterfactualCheckpointOutcome BuildCounterfactualCheckpointOutcome(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const GraphTopology & graph_topology,
+    const IterationState & iteration_state,
+    const ObjectiveDomain & comparison_objective_domain)
+{
+    auto audit_options{ options };
+    audit_options.quiet_mode = true;
+    ClusterSolverWorkspaceMap solver_workspace_by_key;
+    BoundaryJointCorrectionWorkspaceMap boundary_workspace_by_key;
+    PerformanceCounters performance_counters{
+        true,
+        context,
+        solver_workspace_by_key,
+        boundary_workspace_by_key
+    };
+    auto polish_result{
+        RunFinalDependencyPolish(
+            context,
+            audit_options,
+            graph_topology,
+            iteration_state.graph_partition,
+            iteration_state.objective_domain,
+            iteration_state.quarantine_state.BuildFinalActivity(),
+            iteration_state.trust_region_state,
+            iteration_state.previous_state,
+            boundary_workspace_by_key,
+            performance_counters)
+    };
+    auto finalized_state{
+        polish_result.accepted ?
+            std::move(polish_result.state) : iteration_state.previous_state
+    };
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, finalized_state)
+    };
+    auto objective{
+        EvaluateAuditObjective(
+            comparison_objective_domain,
+            SnapshotResidualEvaluator{ context, model_snapshot })
+    };
+    return CounterfactualCheckpointOutcome{
+        std::move(finalized_state),
+        std::move(objective),
+        polish_result.accepted,
+        std::array{
+            comparison_objective_domain.active_atom_count,
+            comparison_objective_domain.fit_sample_count,
+            comparison_objective_domain.tail_sample_count }
+    };
+}
+
+static std::string_view GetCounterfactualPolicyText(
+    CounterfactualConvergencePolicy policy)
+{
+    switch (policy)
+    {
+    case CounterfactualConvergencePolicy::Production:
+        return "production";
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return "strict-current";
+    case CounterfactualConvergencePolicy::CurrentActiveDof:
+        return "current-dof";
+    case CounterfactualConvergencePolicy::StrictActiveDof:
+        return "strict-dof";
+    case CounterfactualConvergencePolicy::StrictActiveMember:
+        return "strict-member";
+    case CounterfactualConvergencePolicy::Count:
+        break;
+    }
+    return "unknown";
+}
+
+static const TransformedChangeSummary & GetCounterfactualAcceptedChange(
+    CounterfactualConvergencePolicy policy,
+    const CounterfactualIterationEvidence & evidence)
+{
+    switch (policy)
+    {
+    case CounterfactualConvergencePolicy::Production:
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.accepted_current;
+    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::StrictActiveDof:
+        return evidence.accepted_dof;
+    case CounterfactualConvergencePolicy::StrictActiveMember:
+        return evidence.accepted_member;
+    case CounterfactualConvergencePolicy::Count:
+        break;
+    }
+    throw std::invalid_argument("Counterfactual convergence policy is invalid.");
+}
+
+static const TransformedChangeSummary & GetCounterfactualRawChange(
+    CounterfactualConvergencePolicy policy,
+    const CounterfactualIterationEvidence & evidence)
+{
+    switch (policy)
+    {
+    case CounterfactualConvergencePolicy::Production:
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.raw_current;
+    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::StrictActiveDof:
+        return evidence.raw_dof;
+    case CounterfactualConvergencePolicy::StrictActiveMember:
+        return evidence.raw_member;
+    case CounterfactualConvergencePolicy::Count:
+        break;
+    }
+    throw std::invalid_argument("Counterfactual convergence policy is invalid.");
+}
+
+static const std::vector<double> & GetCounterfactualAcceptedMedian(
+    CounterfactualConvergencePolicy policy,
+    const CounterfactualIterationEvidence & evidence)
+{
+    switch (policy)
+    {
+    case CounterfactualConvergencePolicy::Production:
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.accepted_current_median;
+    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::StrictActiveDof:
+        return evidence.accepted_dof_median;
+    case CounterfactualConvergencePolicy::StrictActiveMember:
+        return evidence.accepted_member_median;
+    case CounterfactualConvergencePolicy::Count:
+        break;
+    }
+    throw std::invalid_argument("Counterfactual convergence policy is invalid.");
+}
+
+static const std::vector<double> & GetCounterfactualRawMedian(
+    CounterfactualConvergencePolicy policy,
+    const CounterfactualIterationEvidence & evidence)
+{
+    switch (policy)
+    {
+    case CounterfactualConvergencePolicy::Production:
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.raw_current_median;
+    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::StrictActiveDof:
+        return evidence.raw_dof_median;
+    case CounterfactualConvergencePolicy::StrictActiveMember:
+        return evidence.raw_member_median;
+    case CounterfactualConvergencePolicy::Count:
+        break;
+    }
+    throw std::invalid_argument("Counterfactual convergence policy is invalid.");
+}
+
+static void AppendCounterfactualChangeSummary(
+    std::ostringstream & message,
+    std::string_view name,
+    const std::vector<double> & median_list,
+    const TransformedChangeSummary & summary)
+{
+    message << ", " << name << "-median=";
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (index != 0) message << "/";
+        message << median_list.at(index);
+    }
+    message << ", " << name << "-p99=";
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (index != 0) message << "/";
+        message << summary.percentile_stats.percentile_list.at(index);
+    }
+    message << ", " << name << "-max=";
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (index != 0) message << "/";
+        message << summary.maximum_list.at(index);
+    }
+}
+
+[[maybe_unused]] static void LogCounterfactualCheckpoint(
+    bool quiet_mode,
+    double continuation_elapsed_ms,
+    const SecondStageContext & context,
+    const CounterfactualContinuationState & continuation,
+    CounterfactualConvergencePolicy policy,
+    std::size_t attempt_number,
+    const IterationState & iteration_state,
+    const CounterfactualIterationEvidence & evidence,
+    const CounterfactualCheckpointOutcome & outcome)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+    const auto & accepted_change{ GetCounterfactualAcceptedChange(policy, evidence) };
+    const auto & raw_change{ GetCounterfactualRawChange(policy, evidence) };
+    const auto & accepted_median{ GetCounterfactualAcceptedMedian(policy, evidence) };
+    const auto & raw_median{ GetCounterfactualRawMedian(policy, evidence) };
+    std::ostringstream message;
+    message << std::scientific << std::setprecision(6)
+        << "Counterfactual convergence checkpoint: schema=1"
+        << ", experiment=" << continuation.trigger_attempt << "-"
+        << continuation.trigger_accepted_iteration
+        << ", policy=" << GetCounterfactualPolicyText(policy)
+        << ", try=" << attempt_number
+        << ", acc=" << iteration_state.accepted_iteration_count
+        << ", extra-try=" << attempt_number - continuation.trigger_attempt
+        << ", extra-acc=" << iteration_state.accepted_iteration_count -
+            continuation.trigger_accepted_iteration
+        << ", extra-ms=" << continuation_elapsed_ms
+        << ", final-polish=" << outcome.final_polish_accepted
+        << ", strict=" << evidence.strict_stationarity.strict_eligible
+        << ", restricted=" << evidence.strict_stationarity.restricted_active_set
+        << ", all-fixed=" << evidence.strict_stationarity.all_fixed
+        << ", best-iteration=";
+    if (iteration_state.best_audit_state.has_value())
+    {
+        message << iteration_state.best_audit_state->source_iteration
+            << ", best-objective="
+            << iteration_state.best_audit_state->objective.GetTotalObjective();
+    }
+    else
+    {
+        message << "-, best-objective=-";
+    }
+    message
+        << ", active=" << evidence.strict_stationarity.active_shape_count << "/"
+        << evidence.active_population.member_index_list_by_parameter.at(
+            kOffsetToPeakRatioChangeIndex).size() << "/"
+        << evidence.active_population.active_offset_group_atom_index_list.size()
+        << ", topology=" << iteration_state.graph_partition.sample_id_list_by_key.size()
+        << "/" << iteration_state.graph_partition.boundary_sample_count
+        << ", domain=" << iteration_state.objective_domain.active_atom_count << "/"
+        << iteration_state.objective_domain.fit_sample_count << "/"
+        << iteration_state.objective_domain.tail_sample_count
+        << ", fixed-domain=" << outcome.comparison_domain_size.at(0) << "/"
+        << outcome.comparison_domain_size.at(1) << "/"
+        << outcome.comparison_domain_size.at(2)
+        << ", weak-peak=" << evidence.multi_member_offset_group_count << "/"
+        << evidence.weak_peak_dominant_group_count << "/"
+        << evidence.weak_peak_ratio_summary.at(0) << "/"
+        << evidence.weak_peak_ratio_summary.at(1) << "/"
+        << evidence.weak_peak_ratio_summary.at(2) << "/"
+        << evidence.weak_peak_ratio_summary.at(3)
+        << ", population=";
+    const auto & population{ accepted_change.population_size_list };
+    message << population.at(0) << "/" << population.at(1) << "/"
+        << population.at(2)
+        << ", objective=";
+    if (outcome.objective.has_value())
+    {
+        message
+            << outcome.objective->fit_range_residual_objective << "/"
+            << outcome.objective->GetTailValidationPenalty() << "/"
+            << outcome.objective->offset_plausibility_penalty << "/"
+            << outcome.objective->GetTotalObjective();
+    }
+    else
+    {
+        message << "-/-/-/-";
+    }
+    AppendCounterfactualChangeSummary(
+        message, "accepted", accepted_median, accepted_change);
+    AppendCounterfactualChangeSummary(message, "raw", raw_median, raw_change);
+    Logger::Log(LogLevel::Debug, message.str());
+
+    const auto quarantine_activity{
+        iteration_state.quarantine_state.BuildFinalActivity() };
+    const auto & shape_active_index_list{
+        evidence.active_population.member_index_list_by_parameter.at(
+            kLogPeakHeightChangeIndex) };
+    const auto & offset_active_index_list{
+        evidence.active_population.member_index_list_by_parameter.at(
+            kOffsetToPeakRatioChangeIndex) };
+    for (std::size_t atom_index = 0; atom_index < outcome.finalized_state.size(); atom_index++)
+    {
+        const auto & model{ outcome.finalized_state.at(atom_index).mdpde.GetModel() };
+        std::ostringstream atom_message;
+        atom_message << std::scientific << std::setprecision(17)
+            << "Counterfactual convergence atom: schema=1"
+            << ", experiment=" << continuation.trigger_attempt << "-"
+            << continuation.trigger_accepted_iteration
+            << ", policy=" << GetCounterfactualPolicyText(policy)
+            << ", serial=" << context.at(atom_index).atom->GetSerialID()
+            << ", group=" << context.at(atom_index).group_id
+            << ", shape-active=" << (std::ranges::find(
+                shape_active_index_list, atom_index) != shape_active_index_list.end())
+            << ", offset-active=" << (std::ranges::find(
+                offset_active_index_list, atom_index) != offset_active_index_list.end())
+            << ", quarantined=" << (
+                quarantine_activity.shape_fixed_atom_mask.at(atom_index) != 0 ||
+                quarantine_activity.offset_fixed_atom_mask.at(atom_index) != 0 ||
+                quarantine_activity.hard_failure_atom_mask.at(atom_index) != 0)
+            << ", amplitude=" << model.GetAmplitude()
+            << ", width=" << model.GetWidth()
+            << ", offset=" << model.GetOffset();
+        Logger::Log(LogLevel::Debug, atom_message.str());
+    }
+}
+
+[[maybe_unused]] static void LogCounterfactualTermination(
+    bool quiet_mode,
+    double continuation_elapsed_ms,
+    const CounterfactualContinuationState & continuation,
+    std::size_t attempt_number,
+    std::size_t accepted_iteration_count,
+    std::string_view reason)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
+        !continuation.triggered) return;
+    std::ostringstream message;
+    message << "Counterfactual convergence termination: schema=1"
+        << ", experiment=" << continuation.trigger_attempt << "-"
+        << continuation.trigger_accepted_iteration
+        << ", reason=" << reason
+        << ", try=" << attempt_number
+        << ", acc=" << accepted_iteration_count
+        << ", extra-try=" << attempt_number - continuation.trigger_attempt
+        << ", extra-acc=" << accepted_iteration_count -
+            continuation.trigger_accepted_iteration
+        << ", extra-ms=" << continuation_elapsed_ms
+        << ", checkpoints=";
+    for (std::size_t index = 0; index < continuation.checkpoint_reached.size(); index++)
+    {
+        if (index != 0) message << "/";
+        message << continuation.checkpoint_reached.at(index);
+    }
+    Logger::Log(LogLevel::Debug, message.str());
 }
 
 void AppendOffsetSummary(std::ostringstream & stream, const FitState & state)
@@ -4182,10 +4817,31 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 
     std::string_view final_stop_reason;
     bool maximum_iterations_reached{ false };
+    CounterfactualContinuationState counterfactual_continuation;
+    std::optional<std::chrono::steady_clock::time_point>
+        counterfactual_continuation_start;
+    std::optional<ObjectiveDomain> counterfactual_comparison_objective_domain;
+    const auto get_counterfactual_elapsed_ms = [&]()
+    {
+        if (!counterfactual_continuation_start.has_value()) return 0.0;
+        return std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() -
+            *counterfactual_continuation_start).count();
+    };
     for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
     {
         if (iteration_state.active_index_list.empty())
         {
+            if constexpr (kCounterfactualConvergenceAuditEnabled)
+            {
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter,
+                    iteration_state.accepted_iteration_count,
+                    "empty-active-set");
+            }
             FinalizeSecondStageState(
                 model_object,
                 context,
@@ -4241,10 +4897,52 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 *iteration_result.all_rejected_resolution);
             if (*iteration_result.all_rejected_resolution == AllRejectedResolution::Retry)
             {
+                if constexpr (kCounterfactualConvergenceAuditEnabled)
+                {
+                    if (IsCounterfactualContinuationBudgetExhausted(
+                        counterfactual_continuation,
+                        iter + 1,
+                        iteration_state.accepted_iteration_count))
+                    {
+                        final_stop_reason = "counterfactual-budget";
+                        LogCounterfactualTermination(
+                            options.quiet_mode,
+                            get_counterfactual_elapsed_ms(),
+                            counterfactual_continuation,
+                            iter + 1,
+                            iteration_state.accepted_iteration_count,
+                            "budget-exhausted");
+                        break;
+                    }
+                    if (counterfactual_continuation.continuation_active &&
+                        iter + 1 == kMaximumIterations)
+                    {
+                        final_stop_reason = "maximum-iterations";
+                        maximum_iterations_reached = true;
+                        LogCounterfactualTermination(
+                            options.quiet_mode,
+                            get_counterfactual_elapsed_ms(),
+                            counterfactual_continuation,
+                            iter + 1,
+                            iteration_state.accepted_iteration_count,
+                            final_stop_reason);
+                        break;
+                    }
+                }
                 continue;
             }
 
             final_stop_reason = GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution);
+            if constexpr (kCounterfactualConvergenceAuditEnabled)
+            {
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    final_stop_reason);
+            }
             break;
         }
 
@@ -4259,7 +4957,124 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         if (iteration_result.audit_patience_exhausted)
         {
             final_stop_reason = "audit-patience";
+            if constexpr (kCounterfactualConvergenceAuditEnabled)
+            {
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    final_stop_reason);
+            }
             break;
+        }
+
+        if constexpr (kCounterfactualConvergenceAuditEnabled)
+        {
+            if (!iteration_result.counterfactual_evidence.available)
+            {
+                throw std::logic_error(
+                    "Counterfactual convergence audit evidence is unavailable.");
+            }
+            const auto continuation_update{
+                UpdateCounterfactualContinuation(
+                    iteration_result.counterfactual_evidence.policy_decision,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    counterfactual_continuation)
+            };
+            if (continuation_update.triggered_now)
+            {
+                counterfactual_continuation_start =
+                    std::chrono::steady_clock::now();
+                counterfactual_comparison_objective_domain =
+                    iteration_state.objective_domain;
+            }
+            if (counterfactual_continuation.triggered)
+            {
+                std::optional<CounterfactualCheckpointOutcome> checkpoint_outcome;
+                for (std::size_t policy_index = 0;
+                    policy_index < continuation_update.new_checkpoint.size();
+                    policy_index++)
+                {
+                    if (!continuation_update.new_checkpoint.at(policy_index)) continue;
+                    if (!checkpoint_outcome.has_value())
+                    {
+                        checkpoint_outcome = BuildCounterfactualCheckpointOutcome(
+                            context,
+                            options,
+                            graph_topology,
+                            iteration_state,
+                            *counterfactual_comparison_objective_domain);
+                    }
+                    LogCounterfactualCheckpoint(
+                        options.quiet_mode,
+                        get_counterfactual_elapsed_ms(),
+                        context,
+                        counterfactual_continuation,
+                        static_cast<CounterfactualConvergencePolicy>(policy_index),
+                        iter + 1,
+                        iteration_state,
+                        iteration_result.counterfactual_evidence,
+                        *checkpoint_outcome);
+                }
+            }
+            if (continuation_update.policy_agreement)
+            {
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    "policy-agreement");
+            }
+            else if (continuation_update.all_candidate_policies_reached &&
+                counterfactual_continuation.triggered)
+            {
+                final_stop_reason = "counterfactual-policies";
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    "all-policies-reached");
+                break;
+            }
+            else if (IsCounterfactualContinuationBudgetExhausted(
+                counterfactual_continuation,
+                iter + 1,
+                iteration_state.accepted_iteration_count))
+            {
+                final_stop_reason = "counterfactual-budget";
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    "budget-exhausted");
+                break;
+            }
+            else if (counterfactual_continuation.continuation_active)
+            {
+                if (iter + 1 == kMaximumIterations)
+                {
+                    final_stop_reason = "maximum-iterations";
+                    maximum_iterations_reached = true;
+                    LogCounterfactualTermination(
+                        options.quiet_mode,
+                        get_counterfactual_elapsed_ms(),
+                        counterfactual_continuation,
+                        iter + 1,
+                        iteration_state.accepted_iteration_count,
+                        final_stop_reason);
+                    break;
+                }
+                continue;
+            }
         }
 
         if (iteration_result.converged)
@@ -4295,6 +5110,16 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         {
             final_stop_reason = "maximum-iterations";
             maximum_iterations_reached = true;
+            if constexpr (kCounterfactualConvergenceAuditEnabled)
+            {
+                LogCounterfactualTermination(
+                    options.quiet_mode,
+                    get_counterfactual_elapsed_ms(),
+                    counterfactual_continuation,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count,
+                    final_stop_reason);
+            }
             break;
         }
     }
