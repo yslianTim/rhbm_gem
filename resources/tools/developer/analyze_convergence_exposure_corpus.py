@@ -18,6 +18,8 @@ POLICY_EXPOSURES = {
     "legacy-population": "legacy_population",
     "legacy-maximum": "maximum_gate",
     "solver-qualified": "solver_qualification",
+    "fixed-point-operator": "fixed_point_operator",
+    "fixed-point-operator-maximum": "fixed_point_operator_maximum",
 }
 MINIMUM_TOTAL_EXPOSURES = 15
 MINIMUM_EXPOSURES_PER_FAMILY = 5
@@ -60,7 +62,7 @@ def classify_exposure(case_summary: dict[str, Any]) -> str:
     experiment = audit["experiments"][0]
     exposed = [
         name for name in POLICY_EXPOSURES.values()
-        if experiment["exposures"][name]
+        if experiment["exposures"].get(name, False)
     ]
     return "+".join(exposed) if exposed else "policy-agreement"
 
@@ -222,7 +224,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     accepted_only_shadow_count = 0
     maximum_evidence: dict[str, Counter[str]] = {
         population: Counter() for population in (
-            "production", "legacy_population", "solver_qualified")
+            "production", "legacy_population", "solver_qualified",
+            "fixed_point_operator")
     }
     for summary in summaries:
         exposure_class = classify_exposure(summary)
@@ -257,7 +260,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         if audit["status"] != "no_convergence_trigger":
             experiment = audit["experiments"][0]
             exposures = {
-                name: bool(experiment["exposures"][name])
+                name: bool(experiment["exposures"].get(name, False))
                 for name in POLICY_EXPOSURES.values()
             }
             for name, exposed in exposures.items():
@@ -272,7 +275,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         maximum_evidence["production"]["accepted_max_unique_catches"] += int(
             legacy_maximum_unique.get("accepted_max", 0))
         maximum_evidence["production"]["raw_max_unique_catches"] += int(
-            legacy_maximum_unique.get("raw_max", 0))
+            legacy_maximum_unique.get(
+                "guarded_max", legacy_maximum_unique.get("raw_max", 0)))
         outcomes = {}
         if exposure_class not in ("no-trigger", "policy-agreement"):
             outcomes = {
@@ -353,6 +357,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "safety_regression_count": safety_regressions,
             (
                 "redesign_candidate" if policy == "solver-qualified" else
+                "promotion_candidate" if policy.startswith("fixed-point-") else
                 "rollback_candidate"
             ): candidate,
         }

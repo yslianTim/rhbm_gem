@@ -120,8 +120,8 @@ Each outer attempt performs the following sequence:
    damping only the log-amplitude/log-width path through the same factor list.
    If no safe material shape step exists, preserve that atom's previous shape;
    other shape and offset blocks in the component remain eligible. These refits
-   form the raw fixed-point state.
-6. Limit each cluster's raw proposal to its trust region and score the resulting
+   form the guard-aware proposal state.
+6. Limit each cluster's guarded proposal to its trust region and score the resulting
    endpoint candidate. If the endpoint fails the objective guard, backtrack in
    the three transformed coordinates within the same outer attempt.
 7. For a solver-qualified cluster, attempt one joint
@@ -180,8 +180,9 @@ resolver is used by the coupling topology, joint-offset system, local refit,
 objective guards, audit, and final peeling calculation.
 
 This offset solve and neighbor-adjusted local refit constitute one raw
-fixed-point update. These group-median-adjusted entries are temporary inputs to
-the current raw proposal; they are not persisted as peeling sampling entries.
+guard-aware proposal update. These group-median-adjusted entries are temporary
+inputs to the current guarded proposal; they are not persisted as peeling
+sampling entries.
 
 The joint-offset parameterization is cluster-local. Atoms with the same group
 key share one offset column when they are in the same coupling cluster. The same
@@ -208,10 +209,19 @@ maximum absolute transformed change among its members. Fixed and quarantined
 coordinates are excluded; mixed-activity groups and non-finite member changes
 fail convergence.
 
-Both the accepted state and raw fixed-point state must have a linearly
+Both the accepted state and guarded proposal state must have a linearly
 interpolated p99 below `1e-4` in all three populations. Maximum transformed
 change remains a diagnostic and topology-drift metric, but is not a convergence
 predicate.
+
+Developer audit builds additionally evaluate the strict fixed-point operator
+`F(S[k])`: one undamped joint-offset solve followed by undamped local shape
+refits using those offsets. If guard damping, fallback, or quarantine changes
+an offset, all selected shapes are refit once in an isolated shadow pass. If an
+unrestricted offset is unavailable, shape residuals are marked unavailable
+rather than replaced with zero. This strict operator uses the nominal selected
+shape and shared-offset DOFs, including fixed and quarantined blocks, and does
+not change the production trajectory or stopping policy.
 
 Production convergence qualification is the existing active-block cluster
 rollup. Solver qualification is a separate developer comparator: active local
@@ -509,7 +519,7 @@ earliest state that improves the best objective beyond the strict tolerance.
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
-- the accepted and raw fixed-point active-DOF p99 changes are both below
+- the accepted and guarded-proposal active-DOF p99 changes are both below
   `1e-4`, all clusters are accepted, and no active block is suspicious or
   unhealthy;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
@@ -548,7 +558,7 @@ blocks from converging or being written.
 After the stopping policy selects the final validated state, the stage builds
 one atom-level snapshot from the MDPDE model stored in each selected result.
 This is the actual best-audit or latest-validated state chosen for application
-according to the stopping condition, not the last raw proposal and not a
+according to the stopping condition, not the last guarded proposal and not a
 group-median snapshot.
 
 For every selected atom, the stage then rebuilds its persistent peeling
@@ -631,7 +641,7 @@ update one progress row per outer attempt with `Logger::ProgressLine`. An outer
 attempt may be an accepted iteration or an all-rejected trust-region retry, so
 `Try` can advance without `Acc`. The header and progress rows use the same
 fixed column widths, including enough space for both scientific-notation
-values in `dMax A/R`.
+values in `dMax A/G`.
 
 | Column | Meaning after the current outer attempt |
 |---|---|
@@ -640,7 +650,7 @@ values in `dMax A/R`.
 | `Cluster A/R` | Accepted / rejected candidate clusters |
 | `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after component reconciliation and the final global guard; `E = A + R + S` |
 | `Suspicious` | Atoms with at least one shape, offset, or hard-failure block fixed in this attempt |
-| `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
+| `dMax A/G` | Maximum transformed change in the accepted/guarded-proposal state; accepted is `-` on an all-rejected attempt |
 
 Objective-domain startup diagnostics report the weights, cluster and unique
 fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection

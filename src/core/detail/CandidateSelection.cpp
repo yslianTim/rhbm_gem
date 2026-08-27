@@ -2145,7 +2145,7 @@ static bool TryCommitClusterCandidate(
 static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     const SecondStageContext & context,
     const FitState & outer_previous_state,
-    const FitState & raw_state,
+    const FitState & guarded_proposal_state,
     const ClusterKey & key,
     double trust_region_radius)
 {
@@ -2168,7 +2168,8 @@ static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     {
         group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
         previous_model_list.emplace_back(outer_previous_state.at(atom_index).mdpde.GetModel());
-        raw_model_list.emplace_back(raw_state.at(atom_index).mdpde.GetModel());
+        raw_model_list.emplace_back(
+            guarded_proposal_state.at(atom_index).mdpde.GetModel());
     }
     const auto previous_shared_offset_list{
         BuildGroupMedianOffsetList(group_id_by_atom_position, previous_model_list)
@@ -2243,7 +2244,7 @@ static BaseProposalBuildResult BuildSharedOffsetBaseProposal(
                     proposal.patch.mdpde_list.emplace_back(
                         GaussianModel3DWithUncertainty{
                             candidate_model_list.at(atom_position),
-                            raw_state.at(atom_index).mdpde
+                            guarded_proposal_state.at(atom_index).mdpde
                                 .GetStandardDeviationModel()
                         });
                 }
@@ -2402,7 +2403,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     const auto & residual_baseline{ inputs.residual_baseline };
     const auto & previous_state{ inputs.previous_state };
     const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
-    const auto & raw_state{ inputs.raw_state };
+    const auto & guarded_proposal_state{ inputs.guarded_proposal_state };
     const auto & ridge_multiplier_list{ inputs.ridge_multiplier_list };
     const auto & objective_domain{ inputs.objective_domain };
     const auto & previous_objective_entry{ inputs.previous_objective_by_key.at(key) };
@@ -2459,7 +2460,7 @@ static ClusterCandidateResult SelectClusterCandidate(
         BuildSharedOffsetBaseProposal(
             context,
             previous_state,
-            raw_state,
+            guarded_proposal_state,
             key,
             trust_region_radius)
     };

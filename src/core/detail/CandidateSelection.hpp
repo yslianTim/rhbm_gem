@@ -582,7 +582,7 @@ struct CandidateSelectionInputs
     const ClusterHealthMap & health_by_key;
     const FitState & previous_state;
     const PolishProvenance & previous_polish_provenance;
-    const FitState & raw_state;
+    const FitState & guarded_proposal_state;
     const SuspiciousUpdateMask & rollback_atom_mask;
     const SuspiciousBlockActivity & block_activity;
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom;

@@ -1,9 +1,8 @@
 # Counterfactual convergence continuation audit
 
-> Current baseline (2026-08-27): production uses its existing convergence
-> qualification plus accepted/raw active-DOF p99. Schema-3 continuation
-> isolates the former all-selected population, the removed maximum gate, and
-> solver qualification.
+> Current baseline (2026-08-28): production uses its existing convergence
+> qualification plus accepted/guarded-proposal active-DOF p99. Schema-3
+> continuation also evaluates the strict fixed-point operator in shadow.
 
 ## Purpose and isolation boundary
 
@@ -35,6 +34,8 @@ One continuation trajectory evaluates the first stop checkpoint for:
 | `legacy-population` | Production convergence qualification | All selected atoms; p99 only |
 | `legacy-maximum` | Production convergence qualification | Active shared DOFs; p99 plus accepted/raw maximum `< 1e-3` |
 | `solver-qualified` | Active-block solver qualification | Active shape atoms and shared-offset DOFs |
+| `fixed-point-operator` | Production convergence qualification | Accepted active DOFs plus nominal-DOF strict operator p99 |
+| `fixed-point-operator-maximum` | Production convergence qualification | Strict operator policy plus accepted/operator maximum `< 1e-3` |
 
 The legacy-population comparator includes fixed and quarantined zero changes.
 The legacy-maximum comparator stays on active DOFs so it isolates only the
@@ -71,9 +72,10 @@ Debug output uses an independent schema:
 
 The checkpoint also reports multi-member shared groups, the distribution of
 `Hmin/Hmedian`, and how often the weakest-peak member supplies the largest raw
-offset/peak change. The analyzer joins these records with the schema-5
+offset/peak change. The analyzer joins these records with the schema-6
 trajectory aggregation, which retains solver/path strata, active population
-sizes, `N<=91` p99-to-maximum evidence, and unique blockers.
+sizes, strict-operator availability and tail evidence, `N<=91`
+p99-to-maximum evidence, and unique blockers.
 
 ```bash
 python3 resources/tools/developer/analyze_counterfactual_convergence.py \
@@ -97,12 +99,12 @@ regular runner now parses both the legacy one-line and current multiline
 second-stage summaries without changing its command template.
 
 The observed fold-168 trajectory has seven accepted iterations and stops with
-`audit-patience`. The refreshed schema-5 records have converged joint solves,
+`audit-patience`. The refreshed schema-6 records have converged joint solves,
 no quarantine, and no production convergence checkpoint. Therefore the
 build-gated run correctly reports
 `no_convergence_trigger`; it does not suppress audit patience or manufacture a
 counterfactual continuation. Its 168-atom quality gate remains within the
-checked-in schema-5 baseline. The normal and audit builds produced byte-identical
+checked-in quality baseline. The normal and audit builds produced byte-identical
 `actual.json` state, summary, and quality records for this negative control.
 
 Configure the external negative control without committing local input paths:

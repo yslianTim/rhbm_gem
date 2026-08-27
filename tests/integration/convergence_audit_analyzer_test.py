@@ -36,27 +36,36 @@ def make_record(
     legacy_maximum: str = "1/1/1/1/1",
 ) -> dict[str, str]:
     line = (
-        "[Debug] Convergence safeguard audit: schema=5, try=1, acc=1, "
+        "[Debug] Convergence safeguard audit: schema=6, try=1, acc=1, "
         f"production-population={production_population}, "
         f"legacy-population={legacy_population}, "
+        f"operator-population={legacy_population}, "
         f"production-predicates[q/a99/r99]={production}, "
         f"legacy-population-predicates[q/a99/r99]={legacy}, "
         f"legacy-maximum-predicates[q/a99/amax/r99/rmax]={legacy_maximum}, "
         f"solver-qualified-predicates[q/a99/r99]={solver_qualified}, "
+        f"operator-predicates[q/a99/fp99/complete/fpmax]={production}/1/1, "
         f"production-accepted-p99={production_values}, "
         "production-accepted-max=5e-4/5e-4/5e-4, "
-        f"production-raw-p99={production_values}, "
-        "production-raw-max=5e-4/5e-4/5e-4, "
+        f"guarded-proposal-p99={production_values}, "
+        "guarded-proposal-max=5e-4/5e-4/5e-4, "
         f"legacy-accepted-p99={legacy_values}, "
         "legacy-accepted-max=5e-4/5e-4/5e-4, "
-        f"legacy-raw-p99={legacy_values}, legacy-raw-max=5e-4/5e-4/5e-4, "
+        f"legacy-guarded-p99={legacy_values}, legacy-guarded-max=5e-4/5e-4/5e-4, "
+        f"fixed-point-residual-p99={production_values}, "
+        "fixed-point-residual-max=5e-4/5e-4/5e-4, "
+        "operator-unavailable[height/width/offset]=0/0/0, "
+        "operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=0/0/0, "
+        "operator-tail[height/width/offset]=0/0/0, "
+        "residual-state=fixed-point-converged, "
         "path[trust/backtrack/polish/boundary/rescue]=0/0/0/0/0, "
+        "limiters[guard/fixed/quarantine/trust/backtrack/reject/polish/boundary/rescue]=0/0/0/0/0/0/0/0/0, "
         "joint-status[converged/system-build/empty/initial-solve/irls-solve/objective-deteriorated/max-iter]=1/0/0/0/0/1/0, "
         f"qualification[production/solver/restricted/all-fixed/active-shape/solver-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/solver-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]={qualification}, "
         "offset-groups[total/active/fixed/quarantine/mixed/min/p50/p99/max]=2/2/0/0/0/1/5/9/9, "
         "ratios[shape-active/offset-active/quarantine]=0.01/0.01/0, "
-        f"stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/solver-qualified]={stops}, "
-        f"exposures[legacy-population/maximum-gate/solver-qualification]={exposures}."
+        f"stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/solver-qualified/operator/operator-maximum]={stops}/1/1, "
+        f"exposures[legacy-population/maximum-gate/solver-qualification/operator/operator-maximum]={exposures}/0/0."
     )
     record = MODULE.parse_record(line)
     assert record is not None
@@ -129,7 +138,7 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
 
     def test_ignores_older_schema(self) -> None:
         self.assertIsNone(
-            MODULE.parse_record("Convergence safeguard audit: schema=4, try=1")
+            MODULE.parse_record("Convergence safeguard audit: schema=5, try=1")
         )
 
 

@@ -28,6 +28,8 @@ POLICIES = (
     "legacy-population",
     "legacy-maximum",
     "solver-qualified",
+    "fixed-point-operator",
+    "fixed-point-operator-maximum",
 )
 SHADOW_POLICIES = (
     "accepted-only-k2",
@@ -225,7 +227,8 @@ def _continuation_safety_events(
             counts["domain_change"] += blockers[3]
         summary_fields = (
             "production-accepted-p99", "production-accepted-max",
-            "production-raw-p99", "production-raw-max")
+            "guarded-proposal-p99", "guarded-proposal-max",
+            "fixed-point-residual-p99", "fixed-point-residual-max")
         if any(
                 not math.isfinite(value)
                 for field in summary_fields
@@ -405,6 +408,9 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
                 "legacy_population": exposed("legacy-population"),
                 "maximum_gate": exposed("legacy-maximum"),
                 "solver_qualification": exposed("solver-qualified"),
+                "fixed_point_operator": exposed("fixed-point-operator"),
+                "fixed_point_operator_maximum": exposed(
+                    "fixed-point-operator-maximum"),
             },
             "actual_continuation": any(
                 report.get("extra_attempts", 0) > 0

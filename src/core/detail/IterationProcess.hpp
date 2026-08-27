@@ -7,6 +7,7 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -62,13 +63,13 @@ struct ConvergencePredicates
 {
     bool qualification_passed{ false };
     bool accepted_percentile_converged{ false };
-    bool raw_percentile_converged{ false };
+    bool residual_percentile_converged{ false };
 
     bool Converged() const
     {
         return qualification_passed &&
             accepted_percentile_converged &&
-            raw_percentile_converged;
+            residual_percentile_converged;
     }
 
     bool AcceptedOnlyConverged() const
@@ -80,7 +81,27 @@ struct ConvergencePredicates
 ConvergencePredicates EvaluateConvergencePredicates(
     bool qualification_passed,
     const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & raw_change);
+    const TransformedChangeSummary & residual_change);
+
+enum class FixedPointResidualInterpretation
+{
+    Restricted,
+    UnqualifiedSmall,
+    StepLimited,
+    PostprocessedMovement,
+    BulkFixedPointWithTail,
+    FixedPointConverged,
+    Progressing
+};
+
+FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
+    bool operator_complete,
+    bool qualification_passed,
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & fixed_point_residual);
+
+std::string_view GetFixedPointResidualInterpretationText(
+    FixedPointResidualInterpretation interpretation);
 
 enum class AcceptedOnlyAuditPolicy : std::size_t
 {
@@ -119,6 +140,8 @@ enum class CounterfactualConvergencePolicy : std::size_t
     LegacyPopulation,
     LegacyMaximum,
     SolverQualified,
+    FixedPointOperator,
+    FixedPointOperatorMaximum,
     Count
 };
 

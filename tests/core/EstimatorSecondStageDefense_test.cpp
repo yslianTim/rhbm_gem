@@ -27,6 +27,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
@@ -4781,7 +4782,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximum
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(summary));
 }
 
-TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarityIndependent)
+TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualificationIndependent)
 {
     const auto make_summary = [](double percentile, double maximum)
     {
@@ -4804,23 +4805,23 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     };
     EXPECT_TRUE(accepted_small.qualification_passed);
     EXPECT_TRUE(accepted_small.accepted_percentile_converged);
-    EXPECT_FALSE(accepted_small.raw_percentile_converged);
+    EXPECT_FALSE(accepted_small.residual_percentile_converged);
     EXPECT_TRUE(accepted_small.AcceptedOnlyConverged());
     EXPECT_FALSE(accepted_small.Converged());
 
-    const auto raw_small{
+    const auto residual_small{
         audit_detail::EvaluateConvergencePredicates(true, large, small)
     };
-    EXPECT_FALSE(raw_small.accepted_percentile_converged);
-    EXPECT_TRUE(raw_small.raw_percentile_converged);
-    EXPECT_FALSE(raw_small.AcceptedOnlyConverged());
-    EXPECT_FALSE(raw_small.Converged());
+    EXPECT_FALSE(residual_small.accepted_percentile_converged);
+    EXPECT_TRUE(residual_small.residual_percentile_converged);
+    EXPECT_FALSE(residual_small.AcceptedOnlyConverged());
+    EXPECT_FALSE(residual_small.Converged());
 
     const auto nonstationary_small{
         audit_detail::EvaluateConvergencePredicates(false, small, small)
     };
     EXPECT_TRUE(nonstationary_small.accepted_percentile_converged);
-    EXPECT_TRUE(nonstationary_small.raw_percentile_converged);
+    EXPECT_TRUE(nonstationary_small.residual_percentile_converged);
     EXPECT_FALSE(nonstationary_small.AcceptedOnlyConverged());
     EXPECT_FALSE(nonstationary_small.Converged());
 
@@ -4869,6 +4870,58 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     EXPECT_EQ(production_update.eligible_streak, 1U);
     EXPECT_TRUE(std::ranges::none_of(
         production_update.triggered_now, [](bool value) { return value; }));
+}
+
+TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesLimitedSteps)
+{
+    const auto make_summary = [](double percentile, double maximum)
+    {
+        change_detail::TransformedChangeSummary summary;
+        summary.percentile_stats.percentile_list.assign(
+            change_detail::kTransformedChangeSize,
+            percentile);
+        summary.maximum_list.assign(
+            change_detail::kTransformedChangeSize,
+            maximum);
+        summary.population_size_list.fill(100);
+        return summary;
+    };
+    const auto small{ make_summary(5.0e-5, 5.0e-4) };
+    const auto large{ make_summary(2.0e-4, 2.0e-3) };
+    const auto sparse_tail{ make_summary(5.0e-5, 2.0e-3) };
+
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            false, true, small, small),
+        audit_detail::FixedPointResidualInterpretation::Restricted);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, false, small, small),
+        audit_detail::FixedPointResidualInterpretation::UnqualifiedSmall);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, true, small, large),
+        audit_detail::FixedPointResidualInterpretation::StepLimited);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, true, large, small),
+        audit_detail::FixedPointResidualInterpretation::PostprocessedMovement);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, true, small, sparse_tail),
+        audit_detail::FixedPointResidualInterpretation::BulkFixedPointWithTail);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, true, small, small),
+        audit_detail::FixedPointResidualInterpretation::FixedPointConverged);
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            true, true, large, large),
+        audit_detail::FixedPointResidualInterpretation::Progressing);
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            audit_detail::FixedPointResidualInterpretation::StepLimited),
+        "step-limited");
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlockDilution)
@@ -5329,6 +5382,52 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingDampsFiniteNonph
     EXPECT_GT(fitted_model.GetWidth(), 0.0);
     EXPECT_NE(fitted_model.GetOffset(), previous_model.GetOffset());
     ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, FixedPointShadowAuditNamesAllThreeStates)
+{
+    auto model{ BuildFiniteNonphysicalProfileDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_NE(
+        output.find("Convergence safeguard audit: schema=6"),
+        std::string::npos);
+    EXPECT_NE(output.find("production-accepted-p99="), std::string::npos);
+    EXPECT_NE(output.find("guarded-proposal-p99="), std::string::npos);
+    EXPECT_NE(output.find("fixed-point-residual-p99="), std::string::npos);
+    EXPECT_NE(output.find("operator-unavailable[height/width/offset]="),
+        std::string::npos);
+    EXPECT_NE(output.find("residual-state="), std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, FixedPointShadowMarksUnavailableOperatorRestricted)
+{
+    auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_NE(output.find("residual-state=restricted"), std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]="),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find(
+            "operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=0/0/0"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinearRidgeGuard)

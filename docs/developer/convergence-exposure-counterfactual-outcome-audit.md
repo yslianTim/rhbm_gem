@@ -1,17 +1,18 @@
 # Convergence exposure and counterfactual outcome audit
 
-> Current result (2026-08-27): the post-fix (`after`) 600-case corpus is the
+> Current result (2026-08-28): the post-fix (`after`) 600-case corpus is the
 > canonical result for the current implementation. The instrumentation-only
 > pre-fix (`before`) corpus is retained as the paired historical baseline.
 > Production still requires its existing convergence qualification and
-> accepted/raw active-DOF p99 without a maximum gate; the accepted-only
+> accepted/guarded-proposal active-DOF p99 without a maximum gate; the strict
+> fixed-point operator and accepted-only
 > checkpoint remains audit-only evidence and does not change that predicate.
 
 ## Purpose and scope
 
 The refreshed audit searches for production convergence checkpoints at which
-the legacy all-selected population, the removed maximum gate, or solver
-qualification rejects the stop. It then uses the isolated continuation from the
+the legacy all-selected population, the removed maximum gate, solver
+qualification, or either strict-operator policy rejects the stop. It then uses the isolated continuation from the
 [third-round audit](counterfactual-convergence-continuation-audit.md) to compare
 outcomes. A mismatch alone is an exposure, not evidence of quality loss.
 
@@ -57,7 +58,7 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 
 Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
-`scenario-truth.json`, `trajectory-schema-5.json`,
+`scenario-truth.json`, `trajectory-schema-6.json`,
 `counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
 legacy shadow/terminal audit artifact, and schema-8 `case-summary.json`. The
 aggregate report is schema 5. Old summaries
@@ -72,6 +73,8 @@ At the production checkpoint `T0`:
 | `legacy_population` | Production qualification + all-selected p99 | Would the former population delay the current stop? |
 | `maximum_gate` | Production qualification + active-DOF p99/max | Would restoring maximum delay the current stop? |
 | `solver_qualification` | Solver qualification + active-DOF p99 | Would solver qualification delay the current stop? |
+| `fixed_point_operator` | Production qualification + accepted active-DOF p99 + complete nominal-DOF operator p99 | Was the guarded proposal hiding a material fixed-point residual? |
+| `fixed_point_operator_maximum` | Fixed-point operator policy + accepted/operator maximum | Does a sparse residual tail justify the maximum gate? |
 | policy agreement | All comparators accept | No continuation is required. |
 
 No production convergence trigger is a separate negative control. Outcomes are
@@ -86,12 +89,12 @@ Safety regressions are counted independently: new hard failures, non-finite
 states, mixed shared-group activity, or new quarantine after `T0`. Maximum
 statistics remain diagnostic and support the isolated rollback comparison.
 
-The accepted-only shadow checkpoint is separate from those three comparators.
+The accepted-only shadow checkpoint is separate from those five comparators.
 It requires production qualification, accepted active-DOF p99, a stable
 objective domain, no quarantine transition, no genuine suspicious/hard failure,
-and no rejection, but ignores raw p99 while recording it. Only the first shadow
-checkpoint is retained and final polish runs on isolated state, so it cannot
-alter the production trajectory or output.
+and no rejection, but ignores guarded-proposal p99 while recording it. Only the
+first shadow checkpoint is retained and final polish runs on isolated state, so
+it cannot alter the production trajectory or output.
 
 ## Replay selection and production decision
 
@@ -104,8 +107,9 @@ corpus family. At least 70% must show material objective or truth benefit,
 material harm must be at most 10%, aggregate raw-residual median must not
 worsen, and no safety regression may appear. Legacy population/maximum results
 are reported as `rollback_candidate`; `solver-qualified` is reported as
-`redesign_candidate`. An incomplete run or unmet quota forces a diagnostic-only
-conclusion.
+`redesign_candidate`; the strict-operator policies are reported as
+`promotion_candidate`. An incomplete run or unmet quota forces a
+diagnostic-only conclusion.
 
 ## Verification and observed evidence
 
@@ -141,12 +145,14 @@ material truth harm (`+1.7153815119742974e-05`) while its objective delta is not
 material. No non-finite, hard-failure, suspicious/quarantine, or other safety
 regression is observed.
 
-The three counterfactual policies still have no genuine production-checkpoint
+All five counterfactual policies have no genuine production-checkpoint
 exposure in this corpus, so their minimum exposure/family quotas remain unmet.
-Consequently `rollback_candidate=false` and `redesign_candidate=false` still
-mean only that no evidence currently requires a rollback or redesign; they do
-not prove the production policy is optimal. The accepted-only shadow result is
-reported independently and is not counted as comparator exposure.
+The 42 production convergence checkpoints agree with both strict-operator
+comparators. Consequently `rollback_candidate=false`, `redesign_candidate=false`,
+and `promotion_candidate=false` mean only that no comparator has enough
+exposure for a policy change; they do not prove the production policy is
+optimal. The accepted-only shadow result is reported independently and is not
+counted as comparator exposure.
 
 ## Accepted-only isolated continuation outcome
 
@@ -177,14 +183,15 @@ unchanged. The result shows that objective and safety neutrality alone are not
 sufficient evidence for early stopping because terminal continuation still
 materially improves at least one truth-error component in a nonzero subset.
 
-Current verification on 2026-08-27:
+Current verification on 2026-08-28:
 
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
 - fold-168 still stops after seven accepted iterations with `audit-patience` in
   both builds and produces byte-identical `actual.json` files;
 - C/N/O positive controls pass 3/3 and `natural-v00` passes 8/8;
-- both 600-case runs are complete and deterministic, with zero safety
-  regression;
+- the schema-6 600-case corpus completes 600/600 with 42 production
+  convergence cases, zero strict-operator exposure, zero failed cases, and no
+  promotion recommendation;
 - the 137-case isolated continuation replay completes twice with no failures,
   no non-time artifact mismatch, and no production-policy recommendation;
 - repository lint passes.

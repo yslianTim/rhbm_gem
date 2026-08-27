@@ -19,49 +19,59 @@ FIELD_PATTERN = re.compile(
 PREDICATE_NAMES = (
     "qualification",
     "accepted_p99",
-    "raw_p99",
+    "residual_p99",
 )
 LEGACY_MAXIMUM_PREDICATE_NAMES = (
     "qualification",
     "accepted_p99",
     "accepted_max",
-    "raw_p99",
-    "raw_max",
+    "guarded_p99",
+    "guarded_max",
 )
 TRACK_FIELDS = {
     "production": "production-predicates",
     "legacy_population": "legacy-population-predicates",
     "solver_qualified": "solver-qualified-predicates",
+    "fixed_point_operator": "operator-predicates",
 }
 POPULATION_FIELDS = {
     "production": "production-population",
     "legacy_population": "legacy-population",
     "solver_qualified": "production-population",
+    "fixed_point_operator": "operator-population",
 }
 SUMMARY_FIELDS = {
     "production": (
         "production-accepted-p99",
         "production-accepted-max",
-        "production-raw-p99",
-        "production-raw-max",
+        "guarded-proposal-p99",
+        "guarded-proposal-max",
     ),
     "legacy_population": (
         "legacy-accepted-p99",
         "legacy-accepted-max",
-        "legacy-raw-p99",
-        "legacy-raw-max",
+        "legacy-guarded-p99",
+        "legacy-guarded-max",
     ),
     "solver_qualified": (
         "production-accepted-p99",
         "production-accepted-max",
-        "production-raw-p99",
-        "production-raw-max",
+        "guarded-proposal-p99",
+        "guarded-proposal-max",
+    ),
+    "fixed_point_operator": (
+        "production-accepted-p99",
+        "production-accepted-max",
+        "fixed-point-residual-p99",
+        "fixed-point-residual-max",
     ),
 }
 EXPOSURE_NAMES = (
     "legacy_population",
     "maximum_gate",
     "solver_qualification",
+    "fixed_point_operator",
+    "fixed_point_operator_maximum",
 )
 
 
@@ -82,7 +92,7 @@ def parse_record(line: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip()
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "5":
+    if fields.get("schema") != "6":
         return None
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
         "qualification",
@@ -93,6 +103,11 @@ def parse_record(line: str) -> dict[str, str] | None:
         "ratios",
         "offset-groups",
         "joint-status",
+        "operator-unavailable",
+        "operator-unavailable-reasons",
+        "operator-tail",
+        "residual-state",
+        "limiters",
     }
     if not required.issubset(fields):
         missing = ", ".join(sorted(required - fields.keys()))
@@ -168,7 +183,12 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         vector_by_track: dict[str, list[int]] = {}
         for track, field in TRACK_FIELDS.items():
             vector = _integers(record[field])
-            if len(vector) != len(PREDICATE_NAMES):
+            if track == "fixed_point_operator":
+                if len(vector) != 5:
+                    raise ValueError(
+                        "operator-predicates must contain five predicates")
+                vector = vector[:3]
+            elif len(vector) != len(PREDICATE_NAMES):
                 raise ValueError(f"{field} must contain three predicates")
             vector_by_track[track] = vector
             vectors_by_track[track].append(vector)
@@ -198,10 +218,10 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         qualification = _integers(record["qualification"])
         stops = _integers(record["stop-candidates"])
         exposures = _integers(record["exposures"])
-        if len(stops) != 5:
-            raise ValueError("stop-candidates must contain five values")
+        if len(stops) != 7:
+            raise ValueError("stop-candidates must contain seven values")
         if len(exposures) != len(EXPOSURE_NAMES):
-            raise ValueError("exposures must contain three values")
+            raise ValueError("exposures must contain five values")
         for name, exposed in zip(EXPOSURE_NAMES, exposures):
             exposure_count[name] += int(bool(exposed))
 
@@ -209,7 +229,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             implication_name = "production_qualification=>solver_qualified"
             implication_counterexamples[implication_name] += 1
             implication_examples[implication_name].append(record_ref)
-        for comparison_track in ("legacy_population",):
+        for comparison_track in ("legacy_population", "fixed_point_operator"):
             for index, name in enumerate(PREDICATE_NAMES[1:], start=1):
                 if (vector_by_track["production"][index] and
                         not vector_by_track[comparison_track][index]):
@@ -226,21 +246,22 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         comparison_mismatch = (
             not all(vector_by_track["legacy_population"]) or
             not all(legacy_maximum_vector) or
-            not all(vector_by_track["solver_qualified"])
+            not all(vector_by_track["solver_qualified"]) or
+            not all(vector_by_track["fixed_point_operator"])
         )
         diagnostic_mismatch_count += int(
             production_predicate_pass and comparison_mismatch and not stops[0])
 
         for track, population_field in POPULATION_FIELDS.items():
             populations = _integers(record[population_field])
-            accepted_p99, accepted_max, raw_p99, raw_max = (
+            accepted_p99, accepted_max, residual_p99, residual_max = (
                 _numbers(record[field]) for field in SUMMARY_FIELDS[track]
             )
             for coordinate, population_size in enumerate(populations):
                 size_bin = "N<=91" if population_size <= 91 else "N>91"
                 for state, p99_values, max_values in (
                     ("accepted", accepted_p99, accepted_max),
-                    ("raw", raw_p99, raw_max),
+                    ("residual", residual_p99, residual_max),
                 ):
                     p99_pass = math.isfinite(p99_values[coordinate]) and p99_values[coordinate] < 1.0e-4
                     max_pass = math.isfinite(max_values[coordinate]) and max_values[coordinate] < 1.0e-3
@@ -279,6 +300,19 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             strata,
             "proposal_path",
             "+".join(active_paths) if active_paths else "normal",
+            actual_exposure,
+        )
+        _record_stratum(
+            strata,
+            "fixed_point_interpretation",
+            record["residual-state"],
+            actual_exposure,
+        )
+        unavailable = _integers(record["operator-unavailable"])
+        _record_stratum(
+            strata,
+            "operator_availability",
+            "complete" if not any(unavailable) else "restricted",
             actual_exposure,
         )
 
@@ -378,7 +412,7 @@ def format_markdown(report: dict[str, object]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("log", type=Path, help="Debug log containing schema=5 audit records")
+    parser.add_argument("log", type=Path, help="Debug log containing schema=6 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

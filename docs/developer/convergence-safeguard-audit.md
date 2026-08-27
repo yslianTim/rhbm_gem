@@ -1,20 +1,24 @@
 # Second-stage convergence safeguard audit
 
-> Current baseline (2026-08-27): production requires its existing active-block
-> convergence qualification plus accepted/raw active-DOF p99 below `1e-4`. Maximum change
+> Current baseline (2026-08-28): production requires its existing active-block
+> convergence qualification plus accepted/guarded-proposal active-DOF p99 below `1e-4`. Maximum change
 > remains diagnostic and drives topology-drift checks, but is not a convergence
-> predicate. The first-round measurements below remain historical evidence.
+> predicate. A strict fixed-point operator is now collected as shadow evidence;
+> the first-round measurements below remain historical evidence.
 
 ## Current resolution
 
 - Retain accepted-state p99 because post-raw correction can move a committed
   state after a small raw endpoint.
-- Retain raw fixed-point p99 because clipping, backtracking, or rejection can
+- Retain guarded-proposal p99 because trust clipping, backtracking, or rejection can
   hide a material raw residual from the accepted step.
+- Record strict operator residual p99/maximum separately. It is computed before
+  guard damping, fallback, freeze, trust limiting, objective gates, and polish.
+  Unavailable nominal DOFs produce a restricted classification, not a zero.
 - Evaluate both summaries over active optimization DOFs. Fixed and quarantined
   coordinates do not dilute the population, and each shared offset contributes
   one group-level sample.
-- Remove accepted/raw maximum from the production stopping conjunction. The
+- Remove accepted/guarded-proposal maximum from the production stopping conjunction. The
   historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
 - Keep solver qualification diagnostic-only until continuation demonstrates a
   material objective or truth-error benefit.
@@ -28,11 +32,15 @@ five predicates without changing the stopping policy:
 - active-block stationarity;
 - accepted-state p99 change;
 - accepted-state maximum change;
-- raw fixed-point p99 change;
-- raw fixed-point maximum change.
+- guarded-proposal p99 change;
+- guarded-proposal maximum change.
 
-Accepted change is `|z(S[k+1]) - z(S[k])|`; raw change is
-`|z(F(S[k])) - z(S[k])|`. The transformed coordinates `z` are log peak
+Historically, accepted change was `|z(S[k+1]) - z(S[k])|` and the guarded
+proposal was described as `|z(F(S[k])) - z(S[k])|`. That second description
+was imprecise because guard damping and fixed/quarantined rollback had already
+been applied. Schema 6 now calls it `guarded-proposal` and reserves
+`fixed-point-residual` for the undamped offset-to-shape operator. The
+transformed coordinates `z` are log peak
 height, log width, and offset/peak. Every coordinate must have p99 below
 `1e-4` and maximum below `1e-3`. Objective-domain changes, quarantine
 transitions, suspicious updates, and rejected clusters remain orthogonal
@@ -45,8 +53,8 @@ production convergence expression.
 
 | Relationship | Result | Reason |
 | --- | --- | --- |
-| accepted change ⇒ raw change | False | Trust clipping, objective backtracking, or rejection can make the committed step small while the raw fixed-point residual remains large. |
-| raw change ⇒ accepted change | False | Joint polish, boundary reconciliation, and rescue can move the accepted state away from an otherwise small raw endpoint. |
+| accepted change ⇒ guarded-proposal change | False | Trust clipping, objective backtracking, or rejection can make the committed step small while the guarded proposal remains large. |
+| guarded-proposal change ⇒ accepted change | False | Joint polish, boundary reconciliation, and rescue can move the accepted state away from an otherwise small guarded endpoint. |
 | stationarity ⇒ small change | False | Stationarity describes inner-solver/refit qualification, not the magnitude of the outer fixed-point step. |
 | small change ⇒ stationarity | False | Fallback, damping, fixed blocks, or an unfinished inner solve can return a numerically small step without qualification. |
 | p99 ⇒ maximum | False in general | p99 intentionally ignores a sufficiently sparse extreme tail. |
@@ -94,18 +102,19 @@ parallel selection and for behavioral neutrality between Info and Debug runs.
 
 ## Current Debug trace contract
 
-At Debug verbosity (`-v 4`) every accepted attempt emits schema `5` on a line
+At Debug verbosity (`-v 4`) every accepted attempt emits schema `6` on a line
 beginning with `Convergence safeguard audit:`. The record contains:
 
 - attempt, accepted iteration, selected/quarantined population;
-- production active-DOF and legacy all-selected population sizes for all three
-  coordinates;
+- production active-DOF, legacy all-selected, and strict-operator nominal
+  population sizes for all three coordinates;
 - production, `legacy-population`, `legacy-maximum`, and `solver-qualified`
   predicate vectors;
-- accepted/raw p99 and diagnostic maximum values for production and legacy
-  populations;
-- isolated stop-candidate and exposure flags for the three comparators;
-- whether accepted and raw states are equal;
+- accepted, guarded-proposal, and fixed-point-residual p99/maximum values;
+- strict-operator unavailable and sparse-tail counts plus residual-state
+  classification;
+- isolated stop-candidate and exposure flags for five comparators;
+- whether accepted and guarded-proposal states are equal;
 - trust limiting, backtracking, polish, boundary, and rescue path counts;
 - production and solver qualification, exact local-refit status counts, and
   joint-solver status counts;
@@ -141,7 +150,7 @@ block-level stationarity, active-member changes, and one-sample-per-shared-DOF
 offset changes.
 
 The subsequent audits completed this follow-up. Production now uses the
-preferred active-DOF population without a maximum gate; the accepted/raw and
+  preferred active-DOF population without a maximum gate; the accepted/guarded and
 qualification independence results remain valid. The active-member comparison
 was retired after the shared-DOF population became authoritative; its results
 above remain historical evidence only.
