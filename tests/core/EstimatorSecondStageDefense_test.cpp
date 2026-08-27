@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -12,7 +13,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "core/detail/FittingModel.hpp"
@@ -5073,6 +5073,33 @@ TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlo
     EXPECT_EQ(active_shadow.population_size_list.at(0), 10U);
     EXPECT_EQ(active_shadow.population_size_list.at(1), 10U);
     EXPECT_EQ(active_shadow.population_size_list.at(2), 10U);
+
+    std::vector<std::size_t> group_id_by_atom_index(atom_count);
+    std::iota(
+        group_id_by_atom_index.begin(),
+        group_id_by_atom_index.end(),
+        0);
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0)
+    };
+    const auto population{
+        audit_detail::BuildActiveCoordinateAuditPopulation(
+            atom_index_list,
+            std::vector<audit_detail::ClusterKey>{ atom_index_list },
+            group_id_by_atom_index,
+            block_activity,
+            quarantine_activity)
+    };
+    const auto dual_shadow{
+        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+    };
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
+        dual_shadow.member));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
+        dual_shadow.shared_dof));
+    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(2), 10U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveBlockStationarityCanHideSoftJointNonconvergence)
@@ -5090,6 +5117,346 @@ TEST(EstimatorSecondStageDefenseTest, ActiveBlockStationarityCanHideSoftJointNon
     EXPECT_FALSE(audit.full_cluster_eligible);
     EXPECT_EQ(audit.soft_joint_nonconverged_cluster_count, 1U);
     EXPECT_EQ(audit.hard_joint_failure_cluster_count, 0U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, StrictStationarityRejectsActiveSoftJointStatus)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    const std::vector<std::size_t> atom_index_list{ 0 };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        audit_detail::ClusterKey{ 0 },
+        audit_detail::ClusterHealth{ Status::IrlsMaximumIterationsReached });
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
+        rg::RHBMEstimationStatus::SUCCESS
+    };
+
+    const auto audit{
+        audit_detail::EvaluateStrictConvergenceStationarityAudit(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity,
+            audit_detail::SuspiciousUpdateMask(1, 1),
+            audit_detail::SuspiciousUpdateMask(1, 0),
+            local_status,
+            health_by_key)
+    };
+    EXPECT_TRUE(audit.current_eligible);
+    EXPECT_FALSE(audit.strict_eligible);
+    EXPECT_EQ(audit.qualified_shape_count, 1U);
+    EXPECT_EQ(audit.soft_nonstationary_offset_group_count, 1U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, StrictStationarityClassifiesActiveHardJointStatuses)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    const std::vector<std::size_t> atom_index_list{ 0 };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(1, 1),
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
+        std::nullopt
+    };
+    for (const auto status : {
+        Status::SystemBuildFailed,
+        Status::EmptySystem,
+        Status::InitialSolveFailed,
+        Status::IrlsSolveFailed })
+    {
+        audit_detail::ClusterHealthMap health_by_key;
+        health_by_key.emplace(
+            audit_detail::ClusterKey{ 0 },
+            audit_detail::ClusterHealth{ status });
+        const auto audit{
+            audit_detail::EvaluateStrictConvergenceStationarityAudit(
+                atom_index_list,
+                cluster_key_list,
+                group_id_by_atom_index,
+                activity,
+                quarantine_activity,
+                audit_detail::SuspiciousUpdateMask(1, 0),
+                audit_detail::SuspiciousUpdateMask(1, 0),
+                local_status,
+                health_by_key)
+        };
+        EXPECT_FALSE(audit.strict_eligible);
+        EXPECT_EQ(audit.hard_failure_offset_group_count, 1U);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, StrictShapeStationarityCoversStatusesAndDamping)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    const std::vector<std::size_t> atom_index_list{ 0 };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 1),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0),
+        audit_detail::SuspiciousUpdateMask(1, 0)
+    };
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        audit_detail::ClusterKey{ 0 },
+        audit_detail::ClusterHealth{ Status::Converged });
+
+    const std::array status_list{
+        rg::RHBMEstimationStatus::SUCCESS,
+        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED,
+        rg::RHBMEstimationStatus::SINGLE_MEMBER,
+        rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
+        rg::RHBMEstimationStatus::NUMERICAL_FALLBACK
+    };
+    for (const auto status : status_list)
+    {
+        const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
+            status
+        };
+        const auto is_qualified{ status == rg::RHBMEstimationStatus::SUCCESS };
+        const auto audit{
+            audit_detail::EvaluateStrictConvergenceStationarityAudit(
+                atom_index_list,
+                cluster_key_list,
+                group_id_by_atom_index,
+                activity,
+                quarantine_activity,
+                audit_detail::SuspiciousUpdateMask(1, is_qualified ? 1 : 0),
+                audit_detail::SuspiciousUpdateMask(1, 0),
+                local_status,
+                health_by_key)
+        };
+        EXPECT_EQ(audit.strict_eligible, is_qualified);
+        EXPECT_EQ(audit.qualified_shape_count, is_qualified ? 1U : 0U);
+        EXPECT_EQ(audit.soft_nonstationary_shape_count, is_qualified ? 0U : 1U);
+    }
+
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> success_status{
+        rg::RHBMEstimationStatus::SUCCESS
+    };
+    const auto damped_audit{
+        audit_detail::EvaluateStrictConvergenceStationarityAudit(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity,
+            audit_detail::SuspiciousUpdateMask(1, 0),
+            audit_detail::SuspiciousUpdateMask(1, 0),
+            success_status,
+            health_by_key)
+    };
+    EXPECT_FALSE(damped_audit.strict_eligible);
+    EXPECT_EQ(damped_audit.soft_nonstationary_shape_count, 1U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, StrictStationarityExcludesQuarantinedBlocks)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    const std::vector<std::size_t> atom_index_list{ 0 };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
+    audit_detail::SuspiciousBlockActivity fixed_activity{
+        audit_detail::SuspiciousUpdateMask(1, 1),
+        audit_detail::SuspiciousUpdateMask(1, 1),
+        audit_detail::SuspiciousUpdateMask(1, 1)
+    };
+    const auto quarantine_activity{ fixed_activity };
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        audit_detail::ClusterKey{ 0 },
+        audit_detail::ClusterHealth{ Status::IrlsObjectiveDeteriorated });
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
+        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED
+    };
+
+    const auto audit{
+        audit_detail::EvaluateStrictConvergenceStationarityAudit(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            fixed_activity,
+            quarantine_activity,
+            audit_detail::SuspiciousUpdateMask(1, 0),
+            audit_detail::SuspiciousUpdateMask(1, 0),
+            local_status,
+            health_by_key)
+    };
+    EXPECT_TRUE(audit.strict_eligible);
+    EXPECT_TRUE(audit.restricted_active_set);
+    EXPECT_TRUE(audit.all_fixed);
+    EXPECT_EQ(audit.quarantined_shape_count, 1U);
+    EXPECT_EQ(audit.quarantined_offset_group_count, 1U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationRemovesGroupSizeWeighting)
+{
+    constexpr std::size_t large_group_size{ 100 };
+    constexpr std::size_t atom_count{ large_group_size + 1 };
+    std::vector<alg::ParameterChange> change_list(
+        atom_count,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    change_list.back().value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+        5.0e-4;
+    std::vector<std::size_t> atom_index_list(atom_count);
+    std::iota(atom_index_list.begin(), atom_index_list.end(), 0);
+    std::vector<std::size_t> group_id_by_atom_index(atom_count, 0);
+    group_id_by_atom_index.back() = 1;
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(atom_count, 1),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0),
+        audit_detail::SuspiciousUpdateMask(atom_count, 0)
+    };
+    const auto population{
+        audit_detail::BuildActiveCoordinateAuditPopulation(
+            atom_index_list,
+            std::vector<audit_detail::ClusterKey>{ atom_index_list },
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity)
+    };
+    const auto audit{
+        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+    };
+
+    EXPECT_EQ(audit.member.population_size_list.at(2), atom_count);
+    EXPECT_EQ(audit.shared_dof.population_size_list.at(2), 2U);
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(audit.member));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit.shared_dof));
+    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(audit.member));
+    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(audit.shared_dof));
+}
+
+TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationPreservesExtremeAndNonFiniteMembers)
+{
+    const std::vector<std::size_t> atom_index_list{ 0, 1, 2 };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0, 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(3, 1),
+        audit_detail::SuspiciousUpdateMask(3, 0),
+        audit_detail::SuspiciousUpdateMask(3, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(3, 0),
+        audit_detail::SuspiciousUpdateMask(3, 0),
+        audit_detail::SuspiciousUpdateMask(3, 0)
+    };
+    const auto population{
+        audit_detail::BuildActiveCoordinateAuditPopulation(
+            atom_index_list,
+            std::vector<audit_detail::ClusterKey>{ atom_index_list },
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity)
+    };
+    std::vector<alg::ParameterChange> change_list(
+        3,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+        2.0e-3;
+    const auto extreme{
+        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+    };
+    EXPECT_DOUBLE_EQ(extreme.shared_dof.maximum_list.at(2), 2.0e-3);
+    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(extreme.shared_dof));
+
+    change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+        std::numeric_limits<double>::quiet_NaN();
+    const auto nonfinite{
+        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+    };
+    EXPECT_TRUE(std::isinf(nonfinite.shared_dof.maximum_list.at(2)));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(nonfinite.shared_dof));
+    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(nonfinite.shared_dof));
+}
+
+TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsDofShadow)
+{
+    const std::vector<std::size_t> atom_index_list{ 0, 1 };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(2, 1),
+        audit_detail::SuspiciousUpdateMask{ 0, 1 },
+        audit_detail::SuspiciousUpdateMask(2, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(2, 0),
+        audit_detail::SuspiciousUpdateMask(2, 0),
+        audit_detail::SuspiciousUpdateMask(2, 0)
+    };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
+    const auto population{
+        audit_detail::BuildActiveCoordinateAuditPopulation(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity)
+    };
+    std::vector<alg::ParameterChange> change_list(
+        2,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    const auto change_audit{
+        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+    };
+    EXPECT_EQ(population.mixed_offset_group_count, 1U);
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
+        change_audit.shared_dof));
+
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        audit_detail::ClusterKey{ 0, 1 },
+        audit_detail::ClusterHealth{
+            offset_detail::JointOffsetSolveStatus::Converged });
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status(
+        2,
+        rg::RHBMEstimationStatus::SUCCESS);
+    const auto stationarity{
+        audit_detail::EvaluateStrictConvergenceStationarityAudit(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            activity,
+            quarantine_activity,
+            audit_detail::SuspiciousUpdateMask(2, 0),
+            audit_detail::SuspiciousUpdateMask(2, 1),
+            local_status,
+            health_by_key)
+    };
+    EXPECT_FALSE(stationarity.strict_eligible);
+    EXPECT_EQ(stationarity.mixed_offset_group_count, 1U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentileAndMaximumPredicates)
@@ -5776,7 +6143,13 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditTraceIsDeterministicAndBeh
         serial_audit_lines,
         [](const auto & line)
         {
-            return line.find(
+            return line.find("schema=2") != std::string::npos &&
+                line.find("active-dof-population=") != std::string::npos &&
+                line.find("member-strict-predicates") != std::string::npos &&
+                line.find("dof-strict-predicates") != std::string::npos &&
+                line.find("strict-stationarity") != std::string::npos &&
+                line.find("stop-candidates") != std::string::npos &&
+                line.find(
                 "local-status[success/max-iter/single/insufficient/numerical/unavailable]=") !=
                 std::string::npos;
         }));
@@ -5796,13 +6169,22 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditTraceIsDeterministicAndBeh
     ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
     for (std::size_t i = 0; i < info_atoms.size(); i++)
     {
+        const auto info_gaussian{ GetEstimateModel(*info_atoms.at(i)) };
+        const auto serial_gaussian{ GetEstimateModel(*serial_atoms.at(i)) };
+        const auto parallel_gaussian{ GetEstimateModel(*parallel_atoms.at(i)) };
+        EXPECT_DOUBLE_EQ(info_gaussian.GetAmplitude(), serial_gaussian.GetAmplitude());
+        EXPECT_DOUBLE_EQ(info_gaussian.GetWidth(), serial_gaussian.GetWidth());
+        EXPECT_DOUBLE_EQ(info_gaussian.GetOffset(), serial_gaussian.GetOffset());
+        EXPECT_DOUBLE_EQ(serial_gaussian.GetAmplitude(), parallel_gaussian.GetAmplitude());
+        EXPECT_DOUBLE_EQ(serial_gaussian.GetWidth(), parallel_gaussian.GetWidth());
+        EXPECT_DOUBLE_EQ(serial_gaussian.GetOffset(), parallel_gaussian.GetOffset());
         ExpectGaussianModelsNear(
-            GetEstimateModel(*info_atoms.at(i)),
-            GetEstimateModel(*serial_atoms.at(i)),
+            info_gaussian,
+            serial_gaussian,
             1.0e-12);
         ExpectGaussianModelsNear(
-            GetEstimateModel(*serial_atoms.at(i)),
-            GetEstimateModel(*parallel_atoms.at(i)),
+            serial_gaussian,
+            parallel_gaussian,
             1.0e-12);
     }
 }

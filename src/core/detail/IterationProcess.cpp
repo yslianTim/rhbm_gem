@@ -189,6 +189,8 @@ struct RawIterationResult
     SuspiciousBlockActivity failure_block_activity{};
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom{};
     std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
+    SuspiciousUpdateMask shape_stationarity_eligible_atom_mask{};
+    SuspiciousUpdateMask offset_stationarity_eligible_atom_mask{};
     ClusterHealthMap health_by_key{};
 };
 
@@ -317,6 +319,210 @@ TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
     return result;
 }
 
+namespace {
+
+constexpr double kConvergenceAuditPercentile{ 0.99 };
+
+struct OffsetGroupAuditEntry
+{
+    ClusterKey cluster_key{};
+    ClusterKey atom_index_list{};
+};
+
+static void ValidateConvergenceAuditInputs(
+    std::size_t atom_count,
+    const std::vector<std::size_t> & group_id_by_atom_index,
+    const SuspiciousBlockActivity & block_activity,
+    const SuspiciousBlockActivity & quarantine_activity)
+{
+    if (group_id_by_atom_index.size() != atom_count ||
+        block_activity.shape_fixed_atom_mask.size() != atom_count ||
+        block_activity.offset_fixed_atom_mask.size() != atom_count ||
+        block_activity.hard_failure_atom_mask.size() != atom_count ||
+        quarantine_activity.shape_fixed_atom_mask.size() != atom_count ||
+        quarantine_activity.offset_fixed_atom_mask.size() != atom_count ||
+        quarantine_activity.hard_failure_atom_mask.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Convergence audit activity inputs are inconsistent.");
+    }
+}
+
+static std::vector<OffsetGroupAuditEntry> BuildOffsetGroupAuditEntries(
+    const std::vector<ClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & group_id_by_atom_index)
+{
+    std::vector<OffsetGroupAuditEntry> result;
+    for (const auto & cluster_key : cluster_key_list)
+    {
+        std::map<std::size_t, ClusterKey> atom_index_list_by_group;
+        for (const auto atom_index : cluster_key)
+        {
+            atom_index_list_by_group[group_id_by_atom_index.at(atom_index)]
+                .emplace_back(atom_index);
+        }
+        for (auto & [group_id, atom_index_list] : atom_index_list_by_group)
+        {
+            static_cast<void>(group_id);
+            result.emplace_back(OffsetGroupAuditEntry{
+                cluster_key,
+                std::move(atom_index_list)
+            });
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+ActiveCoordinateAuditPopulation BuildActiveCoordinateAuditPopulation(
+    const std::vector<std::size_t> & atom_index_list,
+    const std::vector<ClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & group_id_by_atom_index,
+    const SuspiciousBlockActivity & block_activity,
+    const SuspiciousBlockActivity & quarantine_activity)
+{
+    ValidateConvergenceAuditInputs(
+        group_id_by_atom_index.size(),
+        group_id_by_atom_index,
+        block_activity,
+        quarantine_activity);
+
+    ActiveCoordinateAuditPopulation result;
+    for (const auto atom_index : atom_index_list)
+    {
+        if (block_activity.HasActiveShape(atom_index))
+        {
+            result.member_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
+                .emplace_back(atom_index);
+            result.member_index_list_by_parameter.at(kLogWidthChangeIndex)
+                .emplace_back(atom_index);
+        }
+        if (block_activity.HasActiveOffset(atom_index))
+        {
+            result.member_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
+                .emplace_back(atom_index);
+        }
+    }
+
+    const auto offset_group_list{
+        BuildOffsetGroupAuditEntries(cluster_key_list, group_id_by_atom_index)
+    };
+    result.total_offset_group_count = offset_group_list.size();
+    for (const auto & group : offset_group_list)
+    {
+        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return block_activity.HasActiveOffset(atom_index);
+            })) };
+        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return !quarantine_activity.HasActiveOffset(atom_index);
+            })) };
+        if (active_count == 0)
+        {
+            if (quarantine_count != 0) result.quarantined_offset_group_count++;
+            else result.fixed_offset_group_count++;
+            continue;
+        }
+
+        const auto is_mixed{ active_count != group.atom_index_list.size() };
+        if (is_mixed) result.mixed_offset_group_count++;
+        result.active_offset_group_atom_index_list.emplace_back(group.atom_index_list);
+        result.active_offset_group_size_list.emplace_back(group.atom_index_list.size());
+        result.mixed_offset_group_mask.emplace_back(is_mixed ? 1 : 0);
+    }
+    return result;
+}
+
+ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const ActiveCoordinateAuditPopulation & population)
+{
+    ActiveCoordinateChangeAudit result;
+    result.member = SummarizeTransformedChangesByParameter(
+        change_list,
+        population.member_index_list_by_parameter);
+    result.shared_dof = result.member;
+
+    if (population.active_offset_group_atom_index_list.size() !=
+            population.mixed_offset_group_mask.size() ||
+        population.active_offset_group_atom_index_list.size() !=
+            population.active_offset_group_size_list.size())
+    {
+        throw std::invalid_argument(
+            "Convergence audit shared-offset population is inconsistent.");
+    }
+
+    std::vector<double> offset_group_change_list;
+    offset_group_change_list.reserve(
+        population.active_offset_group_atom_index_list.size());
+    for (std::size_t group_position = 0;
+        group_position < population.active_offset_group_atom_index_list.size();
+        group_position++)
+    {
+        double maximum_change{ 0.0 };
+        bool is_finite{ population.mixed_offset_group_mask.at(group_position) == 0 };
+        for (const auto atom_index :
+            population.active_offset_group_atom_index_list.at(group_position))
+        {
+            if (atom_index >= change_list.size() ||
+                change_list.at(atom_index).value_list.size() != kTransformedChangeSize)
+            {
+                throw std::invalid_argument(
+                    "Convergence audit shared-offset change input is inconsistent.");
+            }
+            const auto value{
+                change_list.at(atom_index).value_list.at(kOffsetToPeakRatioChangeIndex)
+            };
+            if (!std::isfinite(value))
+            {
+                is_finite = false;
+                break;
+            }
+            maximum_change = std::max(maximum_change, std::abs(value));
+        }
+        offset_group_change_list.emplace_back(
+            is_finite ? maximum_change : std::numeric_limits<double>::infinity());
+    }
+
+    result.shared_dof.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
+        offset_group_change_list.size();
+    result.shared_dof.percentile_stats.percentile_list.at(
+        kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
+            offset_group_change_list,
+            kConvergenceAuditPercentile);
+    result.shared_dof.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
+        offset_group_change_list.empty() ? 0.0 :
+            *std::ranges::max_element(offset_group_change_list);
+    return result;
+}
+
+ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+    const FitState & current_state,
+    const FitState & previous_state,
+    const ActiveCoordinateAuditPopulation & population)
+{
+    if (current_state.size() != previous_state.size())
+    {
+        throw std::invalid_argument(
+            "Convergence audit transformed state sizes are inconsistent.");
+    }
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(current_state.size());
+    for (std::size_t atom_index = 0; atom_index < current_state.size(); atom_index++)
+    {
+        change_list.emplace_back(CalculateTransformedChange(
+            GetFitModel(current_state, atom_index),
+            GetFitModel(previous_state, atom_index)));
+    }
+    return EvaluateActiveCoordinateChangeAudit(change_list, population);
+}
+
 ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
     const ClusterHealthMap & health_by_key)
 {
@@ -327,6 +533,8 @@ ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
     result.full_cluster_eligible = AreClustersStationarityEligible(health_by_key);
     for (const auto & health : health_by_key | std::views::values)
     {
+        result.joint_offset_status_count.at(
+            static_cast<std::size_t>(health.joint_offset_status))++;
         if (!health.is_active_block_stationarity_eligible)
         {
             result.active_block_ineligible_cluster_count++;
@@ -347,6 +555,138 @@ ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
             }
         }
     }
+    return result;
+}
+
+StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
+    const std::vector<std::size_t> & atom_index_list,
+    const std::vector<ClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & group_id_by_atom_index,
+    const SuspiciousBlockActivity & block_activity,
+    const SuspiciousBlockActivity & quarantine_activity,
+    const SuspiciousUpdateMask & shape_stationarity_eligible_atom_mask,
+    const SuspiciousUpdateMask & offset_stationarity_eligible_atom_mask,
+    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
+    const ClusterHealthMap & health_by_key)
+{
+    const auto atom_count{ group_id_by_atom_index.size() };
+    ValidateConvergenceAuditInputs(
+        atom_count,
+        group_id_by_atom_index,
+        block_activity,
+        quarantine_activity);
+    if (shape_stationarity_eligible_atom_mask.size() != atom_count ||
+        offset_stationarity_eligible_atom_mask.size() != atom_count ||
+        local_refit_status_by_atom.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Convergence audit stationarity inputs are inconsistent.");
+    }
+
+    StrictConvergenceStationarityAudit result;
+    result.current_eligible = std::ranges::all_of(
+        health_by_key | std::views::values,
+        &ClusterHealth::is_active_block_stationarity_eligible);
+    for (const auto atom_index : atom_index_list)
+    {
+        if (!block_activity.HasActiveShape(atom_index))
+        {
+            if (!quarantine_activity.HasActiveShape(atom_index))
+            {
+                result.quarantined_shape_count++;
+            }
+            else
+            {
+                result.fixed_shape_count++;
+            }
+            continue;
+        }
+
+        result.active_shape_count++;
+        if (shape_stationarity_eligible_atom_mask.at(atom_index) != 0)
+        {
+            result.qualified_shape_count++;
+        }
+        else if (local_refit_status_by_atom[atom_index].has_value())
+        {
+            result.soft_nonstationary_shape_count++;
+            result.strict_eligible = false;
+        }
+        else
+        {
+            result.hard_failure_shape_count++;
+            result.strict_eligible = false;
+        }
+    }
+
+    for (const auto & group :
+        BuildOffsetGroupAuditEntries(cluster_key_list, group_id_by_atom_index))
+    {
+        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return block_activity.HasActiveOffset(atom_index);
+            })) };
+        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return !quarantine_activity.HasActiveOffset(atom_index);
+            })) };
+        if (active_count == 0)
+        {
+            if (quarantine_count != 0) result.quarantined_offset_group_count++;
+            else result.fixed_offset_group_count++;
+            continue;
+        }
+        if (active_count != group.atom_index_list.size())
+        {
+            result.mixed_offset_group_count++;
+            result.strict_eligible = false;
+            continue;
+        }
+
+        result.active_offset_group_count++;
+        const auto health_iter{ health_by_key.find(group.cluster_key) };
+        if (health_iter == health_by_key.end())
+        {
+            result.hard_failure_offset_group_count++;
+            result.strict_eligible = false;
+            continue;
+        }
+        const auto all_qualified{ std::ranges::all_of(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return offset_stationarity_eligible_atom_mask.at(atom_index) != 0;
+            }) };
+        if (health_iter->second.joint_offset_status == JointOffsetSolveStatus::Converged &&
+            all_qualified)
+        {
+            result.qualified_offset_group_count++;
+        }
+        else if (IsJointOffsetSolveHardFailure(
+                health_iter->second.joint_offset_status))
+        {
+            result.hard_failure_offset_group_count++;
+            result.strict_eligible = false;
+        }
+        else
+        {
+            result.soft_nonstationary_offset_group_count++;
+            result.strict_eligible = false;
+        }
+    }
+
+    result.restricted_active_set = result.fixed_shape_count != 0 ||
+        result.quarantined_shape_count != 0 ||
+        result.fixed_offset_group_count != 0 ||
+        result.quarantined_offset_group_count != 0 ||
+        result.mixed_offset_group_count != 0;
+    result.all_fixed = result.active_shape_count == 0 &&
+        result.active_offset_group_count == 0 &&
+        result.mixed_offset_group_count == 0;
     return result;
 }
 
@@ -1777,11 +2117,17 @@ static void LogConvergenceSafeguardAudit(
     const IterationProgress & progress,
     const ConvergenceSafeguardPredicates & predicates,
     const ConvergenceSafeguardPredicates & shadow_predicates,
+    const ConvergenceSafeguardPredicates & member_strict_predicates,
+    const ConvergenceSafeguardPredicates & shared_dof_strict_predicates,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change,
     const TransformedChangeSummary & accepted_shadow_change,
     const TransformedChangeSummary & raw_shadow_change,
+    const TransformedChangeSummary & accepted_shared_dof_change,
+    const TransformedChangeSummary & raw_shared_dof_change,
+    const ActiveCoordinateAuditPopulation & active_population,
     const ConvergenceStationarityAudit & stationarity,
+    const StrictConvergenceStationarityAudit & strict_stationarity,
     const IterationDiagnostics & diagnostics,
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
@@ -1789,7 +2135,11 @@ static void LogConvergenceSafeguardAudit(
     bool accepted_equals_raw,
     bool assembled_uses_polish,
     bool has_quarantine_transition,
-    bool objective_domain_changed)
+    bool objective_domain_changed,
+    bool orthogonal_blockers_clear,
+    bool production_stop_candidate,
+    bool member_shadow_stop_candidate,
+    bool shared_dof_shadow_stop_candidate)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
@@ -1863,9 +2213,38 @@ static void LogConvergenceSafeguardAudit(
         }
     }
 
+    std::vector<double> offset_group_size_list;
+    offset_group_size_list.reserve(active_population.active_offset_group_size_list.size());
+    for (const auto size : active_population.active_offset_group_size_list)
+    {
+        offset_group_size_list.emplace_back(static_cast<double>(size));
+    }
+    const auto offset_group_size_minimum{
+        offset_group_size_list.empty() ? 0.0 :
+            *std::ranges::min_element(offset_group_size_list)
+    };
+    const auto offset_group_size_maximum{
+        offset_group_size_list.empty() ? 0.0 :
+            *std::ranges::max_element(offset_group_size_list)
+    };
+    const auto offset_group_size_median{
+        array_helper::ComputePercentile(offset_group_size_list, 0.5)
+    };
+    const auto offset_group_size_p99{
+        array_helper::ComputePercentile(offset_group_size_list, 0.99)
+    };
+    const auto selected_atom_count{
+        progress.active_atom_count + progress.quarantine_atom_count
+    };
+    const auto ratio = [selected_atom_count](std::size_t count)
+    {
+        return selected_atom_count == 0 ? 0.0 :
+            static_cast<double>(count) / static_cast<double>(selected_atom_count);
+    };
+
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: try=" << attempt_number
+        << "Convergence safeguard audit: schema=2, try=" << attempt_number
         << ", acc=" << progress.accepted_iteration_count
         << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
         << ", quarantine=" << progress.quarantine_atom_count
@@ -1873,6 +2252,8 @@ static void LogConvergenceSafeguardAudit(
     AppendAuditPopulation(message, accepted_change.population_size_list);
     message << ", shadow-population=";
     AppendAuditPopulation(message, accepted_shadow_change.population_size_list);
+    message << ", active-dof-population=";
+    AppendAuditPopulation(message, accepted_shared_dof_change.population_size_list);
     message
         << ", predicates[s/a99/amax/r99/rmax]="
         << predicates.stationarity_eligible << "/"
@@ -1886,6 +2267,18 @@ static void LogConvergenceSafeguardAudit(
         << shadow_predicates.accepted.maximum_converged << "/"
         << shadow_predicates.raw.percentile_converged << "/"
         << shadow_predicates.raw.maximum_converged
+        << ", member-strict-predicates[s/a99/amax/r99/rmax]="
+        << member_strict_predicates.stationarity_eligible << "/"
+        << member_strict_predicates.accepted.percentile_converged << "/"
+        << member_strict_predicates.accepted.maximum_converged << "/"
+        << member_strict_predicates.raw.percentile_converged << "/"
+        << member_strict_predicates.raw.maximum_converged
+        << ", dof-strict-predicates[s/a99/amax/r99/rmax]="
+        << shared_dof_strict_predicates.stationarity_eligible << "/"
+        << shared_dof_strict_predicates.accepted.percentile_converged << "/"
+        << shared_dof_strict_predicates.accepted.maximum_converged << "/"
+        << shared_dof_strict_predicates.raw.percentile_converged << "/"
+        << shared_dof_strict_predicates.raw.maximum_converged
         << ", accepted-p99=";
     AppendAuditValues(message, accepted_change.percentile_stats.percentile_list);
     message << ", accepted-max=";
@@ -1902,6 +2295,14 @@ static void LogConvergenceSafeguardAudit(
     AppendAuditValues(message, raw_shadow_change.percentile_stats.percentile_list);
     message << ", shadow-raw-max=";
     AppendAuditValues(message, raw_shadow_change.maximum_list);
+    message << ", dof-accepted-p99=";
+    AppendAuditValues(message, accepted_shared_dof_change.percentile_stats.percentile_list);
+    message << ", dof-accepted-max=";
+    AppendAuditValues(message, accepted_shared_dof_change.maximum_list);
+    message << ", dof-raw-p99=";
+    AppendAuditValues(message, raw_shared_dof_change.percentile_stats.percentile_list);
+    message << ", dof-raw-max=";
+    AppendAuditValues(message, raw_shared_dof_change.maximum_list);
     message
         << ", accepted-equals-raw=" << accepted_equals_raw
         << ", path[trust/backtrack/polish/boundary/rescue]="
@@ -1917,6 +2318,32 @@ static void LogConvergenceSafeguardAudit(
         << stationarity.refit_ineligible_cluster_count << "/"
         << stationarity.soft_joint_nonconverged_cluster_count << "/"
         << stationarity.hard_joint_failure_cluster_count
+        << ", joint-status[converged/system-build/empty/initial-solve/irls-solve/objective-deteriorated/max-iter]="
+        << stationarity.joint_offset_status_count.at(0) << "/"
+        << stationarity.joint_offset_status_count.at(1) << "/"
+        << stationarity.joint_offset_status_count.at(2) << "/"
+        << stationarity.joint_offset_status_count.at(3) << "/"
+        << stationarity.joint_offset_status_count.at(4) << "/"
+        << stationarity.joint_offset_status_count.at(5) << "/"
+        << stationarity.joint_offset_status_count.at(6)
+        << ", strict-stationarity[current/strict/restricted/all-fixed/active-shape/qualified-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/qualified-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]="
+        << strict_stationarity.current_eligible << "/"
+        << strict_stationarity.strict_eligible << "/"
+        << strict_stationarity.restricted_active_set << "/"
+        << strict_stationarity.all_fixed << "/"
+        << strict_stationarity.active_shape_count << "/"
+        << strict_stationarity.qualified_shape_count << "/"
+        << strict_stationarity.soft_nonstationary_shape_count << "/"
+        << strict_stationarity.hard_failure_shape_count << "/"
+        << strict_stationarity.fixed_shape_count << "/"
+        << strict_stationarity.quarantined_shape_count << "/"
+        << strict_stationarity.active_offset_group_count << "/"
+        << strict_stationarity.qualified_offset_group_count << "/"
+        << strict_stationarity.soft_nonstationary_offset_group_count << "/"
+        << strict_stationarity.hard_failure_offset_group_count << "/"
+        << strict_stationarity.fixed_offset_group_count << "/"
+        << strict_stationarity.quarantined_offset_group_count << "/"
+        << strict_stationarity.mixed_offset_group_count
         << ", local-status[success/max-iter/single/insufficient/numerical/unavailable]="
         << local_refit_status_count.at(0) << "/"
         << local_refit_status_count.at(1) << "/"
@@ -1924,6 +2351,36 @@ static void LogConvergenceSafeguardAudit(
         << local_refit_status_count.at(3) << "/"
         << local_refit_status_count.at(4) << "/"
         << unavailable_local_refit_status_count
+        << ", offset-groups[total/active/fixed/quarantine/mixed/member-count/min/p50/p99/max]="
+        << active_population.total_offset_group_count << "/"
+        << strict_stationarity.active_offset_group_count << "/"
+        << active_population.fixed_offset_group_count << "/"
+        << active_population.quarantined_offset_group_count << "/"
+        << active_population.mixed_offset_group_count << "/"
+        << accepted_shadow_change.population_size_list.at(
+            kOffsetToPeakRatioChangeIndex) << "/"
+        << offset_group_size_minimum << "/"
+        << offset_group_size_median << "/"
+        << offset_group_size_p99 << "/"
+        << offset_group_size_maximum
+        << ", ratios[shape-active/offset-member-active/quarantine]="
+        << ratio(accepted_shadow_change.population_size_list.at(
+            kLogPeakHeightChangeIndex)) << "/"
+        << ratio(accepted_shadow_change.population_size_list.at(
+            kOffsetToPeakRatioChangeIndex)) << "/"
+        << ratio(progress.quarantine_atom_count)
+        << ", stop-candidates[orthogonal-clear/production/member/dof/stationarity-exposure/member-population-exposure/dof-population-exposure]="
+        << orthogonal_blockers_clear << "/"
+        << production_stop_candidate << "/"
+        << member_shadow_stop_candidate << "/"
+        << shared_dof_shadow_stop_candidate << "/"
+        << (production_stop_candidate && !strict_stationarity.strict_eligible) << "/"
+        << (production_stop_candidate &&
+            (!shadow_predicates.accepted.Converged() ||
+                !shadow_predicates.raw.Converged())) << "/"
+        << (production_stop_candidate &&
+            (!IsTransformedChangeConverged(accepted_shared_dof_change) ||
+                !IsTransformedChangeConverged(raw_shared_dof_change)))
         << ", fixed[shape/offset/hard]="
         << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
         << ", damped-atoms=" << damped_atom_count
@@ -2224,6 +2681,8 @@ static RawIterationResult RunRawIteration(
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
     std::vector<std::optional<RHBMEstimationStatus>>
         local_refit_status_by_atom(context.size());
+    SuspiciousUpdateMask shape_stationarity_eligible_atom_mask(context.size(), 0);
+    SuspiciousUpdateMask offset_stationarity_eligible_atom_mask(context.size(), 0);
     std::vector<std::size_t> group_id_by_atom_index;
     group_id_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
@@ -2381,6 +2840,10 @@ static RawIterationResult RunRawIteration(
                         accepted_model_list.at(member_position);
                     assessment_by_atom.at(atom_index) =
                         accepted_assessment_list.at(member_position);
+                    offset_stationarity_eligible_atom_mask.at(atom_index) =
+                        offset_result.status == JointOffsetSolveStatus::Converged &&
+                        accepted_assessment_list.at(member_position).damping_factor == 1.0 ?
+                            1 : 0;
                 }
                 else
                 {
@@ -2523,6 +2986,10 @@ static RawIterationResult RunRawIteration(
                     health.is_active_block_stationarity_eligible = false;
                 }
             }
+            else
+            {
+                shape_stationarity_eligible_atom_mask.at(atom_index) = 1;
+            }
             if (!refit_result->is_boundary_correction_eligible)
             {
                 health.is_boundary_correction_eligible = false;
@@ -2603,6 +3070,8 @@ static RawIterationResult RunRawIteration(
         failure_block_activity,
         std::move(assessment_by_atom),
         std::move(local_refit_status_by_atom),
+        std::move(shape_stationarity_eligible_atom_mask),
+        std::move(offset_stationarity_eligible_atom_mask),
         std::move(health_by_key)
     };
 }
@@ -3176,28 +3645,61 @@ static IterationResult RunIteration(
 
     if (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug)
     {
-        const auto active_block_change_index_list{
-            BuildActiveBlockChangeIndexLists(
+        std::vector<std::size_t> group_id_by_atom_index;
+        group_id_by_atom_index.reserve(context.size());
+        for (const auto & atom_context : context)
+        {
+            group_id_by_atom_index.emplace_back(atom_context.group_id);
+        }
+        const auto active_population{
+            BuildActiveCoordinateAuditPopulation(
                 iteration_state.active_index_list,
-                raw_iteration_result.block_activity)
+                cluster_key_list,
+                group_id_by_atom_index,
+                raw_iteration_result.block_activity,
+                quarantine_activity)
         };
-        const auto accepted_shadow_change_summary{
-            SummarizeTransformedChangesByParameter(
+        const auto accepted_active_change_audit{
+            EvaluateActiveCoordinateChangeAudit(
                 assembled_state,
                 previous_state,
-                active_block_change_index_list)
+                active_population)
         };
-        const auto raw_shadow_change_summary{
-            SummarizeTransformedChangesByParameter(
+        const auto raw_active_change_audit{
+            EvaluateActiveCoordinateChangeAudit(
                 raw_state,
                 previous_state,
-                active_block_change_index_list)
+                active_population)
         };
         const auto shadow_safeguard_predicates{
             EvaluateConvergenceSafeguardPredicates(
                 is_stationarity_eligible,
-                accepted_shadow_change_summary,
-                raw_shadow_change_summary)
+                accepted_active_change_audit.member,
+                raw_active_change_audit.member)
+        };
+        const auto strict_stationarity{
+            EvaluateStrictConvergenceStationarityAudit(
+                iteration_state.active_index_list,
+                cluster_key_list,
+                group_id_by_atom_index,
+                raw_iteration_result.block_activity,
+                quarantine_activity,
+                raw_iteration_result.shape_stationarity_eligible_atom_mask,
+                raw_iteration_result.offset_stationarity_eligible_atom_mask,
+                raw_iteration_result.local_refit_status_by_atom,
+                raw_iteration_result.health_by_key)
+        };
+        const auto member_strict_predicates{
+            EvaluateConvergenceSafeguardPredicates(
+                strict_stationarity.strict_eligible,
+                accepted_active_change_audit.member,
+                raw_active_change_audit.member)
+        };
+        const auto shared_dof_strict_predicates{
+            EvaluateConvergenceSafeguardPredicates(
+                strict_stationarity.strict_eligible,
+                accepted_active_change_audit.shared_dof,
+                raw_active_change_audit.shared_dof)
         };
         const auto accepted_raw_change_summary{
             SummarizeTransformedChanges(
@@ -3205,18 +3707,36 @@ static IterationResult RunIteration(
                 raw_state,
                 iteration_state.active_index_list)
         };
+        const auto orthogonal_blockers_clear{
+            !objective_domain_changed &&
+            !has_quarantine_transition &&
+            !has_suspicious_offset_fallback &&
+            selection.rejected_key_list.empty()
+        };
+        const auto member_shadow_stop_candidate{
+            orthogonal_blockers_clear && member_strict_predicates.Converged()
+        };
+        const auto shared_dof_shadow_stop_candidate{
+            orthogonal_blockers_clear && shared_dof_strict_predicates.Converged()
+        };
         LogConvergenceSafeguardAudit(
             options.quiet_mode,
             attempt_number,
             result.progress,
             safeguard_predicates,
             shadow_safeguard_predicates,
+            member_strict_predicates,
+            shared_dof_strict_predicates,
             transformed_change_summary,
             raw_fixed_point_change_summary,
-            accepted_shadow_change_summary,
-            raw_shadow_change_summary,
+            accepted_active_change_audit.member,
+            raw_active_change_audit.member,
+            accepted_active_change_audit.shared_dof,
+            raw_active_change_audit.shared_dof,
+            active_population,
             EvaluateConvergenceStationarityAudit(
                 raw_iteration_result.health_by_key),
+            strict_stationarity,
             result.diagnostics,
             raw_iteration_result.block_activity,
             raw_iteration_result.assessment_by_atom,
@@ -3224,7 +3744,11 @@ static IterationResult RunIteration(
             GetMaximumTransformedChange(accepted_raw_change_summary) == 0.0,
             assembled_uses_polish,
             has_quarantine_transition,
-            objective_domain_changed);
+            objective_domain_changed,
+            orthogonal_blockers_clear,
+            result.converged,
+            member_shadow_stop_candidate,
+            shared_dof_shadow_stop_candidate);
     }
 
     iteration_state.previous_state = std::move(assembled_state);

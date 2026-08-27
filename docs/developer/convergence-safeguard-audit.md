@@ -113,6 +113,12 @@ coordinate-specific active sets. Only after those definitions are stable
 should a trajectory-changing ablation compare removal of the maximum gate for
 small populations or any empirically dominated predicate on fold-168 data.
 
+That follow-up is implemented as the shadow-only
+[stationarity semantics and active-coordinate population audit](stationarity-active-coordinate-audit.md).
+It preserves the production stopping expression while comparing strict
+block-level stationarity, active-member changes, and one-sample-per-shared-DOF
+offset changes.
+
 The external fold-168 regression remains optional for this round because its
 model and map inputs are not stored in the repository. When hash-matching inputs
 are available, its Debug trace can be aggregated with the same contract without

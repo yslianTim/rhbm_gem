@@ -285,6 +285,16 @@ endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(
+        NAME convergence_audit_analyzer_test
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_audit_analyzer_test.py"
+    )
+    set_tests_properties(
+        convergence_audit_analyzer_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm"
+    )
+
+    add_test(
         NAME fold_168_regression_runner_test
         COMMAND "${Python_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression_test.py"
