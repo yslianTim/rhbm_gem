@@ -372,12 +372,27 @@ audit_detail::SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdateForTest(
         audit_detail::BuildPreviousSuspiciousProfileBaseline(
             sample_entries, previous_model, options)
     };
-    return audit_detail::EvaluateSuspiciousGaussianUpdate(
+    return audit_detail::AssessSuspiciousGaussianUpdate(
         sample_entries,
         candidate_model,
         options,
         previous_baseline,
-        audit_detail::SuspiciousUpdateMode::PostRefit);
+        audit_detail::SuspiciousUpdateMode::PostRefit).reason;
+}
+
+audit_detail::SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdateForTest(
+    const LocalPotentialSampleList & sample_entries,
+    const rg::GaussianModel3D & previous_model,
+    const rg::GaussianModel3D & candidate_model,
+    const rt::FitOptions & options)
+{
+    return audit_detail::AssessSuspiciousGaussianUpdate(
+        sample_entries,
+        candidate_model,
+        options,
+        audit_detail::BuildPreviousSuspiciousProfileBaseline(
+            sample_entries, previous_model, options),
+        audit_detail::SuspiciousUpdateMode::OffsetOnly).reason;
 }
 
 TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)
@@ -444,7 +459,7 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
             1.0 / previous_model.OffsetBasisAtDistance(0.0))
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
             large_offset_model,
@@ -465,7 +480,7 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
 
     const auto wide_model{ MakeGaussianWithCenterSignal(0.1, 2.0) };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
             wide_model,
@@ -512,7 +527,7 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAcceptsUnchangedShapeOu
             options),
         audit_detail::SuspiciousGaussianReason::WidthGrowth);
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
             fallback_model,
@@ -542,14 +557,14 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
     };
 
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
             candidate_with_center_offset(1.3),
             options),
         audit_detail::SuspiciousGaussianReason::None);
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
             candidate_with_center_offset(1.6),
@@ -563,14 +578,14 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
             { { 1.0 }, { 1.0 }, { 1.0 } })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             zero_mad_sample_list,
             previous_model,
             candidate_with_center_offset(1.2),
             options),
         audit_detail::SuspiciousGaussianReason::None);
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             zero_mad_sample_list,
             previous_model,
             candidate_with_center_offset(1.3),
@@ -588,7 +603,7 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
             })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             low_snr_sample_list,
             previous_model,
             candidate_with_center_offset(0.3),
@@ -602,7 +617,7 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
             { { -1.0 }, { -1.0 }, { -1.0 } })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             negative_profile_samples,
             previous_model,
             candidate_with_center_offset(-1.5),
@@ -630,7 +645,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
             })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
             candidate_model,
@@ -648,7 +663,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
             })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             low_noise_sample_list,
             previous_model,
             candidate_model,
@@ -672,7 +687,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
     };
     options.distance_max = 0.41;
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             one_excursion_samples,
             excursion_model,
             excursion_model,
@@ -692,7 +707,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
             })
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousOffsetUpdate(
+        EvaluateSuspiciousOffsetUpdateForTest(
             two_excursion_samples,
             excursion_model,
             excursion_model,
@@ -1907,20 +1922,24 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
 
     for (const auto expected : { 0.5, 0.25, 0.125, 0.0625 })
     {
-        const auto update{ state.Shrink({ key }) };
+        const auto update{
+            state.ApplyRadiusUpdates({}, { key }, {}, {})
+        };
         EXPECT_EQ(
             update.changed_key_list,
             std::vector<trust_detail::ClusterKey>{ key });
         EXPECT_TRUE(update.saturated_key_list.empty());
         EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
     }
-    const auto saturated{ state.Shrink({ key }) };
+    const auto saturated{
+        state.ApplyRadiusUpdates({}, { key }, {}, {})
+    };
     EXPECT_TRUE(saturated.changed_key_list.empty());
     EXPECT_EQ(
         saturated.saturated_key_list,
         std::vector<trust_detail::ClusterKey>{ key });
 
-    state.Grow({ key });
+    state.ApplyRadiusUpdates({ key }, {}, {}, {});
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
 
     const trust_detail::ClusterKey replacement_key{ 1 };
@@ -1932,35 +1951,21 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
 {
     using Key = trust_detail::ClusterKey;
-    const Key exhausted_key{ 0 };
-    const Key retryable_key{ 1 };
-    const auto partition{
-        trust_detail::PartitionRejectedClusters(
-            { exhausted_key, retryable_key },
-            { exhausted_key })
-    };
-    ASSERT_EQ(partition.exhausted_key_list, std::vector<Key>{ exhausted_key });
-    ASSERT_EQ(partition.retryable_key_list, std::vector<Key>{ retryable_key });
+    const Key grow_key{ 0 };
+    const Key shrink_key{ 1 };
 
     trust_detail::TrustRegionStateSet state;
-    state.Reconcile({ exhausted_key, retryable_key });
-    const auto update{ state.Shrink(partition.retryable_key_list) };
+    state.Reconcile({ grow_key, shrink_key });
+    const auto update{ state.ApplyRadiusUpdates(
+        { grow_key },
+        {},
+        { shrink_key },
+        { shrink_key }) };
 
-    EXPECT_DOUBLE_EQ(state.GetRadius(exhausted_key), 1.0);
-    EXPECT_DOUBLE_EQ(state.GetRadius(retryable_key), 0.5);
-    EXPECT_EQ(update.changed_key_list, std::vector<Key>{ retryable_key });
-
-    const auto all_exhausted{
-        trust_detail::PartitionRejectedClusters(
-            { exhausted_key },
-            { exhausted_key })
-    };
-    const auto exhausted_update{
-        state.Shrink(all_exhausted.retryable_key_list)
-    };
-    EXPECT_TRUE(exhausted_update.changed_key_list.empty());
-    EXPECT_TRUE(exhausted_update.saturated_key_list.empty());
-    EXPECT_DOUBLE_EQ(state.GetRadius(exhausted_key), 1.0);
+    EXPECT_DOUBLE_EQ(state.GetRadius(grow_key), 2.0);
+    EXPECT_DOUBLE_EQ(state.GetRadius(shrink_key), 1.0);
+    EXPECT_TRUE(update.changed_key_list.empty());
+    EXPECT_TRUE(update.saturated_key_list.empty());
 }
 
 TEST(EstimatorSecondStageDefenseTest, TerminalRejectionShrinksRadiusOncePerControllerUpdate)
@@ -1971,13 +1976,14 @@ TEST(EstimatorSecondStageDefenseTest, TerminalRejectionShrinksRadiusOncePerContr
     trust_detail::TrustRegionStateSet state;
     state.Reconcile({ first_key, second_key });
 
-    const auto update{ state.UpdateAfterIteration(
+    const auto update{ state.ApplyRadiusUpdates(
+        {},
         {},
         { first_key, second_key },
         {}) };
 
     EXPECT_EQ(
-        update.radius_update.changed_key_list,
+        update.changed_key_list,
         (std::vector<Key>{ first_key, second_key }));
     EXPECT_DOUBLE_EQ(state.GetRadius(first_key), 0.5);
     EXPECT_DOUBLE_EQ(state.GetRadius(second_key), 0.5);

@@ -85,8 +85,8 @@ The initial weighted topology retains the fixed minimum edge weight `0.05`.
 After accepted iterations, the stage adaptively rebuilds the topology from the
 latest validated atom models when either the maximum transformed-coordinate
 drift from the last topology reference state reaches `0.10`, or three accepted
-iterations have elapsed since the last rebuild. Rejected attempts and
-trust-radius retries do not advance this interval. Quarantined parameter blocks
+iterations have elapsed since the last rebuild. Rejected attempts do not
+advance this interval. Quarantined parameter blocks
 remain in the graph and objective domain, so quarantine does not itself rebuild
 or renormalize either one.
 
@@ -285,7 +285,7 @@ matches the corresponding full-global difference when only that cluster
 changes.
 
 Candidate scoring uses a provisional copy of the cluster objective state. A
-rejected base, polish, backtracking trial, or boundary-component candidate does not
+rejected base, polish, candidate-search trial, or boundary-component candidate does not
 advance the previous or best references. The best objective and maximum
 transformed change are retained to break objective ties.
 
@@ -303,7 +303,7 @@ joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
 
-For a non-suspicious cluster, previous and raw offsets are reduced to one
+For a non-suspicious cluster, previous and operator offsets are reduced to one
 physical offset per `GroupKey` by deterministic component medians. Base
 proposal trials use factors `1, 1/2, 1/4, ...`; each trial interpolates the
 atom-level log-peak and log-width coordinates and the physical group offset
@@ -315,30 +315,36 @@ C_g(t) = C_previous,g + t * (C_raw,g - C_previous,g)
 
 The realized atom models are then re-encoded and measured against the trust
 radius. At `t = 0`, the shape is the previous shape and the offset is the
-previous group median; at `t = 1`, the complete raw shared-offset state is
+previous group median; at `t = 1`, the complete operator shared-offset state is
 recovered. If projecting an inconsistent previous group onto its median already
 exceeds the radius, the proposal fails before objective evaluation with an
 explicit diagnostic reason.
 
-If the endpoint is valid but fails its local objective guard, the same cluster
-attempt evaluates factors `1/2, 1/4, 1/8, ...` between the previous and endpoint
-states. Local and boundary-component backtracking preserve one physical offset per
-`GroupKey`; shapes remain interpolated in transformed coordinates. Search stops
-when the largest transformed change is below
-`kTransformedChangeTolerance`. The first passing trial is committed
-with endpoint uncertainty, records its factor, and does not grow the radius.
-Rejected trials do not mutate objective state or polish provenance. A cluster
-that exhausts objective backtracking is immediately excluded from trust-radius
-shrink. When another, radius-retryable cluster causes an unchanged-state retry,
-the exhausted cluster is skipped and its diagnostic retains its actual radius.
-It becomes eligible again after another cluster commits a state change.
+Each cluster owns one factor sequence. Every trial first constructs the
+log-shape/shared-physical-offset candidate, then checks validity, trust
+admissibility, guard feasibility, and the previous/best objective gates in that
+order. Trust-inadmissible trials do not run guard or objective evaluation.
+Search stops when the largest transformed change is below
+`kTransformedChangeTolerance`; the first passing material trial is committed
+with endpoint uncertainty and its factor is recorded. Rejected trials do not
+mutate objective state or polish provenance.
+
+When every material factor is guard-infeasible for one shape or shared-offset
+group, that block is made locally inactive and the same function restarts the
+factor sequence for the remaining blocks. This is an iterative block-isolation
+loop, not a recursive candidate selection or a new outer attempt.
 
 The polish step is limited by the radius remaining after the accepted base
 movement. A rejected polish keeps the base candidate and is not backtracked.
-A radius-retryable rejected cluster shrinks its own radius once. A
-non-backtracked accepted cluster grows its radius only when the objective
-strictly improves and its step is close to the current boundary. Trust-region
-updates are isolated by cluster.
+Radius updates use one controller entry point while preserving the validated
+baseline order: accepted-factor shrink, accepted growth, then retryable
+rejection shrink. Local terminal rejection remains retryable; an exhausted
+boundary or final-audit search keeps its radius because another shrink cannot
+produce a material candidate. An accepted cluster grows its radius only when
+the objective strictly improves, its step is close to the current boundary,
+and no accepted-factor shrink is already required. No radius update reruns the
+same validated state; updates remain isolated by cluster and clamp to
+`0.0625...4.0`.
 
 Accepted clusters are first connected only when they both affect the same boundary
 sample. Each multi-cluster component
@@ -503,7 +509,7 @@ cluster-key, sample, or boundary-dependency mapping changes, the current accepte
 state initializes new fit/tail scales, cluster objectives, and the best-audit
 baseline. Exact
 cluster keys retain their trust radii; merged or split keys start at the initial
-radius. Solver workspaces and exhausted-backtracking keys are reset, audit
+radius. Solver workspaces are reset, audit
 patience is cleared, and convergence is disabled for that attempt so the new
 partition executes at least one complete iteration. Objectives from before the
 partition change are never compared with the new domain.
@@ -521,17 +527,18 @@ The stage stops on the first applicable condition:
   no orthogonal blocker is present;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
-- an all-rejected attempt terminates after shrinking its radius state once;
+- an all-rejected attempt terminates after applying its per-cluster radius
+  actions once;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
-An all-rejected attempt does not rerun the unchanged `S[k]`. Each terminal
-rejection shrinks the stored radius once for a future state, then stops with
-`all-rejected-backtracking-exhausted` unless the outer iteration limit has
-priority.
+An all-rejected attempt does not rerun the unchanged `S[k]`. Retryable
+rejections shrink their stored radius once, while exhausted terminal searches
+keep it, then the attempt stops with `all-rejected-backtracking-exhausted`
+unless the outer iteration limit has priority.
 
-Convergence writes the current accepted state. Audit-patience, minimum-radius
-all-reject, backtracking-exhaustion, no-retry-progress, and iteration-limit
-stops always write the best validated audit state when one is available;
+Convergence writes the current accepted state. Audit-patience, all-rejected,
+and iteration-limit stops always write the best validated audit state when one
+is available;
 otherwise they write the latest validated state. Best tracking, best-relative
 guards, audit patience, iteration history, and stop reasons are independent of
 which validated state is ultimately written. Unresolved quarantine targets are
@@ -604,7 +611,7 @@ are cleared with the other solver workspaces when the partition changes.
 Independent boundary components are corrected serially in cluster-key order.
 Cluster candidate workers own independent solver state and patches. With
 OpenMP, more than one cluster, and `thread_size > 1`, base proposal, local
-backtracking, polish, and local objective evaluation run per cluster in
+candidate search, polish, and local objective evaluation run per cluster in
 parallel while Eigen uses one thread. Results are committed in the partition's
 fixed cluster order; the serial path calls the same worker and merge code.
 
@@ -640,8 +647,8 @@ values in `dMax A/F`.
 Objective-domain startup diagnostics report the weights, cluster and unique
 fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
 diagnostics use `fit/tail-weighted/offset/total` order and also report raw tail
-loss, weights, sample counts, fixed scales, and backtracking
-trials/factor/exhaustion. Accepted local factors are logged at debug level.
+loss, weights, sample counts, fixed scales, unified trial dispositions, and the
+accepted factor. Accepted local factors are logged at debug level.
 Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
 record with its cluster, atom, and boundary-sample counts plus trials, factor,
 accepted/rejected, exhausted status, accepted source, previous/endpoint/final

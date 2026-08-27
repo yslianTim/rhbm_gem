@@ -31,27 +31,11 @@ struct TrustRegionRadiusUpdate
     std::vector<ClusterKey> saturated_key_list{};
 };
 
-struct RejectedClusterPartition
-{
-    std::vector<ClusterKey> exhausted_key_list{};
-    std::vector<ClusterKey> retryable_key_list{};
-};
-
-struct TrustRegionIterationUpdate
-{
-    RejectedClusterPartition rejected_cluster_partition{};
-    TrustRegionRadiusUpdate radius_update{};
-};
-
 enum class AllRejectedResolution
 {
     MaximumIterations,
     BacktrackingExhausted
 };
-
-RejectedClusterPartition PartitionRejectedClusters(
-    const std::vector<ClusterKey> & rejected_key_list,
-    const std::vector<ClusterKey> & exhausted_key_list);
 
 class TrustRegionStateSet
 {
@@ -63,12 +47,11 @@ public:
     void Reconcile(const std::vector<ClusterKey> & key_list);
     double GetRadius(const ClusterKey & key) const;
     void ResetToMinimum(const std::vector<ClusterKey> & key_list);
-    TrustRegionRadiusUpdate Shrink(const std::vector<ClusterKey> & key_list);
-    void Grow(const std::vector<ClusterKey> & key_list);
-    TrustRegionIterationUpdate UpdateAfterIteration(
+    TrustRegionRadiusUpdate ApplyRadiusUpdates(
         const std::vector<ClusterKey> & grow_key_list,
+        const std::vector<ClusterKey> & accepted_shrink_key_list,
         const std::vector<ClusterKey> & rejected_key_list,
-        const std::vector<ClusterKey> & backtracking_exhausted_key_list);
+        const std::vector<ClusterKey> & exhausted_key_list);
 
 };
 
@@ -100,15 +83,7 @@ struct SuspiciousBlockActivity
 
 std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask);
 
-std::vector<std::size_t> CollectSuspiciousAtomIndices(
-    const std::vector<std::size_t> & atom_index_list,
-    const SuspiciousUpdateMask & suspicious_mask);
-
 std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(const SuspiciousUpdateMask & suspicious_mask);
-
-void ClearSuspiciousUpdateMaskForClusters(
-    const std::vector<std::vector<std::size_t>> & cluster_key_list,
-    SuspiciousUpdateMask & suspicious_mask);
 
 struct ZeroOffsetProfileDiagnostics
 {
@@ -153,22 +128,9 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
     const SuspiciousUpdateBaseline & previous_baseline,
     SuspiciousUpdateMode mode);
 
-SuspiciousGaussianReason EvaluateSuspiciousGaussianUpdate(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & candidate_model,
-    const FitOptions & options,
-    const SuspiciousUpdateBaseline & previous_baseline,
-    SuspiciousUpdateMode mode);
-
 SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & previous_model,
-    const FitOptions & options);
-
-SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
     const FitOptions & options);
 
 SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
@@ -323,7 +285,6 @@ enum class PreObjectiveFailureReason
 {
     None,
     InvalidModel,
-    PreviousSharedOffsetProjectionOutsideTrustRegion,
     NoCandidateWithinTrustRegion
 };
 
@@ -351,8 +312,7 @@ struct ObjectiveScale
 
 struct ObjectiveAttemptDiagnostic
 {
-    double accepted_factor{ 1.0 };
-    bool is_invalid_model{ false };
+    std::optional<double> accepted_factor{};
     PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
     std::optional<double> pre_objective_attempted_step_norm{};
     std::optional<ObjectiveScale> scale{};
@@ -365,9 +325,7 @@ struct ObjectiveAttemptDiagnostic
     double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
     bool rejected_by_best{ false };
-    std::size_t backtracking_trial_count{ 0 };
-    std::optional<double> accepted_backtracking_factor{};
-    bool backtracking_exhausted{ false };
+    std::size_t trial_count{ 0 };
     std::size_t invalid_trial_count{ 0 };
     std::size_t trust_skipped_trial_count{ 0 };
     std::size_t guard_rejected_trial_count{ 0 };
@@ -501,10 +459,6 @@ public:
         const PolishProvenance & previous_provenance,
         const PolishProvenance & endpoint_provenance) const;
 
-    PolishProvenance BuildActiveCandidatePolishProvenance(
-        const PolishProvenance & previous_provenance,
-        const PolishProvenance & endpoint_provenance) const;
-
 private:
     bool BuildCandidate(double factor);
     bool HasMaterialChange(std::size_t atom_position) const;
@@ -575,11 +529,11 @@ struct CandidateSelection
     PolishProvenance assembled_polish_provenance{};
     std::vector<ClusterKey> accepted_key_list{};
     std::vector<ClusterKey> rejected_key_list{};
-    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<ClusterKey> grow_trust_region_key_list{};
     std::vector<ClusterKey> shrink_trust_region_key_list{};
-    std::vector<ClusterKey> backtracking_exhausted_key_list{};
+    std::vector<ClusterKey> exhausted_key_list{};
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
     PolishProgress polish_progress{};
@@ -595,9 +549,7 @@ struct CandidateSelectionInputs
     const FitState & previous_state;
     const PolishProvenance & previous_polish_provenance;
     const FitState & operator_proposal_state;
-    const SuspiciousUpdateMask & rollback_atom_mask;
     SuspiciousBlockActivity & block_activity;
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom;
     const std::vector<double> & ridge_multiplier_list;
     const ObjectiveDomain & objective_domain;
     const ObjectiveByKey & previous_objective_by_key;

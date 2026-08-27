@@ -243,8 +243,6 @@ SolverQualificationAudit EvaluateSolverQualificationAudit(
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity,
-    const SuspiciousUpdateMask & shape_solver_qualified_atom_mask,
-    const SuspiciousUpdateMask & offset_solver_qualified_atom_mask,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
 
