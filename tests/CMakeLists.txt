@@ -366,7 +366,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             PROPERTIES
                 LABELS "domain:integration;intent:algorithm"
                 PASS_REGULAR_EXPRESSION
-                    "Counterfactual convergence checkpoint: schema=3.*policy=production"
+                    "Second-stage audit terminal: schema=1, reason=converged"
                 TIMEOUT 60
         )
 

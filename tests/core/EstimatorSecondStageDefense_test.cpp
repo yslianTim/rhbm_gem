@@ -4797,6 +4797,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     };
     const auto small{ make_summary(5.0e-5, 2.0e-3) };
     const auto large{ make_summary(2.0e-4, 2.0e-3) };
+    const auto raw_blocked{ make_summary(2.0e-3, 2.0e-3) };
 
     const auto accepted_small{
         audit_detail::EvaluateConvergencePredicates(true, small, large)
@@ -4822,6 +4823,52 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     EXPECT_TRUE(nonstationary_small.raw_percentile_converged);
     EXPECT_FALSE(nonstationary_small.AcceptedOnlyConverged());
     EXPECT_FALSE(nonstationary_small.Converged());
+
+    audit_detail::AcceptedOnlyAuditState audit_state;
+    const auto first_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state) };
+    EXPECT_EQ(first_update.eligible_streak, 1U);
+    EXPECT_DOUBLE_EQ(first_update.dynamic_raw_threshold, 1.0e-4);
+    EXPECT_TRUE(std::ranges::none_of(
+        first_update.triggered_now, [](bool value) { return value; }));
+
+    const auto second_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state) };
+    EXPECT_EQ(second_update.eligible_streak, 2U);
+    EXPECT_DOUBLE_EQ(second_update.dynamic_raw_threshold, 2.0e-4);
+    EXPECT_TRUE(second_update.triggered_now.at(static_cast<std::size_t>(
+        audit_detail::AcceptedOnlyAuditPolicy::Persistence2)));
+    EXPECT_FALSE(second_update.triggered_now.at(static_cast<std::size_t>(
+        audit_detail::AcceptedOnlyAuditPolicy::DynamicRaw)));
+
+    const auto reset_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        false, false, raw_blocked, audit_state) };
+    EXPECT_EQ(reset_update.eligible_streak, 0U);
+    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state);
+    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state);
+    const auto third_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state) };
+    EXPECT_TRUE(third_update.triggered_now.at(static_cast<std::size_t>(
+        audit_detail::AcceptedOnlyAuditPolicy::Persistence3)));
+    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, raw_blocked, audit_state);
+    const auto capped_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, false, small, audit_state) };
+    EXPECT_EQ(capped_update.eligible_streak, 5U);
+    EXPECT_DOUBLE_EQ(capped_update.dynamic_raw_threshold, 1.0e-3);
+    EXPECT_TRUE(capped_update.triggered_now.at(static_cast<std::size_t>(
+        audit_detail::AcceptedOnlyAuditPolicy::Persistence5)));
+    EXPECT_TRUE(capped_update.triggered_now.at(static_cast<std::size_t>(
+        audit_detail::AcceptedOnlyAuditPolicy::DynamicRaw)));
+
+    audit_detail::AcceptedOnlyAuditState production_priority_state;
+    const auto production_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
+        true, true, small, production_priority_state) };
+    EXPECT_EQ(production_update.eligible_streak, 1U);
+    EXPECT_TRUE(std::ranges::none_of(
+        production_update.triggered_now, [](bool value) { return value; }));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlockDilution)

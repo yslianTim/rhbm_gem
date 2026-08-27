@@ -63,6 +63,13 @@ def main() -> int:
         raise AssertionError("identical seeds did not reproduce the predicate sequence")
     if parsed_a["trajectory_records"] != parsed_parallel["trajectory_records"]:
         raise AssertionError("one-thread and four-thread predicate sequences differ")
+    if parsed_a["shadow_policy_checkpoints"] != parsed_b["shadow_policy_checkpoints"]:
+        raise AssertionError("identical seeds did not reproduce shadow policies")
+    if (parsed_a["shadow_policy_checkpoints"] !=
+            parsed_parallel["shadow_policy_checkpoints"]):
+        raise AssertionError("one-thread and four-thread shadow policies differ")
+    if parsed_a["audit_terminal"] != parsed_b["audit_terminal"]:
+        raise AssertionError("identical seeds did not reproduce terminal state")
 
     for topology in ("unk-c", "unk-n", "unk-o"):
         _, parsed = run_case(

@@ -29,6 +29,12 @@ POLICIES = (
     "legacy-maximum",
     "solver-qualified",
 )
+SHADOW_POLICIES = (
+    "accepted-only-k2",
+    "accepted-only-k3",
+    "accepted-only-k5",
+    "dynamic-raw",
+)
 OBJECTIVE_ABSOLUTE_TOLERANCE = 1.0e-8
 OBJECTIVE_RELATIVE_TOLERANCE = 1.0e-3
 
@@ -64,6 +70,8 @@ def parse_log(text: str) -> dict[str, Any]:
     terminations: list[dict[str, str]] = []
     shadow_checkpoint: dict[str, str] | None = None
     shadow_atoms: list[dict[str, str]] = []
+    shadow_policy_checkpoints: list[dict[str, str]] = []
+    shadow_policy_atoms: dict[str, list[dict[str, str]]] = defaultdict(list)
     audit_terminal: dict[str, str] | None = None
     audit_terminal_atoms: list[dict[str, str]] = []
     trajectory_records: list[dict[str, str]] = []
@@ -79,8 +87,13 @@ def parse_log(text: str) -> dict[str, Any]:
             terminations.append(termination)
         elif shadow := _fields(line, SHADOW_CHECKPOINT_MARKER, "1"):
             shadow_checkpoint = shadow
+        elif shadow_policy := _fields(line, SHADOW_CHECKPOINT_MARKER, "2"):
+            shadow_policy_checkpoints.append(shadow_policy)
         elif shadow_atom := _fields(line, SHADOW_ATOM_MARKER, "1"):
             shadow_atoms.append(shadow_atom)
+        elif shadow_policy_atom := _fields(line, SHADOW_ATOM_MARKER, "2"):
+            shadow_policy_atoms[shadow_policy_atom["policy"]].append(
+                shadow_policy_atom)
         elif terminal := _fields(line, AUDIT_TERMINAL_MARKER, "1"):
             audit_terminal = terminal
         elif terminal_atom := _fields(line, AUDIT_TERMINAL_ATOM_MARKER, "1"):
@@ -91,6 +104,8 @@ def parse_log(text: str) -> dict[str, Any]:
         "terminations": terminations,
         "shadow_checkpoint": shadow_checkpoint,
         "shadow_atoms": shadow_atoms,
+        "shadow_policy_checkpoints": shadow_policy_checkpoints,
+        "shadow_policy_atoms": shadow_policy_atoms,
         "audit_terminal": audit_terminal,
         "audit_terminal_atoms": audit_terminal_atoms,
         "trajectory_records": trajectory_records,
@@ -186,6 +201,43 @@ def _truth_metrics(
     return result
 
 
+def _continuation_safety_events(
+    records: list[dict[str, str]],
+    checkpoint_try: int,
+) -> dict[str, int]:
+    counts = defaultdict(int)
+    for record in records:
+        if int(record["try"]) <= checkpoint_try:
+            continue
+        qualification = [
+            int(float(value)) for value in record.get("qualification", "").split("/")
+            if value]
+        blockers = [
+            int(float(value.rstrip(".")))
+            for value in record.get("blockers", "").split("/") if value]
+        if len(qualification) >= 17:
+            counts["hard_failure"] += qualification[7] + qualification[13]
+            counts["mixed_activity"] += qualification[16]
+        if len(blockers) >= 4:
+            counts["suspicious"] += blockers[0]
+            counts["rejection"] += blockers[1]
+            counts["quarantine_transition"] += blockers[2]
+            counts["domain_change"] += blockers[3]
+        summary_fields = (
+            "production-accepted-p99", "production-accepted-max",
+            "production-raw-p99", "production-raw-max")
+        if any(
+                not math.isfinite(value)
+                for field in summary_fields
+                for value in _numbers(record.get(field, "inf"))):
+            counts["nonfinite"] += 1
+    return {
+        name: counts.get(name, 0) for name in (
+            "nonfinite", "hard_failure", "mixed_activity", "suspicious",
+            "rejection", "quarantine_transition", "domain_change")
+    }
+
+
 def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[str, Any]:
     checkpoints = parsed["checkpoints"]
     trajectory_audit = CONVERGENCE_ANALYZER.analyze_records(
@@ -221,12 +273,66 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             terminal_report["accepted_iterations_after_accepted_only"] = (
                 terminal_report["accepted_iteration"] -
                 int(shadow_record["acc"]))
+    shadow_policy_records = {
+        record["policy"]: record
+        for record in parsed.get("shadow_policy_checkpoints", [])
+    }
+    shadow_policy_reports: dict[str, dict[str, Any]] = {}
+    for policy in SHADOW_POLICIES:
+        record = shadow_policy_records.get(policy)
+        if record is not None:
+            checkpoint_try = int(record["try"])
+            checkpoint_acc = int(record["acc"])
+            checkpoint_objective = _objective_total(record["objective"])
+            endpoint_safe = record.get("checkpoint-safe") == "1"
+            blockers = [
+                int(float(value)) for value in record.get(
+                    "blockers", "1/1/1/1").split("/")]
+            endpoint_safe = endpoint_safe and not any(blockers)
+            report = {
+                "reached": True,
+                "source": "shadow-policy",
+                "try": checkpoint_try,
+                "accepted_iteration": checkpoint_acc,
+                "streak": int(record["streak"]),
+                "effective_raw_threshold": float(record["raw-threshold"]),
+                "objective": checkpoint_objective,
+                "accepted_p99": _numbers(record["accepted-p99"]),
+                "raw_p99": _numbers(record["raw-p99"]),
+                "endpoint_safe": endpoint_safe,
+                "truth_metrics": _truth_metrics(
+                    parsed.get("shadow_policy_atoms", {}).get(policy, []), truth),
+                "continuation_safety_events": _continuation_safety_events(
+                    parsed.get("trajectory_records", []), checkpoint_try),
+            }
+            if terminal_report is not None:
+                report["attempts_saved"] = terminal_report["try"] - checkpoint_try
+                report["accepted_iterations_saved"] = (
+                    terminal_report["accepted_iteration"] - checkpoint_acc)
+            shadow_policy_reports[policy] = report
+        elif terminal_report is not None and terminal_report["reason"] == "converged":
+            shadow_policy_reports[policy] = {
+                "reached": True,
+                "source": "production-agreement",
+                "try": terminal_report["try"],
+                "accepted_iteration": terminal_report["accepted_iteration"],
+                "objective": terminal_report["objective"],
+                "endpoint_safe": terminal_report["objective"] is not None,
+                "truth_metrics": terminal_report["truth_metrics"],
+                "attempts_saved": 0,
+                "accepted_iterations_saved": 0,
+                "continuation_safety_events": _continuation_safety_events(
+                    parsed.get("trajectory_records", []), terminal_report["try"]),
+            }
+        else:
+            shadow_policy_reports[policy] = {"reached": False}
     if not checkpoints:
         return {
             "status": "no_convergence_trigger",
             "experiment_count": 0,
             "experiments": [],
             "accepted_only_shadow": shadow_report,
+            "shadow_policies": shadow_policy_reports,
             "terminal": terminal_report,
             "trajectory_audit": trajectory_audit,
         }
@@ -356,6 +462,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
         "unresolved_policy_counts": unresolved_policy_counts,
         "experiments": reports,
         "accepted_only_shadow": shadow_report,
+        "shadow_policies": shadow_policy_reports,
         "terminal": terminal_report,
         "trajectory_audit": trajectory_audit,
     }

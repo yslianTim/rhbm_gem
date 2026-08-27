@@ -24,6 +24,19 @@ MINIMUM_EXPOSURES_PER_FAMILY = 5
 MINIMUM_BENEFIT_RATIO = 0.70
 MAXIMUM_HARM_RATIO = 0.10
 REQUIRED_FAMILIES = ("natural", "stationarity", "population")
+SHADOW_REQUIRED_FAMILIES = ("natural", "stationarity")
+SHADOW_POLICIES = (
+    "accepted-only-k2",
+    "accepted-only-k3",
+    "accepted-only-k5",
+    "dynamic-raw",
+)
+TRUTH_RMSE_METRICS = (
+    "amplitude_rmse",
+    "width_rmse",
+    "offset_rmse",
+    "transformed_aggregate_rmse",
+)
 
 
 def _materially_lower(candidate: float | None, reference: float | None) -> bool:
@@ -115,6 +128,66 @@ def classify_policy_outcome(
     }
 
 
+def classify_shadow_policy_outcome(
+    policy_report: dict[str, Any],
+    terminal: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not policy_report.get("reached", False) or terminal is None:
+        return {"reached": False, "effective_exposure": False}
+    attempts_saved = int(policy_report.get("attempts_saved", 0))
+    effective_exposure = (
+        policy_report.get("source") == "shadow-policy" and attempts_saved > 0)
+    candidate_objective = policy_report.get("objective")
+    terminal_objective = terminal.get("objective")
+    objective_delta = (
+        candidate_objective - terminal_objective
+        if candidate_objective is not None and terminal_objective is not None
+        else None)
+    objective_harm = _materially_higher(
+        candidate_objective, terminal_objective)
+    objective_benefit = _materially_lower(
+        candidate_objective, terminal_objective)
+    candidate_truth = policy_report.get("truth_metrics") or {}
+    terminal_truth = terminal.get("truth_metrics") or {}
+    truth_deltas = {}
+    truth_harm = {}
+    truth_benefit = {}
+    for metric in TRUTH_RMSE_METRICS:
+        candidate_value = candidate_truth.get(metric)
+        terminal_value = terminal_truth.get(metric)
+        truth_deltas[metric] = (
+            candidate_value - terminal_value
+            if candidate_value is not None and terminal_value is not None
+            else None)
+        truth_harm[metric] = _materially_higher(candidate_value, terminal_value)
+        truth_benefit[metric] = _materially_lower(candidate_value, terminal_value)
+    comparison_complete = (
+        candidate_objective is not None and terminal_objective is not None and
+        all(
+            candidate_truth.get(metric) is not None and
+            terminal_truth.get(metric) is not None
+            for metric in TRUTH_RMSE_METRICS)
+    )
+    return {
+        "reached": True,
+        "source": policy_report.get("source"),
+        "effective_exposure": effective_exposure,
+        "attempts_saved": attempts_saved,
+        "accepted_iterations_saved": int(
+            policy_report.get("accepted_iterations_saved", 0)),
+        "objective_delta": objective_delta,
+        "objective_harm": objective_harm,
+        "objective_benefit": objective_benefit,
+        "truth_rmse_delta": truth_deltas,
+        "truth_rmse_harm": truth_harm,
+        "truth_rmse_benefit": truth_benefit,
+        "endpoint_safe": bool(policy_report.get("endpoint_safe", False)),
+        "comparison_complete": comparison_complete,
+        "continuation_safety_events": policy_report.get(
+            "continuation_safety_events", {}),
+    }
+
+
 def select_replay_cases(case_rows: Iterable[dict[str, Any]]) -> list[str]:
     by_exposure: dict[str, list[str]] = {
         name: [] for name in POLICY_EXPOSURES.values()
@@ -162,8 +235,13 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         production_convergence_count += int(
             audit["status"] == "counterfactual_records")
         shadow = audit.get("accepted_only_shadow", {"reached": False})
-        accepted_only_shadow_count += int(shadow.get("reached", False))
         terminal = audit.get("terminal")
+        shadow_policy_outcomes = {
+            policy: classify_shadow_policy_outcome(
+                audit.get("shadow_policies", {}).get(policy, {}), terminal)
+            for policy in SHADOW_POLICIES
+        }
+        accepted_only_shadow_count += int(shadow.get("reached", False))
         exposures = {
             name: False for name in POLICY_EXPOSURES.values()
         }
@@ -176,6 +254,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             termination_counts[
                 experiment.get("termination_reason", "unrecorded")
             ] += 1
+        if audit["status"] != "no_convergence_trigger":
+            experiment = audit["experiments"][0]
             exposures = {
                 name: bool(experiment["exposures"][name])
                 for name in POLICY_EXPOSURES.values()
@@ -209,6 +289,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "exposures": exposures,
             "outcomes": outcomes,
             "accepted_only_shadow": shadow,
+            "shadow_policy_outcomes": shadow_policy_outcomes,
             "terminal": terminal,
             "production_converged": audit["status"] == "counterfactual_records",
             "safety_regression": bool(summary.get("safety_regression", False)),
@@ -276,6 +357,217 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             ): candidate,
         }
 
+    shadow_decisions: dict[str, Any] = {}
+    for policy in SHADOW_POLICIES:
+        reached_rows = [
+            row for row in rows
+            if row["shadow_policy_outcomes"][policy].get("reached", False)
+        ]
+        exposed_rows = [
+            row for row in reached_rows
+            if row["shadow_policy_outcomes"][policy]["effective_exposure"]
+        ]
+        family_counts = Counter(row["family"] for row in exposed_rows)
+        topology_counts = Counter(row["topology"] for row in exposed_rows)
+        attempts_saved = [
+            row["shadow_policy_outcomes"][policy]["attempts_saved"]
+            for row in exposed_rows
+        ]
+        accepted_iterations_saved = [
+            row["shadow_policy_outcomes"][policy]["accepted_iterations_saved"]
+            for row in exposed_rows
+        ]
+        objective_deltas = [
+            row["shadow_policy_outcomes"][policy]["objective_delta"]
+            for row in exposed_rows
+            if row["shadow_policy_outcomes"][policy]["objective_delta"] is not None
+        ]
+        objective_harm_count = sum(
+            row["shadow_policy_outcomes"][policy]["objective_harm"]
+            for row in exposed_rows)
+        objective_benefit_count = sum(
+            row["shadow_policy_outcomes"][policy]["objective_benefit"]
+            for row in exposed_rows)
+        truth_harm_counts = {
+            metric: sum(
+                row["shadow_policy_outcomes"][policy]["truth_rmse_harm"][metric]
+                for row in exposed_rows)
+            for metric in TRUTH_RMSE_METRICS
+        }
+        truth_benefit_counts = {
+            metric: sum(
+                row["shadow_policy_outcomes"][policy]["truth_rmse_benefit"][metric]
+                for row in exposed_rows)
+            for metric in TRUTH_RMSE_METRICS
+        }
+        truth_harm_case_count = sum(
+            any(row["shadow_policy_outcomes"][policy]["truth_rmse_harm"].values())
+            for row in exposed_rows)
+        endpoint_safety_violation_count = sum(
+            not row["shadow_policy_outcomes"][policy]["endpoint_safe"]
+            for row in exposed_rows)
+        incomplete_comparison_count = sum(
+            not row["shadow_policy_outcomes"][policy]["comparison_complete"]
+            for row in exposed_rows)
+        continuation_safety_event_counts: Counter[str] = Counter()
+        for row in exposed_rows:
+            continuation_safety_event_counts.update(
+                row["shadow_policy_outcomes"][policy]
+                ["continuation_safety_events"])
+
+        def summarize_shadow_group(
+            group_rows: list[dict[str, Any]],
+        ) -> dict[str, Any]:
+            group_attempts = [
+                row["shadow_policy_outcomes"][policy]["attempts_saved"]
+                for row in group_rows]
+            group_objective_deltas = [
+                row["shadow_policy_outcomes"][policy]["objective_delta"]
+                for row in group_rows
+                if row["shadow_policy_outcomes"][policy]["objective_delta"]
+                is not None]
+            group_truth_deltas = {
+                metric: [
+                    row["shadow_policy_outcomes"][policy]
+                    ["truth_rmse_delta"][metric]
+                    for row in group_rows
+                    if row["shadow_policy_outcomes"][policy]
+                    ["truth_rmse_delta"][metric] is not None]
+                for metric in TRUTH_RMSE_METRICS
+            }
+            return {
+                "effective_exposure_count": len(group_rows),
+                "attempts_saved_total": sum(group_attempts),
+                "attempts_saved_median": (
+                    statistics.median(group_attempts) if group_attempts else None),
+                "objective_delta_median": (
+                    statistics.median(group_objective_deltas)
+                    if group_objective_deltas else None),
+                "objective_delta_p90": _percentile(
+                    group_objective_deltas, 0.90),
+                "truth_rmse_delta": {
+                    metric: {
+                        "median": statistics.median(values) if values else None,
+                        "p90": _percentile(values, 0.90),
+                    }
+                    for metric, values in group_truth_deltas.items()
+                },
+                "objective_material_harm_count": sum(
+                    row["shadow_policy_outcomes"][policy]["objective_harm"]
+                    for row in group_rows),
+                "truth_material_harm_counts": {
+                    metric: sum(
+                        row["shadow_policy_outcomes"][policy]
+                        ["truth_rmse_harm"][metric]
+                        for row in group_rows)
+                    for metric in TRUTH_RMSE_METRICS
+                },
+                "endpoint_safety_violation_count": sum(
+                    not row["shadow_policy_outcomes"][policy]["endpoint_safe"]
+                    for row in group_rows),
+            }
+        exposure_quota_met = (
+            len(exposed_rows) >= MINIMUM_TOTAL_EXPOSURES and
+            all(
+                family_counts[family] >= MINIMUM_EXPOSURES_PER_FAMILY
+                for family in SHADOW_REQUIRED_FAMILIES)
+        )
+        promotion_candidate = (
+            exposure_quota_met and
+            endpoint_safety_violation_count == 0 and
+            incomplete_comparison_count == 0 and
+            objective_harm_count == 0 and
+            not any(truth_harm_counts.values())
+        )
+        shadow_decisions[policy] = {
+            "reached_count": len(reached_rows),
+            "production_agreement_count": sum(
+                row["shadow_policy_outcomes"][policy].get("source") ==
+                "production-agreement" for row in reached_rows),
+            "effective_exposure_count": len(exposed_rows),
+            "unreached_count": sum(
+                row["accepted_only_shadow"].get("reached", False)
+                for row in rows) - len(reached_rows),
+            "family_counts": dict(sorted(family_counts.items())),
+            "topology_counts": dict(sorted(topology_counts.items())),
+            "attempts_saved": {
+                "median": statistics.median(attempts_saved)
+                if attempts_saved else None,
+                "p90": _percentile(attempts_saved, 0.90),
+                "maximum": max(attempts_saved) if attempts_saved else None,
+                "total": sum(attempts_saved),
+            },
+            "accepted_iterations_saved": {
+                "median": statistics.median(accepted_iterations_saved)
+                if accepted_iterations_saved else None,
+                "p90": _percentile(accepted_iterations_saved, 0.90),
+                "maximum": max(accepted_iterations_saved)
+                if accepted_iterations_saved else None,
+                "total": sum(accepted_iterations_saved),
+            },
+            "objective_delta": {
+                "median": statistics.median(objective_deltas)
+                if objective_deltas else None,
+                "p90": _percentile(objective_deltas, 0.90),
+            },
+            "truth_rmse_delta": {
+                metric: {
+                    "median": statistics.median(values) if values else None,
+                    "p90": _percentile(values, 0.90),
+                }
+                for metric, values in {
+                    metric: [
+                        row["shadow_policy_outcomes"][policy]
+                        ["truth_rmse_delta"][metric]
+                        for row in exposed_rows
+                        if row["shadow_policy_outcomes"][policy]
+                        ["truth_rmse_delta"][metric] is not None]
+                    for metric in TRUTH_RMSE_METRICS
+                }.items()
+            },
+            "objective_material_benefit_count": objective_benefit_count,
+            "objective_material_harm_count": objective_harm_count,
+            "truth_material_benefit_counts": truth_benefit_counts,
+            "truth_material_harm_counts": truth_harm_counts,
+            "truth_material_harm_case_count": truth_harm_case_count,
+            "endpoint_safety_violation_count": endpoint_safety_violation_count,
+            "incomplete_comparison_count": incomplete_comparison_count,
+            "continuation_safety_event_counts": dict(
+                sorted(continuation_safety_event_counts.items())),
+            "exposure_quota_met": exposure_quota_met,
+            "promotion_candidate": promotion_candidate,
+            "by_family": {
+                family: summarize_shadow_group([
+                    row for row in exposed_rows if row["family"] == family])
+                for family in sorted({row["family"] for row in exposed_rows})
+            },
+            "by_topology": {
+                topology: summarize_shadow_group([
+                    row for row in exposed_rows if row["topology"] == topology])
+                for topology in sorted({row["topology"] for row in exposed_rows})
+            },
+        }
+
+    promotable = [
+        policy for policy in SHADOW_POLICIES
+        if shadow_decisions[policy]["promotion_candidate"]
+    ]
+    recommended_shadow_policy = None
+    if promotable:
+        maximum_total = max(
+            shadow_decisions[policy]["attempts_saved"]["total"]
+            for policy in promotable)
+        near_maximum = [
+            policy for policy in promotable
+            if shadow_decisions[policy]["attempts_saved"]["total"] >=
+            0.95 * maximum_total
+        ]
+        if "dynamic-raw" in near_maximum:
+            recommended_shadow_policy = "dynamic-raw"
+        else:
+            recommended_shadow_policy = next(
+                policy for policy in SHADOW_POLICIES if policy in near_maximum)
+
     genuine_exposure_count = sum(
         1 for row in rows if any(row["exposures"].values()))
     shortfall = {}
@@ -304,7 +596,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "attempts_after_accepted_only" in row["terminal"]
     ]
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "case_count": len(summaries),
         "production_convergence_count": production_convergence_count,
         "accepted_only_shadow_count": accepted_only_shadow_count,
@@ -317,6 +609,10 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
                 max(accepted_only_saved_attempts)
                 if accepted_only_saved_attempts else None),
         },
+        "shadow_policy_decisions": shadow_decisions,
+        "recommended_shadow_policy": recommended_shadow_policy,
+        "shadow_policy_production_change_recommended": (
+            recommended_shadow_policy is not None),
         "genuine_exposure_count": genuine_exposure_count,
         "exposure_counts": dict(sorted(exposure_counts.items())),
         "comparator_exposure_counts": {

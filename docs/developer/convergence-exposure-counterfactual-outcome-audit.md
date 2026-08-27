@@ -58,8 +58,9 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
 `scenario-truth.json`, `trajectory-schema-5.json`,
-`counterfactual-schema-3.json`, the shadow/terminal audit artifacts, and
-schema-7 `case-summary.json`. The aggregate report is schema 4. Old summaries
+`counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
+legacy shadow/terminal audit artifact, and schema-8 `case-summary.json`. The
+aggregate report is schema 5. Old summaries
 are intentionally not resumed across the baseline change.
 
 ## Exposure and outcome definitions
@@ -129,9 +130,9 @@ topology the convergence counts are C-C 8, CA-C 8, N-N 8, O-O 9, and UNK-C 8.
 
 The accepted-only shadow checkpoint appears in 137 post-fix cases: 125
 `natural` and 12 `stationarity`. Relative to the terminal outcome it could have
-saved a median of 3 attempts, p90 22.4, and at most 57 attempts. This is evidence
-for a future raw-p99 study, not permission to remove or relax the production raw
-p99 `< 1e-4` gate.
+saved a median of 3 attempts, p90 22.4, and at most 57 attempts. The isolated
+continuation follow-up below evaluates whether persistence can turn that
+opportunity into a safe stopping rule.
 
 On the frozen objective domain, paired objective delta has median/p90 0/0 with
 zero material benefit and zero material harm. Transformed aggregate truth RMSE
@@ -147,6 +148,35 @@ mean only that no evidence currently requires a rollback or redesign; they do
 not prove the production policy is optimal. The accepted-only shadow result is
 reported independently and is not counted as comparator exposure.
 
+## Accepted-only isolated continuation outcome
+
+The 137 shadow cases were replayed twice with identical production terminal
+states and frozen truth. Each candidate checkpoint ran final dependency polish
+in isolated workspaces and the production trajectory continued unchanged. All
+827 non-time JSON artifacts and both decision reports are deterministic across
+the two runs.
+
+| Audit-only policy | Effective exposures (natural/stationarity) | Attempts saved total | Objective harm | Truth-harm cases | Safety | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| accepted-only K=2 | 70 (61/9) | 954 | 0 | 34 | 0 | retain shadow-only |
+| accepted-only K=3 | 63 (55/8) | 847 | 0 | 22 | 0 | retain shadow-only |
+| accepted-only K=5 | 59 (51/8) | 713 | 0 | 12 | 0 | retain shadow-only |
+| dynamic raw | 3 (2/1) | 24 | 0 | 2 | 0 | insufficient exposure and truth harm |
+
+The persistence policies meet the exposure quota and save substantial work,
+but none satisfies the zero-material-harm truth rule. K=5 reduces the number of
+truth-harm cases relative to K=2/K=3 but does not eliminate them. Dynamic raw
+uses `min(1e-3, 1e-4 * 2^(streak-1))`; it reaches only three effective
+exposures and two of those have material truth harm. Every candidate has finite
+complete comparisons, zero endpoint safety violations, zero continuation
+safety events, and zero material objective harm.
+
+Therefore no accepted-only persistence or dynamic-raw policy is recommended
+for production. The production raw active-DOF p99 `< 1e-4` predicate remains
+unchanged. The result shows that objective and safety neutrality alone are not
+sufficient evidence for early stopping because terminal continuation still
+materially improves at least one truth-error component in a nonzero subset.
+
 Current verification on 2026-08-27:
 
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
@@ -155,4 +185,6 @@ Current verification on 2026-08-27:
 - C/N/O positive controls pass 3/3 and `natural-v00` passes 8/8;
 - both 600-case runs are complete and deterministic, with zero safety
   regression;
+- the 137-case isolated continuation replay completes twice with no failures,
+  no non-time artifact mismatch, and no production-policy recommendation;
 - repository lint passes.

@@ -129,8 +129,17 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             "objective=1/0/0/1, accepted-p99=0/0/0, raw-p99=1/1/1",
             "[Debug] Accepted-only shadow atom: schema=1, serial=1, group=1, "
             "amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Second-stage audit terminal: schema=1, reason=converged, "
-            "try=2, acc=2, objective=1/0/0/1",
+            "[Debug] Accepted-only shadow checkpoint: schema=2, "
+            "policy=dynamic-raw, try=2, acc=2, streak=2, "
+            "raw-threshold=2e-4, final-polish=0, checkpoint-safe=1, "
+            "production-qualified=1, blockers=0/0/0/0, "
+            "accepted-p99=0/0/0, raw-p99=1e-4/1e-4/1e-4, "
+            "objective=1/0/0/1",
+            "[Debug] Accepted-only shadow atom: schema=2, "
+            "policy=dynamic-raw, serial=1, group=1, "
+            "amplitude=6, width=0.5, offset=0.1",
+            "[Debug] Second-stage audit terminal: schema=1, "
+            "reason=audit-patience, try=3, acc=3, objective=1/0/0/1",
             "[Debug] Second-stage audit terminal atom: schema=1, serial=1, "
             "group=1, amplitude=6, width=0.5, offset=0.1",
         ))
@@ -144,6 +153,14 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         shadow = COUNTERFACTUAL.analyze(parsed, truth)["accepted_only_shadow"]
         self.assertTrue(shadow["reached"])
         self.assertEqual(shadow["truth_metrics"]["transformed_aggregate_rmse"], 0.0)
+        policies = COUNTERFACTUAL.analyze(parsed, truth)["shadow_policies"]
+        self.assertTrue(policies["dynamic-raw"]["reached"])
+        self.assertEqual(policies["dynamic-raw"]["attempts_saved"], 1)
+        self.assertTrue(policies["dynamic-raw"]["endpoint_safe"])
+        self.assertEqual(
+            policies["dynamic-raw"]["truth_metrics"]
+            ["transformed_aggregate_rmse"], 0.0)
+        self.assertFalse(policies["accepted-only-k2"]["reached"])
 
     def test_analyzer_classifies_exposures_outcomes_and_replay_order(self) -> None:
         summaries = []
@@ -170,6 +187,28 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
     def test_analyzer_reports_harm_and_safety_regression(self) -> None:
         harmful = case_summary("harm", False, False, True, 1.01, 0.12)
         harmful["safety_regression"] = True
+        harmful["audit"]["accepted_only_shadow"] = {"reached": True}
+        harmful["audit"]["terminal"] = {
+            "reason": "audit-patience", "try": 6,
+            "accepted_iteration": 6, "objective": 1.0,
+            "truth_metrics": {
+                "amplitude_rmse": 0.1, "width_rmse": 0.1,
+                "offset_rmse": 0.1, "transformed_aggregate_rmse": 0.1,
+            },
+        }
+        harmful["audit"]["shadow_policies"] = {
+            "accepted-only-k2": {
+                "reached": True, "source": "shadow-policy", "try": 4,
+                "accepted_iteration": 4, "attempts_saved": 2,
+                "accepted_iterations_saved": 2, "objective": 1.01,
+                "endpoint_safe": False, "continuation_safety_events": {},
+                "truth_metrics": {
+                    "amplitude_rmse": 0.12, "width_rmse": 0.12,
+                    "offset_rmse": 0.12,
+                    "transformed_aggregate_rmse": 0.12,
+                },
+            },
+        }
         report = ANALYZER.analyze([harmful])
         outcome = report["cases"][0]["outcomes"]["solver-qualified"]
 
@@ -178,6 +217,10 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertFalse(
             report["policy_decisions"]["solver-qualified"][
                 "redesign_candidate"])
+        shadow_decision = report["shadow_policy_decisions"]["accepted-only-k2"]
+        self.assertEqual(shadow_decision["objective_material_harm_count"], 1)
+        self.assertEqual(shadow_decision["endpoint_safety_violation_count"], 1)
+        self.assertFalse(shadow_decision["promotion_candidate"])
 
     def test_analyzer_keeps_agreement_and_no_trigger_as_controls(self) -> None:
         agreement = case_summary("agreement", False, False, False)
@@ -278,6 +321,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertTrue({
             "run.log", "scenario-truth.json", "trajectory-schema-5.json",
             "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
+            "shadow-continuation-schema-2.json",
             "case-summary.json",
         }.issubset(artifact_names))
 

@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 7
+CASE_SUMMARY_SCHEMA_VERSION = 8
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -298,6 +298,17 @@ def run_case(
         "terminal": parsed["audit_terminal"],
         "terminal_atoms": parsed["audit_terminal_atoms"],
     })
+    write_json(case_directory / "shadow-continuation-schema-2.json", {
+        "schema_version": 2,
+        "checkpoints": parsed["shadow_policy_checkpoints"],
+        "atoms": [
+            atom
+            for records in parsed["shadow_policy_atoms"].values()
+            for atom in records
+        ],
+        "terminal": parsed["audit_terminal"],
+        "terminal_atoms": parsed["audit_terminal_atoms"],
+    })
     audit = COUNTERFACTUAL_ANALYZER.analyze(parsed, truth)
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
@@ -328,6 +339,9 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--reference-truth-dir", type=Path)
+    parser.add_argument(
+        "--case-list", type=Path,
+        help="JSON object containing the sorted case_ids to replay")
     return parser.parse_args(argv)
 
 
@@ -341,6 +355,19 @@ def run(argv: Sequence[str] | None = None) -> int:
         if args.reference_truth_dir is not None else None)
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     cases = expand_manifest(manifest)
+    if args.case_list is not None:
+        selection = json.loads(args.case_list.read_text(encoding="utf-8"))
+        if selection.get("schema_version") != 1:
+            raise ValueError("Case-list schema_version must be 1")
+        requested_case_ids = list(selection.get("case_ids", []))
+        if (requested_case_ids != sorted(requested_case_ids) or
+                len(requested_case_ids) != len(set(requested_case_ids))):
+            raise ValueError("Case-list case_ids must be sorted and unique")
+        case_by_id = {case["case_id"]: case for case in cases}
+        unknown = [case_id for case_id in requested_case_ids if case_id not in case_by_id]
+        if unknown:
+            raise ValueError(f"Unknown case-list case_id: {unknown[0]}")
+        cases = [case_by_id[case_id] for case_id in requested_case_ids]
     if args.case_id:
         cases = [case for case in cases if case["case_id"] == args.case_id]
         if not cases:
@@ -389,6 +416,27 @@ def run(argv: Sequence[str] | None = None) -> int:
         if baseline_aggregate_path.is_file():
             baseline_aggregate = json.loads(
                 baseline_aggregate_path.read_text(encoding="utf-8"))
+            aggregate_case_ids = {
+                row["case_id"] for row in aggregate["cases"]
+            }
+            baseline_case_ids = {
+                row["case_id"] for row in baseline_aggregate["cases"]
+            }
+            if aggregate_case_ids != baseline_case_ids:
+                if not aggregate_case_ids.issubset(baseline_case_ids):
+                    raise ValueError(
+                        "Reference truth aggregate does not contain every replay case")
+                baseline_aggregate = dict(baseline_aggregate)
+                baseline_aggregate["cases"] = [
+                    row for row in baseline_aggregate["cases"]
+                    if row["case_id"] in aggregate_case_ids
+                ]
+                baseline_aggregate["production_convergence_count"] = sum(
+                    row.get("production_converged", False)
+                    for row in baseline_aggregate["cases"])
+                baseline_aggregate["accepted_only_shadow_count"] = sum(
+                    bool(row.get("accepted_only_shadow", {}).get("reached"))
+                    for row in baseline_aggregate["cases"])
             comparison = CORPUS_ANALYZER.compare(baseline_aggregate, aggregate)
             write_json(args.output_dir / "comparison.json", comparison)
             objective = comparison["objective_delta"]
@@ -456,6 +504,58 @@ def run(argv: Sequence[str] | None = None) -> int:
         "schema_version": 1,
         "case_ids": aggregate["replay_case_ids"],
     })
+    shadow_case_ids = sorted(
+        row["case_id"] for row in aggregate["cases"]
+        if row.get("accepted_only_shadow", {}).get("reached", False))
+    write_json(args.output_dir / "shadow-replay-manifest.json", {
+        "schema_version": 1,
+        "case_ids": shadow_case_ids,
+    })
+    decision = {
+        "schema_version": 1,
+        "case_count": aggregate["case_count"],
+        "failed_case_count": len(failed),
+        "accepted_only_shadow_count": aggregate["accepted_only_shadow_count"],
+        "policy_decisions": aggregate["shadow_policy_decisions"],
+        "recommended_policy": aggregate["recommended_shadow_policy"],
+        "production_change_recommended": aggregate[
+            "shadow_policy_production_change_recommended"],
+    }
+    write_json(args.output_dir / "shadow-continuation-decision.json", decision)
+    decision_lines = [
+        "# Accepted-only shadow continuation decision",
+        "",
+        f"- Cases: {decision['case_count']}",
+        f"- Accepted-only shadow cases: {decision['accepted_only_shadow_count']}",
+        f"- Failed cases: {decision['failed_case_count']}",
+        f"- Recommended policy: {decision['recommended_policy'] or 'none'}",
+        f"- Production change recommended: "
+        f"{str(decision['production_change_recommended']).lower()}",
+        "",
+        "| Policy | Exposure | Natural | Stationarity | Attempts saved total | "
+        "Objective Δ median/p90 | Truth aggregate Δ median/p90 | "
+        "Objective harm | Truth harm | Safety | Incomplete | Promote |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for policy, values in decision["policy_decisions"].items():
+        decision_lines.append(
+            f"| {policy} | {values['effective_exposure_count']} | "
+            f"{values['family_counts'].get('natural', 0)} | "
+            f"{values['family_counts'].get('stationarity', 0)} | "
+            f"{values['attempts_saved']['total']} | "
+            f"{values['objective_delta']['median']} / "
+            f"{values['objective_delta']['p90']} | "
+            f"{values['truth_rmse_delta']['transformed_aggregate_rmse']['median']} / "
+            f"{values['truth_rmse_delta']['transformed_aggregate_rmse']['p90']} | "
+            f"{values['objective_material_harm_count']} | "
+            f"{values['truth_material_harm_case_count']} | "
+            f"{values['endpoint_safety_violation_count']} | "
+            f"{values['incomplete_comparison_count']} | "
+            f"{str(values['promotion_candidate']).lower()} |"
+        )
+    decision_lines.append("")
+    (args.output_dir / "shadow-continuation-decision.md").write_text(
+        "\n".join(decision_lines), encoding="utf-8")
     print(
         f"Convergence exposure corpus: cases={len(summaries)}, "
         f"exposures={aggregate['genuine_exposure_count']}, "

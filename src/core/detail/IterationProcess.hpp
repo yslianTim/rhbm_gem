@@ -82,6 +82,37 @@ ConvergencePredicates EvaluateConvergencePredicates(
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change);
 
+enum class AcceptedOnlyAuditPolicy : std::size_t
+{
+    Persistence2,
+    Persistence3,
+    Persistence5,
+    DynamicRaw,
+    Count
+};
+
+constexpr std::size_t kAcceptedOnlyAuditPolicyCount{
+    static_cast<std::size_t>(AcceptedOnlyAuditPolicy::Count) };
+
+struct AcceptedOnlyAuditState
+{
+    std::size_t eligible_streak{ 0 };
+    std::array<bool, kAcceptedOnlyAuditPolicyCount> checkpoint_reached{};
+};
+
+struct AcceptedOnlyAuditUpdate
+{
+    std::size_t eligible_streak{ 0 };
+    double dynamic_raw_threshold{ 0.0 };
+    std::array<bool, kAcceptedOnlyAuditPolicyCount> triggered_now{};
+};
+
+AcceptedOnlyAuditUpdate UpdateAcceptedOnlyAuditPolicies(
+    bool eligible,
+    bool production_converged,
+    const TransformedChangeSummary & raw_change,
+    AcceptedOnlyAuditState & state);
+
 enum class CounterfactualConvergencePolicy : std::size_t
 {
     Production,

@@ -320,6 +320,61 @@ ConvergencePredicates EvaluateConvergencePredicates(
     };
 }
 
+AcceptedOnlyAuditUpdate UpdateAcceptedOnlyAuditPolicies(
+    bool eligible,
+    bool production_converged,
+    const TransformedChangeSummary & raw_change,
+    AcceptedOnlyAuditState & state)
+{
+    if (!eligible)
+    {
+        state.eligible_streak = 0;
+        return AcceptedOnlyAuditUpdate{
+            0,
+            kTransformedChangeTolerance,
+            {}
+        };
+    }
+
+    state.eligible_streak++;
+    const auto exponent{
+        static_cast<int>(std::min<std::size_t>(state.eligible_streak - 1, 30))
+    };
+    const auto dynamic_raw_threshold{
+        std::min(
+            kLegacyMaximumTransformedChangeTolerance,
+            std::ldexp(kTransformedChangeTolerance, exponent))
+    };
+    AcceptedOnlyAuditUpdate update{
+        state.eligible_streak,
+        dynamic_raw_threshold,
+        {}
+    };
+    if (production_converged) return update;
+
+    const auto trigger = [&](AcceptedOnlyAuditPolicy policy, bool condition)
+    {
+        const auto index{ static_cast<std::size_t>(policy) };
+        if (!state.checkpoint_reached.at(index) && condition)
+        {
+            state.checkpoint_reached.at(index) = true;
+            update.triggered_now.at(index) = true;
+        }
+    };
+    trigger(AcceptedOnlyAuditPolicy::Persistence2, state.eligible_streak >= 2);
+    trigger(AcceptedOnlyAuditPolicy::Persistence3, state.eligible_streak >= 3);
+    trigger(AcceptedOnlyAuditPolicy::Persistence5, state.eligible_streak >= 5);
+    trigger(
+        AcceptedOnlyAuditPolicy::DynamicRaw,
+        std::ranges::all_of(
+            raw_change.percentile_stats.percentile_list,
+            [dynamic_raw_threshold](double value)
+            {
+                return std::isfinite(value) && value < dynamic_raw_threshold;
+            }));
+    return update;
+}
+
 SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom)
@@ -4365,6 +4420,108 @@ static void LogAcceptedOnlyShadowCheckpoint(
         "Accepted-only shadow atom:", context, outcome.finalized_state);
 }
 
+static std::string_view GetAcceptedOnlyAuditPolicyText(
+    AcceptedOnlyAuditPolicy policy)
+{
+    switch (policy)
+    {
+    case AcceptedOnlyAuditPolicy::Persistence2:
+        return "accepted-only-k2";
+    case AcceptedOnlyAuditPolicy::Persistence3:
+        return "accepted-only-k3";
+    case AcceptedOnlyAuditPolicy::Persistence5:
+        return "accepted-only-k5";
+    case AcceptedOnlyAuditPolicy::DynamicRaw:
+        return "dynamic-raw";
+    case AcceptedOnlyAuditPolicy::Count:
+        break;
+    }
+    throw std::invalid_argument("Unknown accepted-only audit policy.");
+}
+
+static bool IsAcceptedOnlyAuditCheckpointSafe(
+    const CounterfactualCheckpointOutcome & outcome)
+{
+    if (!outcome.objective.has_value() ||
+        !std::isfinite(outcome.objective->GetTotalObjective()))
+    {
+        return false;
+    }
+    return std::ranges::all_of(
+        outcome.finalized_state,
+        [](const LocalGaussianResult & result)
+        {
+            const auto & model{ result.mdpde.GetModel() };
+            return std::isfinite(model.GetAmplitude()) &&
+                std::isfinite(model.GetWidth()) &&
+                std::isfinite(model.GetOffset()) &&
+                model.GetAmplitude() > 0.0 && model.GetWidth() > 0.0;
+        });
+}
+
+static void LogAcceptedOnlyAuditPolicyCheckpoint(
+    bool quiet_mode,
+    const SecondStageContext & context,
+    AcceptedOnlyAuditPolicy policy,
+    const AcceptedOnlyAuditUpdate & update,
+    std::size_t attempt_number,
+    const IterationState & iteration_state,
+    const CounterfactualIterationEvidence & evidence,
+    const CounterfactualCheckpointOutcome & outcome)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+    const auto policy_text{ GetAcceptedOnlyAuditPolicyText(policy) };
+    std::ostringstream message;
+    message << std::scientific << std::setprecision(6)
+        << "Accepted-only shadow checkpoint: schema=2"
+        << ", policy=" << policy_text
+        << ", try=" << attempt_number
+        << ", acc=" << iteration_state.accepted_iteration_count
+        << ", streak=" << update.eligible_streak
+        << ", raw-threshold=" << update.dynamic_raw_threshold
+        << ", final-polish=" << outcome.final_polish_accepted
+        << ", checkpoint-safe=" << IsAcceptedOnlyAuditCheckpointSafe(outcome)
+        << ", production-qualified="
+        << evidence.solver_qualification.production_qualified
+        << ", blockers=0/0/0/0"
+        << ", accepted-p99=";
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (index != 0) message << "/";
+        message << evidence.accepted_dof.percentile_stats.percentile_list.at(index);
+    }
+    message << ", raw-p99=";
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (index != 0) message << "/";
+        message << evidence.raw_dof.percentile_stats.percentile_list.at(index);
+    }
+    message << ", fixed-domain=" << outcome.comparison_domain_size.at(0)
+        << "/" << outcome.comparison_domain_size.at(1)
+        << "/" << outcome.comparison_domain_size.at(2)
+        << ", objective=";
+    AppendAuditObjective(message, outcome.objective);
+    Logger::Log(LogLevel::Debug, message.str());
+
+    for (std::size_t atom_index = 0;
+        atom_index < outcome.finalized_state.size(); atom_index++)
+    {
+        const auto & model{
+            outcome.finalized_state.at(atom_index).mdpde.GetModel()
+        };
+        std::ostringstream atom_message;
+        atom_message << std::scientific << std::setprecision(17)
+            << "Accepted-only shadow atom: schema=2"
+            << ", policy=" << policy_text
+            << ", serial=" << context.at(atom_index).atom->GetSerialID()
+            << ", group=" << context.at(atom_index).group_id
+            << ", amplitude=" << model.GetAmplitude()
+            << ", width=" << model.GetWidth()
+            << ", offset=" << model.GetOffset();
+        Logger::Log(LogLevel::Debug, atom_message.str());
+    }
+}
+
 static void LogSecondStageAuditTerminal(
     bool quiet_mode,
     const SecondStageContext & context,
@@ -4904,6 +5061,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 
     const auto audit_comparison_objective_domain{ iteration_state.objective_domain };
     AcceptedOnlyShadowState accepted_only_shadow;
+    AcceptedOnlyAuditState accepted_only_audit_state;
     std::size_t last_attempt_number{ 0 };
     const auto log_audit_terminal = [&](
         std::string_view reason,
@@ -5068,27 +5226,60 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             progress_column_widths,
             iteration_result.progress);
 
-        if (!accepted_only_shadow.reached &&
-            iteration_result.accepted_only_stop_candidate &&
-            iteration_result.counterfactual_evidence.available)
+        if (iteration_result.counterfactual_evidence.available)
         {
-            accepted_only_shadow = AcceptedOnlyShadowState{
-                true,
-                iter + 1,
-                iteration_state.accepted_iteration_count
+            std::optional<CounterfactualCheckpointOutcome> shadow_outcome;
+            const auto get_shadow_outcome = [&]()
+                -> const CounterfactualCheckpointOutcome &
+            {
+                if (!shadow_outcome.has_value())
+                {
+                    shadow_outcome = BuildCounterfactualCheckpointOutcome(
+                        context,
+                        options,
+                        graph_topology,
+                        iteration_state,
+                        audit_comparison_objective_domain);
+                }
+                return *shadow_outcome;
             };
-            LogAcceptedOnlyShadowCheckpoint(
-                options.quiet_mode,
-                context,
-                iter + 1,
-                iteration_state,
-                iteration_result.counterfactual_evidence,
-                BuildCounterfactualCheckpointOutcome(
+            if (!accepted_only_shadow.reached &&
+                iteration_result.accepted_only_stop_candidate)
+            {
+                accepted_only_shadow = AcceptedOnlyShadowState{
+                    true,
+                    iter + 1,
+                    iteration_state.accepted_iteration_count
+                };
+                LogAcceptedOnlyShadowCheckpoint(
+                    options.quiet_mode,
                     context,
-                    options,
-                    graph_topology,
+                    iter + 1,
                     iteration_state,
-                    audit_comparison_objective_domain));
+                    iteration_result.counterfactual_evidence,
+                    get_shadow_outcome());
+            }
+
+            const auto policy_update{ UpdateAcceptedOnlyAuditPolicies(
+                iteration_result.accepted_only_stop_candidate,
+                iteration_result.converged,
+                iteration_result.counterfactual_evidence.raw_dof,
+                accepted_only_audit_state) };
+            for (std::size_t policy_index = 0;
+                policy_index < policy_update.triggered_now.size();
+                policy_index++)
+            {
+                if (!policy_update.triggered_now.at(policy_index)) continue;
+                LogAcceptedOnlyAuditPolicyCheckpoint(
+                    options.quiet_mode,
+                    context,
+                    static_cast<AcceptedOnlyAuditPolicy>(policy_index),
+                    policy_update,
+                    iter + 1,
+                    iteration_state,
+                    iteration_result.counterfactual_evidence,
+                    get_shadow_outcome());
+            }
         }
 
         if constexpr (kCounterfactualConvergenceAuditEnabled)
