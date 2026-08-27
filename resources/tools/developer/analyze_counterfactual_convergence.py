@@ -227,7 +227,6 @@ def _continuation_safety_events(
             counts["domain_change"] += blockers[3]
         summary_fields = (
             "production-accepted-p99", "production-accepted-max",
-            "guarded-proposal-p99", "guarded-proposal-max",
             "fixed-point-residual-p99", "fixed-point-residual-max")
         if any(
                 not math.isfinite(value)

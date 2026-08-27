@@ -173,9 +173,7 @@ def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> b
             int(float(value)) for value in record["blockers"].split("/")]
         summary_fields = (
             "production-accepted-p99", "production-accepted-max",
-            "guarded-proposal-p99", "guarded-proposal-max",
             "legacy-accepted-p99", "legacy-accepted-max",
-            "legacy-guarded-p99", "legacy-guarded-max",
             "fixed-point-residual-p99", "fixed-point-residual-max")
         nonfinite = any(
             not math.isfinite(value)
@@ -211,7 +209,7 @@ def run_case(
     summary_path = case_directory / "case-summary.json"
     if summary_path.is_file():
         value = json.loads(summary_path.read_text(encoding="utf-8"))
-        trajectory_path = case_directory / "trajectory-schema-6.json"
+        trajectory_path = case_directory / "trajectory-schema-7.json"
         trajectory = (
             json.loads(trajectory_path.read_text(encoding="utf-8"))
             if trajectory_path.is_file() else {})
@@ -222,7 +220,7 @@ def run_case(
                     str(reference_truth_directory)
                     if reference_truth_directory is not None else None) and
                 value.get("status") == "complete" and
-                trajectory.get("schema_version") == 6):
+                trajectory.get("schema_version") == 7):
             return value
 
     command = build_command(executable, case, thread_count)
@@ -285,8 +283,8 @@ def run_case(
         ],
     })
     write_json(
-        case_directory / "trajectory-schema-6.json",
-        {"schema_version": 6, "records": parsed["trajectory_records"]})
+        case_directory / "trajectory-schema-7.json",
+        {"schema_version": 7, "records": parsed["trajectory_records"]})
     write_json(case_directory / "counterfactual-schema-3.json", {
         "schema_version": 3,
         "checkpoints": parsed["checkpoints"],

@@ -3,10 +3,9 @@
 > Current result (2026-08-28): the post-fix (`after`) 600-case corpus is the
 > canonical result for the current implementation. The instrumentation-only
 > pre-fix (`before`) corpus is retained as the paired historical baseline.
-> Production still requires its existing convergence qualification and
-> accepted/guarded-proposal active-DOF p99 without a maximum gate; the strict
-> fixed-point operator and accepted-only
-> checkpoint remains audit-only evidence and does not change that predicate.
+> Production now requires accepted active-DOF p99 plus complete nominal-DOF
+> fixed-point residual p99, with solver qualification. Maximum remains an
+> independent diagnostic comparator.
 
 ## Purpose and scope
 
@@ -58,7 +57,7 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 
 Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
-`scenario-truth.json`, `trajectory-schema-6.json`,
+`scenario-truth.json`, `trajectory-schema-7.json`,
 `counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
 legacy shadow/terminal audit artifact, and schema-8 `case-summary.json`. The
 aggregate report is schema 5. Old summaries
@@ -92,7 +91,7 @@ statistics remain diagnostic and support the isolated rollback comparison.
 The accepted-only shadow checkpoint is separate from those five comparators.
 It requires production qualification, accepted active-DOF p99, a stable
 objective domain, no quarantine transition, no genuine suspicious/hard failure,
-and no rejection, but ignores guarded-proposal p99 while recording it. Only the
+and no rejection, but ignores fixed-point residual p99. Only the
 first shadow checkpoint is retained and final polish runs on isolated state, so
 it cannot alter the production trajectory or output.
 
@@ -177,11 +176,9 @@ exposures and two of those have material truth harm. Every candidate has finite
 complete comparisons, zero endpoint safety violations, zero continuation
 safety events, and zero material objective harm.
 
-Therefore no accepted-only persistence or dynamic-raw policy is recommended
-for production. The production raw active-DOF p99 `< 1e-4` predicate remains
-unchanged. The result shows that objective and safety neutrality alone are not
-sufficient evidence for early stopping because terminal continuation still
-materially improves at least one truth-error component in a nonzero subset.
+The earlier accepted-only persistence and dynamic-raw experiments remain
+historical controls. They are not the production policy after the unified
+stabilisation change.
 
 Current verification on 2026-08-28:
 
@@ -189,9 +186,14 @@ Current verification on 2026-08-28:
 - fold-168 still stops after seven accepted iterations with `audit-patience` in
   both builds and produces byte-identical `actual.json` files;
 - C/N/O positive controls pass 3/3 and `natural-v00` passes 8/8;
-- the schema-6 600-case corpus completes 600/600 with 42 production
-  convergence cases, zero strict-operator exposure, zero failed cases, and no
-  promotion recommendation;
+- the schema-7 unified-stabilisation corpus completes 600/600 with 42 production
+  convergence cases, zero failed cases, and zero safety regressions;
+- against the frozen schema-6 baseline, transformed truth RMSE median improves
+  from `0.0067853` to `0.0054550` and accepted-iteration p90 improves from
+  `100` to `37`, but objective median worsens from `0.16498` to `0.23613`,
+  accepted-iteration median worsens from `11` to `12`, and only `68.7%` of the
+  150 overlap cases reduce objective evaluations. The planned quality and 70%
+  case-level efficiency acceptance gates therefore remain unmet;
 - the 137-case isolated continuation replay completes twice with no failures,
   no non-time artifact mismatch, and no production-policy recommendation;
 - repository lint passes.

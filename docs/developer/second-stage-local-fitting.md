@@ -107,23 +107,23 @@ Each outer attempt performs the following sequence:
 2. Partition the complete selected-atom coupling topology and reconcile the per-cluster
    objective and trust-region states.
 3. Jointly estimate one shared offset per represented group within each cluster
-   using robust IRLS and the fixed `kJointOffsetRidgeRatio`. Guard-aware damping
-   chooses the largest safe shared factor from `1, 1/2, ..., 1/256`; an
-   ineffective or unsafe step fixes only that offset group. A hard joint solve
-   fixes the cluster's offset blocks for the current attempt but does not block
-   shape refits.
+   using robust IRLS and the fixed `kJointOffsetRidgeRatio`. Preserve the finite,
+   undamped endpoint as the offset part of the fixed-point operator. A hard
+   joint solve marks the cluster endpoint unavailable.
 4. Build component-wise group-median models from the post-solve snapshot. For
    each selected atom, subtract its selected neighbors and all effective
    unselected contributors from the observed sample responses.
 5. Refit the atom's local Gaussian with its trained `alpha_r`, using its
-   group-median model as the fixed offset model. Keep that offset fixed while
-   damping only the log-amplitude/log-width path through the same factor list.
-   If no safe material shape step exists, preserve that atom's previous shape;
-   other shape and offset blocks in the component remain eligible. These refits
-   form the guard-aware proposal state.
-6. Limit each cluster's guarded proposal to its trust region and score the resulting
-   endpoint candidate. If the endpoint fails the objective guard, backtrack in
-   the three transformed coordinates within the same outer attempt.
+   group-median model as the fixed offset model. The undamped offset-to-shape
+   result is the complete fixed-point operator endpoint.
+6. Search one geometric factor sequence `1, 1/2, 1/4, ...` for each cluster.
+   Each factor constructs log-shape and shared-physical-offset coordinates,
+   skips candidates outside the trust radius, then applies offset-only and
+   post-refit feasibility guards, and finally the previous/best objective gate.
+   Guard never damps, trust never accepts, and the objective gate never chooses
+   a second independent factor. If every material factor is guard-infeasible,
+   deactivate only the terminal shape or offset-group block and repeat the same
+   search for the remaining blocks. Objective exhaustion rejects the cluster.
 7. For a solver-qualified cluster, attempt one joint
    amplitude/width/offset polish over its active columns. Inactive shapes and
    offset groups decode to the endpoint values and remain fixed background.
@@ -179,10 +179,9 @@ has that key, it keeps its initialization-time global-median seed. The same
 resolver is used by the coupling topology, joint-offset system, local refit,
 objective guards, audit, and final peeling calculation.
 
-This offset solve and neighbor-adjusted local refit constitute one raw
-guard-aware proposal update. These group-median-adjusted entries are temporary
-inputs to the current guarded proposal; they are not persisted as peeling
-sampling entries.
+This offset solve and neighbor-adjusted local refit constitute one undamped
+fixed-point operator update. These group-median-adjusted entries are temporary
+operator inputs; they are not persisted as peeling sampling entries.
 
 The joint-offset parameterization is cluster-local. Atoms with the same group
 key share one offset column when they are in the same coupling cluster. The same
@@ -209,19 +208,19 @@ maximum absolute transformed change among its members. Fixed and quarantined
 coordinates are excluded; mixed-activity groups and non-finite member changes
 fail convergence.
 
-Both the accepted state and guarded proposal state must have a linearly
-interpolated p99 below `1e-4` in all three populations. Maximum transformed
-change remains a diagnostic and topology-drift metric, but is not a convergence
-predicate.
+Production convergence requires accepted active-DOF p99 and complete nominal-
+DOF fixed-point residual p99 below `1e-4`, with solver qualification and all
+orthogonal blockers clear. Maximum transformed change remains a tail diagnostic
+and topology-drift metric, but is not a convergence predicate.
 
-Developer audit builds additionally evaluate the strict fixed-point operator
+The strict fixed-point operator
 `F(S[k])`: one undamped joint-offset solve followed by undamped local shape
-refits using those offsets. If guard damping, fallback, or quarantine changes
-an offset, all selected shapes are refit once in an isolated shadow pass. If an
+refits using those offsets. If production fixed/quarantine handling changes an
+offset, all selected shapes are refit once in an isolated workspace. If an
 unrestricted offset is unavailable, shape residuals are marked unavailable
 rather than replaced with zero. This strict operator uses the nominal selected
 shape and shared-offset DOFs, including fixed and quarantined blocks, and does
-not change the production trajectory or stopping policy.
+is the production residual source.
 
 Production convergence qualification is the existing active-block cluster
 rollup. Solver qualification is a separate developer comparator: active local
@@ -440,8 +439,8 @@ change the stop reason.
   finite zero-offset responses, offset magnitude, center sign flip, and radial
   rebound. Post-refit first requires a valid model and additionally checks width
   growth and amplitude-offset compensation. Guard precedence is unchanged.
-- Every assessment records the selected reason, guard mode, signed normalized
-  margin, damping trial count, and last factor. A one-threshold margin is
+- Every assessment records the selected reason, guard mode, and signed
+  normalized margin. A one-threshold margin is
   `observed / limit - 1`; AND predicates use the minimum constituent margin and
   OR predicates use the maximum. Positive means violated, zero is the boundary,
   negative is safe, and invalid or non-finite inputs use positive infinity.
@@ -458,13 +457,11 @@ change the stop reason.
   uses the same noise estimate, its existing magnitude thresholds, and more
   than one upward excursion. Sign flip and rebound require a trustworthy
   previous radial shape; width growth and amplitude-offset compensation do not.
-- Guard-aware damping tries `1, 1/2, ..., 1/256` in transformed coordinates.
-  Shared-offset members use one common physical-offset factor, and any unsafe
-  member shrinks the whole group. Local refit then holds the accepted group
-  offset fixed and damps only log-amplitude/log-width. A safe step below
-  `kTransformedChangeTolerance` is treated as ineffective and leaves that block
-  fixed. Any damped material update fails production convergence qualification
-  and solver qualification for the attempt.
+- Guard is feasibility-only. The cluster controller owns the sole factor list
+  and applies one common factor to log-shape and shared physical offsets. Trust-
+  inadmissible candidates skip guard and objective evaluation. A full,
+  solver-qualified endpoint below `kTransformedChangeTolerance` is stationary;
+  reaching that tolerance only after factor reduction is step-limited.
 - Failure is block-local. An unsafe offset update fixes the complete shared
   offset group; an unsafe shape update fixes only that atom's amplitude/width;
   and a hard joint-offset solve fixes the cluster's offset blocks while allowing
@@ -519,30 +516,18 @@ earliest state that improves the best objective beyond the strict tolerance.
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
-- the accepted and guarded-proposal active-DOF p99 changes are both below
-  `1e-4`, all clusters are accepted, and no active block is suspicious or
-  unhealthy;
+- accepted active-DOF p99 and complete nominal-DOF fixed-point residual p99 are
+  both below `1e-4`, every solver is qualified, all clusters are accepted, and
+  no orthogonal blocker is present;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
-- an all-rejected attempt reaches one of the no-progress resolutions below;
+- an all-rejected attempt terminates after shrinking its radius state once;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
-On an all-rejected attempt, the iteration limit has the highest resolution
-priority. Otherwise, rejected clusters are partitioned into objective-
-backtracking-exhausted and radius-retryable sets. If any retryable radius
-shrinks, the stage continues. When none can shrink, the stop reason is:
-
-- `all-rejected-backtracking-exhausted` when every rejected cluster is
-  exhausted;
-- `all-rejected-minimum-radius` when there are no exhausted clusters and every
-  rejected cluster is radius-retryable and saturated at the minimum radius;
-- `all-rejected-no-retry-progress` when exhausted and saturated retryable
-  clusters are both present.
-
-Numerical and invalid-model rejections that cannot perform objective
-backtracking retain the minimum-radius retry behavior. Trust-radius shrink
-retries do not consume audit patience while a rejected cluster's radius is
-still changing.
+An all-rejected attempt does not rerun the unchanged `S[k]`. Each terminal
+rejection shrinks the stored radius once for a future state, then stops with
+`all-rejected-backtracking-exhausted` unless the outer iteration limit has
+priority.
 
 Convergence writes the current accepted state. Audit-patience, minimum-radius
 all-reject, backtracking-exhaustion, no-retry-progress, and iteration-limit
@@ -558,7 +543,7 @@ blocks from converging or being written.
 After the stopping policy selects the final validated state, the stage builds
 one atom-level snapshot from the MDPDE model stored in each selected result.
 This is the actual best-audit or latest-validated state chosen for application
-according to the stopping condition, not the last guarded proposal and not a
+according to the stopping condition, not the operator endpoint and not a
 group-median snapshot.
 
 For every selected atom, the stage then rebuilds its persistent peeling
@@ -638,10 +623,10 @@ These counters are diagnostic evidence rather than acceptance thresholds.
 
 After valid seeds are available, non-quiet runs print a compact header and
 update one progress row per outer attempt with `Logger::ProgressLine`. An outer
-attempt may be an accepted iteration or an all-rejected trust-region retry, so
-`Try` can advance without `Acc`. The header and progress rows use the same
+attempt may be accepted or terminally rejected, so `Try` can advance without
+`Acc`. The header and progress rows use the same
 fixed column widths, including enough space for both scientific-notation
-values in `dMax A/G`.
+values in `dMax A/F`.
 
 | Column | Meaning after the current outer attempt |
 |---|---|
@@ -650,7 +635,7 @@ values in `dMax A/G`.
 | `Cluster A/R` | Accepted / rejected candidate clusters |
 | `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after component reconciliation and the final global guard; `E = A + R + S` |
 | `Suspicious` | Atoms with at least one shape, offset, or hard-failure block fixed in this attempt |
-| `dMax A/G` | Maximum transformed change in the accepted/guarded-proposal state; accepted is `-` on an all-rejected attempt |
+| `dMax A/F` | Maximum transformed change in the accepted/fixed-point operator state; accepted is `-` on an all-rejected attempt |
 
 Objective-domain startup diagnostics report the weights, cluster and unique
 fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
@@ -668,11 +653,10 @@ direct-interface/shape-active/offset-active/offset-closure/parameter counts, sus
 solver status,
 damping, maximum normalized trust step, strict-improvement reference/candidate
 objectives, acceptance result, and endpoint-fallback outcome. An all-rejected
-debug record reports
-`exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
-stop classification can be audited directly. Guard-aware debug records report
-each affected atom's reason, margin, mode-derived factor/trial count, and fixed
-shape/offset/hard block. Completion warnings report cumulative quarantine
+debug record reports unified trial dispositions, terminal category, radius
+action, and stop classification. Operator-assessment debug records report each
+affected atom's reason, margin, and fixed shape/offset/hard block. Completion
+warnings report cumulative quarantine
 entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
 

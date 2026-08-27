@@ -317,17 +317,17 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                 path.name for path in case_directory.iterdir()
             }
             trajectory = json.loads(
-                (case_directory / "trajectory-schema-6.json").read_text(
+                (case_directory / "trajectory-schema-7.json").read_text(
                     encoding="utf-8"))
 
         self.assertEqual(summary["status"], "complete")
         self.assertTrue({
-            "run.log", "scenario-truth.json", "trajectory-schema-6.json",
+            "run.log", "scenario-truth.json", "trajectory-schema-7.json",
             "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
             "shadow-continuation-schema-2.json",
             "case-summary.json",
         }.issubset(artifact_names))
-        self.assertEqual(trajectory["schema_version"], 6)
+        self.assertEqual(trajectory["schema_version"], 7)
 
     def test_runner_isolates_failed_case(self) -> None:
         case = {

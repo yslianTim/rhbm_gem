@@ -1,8 +1,7 @@
 # Counterfactual convergence continuation audit
 
-> Current baseline (2026-08-28): production uses its existing convergence
-> qualification plus accepted/guarded-proposal active-DOF p99. Schema-3
-> continuation also evaluates the strict fixed-point operator in shadow.
+> Current baseline (2026-08-28): production uses solver qualification plus
+> accepted active-DOF and complete nominal-DOF fixed-point residual p99.
 
 ## Purpose and isolation boundary
 
@@ -72,7 +71,7 @@ Debug output uses an independent schema:
 
 The checkpoint also reports multi-member shared groups, the distribution of
 `Hmin/Hmedian`, and how often the weakest-peak member supplies the largest raw
-offset/peak change. The analyzer joins these records with the schema-6
+offset/peak change. The analyzer joins these records with the schema-7
 trajectory aggregation, which retains solver/path strata, active population
 sizes, strict-operator availability and tail evidence, `N<=91`
 p99-to-maximum evidence, and unique blockers.
@@ -99,7 +98,7 @@ regular runner now parses both the legacy one-line and current multiline
 second-stage summaries without changing its command template.
 
 The observed fold-168 trajectory has seven accepted iterations and stops with
-`audit-patience`. The refreshed schema-6 records have converged joint solves,
+`audit-patience`. The refreshed schema-7 records have converged joint solves,
 no quarantine, and no production convergence checkpoint. Therefore the
 build-gated run correctly reports
 `no_convergence_trigger`; it does not suppress audit patience or manufacture a

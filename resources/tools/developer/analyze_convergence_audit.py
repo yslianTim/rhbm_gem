@@ -83,6 +83,19 @@ def _integers(value: str) -> list[int]:
     return [int(float(item)) for item in value.rstrip(".").split("/")]
 
 
+def summary_field_names(record: dict[str, str], track: str) -> tuple[str, ...]:
+    if record.get("schema") == "7":
+        accepted_prefix = (
+            "legacy" if track == "legacy_population" else "production")
+        return (
+            f"{accepted_prefix}-accepted-p99",
+            f"{accepted_prefix}-accepted-max",
+            "fixed-point-residual-p99",
+            "fixed-point-residual-max",
+        )
+    return SUMMARY_FIELDS[track]
+
+
 def parse_record(line: str) -> dict[str, str] | None:
     marker_position = line.find(MARKER)
     if marker_position < 0:
@@ -92,7 +105,8 @@ def parse_record(line: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip()
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "6":
+    schema = fields.get("schema")
+    if schema not in {"6", "7"}:
         return None
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
         "qualification",
@@ -109,6 +123,8 @@ def parse_record(line: str) -> dict[str, str] | None:
         "residual-state",
         "limiters",
     }
+    if schema == "7":
+        required.add("unified-search")
     if not required.issubset(fields):
         missing = ", ".join(sorted(required - fields.keys()))
         raise ValueError(f"Convergence audit record is missing: {missing}")
@@ -255,7 +271,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         for track, population_field in POPULATION_FIELDS.items():
             populations = _integers(record[population_field])
             accepted_p99, accepted_max, residual_p99, residual_max = (
-                _numbers(record[field]) for field in SUMMARY_FIELDS[track]
+                _numbers(record[field]) for field in summary_field_names(record, track)
             )
             for coordinate, population_size in enumerate(populations):
                 size_bin = "N<=91" if population_size <= 91 else "N>91"
@@ -294,7 +310,11 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             name for name, count in zip(joint_status_names, joint_status) if count
         ) or "none"
         _record_stratum(strata, "solver_status", solver_label, actual_exposure)
-        path_names = ("trust", "backtrack", "polish", "boundary", "rescue")
+        path_names = (
+            ("limited", "polish", "boundary", "rescue")
+            if record.get("schema") == "7"
+            else ("trust", "backtrack", "polish", "boundary", "rescue")
+        )
         active_paths = [name for name, count in zip(path_names, path) if count]
         _record_stratum(
             strata,
@@ -412,7 +432,8 @@ def format_markdown(report: dict[str, object]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("log", type=Path, help="Debug log containing schema=6 audit records")
+    parser.add_argument(
+        "log", type=Path, help="Debug log containing schema=6 or schema=7 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

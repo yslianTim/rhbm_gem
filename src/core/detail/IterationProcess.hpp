@@ -267,8 +267,18 @@ struct QuarantineTarget
     friend auto operator<=>(const QuarantineTarget &, const QuarantineTarget &) = default;
 };
 
+struct StabilizationTerminalFailure
+{
+    StabilizationTerminalReason category{ StabilizationTerminalReason::None };
+    std::optional<SuspiciousGaussianReason> guard_reason{};
+
+    friend auto operator<=>(
+        const StabilizationTerminalFailure &,
+        const StabilizationTerminalFailure &) = default;
+};
+
 using QuarantineFailureReason =
-    std::variant<SuspiciousGaussianReason, JointOffsetSolveStatus>;
+    std::variant<JointOffsetSolveStatus, StabilizationTerminalFailure>;
 
 struct QuarantineFailureObservation
 {

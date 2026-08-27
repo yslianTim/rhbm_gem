@@ -45,21 +45,13 @@ struct TrustRegionIterationUpdate
 
 enum class AllRejectedResolution
 {
-    Retry,
     MaximumIterations,
-    BacktrackingExhausted,
-    MinimumRadius,
-    NoRetryProgress
+    BacktrackingExhausted
 };
 
 RejectedClusterPartition PartitionRejectedClusters(
     const std::vector<ClusterKey> & rejected_key_list,
     const std::vector<ClusterKey> & exhausted_key_list);
-
-AllRejectedResolution ResolveAllRejected(
-    bool maximum_iterations_reached,
-    const RejectedClusterPartition & partition,
-    const TrustRegionRadiusUpdate & radius_update);
 
 class TrustRegionStateSet
 {
@@ -150,8 +142,6 @@ struct SuspiciousGaussianAssessment
     SuspiciousGaussianReason reason{ SuspiciousGaussianReason::None };
     SuspiciousUpdateMode mode{ SuspiciousUpdateMode::PostRefit };
     double normalized_margin{ -std::numeric_limits<double>::infinity() };
-    std::size_t damping_trial_count{ 1 };
-    double damping_factor{ 1.0 };
 
     bool IsSuspicious() const { return reason != SuspiciousGaussianReason::None; }
 };
@@ -337,6 +327,22 @@ enum class PreObjectiveFailureReason
     NoCandidateWithinTrustRegion
 };
 
+enum class StabilizationTerminalReason
+{
+    None,
+    GuardInfeasible,
+    ObjectiveExhausted,
+    InvalidCandidate
+};
+
+struct StabilizationTerminalDiagnostic
+{
+    StabilizationTerminalReason reason{ StabilizationTerminalReason::None };
+    std::optional<std::size_t> guard_atom_index{};
+    std::optional<SuspiciousUpdateMode> guard_mode{};
+    std::optional<SuspiciousGaussianReason> guard_reason{};
+};
+
 struct ObjectiveScale
 {
     double fit{ 0.0 };
@@ -345,7 +351,7 @@ struct ObjectiveScale
 
 struct ObjectiveAttemptDiagnostic
 {
-    double effective_damping{ 1.0 };
+    double accepted_factor{ 1.0 };
     bool is_invalid_model{ false };
     PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
     std::optional<double> pre_objective_attempted_step_norm{};
@@ -362,6 +368,11 @@ struct ObjectiveAttemptDiagnostic
     std::size_t backtracking_trial_count{ 0 };
     std::optional<double> accepted_backtracking_factor{};
     bool backtracking_exhausted{ false };
+    std::size_t invalid_trial_count{ 0 };
+    std::size_t trust_skipped_trial_count{ 0 };
+    std::size_t guard_rejected_trial_count{ 0 };
+    std::size_t objective_rejected_trial_count{ 0 };
+    std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list{};
 };
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
@@ -567,6 +578,7 @@ struct CandidateSelection
     std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
     std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<ClusterKey> grow_trust_region_key_list{};
+    std::vector<ClusterKey> shrink_trust_region_key_list{};
     std::vector<ClusterKey> backtracking_exhausted_key_list{};
     std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
@@ -582,12 +594,11 @@ struct CandidateSelectionInputs
     const ClusterHealthMap & health_by_key;
     const FitState & previous_state;
     const PolishProvenance & previous_polish_provenance;
-    const FitState & guarded_proposal_state;
+    const FitState & operator_proposal_state;
     const SuspiciousUpdateMask & rollback_atom_mask;
-    const SuspiciousBlockActivity & block_activity;
+    SuspiciousBlockActivity & block_activity;
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom;
     const std::vector<double> & ridge_multiplier_list;
-    std::span<const ClusterKey> unchanged_state_exhausted_key_list;
     const ObjectiveDomain & objective_domain;
     const ObjectiveByKey & previous_objective_by_key;
     ClusterObjectiveStateMap & cluster_objective_state;

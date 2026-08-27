@@ -1,27 +1,24 @@
 # Second-stage convergence safeguard audit
 
-> Current baseline (2026-08-28): production requires its existing active-block
-> convergence qualification plus accepted/guarded-proposal active-DOF p99 below `1e-4`. Maximum change
-> remains diagnostic and drives topology-drift checks, but is not a convergence
-> predicate. A strict fixed-point operator is now collected as shadow evidence;
-> the first-round measurements below remain historical evidence.
+> Current baseline (2026-08-28): production requires solver qualification,
+> accepted active-DOF p99 below `1e-4`, and a complete nominal-DOF fixed-point
+> residual p99 below `1e-4`. Maximum remains a tail diagnostic. The first-round
+> measurements below remain historical evidence.
 
 ## Current resolution
 
 - Retain accepted-state p99 because post-raw correction can move a committed
   state after a small raw endpoint.
-- Retain guarded-proposal p99 because trust clipping, backtracking, or rejection can
-  hide a material raw residual from the accepted step.
-- Record strict operator residual p99/maximum separately. It is computed before
-  guard damping, fallback, freeze, trust limiting, objective gates, and polish.
+- Use strict operator residual p99 as the production residual predicate. It is
+  computed before guard feasibility, terminal freeze, trust limiting, objective
+  gates, and polish.
   Unavailable nominal DOFs produce a restricted classification, not a zero.
 - Evaluate both summaries over active optimization DOFs. Fixed and quarantined
   coordinates do not dilute the population, and each shared offset contributes
   one group-level sample.
-- Remove accepted/guarded-proposal maximum from the production stopping conjunction. The
+- Remove accepted/operator maximum from the production stopping conjunction. The
   historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
-- Keep solver qualification diagnostic-only until continuation demonstrates a
-  material objective or truth-error benefit.
+- Require solver qualification in production.
 
 ## Historical purpose and scope
 
@@ -102,7 +99,7 @@ parallel selection and for behavioral neutrality between Info and Debug runs.
 
 ## Current Debug trace contract
 
-At Debug verbosity (`-v 4`) every accepted attempt emits schema `6` on a line
+At Debug verbosity (`-v 4`) every accepted attempt emits schema `7` on a line
 beginning with `Convergence safeguard audit:`. The record contains:
 
 - attempt, accepted iteration, selected/quarantined population;
@@ -110,15 +107,16 @@ beginning with `Convergence safeguard audit:`. The record contains:
   population sizes for all three coordinates;
 - production, `legacy-population`, `legacy-maximum`, and `solver-qualified`
   predicate vectors;
-- accepted, guarded-proposal, and fixed-point-residual p99/maximum values;
+- accepted and fixed-point-residual p99/maximum values;
 - strict-operator unavailable and sparse-tail counts plus residual-state
   classification;
 - isolated stop-candidate and exposure flags for five comparators;
-- whether accepted and guarded-proposal states are equal;
-- trust limiting, backtracking, polish, boundary, and rescue path counts;
+- whether accepted and operator states are equal;
+- unified-search invalid, trust-skipped, guard-rejected, objective-rejected,
+  accepted-factor, and terminal counts, plus polish, boundary, and rescue paths;
 - production and solver qualification, exact local-refit status counts, and
   joint-solver status counts;
-- fixed-block, damping, suspicious, rejection, quarantine-transition, and
+- fixed-block, suspicious, rejection, quarantine-transition, and
   objective-domain-change counts.
 
 These stable key/value fields support pairwise 2×2 tables, implication
