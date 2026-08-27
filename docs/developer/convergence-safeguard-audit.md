@@ -1,7 +1,7 @@
 # Second-stage convergence safeguard audit
 
-> Current baseline (2026-08-27): production requires current active-block
-> stationarity plus accepted/raw active-DOF p99 below `1e-4`. Maximum change
+> Current baseline (2026-08-27): production requires its existing active-block
+> convergence qualification plus accepted/raw active-DOF p99 below `1e-4`. Maximum change
 > remains diagnostic and drives topology-drift checks, but is not a convergence
 > predicate. The first-round measurements below remain historical evidence.
 
@@ -16,7 +16,7 @@
   one group-level sample.
 - Remove accepted/raw maximum from the production stopping conjunction. The
   historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
-- Keep strict stationarity diagnostic-only until continuation demonstrates a
+- Keep solver qualification diagnostic-only until continuation demonstrates a
   material objective or truth-error benefit.
 
 ## Historical purpose and scope
@@ -94,20 +94,21 @@ parallel selection and for behavioral neutrality between Info and Debug runs.
 
 ## Current Debug trace contract
 
-At Debug verbosity (`-v 4`) every accepted attempt emits schema `4` on a line
+At Debug verbosity (`-v 4`) every accepted attempt emits schema `5` on a line
 beginning with `Convergence safeguard audit:`. The record contains:
 
 - attempt, accepted iteration, selected/quarantined population;
-- production active-DOF, legacy all-selected, and active-member population
-  sizes for all three coordinates;
-- production, `legacy-population`, `legacy-maximum`, and `strict-dof`
+- production active-DOF and legacy all-selected population sizes for all three
+  coordinates;
+- production, `legacy-population`, `legacy-maximum`, and `solver-qualified`
   predicate vectors;
-- accepted/raw p99 and diagnostic maximum values for every population;
+- accepted/raw p99 and diagnostic maximum values for production and legacy
+  populations;
 - isolated stop-candidate and exposure flags for the three comparators;
 - whether accepted and raw states are equal;
 - trust limiting, backtracking, polish, boundary, and rescue path counts;
-- current/full stationarity, exact local-refit status counts, and soft/hard
-  joint status counts;
+- production and solver qualification, exact local-refit status counts, and
+  joint-solver status counts;
 - fixed-block, damping, suspicious, rejection, quarantine-transition, and
   objective-domain-change counts.
 
@@ -141,7 +142,9 @@ offset changes.
 
 The subsequent audits completed this follow-up. Production now uses the
 preferred active-DOF population without a maximum gate; the accepted/raw and
-stationarity independence results remain valid.
+qualification independence results remain valid. The active-member comparison
+was retired after the shared-DOF population became authoritative; its results
+above remain historical evidence only.
 
 The external fold-168 regression remains optional for this round because its
 model and map inputs are not stored in the repository. When hash-matching inputs
@@ -155,7 +158,7 @@ changing the fitting configuration.
 - Audit-disabled CTest passes 19/19, including the external fold-168 regression.
 - Both fold-168 runs stop after seven accepted iterations with
   `audit-patience`; the audit report is `no_convergence_trigger` with zero
-  legacy-population, maximum-gate, and strict-stationarity exposures.
+  legacy-population, maximum-gate, and solver-qualification exposures.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical, and repository lint passes.
 - The 600-case exposure corpus was not rerun.

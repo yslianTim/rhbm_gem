@@ -355,14 +355,14 @@ void ResetClusterSolverWorkspace(
     }
 }
 
-bool AreClustersStationarityEligible(const ClusterHealthMap & health_by_key)
+bool AreClustersSolverQualified(const ClusterHealthMap & health_by_key)
 {
     return std::ranges::all_of(
         health_by_key | std::views::values,
-        &ClusterHealth::IsStationarityEligible);
+        &ClusterHealth::IsSolverQualified);
 }
 
-bool IsLocalRefitStatusStationarityEligible(RHBMEstimationStatus status)
+bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status)
 {
     switch (status)
     {

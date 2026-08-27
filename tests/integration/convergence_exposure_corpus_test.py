@@ -55,7 +55,7 @@ def case_summary(
     case_id: str,
     legacy_population: bool,
     maximum_gate: bool,
-    strict_stationarity: bool,
+    solver_qualification: bool,
     candidate_objective: float = 0.998,
     candidate_truth: float = 0.08,
 ) -> dict[str, object]:
@@ -63,7 +63,7 @@ def case_summary(
         "production": policy(1.0, 0.1),
         "legacy-population": policy(candidate_objective, candidate_truth, 2),
         "legacy-maximum": policy(candidate_objective, candidate_truth, 2),
-        "strict-dof": policy(candidate_objective, candidate_truth, 2),
+        "solver-qualified": policy(candidate_objective, candidate_truth, 2),
     }
     return {
         "status": "complete",
@@ -80,7 +80,7 @@ def case_summary(
                 "exposures": {
                     "legacy_population": legacy_population,
                     "maximum_gate": maximum_gate,
-                    "strict_stationarity": strict_stationarity,
+                    "solver_qualification": solver_qualification,
                 },
                 "policies": policies,
             }],
@@ -122,7 +122,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         text = "\n".join((
             "Convergence exposure truth: schema=1, case=x, serial=1, "
             "amplitude=6, width=0.5, offset=0.1.",
-            "[Debug] Counterfactual convergence atom: schema=2, "
+            "[Debug] Counterfactual convergence atom: schema=3, "
             "experiment=1-1, policy=production, serial=1, "
             "amplitude=6, width=0.5, offset=0.1",
         ))
@@ -147,7 +147,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertEqual(len(report["replay_case_ids"]), 15)
         self.assertFalse(report["corpus_target_met"])
         self.assertEqual(
-            report["policy_decisions"]["strict-dof"]["benefit_ratio"], 1.0)
+            report["policy_decisions"]["solver-qualified"]["benefit_ratio"], 1.0)
         self.assertEqual(
             report["maximum_evidence"]["production"]
             ["accepted:N<=91:samples"], 30)
@@ -159,12 +159,12 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         harmful = case_summary("harm", False, False, True, 1.01, 0.12)
         harmful["safety_regression"] = True
         report = ANALYZER.analyze([harmful])
-        outcome = report["cases"][0]["outcomes"]["strict-dof"]
+        outcome = report["cases"][0]["outcomes"]["solver-qualified"]
 
         self.assertEqual(outcome["category"], "material-harm")
         self.assertTrue(outcome["safety_regression"])
         self.assertFalse(
-            report["policy_decisions"]["strict-dof"][
+            report["policy_decisions"]["solver-qualified"][
                 "redesign_candidate"])
 
     def test_analyzer_keeps_agreement_and_no_trigger_as_controls(self) -> None:
@@ -190,18 +190,19 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         budget = case_summary("budget", False, False, True)
         budget_experiment = budget["audit"]["experiments"][0]
         budget_experiment["termination_reason"] = "budget-exhausted"
-        budget_experiment["policies"]["strict-dof"] = {"reached": False}
+        budget_experiment["policies"]["solver-qualified"] = {"reached": False}
         safeguarded = case_summary("safeguarded", False, False, True)
         safeguard_experiment = safeguarded["audit"]["experiments"][0]
         safeguard_experiment["termination_reason"] = "audit-patience"
-        safeguard_experiment["policies"]["strict-dof"] = {"reached": False}
+        safeguard_experiment["policies"]["solver-qualified"] = {"reached": False}
 
         self.assertEqual(
-            ANALYZER.classify_policy_outcome(budget, "strict-dof")["category"],
+            ANALYZER.classify_policy_outcome(
+                budget, "solver-qualified")["category"],
             "unresolved-budget-exhausted")
         self.assertEqual(
             ANALYZER.classify_policy_outcome(
-                safeguarded, "strict-dof")["category"],
+                safeguarded, "solver-qualified")["category"],
             "terminated-existing-safeguard")
 
     def test_runner_resumes_completed_case(self) -> None:
@@ -214,17 +215,26 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             case_directory = (
                 Path(temp_directory) / "cases" / case["case_id"])
             case_directory.mkdir(parents=True)
-            expected = {
-                "schema_version": RUNNER.CASE_SUMMARY_SCHEMA_VERSION,
+            legacy = {
+                "schema_version": 5,
                 "status": "complete", "case": case, "thread_count": 1,
             }
-            RUNNER.write_json(case_directory / "case-summary.json", expected)
-            with mock.patch.object(RUNNER.subprocess, "run") as run_mock:
+            RUNNER.write_json(case_directory / "case-summary.json", legacy)
+            with mock.patch.object(
+                    RUNNER.subprocess, "run",
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, stdout=b"")) as initial_run_mock:
+                expected = RUNNER.run_case(
+                    Path("unused"), case, Path(temp_directory), 1)
+            with mock.patch.object(RUNNER.subprocess, "run") as resume_run_mock:
                 actual = RUNNER.run_case(
                     Path("unused"), case, Path(temp_directory), 1)
 
         self.assertEqual(actual, expected)
-        run_mock.assert_not_called()
+        self.assertEqual(
+            actual["schema_version"], RUNNER.CASE_SUMMARY_SCHEMA_VERSION)
+        initial_run_mock.assert_called_once()
+        resume_run_mock.assert_not_called()
 
     def test_runner_writes_complete_case_artifacts(self) -> None:
         case = {
@@ -250,8 +260,8 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
 
         self.assertEqual(summary["status"], "complete")
         self.assertTrue({
-            "run.log", "scenario-truth.json", "trajectory-schema-4.json",
-            "counterfactual-schema-2.json", "case-summary.json",
+            "run.log", "scenario-truth.json", "trajectory-schema-5.json",
+            "counterfactual-schema-3.json", "case-summary.json",
         }.issubset(artifact_names))
 
     def test_runner_isolates_failed_case(self) -> None:

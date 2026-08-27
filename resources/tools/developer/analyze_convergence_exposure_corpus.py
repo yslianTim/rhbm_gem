@@ -17,7 +17,7 @@ RELATIVE_TOLERANCE = 1.0e-3
 POLICY_EXPOSURES = {
     "legacy-population": "legacy_population",
     "legacy-maximum": "maximum_gate",
-    "strict-dof": "strict_stationarity",
+    "solver-qualified": "solver_qualification",
 }
 MINIMUM_TOTAL_EXPOSURES = 15
 MINIMUM_EXPOSURES_PER_FAMILY = 5
@@ -147,7 +147,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     termination_counts: Counter[str] = Counter()
     maximum_evidence: dict[str, Counter[str]] = {
         population: Counter() for population in (
-            "production", "legacy_population", "strict_dof", "active_member")
+            "production", "legacy_population", "solver_qualified")
     }
     for summary in summaries:
         exposure_class = classify_exposure(summary)
@@ -258,7 +258,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "aggregate_raw_median_regression": aggregate_raw_median_regression,
             "safety_regression_count": safety_regressions,
             (
-                "redesign_candidate" if policy == "strict-dof" else
+                "redesign_candidate" if policy == "solver-qualified" else
                 "rollback_candidate"
             ): candidate,
         }
@@ -285,7 +285,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         for values in shortfall.values()
     )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "case_count": len(summaries),
         "genuine_exposure_count": genuine_exposure_count,
         "exposure_counts": dict(sorted(exposure_counts.items())),

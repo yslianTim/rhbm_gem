@@ -1,13 +1,14 @@
 # Counterfactual convergence continuation audit
 
-> Current baseline (2026-08-27): production uses current stationarity plus
-> accepted/raw active-DOF p99. Schema-2 continuation isolates the former
-> all-selected population, the removed maximum gate, and strict stationarity.
+> Current baseline (2026-08-27): production uses its existing convergence
+> qualification plus accepted/raw active-DOF p99. Schema-3 continuation
+> isolates the former all-selected population, the removed maximum gate, and
+> solver qualification.
 
 ## Purpose and isolation boundary
 
 This audit asks whether continuing past a current production convergence stop
-under one isolated legacy or strict comparator yields material progress. It
+under one isolated legacy or solver-qualified comparator yields material progress. It
 follows the
 [stationarity and active-coordinate audit](stationarity-active-coordinate-audit.md).
 
@@ -30,10 +31,10 @@ One continuation trajectory evaluates the first stop checkpoint for:
 
 | Policy | Stationarity | Change population |
 | --- | --- | --- |
-| `production` | Current active-block eligibility | Active shared DOFs; p99 only |
-| `legacy-population` | Current active-block eligibility | All selected atoms; p99 only |
-| `legacy-maximum` | Current active-block eligibility | Active shared DOFs; p99 plus accepted/raw maximum `< 1e-3` |
-| `strict-dof` | Strict active-block qualification | Active shape members and shared-offset DOFs |
+| `production` | Production convergence qualification | Active shared DOFs; p99 only |
+| `legacy-population` | Production convergence qualification | All selected atoms; p99 only |
+| `legacy-maximum` | Production convergence qualification | Active shared DOFs; p99 plus accepted/raw maximum `< 1e-3` |
+| `solver-qualified` | Active-block solver qualification | Active shape atoms and shared-offset DOFs |
 
 The legacy-population comparator includes fixed and quarantined zero changes.
 The legacy-maximum comparator stays on active DOFs so it isolates only the
@@ -57,20 +58,20 @@ cross-policy `delta J` does not confound fit progress with a changing domain.
 
 Debug output uses an independent schema:
 
-- `Counterfactual convergence checkpoint: schema=2` records policy, attempt,
+- `Counterfactual convergence checkpoint: schema=3` records policy, attempt,
   elapsed continuation time, activity/domain sizes, latest and best-audit
   objectives, final-polish result, population, and accepted/raw median, p99,
   and maximum transformed changes.
-- `Counterfactual convergence atom: schema=2` records the finalized
+- `Counterfactual convergence atom: schema=3` records the finalized
   amplitude, width, and offset by atom serial ID together with group,
   shape/offset activity, and quarantine state.
-- `Counterfactual convergence termination: schema=2` records policy
+- `Counterfactual convergence termination: schema=3` records policy
   completion, budget exhaustion, or the unchanged production safeguard that
   ended continuation.
 
 The checkpoint also reports multi-member shared groups, the distribution of
 `Hmin/Hmedian`, and how often the weakest-peak member supplies the largest raw
-offset/peak change. The analyzer joins these records with the schema-4
+offset/peak change. The analyzer joins these records with the schema-5
 trajectory aggregation, which retains solver/path strata, active population
 sizes, `N<=91` p99-to-maximum evidence, and unique blockers.
 
@@ -96,7 +97,7 @@ regular runner now parses both the legacy one-line and current multiline
 second-stage summaries without changing its command template.
 
 The observed fold-168 trajectory has seven accepted iterations and stops with
-`audit-patience`. The refreshed schema-4 records have converged joint solves,
+`audit-patience`. The refreshed schema-5 records have converged joint solves,
 no quarantine, and no production convergence checkpoint. Therefore the
 build-gated run correctly reports
 `no_convergence_trigger`; it does not suppress audit patience or manufacture a
@@ -123,7 +124,7 @@ ctest --test-dir build/counterfactual-audit \
 
 - Restoring the legacy population or maximum gate requires a real isolated
   exposure followed by repeatable material benefit without a new failure.
-- Promoting strict stationarity uses the same requirement but is reported as a
+- Promoting solver qualification uses the same requirement but is reported as a
   redesign candidate rather than a rollback candidate.
 - A predicate mismatch without continuation benefit remains semantic evidence,
   not observed quality loss.
@@ -131,13 +132,13 @@ ctest --test-dir build/counterfactual-audit \
   shadow-only.
 - Maximum remains diagnostic; only the `legacy-maximum` comparator can delay an
   audit build after a production convergence checkpoint.
-- An empty active set remains restricted/all-fixed termination, not full
-  convergence.
+- An empty active set remains labelled restricted/all-fixed; this diagnostic
+  classification does not add a production stop condition.
 
 The current fold-168 result is a valid negative control but supplies no evidence
 for changing production convergence. A representative trajectory with an
 actual production convergence exposure is still required before any rollback
-or strict-stationarity redesign.
+or solver-qualification redesign.
 
 The targeted discovery and cross-case outcome rules are continued in the
 [convergence exposure and counterfactual outcome audit](convergence-exposure-counterfactual-outcome-audit.md).
@@ -146,7 +147,7 @@ The targeted discovery and cross-case outcome rules are continued in the
 
 - Audit-enabled CTest passes 21/21; audit-disabled CTest passes 19/19.
 - Fold-168 stops after seven accepted iterations with `audit-patience` in both
-  builds. Schema-4 aggregation reports seven records, no convergence trigger,
+  builds. Schema-5 aggregation reports seven records, no convergence trigger,
   and zero exposures for all three comparators.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical; repository lint passes.

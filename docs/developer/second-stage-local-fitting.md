@@ -12,7 +12,7 @@ never added to the optimizer state.
 The implication and redundancy review of the stopping predicates is recorded
 in [Second-stage convergence safeguard audit](convergence-safeguard-audit.md).
 Its shadow-only follow-up is the
-[stationarity and active-coordinate population audit](stationarity-active-coordinate-audit.md).
+[solver-qualification and active-coordinate population audit](stationarity-active-coordinate-audit.md).
 The third-round causal experiment is the
 [counterfactual convergence continuation audit](counterfactual-convergence-continuation-audit.md).
 
@@ -124,7 +124,7 @@ Each outer attempt performs the following sequence:
 6. Limit each cluster's raw proposal to its trust region and score the resulting
    endpoint candidate. If the endpoint fails the objective guard, backtrack in
    the three transformed coordinates within the same outer attempt.
-7. For a stationarity-eligible cluster, attempt one joint
+7. For a solver-qualified cluster, attempt one joint
    amplitude/width/offset polish over its active columns. Inactive shapes and
    offset groups decode to the endpoint values and remain fixed background.
    Keep the polish only when it strictly improves the base candidate on the
@@ -212,6 +212,13 @@ Both the accepted state and raw fixed-point state must have a linearly
 interpolated p99 below `1e-4` in all three populations. Maximum transformed
 change remains a diagnostic and topology-drift metric, but is not a convergence
 predicate.
+
+Production convergence qualification is the existing active-block cluster
+rollup. Solver qualification is a separate developer comparator: active local
+shape refits must report `SUCCESS`, active shared offsets must report
+`Converged`, and both require a full undamped, non-fallback endpoint. A usable
+soft endpoint may continue through candidate selection without being solver
+qualified. This distinction does not change the production stopping policy.
 
 The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
@@ -360,7 +367,7 @@ endpoint offset. Candidate guards inspect only materially changed active blocks,
 while fixed-block invariants require every inactive value to remain bitwise at
 its endpoint. IRLS objective deterioration, IRLS iteration exhaustion, and valid
 non-success local estimation statuses may participate. Local joint polish still
-requires full stationarity. Every eligible accepted-only or rescue boundary
+requires full solver qualification. Every eligible accepted-only or rescue boundary
 component receives at most one correction attempt per outer iteration.
 
 Before a joint-correction candidate is accepted, neighbor-adjusted profiles are
@@ -446,7 +453,8 @@ change the stop reason.
   member shrinks the whole group. Local refit then holds the accepted group
   offset fixed and damps only log-amplitude/log-width. A safe step below
   `kTransformedChangeTolerance` is treated as ineffective and leaves that block
-  fixed. Any damped material update is stationarity-ineligible for the attempt.
+  fixed. Any damped material update fails production convergence qualification
+  and solver qualification for the attempt.
 - Failure is block-local. An unsafe offset update fixes the complete shared
   offset group; an unsafe shape update fixes only that atom's amplitude/width;
   and a hard joint-offset solve fixes the cluster's offset blocks while allowing

@@ -1,8 +1,8 @@
 # Stationarity semantics and active-coordinate population audit
 
 > Current baseline (2026-08-27): active shared-DOF p99 is the production
-> convergence population, maximum change is diagnostic-only, and strict
-> stationarity remains a counterfactual comparator.
+> convergence population, maximum change is diagnostic-only, and solver
+> qualification remains a counterfactual comparator.
 
 ## Current resolution
 
@@ -13,8 +13,9 @@ shared-group activity and non-finite member changes fail convergence. This
 removes fixed-zero dilution and group-size weighting without changing the p99
 threshold.
 
-Current stationarity remains `ClusterHealth::is_active_block_stationarity_eligible`.
-Strict qualification is retained in Debug/audit builds as `strict-dof`; it is
+Production convergence qualification remains
+`ClusterHealth::production_convergence_qualified`. Solver qualification is
+retained in Debug/audit builds as `solver-qualified`; it is
 not promoted without continuation evidence of material benefit.
 
 ## Purpose and constraints
@@ -24,7 +25,7 @@ This is the second-round convergence safeguard audit for
 [first-round audit](convergence-safeguard-audit.md) and compares two shadow
 definitions against the production convergence gate:
 
-- convergence-qualified stationarity for truly active parameter blocks;
+- solver qualification for truly active parameter blocks;
 - active-member and independent shared-offset-DOF change populations.
 
 The audit is observation-only. It does not change the production conjunction,
@@ -35,32 +36,33 @@ At the time of this audit, the implementation still computed production p99
 and maximum from every selected atom even though the algorithm description
 specified active-coordinate semantics. That discrepancy is now resolved.
 
-## Stationarity semantics
+## Qualification semantics
 
 Activity and qualification are separate axes:
 
-| Activity | Meaning | Included in strict conjunction |
+| Activity | Meaning | Included in solver-qualified conjunction |
 | --- | --- | --- |
 | Active | The block remains eligible to move this attempt. | Yes |
 | Fixed | A current failure or fallback removed the block from the active parameterization. | No; reported as restricted state |
 | Quarantined | A stage-local quarantine mask fixed the block. | No; reported as restricted state |
 
-| Qualification | Shape atom | Shared-offset DOF |
+| Solver qualification | Shape atom | Shared-offset DOF |
 | --- | --- | --- |
-| Qualified stationary | Local status `SUCCESS`, full guard factor, no fallback | Joint status `Converged`, full group factor, no fallback |
-| Soft nonstationary | Finite usable endpoint with a non-success status or damping | IRLS objective deterioration, maximum iterations, or damping |
+| Solver qualified | Local status `SUCCESS`, full guard factor, no fallback | Joint status `Converged`, full group factor, no fallback |
+| Soft unqualified | Finite usable endpoint with a non-success status or damping | IRLS objective deterioration, maximum iterations, or damping |
 | Hard failure | Missing/invalid refit evidence for an active block | System build, empty system, initial solve, or IRLS solve failure |
 
-`eligible for update` is deliberately not equivalent to `eligible for
-convergence`. Soft endpoints retain their existing update and objective-gate
-behavior but fail the strict shadow predicate. Fixed and quarantined blocks are
-excluded from the active conjunction. An empty active set passes vacuously and
-is explicitly labelled `all-fixed/restricted`, not full convergence.
+Proposal usability is deliberately not equivalent to solver qualification.
+Soft endpoints retain their existing update and objective-gate behavior but
+fail the `solver-qualified` comparator. Fixed and quarantined blocks are
+excluded from its active conjunction. An empty active set passes the solver
+qualification conjunction vacuously and remains explicitly labelled
+`all-fixed/restricted`; this label does not add a production stop condition.
 
 The production predicate remains
-`ClusterHealth::is_active_block_stationarity_eligible`. The Debug snapshot also
-records the strict predicate, shape/offset qualification counts, restricted
-state, and `current=true, strict=false` disagreements.
+`ClusterHealth::production_convergence_qualified`. The Debug snapshot also
+records solver qualification, shape/offset qualification counts, restricted
+state, and `production=true, solver=false` disagreements.
 
 ## Historical population comparison
 
@@ -99,10 +101,10 @@ reported as restricted/all-fixed rather than full convergence.
 
 ## Reproduced synthetic evidence
 
-- Active `IrlsMaximumIterationsReached`: current stationarity is true while
-  strict stationarity is false; the offset group is classified soft
-  nonstationary.
-- All shape and offset blocks quarantined: strict stationarity passes
+- Active `IrlsMaximumIterationsReached`: production qualification is true while
+  solver qualification is false; the offset group is classified soft
+  unqualified.
+- All shape and offset blocks quarantined: solver qualification passes
   vacuously and reports both `restricted` and `all-fixed`.
 - All local refit statuses are classified explicitly. Only `SUCCESS` with a
   full-step qualification passes; a successful but damped refit remains soft
@@ -112,7 +114,7 @@ reported as restricted/all-fixed rather than full convergence.
   weighting, not a threshold change.
 - A member at `2e-3` remains the one-group shared-DOF maximum. A non-finite
   member makes both shared-DOF p99 and maximum fail.
-- A mixed active/fixed shared group produces a strict-stationarity violation
+- A mixed active/fixed shared group produces a solver-qualification violation
   and a failing shared-DOF change summary.
 
 These cases establish mathematical and semantic independence. They do not by
@@ -120,17 +122,21 @@ themselves establish the frequency or quality impact on production datasets.
 
 ## Debug record and aggregation
 
-Every accepted Debug attempt now emits schema `4` on the existing
+Every accepted Debug attempt now emits schema `5` on the existing
 `Convergence safeguard audit:` record. It includes:
 
-- active-member and active-DOF populations and accepted/raw summaries;
-- production, legacy-population, legacy-maximum, strict-DOF, and active-member
-  diagnostic predicate vectors;
+- production active-DOF and legacy all-selected accepted/raw summaries;
+- production, legacy-population, legacy-maximum, and solver-qualified
+  predicate vectors;
 - activity/qualification counts for shape and offset blocks;
 - shared-offset group counts and min/p50/p99/max group sizes;
-- shape-active, offset-member-active, and quarantine ratios;
+- shape-active, offset-active, and quarantine ratios;
 - orthogonal-clear and four policy stop candidates;
-- isolated legacy-population, maximum-gate, and strict-stationarity exposures.
+- isolated legacy-population, maximum-gate, and solver-qualification exposures.
+
+The former active-member p99/maximum/median track is no longer emitted or
+aggregated. Active atom membership and group-size diagnostics remain because
+they define the production DOF population and exposure strata.
 
 Aggregate a captured Debug log with:
 
@@ -150,7 +156,7 @@ mismatch alone does not claim downstream quality loss.
 
 | Mechanism | Decision | Evidence needed before production change |
 | --- | --- | --- |
-| Current stationarity rollup | Semantic redesign candidate | Count actual `current=true, strict=false` stop exposures on representative trajectories. |
+| Current stationarity rollup | Semantic redesign candidate | Count actual `production=true, solver=false` stop exposures on representative trajectories. |
 | All-selected population | Semantic redesign needed | The implementation contradicts the documented active-coordinate semantics and admits fixed-zero dilution. |
 | Active-member offset population | Retain as comparison | It preserves per-atom transformed geometry but remains group-size weighted. |
 | Shared-DOF offset population | Preferred redesign candidate | It removes group-size weighting and preserves within-group extremes in targeted tests; confirm on real trajectories. |
@@ -161,15 +167,16 @@ called redundant without a mathematical implication or a subsequent
 trajectory-changing ablation.
 
 The subsequent production change adopted the preferred shared-DOF population
-and removed the maximum gate. Strict stationarity remains diagnostic because
-the available counterfactual evidence did not justify a production change.
+and removed the maximum gate. The active-member comparison was then retired.
+Solver qualification remains diagnostic because the available counterfactual
+evidence did not justify a production change.
 
 ## Verification and external evidence
 
 The historical focused tests covered the stationarity status matrix, quarantine exclusion,
 unequal group weighting, extreme/non-finite members, mixed activity, Debug
 schema, serial/parallel trace equality, and exact Info/Debug final model values.
-The developer analyzer now has a schema-4 fixture using isolated comparators.
+The developer analyzer now has a schema-5 fixture using isolated comparators.
 
 Fold-168 inputs remain external to the repository. The current refresh uses
 the locally available hash-matching inputs as a negative control without
@@ -184,7 +191,7 @@ Current refresh verification on 2026-08-27:
 
 - Audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19.
 - Fold-168 stops after seven accepted iterations with `audit-patience` in both
-  builds; the audit report contains seven schema-4 records, no convergence
+  builds; the audit report contains seven schema-5 records, no convergence
   trigger, and zero comparator exposures.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical; repository lint passes.

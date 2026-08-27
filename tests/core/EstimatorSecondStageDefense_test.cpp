@@ -2145,37 +2145,37 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_EQ(reordered->OffsetColumn(2), 1);
 }
 
-TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)
+TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksSolverQualification)
 {
-    EXPECT_TRUE(health_detail::IsLocalRefitStatusStationarityEligible(
+    EXPECT_TRUE(health_detail::IsLocalRefitStatusSolverQualified(
         rg::RHBMEstimationStatus::SUCCESS));
-    EXPECT_FALSE(health_detail::IsLocalRefitStatusStationarityEligible(
+    EXPECT_FALSE(health_detail::IsLocalRefitStatusSolverQualified(
         rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
     for (const auto status : {
         rg::RHBMEstimationStatus::NUMERICAL_FALLBACK,
         rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
         rg::RHBMEstimationStatus::SINGLE_MEMBER })
     {
-        EXPECT_FALSE(health_detail::IsLocalRefitStatusStationarityEligible(status));
+        EXPECT_FALSE(health_detail::IsLocalRefitStatusSolverQualified(status));
     }
     EXPECT_THROW(
-        health_detail::IsLocalRefitStatusStationarityEligible(
+        health_detail::IsLocalRefitStatusSolverQualified(
             static_cast<rg::RHBMEstimationStatus>(-1)),
         std::logic_error);
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromStationarity)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromSolverQualification)
 {
     using Status = offset_detail::JointOffsetSolveStatus;
 
-    EXPECT_TRUE(health_detail::ClusterHealth{ Status::Converged }.IsStationarityEligible());
+    EXPECT_TRUE(health_detail::ClusterHealth{ Status::Converged }.IsSolverQualified());
     EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(Status::Converged));
 
     for (const auto status : {
         Status::IrlsObjectiveDeteriorated,
         Status::IrlsMaximumIterationsReached })
     {
-        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsStationarityEligible());
+        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsSolverQualified());
         EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
@@ -2185,12 +2185,12 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromS
         Status::InitialSolveFailed,
         Status::IrlsSolveFailed })
     {
-        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsStationarityEligible());
+        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsSolverQualified());
         EXPECT_TRUE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
     const auto invalid_status{ static_cast<Status>(-1) };
-    EXPECT_FALSE(health_detail::ClusterHealth{ invalid_status }.IsStationarityEligible());
+    EXPECT_FALSE(health_detail::ClusterHealth{ invalid_status }.IsSolverQualified());
     EXPECT_THROW(
         offset_detail::IsJointOffsetSolveHardFailure(invalid_status),
         std::logic_error);
@@ -4799,7 +4799,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     const auto accepted_small{
         audit_detail::EvaluateConvergencePredicates(true, small, large)
     };
-    EXPECT_TRUE(accepted_small.stationarity_eligible);
+    EXPECT_TRUE(accepted_small.qualification_passed);
     EXPECT_TRUE(accepted_small.accepted_percentile_converged);
     EXPECT_FALSE(accepted_small.raw_percentile_converged);
     EXPECT_FALSE(accepted_small.Converged());
@@ -4870,15 +4870,12 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlo
             quarantine_activity)
     };
     const auto dual_shadow{
-        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
+        audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        dual_shadow.member));
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        dual_shadow.shared_dof));
-    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(0), 10U);
-    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(1), 10U);
-    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(2), 10U);
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(dual_shadow));
+    EXPECT_EQ(dual_shadow.population_size_list.at(0), 10U);
+    EXPECT_EQ(dual_shadow.population_size_list.at(1), 10U);
+    EXPECT_EQ(dual_shadow.population_size_list.at(2), 10U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSizeWeighting)
@@ -4913,13 +4910,11 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSize
             quarantine_activity)
     };
     const auto audit{
-        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
+        audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
 
-    EXPECT_EQ(audit.member.population_size_list.at(2), atom_count);
-    EXPECT_EQ(audit.shared_dof.population_size_list.at(2), 2U);
-    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(audit.member));
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit.shared_dof));
+    EXPECT_EQ(audit.population_size_list.at(2), 2U);
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtremeAndNonFiniteMembers)
@@ -4950,19 +4945,18 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
         2.0e-3;
     const auto extreme{
-        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
+        audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_DOUBLE_EQ(extreme.shared_dof.maximum_list.at(2), 2.0e-3);
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        extreme.shared_dof));
+    EXPECT_DOUBLE_EQ(extreme.maximum_list.at(2), 2.0e-3);
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(extreme));
 
     change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
         std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite{
-        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
+        audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_TRUE(std::isinf(nonfinite.shared_dof.maximum_list.at(2)));
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(nonfinite.shared_dof));
+    EXPECT_TRUE(std::isinf(nonfinite.maximum_list.at(2)));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(nonfinite));
 }
 
 TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
@@ -4992,11 +4986,11 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
         2,
         alg::ParameterChange{ std::vector<double>(3, 0.0) });
     const auto change_audit{
-        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
+        audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
     EXPECT_EQ(population.mixed_offset_group_count, 1U);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        change_audit.shared_dof));
+        change_audit));
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)

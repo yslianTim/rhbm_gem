@@ -17,12 +17,12 @@ FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)(?:\[[^]]+\])?=(?P<value>[^,]+)"
 )
 PREDICATE_NAMES = (
-    "stationarity",
+    "qualification",
     "accepted_p99",
     "raw_p99",
 )
 LEGACY_MAXIMUM_PREDICATE_NAMES = (
-    "stationarity",
+    "qualification",
     "accepted_p99",
     "accepted_max",
     "raw_p99",
@@ -31,14 +31,12 @@ LEGACY_MAXIMUM_PREDICATE_NAMES = (
 TRACK_FIELDS = {
     "production": "production-predicates",
     "legacy_population": "legacy-population-predicates",
-    "strict_dof": "strict-dof-predicates",
-    "active_member": "member-diagnostic-predicates",
+    "solver_qualified": "solver-qualified-predicates",
 }
 POPULATION_FIELDS = {
     "production": "production-population",
     "legacy_population": "legacy-population",
-    "strict_dof": "production-population",
-    "active_member": "member-population",
+    "solver_qualified": "production-population",
 }
 SUMMARY_FIELDS = {
     "production": (
@@ -53,23 +51,17 @@ SUMMARY_FIELDS = {
         "legacy-raw-p99",
         "legacy-raw-max",
     ),
-    "strict_dof": (
+    "solver_qualified": (
         "production-accepted-p99",
         "production-accepted-max",
         "production-raw-p99",
         "production-raw-max",
     ),
-    "active_member": (
-        "member-accepted-p99",
-        "member-accepted-max",
-        "member-raw-p99",
-        "member-raw-max",
-    ),
 }
 EXPOSURE_NAMES = (
     "legacy_population",
     "maximum_gate",
-    "strict_stationarity",
+    "solver_qualification",
 )
 
 
@@ -90,17 +82,16 @@ def parse_record(line: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip()
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "4":
+    if fields.get("schema") != "5":
         return None
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
-        "strict-stationarity",
+        "qualification",
         "stop-candidates",
         "exposures",
         "legacy-maximum-predicates",
         "path",
         "ratios",
         "offset-groups",
-        "stationarity",
         "joint-status",
     }
     if not required.issubset(fields):
@@ -204,7 +195,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
                 LEGACY_MAXIMUM_PREDICATE_NAMES[legacy_maximum_failed[0]]
             ] += 1
 
-        strict = _integers(record["strict-stationarity"])
+        qualification = _integers(record["qualification"])
         stops = _integers(record["stop-candidates"])
         exposures = _integers(record["exposures"])
         if len(stops) != 5:
@@ -214,11 +205,11 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         for name, exposed in zip(EXPOSURE_NAMES, exposures):
             exposure_count[name] += int(bool(exposed))
 
-        if vector_by_track["production"][0] and not strict[1]:
-            implication_name = "production_stationarity=>strict"
+        if vector_by_track["production"][0] and not qualification[1]:
+            implication_name = "production_qualification=>solver_qualified"
             implication_counterexamples[implication_name] += 1
             implication_examples[implication_name].append(record_ref)
-        for comparison_track in ("legacy_population", "active_member"):
+        for comparison_track in ("legacy_population",):
             for index, name in enumerate(PREDICATE_NAMES[1:], start=1):
                 if (vector_by_track["production"][index] and
                         not vector_by_track[comparison_track][index]):
@@ -235,7 +226,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         comparison_mismatch = (
             not all(vector_by_track["legacy_population"]) or
             not all(legacy_maximum_vector) or
-            not all(vector_by_track["strict_dof"])
+            not all(vector_by_track["solver_qualified"])
         )
         diagnostic_mismatch_count += int(
             production_predicate_pass and comparison_mismatch and not stops[0])
@@ -387,7 +378,7 @@ def format_markdown(report: dict[str, object]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("log", type=Path, help="Debug log containing schema=4 audit records")
+    parser.add_argument("log", type=Path, help="Debug log containing schema=5 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

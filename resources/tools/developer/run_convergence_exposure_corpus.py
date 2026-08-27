@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 5
+CASE_SUMMARY_SCHEMA_VERSION = 6
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -137,18 +137,23 @@ def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> b
         return True
 
     def safety_signature(record: dict[str, str]) -> tuple[int, int, int, bool]:
-        strict = [int(value) for value in record["strict-stationarity"].split("/")]
+        qualification = [
+            int(value) for value in record["qualification"].split("/")]
         blockers = [int(value) for value in record["blockers"].split("/")]
         summary_fields = (
-            "accepted-p99", "accepted-max", "raw-p99", "raw-max",
-            "shadow-accepted-p99", "shadow-accepted-max",
-            "shadow-raw-p99", "shadow-raw-max",
-            "dof-accepted-p99", "dof-accepted-max",
-            "dof-raw-p99", "dof-raw-max")
+            "production-accepted-p99", "production-accepted-max",
+            "production-raw-p99", "production-raw-max",
+            "legacy-accepted-p99", "legacy-accepted-max",
+            "legacy-raw-p99", "legacy-raw-max")
         nonfinite = any(
             not math.isfinite(value)
             for field in summary_fields for value in _numbers(record[field]))
-        return strict[7] + strict[13], strict[16], blockers[2], nonfinite
+        return (
+            qualification[7] + qualification[13],
+            qualification[16],
+            blockers[2],
+            nonfinite,
+        )
 
     baseline_signature = safety_signature(baseline)
     for record in records:
@@ -236,10 +241,10 @@ def run_case(
         ],
     })
     write_json(
-        case_directory / "trajectory-schema-4.json",
-        {"schema_version": 4, "records": parsed["trajectory_records"]})
-    write_json(case_directory / "counterfactual-schema-2.json", {
-        "schema_version": 2,
+        case_directory / "trajectory-schema-5.json",
+        {"schema_version": 5, "records": parsed["trajectory_records"]})
+    write_json(case_directory / "counterfactual-schema-3.json", {
+        "schema_version": 3,
         "checkpoints": parsed["checkpoints"],
         "terminations": parsed["terminations"],
         "atoms": [
@@ -318,7 +323,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         aggregate["corpus_target_met"] = False
         for policy, decision in aggregate["policy_decisions"].items():
             decision[
-                "redesign_candidate" if policy == "strict-dof" else
+                "redesign_candidate" if policy == "solver-qualified" else
                 "rollback_candidate"
             ] = False
     write_json(args.output_dir / "aggregate.json", aggregate)

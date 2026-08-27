@@ -182,20 +182,16 @@ struct CounterfactualIterationEvidence
     CounterfactualPolicyDecision policy_decision{};
     TransformedChangeSummary accepted_current{};
     TransformedChangeSummary raw_current{};
-    TransformedChangeSummary accepted_member{};
-    TransformedChangeSummary raw_member{};
     TransformedChangeSummary accepted_dof{};
     TransformedChangeSummary raw_dof{};
     std::vector<double> accepted_current_median{};
     std::vector<double> raw_current_median{};
-    std::vector<double> accepted_member_median{};
-    std::vector<double> raw_member_median{};
     std::vector<double> accepted_dof_median{};
     std::vector<double> raw_dof_median{};
     std::size_t multi_member_offset_group_count{ 0 };
     std::size_t weak_peak_dominant_group_count{ 0 };
     std::array<double, 4> weak_peak_ratio_summary{};
-    StrictConvergenceStationarityAudit strict_stationarity{};
+    SolverQualificationAudit solver_qualification{};
     ActiveCoordinatePopulation active_population{};
 };
 
@@ -219,15 +215,15 @@ struct RawIterationResult
     SuspiciousBlockActivity failure_block_activity{};
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom{};
     std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
-    SuspiciousUpdateMask shape_stationarity_eligible_atom_mask{};
-    SuspiciousUpdateMask offset_stationarity_eligible_atom_mask{};
+    SuspiciousUpdateMask shape_solver_qualified_atom_mask{};
+    SuspiciousUpdateMask offset_solver_qualified_atom_mask{};
     ClusterHealthMap health_by_key{};
 };
 
 struct LocalAtomRefitResult
 {
     LocalGaussianResult result{};
-    bool is_stationarity_eligible{ false };
+    bool is_shape_solver_qualified{ false };
     bool is_boundary_correction_eligible{ false };
     bool shape_fixed{ false };
     SuspiciousGaussianAssessment assessment{};
@@ -312,12 +308,12 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
 }
 
 ConvergencePredicates EvaluateConvergencePredicates(
-    bool stationarity_eligible,
+    bool qualification_passed,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change)
 {
     return ConvergencePredicates{
-        stationarity_eligible,
+        qualification_passed,
         IsTransformedPercentileConverged(accepted_change),
         IsTransformedPercentileConverged(raw_change)
     };
@@ -374,12 +370,12 @@ CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
         CounterfactualConvergencePolicy::LegacyPopulation) };
     const auto legacy_maximum_index{ static_cast<std::size_t>(
         CounterfactualConvergencePolicy::LegacyMaximum) };
-    const auto strict_dof_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::StrictActiveDof) };
+    const auto solver_qualified_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::SolverQualified) };
     update.all_candidate_policies_reached =
         state.checkpoint_reached.at(legacy_population_index) &&
         state.checkpoint_reached.at(legacy_maximum_index) &&
-        state.checkpoint_reached.at(strict_dof_index);
+        state.checkpoint_reached.at(solver_qualified_index);
     update.policy_agreement = update.triggered_now &&
         update.all_candidate_policies_reached;
     state.continuation_active = !update.all_candidate_policies_reached;
@@ -471,14 +467,14 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     {
         if (block_activity.HasActiveShape(atom_index))
         {
-            result.member_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
+            result.active_atom_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
                 .emplace_back(atom_index);
-            result.member_index_list_by_parameter.at(kLogWidthChangeIndex)
+            result.active_atom_index_list_by_parameter.at(kLogWidthChangeIndex)
                 .emplace_back(atom_index);
         }
         if (block_activity.HasActiveOffset(atom_index))
         {
-            result.member_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
+            result.active_atom_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
                 .emplace_back(atom_index);
         }
     }
@@ -517,15 +513,13 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     return result;
 }
 
-ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
+TransformedChangeSummary SummarizeActiveDofChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const ActiveCoordinatePopulation & population)
 {
-    ActiveCoordinateChangeSummary result;
-    result.member = SummarizeTransformedChangesByParameter(
+    auto result{ SummarizeTransformedChangesByParameter(
         change_list,
-        population.member_index_list_by_parameter);
-    result.shared_dof = result.member;
+        population.active_atom_index_list_by_parameter) };
 
     if (population.active_offset_group_atom_index_list.size() !=
             population.mixed_offset_group_mask.size() ||
@@ -568,19 +562,19 @@ ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
             is_finite ? maximum_change : std::numeric_limits<double>::infinity());
     }
 
-    result.shared_dof.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
+    result.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
         offset_group_change_list.size();
-    result.shared_dof.percentile_stats.percentile_list.at(
+    result.percentile_stats.percentile_list.at(
         kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
             offset_group_change_list,
             kConvergencePercentile);
-    result.shared_dof.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
+    result.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
         offset_group_change_list.empty() ? 0.0 :
             *std::ranges::max_element(offset_group_change_list);
     return result;
 }
 
-ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
+TransformedChangeSummary SummarizeActiveDofChanges(
     const FitState & current_state,
     const FitState & previous_state,
     const ActiveCoordinatePopulation & population)
@@ -598,14 +592,8 @@ ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
             GetFitModel(current_state, atom_index),
             GetFitModel(previous_state, atom_index)));
     }
-    return SummarizeActiveCoordinateChanges(change_list, population);
+    return SummarizeActiveDofChanges(change_list, population);
 }
-
-struct ActiveCoordinateMedianAudit
-{
-    std::vector<double> member{};
-    std::vector<double> shared_dof{};
-};
 
 static std::vector<double> SummarizeTransformedChangeMedian(
     const std::vector<algorithm::ParameterChange> & change_list,
@@ -628,7 +616,7 @@ static std::vector<double> SummarizeTransformedChangeMedian(
     return median_list;
 }
 
-static ActiveCoordinateMedianAudit EvaluateActiveCoordinateMedianAudit(
+static std::vector<double> EvaluateActiveDofMedian(
     const FitState & current_state,
     const FitState & previous_state,
     const ActiveCoordinatePopulation & population)
@@ -641,11 +629,9 @@ static ActiveCoordinateMedianAudit EvaluateActiveCoordinateMedianAudit(
             GetFitModel(current_state, atom_index),
             GetFitModel(previous_state, atom_index)));
     }
-    ActiveCoordinateMedianAudit result;
-    result.member = SummarizeTransformedChangeMedian(
+    auto result{ SummarizeTransformedChangeMedian(
         change_list,
-        population.member_index_list_by_parameter);
-    result.shared_dof = result.member;
+        population.active_atom_index_list_by_parameter) };
     std::vector<double> offset_group_change_list;
     offset_group_change_list.reserve(
         population.active_offset_group_atom_index_list.size());
@@ -670,7 +656,7 @@ static ActiveCoordinateMedianAudit EvaluateActiveCoordinateMedianAudit(
         offset_group_change_list.emplace_back(
             finite ? maximum_change : std::numeric_limits<double>::infinity());
     }
-    result.shared_dof.at(kOffsetToPeakRatioChangeIndex) =
+    result.at(kOffsetToPeakRatioChangeIndex) =
         array_helper::ComputeMedian(offset_group_change_list);
     return result;
 }
@@ -738,49 +724,14 @@ static WeakPeakGroupAudit EvaluateWeakPeakGroupAudit(
     return result;
 }
 
-ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
-    const ClusterHealthMap & health_by_key)
-{
-    ConvergenceStationarityAudit result;
-    result.active_block_eligible = std::ranges::all_of(
-        health_by_key | std::views::values,
-        &ClusterHealth::is_active_block_stationarity_eligible);
-    result.full_cluster_eligible = AreClustersStationarityEligible(health_by_key);
-    for (const auto & health : health_by_key | std::views::values)
-    {
-        result.joint_offset_status_count.at(
-            static_cast<std::size_t>(health.joint_offset_status))++;
-        if (!health.is_active_block_stationarity_eligible)
-        {
-            result.active_block_ineligible_cluster_count++;
-        }
-        if (!health.is_refit_stationarity_eligible)
-        {
-            result.refit_ineligible_cluster_count++;
-        }
-        if (health.joint_offset_status != JointOffsetSolveStatus::Converged)
-        {
-            if (IsJointOffsetSolveHardFailure(health.joint_offset_status))
-            {
-                result.hard_joint_failure_cluster_count++;
-            }
-            else
-            {
-                result.soft_joint_nonconverged_cluster_count++;
-            }
-        }
-    }
-    return result;
-}
-
-StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
+SolverQualificationAudit EvaluateSolverQualificationAudit(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity,
-    const SuspiciousUpdateMask & shape_stationarity_eligible_atom_mask,
-    const SuspiciousUpdateMask & offset_stationarity_eligible_atom_mask,
+    const SuspiciousUpdateMask & shape_solver_qualified_atom_mask,
+    const SuspiciousUpdateMask & offset_solver_qualified_atom_mask,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key)
 {
@@ -790,18 +741,23 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
         group_id_by_atom_index,
         block_activity,
         quarantine_activity);
-    if (shape_stationarity_eligible_atom_mask.size() != atom_count ||
-        offset_stationarity_eligible_atom_mask.size() != atom_count ||
+    if (shape_solver_qualified_atom_mask.size() != atom_count ||
+        offset_solver_qualified_atom_mask.size() != atom_count ||
         local_refit_status_by_atom.size() != atom_count)
     {
         throw std::invalid_argument(
-            "Convergence audit stationarity inputs are inconsistent.");
+            "Convergence audit qualification inputs are inconsistent.");
     }
 
-    StrictConvergenceStationarityAudit result;
-    result.current_eligible = std::ranges::all_of(
+    SolverQualificationAudit result;
+    result.production_qualified = std::ranges::all_of(
         health_by_key | std::views::values,
-        &ClusterHealth::is_active_block_stationarity_eligible);
+        &ClusterHealth::production_convergence_qualified);
+    for (const auto & health : health_by_key | std::views::values)
+    {
+        result.joint_offset_status_count.at(
+            static_cast<std::size_t>(health.joint_offset_status))++;
+    }
     for (const auto atom_index : atom_index_list)
     {
         if (!block_activity.HasActiveShape(atom_index))
@@ -818,19 +774,19 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
         }
 
         result.active_shape_count++;
-        if (shape_stationarity_eligible_atom_mask.at(atom_index) != 0)
+        if (shape_solver_qualified_atom_mask.at(atom_index) != 0)
         {
             result.qualified_shape_count++;
         }
         else if (local_refit_status_by_atom[atom_index].has_value())
         {
-            result.soft_nonstationary_shape_count++;
-            result.strict_eligible = false;
+            result.soft_unqualified_shape_count++;
+            result.solver_qualified = false;
         }
         else
         {
             result.hard_failure_shape_count++;
-            result.strict_eligible = false;
+            result.solver_qualified = false;
         }
     }
 
@@ -858,7 +814,7 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
         if (active_count != group.atom_index_list.size())
         {
             result.mixed_offset_group_count++;
-            result.strict_eligible = false;
+            result.solver_qualified = false;
             continue;
         }
 
@@ -867,14 +823,14 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
         if (health_iter == health_by_key.end())
         {
             result.hard_failure_offset_group_count++;
-            result.strict_eligible = false;
+            result.solver_qualified = false;
             continue;
         }
         const auto all_qualified{ std::ranges::all_of(
             group.atom_index_list,
             [&](const auto atom_index)
             {
-                return offset_stationarity_eligible_atom_mask.at(atom_index) != 0;
+                return offset_solver_qualified_atom_mask.at(atom_index) != 0;
             }) };
         if (health_iter->second.joint_offset_status == JointOffsetSolveStatus::Converged &&
             all_qualified)
@@ -885,12 +841,12 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
                 health_iter->second.joint_offset_status))
         {
             result.hard_failure_offset_group_count++;
-            result.strict_eligible = false;
+            result.solver_qualified = false;
         }
         else
         {
-            result.soft_nonstationary_offset_group_count++;
-            result.strict_eligible = false;
+            result.soft_unqualified_offset_group_count++;
+            result.solver_qualified = false;
         }
     }
 
@@ -1583,7 +1539,7 @@ static bool DoesFailureObservationAffectTarget(
     return observation.target.kind != QuarantineTargetKind::OffsetGroup;
 }
 
-static bool IsGuardSafeNonMaterialStationarity(
+static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
     const QuarantineTarget & target,
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
@@ -1600,7 +1556,7 @@ static bool IsGuardSafeNonMaterialStationarity(
                 })
         };
         if (health_iter == health_by_key.end() ||
-            !health_iter->second.IsStationarityEligible() ||
+            !health_iter->second.IsSolverQualified() ||
             atom_index >= assessment_by_atom.size() ||
             assessment_by_atom[atom_index].IsSuspicious() ||
             assessment_by_atom[atom_index].damping_factor != 1.0)
@@ -1716,7 +1672,7 @@ QuarantineStateTransition QuarantineState::UpdateAfterIteration(
         };
         if (!has_affecting_observation &&
             (accepted_material_proposal ||
-                IsGuardSafeNonMaterialStationarity(
+                IsGuardSafeNonMaterialSolverQualifiedEndpoint(
                     target,
                     block_activity,
                     assessment_by_atom,
@@ -2332,17 +2288,13 @@ static void LogConvergenceSafeguardAudit(
     const IterationProgress & progress,
     const ConvergencePredicates & production_predicates,
     const ConvergencePredicates & legacy_population_predicates,
-    const ConvergencePredicates & member_diagnostic_predicates,
-    const ConvergencePredicates & strict_dof_predicates,
+    const ConvergencePredicates & solver_qualified_predicates,
     const TransformedChangeSummary & accepted_legacy_change,
     const TransformedChangeSummary & raw_legacy_change,
-    const TransformedChangeSummary & accepted_member_change,
-    const TransformedChangeSummary & raw_member_change,
     const TransformedChangeSummary & accepted_production_change,
     const TransformedChangeSummary & raw_production_change,
     const ActiveCoordinatePopulation & active_population,
-    const ConvergenceStationarityAudit & stationarity,
-    const StrictConvergenceStationarityAudit & strict_stationarity,
+    const SolverQualificationAudit & solver_qualification,
     const IterationDiagnostics & diagnostics,
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
@@ -2355,7 +2307,7 @@ static void LogConvergenceSafeguardAudit(
     bool production_stop_candidate,
     bool legacy_population_stop_candidate,
     bool legacy_maximum_stop_candidate,
-    bool strict_dof_stop_candidate)
+    bool solver_qualified_stop_candidate)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
@@ -2466,7 +2418,7 @@ static void LogConvergenceSafeguardAudit(
 
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: schema=4, try=" << attempt_number
+        << "Convergence safeguard audit: schema=5, try=" << attempt_number
         << ", acc=" << progress.accepted_iteration_count
         << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
         << ", quarantine=" << progress.quarantine_atom_count
@@ -2474,31 +2426,25 @@ static void LogConvergenceSafeguardAudit(
     AppendAuditPopulation(message, accepted_production_change.population_size_list);
     message << ", legacy-population=";
     AppendAuditPopulation(message, accepted_legacy_change.population_size_list);
-    message << ", member-population=";
-    AppendAuditPopulation(message, accepted_member_change.population_size_list);
     message
-        << ", production-predicates[s/a99/r99]="
-        << production_predicates.stationarity_eligible << "/"
+        << ", production-predicates[q/a99/r99]="
+        << production_predicates.qualification_passed << "/"
         << production_predicates.accepted_percentile_converged << "/"
         << production_predicates.raw_percentile_converged
-        << ", legacy-population-predicates[s/a99/r99]="
-        << legacy_population_predicates.stationarity_eligible << "/"
+        << ", legacy-population-predicates[q/a99/r99]="
+        << legacy_population_predicates.qualification_passed << "/"
         << legacy_population_predicates.accepted_percentile_converged << "/"
         << legacy_population_predicates.raw_percentile_converged
-        << ", legacy-maximum-predicates[s/a99/amax/r99/rmax]="
-        << production_predicates.stationarity_eligible << "/"
+        << ", legacy-maximum-predicates[q/a99/amax/r99/rmax]="
+        << production_predicates.qualification_passed << "/"
         << production_predicates.accepted_percentile_converged << "/"
         << accepted_legacy_maximum_passes << "/"
         << production_predicates.raw_percentile_converged << "/"
         << raw_legacy_maximum_passes
-        << ", strict-dof-predicates[s/a99/r99]="
-        << strict_dof_predicates.stationarity_eligible << "/"
-        << strict_dof_predicates.accepted_percentile_converged << "/"
-        << strict_dof_predicates.raw_percentile_converged
-        << ", member-diagnostic-predicates[s/a99/r99]="
-        << member_diagnostic_predicates.stationarity_eligible << "/"
-        << member_diagnostic_predicates.accepted_percentile_converged << "/"
-        << member_diagnostic_predicates.raw_percentile_converged
+        << ", solver-qualified-predicates[q/a99/r99]="
+        << solver_qualified_predicates.qualification_passed << "/"
+        << solver_qualified_predicates.accepted_percentile_converged << "/"
+        << solver_qualified_predicates.raw_percentile_converged
         << ", production-accepted-p99=";
     AppendAuditValues(
         message,
@@ -2517,14 +2463,6 @@ static void LogConvergenceSafeguardAudit(
     AppendAuditValues(message, raw_legacy_change.percentile_stats.percentile_list);
     message << ", legacy-raw-max=";
     AppendAuditValues(message, raw_legacy_change.maximum_list);
-    message << ", member-accepted-p99=";
-    AppendAuditValues(message, accepted_member_change.percentile_stats.percentile_list);
-    message << ", member-accepted-max=";
-    AppendAuditValues(message, accepted_member_change.maximum_list);
-    message << ", member-raw-p99=";
-    AppendAuditValues(message, raw_member_change.percentile_stats.percentile_list);
-    message << ", member-raw-max=";
-    AppendAuditValues(message, raw_member_change.maximum_list);
     message
         << ", accepted-equals-raw=" << accepted_equals_raw
         << ", path[trust/backtrack/polish/boundary/rescue]="
@@ -2533,39 +2471,32 @@ static void LogConvergenceSafeguardAudit(
         << assembled_uses_polish << "/"
         << accepted_boundary_count << "/"
         << rescued_boundary_count
-        << ", stationarity[current/full/active-ineligible/refit-ineligible/soft-joint/hard-joint]="
-        << stationarity.active_block_eligible << "/"
-        << stationarity.full_cluster_eligible << "/"
-        << stationarity.active_block_ineligible_cluster_count << "/"
-        << stationarity.refit_ineligible_cluster_count << "/"
-        << stationarity.soft_joint_nonconverged_cluster_count << "/"
-        << stationarity.hard_joint_failure_cluster_count
         << ", joint-status[converged/system-build/empty/initial-solve/irls-solve/objective-deteriorated/max-iter]="
-        << stationarity.joint_offset_status_count.at(0) << "/"
-        << stationarity.joint_offset_status_count.at(1) << "/"
-        << stationarity.joint_offset_status_count.at(2) << "/"
-        << stationarity.joint_offset_status_count.at(3) << "/"
-        << stationarity.joint_offset_status_count.at(4) << "/"
-        << stationarity.joint_offset_status_count.at(5) << "/"
-        << stationarity.joint_offset_status_count.at(6)
-        << ", strict-stationarity[current/strict/restricted/all-fixed/active-shape/qualified-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/qualified-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]="
-        << strict_stationarity.current_eligible << "/"
-        << strict_stationarity.strict_eligible << "/"
-        << strict_stationarity.restricted_active_set << "/"
-        << strict_stationarity.all_fixed << "/"
-        << strict_stationarity.active_shape_count << "/"
-        << strict_stationarity.qualified_shape_count << "/"
-        << strict_stationarity.soft_nonstationary_shape_count << "/"
-        << strict_stationarity.hard_failure_shape_count << "/"
-        << strict_stationarity.fixed_shape_count << "/"
-        << strict_stationarity.quarantined_shape_count << "/"
-        << strict_stationarity.active_offset_group_count << "/"
-        << strict_stationarity.qualified_offset_group_count << "/"
-        << strict_stationarity.soft_nonstationary_offset_group_count << "/"
-        << strict_stationarity.hard_failure_offset_group_count << "/"
-        << strict_stationarity.fixed_offset_group_count << "/"
-        << strict_stationarity.quarantined_offset_group_count << "/"
-        << strict_stationarity.mixed_offset_group_count
+        << solver_qualification.joint_offset_status_count.at(0) << "/"
+        << solver_qualification.joint_offset_status_count.at(1) << "/"
+        << solver_qualification.joint_offset_status_count.at(2) << "/"
+        << solver_qualification.joint_offset_status_count.at(3) << "/"
+        << solver_qualification.joint_offset_status_count.at(4) << "/"
+        << solver_qualification.joint_offset_status_count.at(5) << "/"
+        << solver_qualification.joint_offset_status_count.at(6)
+        << ", qualification[production/solver/restricted/all-fixed/active-shape/solver-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/solver-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]="
+        << solver_qualification.production_qualified << "/"
+        << solver_qualification.solver_qualified << "/"
+        << solver_qualification.restricted_active_set << "/"
+        << solver_qualification.all_fixed << "/"
+        << solver_qualification.active_shape_count << "/"
+        << solver_qualification.qualified_shape_count << "/"
+        << solver_qualification.soft_unqualified_shape_count << "/"
+        << solver_qualification.hard_failure_shape_count << "/"
+        << solver_qualification.fixed_shape_count << "/"
+        << solver_qualification.quarantined_shape_count << "/"
+        << solver_qualification.active_offset_group_count << "/"
+        << solver_qualification.qualified_offset_group_count << "/"
+        << solver_qualification.soft_unqualified_offset_group_count << "/"
+        << solver_qualification.hard_failure_offset_group_count << "/"
+        << solver_qualification.fixed_offset_group_count << "/"
+        << solver_qualification.quarantined_offset_group_count << "/"
+        << solver_qualification.mixed_offset_group_count
         << ", local-status[success/max-iter/single/insufficient/numerical/unavailable]="
         << local_refit_status_count.at(0) << "/"
         << local_refit_status_count.at(1) << "/"
@@ -2573,34 +2504,32 @@ static void LogConvergenceSafeguardAudit(
         << local_refit_status_count.at(3) << "/"
         << local_refit_status_count.at(4) << "/"
         << unavailable_local_refit_status_count
-        << ", offset-groups[total/active/fixed/quarantine/mixed/member-count/min/p50/p99/max]="
+        << ", offset-groups[total/active/fixed/quarantine/mixed/min/p50/p99/max]="
         << active_population.total_offset_group_count << "/"
-        << strict_stationarity.active_offset_group_count << "/"
+        << solver_qualification.active_offset_group_count << "/"
         << active_population.fixed_offset_group_count << "/"
         << active_population.quarantined_offset_group_count << "/"
         << active_population.mixed_offset_group_count << "/"
-        << accepted_member_change.population_size_list.at(
-            kOffsetToPeakRatioChangeIndex) << "/"
         << offset_group_size_minimum << "/"
         << offset_group_size_median << "/"
         << offset_group_size_p99 << "/"
         << offset_group_size_maximum
-        << ", ratios[shape-active/offset-member-active/quarantine]="
-        << ratio(accepted_member_change.population_size_list.at(
-            kLogPeakHeightChangeIndex)) << "/"
-        << ratio(accepted_member_change.population_size_list.at(
-            kOffsetToPeakRatioChangeIndex)) << "/"
+        << ", ratios[shape-active/offset-active/quarantine]="
+        << ratio(active_population.active_atom_index_list_by_parameter.at(
+            kLogPeakHeightChangeIndex).size()) << "/"
+        << ratio(active_population.active_atom_index_list_by_parameter.at(
+            kOffsetToPeakRatioChangeIndex).size()) << "/"
         << ratio(progress.quarantine_atom_count)
-        << ", stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/strict-dof]="
+        << ", stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/solver-qualified]="
         << orthogonal_blockers_clear << "/"
         << production_stop_candidate << "/"
         << legacy_population_stop_candidate << "/"
         << legacy_maximum_stop_candidate << "/"
-        << strict_dof_stop_candidate
-        << ", exposures[legacy-population/maximum-gate/strict-stationarity]="
+        << solver_qualified_stop_candidate
+        << ", exposures[legacy-population/maximum-gate/solver-qualification]="
         << (production_stop_candidate && !legacy_population_stop_candidate) << "/"
         << (production_stop_candidate && !legacy_maximum_stop_candidate) << "/"
-        << (production_stop_candidate && !strict_dof_stop_candidate)
+        << (production_stop_candidate && !solver_qualified_stop_candidate)
         << ", fixed[shape/offset/hard]="
         << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
         << ", damped-atoms=" << damped_atom_count
@@ -2725,7 +2654,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
     std::optional<SuspiciousGaussianAssessment> failed_shape_assessment;
     std::optional<RHBMEstimationStatus> attempted_refit_status;
-    bool has_guard_safe_nonmaterial_stationarity{ false };
+    bool has_solver_qualified_nonmaterial_endpoint{ false };
     try
     {
         auto candidate_result{
@@ -2767,25 +2696,25 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                     candidate_result.ols.GetStandardDeviationModel()
                 };
             }
-            const auto is_stationarity_eligible{
+            const auto is_shape_solver_qualified{
                 damping_factor == 1.0 &&
                 candidate_result.fit_result.has_value() &&
-                IsLocalRefitStatusStationarityEligible(candidate_result.fit_result->status)
+                IsLocalRefitStatusSolverQualified(candidate_result.fit_result->status)
             };
             return LocalAtomRefitResult{
                 std::move(candidate_result),
-                is_stationarity_eligible,
+                is_shape_solver_qualified,
                 true,
                 false,
                 damped_candidate.assessment,
                 attempted_refit_status
             };
         }
-        has_guard_safe_nonmaterial_stationarity =
+        has_solver_qualified_nonmaterial_endpoint =
             !damped_candidate.assessment.IsSuspicious() &&
             damped_candidate.assessment.damping_factor == 1.0 &&
             candidate_result.fit_result.has_value() &&
-            IsLocalRefitStatusStationarityEligible(candidate_result.fit_result->status);
+            IsLocalRefitStatusSolverQualified(candidate_result.fit_result->status);
         failed_shape_assessment = damped_candidate.assessment;
     }
     catch (const std::exception &)
@@ -2822,7 +2751,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     }
     return LocalAtomRefitResult{
         std::move(result),
-        has_guard_safe_nonmaterial_stationarity,
+        has_solver_qualified_nonmaterial_endpoint,
         true,
         true,
         failed_shape_assessment.value_or(fallback_assessment),
@@ -2901,8 +2830,8 @@ static RawIterationResult RunRawIteration(
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
     std::vector<std::optional<RHBMEstimationStatus>>
         local_refit_status_by_atom(context.size());
-    SuspiciousUpdateMask shape_stationarity_eligible_atom_mask(context.size(), 0);
-    SuspiciousUpdateMask offset_stationarity_eligible_atom_mask(context.size(), 0);
+    SuspiciousUpdateMask shape_solver_qualified_atom_mask(context.size(), 0);
+    SuspiciousUpdateMask offset_solver_qualified_atom_mask(context.size(), 0);
     std::vector<std::size_t> group_id_by_atom_index;
     group_id_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
@@ -2928,8 +2857,8 @@ static RawIterationResult RunRawIteration(
         }
         if (IsJointOffsetSolveHardFailure(offset_result.status))
         {
-            health.is_refit_stationarity_eligible = false;
-            health.is_active_block_stationarity_eligible =
+            health.all_local_refits_solver_qualified = false;
+            health.production_convergence_qualified =
                 std::ranges::none_of(
                     key,
                     [&](const auto atom_index)
@@ -2961,7 +2890,7 @@ static RawIterationResult RunRawIteration(
             };
             if (is_quarantined_group)
             {
-                health.is_refit_stationarity_eligible = false;
+                health.all_local_refits_solver_qualified = false;
                 for (const auto position : position_list)
                 {
                     const auto atom_index{ key.at(position) };
@@ -2975,7 +2904,7 @@ static RawIterationResult RunRawIteration(
             std::vector<GaussianModel3D> accepted_model_list;
             std::vector<SuspiciousGaussianAssessment> accepted_assessment_list;
             std::vector<SuspiciousGaussianAssessment> last_assessment_list;
-            bool has_guard_safe_nonmaterial_stationarity{ false };
+            bool has_solver_qualified_nonmaterial_endpoint{ false };
             double factor{ 1.0 };
             for (std::size_t halving_count = 0;
                 halving_count <= kGuardAwareDampingMaximumHalvings;
@@ -3036,7 +2965,7 @@ static RawIterationResult RunRawIteration(
                 }
                 if (!has_material_group_change)
                 {
-                    has_guard_safe_nonmaterial_stationarity = halving_count == 0;
+                    has_solver_qualified_nonmaterial_endpoint = halving_count == 0;
                     break;
                 }
                 accepted = true;
@@ -3044,8 +2973,8 @@ static RawIterationResult RunRawIteration(
                 accepted_assessment_list = std::move(candidate_assessment_list);
                 if (halving_count != 0)
                 {
-                    health.is_refit_stationarity_eligible = false;
-                    health.is_active_block_stationarity_eligible = false;
+                    health.all_local_refits_solver_qualified = false;
+                    health.production_convergence_qualified = false;
                 }
                 break;
             }
@@ -3060,7 +2989,7 @@ static RawIterationResult RunRawIteration(
                         accepted_model_list.at(member_position);
                     assessment_by_atom.at(atom_index) =
                         accepted_assessment_list.at(member_position);
-                    offset_stationarity_eligible_atom_mask.at(atom_index) =
+                    offset_solver_qualified_atom_mask.at(atom_index) =
                         offset_result.status == JointOffsetSolveStatus::Converged &&
                         accepted_assessment_list.at(member_position).damping_factor == 1.0 ?
                             1 : 0;
@@ -3077,10 +3006,10 @@ static RawIterationResult RunRawIteration(
                     }
                 }
             }
-            if (!accepted && !has_guard_safe_nonmaterial_stationarity)
+            if (!accepted && !has_solver_qualified_nonmaterial_endpoint)
             {
-                health.is_refit_stationarity_eligible = false;
-                health.is_active_block_stationarity_eligible = false;
+                health.all_local_refits_solver_qualified = false;
+                health.production_convergence_qualified = false;
             }
         }
     }
@@ -3170,11 +3099,11 @@ static RawIterationResult RunRawIteration(
             auto refit_result{ std::move(refit_result_list.at(refit_position++)) };
             if (!refit_result.has_value())
             {
-                health.is_refit_stationarity_eligible = false;
+                health.all_local_refits_solver_qualified = false;
                 if (quarantine_activity.HasActiveShape(atom_index) ||
                     quarantine_activity.HasActiveOffset(atom_index))
                 {
-                    health.is_active_block_stationarity_eligible = false;
+                    health.production_convergence_qualified = false;
                 }
                 block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
                 const auto failed_group_id{ group_id_by_atom_index.at(atom_index) };
@@ -3198,17 +3127,17 @@ static RawIterationResult RunRawIteration(
             }
             local_refit_status_by_atom.at(atom_index) =
                 refit_result->attempted_refit_status;
-            if (!refit_result->is_stationarity_eligible)
+            if (!refit_result->is_shape_solver_qualified)
             {
-                health.is_refit_stationarity_eligible = false;
+                health.all_local_refits_solver_qualified = false;
                 if (quarantine_activity.HasActiveShape(atom_index))
                 {
-                    health.is_active_block_stationarity_eligible = false;
+                    health.production_convergence_qualified = false;
                 }
             }
             else
             {
-                shape_stationarity_eligible_atom_mask.at(atom_index) = 1;
+                shape_solver_qualified_atom_mask.at(atom_index) = 1;
             }
             if (!refit_result->is_boundary_correction_eligible)
             {
@@ -3290,8 +3219,8 @@ static RawIterationResult RunRawIteration(
         failure_block_activity,
         std::move(assessment_by_atom),
         std::move(local_refit_status_by_atom),
-        std::move(shape_stationarity_eligible_atom_mask),
-        std::move(offset_stationarity_eligible_atom_mask),
+        std::move(shape_solver_qualified_atom_mask),
+        std::move(offset_solver_qualified_atom_mask),
         std::move(health_by_key)
     };
 }
@@ -3674,10 +3603,10 @@ static IterationResult RunIteration(
         CountSuspiciousAtoms(iteration_failure_atom_mask)
     };
     const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
-    const auto is_stationarity_eligible{
+    const auto production_convergence_qualified{
         std::ranges::all_of(
             raw_iteration_result.health_by_key | std::views::values,
-            &ClusterHealth::is_active_block_stationarity_eligible)
+            &ClusterHealth::production_convergence_qualified)
     };
     const auto & raw_state{ raw_iteration_result.state };
     const auto raw_fixed_point_change_summary{
@@ -3800,8 +3729,8 @@ static IterationResult RunIteration(
             raw_iteration_result.block_activity,
             quarantine_activity)
     };
-    const auto raw_active_change_summary{
-        SummarizeActiveCoordinateChanges(
+    const auto raw_active_dof_change_summary{
+        SummarizeActiveDofChanges(
             raw_state,
             previous_state,
             active_population)
@@ -3812,17 +3741,17 @@ static IterationResult RunIteration(
             previous_state,
             iteration_state.active_index_list)
     };
-    const auto accepted_active_change_summary{
-        SummarizeActiveCoordinateChanges(
+    const auto accepted_active_dof_change_summary{
+        SummarizeActiveDofChanges(
             assembled_state,
             previous_state,
             active_population)
     };
     const auto safeguard_predicates{
         EvaluateConvergencePredicates(
-            is_stationarity_eligible,
-            accepted_active_change_summary.shared_dof,
-            raw_active_change_summary.shared_dof)
+            production_convergence_qualified,
+            accepted_active_dof_change_summary,
+            raw_active_dof_change_summary)
     };
     iteration_state.accepted_iteration_count++;
     iteration_state.accepted_iterations_since_topology_rebuild++;
@@ -3883,7 +3812,7 @@ static IterationResult RunIteration(
     result.progress.accepted_maximum_transformed_change =
         GetMaximumTransformedChange(transformed_change_summary);
     result.transformed_change_stats =
-        accepted_active_change_summary.shared_dof.percentile_stats;
+        accepted_active_dof_change_summary.percentile_stats;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     result.converged =
         !objective_domain_changed &&
@@ -3895,20 +3824,16 @@ static IterationResult RunIteration(
     if (kCounterfactualConvergenceAuditEnabled ||
         (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug))
     {
-        const auto & accepted_active_change_audit{
-            accepted_active_change_summary
-        };
-        const auto & raw_active_change_audit{ raw_active_change_summary };
         TransformedChangeIndexListByParameter selected_index_list_by_parameter;
         selected_index_list_by_parameter.fill(iteration_state.active_index_list);
-        const auto accepted_active_median_audit{
-            EvaluateActiveCoordinateMedianAudit(
+        const auto accepted_active_dof_median{
+            EvaluateActiveDofMedian(
                 assembled_state,
                 previous_state,
                 active_population)
         };
-        const auto raw_active_median_audit{
-            EvaluateActiveCoordinateMedianAudit(
+        const auto raw_active_dof_median{
+            EvaluateActiveDofMedian(
                 raw_state,
                 previous_state,
                 active_population)
@@ -3932,33 +3857,27 @@ static IterationResult RunIteration(
                 raw_change_list,
                 active_population)
         };
-        const auto member_diagnostic_predicates{
-            EvaluateConvergencePredicates(
-                is_stationarity_eligible,
-                accepted_active_change_audit.member,
-                raw_active_change_audit.member)
-        };
-        const auto strict_stationarity{
-            EvaluateStrictConvergenceStationarityAudit(
+        const auto solver_qualification{
+            EvaluateSolverQualificationAudit(
                 iteration_state.active_index_list,
                 cluster_key_list,
                 group_id_by_atom_index,
                 raw_iteration_result.block_activity,
                 quarantine_activity,
-                raw_iteration_result.shape_stationarity_eligible_atom_mask,
-                raw_iteration_result.offset_stationarity_eligible_atom_mask,
+                raw_iteration_result.shape_solver_qualified_atom_mask,
+                raw_iteration_result.offset_solver_qualified_atom_mask,
                 raw_iteration_result.local_refit_status_by_atom,
                 raw_iteration_result.health_by_key)
         };
-        const auto strict_dof_predicates{
+        const auto solver_qualified_predicates{
             EvaluateConvergencePredicates(
-                strict_stationarity.strict_eligible,
-                accepted_active_change_audit.shared_dof,
-                raw_active_change_audit.shared_dof)
+                solver_qualification.solver_qualified,
+                accepted_active_dof_change_summary,
+                raw_active_dof_change_summary)
         };
         const auto legacy_population_predicates{
             EvaluateConvergencePredicates(
-                is_stationarity_eligible,
+                production_convergence_qualified,
                 transformed_change_summary,
                 raw_fixed_point_change_summary)
         };
@@ -3980,11 +3899,11 @@ static IterationResult RunIteration(
         const auto legacy_maximum_stop_candidate{
             orthogonal_blockers_clear && safeguard_predicates.Converged() &&
                 IsLegacyMaximumConverged(
-                    accepted_active_change_audit.shared_dof,
-                    raw_active_change_audit.shared_dof)
+                    accepted_active_dof_change_summary,
+                    raw_active_dof_change_summary)
         };
-        const auto strict_dof_stop_candidate{
-            orthogonal_blockers_clear && strict_dof_predicates.Converged()
+        const auto solver_qualified_stop_candidate{
+            orthogonal_blockers_clear && solver_qualified_predicates.Converged()
         };
         result.counterfactual_evidence = CounterfactualIterationEvidence{
             true,
@@ -3992,28 +3911,24 @@ static IterationResult RunIteration(
                 result.converged,
                 legacy_population_stop_candidate,
                 legacy_maximum_stop_candidate,
-                strict_dof_stop_candidate
+                solver_qualified_stop_candidate
             } },
             transformed_change_summary,
             raw_fixed_point_change_summary,
-            accepted_active_change_audit.member,
-            raw_active_change_audit.member,
-            accepted_active_change_audit.shared_dof,
-            raw_active_change_audit.shared_dof,
+            accepted_active_dof_change_summary,
+            raw_active_dof_change_summary,
             SummarizeTransformedChangeMedian(
                 accepted_change_list,
                 selected_index_list_by_parameter),
             SummarizeTransformedChangeMedian(
                 raw_change_list,
                 selected_index_list_by_parameter),
-            accepted_active_median_audit.member,
-            raw_active_median_audit.member,
-            accepted_active_median_audit.shared_dof,
-            raw_active_median_audit.shared_dof,
+            accepted_active_dof_median,
+            raw_active_dof_median,
             weak_peak_group_audit.multi_member_group_count,
             weak_peak_group_audit.weak_peak_dominant_group_count,
             weak_peak_group_audit.ratio_summary,
-            strict_stationarity,
+            solver_qualification,
             active_population
         };
         LogConvergenceSafeguardAudit(
@@ -4022,18 +3937,13 @@ static IterationResult RunIteration(
             result.progress,
             safeguard_predicates,
             legacy_population_predicates,
-            member_diagnostic_predicates,
-            strict_dof_predicates,
+            solver_qualified_predicates,
             transformed_change_summary,
             raw_fixed_point_change_summary,
-            accepted_active_change_audit.member,
-            raw_active_change_audit.member,
-            accepted_active_change_audit.shared_dof,
-            raw_active_change_audit.shared_dof,
+            accepted_active_dof_change_summary,
+            raw_active_dof_change_summary,
             active_population,
-            EvaluateConvergenceStationarityAudit(
-                raw_iteration_result.health_by_key),
-            strict_stationarity,
+            solver_qualification,
             result.diagnostics,
             raw_iteration_result.block_activity,
             raw_iteration_result.assessment_by_atom,
@@ -4046,7 +3956,7 @@ static IterationResult RunIteration(
             result.converged,
             legacy_population_stop_candidate,
             legacy_maximum_stop_candidate,
-            strict_dof_stop_candidate);
+            solver_qualified_stop_candidate);
     }
 
     iteration_state.previous_state = std::move(assembled_state);
@@ -4310,8 +4220,8 @@ static std::string_view GetCounterfactualPolicyText(
         return "legacy-population";
     case CounterfactualConvergencePolicy::LegacyMaximum:
         return "legacy-maximum";
-    case CounterfactualConvergencePolicy::StrictActiveDof:
-        return "strict-dof";
+    case CounterfactualConvergencePolicy::SolverQualified:
+        return "solver-qualified";
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4326,7 +4236,7 @@ static const TransformedChangeSummary & GetCounterfactualAcceptedChange(
     {
     case CounterfactualConvergencePolicy::Production:
     case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::StrictActiveDof:
+    case CounterfactualConvergencePolicy::SolverQualified:
         return evidence.accepted_dof;
     case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.accepted_current;
@@ -4344,7 +4254,7 @@ static const TransformedChangeSummary & GetCounterfactualRawChange(
     {
     case CounterfactualConvergencePolicy::Production:
     case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::StrictActiveDof:
+    case CounterfactualConvergencePolicy::SolverQualified:
         return evidence.raw_dof;
     case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.raw_current;
@@ -4362,7 +4272,7 @@ static const std::vector<double> & GetCounterfactualAcceptedMedian(
     {
     case CounterfactualConvergencePolicy::Production:
     case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::StrictActiveDof:
+    case CounterfactualConvergencePolicy::SolverQualified:
         return evidence.accepted_dof_median;
     case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.accepted_current_median;
@@ -4380,7 +4290,7 @@ static const std::vector<double> & GetCounterfactualRawMedian(
     {
     case CounterfactualConvergencePolicy::Production:
     case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::StrictActiveDof:
+    case CounterfactualConvergencePolicy::SolverQualified:
         return evidence.raw_dof_median;
     case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.raw_current_median;
@@ -4434,7 +4344,7 @@ static void AppendCounterfactualChangeSummary(
     const auto & raw_median{ GetCounterfactualRawMedian(policy, evidence) };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Counterfactual convergence checkpoint: schema=2"
+        << "Counterfactual convergence checkpoint: schema=3"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -4445,9 +4355,9 @@ static void AppendCounterfactualChangeSummary(
             continuation.trigger_accepted_iteration
         << ", extra-ms=" << continuation_elapsed_ms
         << ", final-polish=" << outcome.final_polish_accepted
-        << ", strict=" << evidence.strict_stationarity.strict_eligible
-        << ", restricted=" << evidence.strict_stationarity.restricted_active_set
-        << ", all-fixed=" << evidence.strict_stationarity.all_fixed
+        << ", solver-qualified=" << evidence.solver_qualification.solver_qualified
+        << ", restricted=" << evidence.solver_qualification.restricted_active_set
+        << ", all-fixed=" << evidence.solver_qualification.all_fixed
         << ", best-iteration=";
     if (iteration_state.best_audit_state.has_value())
     {
@@ -4460,8 +4370,8 @@ static void AppendCounterfactualChangeSummary(
         message << "-, best-objective=-";
     }
     message
-        << ", active=" << evidence.strict_stationarity.active_shape_count << "/"
-        << evidence.active_population.member_index_list_by_parameter.at(
+        << ", active=" << evidence.solver_qualification.active_shape_count << "/"
+        << evidence.active_population.active_atom_index_list_by_parameter.at(
             kOffsetToPeakRatioChangeIndex).size() << "/"
         << evidence.active_population.active_offset_group_atom_index_list.size()
         << ", topology=" << iteration_state.graph_partition.sample_id_list_by_key.size()
@@ -4503,17 +4413,17 @@ static void AppendCounterfactualChangeSummary(
     const auto quarantine_activity{
         iteration_state.quarantine_state.BuildFinalActivity() };
     const auto & shape_active_index_list{
-        evidence.active_population.member_index_list_by_parameter.at(
+        evidence.active_population.active_atom_index_list_by_parameter.at(
             kLogPeakHeightChangeIndex) };
     const auto & offset_active_index_list{
-        evidence.active_population.member_index_list_by_parameter.at(
+        evidence.active_population.active_atom_index_list_by_parameter.at(
             kOffsetToPeakRatioChangeIndex) };
     for (std::size_t atom_index = 0; atom_index < outcome.finalized_state.size(); atom_index++)
     {
         const auto & model{ outcome.finalized_state.at(atom_index).mdpde.GetModel() };
         std::ostringstream atom_message;
         atom_message << std::scientific << std::setprecision(17)
-            << "Counterfactual convergence atom: schema=2"
+            << "Counterfactual convergence atom: schema=3"
             << ", experiment=" << continuation.trigger_attempt << "-"
             << continuation.trigger_accepted_iteration
             << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -4545,7 +4455,7 @@ static void AppendCounterfactualChangeSummary(
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
         !continuation.triggered) return;
     std::ostringstream message;
-    message << "Counterfactual convergence termination: schema=2"
+    message << "Counterfactual convergence termination: schema=3"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", reason=" << reason

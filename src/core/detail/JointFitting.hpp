@@ -102,14 +102,14 @@ struct ClusterHealth
     }
 
     JointOffsetSolveStatus joint_offset_status;
-    bool is_refit_stationarity_eligible{ true };
-    bool is_active_block_stationarity_eligible{ true };
+    bool all_local_refits_solver_qualified{ true };
+    bool production_convergence_qualified{ true };
     bool is_boundary_correction_eligible{ true };
 
-    bool IsStationarityEligible() const
+    bool IsSolverQualified() const
     {
         return joint_offset_status == JointOffsetSolveStatus::Converged &&
-            is_refit_stationarity_eligible;
+            all_local_refits_solver_qualified;
     }
 
     bool IsBoundaryCorrectionEligible() const
@@ -121,9 +121,9 @@ struct ClusterHealth
 
 using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
-bool AreClustersStationarityEligible(const ClusterHealthMap & health_by_key);
+bool AreClustersSolverQualified(const ClusterHealthMap & health_by_key);
 
-bool IsLocalRefitStatusStationarityEligible(RHBMEstimationStatus status);
+bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
 
 
 struct JointOffsetParameterization

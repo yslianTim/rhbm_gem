@@ -23,7 +23,7 @@ POLICIES = (
     "production",
     "legacy-population",
     "legacy-maximum",
-    "strict-dof",
+    "solver-qualified",
 )
 OBJECTIVE_ABSOLUTE_TOLERANCE = 1.0e-8
 OBJECTIVE_RELATIVE_TOLERANCE = 1.0e-3
@@ -45,7 +45,7 @@ def _fields(line: str, marker: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip().rstrip(".")
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "2":
+    if fields.get("schema") != "3":
         return None
     return fields
 
@@ -241,7 +241,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "exposures": {
                 "legacy_population": exposed("legacy-population"),
                 "maximum_gate": exposed("legacy-maximum"),
-                "strict_stationarity": exposed("strict-dof"),
+                "solver_qualification": exposed("solver-qualified"),
             },
             "actual_continuation": any(
                 report.get("extra_attempts", 0) > 0
@@ -254,7 +254,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "policies": policy_reports,
         })
     exposure_names = (
-        "legacy_population", "maximum_gate", "strict_stationarity")
+        "legacy_population", "maximum_gate", "solver_qualification")
     exposure_counts = {
         name: sum(report["exposures"][name] for report in reports)
         for name in exposure_names

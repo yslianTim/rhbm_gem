@@ -25,28 +25,24 @@ def make_record(
     *,
     production: str,
     legacy: str,
-    strict_dof: str,
+    solver_qualified: str,
     stops: str,
     exposures: str,
-    strict: str,
+    qualification: str,
     production_population: str = "10/10/2",
     legacy_population: str = "10/10/10",
-    member_population: str = "10/10/10",
     production_values: str = "5e-5/5e-5/5e-5",
     legacy_values: str = "5e-4/5e-4/5e-4",
-    member_values: str = "5e-4/5e-4/5e-4",
     legacy_maximum: str = "1/1/1/1/1",
 ) -> dict[str, str]:
     line = (
-        "[Debug] Convergence safeguard audit: schema=4, try=1, acc=1, "
+        "[Debug] Convergence safeguard audit: schema=5, try=1, acc=1, "
         f"production-population={production_population}, "
         f"legacy-population={legacy_population}, "
-        f"member-population={member_population}, "
-        f"production-predicates[s/a99/r99]={production}, "
-        f"legacy-population-predicates[s/a99/r99]={legacy}, "
-        f"legacy-maximum-predicates[s/a99/amax/r99/rmax]={legacy_maximum}, "
-        f"strict-dof-predicates[s/a99/r99]={strict_dof}, "
-        "member-diagnostic-predicates[s/a99/r99]=1/0/0, "
+        f"production-predicates[q/a99/r99]={production}, "
+        f"legacy-population-predicates[q/a99/r99]={legacy}, "
+        f"legacy-maximum-predicates[q/a99/amax/r99/rmax]={legacy_maximum}, "
+        f"solver-qualified-predicates[q/a99/r99]={solver_qualified}, "
         f"production-accepted-p99={production_values}, "
         "production-accepted-max=5e-4/5e-4/5e-4, "
         f"production-raw-p99={production_values}, "
@@ -54,17 +50,13 @@ def make_record(
         f"legacy-accepted-p99={legacy_values}, "
         "legacy-accepted-max=5e-4/5e-4/5e-4, "
         f"legacy-raw-p99={legacy_values}, legacy-raw-max=5e-4/5e-4/5e-4, "
-        f"member-accepted-p99={member_values}, "
-        "member-accepted-max=5e-4/5e-4/5e-4, "
-        f"member-raw-p99={member_values}, member-raw-max=5e-4/5e-4/5e-4, "
         "path[trust/backtrack/polish/boundary/rescue]=0/0/0/0/0, "
-        "stationarity[current/full/active-ineligible/refit-ineligible/soft-joint/hard-joint]=1/0/0/0/1/0, "
         "joint-status[converged/system-build/empty/initial-solve/irls-solve/objective-deteriorated/max-iter]=1/0/0/0/0/1/0, "
-        f"strict-stationarity[current/strict/restricted/all-fixed/active-shape/qualified-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/qualified-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]={strict}, "
-        "offset-groups[total/active/fixed/quarantine/mixed/member-count/min/p50/p99/max]=2/2/0/0/0/10/1/5/9/9, "
-        "ratios[shape-active/offset-member-active/quarantine]=0.01/0.01/0, "
-        f"stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/strict-dof]={stops}, "
-        f"exposures[legacy-population/maximum-gate/strict-stationarity]={exposures}."
+        f"qualification[production/solver/restricted/all-fixed/active-shape/solver-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/solver-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]={qualification}, "
+        "offset-groups[total/active/fixed/quarantine/mixed/min/p50/p99/max]=2/2/0/0/0/1/5/9/9, "
+        "ratios[shape-active/offset-active/quarantine]=0.01/0.01/0, "
+        f"stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/solver-qualified]={stops}, "
+        f"exposures[legacy-population/maximum-gate/solver-qualification]={exposures}."
     )
     record = MODULE.parse_record(line)
     assert record is not None
@@ -76,20 +68,19 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
         exposed = make_record(
             production="1/1/1",
             legacy="1/0/0",
-            strict_dof="0/1/1",
+            solver_qualified="0/1/1",
             stops="1/1/0/1/0",
             exposures="1/0/1",
-            strict="1/0/0/0/10/10/0/0/0/0/2/1/1/0/0/0/0",
+            qualification="1/0/0/0/10/10/0/0/0/0/2/1/1/0/0/0/0",
         )
         stable = make_record(
             production="1/1/1",
             legacy="1/1/1",
-            strict_dof="1/1/1",
+            solver_qualified="1/1/1",
             stops="1/1/1/1/1",
             exposures="0/0/0",
-            strict="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
+            qualification="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
             legacy_values="5e-5/5e-5/5e-5",
-            member_values="5e-5/5e-5/5e-5",
         )
 
         report = MODULE.analyze_records([exposed, stable])
@@ -98,7 +89,7 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
         self.assertEqual(report["actual_stop_exposure_count"], 1)
         self.assertEqual(
             report["implication_counterexamples"][
-                "production_stationarity=>strict"],
+                "production_qualification=>solver_qualified"],
             1,
         )
         self.assertEqual(
@@ -116,7 +107,7 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
         )
         self.assertEqual(
             report["truth_tables"]["legacy_population"][
-                "stationarity|accepted_p99"
+                "qualification|accepted_p99"
             ]["10"],
             1,
         )
@@ -125,10 +116,10 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
         record = make_record(
             production="1/1/1",
             legacy="1/0/1",
-            strict_dof="1/1/1",
+            solver_qualified="1/1/1",
             stops="0/0/0/0/0",
             exposures="0/0/0",
-            strict="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
+            qualification="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
         )
         report = MODULE.analyze_records([record])
         self.assertEqual(
@@ -138,7 +129,7 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
 
     def test_ignores_older_schema(self) -> None:
         self.assertIsNone(
-            MODULE.parse_record("Convergence safeguard audit: schema=3, try=1")
+            MODULE.parse_record("Convergence safeguard audit: schema=4, try=1")
         )
 
 

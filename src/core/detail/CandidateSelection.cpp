@@ -2412,7 +2412,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     const auto & previous_objective_state{ inputs.cluster_objective_state.at(key) };
     const auto trust_region_radius{ inputs.trust_region_state.GetRadius(key) };
     const auto is_polish_eligible{
-        inputs.health_by_key.at(key).IsStationarityEligible()
+        inputs.health_by_key.at(key).IsSolverQualified()
     };
     const auto is_unchanged_state_exhausted{
         std::ranges::find(inputs.unchanged_state_exhausted_key_list, key) !=

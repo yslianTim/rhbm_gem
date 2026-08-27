@@ -60,20 +60,20 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
 
 struct ConvergencePredicates
 {
-    bool stationarity_eligible{ false };
+    bool qualification_passed{ false };
     bool accepted_percentile_converged{ false };
     bool raw_percentile_converged{ false };
 
     bool Converged() const
     {
-        return stationarity_eligible &&
+        return qualification_passed &&
             accepted_percentile_converged &&
             raw_percentile_converged;
     }
 };
 
 ConvergencePredicates EvaluateConvergencePredicates(
-    bool stationarity_eligible,
+    bool qualification_passed,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change);
 
@@ -82,7 +82,7 @@ enum class CounterfactualConvergencePolicy : std::size_t
     Production,
     LegacyPopulation,
     LegacyMaximum,
-    StrictActiveDof,
+    SolverQualified,
     Count
 };
 
@@ -126,7 +126,7 @@ bool IsCounterfactualContinuationBudgetExhausted(
 
 struct ActiveCoordinatePopulation
 {
-    TransformedChangeIndexListByParameter member_index_list_by_parameter{};
+    TransformedChangeIndexListByParameter active_atom_index_list_by_parameter{};
     std::vector<ClusterKey> active_offset_group_atom_index_list{};
     std::vector<std::size_t> active_offset_group_size_list{};
     std::vector<char> mixed_offset_group_mask{};
@@ -143,64 +143,45 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity);
 
-struct ActiveCoordinateChangeSummary
-{
-    TransformedChangeSummary member{};
-    TransformedChangeSummary shared_dof{};
-};
-
-ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
+TransformedChangeSummary SummarizeActiveDofChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const ActiveCoordinatePopulation & population);
 
-ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
+TransformedChangeSummary SummarizeActiveDofChanges(
     const FitState & current_state,
     const FitState & previous_state,
     const ActiveCoordinatePopulation & population);
 
-struct ConvergenceStationarityAudit
+struct SolverQualificationAudit
 {
-    bool active_block_eligible{ false };
-    bool full_cluster_eligible{ false };
-    std::size_t active_block_ineligible_cluster_count{ 0 };
-    std::size_t refit_ineligible_cluster_count{ 0 };
-    std::size_t soft_joint_nonconverged_cluster_count{ 0 };
-    std::size_t hard_joint_failure_cluster_count{ 0 };
-    std::array<std::size_t, 7> joint_offset_status_count{};
-};
-
-ConvergenceStationarityAudit EvaluateConvergenceStationarityAudit(
-    const ClusterHealthMap & health_by_key);
-
-struct StrictConvergenceStationarityAudit
-{
-    bool current_eligible{ false };
-    bool strict_eligible{ true };
+    bool production_qualified{ false };
+    bool solver_qualified{ true };
     bool restricted_active_set{ false };
     bool all_fixed{ false };
     std::size_t active_shape_count{ 0 };
     std::size_t qualified_shape_count{ 0 };
-    std::size_t soft_nonstationary_shape_count{ 0 };
+    std::size_t soft_unqualified_shape_count{ 0 };
     std::size_t hard_failure_shape_count{ 0 };
     std::size_t fixed_shape_count{ 0 };
     std::size_t quarantined_shape_count{ 0 };
     std::size_t active_offset_group_count{ 0 };
     std::size_t qualified_offset_group_count{ 0 };
-    std::size_t soft_nonstationary_offset_group_count{ 0 };
+    std::size_t soft_unqualified_offset_group_count{ 0 };
     std::size_t hard_failure_offset_group_count{ 0 };
     std::size_t fixed_offset_group_count{ 0 };
     std::size_t quarantined_offset_group_count{ 0 };
     std::size_t mixed_offset_group_count{ 0 };
+    std::array<std::size_t, 7> joint_offset_status_count{};
 };
 
-StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
+SolverQualificationAudit EvaluateSolverQualificationAudit(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity,
-    const SuspiciousUpdateMask & shape_stationarity_eligible_atom_mask,
-    const SuspiciousUpdateMask & offset_stationarity_eligible_atom_mask,
+    const SuspiciousUpdateMask & shape_solver_qualified_atom_mask,
+    const SuspiciousUpdateMask & offset_solver_qualified_atom_mask,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
 

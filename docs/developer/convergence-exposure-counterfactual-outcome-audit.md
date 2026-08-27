@@ -1,6 +1,6 @@
 # Convergence exposure and counterfactual outcome audit
 
-> Current baseline (2026-08-27): production uses current stationarity and
+> Current baseline (2026-08-27): production uses its existing convergence qualification and
 > accepted/raw active-DOF p99 without a maximum gate. The original 600-case
 > search remains historical evidence for that decision and was not rerun during
 > the current schema refresh.
@@ -8,8 +8,8 @@
 ## Purpose and scope
 
 The refreshed audit searches for production convergence checkpoints at which
-the legacy all-selected population, the removed maximum gate, or strict
-stationarity rejects the stop. It then uses the isolated continuation from the
+the legacy all-selected population, the removed maximum gate, or solver
+qualification rejects the stop. It then uses the isolated continuation from the
 [third-round audit](counterfactual-convergence-continuation-audit.md) to compare
 outcomes. A mismatch alone is an exposure, not evidence of quality loss.
 
@@ -52,8 +52,9 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 
 Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The refreshed runner writes `run.log`,
-`scenario-truth.json`, `trajectory-schema-4.json`,
-`counterfactual-schema-2.json`, and schema-5 `case-summary.json`. Old summaries
+`scenario-truth.json`, `trajectory-schema-5.json`,
+`counterfactual-schema-3.json`, and schema-6 `case-summary.json`. The aggregate
+report is schema 3. Old summaries
 are intentionally not resumed across the baseline change.
 
 ## Exposure and outcome definitions
@@ -62,9 +63,9 @@ At the production checkpoint `T0`:
 
 | Exposure | Comparator at `T0` | Isolated question |
 | --- | --- | --- |
-| `legacy_population` | Current stationarity + all-selected p99 | Would the former population delay the current stop? |
-| `maximum_gate` | Current stationarity + active-DOF p99/max | Would restoring maximum delay the current stop? |
-| `strict_stationarity` | Strict stationarity + active-DOF p99 | Would stricter qualification delay the current stop? |
+| `legacy_population` | Production qualification + all-selected p99 | Would the former population delay the current stop? |
+| `maximum_gate` | Production qualification + active-DOF p99/max | Would restoring maximum delay the current stop? |
+| `solver_qualification` | Solver qualification + active-DOF p99 | Would solver qualification delay the current stop? |
 | policy agreement | All comparators accept | No continuation is required. |
 
 No production convergence trigger is a separate negative control. Outcomes are
@@ -89,13 +90,13 @@ Each comparator requires at least 15 exposures and at least five from every
 corpus family. At least 70% must show material objective or truth benefit,
 material harm must be at most 10%, aggregate raw-residual median must not
 worsen, and no safety regression may appear. Legacy population/maximum results
-are reported as `rollback_candidate`; strict-DOF is reported as
+are reported as `rollback_candidate`; `solver-qualified` is reported as
 `redesign_candidate`. An incomplete run or unmet quota forces a diagnostic-only
 conclusion.
 
 ## Verification and observed evidence
 
-The 600-case corpus was not rerun for the schema-4/schema-2 refresh, so this
+The 600-case corpus was not rerun for the schema-5/schema-3 refresh, so this
 document makes no new corpus outcome claim. Existing analyzer fixtures and
 small runner tests validate the new classifications and artifact contract.
 Fold-168 remains the external `audit-patience / no_convergence_trigger`
@@ -107,8 +108,8 @@ Current refresh verification on 2026-08-27:
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
 - fold-168 stops after seven accepted iterations with `audit-patience` in both
   builds and produces byte-identical `actual.json` files;
-- schema-4 aggregation reports seven records, no convergence trigger, and zero
-  legacy-population, maximum-gate, or strict-stationarity exposures;
+- schema-5 aggregation reports seven records, no convergence trigger, and zero
+  legacy-population, maximum-gate, or solver-qualification exposures;
 - repository lint passes;
 - the 600-case corpus was intentionally not run, so no new rollback or redesign
   decision is claimed.
