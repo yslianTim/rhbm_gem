@@ -124,6 +124,7 @@ private:
 
 constexpr std::size_t kMaximumIterations{ 100 };
 constexpr std::size_t kAuditPatience{ 3 };
+constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
 constexpr bool kCounterfactualConvergenceAuditEnabled{ true };
 #else
@@ -322,6 +323,26 @@ ConvergencePredicates EvaluateConvergencePredicates(
     };
 }
 
+static bool IsLegacyMaximumSummaryConverged(
+    const TransformedChangeSummary & summary)
+{
+    return std::ranges::all_of(
+        summary.maximum_list,
+        [](double value)
+        {
+            return std::isfinite(value) &&
+                value < kLegacyMaximumTransformedChangeTolerance;
+        });
+}
+
+static bool IsLegacyMaximumConverged(
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & raw_change)
+{
+    return IsLegacyMaximumSummaryConverged(accepted_change) &&
+        IsLegacyMaximumSummaryConverged(raw_change);
+}
+
 CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
     const CounterfactualPolicyDecision & decision,
     std::size_t attempt_number,
@@ -349,15 +370,15 @@ CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
         }
     }
 
-    const auto strict_current_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::StrictCurrentPopulation) };
-    const auto current_dof_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::CurrentActiveDof) };
+    const auto legacy_population_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::LegacyPopulation) };
+    const auto legacy_maximum_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::LegacyMaximum) };
     const auto strict_dof_index{ static_cast<std::size_t>(
         CounterfactualConvergencePolicy::StrictActiveDof) };
     update.all_candidate_policies_reached =
-        state.checkpoint_reached.at(strict_current_index) &&
-        state.checkpoint_reached.at(current_dof_index) &&
+        state.checkpoint_reached.at(legacy_population_index) &&
+        state.checkpoint_reached.at(legacy_maximum_index) &&
         state.checkpoint_reached.at(strict_dof_index);
     update.policy_agreement = update.triggered_now &&
         update.all_candidate_policies_reached;
@@ -2309,16 +2330,16 @@ static void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     std::size_t attempt_number,
     const IterationProgress & progress,
-    const ConvergencePredicates & predicates,
-    const ConvergencePredicates & shadow_predicates,
-    const ConvergencePredicates & member_strict_predicates,
-    const ConvergencePredicates & shared_dof_strict_predicates,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & raw_change,
-    const TransformedChangeSummary & accepted_shadow_change,
-    const TransformedChangeSummary & raw_shadow_change,
-    const TransformedChangeSummary & accepted_shared_dof_change,
-    const TransformedChangeSummary & raw_shared_dof_change,
+    const ConvergencePredicates & production_predicates,
+    const ConvergencePredicates & legacy_population_predicates,
+    const ConvergencePredicates & member_diagnostic_predicates,
+    const ConvergencePredicates & strict_dof_predicates,
+    const TransformedChangeSummary & accepted_legacy_change,
+    const TransformedChangeSummary & raw_legacy_change,
+    const TransformedChangeSummary & accepted_member_change,
+    const TransformedChangeSummary & raw_member_change,
+    const TransformedChangeSummary & accepted_production_change,
+    const TransformedChangeSummary & raw_production_change,
     const ActiveCoordinatePopulation & active_population,
     const ConvergenceStationarityAudit & stationarity,
     const StrictConvergenceStationarityAudit & strict_stationarity,
@@ -2332,8 +2353,9 @@ static void LogConvergenceSafeguardAudit(
     bool objective_domain_changed,
     bool orthogonal_blockers_clear,
     bool production_stop_candidate,
-    bool member_shadow_stop_candidate,
-    bool shared_dof_shadow_stop_candidate)
+    bool legacy_population_stop_candidate,
+    bool legacy_maximum_stop_candidate,
+    bool strict_dof_stop_candidate)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
@@ -2435,60 +2457,74 @@ static void LogConvergenceSafeguardAudit(
         return selected_atom_count == 0 ? 0.0 :
             static_cast<double>(count) / static_cast<double>(selected_atom_count);
     };
+    const auto accepted_legacy_maximum_passes{
+        IsLegacyMaximumSummaryConverged(accepted_production_change)
+    };
+    const auto raw_legacy_maximum_passes{
+        IsLegacyMaximumSummaryConverged(raw_production_change)
+    };
 
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: schema=3, try=" << attempt_number
+        << "Convergence safeguard audit: schema=4, try=" << attempt_number
         << ", acc=" << progress.accepted_iteration_count
         << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
         << ", quarantine=" << progress.quarantine_atom_count
-        << ", population=";
-    AppendAuditPopulation(message, accepted_change.population_size_list);
-    message << ", shadow-population=";
-    AppendAuditPopulation(message, accepted_shadow_change.population_size_list);
-    message << ", active-dof-population=";
-    AppendAuditPopulation(message, accepted_shared_dof_change.population_size_list);
+        << ", production-population=";
+    AppendAuditPopulation(message, accepted_production_change.population_size_list);
+    message << ", legacy-population=";
+    AppendAuditPopulation(message, accepted_legacy_change.population_size_list);
+    message << ", member-population=";
+    AppendAuditPopulation(message, accepted_member_change.population_size_list);
     message
-        << ", predicates[s/a99/r99]="
-        << predicates.stationarity_eligible << "/"
-        << predicates.accepted_percentile_converged << "/"
-        << predicates.raw_percentile_converged
-        << ", shadow-predicates[s/a99/r99]="
-        << shadow_predicates.stationarity_eligible << "/"
-        << shadow_predicates.accepted_percentile_converged << "/"
-        << shadow_predicates.raw_percentile_converged
-        << ", member-strict-predicates[s/a99/r99]="
-        << member_strict_predicates.stationarity_eligible << "/"
-        << member_strict_predicates.accepted_percentile_converged << "/"
-        << member_strict_predicates.raw_percentile_converged
-        << ", dof-strict-predicates[s/a99/r99]="
-        << shared_dof_strict_predicates.stationarity_eligible << "/"
-        << shared_dof_strict_predicates.accepted_percentile_converged << "/"
-        << shared_dof_strict_predicates.raw_percentile_converged
-        << ", accepted-p99=";
-    AppendAuditValues(message, accepted_change.percentile_stats.percentile_list);
-    message << ", accepted-max=";
-    AppendAuditValues(message, accepted_change.maximum_list);
-    message << ", raw-p99=";
-    AppendAuditValues(message, raw_change.percentile_stats.percentile_list);
-    message << ", raw-max=";
-    AppendAuditValues(message, raw_change.maximum_list);
-    message << ", shadow-accepted-p99=";
-    AppendAuditValues(message, accepted_shadow_change.percentile_stats.percentile_list);
-    message << ", shadow-accepted-max=";
-    AppendAuditValues(message, accepted_shadow_change.maximum_list);
-    message << ", shadow-raw-p99=";
-    AppendAuditValues(message, raw_shadow_change.percentile_stats.percentile_list);
-    message << ", shadow-raw-max=";
-    AppendAuditValues(message, raw_shadow_change.maximum_list);
-    message << ", dof-accepted-p99=";
-    AppendAuditValues(message, accepted_shared_dof_change.percentile_stats.percentile_list);
-    message << ", dof-accepted-max=";
-    AppendAuditValues(message, accepted_shared_dof_change.maximum_list);
-    message << ", dof-raw-p99=";
-    AppendAuditValues(message, raw_shared_dof_change.percentile_stats.percentile_list);
-    message << ", dof-raw-max=";
-    AppendAuditValues(message, raw_shared_dof_change.maximum_list);
+        << ", production-predicates[s/a99/r99]="
+        << production_predicates.stationarity_eligible << "/"
+        << production_predicates.accepted_percentile_converged << "/"
+        << production_predicates.raw_percentile_converged
+        << ", legacy-population-predicates[s/a99/r99]="
+        << legacy_population_predicates.stationarity_eligible << "/"
+        << legacy_population_predicates.accepted_percentile_converged << "/"
+        << legacy_population_predicates.raw_percentile_converged
+        << ", legacy-maximum-predicates[s/a99/amax/r99/rmax]="
+        << production_predicates.stationarity_eligible << "/"
+        << production_predicates.accepted_percentile_converged << "/"
+        << accepted_legacy_maximum_passes << "/"
+        << production_predicates.raw_percentile_converged << "/"
+        << raw_legacy_maximum_passes
+        << ", strict-dof-predicates[s/a99/r99]="
+        << strict_dof_predicates.stationarity_eligible << "/"
+        << strict_dof_predicates.accepted_percentile_converged << "/"
+        << strict_dof_predicates.raw_percentile_converged
+        << ", member-diagnostic-predicates[s/a99/r99]="
+        << member_diagnostic_predicates.stationarity_eligible << "/"
+        << member_diagnostic_predicates.accepted_percentile_converged << "/"
+        << member_diagnostic_predicates.raw_percentile_converged
+        << ", production-accepted-p99=";
+    AppendAuditValues(
+        message,
+        accepted_production_change.percentile_stats.percentile_list);
+    message << ", production-accepted-max=";
+    AppendAuditValues(message, accepted_production_change.maximum_list);
+    message << ", production-raw-p99=";
+    AppendAuditValues(message, raw_production_change.percentile_stats.percentile_list);
+    message << ", production-raw-max=";
+    AppendAuditValues(message, raw_production_change.maximum_list);
+    message << ", legacy-accepted-p99=";
+    AppendAuditValues(message, accepted_legacy_change.percentile_stats.percentile_list);
+    message << ", legacy-accepted-max=";
+    AppendAuditValues(message, accepted_legacy_change.maximum_list);
+    message << ", legacy-raw-p99=";
+    AppendAuditValues(message, raw_legacy_change.percentile_stats.percentile_list);
+    message << ", legacy-raw-max=";
+    AppendAuditValues(message, raw_legacy_change.maximum_list);
+    message << ", member-accepted-p99=";
+    AppendAuditValues(message, accepted_member_change.percentile_stats.percentile_list);
+    message << ", member-accepted-max=";
+    AppendAuditValues(message, accepted_member_change.maximum_list);
+    message << ", member-raw-p99=";
+    AppendAuditValues(message, raw_member_change.percentile_stats.percentile_list);
+    message << ", member-raw-max=";
+    AppendAuditValues(message, raw_member_change.maximum_list);
     message
         << ", accepted-equals-raw=" << accepted_equals_raw
         << ", path[trust/backtrack/polish/boundary/rescue]="
@@ -2543,30 +2579,28 @@ static void LogConvergenceSafeguardAudit(
         << active_population.fixed_offset_group_count << "/"
         << active_population.quarantined_offset_group_count << "/"
         << active_population.mixed_offset_group_count << "/"
-        << accepted_shadow_change.population_size_list.at(
+        << accepted_member_change.population_size_list.at(
             kOffsetToPeakRatioChangeIndex) << "/"
         << offset_group_size_minimum << "/"
         << offset_group_size_median << "/"
         << offset_group_size_p99 << "/"
         << offset_group_size_maximum
         << ", ratios[shape-active/offset-member-active/quarantine]="
-        << ratio(accepted_shadow_change.population_size_list.at(
+        << ratio(accepted_member_change.population_size_list.at(
             kLogPeakHeightChangeIndex)) << "/"
-        << ratio(accepted_shadow_change.population_size_list.at(
+        << ratio(accepted_member_change.population_size_list.at(
             kOffsetToPeakRatioChangeIndex)) << "/"
         << ratio(progress.quarantine_atom_count)
-        << ", stop-candidates[orthogonal-clear/production/member/dof/stationarity-exposure/member-population-exposure/dof-population-exposure]="
+        << ", stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/strict-dof]="
         << orthogonal_blockers_clear << "/"
         << production_stop_candidate << "/"
-        << member_shadow_stop_candidate << "/"
-        << shared_dof_shadow_stop_candidate << "/"
-        << (production_stop_candidate && !strict_stationarity.strict_eligible) << "/"
-        << (production_stop_candidate &&
-            (!shadow_predicates.accepted_percentile_converged ||
-                !shadow_predicates.raw_percentile_converged)) << "/"
-        << (production_stop_candidate &&
-            (!IsTransformedPercentileConverged(accepted_shared_dof_change) ||
-                !IsTransformedPercentileConverged(raw_shared_dof_change)))
+        << legacy_population_stop_candidate << "/"
+        << legacy_maximum_stop_candidate << "/"
+        << strict_dof_stop_candidate
+        << ", exposures[legacy-population/maximum-gate/strict-stationarity]="
+        << (production_stop_candidate && !legacy_population_stop_candidate) << "/"
+        << (production_stop_candidate && !legacy_maximum_stop_candidate) << "/"
+        << (production_stop_candidate && !strict_dof_stop_candidate)
         << ", fixed[shape/offset/hard]="
         << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
         << ", damped-atoms=" << damped_atom_count
@@ -3898,7 +3932,7 @@ static IterationResult RunIteration(
                 raw_change_list,
                 active_population)
         };
-        const auto shadow_safeguard_predicates{
+        const auto member_diagnostic_predicates{
             EvaluateConvergencePredicates(
                 is_stationarity_eligible,
                 accepted_active_change_audit.member,
@@ -3916,29 +3950,17 @@ static IterationResult RunIteration(
                 raw_iteration_result.local_refit_status_by_atom,
                 raw_iteration_result.health_by_key)
         };
-        const auto member_strict_predicates{
-            EvaluateConvergencePredicates(
-                strict_stationarity.strict_eligible,
-                accepted_active_change_audit.member,
-                raw_active_change_audit.member)
-        };
-        const auto shared_dof_strict_predicates{
+        const auto strict_dof_predicates{
             EvaluateConvergencePredicates(
                 strict_stationarity.strict_eligible,
                 accepted_active_change_audit.shared_dof,
                 raw_active_change_audit.shared_dof)
         };
-        const auto strict_current_predicates{
-            EvaluateConvergencePredicates(
-                strict_stationarity.strict_eligible,
-                transformed_change_summary,
-                raw_fixed_point_change_summary)
-        };
-        const auto current_dof_predicates{
+        const auto legacy_population_predicates{
             EvaluateConvergencePredicates(
                 is_stationarity_eligible,
-                accepted_active_change_audit.shared_dof,
-                raw_active_change_audit.shared_dof)
+                transformed_change_summary,
+                raw_fixed_point_change_summary)
         };
         const auto accepted_raw_change_summary{
             SummarizeTransformedChanges(
@@ -3952,20 +3974,25 @@ static IterationResult RunIteration(
             !has_suspicious_offset_fallback &&
             selection.rejected_key_list.empty()
         };
-        const auto member_shadow_stop_candidate{
-            orthogonal_blockers_clear && member_strict_predicates.Converged()
+        const auto legacy_population_stop_candidate{
+            orthogonal_blockers_clear && legacy_population_predicates.Converged()
         };
-        const auto shared_dof_shadow_stop_candidate{
-            orthogonal_blockers_clear && shared_dof_strict_predicates.Converged()
+        const auto legacy_maximum_stop_candidate{
+            orthogonal_blockers_clear && safeguard_predicates.Converged() &&
+                IsLegacyMaximumConverged(
+                    accepted_active_change_audit.shared_dof,
+                    raw_active_change_audit.shared_dof)
+        };
+        const auto strict_dof_stop_candidate{
+            orthogonal_blockers_clear && strict_dof_predicates.Converged()
         };
         result.counterfactual_evidence = CounterfactualIterationEvidence{
             true,
             CounterfactualPolicyDecision{ std::array{
                 result.converged,
-                orthogonal_blockers_clear && strict_current_predicates.Converged(),
-                orthogonal_blockers_clear && current_dof_predicates.Converged(),
-                shared_dof_shadow_stop_candidate,
-                member_shadow_stop_candidate
+                legacy_population_stop_candidate,
+                legacy_maximum_stop_candidate,
+                strict_dof_stop_candidate
             } },
             transformed_change_summary,
             raw_fixed_point_change_summary,
@@ -3994,11 +4021,11 @@ static IterationResult RunIteration(
             attempt_number,
             result.progress,
             safeguard_predicates,
-            shadow_safeguard_predicates,
-            member_strict_predicates,
-            shared_dof_strict_predicates,
-            accepted_active_change_audit.shared_dof,
-            raw_active_change_audit.shared_dof,
+            legacy_population_predicates,
+            member_diagnostic_predicates,
+            strict_dof_predicates,
+            transformed_change_summary,
+            raw_fixed_point_change_summary,
             accepted_active_change_audit.member,
             raw_active_change_audit.member,
             accepted_active_change_audit.shared_dof,
@@ -4017,8 +4044,9 @@ static IterationResult RunIteration(
             objective_domain_changed,
             orthogonal_blockers_clear,
             result.converged,
-            member_shadow_stop_candidate,
-            shared_dof_shadow_stop_candidate);
+            legacy_population_stop_candidate,
+            legacy_maximum_stop_candidate,
+            strict_dof_stop_candidate);
     }
 
     iteration_state.previous_state = std::move(assembled_state);
@@ -4278,14 +4306,12 @@ static std::string_view GetCounterfactualPolicyText(
     {
     case CounterfactualConvergencePolicy::Production:
         return "production";
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
-        return "strict-current";
-    case CounterfactualConvergencePolicy::CurrentActiveDof:
-        return "current-dof";
+    case CounterfactualConvergencePolicy::LegacyPopulation:
+        return "legacy-population";
+    case CounterfactualConvergencePolicy::LegacyMaximum:
+        return "legacy-maximum";
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return "strict-dof";
-    case CounterfactualConvergencePolicy::StrictActiveMember:
-        return "strict-member";
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4299,13 +4325,11 @@ static const TransformedChangeSummary & GetCounterfactualAcceptedChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::LegacyMaximum:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.accepted_dof;
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+    case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.accepted_current;
-    case CounterfactualConvergencePolicy::StrictActiveMember:
-        return evidence.accepted_member;
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4319,13 +4343,11 @@ static const TransformedChangeSummary & GetCounterfactualRawChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::LegacyMaximum:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.raw_dof;
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+    case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.raw_current;
-    case CounterfactualConvergencePolicy::StrictActiveMember:
-        return evidence.raw_member;
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4339,13 +4361,11 @@ static const std::vector<double> & GetCounterfactualAcceptedMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::LegacyMaximum:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.accepted_dof_median;
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+    case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.accepted_current_median;
-    case CounterfactualConvergencePolicy::StrictActiveMember:
-        return evidence.accepted_member_median;
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4359,13 +4379,11 @@ static const std::vector<double> & GetCounterfactualRawMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::CurrentActiveDof:
+    case CounterfactualConvergencePolicy::LegacyMaximum:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.raw_dof_median;
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+    case CounterfactualConvergencePolicy::LegacyPopulation:
         return evidence.raw_current_median;
-    case CounterfactualConvergencePolicy::StrictActiveMember:
-        return evidence.raw_member_median;
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -4416,7 +4434,7 @@ static void AppendCounterfactualChangeSummary(
     const auto & raw_median{ GetCounterfactualRawMedian(policy, evidence) };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Counterfactual convergence checkpoint: schema=1"
+        << "Counterfactual convergence checkpoint: schema=2"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -4495,7 +4513,7 @@ static void AppendCounterfactualChangeSummary(
         const auto & model{ outcome.finalized_state.at(atom_index).mdpde.GetModel() };
         std::ostringstream atom_message;
         atom_message << std::scientific << std::setprecision(17)
-            << "Counterfactual convergence atom: schema=1"
+            << "Counterfactual convergence atom: schema=2"
             << ", experiment=" << continuation.trigger_attempt << "-"
             << continuation.trigger_accepted_iteration
             << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -4527,7 +4545,7 @@ static void AppendCounterfactualChangeSummary(
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
         !continuation.triggered) return;
     std::ostringstream message;
-    message << "Counterfactual convergence termination: schema=1"
+    message << "Counterfactual convergence termination: schema=2"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", reason=" << reason

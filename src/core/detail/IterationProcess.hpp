@@ -80,10 +80,9 @@ ConvergencePredicates EvaluateConvergencePredicates(
 enum class CounterfactualConvergencePolicy : std::size_t
 {
     Production,
-    StrictCurrentPopulation,
-    CurrentActiveDof,
+    LegacyPopulation,
+    LegacyMaximum,
     StrictActiveDof,
-    StrictActiveMember,
     Count
 };
 

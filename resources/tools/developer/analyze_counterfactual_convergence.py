@@ -21,10 +21,9 @@ FIELD_PATTERN = re.compile(
 )
 POLICIES = (
     "production",
-    "strict-current",
-    "current-dof",
+    "legacy-population",
+    "legacy-maximum",
     "strict-dof",
-    "strict-member",
 )
 OBJECTIVE_ABSOLUTE_TOLERANCE = 1.0e-8
 OBJECTIVE_RELATIVE_TOLERANCE = 1.0e-3
@@ -46,7 +45,7 @@ def _fields(line: str, marker: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip().rstrip(".")
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "1":
+    if fields.get("schema") != "2":
         return None
     return fields
 
@@ -240,10 +239,9 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "trigger_try": trigger_try,
             "trigger_accepted_iteration": int(production["acc"]),
             "exposures": {
-                "stationarity": exposed("strict-current"),
-                "active_dof_population": exposed("current-dof"),
-                "combined": exposed("strict-dof"),
-                "active_member_diagnostic": exposed("strict-member"),
+                "legacy_population": exposed("legacy-population"),
+                "maximum_gate": exposed("legacy-maximum"),
+                "strict_stationarity": exposed("strict-dof"),
             },
             "actual_continuation": any(
                 report.get("extra_attempts", 0) > 0
@@ -256,8 +254,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "policies": policy_reports,
         })
     exposure_names = (
-        "stationarity", "active_dof_population", "combined",
-        "active_member_diagnostic")
+        "legacy_population", "maximum_gate", "strict_stationarity")
     exposure_counts = {
         name: sum(report["exposures"][name] for report in reports)
         for name in exposure_names
@@ -269,7 +266,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
     unresolved_policy_counts = {policy: 0 for policy in POLICIES}
     for report in reports:
         signature = "+".join(
-            name for name in exposure_names[:3] if report["exposures"][name]
+            name for name in exposure_names if report["exposures"][name]
         ) or "none"
         exposure_overlap[signature] += 1
         termination_counts[report["termination_reason"]] += 1

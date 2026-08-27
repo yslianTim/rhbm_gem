@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 4
+CASE_SUMMARY_SCHEMA_VERSION = 5
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -236,10 +236,10 @@ def run_case(
         ],
     })
     write_json(
-        case_directory / "trajectory-schema-2.json",
-        {"schema_version": 2, "records": parsed["trajectory_records"]})
-    write_json(case_directory / "counterfactual-schema-1.json", {
-        "schema_version": 1,
+        case_directory / "trajectory-schema-4.json",
+        {"schema_version": 4, "records": parsed["trajectory_records"]})
+    write_json(case_directory / "counterfactual-schema-2.json", {
+        "schema_version": 2,
         "checkpoints": parsed["checkpoints"],
         "terminations": parsed["terminations"],
         "atoms": [
@@ -316,8 +316,11 @@ def run(argv: Sequence[str] | None = None) -> int:
     aggregate["incomplete_corpus"] = bool(failed)
     if failed:
         aggregate["corpus_target_met"] = False
-        for decision in aggregate["policy_decisions"].values():
-            decision["production_redesign_candidate"] = False
+        for policy, decision in aggregate["policy_decisions"].items():
+            decision[
+                "redesign_candidate" if policy == "strict-dof" else
+                "rollback_candidate"
+            ] = False
     write_json(args.output_dir / "aggregate.json", aggregate)
     write_json(args.output_dir / "replay-manifest.json", {
         "schema_version": 1,

@@ -1,14 +1,15 @@
 # Convergence exposure and counterfactual outcome audit
 
-> Historical audit status: the production baseline is now active-DOF p99
-> without a maximum-change gate. The outcome criteria below remain a record of
-> the experiment that informed that decision.
+> Current baseline (2026-08-27): production uses current stationarity and
+> accepted/raw active-DOF p99 without a maximum gate. The original 600-case
+> search remains historical evidence for that decision and was not rerun during
+> the current schema refresh.
 
 ## Purpose and scope
 
-This fourth-round audit searches deliberately for production convergence
-checkpoints at which strict stationarity, the active shared-DOF population, or
-both reject the stop. It then uses the isolated continuation from the
+The refreshed audit searches for production convergence checkpoints at which
+the legacy all-selected population, the removed maximum gate, or strict
+stationarity rejects the stop. It then uses the isolated continuation from the
 [third-round audit](counterfactual-convergence-continuation-audit.md) to compare
 outcomes. A mismatch alone is an exposure, not evidence of quality loss.
 
@@ -18,7 +19,7 @@ runner and developer scripts, but no production CLI, `FitOptions`, public API,
 threshold, stopping expression, or model field. The search is not registered as
 a normal CTest because its fixed budget is 600 complete fits.
 
-## Reproducible corpus
+## Historical reproducible corpus
 
 [`convergence_exposure_manifest.json`](../../tests/benchmarks/convergence_exposure_manifest.json)
 expands to three families, 25 variants per family, and eight replicas per
@@ -49,22 +50,22 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
   --threads 1 --jobs 4
 ```
 
-Each case directory contains `run.log`, `scenario-truth.json`,
-`trajectory-schema-2.json`, `counterfactual-schema-1.json`, and
-`case-summary.json`. Full logs and generated state stay in build artifacts.
-Only the declarative manifest and compact aggregate evidence are repository
-artifacts.
+Historical case directories used `trajectory-schema-2.json` and
+`counterfactual-schema-1.json`. The refreshed runner writes `run.log`,
+`scenario-truth.json`, `trajectory-schema-4.json`,
+`counterfactual-schema-2.json`, and schema-5 `case-summary.json`. Old summaries
+are intentionally not resumed across the baseline change.
 
 ## Exposure and outcome definitions
 
 At the production checkpoint `T0`:
 
-| Class | Strict/current (`P1`) | Current/active-DOF (`P2`) |
+| Exposure | Comparator at `T0` | Isolated question |
 | --- | --- | --- |
-| stationarity-only | rejects | accepts |
-| active-DOF-only | accepts | rejects |
-| combined | rejects | rejects |
-| policy agreement | accepts | accepts |
+| `legacy_population` | Current stationarity + all-selected p99 | Would the former population delay the current stop? |
+| `maximum_gate` | Current stationarity + active-DOF p99/max | Would restoring maximum delay the current stop? |
+| `strict_stationarity` | Strict stationarity + active-DOF p99 | Would stricter qualification delay the current stop? |
+| policy agreement | All comparators accept | No continuation is required. |
 
 No production convergence trigger is a separate negative control. Outcomes are
 evaluated on the objective domain frozen at `T0` and report transformed truth
@@ -75,26 +76,39 @@ churn, material harm, unresolved budget exhaustion, and termination by an
 existing safeguard.
 
 Safety regressions are counted independently: new hard failures, non-finite
-states, mixed shared-group activity, or new quarantine after `T0`. The report
-also aggregates active-population `N<=91` evidence and maximum-only catches;
-the maximum gate is not changed in this round.
+states, mixed shared-group activity, or new quarantine after `T0`. Maximum
+statistics remain diagnostic and support the isolated rollback comparison.
 
 ## Replay selection and production decision
 
 Replay cases are deterministic: take at most ten sorted case IDs from each
-exposure class, then fill to 30 from the remaining sorted exposures. All
+isolated exposure, then fill to 30 from the remaining sorted exposures. All
 exposures, not only this replay subset, feed the decision statistics.
 
-`P1`, `P2`, or `P3` is a fifth-round production candidate only when its
-applicable set contains at least 15 exposures and at least five from every
-required class, at least 70% show material objective or truth benefit, material
-harm is at most 10%, the aggregate raw-residual median does not worsen, and no
-safety regression appears. An incomplete run or unmet exposure quota forces a
-shadow-only conclusion.
+Each comparator requires at least 15 exposures and at least five from every
+corpus family. At least 70% must show material objective or truth benefit,
+material harm must be at most 10%, aggregate raw-residual median must not
+worsen, and no safety regression may appear. Legacy population/maximum results
+are reported as `rollback_candidate`; strict-DOF is reported as
+`redesign_candidate`. An incomplete run or unmet quota forces a diagnostic-only
+conclusion.
 
 ## Verification and observed evidence
 
-The checked-in compact outcome records the completed fixed-budget result and
-any corpus shortfall. Fold-168 remains the external `audit-patience / no
-convergence trigger` negative control; continuation must never suppress that
-stop. Audit-OFF builds retain the production trajectory and output behavior.
+The 600-case corpus was not rerun for the schema-4/schema-2 refresh, so this
+document makes no new corpus outcome claim. Existing analyzer fixtures and
+small runner tests validate the new classifications and artifact contract.
+Fold-168 remains the external `audit-patience / no_convergence_trigger`
+negative control; continuation must never suppress that stop. Audit-OFF builds
+retain the production trajectory and output behavior.
+
+Current refresh verification on 2026-08-27:
+
+- audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
+- fold-168 stops after seven accepted iterations with `audit-patience` in both
+  builds and produces byte-identical `actual.json` files;
+- schema-4 aggregation reports seven records, no convergence trigger, and zero
+  legacy-population, maximum-gate, or strict-stationarity exposures;
+- repository lint passes;
+- the 600-case corpus was intentionally not run, so no new rollback or redesign
+  decision is claimed.

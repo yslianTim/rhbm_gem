@@ -21,31 +21,56 @@ PREDICATE_NAMES = (
     "accepted_p99",
     "raw_p99",
 )
+LEGACY_MAXIMUM_PREDICATE_NAMES = (
+    "stationarity",
+    "accepted_p99",
+    "accepted_max",
+    "raw_p99",
+    "raw_max",
+)
 TRACK_FIELDS = {
-    "current": "predicates",
-    "active_member": "member-strict-predicates",
-    "shared_dof": "dof-strict-predicates",
+    "production": "production-predicates",
+    "legacy_population": "legacy-population-predicates",
+    "strict_dof": "strict-dof-predicates",
+    "active_member": "member-diagnostic-predicates",
 }
 POPULATION_FIELDS = {
-    "current": "population",
-    "active_member": "shadow-population",
-    "shared_dof": "active-dof-population",
+    "production": "production-population",
+    "legacy_population": "legacy-population",
+    "strict_dof": "production-population",
+    "active_member": "member-population",
 }
 SUMMARY_FIELDS = {
-    "current": ("accepted-p99", "accepted-max", "raw-p99", "raw-max"),
-    "active_member": (
-        "shadow-accepted-p99",
-        "shadow-accepted-max",
-        "shadow-raw-p99",
-        "shadow-raw-max",
+    "production": (
+        "production-accepted-p99",
+        "production-accepted-max",
+        "production-raw-p99",
+        "production-raw-max",
     ),
-    "shared_dof": (
-        "dof-accepted-p99",
-        "dof-accepted-max",
-        "dof-raw-p99",
-        "dof-raw-max",
+    "legacy_population": (
+        "legacy-accepted-p99",
+        "legacy-accepted-max",
+        "legacy-raw-p99",
+        "legacy-raw-max",
+    ),
+    "strict_dof": (
+        "production-accepted-p99",
+        "production-accepted-max",
+        "production-raw-p99",
+        "production-raw-max",
+    ),
+    "active_member": (
+        "member-accepted-p99",
+        "member-accepted-max",
+        "member-raw-p99",
+        "member-raw-max",
     ),
 }
+EXPOSURE_NAMES = (
+    "legacy_population",
+    "maximum_gate",
+    "strict_stationarity",
+)
 
 
 def _numbers(value: str) -> list[float]:
@@ -65,11 +90,13 @@ def parse_record(line: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip()
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "3":
+    if fields.get("schema") != "4":
         return None
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
         "strict-stationarity",
         "stop-candidates",
+        "exposures",
+        "legacy-maximum-predicates",
         "path",
         "ratios",
         "offset-groups",
@@ -140,9 +167,10 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         lambda: defaultdict(list)
     )
     strata: dict[str, Counter[str]] = defaultdict(Counter)
+    exposure_count: Counter[str] = Counter()
     actual_exposure_count = 0
     actual_exposure_examples: list[str] = []
-    predicate_only_mismatch_count = 0
+    diagnostic_mismatch_count = 0
 
     for record in record_list:
         record_ref = f"try={record.get('try', '?')},acc={record.get('acc', '?')}"
@@ -159,30 +187,58 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             if len(failed) == 1:
                 unique_blocker_count[track][PREDICATE_NAMES[failed[0]]] += 1
 
+        legacy_maximum_vector = _integers(record["legacy-maximum-predicates"])
+        if len(legacy_maximum_vector) != len(LEGACY_MAXIMUM_PREDICATE_NAMES):
+            raise ValueError(
+                "legacy-maximum-predicates must contain five predicates")
+        legacy_maximum_failed = [
+            index for index, passed in enumerate(legacy_maximum_vector)
+            if not passed
+        ]
+        for index in legacy_maximum_failed:
+            blocker_count["legacy_maximum"][
+                LEGACY_MAXIMUM_PREDICATE_NAMES[index]
+            ] += 1
+        if len(legacy_maximum_failed) == 1:
+            unique_blocker_count["legacy_maximum"][
+                LEGACY_MAXIMUM_PREDICATE_NAMES[legacy_maximum_failed[0]]
+            ] += 1
+
         strict = _integers(record["strict-stationarity"])
         stops = _integers(record["stop-candidates"])
-        if vector_by_track["current"][0] and not strict[1]:
-            implication_name = "current_stationarity=>strict"
+        exposures = _integers(record["exposures"])
+        if len(stops) != 5:
+            raise ValueError("stop-candidates must contain five values")
+        if len(exposures) != len(EXPOSURE_NAMES):
+            raise ValueError("exposures must contain three values")
+        for name, exposed in zip(EXPOSURE_NAMES, exposures):
+            exposure_count[name] += int(bool(exposed))
+
+        if vector_by_track["production"][0] and not strict[1]:
+            implication_name = "production_stationarity=>strict"
             implication_counterexamples[implication_name] += 1
             implication_examples[implication_name].append(record_ref)
-        for shadow_track in ("active_member", "shared_dof"):
+        for comparison_track in ("legacy_population", "active_member"):
             for index, name in enumerate(PREDICATE_NAMES[1:], start=1):
-                if vector_by_track["current"][index] and not vector_by_track[shadow_track][index]:
-                    implication_name = f"current_{name}=>{shadow_track}_{name}"
+                if (vector_by_track["production"][index] and
+                        not vector_by_track[comparison_track][index]):
+                    implication_name = (
+                        f"production_{name}=>{comparison_track}_{name}")
                     implication_counterexamples[implication_name] += 1
                     implication_examples[implication_name].append(record_ref)
 
-        actual_exposure = bool(stops[1] and (not stops[2] or not stops[3]))
+        actual_exposure = any(bool(value) for value in exposures)
         actual_exposure_count += int(actual_exposure)
         if actual_exposure:
             actual_exposure_examples.append(record_ref)
-        current_predicate_pass = all(vector_by_track["current"])
-        shadow_mismatch = not all(vector_by_track["active_member"]) or not all(
-            vector_by_track["shared_dof"]
+        production_predicate_pass = all(vector_by_track["production"])
+        comparison_mismatch = (
+            not all(vector_by_track["legacy_population"]) or
+            not all(legacy_maximum_vector) or
+            not all(vector_by_track["strict_dof"])
         )
-        predicate_only_mismatch_count += int(
-            current_predicate_pass and shadow_mismatch and not stops[0]
-        )
+        diagnostic_mismatch_count += int(
+            production_predicate_pass and comparison_mismatch and not stops[0])
 
         for track, population_field in POPULATION_FIELDS.items():
             populations = _integers(record[population_field])
@@ -242,6 +298,10 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         }
         for track in TRACK_FIELDS
     }
+    normalized_blockers["legacy_maximum"] = {
+        predicate: blocker_count["legacy_maximum"].get(predicate, 0)
+        for predicate in LEGACY_MAXIMUM_PREDICATE_NAMES
+    }
     normalized_unique = {
         track: {
             predicate: unique_blocker_count[track].get(predicate, 0)
@@ -249,11 +309,18 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         }
         for track in TRACK_FIELDS
     }
+    normalized_unique["legacy_maximum"] = {
+        predicate: unique_blocker_count["legacy_maximum"].get(predicate, 0)
+        for predicate in LEGACY_MAXIMUM_PREDICATE_NAMES
+    }
     return {
         "record_count": len(record_list),
         "actual_stop_exposure_count": actual_exposure_count,
         "actual_stop_exposure_examples": actual_exposure_examples,
-        "predicate_only_mismatch_count": predicate_only_mismatch_count,
+        "exposure_count": {
+            name: exposure_count.get(name, 0) for name in EXPOSURE_NAMES
+        },
+        "diagnostic_mismatch_count": diagnostic_mismatch_count,
         "blocker_count": normalized_blockers,
         "unique_blocker_count": normalized_unique,
         "truth_tables": {
@@ -285,7 +352,8 @@ def format_markdown(report: dict[str, object]) -> str:
         "",
         f"- Records: {report['record_count']}",
         f"- Actual stop exposures: {report['actual_stop_exposure_count']}",
-        f"- Predicate-only mismatches: {report['predicate_only_mismatch_count']}",
+        f"- Exposure counts: {json.dumps(report['exposure_count'], sort_keys=True)}",
+        f"- Diagnostic-only mismatches: {report['diagnostic_mismatch_count']}",
         "",
         "## Blockers",
         "",
@@ -301,6 +369,12 @@ def format_markdown(report: dict[str, object]) -> str:
                 f"{blockers.get(track, {}).get(predicate, 0)} | "
                 f"{unique.get(track, {}).get(predicate, 0)} |"
             )
+    for predicate in LEGACY_MAXIMUM_PREDICATE_NAMES:
+        lines.append(
+            f"| legacy_maximum | {predicate} | "
+            f"{blockers.get('legacy_maximum', {}).get(predicate, 0)} | "
+            f"{unique.get('legacy_maximum', {}).get(predicate, 0)} |"
+        )
     lines.extend(("", "## Implication counterexamples", ""))
     counterexamples = report["implication_counterexamples"]
     if counterexamples:
@@ -313,7 +387,7 @@ def format_markdown(report: dict[str, object]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("log", type=Path, help="Debug log containing schema=3 audit records")
+    parser.add_argument("log", type=Path, help="Debug log containing schema=4 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

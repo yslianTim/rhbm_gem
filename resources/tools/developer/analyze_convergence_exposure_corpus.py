@@ -14,15 +14,16 @@ from typing import Any, Iterable
 
 ABSOLUTE_TOLERANCE = 1.0e-8
 RELATIVE_TOLERANCE = 1.0e-3
-POLICY_CLASSES = {
-    "strict-current": {"stationarity-only", "combined"},
-    "current-dof": {"active-dof-only", "combined"},
-    "strict-dof": {"stationarity-only", "active-dof-only", "combined"},
+POLICY_EXPOSURES = {
+    "legacy-population": "legacy_population",
+    "legacy-maximum": "maximum_gate",
+    "strict-dof": "strict_stationarity",
 }
 MINIMUM_TOTAL_EXPOSURES = 15
-MINIMUM_EXPOSURES_PER_CLASS = 5
+MINIMUM_EXPOSURES_PER_FAMILY = 5
 MINIMUM_BENEFIT_RATIO = 0.70
 MAXIMUM_HARM_RATIO = 0.10
+REQUIRED_FAMILIES = ("natural", "stationarity", "population")
 
 
 def _materially_lower(candidate: float | None, reference: float | None) -> bool:
@@ -44,15 +45,11 @@ def classify_exposure(case_summary: dict[str, Any]) -> str:
     if audit["status"] == "no_convergence_trigger":
         return "no-trigger"
     experiment = audit["experiments"][0]
-    stationarity = bool(experiment["exposures"]["stationarity"])
-    active_dof = bool(experiment["exposures"]["active_dof_population"])
-    if stationarity and active_dof:
-        return "combined"
-    if stationarity:
-        return "stationarity-only"
-    if active_dof:
-        return "active-dof-only"
-    return "policy-agreement"
+    exposed = [
+        name for name in POLICY_EXPOSURES.values()
+        if experiment["exposures"][name]
+    ]
+    return "+".join(exposed) if exposed else "policy-agreement"
 
 
 def classify_policy_outcome(
@@ -119,22 +116,22 @@ def classify_policy_outcome(
 
 
 def select_replay_cases(case_rows: Iterable[dict[str, Any]]) -> list[str]:
-    by_class: dict[str, list[str]] = {
-        name: [] for name in ("stationarity-only", "active-dof-only", "combined")
+    by_exposure: dict[str, list[str]] = {
+        name: [] for name in POLICY_EXPOSURES.values()
     }
     for row in case_rows:
-        exposure_class = row["exposure_class"]
-        if exposure_class in by_class:
-            by_class[exposure_class].append(row["case_id"])
-    for values in by_class.values():
+        for name, exposed in row["exposures"].items():
+            if exposed:
+                by_exposure[name].append(row["case_id"])
+    for values in by_exposure.values():
         values.sort()
     selected: list[str] = []
-    for exposure_class in by_class:
-        selected.extend(by_class[exposure_class][:10])
+    for exposure_name in by_exposure:
+        selected.extend(by_exposure[exposure_name][:10])
     selected = sorted(set(selected))
     if len(selected) < 30:
         remaining = sorted(
-            case_id for values in by_class.values() for case_id in values
+            case_id for values in by_exposure.values() for case_id in values
             if case_id not in selected)
         selected.extend(remaining[:30 - len(selected)])
     return selected[:30]
@@ -144,12 +141,13 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     summaries = sorted(case_summaries, key=lambda value: value["case"]["case_id"])
     rows: list[dict[str, Any]] = []
     exposure_counts: Counter[str] = Counter()
+    comparator_exposure_counts: Counter[str] = Counter()
     family_exposure_counts: dict[str, Counter[str]] = {}
     topology_exposure_counts: dict[str, Counter[str]] = {}
     termination_counts: Counter[str] = Counter()
     maximum_evidence: dict[str, Counter[str]] = {
         population: Counter() for population in (
-            "current", "active_member", "shared_dof")
+            "production", "legacy_population", "strict_dof", "active_member")
     }
     for summary in summaries:
         exposure_class = classify_exposure(summary)
@@ -159,28 +157,39 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         family_exposure_counts.setdefault(family, Counter())[exposure_class] += 1
         topology_exposure_counts.setdefault(topology, Counter())[exposure_class] += 1
         audit = summary["audit"]
+        exposures = {
+            name: False for name in POLICY_EXPOSURES.values()
+        }
         if audit["status"] == "no_convergence_trigger":
             termination_counts["no-convergence-trigger"] += 1
         else:
+            experiment = audit["experiments"][0]
             termination_counts[
-                audit["experiments"][0].get("termination_reason", "unrecorded")
+                experiment.get("termination_reason", "unrecorded")
             ] += 1
+            exposures = {
+                name: bool(experiment["exposures"][name])
+                for name in POLICY_EXPOSURES.values()
+            }
+            for name, exposed in exposures.items():
+                comparator_exposure_counts[name] += int(exposed)
         trajectory = audit.get("trajectory_audit", {})
         p99_implies_max = trajectory.get("p99_implies_max", {})
         unique_blockers = trajectory.get("unique_blocker_count", {})
         for population in maximum_evidence:
             for name, count in p99_implies_max.get(population, {}).items():
                 maximum_evidence[population][name] += int(count)
-            population_unique = unique_blockers.get(population, {})
-            maximum_evidence[population]["accepted_max_unique_catches"] += int(
-                population_unique.get("accepted_max", 0))
-            maximum_evidence[population]["raw_max_unique_catches"] += int(
-                population_unique.get("raw_max", 0))
+        legacy_maximum_unique = unique_blockers.get("legacy_maximum", {})
+        maximum_evidence["production"]["accepted_max_unique_catches"] += int(
+            legacy_maximum_unique.get("accepted_max", 0))
+        maximum_evidence["production"]["raw_max_unique_catches"] += int(
+            legacy_maximum_unique.get("raw_max", 0))
         outcomes = {}
         if exposure_class not in ("no-trigger", "policy-agreement"):
             outcomes = {
                 policy: classify_policy_outcome(summary, policy)
-                for policy in POLICY_CLASSES
+                for policy, exposure_name in POLICY_EXPOSURES.items()
+                if exposures[exposure_name]
             }
         rows.append({
             "case_id": summary["case"]["case_id"],
@@ -188,13 +197,14 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "topology": topology,
             "level": summary["case"]["level"],
             "exposure_class": exposure_class,
+            "exposures": exposures,
             "outcomes": outcomes,
         })
 
     decisions: dict[str, Any] = {}
-    for policy, applicable_classes in POLICY_CLASSES.items():
+    for policy, exposure_name in POLICY_EXPOSURES.items():
         applicable = [
-            row for row in rows if row["exposure_class"] in applicable_classes
+            row for row in rows if row["exposures"][exposure_name]
         ]
         outcome_counts = Counter(
             row["outcomes"][policy]["category"] for row in applicable)
@@ -204,7 +214,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         truth_improvement_count = sum(
             row["outcomes"][policy].get("truth_improvement", False)
             for row in applicable)
-        class_counts = Counter(row["exposure_class"] for row in applicable)
+        family_counts = Counter(row["family"] for row in applicable)
         total = len(applicable)
         benefit_ratio = outcome_counts["material-benefit"] / total if total else 0.0
         harm_ratio = outcome_counts["material-harm"] / total if total else 0.0
@@ -224,12 +234,12 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         aggregate_raw_median_regression = (
             aggregate_raw_median_ratio is None or
             _materially_higher(aggregate_raw_median_ratio, 1.0))
-        class_quota_met = all(
-            class_counts[name] >= MINIMUM_EXPOSURES_PER_CLASS
-            for name in applicable_classes)
+        family_quota_met = all(
+            family_counts[name] >= MINIMUM_EXPOSURES_PER_FAMILY
+            for name in REQUIRED_FAMILIES)
         candidate = (
             total >= MINIMUM_TOTAL_EXPOSURES and
-            class_quota_met and
+            family_quota_met and
             benefit_ratio >= MINIMUM_BENEFIT_RATIO and
             harm_ratio <= MAXIMUM_HARM_RATIO and
             not aggregate_raw_median_regression and
@@ -237,7 +247,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         )
         decisions[policy] = {
             "applicable_exposure_count": total,
-            "class_counts": dict(sorted(class_counts.items())),
+            "family_counts": dict(sorted(family_counts.items())),
             "outcome_counts": dict(sorted(outcome_counts.items())),
             "objective_improvement_count": objective_improvement_count,
             "truth_improvement_count": truth_improvement_count,
@@ -247,20 +257,42 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "aggregate_raw_median_ratio": aggregate_raw_median_ratio,
             "aggregate_raw_median_regression": aggregate_raw_median_regression,
             "safety_regression_count": safety_regressions,
-            "production_redesign_candidate": candidate,
+            (
+                "redesign_candidate" if policy == "strict-dof" else
+                "rollback_candidate"
+            ): candidate,
         }
 
-    required_classes = ("stationarity-only", "active-dof-only", "combined")
-    genuine_exposure_count = sum(exposure_counts[name] for name in required_classes)
-    shortfall = {
-        name: max(0, MINIMUM_EXPOSURES_PER_CLASS - exposure_counts[name])
-        for name in required_classes
-    }
+    genuine_exposure_count = sum(
+        1 for row in rows if any(row["exposures"].values()))
+    shortfall = {}
+    for exposure_name in POLICY_EXPOSURES.values():
+        exposed_rows = [row for row in rows if row["exposures"][exposure_name]]
+        family_counts = Counter(row["family"] for row in exposed_rows)
+        shortfall[exposure_name] = {
+            "total": max(
+                0,
+                MINIMUM_TOTAL_EXPOSURES - comparator_exposure_counts[exposure_name]),
+            "families": {
+                family: max(
+                    0,
+                    MINIMUM_EXPOSURES_PER_FAMILY - family_counts[family])
+                for family in REQUIRED_FAMILIES
+            },
+        }
+    corpus_target_met = all(
+        values["total"] == 0 and not any(values["families"].values())
+        for values in shortfall.values()
+    )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "case_count": len(summaries),
         "genuine_exposure_count": genuine_exposure_count,
         "exposure_counts": dict(sorted(exposure_counts.items())),
+        "comparator_exposure_counts": {
+            name: comparator_exposure_counts.get(name, 0)
+            for name in POLICY_EXPOSURES.values()
+        },
         "exposure_counts_by_family": {
             name: dict(sorted(counts.items()))
             for name, counts in sorted(family_exposure_counts.items())
@@ -274,7 +306,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             name: dict(sorted(counts.items()))
             for name, counts in maximum_evidence.items()
         },
-        "corpus_target_met": genuine_exposure_count >= 30 and not any(shortfall.values()),
+        "corpus_target_met": corpus_target_met,
         "corpus_shortfall": shortfall,
         "replay_case_ids": select_replay_cases(rows),
         "policy_decisions": decisions,

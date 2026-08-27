@@ -1,8 +1,21 @@
 # Stationarity semantics and active-coordinate population audit
 
-> Historical audit status: the active shared-DOF population described here is
-> now the production convergence population, and production no longer uses the
-> maximum-change gate. Strict stationarity remains diagnostic-only.
+> Current baseline (2026-08-27): active shared-DOF p99 is the production
+> convergence population, maximum change is diagnostic-only, and strict
+> stationarity remains a counterfactual comparator.
+
+## Current resolution
+
+Production samples shape-active atoms once for log peak and log width and
+samples each active `(cluster, group_id)` offset DOF once, using the maximum
+absolute member change. Fixed and quarantined blocks are excluded. Mixed
+shared-group activity and non-finite member changes fail convergence. This
+removes fixed-zero dilution and group-size weighting without changing the p99
+threshold.
+
+Current stationarity remains `ClusterHealth::is_active_block_stationarity_eligible`.
+Strict qualification is retained in Debug/audit builds as `strict-dof`; it is
+not promoted without continuation evidence of material benefit.
 
 ## Purpose and constraints
 
@@ -18,11 +31,9 @@ The audit is observation-only. It does not change the production conjunction,
 thresholds, stop reason, trajectory, or final model. Debug-disabled runs do not
 build the second-round summaries.
 
-The current Notion algorithm page says that quarantined fixed zeros cannot hide
-active-variable change. The implementation still computes the production p99
-and maximum from every selected atom. The statement therefore describes the
-intended semantics, not the current stopping expression. This document records
-that discrepancy rather than silently treating either source as authoritative.
+At the time of this audit, the implementation still computed production p99
+and maximum from every selected atom even though the algorithm description
+specified active-coordinate semantics. That discrepancy is now resolved.
 
 ## Stationarity semantics
 
@@ -51,13 +62,13 @@ The production predicate remains
 records the strict predicate, shape/offset qualification counts, restricted
 state, and `current=true, strict=false` disagreements.
 
-## Population definitions
+## Historical population comparison
 
 Accepted and raw transformed changes are summarized three ways:
 
 | Population | log peak / log width | offset / peak |
 | --- | --- | --- |
-| Production | Every selected atom | Every selected atom |
+| Historical production | Every selected atom | Every selected atom |
 | Active member | Shape-active atoms | Offset-active atoms |
 | Active DOF | Shape-active atoms | One sample per `(cluster, group_id)` offset column |
 
@@ -68,10 +79,10 @@ non-finite member makes the group sample non-finite. Mixed active/fixed members
 inside one shared-offset group are an invariant violation: the DOF summary is
 forced to fail instead of choosing a partial group silently.
 
-The same p99 `1e-4` and maximum `1e-3` thresholds are applied to all three
-populations. A zero-sized coordinate population has summary value zero and
-passes vacuously; its population size and restricted-state label remain in the
-record.
+The historical comparison applied p99 `1e-4` and maximum `1e-3` to all three
+populations. Current production applies only p99 `1e-4` to the active-DOF
+population. A zero-sized coordinate population still passes vacuously and is
+reported as restricted/all-fixed rather than full convergence.
 
 ## Failure Mode x Safeguard matrix
 
@@ -109,17 +120,17 @@ themselves establish the frequency or quality impact on production datasets.
 
 ## Debug record and aggregation
 
-Every accepted Debug attempt now emits schema `2` on the existing
-`Convergence safeguard audit:` record. In addition to the first-round fields,
-it includes:
+Every accepted Debug attempt now emits schema `4` on the existing
+`Convergence safeguard audit:` record. It includes:
 
 - active-member and active-DOF populations and accepted/raw summaries;
-- current, member-strict, and shared-DOF-strict predicate vectors;
+- production, legacy-population, legacy-maximum, strict-DOF, and active-member
+  diagnostic predicate vectors;
 - activity/qualification counts for shape and offset blocks;
 - shared-offset group counts and min/p50/p99/max group sizes;
 - shape-active, offset-member-active, and quarantine ratios;
-- orthogonal-clear, production, member-shadow, and DOF-shadow stop candidates;
-- stationarity and population premature-convergence exposure flags.
+- orthogonal-clear and four policy stop candidates;
+- isolated legacy-population, maximum-gate, and strict-stationarity exposures.
 
 Aggregate a captured Debug log with:
 
@@ -132,11 +143,10 @@ python3 resources/tools/developer/analyze_convergence_audit.py \
 The analyzer reports blocker/unique-blocker counts, pairwise truth tables,
 implication counterexamples, p99-to-maximum results split at `N=91`, and
 strata for active/quarantine ratio, group size, solver status, and proposal
-path. A production stop candidate rejected by either shadow policy is called a
-**premature-convergence exposure**. Because this audit never continues beyond
-the production stop, that term does not claim observed downstream quality loss.
+path. A production stop candidate rejected by a comparator is an exposure; a
+mismatch alone does not claim downstream quality loss.
 
-## Second-round decisions
+## Historical second-round decisions
 
 | Mechanism | Decision | Evidence needed before production change |
 | --- | --- | --- |
@@ -150,23 +160,37 @@ Zero observed unique catches remain empirical evidence only. A safeguard is not
 called redundant without a mathematical implication or a subsequent
 trajectory-changing ablation.
 
+The subsequent production change adopted the preferred shared-DOF population
+and removed the maximum gate. Strict stationarity remains diagnostic because
+the available counterfactual evidence did not justify a production change.
+
 ## Verification and external evidence
 
-The focused tests cover the stationarity status matrix, quarantine exclusion,
+The historical focused tests covered the stationarity status matrix, quarantine exclusion,
 unequal group weighting, extreme/non-finite members, mixed activity, Debug
 schema, serial/parallel trace equality, and exact Info/Debug final model values.
-The developer analyzer has a fixed schema-2 fixture test.
+The developer analyzer now has a schema-4 fixture using isolated comparators.
 
-Fold-168 remains optional because the model and map are external to the
-repository. When hash-matching inputs are available, its Debug log can be
-aggregated without changing fitting options or stopping behavior.
+Fold-168 inputs remain external to the repository. The current refresh uses
+the locally available hash-matching inputs as a negative control without
+changing fitting options or stopping behavior.
 
 The trajectory-changing follow-up is the build-gated
 [counterfactual convergence continuation audit](counterfactual-convergence-continuation-audit.md).
 It suppresses only an exposed production convergence stop and evaluates policy
 checkpoints on isolated finalization workspaces.
 
-Verification on 2026-08-27:
+Current refresh verification on 2026-08-27:
+
+- Audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19.
+- Fold-168 stops after seven accepted iterations with `audit-patience` in both
+  builds; the audit report contains seven schema-4 records, no convergence
+  trigger, and zero comparator exposures.
+- Audit-enabled and audit-disabled fold-168 `actual.json` files are
+  byte-identical; repository lint passes.
+- The 600-case exposure corpus was not rerun.
+
+Historical verification from the earlier 2026-08-27 audit:
 
 - all seven second-round C++ audit tests and the schema-2 analyzer fixture test
   pass;

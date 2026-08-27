@@ -1,10 +1,25 @@
 # Second-stage convergence safeguard audit
 
-> Historical audit status: production now evaluates accepted/raw p99 over
-> active optimization DOFs and no longer uses the maximum-change gate. The
-> measurements and conclusions below describe the policy audited at the time.
+> Current baseline (2026-08-27): production requires current active-block
+> stationarity plus accepted/raw active-DOF p99 below `1e-4`. Maximum change
+> remains diagnostic and drives topology-drift checks, but is not a convergence
+> predicate. The first-round measurements below remain historical evidence.
 
-## Purpose and scope
+## Current resolution
+
+- Retain accepted-state p99 because post-raw correction can move a committed
+  state after a small raw endpoint.
+- Retain raw fixed-point p99 because clipping, backtracking, or rejection can
+  hide a material raw residual from the accepted step.
+- Evaluate both summaries over active optimization DOFs. Fixed and quarantined
+  coordinates do not dilute the population, and each shared offset contributes
+  one group-level sample.
+- Remove accepted/raw maximum from the production stopping conjunction. The
+  historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
+- Keep strict stationarity diagnostic-only until continuation demonstrates a
+  material objective or truth-error benefit.
+
+## Historical purpose and scope
 
 This is the first-round Failure Mode × Safeguard audit for
 `RunSecondStageLocalFitting`. It separates the existing convergence gate into
@@ -23,9 +38,8 @@ height, log width, and offset/peak. Every coordinate must have p99 below
 transitions, suspicious updates, and rejected clusters remain orthogonal
 blockers and are not removal candidates in this audit.
 
-The audit adds debug-only observation. Normal, quiet, and Info-level runs do
-not compute the shadow summaries, and the production convergence expression
-remains the same conjunction as before.
+At the time, the audit added debug-only observation without changing the
+production convergence expression.
 
 ## Static implication results
 
@@ -78,16 +92,18 @@ The targeted tests exercise the predicate truth table directly:
 The debug trace is also checked for deterministic equality between serial and
 parallel selection and for behavioral neutrality between Info and Debug runs.
 
-## Debug trace contract
+## Current Debug trace contract
 
-At Debug verbosity (`-v 4`) every accepted attempt emits one line beginning
-with `Convergence safeguard audit:`. The record contains:
+At Debug verbosity (`-v 4`) every accepted attempt emits schema `4` on a line
+beginning with `Convergence safeguard audit:`. The record contains:
 
 - attempt, accepted iteration, selected/quarantined population;
-- current and active-block shadow population sizes for all three coordinates;
-- current and shadow predicate vectors in
-  `stationarity/accepted-p99/accepted-max/raw-p99/raw-max` order;
-- all accepted/raw p99 and maximum coordinate values;
+- production active-DOF, legacy all-selected, and active-member population
+  sizes for all three coordinates;
+- production, `legacy-population`, `legacy-maximum`, and `strict-dof`
+  predicate vectors;
+- accepted/raw p99 and diagnostic maximum values for every population;
+- isolated stop-candidate and exposure flags for the three comparators;
 - whether accepted and raw states are equal;
 - trust limiting, backtracking, polish, boundary, and rescue path counts;
 - current/full stationarity, exact local-refit status counts, and soft/hard
@@ -101,7 +117,7 @@ population size, active ratio, quarantine ratio, and proposal path. A lack of
 observed counterexamples is empirical dominance only; it is not treated as a
 mathematical implication.
 
-## First-round decisions
+## Historical first-round decisions
 
 | Safeguard | Classification | Next action |
 | --- | --- | --- |
@@ -123,12 +139,28 @@ It preserves the production stopping expression while comparing strict
 block-level stationarity, active-member changes, and one-sample-per-shared-DOF
 offset changes.
 
+The subsequent audits completed this follow-up. Production now uses the
+preferred active-DOF population without a maximum gate; the accepted/raw and
+stationarity independence results remain valid.
+
 The external fold-168 regression remains optional for this round because its
 model and map inputs are not stored in the repository. When hash-matching inputs
 are available, its Debug trace can be aggregated with the same contract without
 changing the fitting configuration.
 
-## Verification status (2026-08-26)
+## Current refresh verification (2026-08-27)
+
+- Audit-enabled CTest passes 21/21, including analyzer fixtures, runner
+  smoke/determinism, and the external counterfactual fold-168 audit.
+- Audit-disabled CTest passes 19/19, including the external fold-168 regression.
+- Both fold-168 runs stop after seven accepted iterations with
+  `audit-patience`; the audit report is `no_convergence_trigger` with zero
+  legacy-population, maximum-gate, and strict-stationarity exposures.
+- Audit-enabled and audit-disabled fold-168 `actual.json` files are
+  byte-identical, and repository lint passes.
+- The 600-case exposure corpus was not rerun.
+
+## Historical verification status (2026-08-26)
 
 - All seven new convergence-audit tests pass, including serial/parallel trace
   equality and Info/Debug behavioral equivalence.
