@@ -200,6 +200,19 @@ log width
 offset-to-peak ratio
 ```
 
+Convergence statistics are evaluated over active optimization degrees of
+freedom, not every selected atom. Shape-active atoms contribute one log-peak
+and one log-width sample each. Every active shared offset within one
+`(cluster, group_id)` contributes one offset-to-peak sample equal to the
+maximum absolute transformed change among its members. Fixed and quarantined
+coordinates are excluded; mixed-activity groups and non-finite member changes
+fail convergence.
+
+Both the accepted state and raw fixed-point state must have a linearly
+interpolated p99 below `1e-4` in all three populations. Maximum transformed
+change remains a diagnostic and topology-drift metric, but is not a convergence
+predicate.
+
 The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
 and positive, its offset is not finite, or its transformed coordinates cannot
@@ -488,8 +501,9 @@ earliest state that improves the best objective beyond the strict tolerance.
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
-- the accepted and raw fixed-point transformed changes both converge, all
-  clusters are accepted, and no active block is suspicious or unhealthy;
+- the accepted and raw fixed-point active-DOF p99 changes are both below
+  `1e-4`, all clusters are accepted, and no active block is suspicious or
+  unhealthy;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
 - an all-rejected attempt reaches one of the no-progress resolutions below;

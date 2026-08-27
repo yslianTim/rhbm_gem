@@ -1,5 +1,9 @@
 # Counterfactual convergence continuation audit
 
+> Historical audit status: production now uses current stationarity plus
+> accepted/raw active-DOF p99 and no maximum-change gate. The legacy policy
+> comparisons below remain developer diagnostics.
+
 ## Purpose and isolation boundary
 
 This third-round audit asks whether a production convergence stop rejected by

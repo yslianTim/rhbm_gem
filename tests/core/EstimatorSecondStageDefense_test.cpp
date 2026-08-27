@@ -3,14 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <functional>
 #include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
-#include <string>
-#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -28,7 +25,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
@@ -102,43 +98,6 @@ bool HasCouplingNeighbor(
         neighbor_index) != neighbor_index_list.end();
 }
 
-std::optional<std::array<std::size_t, 4>> ParsePolishProgressCounts(
-    std::string_view row)
-{
-    std::array<std::size_t, 4> separator_position{};
-    std::size_t search_position{ 0 };
-    for (auto & position : separator_position)
-    {
-        position = row.find('|', search_position);
-        if (position == std::string_view::npos) return std::nullopt;
-        search_position = position + 1;
-    }
-
-    auto cell{
-        row.substr(
-            separator_position.at(2) + 1,
-            separator_position.at(3) - separator_position.at(2) - 1)
-    };
-    while (!cell.empty() && cell.front() == ' ') cell.remove_prefix(1);
-    while (!cell.empty() && cell.back() == ' ') cell.remove_suffix(1);
-
-    std::array<std::size_t, 4> count{};
-    std::size_t value_start{ 0 };
-    for (std::size_t value_index = 0; value_index < count.size(); value_index++)
-    {
-        const auto value_end{
-            value_index + 1 == count.size() ?
-                cell.size() : cell.find('/', value_start)
-        };
-        if (value_end == std::string_view::npos) return std::nullopt;
-        count.at(value_index) = static_cast<std::size_t>(
-            std::stoull(std::string{
-                cell.substr(value_start, value_end - value_start) }));
-        value_start = value_end + 1;
-    }
-    return count;
-}
-
 std::unique_ptr<rg::AtomObject> MakeAtom(
     int serial_id,
     Spot spot,
@@ -169,29 +128,6 @@ rg::LocalGaussianResult MakeGaussianResult(const rg::GaussianModel3D & model)
         rg::GaussianModel3DUncertainty{}
     };
     result.posterior = result.mdpde;
-    return result;
-}
-
-std::vector<std::string> CollectLogLinesContaining(
-    std::string_view output,
-    std::string_view marker)
-{
-    std::vector<std::string> result;
-    std::size_t line_start{ 0 };
-    while (line_start < output.size())
-    {
-        const auto line_end{ output.find('\n', line_start) };
-        const auto line{ output.substr(
-            line_start,
-            line_end == std::string_view::npos ? output.size() - line_start :
-                line_end - line_start) };
-        if (line.find(marker) != std::string_view::npos)
-        {
-            result.emplace_back(line);
-        }
-        if (line_end == std::string_view::npos) break;
-        line_start = line_end + 1;
-    }
     return result;
 }
 
@@ -1620,91 +1556,6 @@ TEST(EstimatorSecondStageDefenseTest, SeedSelectionReturnsCompleteSourceModelAnd
     EXPECT_DOUBLE_EQ(
         selection->model.GetStandardDeviationModel().GetOffset(),
         0.03);
-}
-
-TEST(EstimatorSecondStageDefenseTest, SeedInitializationBuildsMediansOnlyFromDirectSources)
-{
-    auto model{
-        BuildDefenseModel(
-            {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 6.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 12.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 18.0F, 0.0F, 0.0F }
-            },
-            { Spot::C, Spot::C, Spot::O, Spot::N },
-            {
-                Element::CARBON,
-                Element::CARBON,
-                Element::OXYGEN,
-                Element::NITROGEN
-            },
-            {
-                rg::GaussianModel3D{ 2.0, 0.5, 0.2 },
-                rg::GaussianModel3D{ 3.0, 0.5, 0.2 },
-                rg::GaussianModel3D{ 10.0, 0.7, -0.2 },
-                rg::GaussianModel3D{ 6.0, 0.6, 0.0 }
-            },
-            rg::GaussianModel3D{ 20.0, 0.8, 0.3 })
-    };
-
-    auto analysis{ model->EditAnalysis() };
-    const auto & atom_list{ model->GetSelectedAtoms() };
-    for (std::size_t i = 0; i < atom_list.size(); i++)
-    {
-        auto result{ MakeGaussianResult(
-            rg::GaussianModel3D{
-                20.0 + static_cast<double>(i),
-                0.8,
-                0.3
-            }) };
-        result.posterior.reset();
-        if (i == 0)
-        {
-            result.posterior = rg::GaussianModel3DWithUncertainty{
-                rg::GaussianModel3D{ 2.0, 0.5, 0.2 },
-                rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
-            };
-        }
-        else if (i == 2)
-        {
-            result.posterior = rg::GaussianModel3DWithUncertainty{
-                rg::GaussianModel3D{ 10.0, 0.7, -0.2 },
-                rg::GaussianModel3DUncertainty{ 0.2, 0.03, 0.04 }
-            };
-        }
-        analysis.EnsureAtomLocalPotential(*atom_list.at(i))
-            .SetGaussianResult(
-                FittingStage::Second,
-                std::move(result));
-    }
-
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        out.find(
-            "Selected second-stage initial seeds = 4, sources = "
-            "group-posterior:2, group-prior:0, group-median:1, global-median:1."),
-        std::string::npos);
-    EXPECT_NE(
-        out.find(
-            "atom index = 1, source = group-median, "
-            "original MDPDE A/B/C = 2.10e+01/8.00e-01/3.00e-01, "
-            "selected A/B/C = 2.00e+00/5.00e-01/2.00e-01."),
-        std::string::npos);
-    EXPECT_NE(
-        out.find(
-            "atom index = 3, source = global-median, "
-            "original MDPDE A/B/C = 2.30e+01/8.00e-01/3.00e-01, "
-            "selected A/B/C = 6.00e+00/6.00e-01/0.00e+00."),
-        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
@@ -4898,7 +4749,7 @@ TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfini
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximumTail)
+TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximumTail)
 {
     std::vector<alg::ParameterChange> change_list(
         1000,
@@ -4911,28 +4762,26 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         index_list.at(i) = i;
     }
 
-    const auto percentile_stats{
-        alg::SummarizeParameterChangeStats(change_list, index_list, 0.99)
-    };
-    const auto maximum_list{
-        change_detail::SummarizeMaximumTransformedChanges(
+    change_detail::TransformedChangeIndexListByParameter index_list_by_parameter;
+    index_list_by_parameter.fill(index_list);
+    const auto summary{
+        change_detail::SummarizeTransformedChangesByParameter(
             change_list,
-            index_list)
+            index_list_by_parameter)
     };
     EXPECT_LT(
-        percentile_stats.percentile_list.at(
+        summary.percentile_stats.percentile_list.at(
             change_detail::kLogPeakHeightChangeIndex),
         1.0e-4);
-    EXPECT_FALSE(change_detail::IsTransformedChangeConverged(
-        percentile_stats,
-        maximum_list));
+    EXPECT_GT(
+        summary.maximum_list.at(change_detail::kLogPeakHeightChangeIndex),
+        1.0e-3);
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(summary));
 }
 
-TEST(EstimatorSecondStageDefenseTest, ConvergenceSafeguardsKeepAcceptedRawAndStationarityIndependent)
+TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarityIndependent)
 {
-    const auto make_summary = [](
-        double percentile,
-        double maximum)
+    const auto make_summary = [](double percentile, double maximum)
     {
         change_detail::TransformedChangeSummary summary;
         summary.percentile_stats.percentile_list.assign(
@@ -4944,94 +4793,33 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceSafeguardsKeepAcceptedRawAndSta
         summary.population_size_list.fill(100);
         return summary;
     };
-    const auto small{ make_summary(5.0e-5, 5.0e-4) };
+    const auto small{ make_summary(5.0e-5, 2.0e-3) };
     const auto large{ make_summary(2.0e-4, 2.0e-3) };
 
     const auto accepted_small{
-        audit_detail::EvaluateConvergenceSafeguardPredicates(true, small, large)
+        audit_detail::EvaluateConvergencePredicates(true, small, large)
     };
     EXPECT_TRUE(accepted_small.stationarity_eligible);
-    EXPECT_TRUE(accepted_small.accepted.Converged());
-    EXPECT_FALSE(accepted_small.raw.Converged());
+    EXPECT_TRUE(accepted_small.accepted_percentile_converged);
+    EXPECT_FALSE(accepted_small.raw_percentile_converged);
     EXPECT_FALSE(accepted_small.Converged());
 
     const auto raw_small{
-        audit_detail::EvaluateConvergenceSafeguardPredicates(true, large, small)
+        audit_detail::EvaluateConvergencePredicates(true, large, small)
     };
-    EXPECT_FALSE(raw_small.accepted.Converged());
-    EXPECT_TRUE(raw_small.raw.Converged());
+    EXPECT_FALSE(raw_small.accepted_percentile_converged);
+    EXPECT_TRUE(raw_small.raw_percentile_converged);
     EXPECT_FALSE(raw_small.Converged());
 
     const auto nonstationary_small{
-        audit_detail::EvaluateConvergenceSafeguardPredicates(false, small, small)
+        audit_detail::EvaluateConvergencePredicates(false, small, small)
     };
-    EXPECT_TRUE(nonstationary_small.accepted.Converged());
-    EXPECT_TRUE(nonstationary_small.raw.Converged());
+    EXPECT_TRUE(nonstationary_small.accepted_percentile_converged);
+    EXPECT_TRUE(nonstationary_small.raw_percentile_converged);
     EXPECT_FALSE(nonstationary_small.Converged());
 }
 
-TEST(EstimatorSecondStageDefenseTest, TransformedPercentileAndMaximumHaveUniqueFailureCoverage)
-{
-    std::vector<alg::ParameterChange> isolated_tail(
-        1000,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
-    isolated_tail.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) =
-        2.0e-3;
-    change_detail::TransformedChangeIndexListByParameter all_indices;
-    for (auto & index_list : all_indices)
-    {
-        index_list.resize(isolated_tail.size());
-        for (std::size_t i = 0; i < index_list.size(); i++) index_list.at(i) = i;
-    }
-    const auto isolated_summary{
-        change_detail::SummarizeTransformedChangesByParameter(
-            isolated_tail,
-            all_indices)
-    };
-    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(isolated_summary));
-    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(isolated_summary));
-
-    std::vector<alg::ParameterChange> coherent_drift(
-        1000,
-        alg::ParameterChange{ std::vector<double>(3, 5.0e-4) });
-    const auto coherent_summary{
-        change_detail::SummarizeTransformedChangesByParameter(
-            coherent_drift,
-            all_indices)
-    };
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(coherent_summary));
-    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(coherent_summary));
-}
-
-TEST(EstimatorSecondStageDefenseTest, P99ImpliesMaximumOnlyThroughNinetyOneMembers)
-{
-    const auto summarize_single_tail = [](std::size_t count, double maximum)
-    {
-        std::vector<alg::ParameterChange> change_list(
-            count,
-            alg::ParameterChange{ std::vector<double>(3, 0.0) });
-        change_list.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) = maximum;
-        change_detail::TransformedChangeIndexListByParameter all_indices;
-        for (auto & index_list : all_indices)
-        {
-            index_list.resize(count);
-            for (std::size_t i = 0; i < count; i++) index_list.at(i) = i;
-        }
-        return change_detail::SummarizeTransformedChangesByParameter(
-            change_list,
-            all_indices);
-    };
-
-    const auto ninety_one{ summarize_single_tail(91, 9.999e-4) };
-    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(ninety_one));
-    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(ninety_one));
-
-    const auto ninety_two{ summarize_single_tail(92, 1.05e-3) };
-    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(ninety_two));
-    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(ninety_two));
-}
-
-TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlockDilution)
+TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlockDilution)
 {
     constexpr std::size_t atom_count{ 1000 };
     constexpr std::size_t fixed_atom_count{ 990 };
@@ -5057,23 +4845,11 @@ TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlo
         block_activity.shape_fixed_atom_mask.at(i) = 1;
         block_activity.offset_fixed_atom_mask.at(i) = 1;
     }
-    const auto shadow_indices{
-        audit_detail::BuildActiveBlockChangeIndexLists(
-            atom_index_list,
-            block_activity)
-    };
     const auto all_selected{
         change_detail::SummarizeTransformedChangesByParameter(change_list, all_indices)
     };
-    const auto active_shadow{
-        change_detail::SummarizeTransformedChangesByParameter(change_list, shadow_indices)
-    };
 
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(all_selected));
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(active_shadow));
-    EXPECT_EQ(active_shadow.population_size_list.at(0), 10U);
-    EXPECT_EQ(active_shadow.population_size_list.at(1), 10U);
-    EXPECT_EQ(active_shadow.population_size_list.at(2), 10U);
 
     std::vector<std::size_t> group_id_by_atom_index(atom_count);
     std::iota(
@@ -5086,7 +4862,7 @@ TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlo
         audit_detail::SuspiciousUpdateMask(atom_count, 0)
     };
     const auto population{
-        audit_detail::BuildActiveCoordinateAuditPopulation(
+        audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
@@ -5094,230 +4870,18 @@ TEST(EstimatorSecondStageDefenseTest, ActiveBlockShadowPopulationExposesFixedBlo
             quarantine_activity)
     };
     const auto dual_shadow{
-        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
     };
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
         dual_shadow.member));
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
         dual_shadow.shared_dof));
+    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(0), 10U);
+    EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(1), 10U);
     EXPECT_EQ(dual_shadow.shared_dof.population_size_list.at(2), 10U);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ActiveBlockStationarityCanHideSoftJointNonconvergence)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        audit_detail::ClusterKey{ 0 },
-        audit_detail::ClusterHealth{ Status::IrlsMaximumIterationsReached });
-
-    const auto audit{
-        audit_detail::EvaluateConvergenceStationarityAudit(health_by_key)
-    };
-    EXPECT_TRUE(audit.active_block_eligible);
-    EXPECT_FALSE(audit.full_cluster_eligible);
-    EXPECT_EQ(audit.soft_joint_nonconverged_cluster_count, 1U);
-    EXPECT_EQ(audit.hard_joint_failure_cluster_count, 0U);
-}
-
-TEST(EstimatorSecondStageDefenseTest, StrictStationarityRejectsActiveSoftJointStatus)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    const std::vector<std::size_t> atom_index_list{ 0 };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
-    audit_detail::SuspiciousBlockActivity activity{
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        audit_detail::ClusterKey{ 0 },
-        audit_detail::ClusterHealth{ Status::IrlsMaximumIterationsReached });
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
-        rg::RHBMEstimationStatus::SUCCESS
-    };
-
-    const auto audit{
-        audit_detail::EvaluateStrictConvergenceStationarityAudit(
-            atom_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            activity,
-            quarantine_activity,
-            audit_detail::SuspiciousUpdateMask(1, 1),
-            audit_detail::SuspiciousUpdateMask(1, 0),
-            local_status,
-            health_by_key)
-    };
-    EXPECT_TRUE(audit.current_eligible);
-    EXPECT_FALSE(audit.strict_eligible);
-    EXPECT_EQ(audit.qualified_shape_count, 1U);
-    EXPECT_EQ(audit.soft_nonstationary_offset_group_count, 1U);
-}
-
-TEST(EstimatorSecondStageDefenseTest, StrictStationarityClassifiesActiveHardJointStatuses)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    const std::vector<std::size_t> atom_index_list{ 0 };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
-    audit_detail::SuspiciousBlockActivity activity{
-        audit_detail::SuspiciousUpdateMask(1, 1),
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
-        std::nullopt
-    };
-    for (const auto status : {
-        Status::SystemBuildFailed,
-        Status::EmptySystem,
-        Status::InitialSolveFailed,
-        Status::IrlsSolveFailed })
-    {
-        audit_detail::ClusterHealthMap health_by_key;
-        health_by_key.emplace(
-            audit_detail::ClusterKey{ 0 },
-            audit_detail::ClusterHealth{ status });
-        const auto audit{
-            audit_detail::EvaluateStrictConvergenceStationarityAudit(
-                atom_index_list,
-                cluster_key_list,
-                group_id_by_atom_index,
-                activity,
-                quarantine_activity,
-                audit_detail::SuspiciousUpdateMask(1, 0),
-                audit_detail::SuspiciousUpdateMask(1, 0),
-                local_status,
-                health_by_key)
-        };
-        EXPECT_FALSE(audit.strict_eligible);
-        EXPECT_EQ(audit.hard_failure_offset_group_count, 1U);
-    }
-}
-
-TEST(EstimatorSecondStageDefenseTest, StrictShapeStationarityCoversStatusesAndDamping)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    const std::vector<std::size_t> atom_index_list{ 0 };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
-    audit_detail::SuspiciousBlockActivity activity{
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 1),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0),
-        audit_detail::SuspiciousUpdateMask(1, 0)
-    };
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        audit_detail::ClusterKey{ 0 },
-        audit_detail::ClusterHealth{ Status::Converged });
-
-    const std::array status_list{
-        rg::RHBMEstimationStatus::SUCCESS,
-        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED,
-        rg::RHBMEstimationStatus::SINGLE_MEMBER,
-        rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
-        rg::RHBMEstimationStatus::NUMERICAL_FALLBACK
-    };
-    for (const auto status : status_list)
-    {
-        const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
-            status
-        };
-        const auto is_qualified{ status == rg::RHBMEstimationStatus::SUCCESS };
-        const auto audit{
-            audit_detail::EvaluateStrictConvergenceStationarityAudit(
-                atom_index_list,
-                cluster_key_list,
-                group_id_by_atom_index,
-                activity,
-                quarantine_activity,
-                audit_detail::SuspiciousUpdateMask(1, is_qualified ? 1 : 0),
-                audit_detail::SuspiciousUpdateMask(1, 0),
-                local_status,
-                health_by_key)
-        };
-        EXPECT_EQ(audit.strict_eligible, is_qualified);
-        EXPECT_EQ(audit.qualified_shape_count, is_qualified ? 1U : 0U);
-        EXPECT_EQ(audit.soft_nonstationary_shape_count, is_qualified ? 0U : 1U);
-    }
-
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> success_status{
-        rg::RHBMEstimationStatus::SUCCESS
-    };
-    const auto damped_audit{
-        audit_detail::EvaluateStrictConvergenceStationarityAudit(
-            atom_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            activity,
-            quarantine_activity,
-            audit_detail::SuspiciousUpdateMask(1, 0),
-            audit_detail::SuspiciousUpdateMask(1, 0),
-            success_status,
-            health_by_key)
-    };
-    EXPECT_FALSE(damped_audit.strict_eligible);
-    EXPECT_EQ(damped_audit.soft_nonstationary_shape_count, 1U);
-}
-
-TEST(EstimatorSecondStageDefenseTest, StrictStationarityExcludesQuarantinedBlocks)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    const std::vector<std::size_t> atom_index_list{ 0 };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ { 0 } };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0 };
-    audit_detail::SuspiciousBlockActivity fixed_activity{
-        audit_detail::SuspiciousUpdateMask(1, 1),
-        audit_detail::SuspiciousUpdateMask(1, 1),
-        audit_detail::SuspiciousUpdateMask(1, 1)
-    };
-    const auto quarantine_activity{ fixed_activity };
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        audit_detail::ClusterKey{ 0 },
-        audit_detail::ClusterHealth{ Status::IrlsObjectiveDeteriorated });
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status{
-        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED
-    };
-
-    const auto audit{
-        audit_detail::EvaluateStrictConvergenceStationarityAudit(
-            atom_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            fixed_activity,
-            quarantine_activity,
-            audit_detail::SuspiciousUpdateMask(1, 0),
-            audit_detail::SuspiciousUpdateMask(1, 0),
-            local_status,
-            health_by_key)
-    };
-    EXPECT_TRUE(audit.strict_eligible);
-    EXPECT_TRUE(audit.restricted_active_set);
-    EXPECT_TRUE(audit.all_fixed);
-    EXPECT_EQ(audit.quarantined_shape_count, 1U);
-    EXPECT_EQ(audit.quarantined_offset_group_count, 1U);
-}
-
-TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationRemovesGroupSizeWeighting)
+TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSizeWeighting)
 {
     constexpr std::size_t large_group_size{ 100 };
     constexpr std::size_t atom_count{ large_group_size + 1 };
@@ -5341,7 +4905,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationRemovesGroupSizeWeighti
         audit_detail::SuspiciousUpdateMask(atom_count, 0)
     };
     const auto population{
-        audit_detail::BuildActiveCoordinateAuditPopulation(
+        audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
@@ -5349,18 +4913,16 @@ TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationRemovesGroupSizeWeighti
             quarantine_activity)
     };
     const auto audit{
-        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
     };
 
     EXPECT_EQ(audit.member.population_size_list.at(2), atom_count);
     EXPECT_EQ(audit.shared_dof.population_size_list.at(2), 2U);
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(audit.member));
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit.shared_dof));
-    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(audit.member));
-    EXPECT_TRUE(change_detail::IsTransformedMaximumConverged(audit.shared_dof));
 }
 
-TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationPreservesExtremeAndNonFiniteMembers)
+TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtremeAndNonFiniteMembers)
 {
     const std::vector<std::size_t> atom_index_list{ 0, 1, 2 };
     const std::vector<std::size_t> group_id_by_atom_index{ 0, 0, 0 };
@@ -5375,7 +4937,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationPreservesExtremeAndNonF
         audit_detail::SuspiciousUpdateMask(3, 0)
     };
     const auto population{
-        audit_detail::BuildActiveCoordinateAuditPopulation(
+        audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
@@ -5388,22 +4950,22 @@ TEST(EstimatorSecondStageDefenseTest, SharedDofPopulationPreservesExtremeAndNonF
     change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
         2.0e-3;
     const auto extreme{
-        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
     };
     EXPECT_DOUBLE_EQ(extreme.shared_dof.maximum_list.at(2), 2.0e-3);
-    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(extreme.shared_dof));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
+        extreme.shared_dof));
 
     change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
         std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite{
-        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
     };
     EXPECT_TRUE(std::isinf(nonfinite.shared_dof.maximum_list.at(2)));
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(nonfinite.shared_dof));
-    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(nonfinite.shared_dof));
 }
 
-TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsDofShadow)
+TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
 {
     const std::vector<std::size_t> atom_index_list{ 0, 1 };
     const std::vector<std::size_t> group_id_by_atom_index{ 0, 0 };
@@ -5419,7 +4981,7 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsDofShadow)
     };
     const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
     const auto population{
-        audit_detail::BuildActiveCoordinateAuditPopulation(
+        audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             cluster_key_list,
             group_id_by_atom_index,
@@ -5430,37 +4992,14 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsDofShadow)
         2,
         alg::ParameterChange{ std::vector<double>(3, 0.0) });
     const auto change_audit{
-        audit_detail::EvaluateActiveCoordinateChangeAudit(change_list, population)
+        audit_detail::SummarizeActiveCoordinateChanges(change_list, population)
     };
     EXPECT_EQ(population.mixed_offset_group_count, 1U);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
         change_audit.shared_dof));
-
-    audit_detail::ClusterHealthMap health_by_key;
-    health_by_key.emplace(
-        audit_detail::ClusterKey{ 0, 1 },
-        audit_detail::ClusterHealth{
-            offset_detail::JointOffsetSolveStatus::Converged });
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> local_status(
-        2,
-        rg::RHBMEstimationStatus::SUCCESS);
-    const auto stationarity{
-        audit_detail::EvaluateStrictConvergenceStationarityAudit(
-            atom_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            activity,
-            quarantine_activity,
-            audit_detail::SuspiciousUpdateMask(2, 0),
-            audit_detail::SuspiciousUpdateMask(2, 1),
-            local_status,
-            health_by_key)
-    };
-    EXPECT_FALSE(stationarity.strict_eligible);
-    EXPECT_EQ(stationarity.mixed_offset_group_count, 1U);
 }
 
-TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentileAndMaximumPredicates)
+TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
 {
     change_detail::TransformedChangeSummary summary;
     summary.percentile_stats.percentile_list.assign(3, 0.0);
@@ -5468,10 +5007,8 @@ TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentileAndMaximumPr
     summary.population_size_list.fill(1);
     summary.percentile_stats.percentile_list.at(0) =
         std::numeric_limits<double>::infinity();
-    summary.maximum_list.at(1) = std::numeric_limits<double>::quiet_NaN();
 
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(summary));
-    EXPECT_FALSE(change_detail::IsTransformedMaximumConverged(summary));
 }
 
 TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousAtomDoesNotFreezeCompleteLongChain)
@@ -5508,21 +5045,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
-    EXPECT_EQ(out.find("objective-unavailable"), std::string::npos);
-    EXPECT_EQ(out.find("objective = not-evaluated"), std::string::npos);
-    EXPECT_NE(out.find("hard-fixed=yes"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluster)
@@ -5578,17 +5104,7 @@ TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveD
         GetEstimateModel(*selected_atoms.at(0)),
         GetEstimateModel(*selected_atoms.at(1))
     };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    testing::internal::GetCapturedStderr();
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     bool any_local_model_changed{ false };
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
@@ -5600,9 +5116,6 @@ TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveD
             fitted_model.GetOffset() != previous_terminal_model_list.at(i).GetOffset();
     }
     EXPECT_TRUE(any_local_model_changed);
-    EXPECT_EQ(
-        out.find("Reset second-stage objective domain"),
-        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -5837,14 +5350,8 @@ TEST(
     {
         auto model{ BuildUnselectedContributorDefenseModel(seed_model) };
         auto options{ MakeSecondStageOptions() };
-        options.quiet_mode = false;
         options.exclude_hydrogen = exclude_hydrogen;
-        const auto previous_log_level{ Logger::GetLogLevel() };
-        Logger::SetLogLevel(LogLevel::Debug);
-        testing::internal::CaptureStdout();
         const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
-        const std::string out{ testing::internal::GetCapturedStdout() };
-        Logger::SetLogLevel(previous_log_level);
 
         EXPECT_EQ(model->GetSelectedAtomCount(), 2U);
         EXPECT_TRUE(peeling_applied);
@@ -5867,43 +5374,6 @@ TEST(
             seed_model,
             exclude_hydrogen);
 
-        EXPECT_NE(
-            out.find(
-                exclude_hydrogen ?
-                    "Unselected second-stage neighbor seeds = 2, "
-                    "sources = group-median:1, global-median:1." :
-                    "Unselected second-stage neighbor seeds = 3, "
-                    "sources = group-median:2, global-median:1."),
-            std::string::npos);
-        EXPECT_NE(
-            out.find(
-                "Unselected second-stage neighbor seed selection: serial ID = 3"),
-            std::string::npos);
-        EXPECT_NE(
-            out.find(
-                "Unselected second-stage neighbor seed selection: serial ID = 4"),
-            std::string::npos);
-        EXPECT_EQ(
-            out.find(
-                "Unselected second-stage neighbor seed selection: serial ID = 6"),
-            std::string::npos);
-        EXPECT_EQ(
-            out.find(
-                "Unselected second-stage neighbor seed selection: serial ID = 7"),
-            std::string::npos);
-        const auto hydrogen_log_position{
-            out.find(
-                "Unselected second-stage neighbor seed selection: serial ID = 5")
-        };
-        if (exclude_hydrogen)
-        {
-            EXPECT_EQ(hydrogen_log_position, std::string::npos);
-        }
-        else
-        {
-            EXPECT_NE(hydrogen_log_position, std::string::npos);
-        }
-
         const auto first_response{
             rg::AtomLocalPotentialView::RequireFor(
                 *model->GetSelectedAtoms().front())
@@ -5919,16 +5389,6 @@ TEST(
             include_hydrogen_response = first_response;
         }
     }
-
-    auto quiet_model{ BuildUnselectedContributorDefenseModel(seed_model) };
-    auto quiet_options{ MakeSecondStageOptions() };
-    quiet_options.quiet_mode = true;
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*quiet_model, quiet_options);
-    const std::string quiet_out{ testing::internal::GetCapturedStdout() };
-    EXPECT_EQ(
-        quiet_out.find("Unselected second-stage neighbor seeds"),
-        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesClusterParameters)
@@ -5974,13 +5434,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
 TEST(EstimatorSecondStageDefenseTest, SharedOffsetGroupParticipatesInAcceptedJointPolish)
 {
     auto model{ BuildSharedOffsetJointPolishDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     const auto & atom_list{ model->GetSelectedAtoms() };
     ASSERT_EQ(atom_list.size(), 2U);
@@ -5989,7 +5445,6 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetGroupParticipatesInAcceptedJoi
         GetEstimateModel(*atom_list.at(0)).GetOffset(),
         GetEstimateModel(*atom_list.at(1)).GetOffset());
     EXPECT_LT(CalculateSelectedAtomResponseMeanSquaredError(*model), initial_error);
-    EXPECT_NE(out.find("1/1/0/0"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -6086,110 +5541,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAnd
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditTraceIsDeterministicAndBehaviorNeutral)
-{
-    auto info_model{ BuildSeparatedRollbackDefenseModel() };
-    auto debug_serial_model{ BuildSeparatedRollbackDefenseModel() };
-    auto debug_parallel_model{ BuildSeparatedRollbackDefenseModel() };
-    auto info_options{ MakeSecondStageOptions() };
-    auto debug_serial_options{ MakeSecondStageOptions() };
-    auto debug_parallel_options{ MakeSecondStageOptions() };
-    info_options.quiet_mode = false;
-    debug_serial_options.quiet_mode = false;
-    debug_parallel_options.quiet_mode = false;
-    info_options.thread_size = 1;
-    debug_serial_options.thread_size = 1;
-    debug_parallel_options.thread_size = 2;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    const auto info_result{
-        rt::RunSecondStageLocalFitting(*info_model, info_options)
-    };
-    const std::string info_output{ testing::internal::GetCapturedStdout() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    const auto debug_serial_result{
-        rt::RunSecondStageLocalFitting(*debug_serial_model, debug_serial_options)
-    };
-    const std::string debug_serial_output{
-        testing::internal::GetCapturedStdout()
-    };
-
-    testing::internal::CaptureStdout();
-    const auto debug_parallel_result{
-        rt::RunSecondStageLocalFitting(*debug_parallel_model, debug_parallel_options)
-    };
-    const std::string debug_parallel_output{
-        testing::internal::GetCapturedStdout()
-    };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_EQ(info_result, debug_serial_result);
-    EXPECT_EQ(debug_serial_result, debug_parallel_result);
-    EXPECT_TRUE(CollectLogLinesContaining(
-        info_output,
-        "Convergence safeguard audit:").empty());
-    const auto serial_audit_lines{ CollectLogLinesContaining(
-        debug_serial_output,
-        "Convergence safeguard audit:") };
-    const auto parallel_audit_lines{ CollectLogLinesContaining(
-        debug_parallel_output,
-        "Convergence safeguard audit:") };
-    EXPECT_FALSE(serial_audit_lines.empty());
-    EXPECT_EQ(serial_audit_lines, parallel_audit_lines);
-    EXPECT_TRUE(std::ranges::all_of(
-        serial_audit_lines,
-        [](const auto & line)
-        {
-            return line.find("schema=2") != std::string::npos &&
-                line.find("active-dof-population=") != std::string::npos &&
-                line.find("member-strict-predicates") != std::string::npos &&
-                line.find("dof-strict-predicates") != std::string::npos &&
-                line.find("strict-stationarity") != std::string::npos &&
-                line.find("stop-candidates") != std::string::npos &&
-                line.find(
-                "local-status[success/max-iter/single/insufficient/numerical/unavailable]=") !=
-                std::string::npos;
-        }));
-    const auto info_summary_lines{ CollectLogLinesContaining(
-        info_output,
-        "Second-Stage Local Fitting Summary") };
-    const auto debug_summary_lines{ CollectLogLinesContaining(
-        debug_serial_output,
-        "Second-Stage Local Fitting Summary") };
-    EXPECT_FALSE(info_summary_lines.empty());
-    EXPECT_EQ(info_summary_lines, debug_summary_lines);
-
-    const auto & info_atoms{ info_model->GetSelectedAtoms() };
-    const auto & serial_atoms{ debug_serial_model->GetSelectedAtoms() };
-    const auto & parallel_atoms{ debug_parallel_model->GetSelectedAtoms() };
-    ASSERT_EQ(info_atoms.size(), serial_atoms.size());
-    ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
-    for (std::size_t i = 0; i < info_atoms.size(); i++)
-    {
-        const auto info_gaussian{ GetEstimateModel(*info_atoms.at(i)) };
-        const auto serial_gaussian{ GetEstimateModel(*serial_atoms.at(i)) };
-        const auto parallel_gaussian{ GetEstimateModel(*parallel_atoms.at(i)) };
-        EXPECT_DOUBLE_EQ(info_gaussian.GetAmplitude(), serial_gaussian.GetAmplitude());
-        EXPECT_DOUBLE_EQ(info_gaussian.GetWidth(), serial_gaussian.GetWidth());
-        EXPECT_DOUBLE_EQ(info_gaussian.GetOffset(), serial_gaussian.GetOffset());
-        EXPECT_DOUBLE_EQ(serial_gaussian.GetAmplitude(), parallel_gaussian.GetAmplitude());
-        EXPECT_DOUBLE_EQ(serial_gaussian.GetWidth(), parallel_gaussian.GetWidth());
-        EXPECT_DOUBLE_EQ(serial_gaussian.GetOffset(), parallel_gaussian.GetOffset());
-        ExpectGaussianModelsNear(
-            info_gaussian,
-            serial_gaussian,
-            1.0e-12);
-        ExpectGaussianModelsNear(
-            serial_gaussian,
-            parallel_gaussian,
-            1.0e-12);
-    }
-}
-
 TEST(
     EstimatorSecondStageDefenseTest,
     BoundaryComponentReconciliationMatchesSerialAndParallelSelection)
@@ -6275,109 +5626,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, ObjectiveSeparatesFitAndTailDomains)
-{
-    auto model{
-        BuildDefenseModel(
-            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
-            { Spot::O },
-            { Element::OXYGEN },
-            { rg::GaussianModel3D{ 8.0, 0.45, -0.1 } },
-            rg::GaussianModel3D{ 6.0, 0.60, 0.0 })
-    };
-    auto options{ MakeSecondStageOptions() };
-    options.distance_max = 0.5;
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(out.find("unique fit/tail samples = 12/12"), std::string::npos);
-    EXPECT_NE(
-        out.find("fixed tail scale median/p99/max = "),
-        std::string::npos);
-    EXPECT_EQ(
-        out.find("fixed tail scale median/p99/max = unavailable"),
-        std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnce)
-{
-    auto model{
-        BuildDefenseModel(
-            {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 3.4F, 0.0F, 0.0F }
-            },
-            { Spot::C, Spot::O },
-            { Element::CARBON, Element::OXYGEN },
-            {
-                rg::GaussianModel3D{ 8.0, 0.90, 0.20 },
-                rg::GaussianModel3D{ 3.0, 0.80, -0.10 }
-            },
-            rg::GaussianModel3D{ 5.5, 0.30, 0.0 })
-    };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(out.find("candidate/retained/cut edges = 1/0/1"), std::string::npos);
-    EXPECT_NE(out.find("clusters = 2"), std::string::npos);
-    EXPECT_NE(out.find("unique fit/tail samples = 48/0"), std::string::npos);
-    EXPECT_NE(
-        out.find("Boundary-component reconciliation:"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("boundary_joint_correction_attempts/accepted/fallback="),
-        std::string::npos);
-}
-
-TEST(
-    EstimatorSecondStageDefenseTest,
-    BoundaryJointCorrectionRepairsFailedEndpointAndRetainsFallback)
-{
-    auto model{ BuildBoundaryJointCorrectionDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(out.find("accepted_source=joint-correction"), std::string::npos);
-    EXPECT_NE(
-        out.find(
-            "Boundary-interface joint correction: direct-interface/shape-active/offset-active/closure/parameters = 2/2/2/2/6"),
-        std::string::npos);
-    EXPECT_NE(out.find("status=candidate-ready"), std::string::npos);
-    EXPECT_NE(
-        out.find("accepted=yes, outcome=accepted-over-endpoint."),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("boundary_joint_correction_attempts/accepted/fallback="),
-        std::string::npos);
-    EXPECT_EQ(
-        out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("accepted=no, outcome=fallback-endpoint."),
-        std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
 TEST(
     EstimatorSecondStageDefenseTest,
     BoundaryJointCorrectionMatchesSerialParallelAndIntensityScaling)
@@ -6390,23 +5638,13 @@ TEST(
     };
     auto serial_options{ MakeSecondStageOptions() };
     auto parallel_options{ MakeSecondStageOptions() };
-    auto scaled_options{ MakeSecondStageOptions() };
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
-    scaled_options.quiet_mode = false;
 
     EXPECT_EQ(
         rt::RunSecondStageLocalFitting(*serial_model, serial_options),
         rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*scaled_model, scaled_options);
-    const std::string scaled_out{ testing::internal::GetCapturedStdout() };
-    EXPECT_NE(
-        scaled_out.find("boundary_joint_correction_attempts/accepted/fallback="),
-        std::string::npos);
-    EXPECT_EQ(
-        scaled_out.find("boundary_joint_correction_attempts/accepted/fallback=0/0/0"),
-        std::string::npos);
+    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
     const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
@@ -6431,20 +5669,6 @@ TEST(
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, QuietBoundaryJointCorrectionIsSilent)
-{
-    auto model{ BuildBoundaryJointCorrectionDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = true;
-
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-
-    EXPECT_TRUE(out.empty());
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
 TEST(
     EstimatorSecondStageDefenseTest,
     BoundaryComponentReconciliationBacktracksAndPreservesRemoteCluster)
@@ -6453,22 +5677,7 @@ TEST(
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13)
     };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-    EXPECT_NE(
-        out.find(
-            "Boundary-component reconciliation: clusters/atoms/boundary-samples = 2/11/"),
-        std::string::npos);
-    EXPECT_NE(out.find("mode=rescue"), std::string::npos);
-    EXPECT_NE(out.find("locally-deteriorated/max-delta="), std::string::npos);
-    EXPECT_NE(out.find("component/global-improvement="), std::string::npos);
-    EXPECT_NE(out.find("| 1/2"), std::string::npos);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13),
         initial_remote_error);
@@ -6503,69 +5712,13 @@ TEST(
     const auto previous_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
     };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     const auto fitted_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
     };
     EXPECT_NE(fitted_model.GetOffset(), previous_model.GetOffset());
-    EXPECT_NE(out.find("accepted_iterations="), std::string::npos);
-    EXPECT_EQ(out.find("accepted_iterations=0"), std::string::npos);
-    EXPECT_EQ(
-        out.find("previous-shared-offset-projection-outside-trust-region"),
-        std::string::npos);
-    EXPECT_EQ(out.find("objective = not-evaluated"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(
-    EstimatorSecondStageDefenseTest,
-    PreObjectiveTrustFailureDoesNotReportUnavailableObjective)
-{
-    const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
-    auto model{
-        BuildDefenseModel(
-            {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F }
-            },
-            { Spot::C, Spot::C },
-            { Element::CARBON, Element::CARBON },
-            { initial_model, initial_model },
-            initial_model)
-    };
-    const auto & atom_list{ model->GetSelectedAtoms() };
-    auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom_list.at(0))
-        .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-            initial_model.WithOffset(-2.0)));
-    analysis.EnsureAtomLocalPotential(*atom_list.at(1))
-        .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-            initial_model.WithOffset(2.0)));
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        out.find("previous-shared-offset-projection-outside-trust-region"),
-        std::string::npos);
-    EXPECT_NE(out.find("objective = not-evaluated"), std::string::npos);
-    EXPECT_EQ(out.find("objective-unavailable"), std::string::npos);
-    EXPECT_EQ(out.find("fit/tail samples = 0/0"), std::string::npos);
 }
 
 TEST(
@@ -6574,7 +5727,6 @@ TEST(
 {
     auto model{ BuildNearCollinearDefenseModel() };
     auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
     std::vector<rg::GaussianModel3D> previous_model_list;
     std::vector<LocalPotentialSampleList> previous_peeling_sampling_entries_list;
     auto analysis{ model->EditAnalysis() };
@@ -6618,9 +5770,7 @@ TEST(
                 rg::FittingStage::Second, group_key));
     }
 
-    testing::internal::CaptureStdout();
     const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
-    const std::string out{ testing::internal::GetCapturedStdout() };
 
     EXPECT_FALSE(peeling_applied);
 
@@ -6657,367 +5807,4 @@ TEST(
             previous_group_prior_list.at(i),
             0.0);
     }
-    EXPECT_NE(out.find("stop_reason=no-valid-seed"), std::string::npos);
-    EXPECT_NE(out.find("final_uses_polish=unavailable"), std::string::npos);
-    EXPECT_EQ(
-        out.find("Second-stage best-iteration application:"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("final_state_source=unavailable"),
-        std::string::npos);
 }
-
-TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPolish)
-{
-    auto model{ BuildJointPolishDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(out.find("final_uses_polish=yes"), std::string::npos);
-    EXPECT_NE(out.find("Final dependency polish:"), std::string::npos);
-    EXPECT_NE(
-        out.find("dependency_polish_components/attempted/accepted/fallback="),
-        std::string::npos);
-    bool found_accepted_polish{ false };
-    bool found_skipped_polish{ false };
-    for (std::size_t row_start = out.find('\r');
-        row_start != std::string::npos;
-        row_start = out.find('\r', row_start))
-    {
-        row_start++;
-        const auto row_end{ out.find_first_of("\r\n", row_start) };
-        ASSERT_NE(row_end, std::string::npos);
-        const std::string_view row{
-            out.data() + row_start,
-            row_end - row_start
-        };
-        const auto polish_count{ ParsePolishProgressCounts(row) };
-        if (!polish_count.has_value()) continue;
-        found_accepted_polish = found_accepted_polish || polish_count->at(1) > 0;
-        found_skipped_polish = found_skipped_polish || polish_count->at(3) > 0;
-        row_start = row_end;
-    }
-    EXPECT_TRUE(found_accepted_polish);
-    EXPECT_TRUE(found_skipped_polish);
-}
-
-TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsNoPolishForEmptySelection)
-{
-    auto model{ BuildJointPolishDefenseModel() };
-    model->SelectAllAtoms(false);
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-
-    EXPECT_NE(out.find("final_uses_polish=no"), std::string::npos);
-    EXPECT_NE(out.find("Final dependency polish:"), std::string::npos);
-    EXPECT_NE(
-        out.find("final_state_source=latest-validated"),
-        std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
-{
-    auto model{ BuildSeparatedRollbackDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    const auto count_occurrences = [&](std::string_view text)
-    {
-        std::size_t count{ 0 };
-        for (std::size_t position = 0;
-            (position = out.find(text, position)) != std::string::npos;
-            position += text.size())
-        {
-            count++;
-        }
-        return count;
-    };
-    EXPECT_EQ(count_occurrences("Try/Acc"), 1U);
-    EXPECT_NE(out.find("Atom A/Q"), std::string::npos);
-    EXPECT_NE(out.find("Cluster A/R"), std::string::npos);
-    EXPECT_NE(out.find("Polish E/A/R/S"), std::string::npos);
-    EXPECT_NE(out.find("Suspicious"), std::string::npos);
-    EXPECT_NE(out.find("dMax A/R"), std::string::npos);
-    EXPECT_EQ(count_occurrences("Local-fitting residue cutoff:"), 1U);
-    EXPECT_NE(
-        out.find("Adaptive local-fitting topology rebuild:"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("% Rebuild local-fitting coupling topology"),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("topology_rebuilds/partition_changes="),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("boundary_reconciliations/backtracked/rejected="),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("boundary_reconciliation_ms="),
-        std::string::npos);
-    EXPECT_NE(
-        out.find("iteration/candidate/topology/total_ms="),
-        std::string::npos);
-
-    const auto header_start{ out.find("Try/Acc") };
-    ASSERT_NE(header_start, std::string::npos);
-    const auto header_end{ out.find('\n', header_start) };
-    ASSERT_NE(header_end, std::string::npos);
-    const std::string_view header{
-        out.data() + header_start,
-        header_end - header_start
-    };
-    std::vector<std::string_view> progress_row_list;
-    for (std::size_t row_start = out.find('\r');
-        row_start != std::string::npos;
-        row_start = out.find('\r', row_start))
-    {
-        row_start++;
-        const auto row_end{ out.find_first_of("\r\n", row_start) };
-        ASSERT_NE(row_end, std::string::npos);
-        const std::string_view row{
-            out.data() + row_start,
-            row_end - row_start
-        };
-        if (ParsePolishProgressCounts(row).has_value())
-        {
-            progress_row_list.emplace_back(row);
-        }
-        row_start = row_end;
-    }
-    const auto separator_position_list = [](std::string_view row)
-    {
-        std::vector<std::size_t> position_list;
-        for (std::size_t position = row.find('|');
-            position != std::string::npos;
-            position = row.find('|', position + 1))
-        {
-            position_list.emplace_back(position);
-        }
-        return position_list;
-    };
-    const auto header_separator_position_list{
-        separator_position_list(header)
-    };
-    ASSERT_EQ(header_separator_position_list.size(), 5U);
-    ASSERT_EQ(progress_row_list.size(), 4U);
-    bool found_skipped_polish{ false };
-    for (const auto row : progress_row_list)
-    {
-        EXPECT_EQ(row.size(), header.size());
-        EXPECT_EQ(
-            separator_position_list(row),
-            header_separator_position_list);
-
-        const auto polish_count{ ParsePolishProgressCounts(row) };
-        ASSERT_TRUE(polish_count.has_value());
-        EXPECT_EQ(
-            polish_count->at(0),
-            polish_count->at(1) + polish_count->at(2) + polish_count->at(3));
-        found_skipped_polish = found_skipped_polish || polish_count->at(3) > 0;
-    }
-    EXPECT_TRUE(found_skipped_polish);
-    EXPECT_NE(
-        progress_row_list.front().find("3.55e-02/4.14e-02"),
-        std::string::npos);
-
-    const std::string summary_prefix{
-        "Second-stage local fitting summary: accepted_iterations="
-    };
-    const auto summary_position{ out.find(summary_prefix) };
-    ASSERT_NE(summary_position, std::string::npos);
-    ASSERT_GT(summary_position, 0U);
-    EXPECT_EQ(out.at(summary_position - 1), '\n');
-    const auto accepted_start{ summary_position + summary_prefix.size() };
-    const auto accepted_end{ out.find(',', accepted_start) };
-    ASSERT_NE(accepted_end, std::string::npos);
-    const auto accepted_iteration_count{
-        static_cast<std::size_t>(std::stoull(
-            out.substr(accepted_start, accepted_end - accepted_start)))
-    };
-    EXPECT_EQ(accepted_iteration_count, 4U);
-    EXPECT_NE(
-        out.find(
-            "best_iteration=1, stop_reason=audit-patience"),
-        std::string::npos);
-    EXPECT_TRUE(
-        out.find("final_uses_polish=yes") != std::string::npos ||
-        out.find("final_uses_polish=no") != std::string::npos);
-    EXPECT_NE(
-        out.find("final_state_source=best-audit"),
-        std::string::npos);
-    ExpectPeelingSamplingEntriesMatchFinalModels(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)
-{
-    auto model{ BuildSeparatedRollbackDefenseModel() };
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_EQ(out.find("Try/Acc"), std::string::npos);
-    EXPECT_EQ(std::count(out.begin(), out.end(), '\r'), 0);
-    EXPECT_EQ(
-        out.find("Rebuild local-fitting coupling topology"),
-        std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerStopsOnPolicyAgreement)
-{
-    audit_detail::CounterfactualContinuationState state;
-    const audit_detail::CounterfactualPolicyDecision decision{
-        std::array{ true, true, true, true, true }
-    };
-
-    const auto update{ audit_detail::UpdateCounterfactualContinuation(
-        decision, 7, 5, state) };
-
-    EXPECT_TRUE(update.triggered_now);
-    EXPECT_TRUE(update.policy_agreement);
-    EXPECT_TRUE(update.all_candidate_policies_reached);
-    EXPECT_FALSE(state.continuation_active);
-    EXPECT_EQ(state.trigger_attempt, 7U);
-    EXPECT_EQ(state.trigger_accepted_iteration, 5U);
-    EXPECT_TRUE(std::ranges::all_of(update.new_checkpoint, std::identity{}));
-}
-
-TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerSeparatesPolicyEffects)
-{
-    audit_detail::CounterfactualContinuationState state;
-    const auto trigger{ audit_detail::UpdateCounterfactualContinuation(
-        audit_detail::CounterfactualPolicyDecision{
-            std::array{ true, false, true, false, false } },
-        4,
-        4,
-        state) };
-
-    EXPECT_TRUE(trigger.triggered_now);
-    EXPECT_TRUE(state.continuation_active);
-    EXPECT_TRUE(trigger.new_checkpoint.at(static_cast<std::size_t>(
-        audit_detail::CounterfactualConvergencePolicy::Production)));
-    EXPECT_TRUE(trigger.new_checkpoint.at(static_cast<std::size_t>(
-        audit_detail::CounterfactualConvergencePolicy::CurrentActiveDof)));
-
-    const auto stationarity_checkpoint{
-        audit_detail::UpdateCounterfactualContinuation(
-            audit_detail::CounterfactualPolicyDecision{
-                std::array{ false, true, false, false, true } },
-            6,
-            5,
-            state)
-    };
-    EXPECT_TRUE(stationarity_checkpoint.new_checkpoint.at(
-        static_cast<std::size_t>(
-            audit_detail::CounterfactualConvergencePolicy::StrictCurrentPopulation)));
-    EXPECT_FALSE(stationarity_checkpoint.all_candidate_policies_reached);
-
-    const auto combined_checkpoint{
-        audit_detail::UpdateCounterfactualContinuation(
-            audit_detail::CounterfactualPolicyDecision{
-                std::array{ false, false, false, true, false } },
-            8,
-            6,
-            state)
-    };
-    EXPECT_TRUE(combined_checkpoint.all_candidate_policies_reached);
-    EXPECT_FALSE(state.continuation_active);
-}
-
-TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerDoesNotTriggerWithoutProductionStop)
-{
-    audit_detail::CounterfactualContinuationState state;
-    const auto update{ audit_detail::UpdateCounterfactualContinuation(
-        audit_detail::CounterfactualPolicyDecision{
-            std::array{ false, true, true, true, true } },
-        3,
-        2,
-        state) };
-
-    EXPECT_FALSE(update.triggered_now);
-    EXPECT_FALSE(state.triggered);
-    EXPECT_FALSE(state.continuation_active);
-    EXPECT_TRUE(std::ranges::none_of(update.new_checkpoint, std::identity{}));
-}
-
-TEST(EstimatorSecondStageDefenseTest, CounterfactualControllerEnforcesBothBudgets)
-{
-    audit_detail::CounterfactualContinuationState state;
-    audit_detail::UpdateCounterfactualContinuation(
-        audit_detail::CounterfactualPolicyDecision{
-            std::array{ true, false, false, false, false } },
-        20,
-        7,
-        state);
-
-    EXPECT_FALSE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
-        state, 44, 16));
-    EXPECT_TRUE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
-        state, 45, 16));
-    EXPECT_TRUE(audit_detail::IsCounterfactualContinuationBudgetExhausted(
-        state, 24, 17));
-}
-
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-TEST(EstimatorSecondStageDefenseTest, CounterfactualAuditDoesNotOverrideAuditPatience)
-{
-    const rg::GaussianModel3D exact_model{ 6.0, 0.5, 0.1 };
-    auto model{ BuildDefenseModel(
-        { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
-        { Spot::C },
-        { Element::CARBON },
-        { exact_model },
-        exact_model) };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_log_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_EQ(
-        output.find("Counterfactual convergence checkpoint: schema=1"),
-        std::string::npos);
-    EXPECT_NE(output.find(" - stop_reason = audit-patience"), std::string::npos);
-    EXPECT_EQ(output.find("reason=budget-exhausted"), std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, CounterfactualAuditRunsWithoutDebugOutput)
-{
-    const rg::GaussianModel3D exact_model{ 6.0, 0.5, 0.1 };
-    auto model{ BuildDefenseModel(
-        { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
-        { Spot::C },
-        { Element::CARBON },
-        { exact_model },
-        exact_model) };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = true;
-
-    EXPECT_NO_THROW(rt::RunSecondStageLocalFitting(*model, options));
-}
-#endif

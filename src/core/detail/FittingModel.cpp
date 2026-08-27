@@ -1098,37 +1098,9 @@ std::vector<double> SummarizeMaximumTransformedChanges(
     return maximum_list;
 }
 
-bool IsTransformedChangeConverged(
-    const algorithm::ParameterChangeStats & percentile_stats,
-    const std::vector<double> & maximum_list)
-{
-    if (percentile_stats.percentile_list.size() != kTransformedChangeSize ||
-        maximum_list.size() != kTransformedChangeSize)
-    {
-        throw std::invalid_argument(
-            "Local fitting transformed convergence statistics are inconsistent.");
-    }
-    for (std::size_t i = 0; i < kTransformedChangeSize; i++)
-    {
-        if (!std::isfinite(percentile_stats.percentile_list.at(i)) ||
-            percentile_stats.percentile_list.at(i) >= kTransformedChangeTolerance ||
-            !std::isfinite(maximum_list.at(i)) ||
-            maximum_list.at(i) >= kTransformedMaximumChangeTolerance)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 double GetMaximumTransformedChange(const TransformedChangeSummary & summary)
 {
     return GetMaximumTransformedChange(summary.maximum_list);
-}
-
-bool IsTransformedChangeConverged(const TransformedChangeSummary & summary)
-{
-    return IsTransformedChangeConverged(summary.percentile_stats, summary.maximum_list);
 }
 
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
@@ -1136,23 +1108,6 @@ bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
     for (const auto value : summary.percentile_stats.percentile_list)
     {
         if (!std::isfinite(value) || value >= kTransformedChangeTolerance) return false;
-    }
-    return true;
-}
-
-bool IsTransformedMaximumConverged(const TransformedChangeSummary & summary)
-{
-    if (summary.maximum_list.size() != kTransformedChangeSize)
-    {
-        throw std::invalid_argument(
-            "Local fitting transformed maximum statistics are inconsistent.");
-    }
-    for (const auto value : summary.maximum_list)
-    {
-        if (!std::isfinite(value) || value >= kTransformedMaximumChangeTolerance)
-        {
-            return false;
-        }
     }
     return true;
 }

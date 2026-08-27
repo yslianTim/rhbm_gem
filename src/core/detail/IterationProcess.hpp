@@ -58,30 +58,21 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-struct ConvergenceChangePredicates
-{
-    bool percentile_converged{ false };
-    bool maximum_converged{ false };
-
-    bool Converged() const
-    {
-        return percentile_converged && maximum_converged;
-    }
-};
-
-struct ConvergenceSafeguardPredicates
+struct ConvergencePredicates
 {
     bool stationarity_eligible{ false };
-    ConvergenceChangePredicates accepted{};
-    ConvergenceChangePredicates raw{};
+    bool accepted_percentile_converged{ false };
+    bool raw_percentile_converged{ false };
 
     bool Converged() const
     {
-        return stationarity_eligible && accepted.Converged() && raw.Converged();
+        return stationarity_eligible &&
+            accepted_percentile_converged &&
+            raw_percentile_converged;
     }
 };
 
-ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
+ConvergencePredicates EvaluateConvergencePredicates(
     bool stationarity_eligible,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change);
@@ -134,11 +125,7 @@ bool IsCounterfactualContinuationBudgetExhausted(
     std::size_t attempt_number,
     std::size_t accepted_iteration_count);
 
-TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
-    const std::vector<std::size_t> & atom_index_list,
-    const SuspiciousBlockActivity & block_activity);
-
-struct ActiveCoordinateAuditPopulation
+struct ActiveCoordinatePopulation
 {
     TransformedChangeIndexListByParameter member_index_list_by_parameter{};
     std::vector<ClusterKey> active_offset_group_atom_index_list{};
@@ -150,27 +137,27 @@ struct ActiveCoordinateAuditPopulation
     std::size_t mixed_offset_group_count{ 0 };
 };
 
-ActiveCoordinateAuditPopulation BuildActiveCoordinateAuditPopulation(
+ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity);
 
-struct ActiveCoordinateChangeAudit
+struct ActiveCoordinateChangeSummary
 {
     TransformedChangeSummary member{};
     TransformedChangeSummary shared_dof{};
 };
 
-ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
-    const ActiveCoordinateAuditPopulation & population);
+    const ActiveCoordinatePopulation & population);
 
-ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
     const FitState & current_state,
     const FitState & previous_state,
-    const ActiveCoordinateAuditPopulation & population);
+    const ActiveCoordinatePopulation & population);
 
 struct ConvergenceStationarityAudit
 {

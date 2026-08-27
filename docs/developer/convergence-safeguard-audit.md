@@ -1,5 +1,9 @@
 # Second-stage convergence safeguard audit
 
+> Historical audit status: production now evaluates accepted/raw p99 over
+> active optimization DOFs and no longer uses the maximum-change gate. The
+> measurements and conclusions below describe the policy audited at the time.
+
 ## Purpose and scope
 
 This is the first-round Failure Mode × Safeguard audit for

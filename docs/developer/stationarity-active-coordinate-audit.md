@@ -1,5 +1,9 @@
 # Stationarity semantics and active-coordinate population audit
 
+> Historical audit status: the active shared-DOF population described here is
+> now the production convergence population, and production no longer uses the
+> maximum-change gate. Strict stationarity remains diagnostic-only.
+
 ## Purpose and constraints
 
 This is the second-round convergence safeguard audit for

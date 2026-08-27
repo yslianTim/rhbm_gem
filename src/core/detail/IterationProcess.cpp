@@ -195,7 +195,7 @@ struct CounterfactualIterationEvidence
     std::size_t weak_peak_dominant_group_count{ 0 };
     std::array<double, 4> weak_peak_ratio_summary{};
     StrictConvergenceStationarityAudit strict_stationarity{};
-    ActiveCoordinateAuditPopulation active_population{};
+    ActiveCoordinatePopulation active_population{};
 };
 
 struct IterationResult
@@ -310,21 +310,15 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     };
 }
 
-ConvergenceSafeguardPredicates EvaluateConvergenceSafeguardPredicates(
+ConvergencePredicates EvaluateConvergencePredicates(
     bool stationarity_eligible,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change)
 {
-    return ConvergenceSafeguardPredicates{
+    return ConvergencePredicates{
         stationarity_eligible,
-        ConvergenceChangePredicates{
-            IsTransformedPercentileConverged(accepted_change),
-            IsTransformedMaximumConverged(accepted_change)
-        },
-        ConvergenceChangePredicates{
-            IsTransformedPercentileConverged(raw_change),
-            IsTransformedMaximumConverged(raw_change)
-        }
+        IsTransformedPercentileConverged(accepted_change),
+        IsTransformedPercentileConverged(raw_change)
     };
 }
 
@@ -382,37 +376,17 @@ bool IsCounterfactualContinuationBudgetExhausted(
             kCounterfactualAcceptedIterationBudget;
 }
 
-TransformedChangeIndexListByParameter BuildActiveBlockChangeIndexLists(
-    const std::vector<std::size_t> & atom_index_list,
-    const SuspiciousBlockActivity & block_activity)
-{
-    TransformedChangeIndexListByParameter result;
-    for (const auto atom_index : atom_index_list)
-    {
-        if (block_activity.HasActiveShape(atom_index))
-        {
-            result.at(kLogPeakHeightChangeIndex).emplace_back(atom_index);
-            result.at(kLogWidthChangeIndex).emplace_back(atom_index);
-        }
-        if (block_activity.HasActiveOffset(atom_index))
-        {
-            result.at(kOffsetToPeakRatioChangeIndex).emplace_back(atom_index);
-        }
-    }
-    return result;
-}
-
 namespace {
 
-constexpr double kConvergenceAuditPercentile{ 0.99 };
+constexpr double kConvergencePercentile{ 0.99 };
 
-struct OffsetGroupAuditEntry
+struct OffsetGroupEntry
 {
     ClusterKey cluster_key{};
     ClusterKey atom_index_list{};
 };
 
-static void ValidateConvergenceAuditInputs(
+static void ValidateActiveCoordinateInputs(
     std::size_t atom_count,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
@@ -427,15 +401,15 @@ static void ValidateConvergenceAuditInputs(
         quarantine_activity.hard_failure_atom_mask.size() != atom_count)
     {
         throw std::invalid_argument(
-            "Convergence audit activity inputs are inconsistent.");
+            "Active-coordinate convergence inputs are inconsistent.");
     }
 }
 
-static std::vector<OffsetGroupAuditEntry> BuildOffsetGroupAuditEntries(
+static std::vector<OffsetGroupEntry> BuildOffsetGroupEntries(
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index)
 {
-    std::vector<OffsetGroupAuditEntry> result;
+    std::vector<OffsetGroupEntry> result;
     for (const auto & cluster_key : cluster_key_list)
     {
         std::map<std::size_t, ClusterKey> atom_index_list_by_group;
@@ -447,7 +421,7 @@ static std::vector<OffsetGroupAuditEntry> BuildOffsetGroupAuditEntries(
         for (auto & [group_id, atom_index_list] : atom_index_list_by_group)
         {
             static_cast<void>(group_id);
-            result.emplace_back(OffsetGroupAuditEntry{
+            result.emplace_back(OffsetGroupEntry{
                 cluster_key,
                 std::move(atom_index_list)
             });
@@ -458,20 +432,20 @@ static std::vector<OffsetGroupAuditEntry> BuildOffsetGroupAuditEntries(
 
 } // namespace
 
-ActiveCoordinateAuditPopulation BuildActiveCoordinateAuditPopulation(
+ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     const SuspiciousBlockActivity & quarantine_activity)
 {
-    ValidateConvergenceAuditInputs(
+    ValidateActiveCoordinateInputs(
         group_id_by_atom_index.size(),
         group_id_by_atom_index,
         block_activity,
         quarantine_activity);
 
-    ActiveCoordinateAuditPopulation result;
+    ActiveCoordinatePopulation result;
     for (const auto atom_index : atom_index_list)
     {
         if (block_activity.HasActiveShape(atom_index))
@@ -489,7 +463,7 @@ ActiveCoordinateAuditPopulation BuildActiveCoordinateAuditPopulation(
     }
 
     const auto offset_group_list{
-        BuildOffsetGroupAuditEntries(cluster_key_list, group_id_by_atom_index)
+        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index)
     };
     result.total_offset_group_count = offset_group_list.size();
     for (const auto & group : offset_group_list)
@@ -522,11 +496,11 @@ ActiveCoordinateAuditPopulation BuildActiveCoordinateAuditPopulation(
     return result;
 }
 
-ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
-    const ActiveCoordinateAuditPopulation & population)
+    const ActiveCoordinatePopulation & population)
 {
-    ActiveCoordinateChangeAudit result;
+    ActiveCoordinateChangeSummary result;
     result.member = SummarizeTransformedChangesByParameter(
         change_list,
         population.member_index_list_by_parameter);
@@ -538,7 +512,7 @@ ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
             population.active_offset_group_size_list.size())
     {
         throw std::invalid_argument(
-            "Convergence audit shared-offset population is inconsistent.");
+            "Active-coordinate shared-offset population is inconsistent.");
     }
 
     std::vector<double> offset_group_change_list;
@@ -557,7 +531,7 @@ ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
                 change_list.at(atom_index).value_list.size() != kTransformedChangeSize)
             {
                 throw std::invalid_argument(
-                    "Convergence audit shared-offset change input is inconsistent.");
+                    "Active-coordinate shared-offset change input is inconsistent.");
             }
             const auto value{
                 change_list.at(atom_index).value_list.at(kOffsetToPeakRatioChangeIndex)
@@ -578,22 +552,22 @@ ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
     result.shared_dof.percentile_stats.percentile_list.at(
         kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
             offset_group_change_list,
-            kConvergenceAuditPercentile);
+            kConvergencePercentile);
     result.shared_dof.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
         offset_group_change_list.empty() ? 0.0 :
             *std::ranges::max_element(offset_group_change_list);
     return result;
 }
 
-ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
+ActiveCoordinateChangeSummary SummarizeActiveCoordinateChanges(
     const FitState & current_state,
     const FitState & previous_state,
-    const ActiveCoordinateAuditPopulation & population)
+    const ActiveCoordinatePopulation & population)
 {
     if (current_state.size() != previous_state.size())
     {
         throw std::invalid_argument(
-            "Convergence audit transformed state sizes are inconsistent.");
+            "Active-coordinate transformed state sizes are inconsistent.");
     }
     std::vector<algorithm::ParameterChange> change_list;
     change_list.reserve(current_state.size());
@@ -603,7 +577,7 @@ ActiveCoordinateChangeAudit EvaluateActiveCoordinateChangeAudit(
             GetFitModel(current_state, atom_index),
             GetFitModel(previous_state, atom_index)));
     }
-    return EvaluateActiveCoordinateChangeAudit(change_list, population);
+    return SummarizeActiveCoordinateChanges(change_list, population);
 }
 
 struct ActiveCoordinateMedianAudit
@@ -636,7 +610,7 @@ static std::vector<double> SummarizeTransformedChangeMedian(
 static ActiveCoordinateMedianAudit EvaluateActiveCoordinateMedianAudit(
     const FitState & current_state,
     const FitState & previous_state,
-    const ActiveCoordinateAuditPopulation & population)
+    const ActiveCoordinatePopulation & population)
 {
     std::vector<algorithm::ParameterChange> change_list;
     change_list.reserve(current_state.size());
@@ -690,7 +664,7 @@ struct WeakPeakGroupAudit
 static WeakPeakGroupAudit EvaluateWeakPeakGroupAudit(
     const FitState & reference_state,
     const std::vector<algorithm::ParameterChange> & raw_change_list,
-    const ActiveCoordinateAuditPopulation & population)
+    const ActiveCoordinatePopulation & population)
 {
     WeakPeakGroupAudit result;
     std::vector<double> ratio_list;
@@ -790,7 +764,7 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
     const ClusterHealthMap & health_by_key)
 {
     const auto atom_count{ group_id_by_atom_index.size() };
-    ValidateConvergenceAuditInputs(
+    ValidateActiveCoordinateInputs(
         atom_count,
         group_id_by_atom_index,
         block_activity,
@@ -840,7 +814,7 @@ StrictConvergenceStationarityAudit EvaluateStrictConvergenceStationarityAudit(
     }
 
     for (const auto & group :
-        BuildOffsetGroupAuditEntries(cluster_key_list, group_id_by_atom_index))
+        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index))
     {
         const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
             group.atom_index_list,
@@ -2335,17 +2309,17 @@ static void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     std::size_t attempt_number,
     const IterationProgress & progress,
-    const ConvergenceSafeguardPredicates & predicates,
-    const ConvergenceSafeguardPredicates & shadow_predicates,
-    const ConvergenceSafeguardPredicates & member_strict_predicates,
-    const ConvergenceSafeguardPredicates & shared_dof_strict_predicates,
+    const ConvergencePredicates & predicates,
+    const ConvergencePredicates & shadow_predicates,
+    const ConvergencePredicates & member_strict_predicates,
+    const ConvergencePredicates & shared_dof_strict_predicates,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & raw_change,
     const TransformedChangeSummary & accepted_shadow_change,
     const TransformedChangeSummary & raw_shadow_change,
     const TransformedChangeSummary & accepted_shared_dof_change,
     const TransformedChangeSummary & raw_shared_dof_change,
-    const ActiveCoordinateAuditPopulation & active_population,
+    const ActiveCoordinatePopulation & active_population,
     const ConvergenceStationarityAudit & stationarity,
     const StrictConvergenceStationarityAudit & strict_stationarity,
     const IterationDiagnostics & diagnostics,
@@ -2464,7 +2438,7 @@ static void LogConvergenceSafeguardAudit(
 
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: schema=2, try=" << attempt_number
+        << "Convergence safeguard audit: schema=3, try=" << attempt_number
         << ", acc=" << progress.accepted_iteration_count
         << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
         << ", quarantine=" << progress.quarantine_atom_count
@@ -2475,30 +2449,22 @@ static void LogConvergenceSafeguardAudit(
     message << ", active-dof-population=";
     AppendAuditPopulation(message, accepted_shared_dof_change.population_size_list);
     message
-        << ", predicates[s/a99/amax/r99/rmax]="
+        << ", predicates[s/a99/r99]="
         << predicates.stationarity_eligible << "/"
-        << predicates.accepted.percentile_converged << "/"
-        << predicates.accepted.maximum_converged << "/"
-        << predicates.raw.percentile_converged << "/"
-        << predicates.raw.maximum_converged
-        << ", shadow-predicates[s/a99/amax/r99/rmax]="
+        << predicates.accepted_percentile_converged << "/"
+        << predicates.raw_percentile_converged
+        << ", shadow-predicates[s/a99/r99]="
         << shadow_predicates.stationarity_eligible << "/"
-        << shadow_predicates.accepted.percentile_converged << "/"
-        << shadow_predicates.accepted.maximum_converged << "/"
-        << shadow_predicates.raw.percentile_converged << "/"
-        << shadow_predicates.raw.maximum_converged
-        << ", member-strict-predicates[s/a99/amax/r99/rmax]="
+        << shadow_predicates.accepted_percentile_converged << "/"
+        << shadow_predicates.raw_percentile_converged
+        << ", member-strict-predicates[s/a99/r99]="
         << member_strict_predicates.stationarity_eligible << "/"
-        << member_strict_predicates.accepted.percentile_converged << "/"
-        << member_strict_predicates.accepted.maximum_converged << "/"
-        << member_strict_predicates.raw.percentile_converged << "/"
-        << member_strict_predicates.raw.maximum_converged
-        << ", dof-strict-predicates[s/a99/amax/r99/rmax]="
+        << member_strict_predicates.accepted_percentile_converged << "/"
+        << member_strict_predicates.raw_percentile_converged
+        << ", dof-strict-predicates[s/a99/r99]="
         << shared_dof_strict_predicates.stationarity_eligible << "/"
-        << shared_dof_strict_predicates.accepted.percentile_converged << "/"
-        << shared_dof_strict_predicates.accepted.maximum_converged << "/"
-        << shared_dof_strict_predicates.raw.percentile_converged << "/"
-        << shared_dof_strict_predicates.raw.maximum_converged
+        << shared_dof_strict_predicates.accepted_percentile_converged << "/"
+        << shared_dof_strict_predicates.raw_percentile_converged
         << ", accepted-p99=";
     AppendAuditValues(message, accepted_change.percentile_stats.percentile_list);
     message << ", accepted-max=";
@@ -2596,11 +2562,11 @@ static void LogConvergenceSafeguardAudit(
         << shared_dof_shadow_stop_candidate << "/"
         << (production_stop_candidate && !strict_stationarity.strict_eligible) << "/"
         << (production_stop_candidate &&
-            (!shadow_predicates.accepted.Converged() ||
-                !shadow_predicates.raw.Converged())) << "/"
+            (!shadow_predicates.accepted_percentile_converged ||
+                !shadow_predicates.raw_percentile_converged)) << "/"
         << (production_stop_candidate &&
-            (!IsTransformedChangeConverged(accepted_shared_dof_change) ||
-                !IsTransformedChangeConverged(raw_shared_dof_change)))
+            (!IsTransformedPercentileConverged(accepted_shared_dof_change) ||
+                !IsTransformedPercentileConverged(raw_shared_dof_change)))
         << ", fixed[shape/offset/hard]="
         << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
         << ", damped-atoms=" << damped_atom_count
@@ -3786,17 +3752,43 @@ static IterationResult RunIteration(
         return result;
     }
 
+    std::vector<std::size_t> group_id_by_atom_index;
+    group_id_by_atom_index.reserve(context.size());
+    for (const auto & atom_context : context)
+    {
+        group_id_by_atom_index.emplace_back(atom_context.group_id);
+    }
+    const auto active_population{
+        BuildActiveCoordinatePopulation(
+            active_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            raw_iteration_result.block_activity,
+            quarantine_activity)
+    };
+    const auto raw_active_change_summary{
+        SummarizeActiveCoordinateChanges(
+            raw_state,
+            previous_state,
+            active_population)
+    };
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
             assembled_state,
             previous_state,
             iteration_state.active_index_list)
     };
+    const auto accepted_active_change_summary{
+        SummarizeActiveCoordinateChanges(
+            assembled_state,
+            previous_state,
+            active_population)
+    };
     const auto safeguard_predicates{
-        EvaluateConvergenceSafeguardPredicates(
+        EvaluateConvergencePredicates(
             is_stationarity_eligible,
-            transformed_change_summary,
-            raw_fixed_point_change_summary)
+            accepted_active_change_summary.shared_dof,
+            raw_active_change_summary.shared_dof)
     };
     iteration_state.accepted_iteration_count++;
     iteration_state.accepted_iterations_since_topology_rebuild++;
@@ -3856,7 +3848,8 @@ static IterationResult RunIteration(
     result.progress.accepted_iteration_count = iteration_state.accepted_iteration_count;
     result.progress.accepted_maximum_transformed_change =
         GetMaximumTransformedChange(transformed_change_summary);
-    result.transformed_change_stats = transformed_change_summary.percentile_stats;
+    result.transformed_change_stats =
+        accepted_active_change_summary.shared_dof.percentile_stats;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     result.converged =
         !objective_domain_changed &&
@@ -3868,32 +3861,10 @@ static IterationResult RunIteration(
     if (kCounterfactualConvergenceAuditEnabled ||
         (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug))
     {
-        std::vector<std::size_t> group_id_by_atom_index;
-        group_id_by_atom_index.reserve(context.size());
-        for (const auto & atom_context : context)
-        {
-            group_id_by_atom_index.emplace_back(atom_context.group_id);
-        }
-        const auto active_population{
-            BuildActiveCoordinateAuditPopulation(
-                iteration_state.active_index_list,
-                cluster_key_list,
-                group_id_by_atom_index,
-                raw_iteration_result.block_activity,
-                quarantine_activity)
+        const auto & accepted_active_change_audit{
+            accepted_active_change_summary
         };
-        const auto accepted_active_change_audit{
-            EvaluateActiveCoordinateChangeAudit(
-                assembled_state,
-                previous_state,
-                active_population)
-        };
-        const auto raw_active_change_audit{
-            EvaluateActiveCoordinateChangeAudit(
-                raw_state,
-                previous_state,
-                active_population)
-        };
+        const auto & raw_active_change_audit{ raw_active_change_summary };
         TransformedChangeIndexListByParameter selected_index_list_by_parameter;
         selected_index_list_by_parameter.fill(iteration_state.active_index_list);
         const auto accepted_active_median_audit{
@@ -3928,7 +3899,7 @@ static IterationResult RunIteration(
                 active_population)
         };
         const auto shadow_safeguard_predicates{
-            EvaluateConvergenceSafeguardPredicates(
+            EvaluateConvergencePredicates(
                 is_stationarity_eligible,
                 accepted_active_change_audit.member,
                 raw_active_change_audit.member)
@@ -3946,25 +3917,25 @@ static IterationResult RunIteration(
                 raw_iteration_result.health_by_key)
         };
         const auto member_strict_predicates{
-            EvaluateConvergenceSafeguardPredicates(
+            EvaluateConvergencePredicates(
                 strict_stationarity.strict_eligible,
                 accepted_active_change_audit.member,
                 raw_active_change_audit.member)
         };
         const auto shared_dof_strict_predicates{
-            EvaluateConvergenceSafeguardPredicates(
+            EvaluateConvergencePredicates(
                 strict_stationarity.strict_eligible,
                 accepted_active_change_audit.shared_dof,
                 raw_active_change_audit.shared_dof)
         };
         const auto strict_current_predicates{
-            EvaluateConvergenceSafeguardPredicates(
+            EvaluateConvergencePredicates(
                 strict_stationarity.strict_eligible,
                 transformed_change_summary,
                 raw_fixed_point_change_summary)
         };
         const auto current_dof_predicates{
-            EvaluateConvergenceSafeguardPredicates(
+            EvaluateConvergencePredicates(
                 is_stationarity_eligible,
                 accepted_active_change_audit.shared_dof,
                 raw_active_change_audit.shared_dof)
@@ -4026,8 +3997,8 @@ static IterationResult RunIteration(
             shadow_safeguard_predicates,
             member_strict_predicates,
             shared_dof_strict_predicates,
-            transformed_change_summary,
-            raw_fixed_point_change_summary,
+            accepted_active_change_audit.shared_dof,
+            raw_active_change_audit.shared_dof,
             accepted_active_change_audit.member,
             raw_active_change_audit.member,
             accepted_active_change_audit.shared_dof,
@@ -4328,11 +4299,11 @@ static const TransformedChangeSummary & GetCounterfactualAcceptedChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
-        return evidence.accepted_current;
     case CounterfactualConvergencePolicy::CurrentActiveDof:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.accepted_dof;
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.accepted_current;
     case CounterfactualConvergencePolicy::StrictActiveMember:
         return evidence.accepted_member;
     case CounterfactualConvergencePolicy::Count:
@@ -4348,11 +4319,11 @@ static const TransformedChangeSummary & GetCounterfactualRawChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
-        return evidence.raw_current;
     case CounterfactualConvergencePolicy::CurrentActiveDof:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.raw_dof;
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.raw_current;
     case CounterfactualConvergencePolicy::StrictActiveMember:
         return evidence.raw_member;
     case CounterfactualConvergencePolicy::Count:
@@ -4368,11 +4339,11 @@ static const std::vector<double> & GetCounterfactualAcceptedMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
-        return evidence.accepted_current_median;
     case CounterfactualConvergencePolicy::CurrentActiveDof:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.accepted_dof_median;
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.accepted_current_median;
     case CounterfactualConvergencePolicy::StrictActiveMember:
         return evidence.accepted_member_median;
     case CounterfactualConvergencePolicy::Count:
@@ -4388,11 +4359,11 @@ static const std::vector<double> & GetCounterfactualRawMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
-        return evidence.raw_current_median;
     case CounterfactualConvergencePolicy::CurrentActiveDof:
     case CounterfactualConvergencePolicy::StrictActiveDof:
         return evidence.raw_dof_median;
+    case CounterfactualConvergencePolicy::StrictCurrentPopulation:
+        return evidence.raw_current_median;
     case CounterfactualConvergencePolicy::StrictActiveMember:
         return evidence.raw_member_median;
     case CounterfactualConvergencePolicy::Count:

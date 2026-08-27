@@ -344,7 +344,6 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
 
 
 constexpr double kTransformedChangeTolerance{ 1.0e-4 };
-constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
 
 using TransformedChangeIndexListByParameter =
     std::array<std::vector<std::size_t>, kTransformedChangeSize>;
@@ -370,10 +369,6 @@ std::vector<double> SummarizeMaximumTransformedChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list);
 
-bool IsTransformedChangeConverged(
-    const algorithm::ParameterChangeStats & percentile_stats,
-    const std::vector<double> & maximum_list);
-
 TransformedChangeSummary SummarizeTransformedChanges(
     const FitState & current_state,
     const FitState & previous_state,
@@ -395,11 +390,7 @@ TransformedChangeSummary SummarizeTransformedChangesByParameter(
 
 double GetMaximumTransformedChange(const TransformedChangeSummary & summary);
 
-bool IsTransformedChangeConverged(const TransformedChangeSummary & summary);
-
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
-
-bool IsTransformedMaximumConverged(const TransformedChangeSummary & summary);
 
 
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);

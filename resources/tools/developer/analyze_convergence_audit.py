@@ -19,9 +19,7 @@ FIELD_PATTERN = re.compile(
 PREDICATE_NAMES = (
     "stationarity",
     "accepted_p99",
-    "accepted_max",
     "raw_p99",
-    "raw_max",
 )
 TRACK_FIELDS = {
     "current": "predicates",
@@ -67,7 +65,7 @@ def parse_record(line: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip()
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "2":
+    if fields.get("schema") != "3":
         return None
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
         "strict-stationarity",
@@ -152,7 +150,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         for track, field in TRACK_FIELDS.items():
             vector = _integers(record[field])
             if len(vector) != len(PREDICATE_NAMES):
-                raise ValueError(f"{field} must contain five predicates")
+                raise ValueError(f"{field} must contain three predicates")
             vector_by_track[track] = vector
             vectors_by_track[track].append(vector)
             failed = [index for index, passed in enumerate(vector) if not passed]
@@ -315,7 +313,7 @@ def format_markdown(report: dict[str, object]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("log", type=Path, help="Debug log containing schema=2 audit records")
+    parser.add_argument("log", type=Path, help="Debug log containing schema=3 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

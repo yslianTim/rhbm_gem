@@ -28,21 +28,21 @@ def make_record(
     dof: str,
     stops: str,
     strict: str,
-    current_population: str = "1000/1000/1000",
+    current_population: str = "10/10/2",
     member_population: str = "10/10/10",
     dof_population: str = "10/10/2",
     current_values: str = "5e-5/5e-5/5e-5",
     member_values: str = "5e-4/5e-4/5e-4",
-    dof_values: str = "5e-4/5e-4/5e-4",
+    dof_values: str = "5e-5/5e-5/5e-5",
 ) -> dict[str, str]:
     line = (
-        "[Debug] Convergence safeguard audit: schema=2, try=1, acc=1, "
+        "[Debug] Convergence safeguard audit: schema=3, try=1, acc=1, "
         f"population={current_population}, shadow-population={member_population}, "
         f"active-dof-population={dof_population}, "
-        f"predicates[s/a99/amax/r99/rmax]={current}, "
-        "shadow-predicates[s/a99/amax/r99/rmax]=1/0/1/0/1, "
-        f"member-strict-predicates[s/a99/amax/r99/rmax]={member}, "
-        f"dof-strict-predicates[s/a99/amax/r99/rmax]={dof}, "
+        f"predicates[s/a99/r99]={current}, "
+        "shadow-predicates[s/a99/r99]=1/0/0, "
+        f"member-strict-predicates[s/a99/r99]={member}, "
+        f"dof-strict-predicates[s/a99/r99]={dof}, "
         f"accepted-p99={current_values}, accepted-max=5e-4/5e-4/5e-4, "
         f"raw-p99={current_values}, raw-max=5e-4/5e-4/5e-4, "
         f"shadow-accepted-p99={member_values}, shadow-accepted-max=5e-4/5e-4/5e-4, "
@@ -65,20 +65,19 @@ def make_record(
 class ConvergenceAuditAnalyzerTest(unittest.TestCase):
     def test_aggregates_exposures_implications_and_strata(self) -> None:
         exposed = make_record(
-            current="1/1/1/1/1",
-            member="0/0/1/0/1",
-            dof="0/0/1/0/1",
+            current="1/1/1",
+            member="0/0/0",
+            dof="0/1/1",
             stops="1/1/0/0/1/1/1",
             strict="1/0/0/0/10/10/0/0/0/0/2/1/1/0/0/0/0",
         )
         stable = make_record(
-            current="1/1/1/1/1",
-            member="1/1/1/1/1",
-            dof="1/1/1/1/1",
+            current="1/1/1",
+            member="1/1/1",
+            dof="1/1/1",
             stops="1/1/1/1/0/0/0",
             strict="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
             member_values="5e-5/5e-5/5e-5",
-            dof_values="5e-5/5e-5/5e-5",
         )
 
         report = MODULE.analyze_records([exposed, stable])
@@ -110,17 +109,15 @@ class ConvergenceAuditAnalyzerTest(unittest.TestCase):
 
     def test_counts_unique_blocker(self) -> None:
         record = make_record(
-            current="1/1/1/1/1",
-            member="1/1/0/1/1",
-            dof="1/1/1/1/1",
+            current="1/1/1",
+            member="1/0/1",
+            dof="1/1/1",
             stops="0/0/0/0/0/0/0",
             strict="1/1/0/0/10/10/0/0/0/0/2/2/0/0/0/0/0",
-            member_values="5e-5/5e-5/5e-5",
-            dof_values="5e-5/5e-5/5e-5",
         )
         report = MODULE.analyze_records([record])
         self.assertEqual(
-            report["unique_blocker_count"]["active_member"]["accepted_max"],
+            report["unique_blocker_count"]["active_member"]["accepted_p99"],
             1,
         )
 

@@ -1,5 +1,9 @@
 # Convergence exposure and counterfactual outcome audit
 
+> Historical audit status: the production baseline is now active-DOF p99
+> without a maximum-change gate. The outcome criteria below remain a record of
+> the experiment that informed that decision.
+
 ## Purpose and scope
 
 This fourth-round audit searches deliberately for production convergence
