@@ -16,6 +16,10 @@ from typing import Any
 CHECKPOINT_MARKER = "Counterfactual convergence checkpoint:"
 ATOM_MARKER = "Counterfactual convergence atom:"
 TERMINATION_MARKER = "Counterfactual convergence termination:"
+SHADOW_CHECKPOINT_MARKER = "Accepted-only shadow checkpoint:"
+SHADOW_ATOM_MARKER = "Accepted-only shadow atom:"
+AUDIT_TERMINAL_MARKER = "Second-stage audit terminal:"
+AUDIT_TERMINAL_ATOM_MARKER = "Second-stage audit terminal atom:"
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)"
 )
@@ -36,7 +40,11 @@ CONVERGENCE_ANALYZER = importlib.util.module_from_spec(CONVERGENCE_SPEC)
 CONVERGENCE_SPEC.loader.exec_module(CONVERGENCE_ANALYZER)
 
 
-def _fields(line: str, marker: str) -> dict[str, str] | None:
+def _fields(
+    line: str,
+    marker: str,
+    schema: str = "3",
+) -> dict[str, str] | None:
     position = line.find(marker)
     if position < 0:
         return None
@@ -45,7 +53,7 @@ def _fields(line: str, marker: str) -> dict[str, str] | None:
         match.group("name"): match.group("value").strip().rstrip(".")
         for match in FIELD_PATTERN.finditer(payload)
     }
-    if fields.get("schema") != "3":
+    if fields.get("schema") != schema:
         return None
     return fields
 
@@ -54,6 +62,10 @@ def parse_log(text: str) -> dict[str, Any]:
     checkpoints: list[dict[str, str]] = []
     atoms: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
     terminations: list[dict[str, str]] = []
+    shadow_checkpoint: dict[str, str] | None = None
+    shadow_atoms: list[dict[str, str]] = []
+    audit_terminal: dict[str, str] | None = None
+    audit_terminal_atoms: list[dict[str, str]] = []
     trajectory_records: list[dict[str, str]] = []
     for line in text.splitlines():
         trajectory_record = CONVERGENCE_ANALYZER.parse_record(line)
@@ -65,10 +77,22 @@ def parse_log(text: str) -> dict[str, Any]:
             atoms[(atom["experiment"], atom["policy"])].append(atom)
         elif termination := _fields(line, TERMINATION_MARKER):
             terminations.append(termination)
+        elif shadow := _fields(line, SHADOW_CHECKPOINT_MARKER, "1"):
+            shadow_checkpoint = shadow
+        elif shadow_atom := _fields(line, SHADOW_ATOM_MARKER, "1"):
+            shadow_atoms.append(shadow_atom)
+        elif terminal := _fields(line, AUDIT_TERMINAL_MARKER, "1"):
+            audit_terminal = terminal
+        elif terminal_atom := _fields(line, AUDIT_TERMINAL_ATOM_MARKER, "1"):
+            audit_terminal_atoms.append(terminal_atom)
     return {
         "checkpoints": checkpoints,
         "atoms": atoms,
         "terminations": terminations,
+        "shadow_checkpoint": shadow_checkpoint,
+        "shadow_atoms": shadow_atoms,
+        "audit_terminal": audit_terminal,
+        "audit_terminal_atoms": audit_terminal_atoms,
         "trajectory_records": trajectory_records,
     }
 
@@ -166,11 +190,44 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
     checkpoints = parsed["checkpoints"]
     trajectory_audit = CONVERGENCE_ANALYZER.analyze_records(
         parsed.get("trajectory_records", []))
+    shadow_record = parsed.get("shadow_checkpoint")
+    terminal_record = parsed.get("audit_terminal")
+    shadow_report = {
+        "reached": shadow_record is not None,
+    }
+    if shadow_record is not None:
+        shadow_report.update({
+            "try": int(shadow_record["try"]),
+            "accepted_iteration": int(shadow_record["acc"]),
+            "objective": _objective_total(shadow_record["objective"]),
+            "accepted_p99": _numbers(shadow_record["accepted-p99"]),
+            "raw_p99": _numbers(shadow_record["raw-p99"]),
+            "truth_metrics": _truth_metrics(
+                parsed.get("shadow_atoms", []), truth),
+        })
+    terminal_report = None
+    if terminal_record is not None:
+        terminal_report = {
+            "reason": terminal_record["reason"],
+            "try": int(terminal_record["try"]),
+            "accepted_iteration": int(terminal_record["acc"]),
+            "objective": _objective_total(terminal_record["objective"]),
+            "truth_metrics": _truth_metrics(
+                parsed.get("audit_terminal_atoms", []), truth),
+        }
+        if shadow_record is not None:
+            terminal_report["attempts_after_accepted_only"] = (
+                terminal_report["try"] - int(shadow_record["try"]))
+            terminal_report["accepted_iterations_after_accepted_only"] = (
+                terminal_report["accepted_iteration"] -
+                int(shadow_record["acc"]))
     if not checkpoints:
         return {
             "status": "no_convergence_trigger",
             "experiment_count": 0,
             "experiments": [],
+            "accepted_only_shadow": shadow_report,
+            "terminal": terminal_report,
             "trajectory_audit": trajectory_audit,
         }
 
@@ -298,6 +355,8 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
         "material_objective_improvement_counts": material_improvement_counts,
         "unresolved_policy_counts": unresolved_policy_counts,
         "experiments": reports,
+        "accepted_only_shadow": shadow_report,
+        "terminal": terminal_report,
         "trajectory_audit": trajectory_audit,
     }
 

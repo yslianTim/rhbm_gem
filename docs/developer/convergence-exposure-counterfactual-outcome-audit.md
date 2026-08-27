@@ -1,9 +1,11 @@
 # Convergence exposure and counterfactual outcome audit
 
-> Current baseline (2026-08-27): production uses its existing convergence qualification and
-> accepted/raw active-DOF p99 without a maximum gate. The original 600-case
-> search remains historical evidence for that decision and was not rerun during
-> the current schema refresh.
+> Current result (2026-08-27): the post-fix (`after`) 600-case corpus is the
+> canonical result for the current implementation. The instrumentation-only
+> pre-fix (`before`) corpus is retained as the paired historical baseline.
+> Production still requires its existing convergence qualification and
+> accepted/raw active-DOF p99 without a maximum gate; the accepted-only
+> checkpoint remains audit-only evidence and does not change that predicate.
 
 ## Purpose and scope
 
@@ -30,7 +32,10 @@ variant. Seeds are fixed by
 \]
 
 - `natural` reuses `PotentialModelScenario`, its five `rhbm_test -t 5` atomic
-  topologies, the full potential-fitting workflow, and five noise levels.
+  topologies, the full potential-fitting workflow, and five noise levels. Its
+  element reference truth now uses the same zero-noise C/N/O reference method
+  as `RunSimulationTestOnAtomicModel`; the pre-fix truth is frozen and reused by
+  the post-fix run.
 - `stationarity` varies near-collinearity, boundary conflict, weak peaks,
   noise, separation, and transformed initial perturbation.
 - `population` creates fixed/quarantined blocks through finite estimator and
@@ -51,10 +56,10 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 ```
 
 Historical case directories used `trajectory-schema-2.json` and
-`counterfactual-schema-1.json`. The refreshed runner writes `run.log`,
+`counterfactual-schema-1.json`. The current runner writes `run.log`,
 `scenario-truth.json`, `trajectory-schema-5.json`,
-`counterfactual-schema-3.json`, and schema-6 `case-summary.json`. The aggregate
-report is schema 3. Old summaries
+`counterfactual-schema-3.json`, the shadow/terminal audit artifacts, and
+schema-7 `case-summary.json`. The aggregate report is schema 4. Old summaries
 are intentionally not resumed across the baseline change.
 
 ## Exposure and outcome definitions
@@ -80,6 +85,13 @@ Safety regressions are counted independently: new hard failures, non-finite
 states, mixed shared-group activity, or new quarantine after `T0`. Maximum
 statistics remain diagnostic and support the isolated rollback comparison.
 
+The accepted-only shadow checkpoint is separate from those three comparators.
+It requires production qualification, accepted active-DOF p99, a stable
+objective domain, no quarantine transition, no genuine suspicious/hard failure,
+and no rejection, but ignores raw p99 while recording it. Only the first shadow
+checkpoint is retained and final polish runs on isolated state, so it cannot
+alter the production trajectory or output.
+
 ## Replay selection and production decision
 
 Replay cases are deterministic: take at most ten sorted case IDs from each
@@ -96,20 +108,51 @@ conclusion.
 
 ## Verification and observed evidence
 
-The 600-case corpus was not rerun for the schema-5/schema-3 refresh, so this
-document makes no new corpus outcome claim. Existing analyzer fixtures and
-small runner tests validate the new classifications and artifact contract.
-Fold-168 remains the external `audit-patience / no_convergence_trigger`
-negative control; continuation must never suppress that stop. Audit-OFF builds
-retain the production trajectory and output behavior.
+The 600-case corpus was run before and after the benign fixed-endpoint and
+audit-patience/quarantine lifecycle fix, using the same manifest, seeds,
+samples, and frozen reference truth. Both runs completed 600/600 cases without
+runner failure.
 
-Current refresh verification on 2026-08-27:
+| Measure | Before | After |
+| --- | ---: | ---: |
+| Production convergence | 0 | 42 |
+| Accepted-only shadow checkpoint | 29 | 137 |
+| `audit-patience` stops | 406 | 364 |
+| `all-rejected-backtracking-exhausted` stops | 126 | 126 |
+| `maximum-iterations` stops | 68 | 68 |
+| Safety regressions | 0 | 0 |
+
+The 42 post-fix convergence cases comprise 41 `natural` cases and one
+`stationarity` case. All C/N/O zero-noise positive controls converge, and all
+eight `natural-v00` single-carbon zero-noise replicas converge. By natural
+topology the convergence counts are C-C 8, CA-C 8, N-N 8, O-O 9, and UNK-C 8.
+
+The accepted-only shadow checkpoint appears in 137 post-fix cases: 125
+`natural` and 12 `stationarity`. Relative to the terminal outcome it could have
+saved a median of 3 attempts, p90 22.4, and at most 57 attempts. This is evidence
+for a future raw-p99 study, not permission to remove or relax the production raw
+p99 `< 1e-4` gate.
+
+On the frozen objective domain, paired objective delta has median/p90 0/0 with
+zero material benefit and zero material harm. Transformed aggregate truth RMSE
+delta also has median/p90 0/0; one case (`natural-v07-r4`) is classified as
+material truth harm (`+1.7153815119742974e-05`) while its objective delta is not
+material. No non-finite, hard-failure, suspicious/quarantine, or other safety
+regression is observed.
+
+The three counterfactual policies still have no genuine production-checkpoint
+exposure in this corpus, so their minimum exposure/family quotas remain unmet.
+Consequently `rollback_candidate=false` and `redesign_candidate=false` still
+mean only that no evidence currently requires a rollback or redesign; they do
+not prove the production policy is optimal. The accepted-only shadow result is
+reported independently and is not counted as comparator exposure.
+
+Current verification on 2026-08-27:
 
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
-- fold-168 stops after seven accepted iterations with `audit-patience` in both
-  builds and produces byte-identical `actual.json` files;
-- schema-5 aggregation reports seven records, no convergence trigger, and zero
-  legacy-population, maximum-gate, or solver-qualification exposures;
-- repository lint passes;
-- the 600-case corpus was intentionally not run, so no new rollback or redesign
-  decision is claimed.
+- fold-168 still stops after seven accepted iterations with `audit-patience` in
+  both builds and produces byte-identical `actual.json` files;
+- C/N/O positive controls pass 3/3 and `natural-v00` passes 8/8;
+- both 600-case runs are complete and deterministic, with zero safety
+  regression;
+- repository lint passes.

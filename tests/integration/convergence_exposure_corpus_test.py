@@ -125,13 +125,25 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             "[Debug] Counterfactual convergence atom: schema=3, "
             "experiment=1-1, policy=production, serial=1, "
             "amplitude=6, width=0.5, offset=0.1",
+            "[Debug] Accepted-only shadow checkpoint: schema=1, try=1, acc=1, "
+            "objective=1/0/0/1, accepted-p99=0/0/0, raw-p99=1/1/1",
+            "[Debug] Accepted-only shadow atom: schema=1, serial=1, group=1, "
+            "amplitude=6, width=0.5, offset=0.1",
+            "[Debug] Second-stage audit terminal: schema=1, reason=converged, "
+            "try=2, acc=2, objective=1/0/0/1",
+            "[Debug] Second-stage audit terminal atom: schema=1, serial=1, "
+            "group=1, amplitude=6, width=0.5, offset=0.1",
         ))
         truth = RUNNER.parse_truth(text)
-        atom_rows = COUNTERFACTUAL.parse_log(text)["atoms"][("1-1", "production")]
+        parsed = COUNTERFACTUAL.parse_log(text)
+        atom_rows = parsed["atoms"][("1-1", "production")]
         metrics = COUNTERFACTUAL._truth_metrics(atom_rows, truth)
 
         self.assertEqual(len(truth), 1)
         self.assertEqual(metrics["transformed_aggregate_rmse"], 0.0)
+        shadow = COUNTERFACTUAL.analyze(parsed, truth)["accepted_only_shadow"]
+        self.assertTrue(shadow["reached"])
+        self.assertEqual(shadow["truth_metrics"]["transformed_aggregate_rmse"], 0.0)
 
     def test_analyzer_classifies_exposures_outcomes_and_replay_order(self) -> None:
         summaries = []
@@ -185,6 +197,10 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertEqual(report["exposure_counts"]["policy-agreement"], 1)
         self.assertEqual(report["exposure_counts"]["no-trigger"], 1)
         self.assertEqual(report["genuine_exposure_count"], 0)
+        comparison = ANALYZER.compare(report, report)
+        self.assertEqual(comparison["before_convergence_count"], 1)
+        self.assertEqual(comparison["after_convergence_count"], 1)
+        self.assertEqual(comparison["safety_regression_count"], 0)
 
     def test_analyzer_separates_budget_and_existing_safeguard_termination(self) -> None:
         budget = case_summary("budget", False, False, True)
@@ -225,10 +241,10 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         [], 0, stdout=b"")) as initial_run_mock:
                 expected = RUNNER.run_case(
-                    Path("unused"), case, Path(temp_directory), 1)
+                    Path("unused"), case, Path(temp_directory), 1, None)
             with mock.patch.object(RUNNER.subprocess, "run") as resume_run_mock:
                 actual = RUNNER.run_case(
-                    Path("unused"), case, Path(temp_directory), 1)
+                    Path("unused"), case, Path(temp_directory), 1, None)
 
         self.assertEqual(actual, expected)
         self.assertEqual(
@@ -252,7 +268,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         [], 0, stdout=log.encode("utf-8"))):
                 summary = RUNNER.run_case(
-                    Path("unused"), case, output_directory, 1)
+                    Path("unused"), case, output_directory, 1, None)
             case_directory = output_directory / "cases" / case["case_id"]
             artifact_names = {
                 path.name for path in case_directory.iterdir()
@@ -261,7 +277,8 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertEqual(summary["status"], "complete")
         self.assertTrue({
             "run.log", "scenario-truth.json", "trajectory-schema-5.json",
-            "counterfactual-schema-3.json", "case-summary.json",
+            "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
+            "case-summary.json",
         }.issubset(artifact_names))
 
     def test_runner_isolates_failed_case(self) -> None:
@@ -277,7 +294,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         [], 7, stdout=b"isolated failure\n")):
                 summary = RUNNER.run_case(
-                    Path("unused"), case, output_directory, 1)
+                    Path("unused"), case, output_directory, 1, None)
             log = (output_directory / "cases" / "failed" / "run.log").read_text()
 
         self.assertEqual(summary["status"], "failed")

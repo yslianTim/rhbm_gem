@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 6
+CASE_SUMMARY_SCHEMA_VERSION = 7
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -122,11 +122,41 @@ def parse_truth(log_text: str) -> dict[int, dict[str, float]]:
     return truth
 
 
+def load_reference_truth(
+    reference_truth_directory: Path | None,
+    case_id: str,
+) -> dict[int, dict[str, float]] | None:
+    if reference_truth_directory is None:
+        return None
+    path = reference_truth_directory / "cases" / case_id / "scenario-truth.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        int(row["serial_id"]): {
+            name: float(row[name]) for name in ("amplitude", "width", "offset")
+        }
+        for row in value["atoms"]
+    }
+
+
 def _numbers(value: str) -> list[float]:
     return [float(item) for item in value.split("/")]
 
 
 def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> bool:
+    terminal = parsed.get("audit_terminal")
+    if terminal is not None:
+        objective = terminal.get("objective", "-/-/-/-")
+        if objective == "-/-/-/-" or any(
+                not math.isfinite(value) for value in _numbers(objective)):
+            return True
+        for atom in parsed.get("audit_terminal_atoms", []):
+            amplitude = float(atom["amplitude"])
+            width = float(atom["width"])
+            offset = float(atom["offset"])
+            if (not all(math.isfinite(value) for value in
+                        (amplitude, width, offset)) or
+                    amplitude <= 0.0 or width <= 0.0):
+                return True
     if audit["status"] == "no_convergence_trigger":
         return False
     trigger_try = int(audit["experiments"][0]["trigger_try"])
@@ -138,8 +168,9 @@ def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> b
 
     def safety_signature(record: dict[str, str]) -> tuple[int, int, int, bool]:
         qualification = [
-            int(value) for value in record["qualification"].split("/")]
-        blockers = [int(value) for value in record["blockers"].split("/")]
+            int(float(value)) for value in record["qualification"].split("/")]
+        blockers = [
+            int(float(value)) for value in record["blockers"].split("/")]
         summary_fields = (
             "production-accepted-p99", "production-accepted-max",
             "production-raw-p99", "production-raw-max",
@@ -172,6 +203,7 @@ def run_case(
     case: dict[str, Any],
     output_directory: Path,
     thread_count: int,
+    reference_truth_directory: Path | None,
 ) -> dict[str, Any]:
     case_directory = output_directory / "cases" / case["case_id"]
     case_directory.mkdir(parents=True, exist_ok=True)
@@ -181,6 +213,9 @@ def run_case(
         if (value.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
                 value.get("case") == case and
                 value.get("thread_count") == thread_count and
+                value.get("reference_truth_directory") == (
+                    str(reference_truth_directory)
+                    if reference_truth_directory is not None else None) and
                 value.get("status") == "complete"):
             return value
 
@@ -219,7 +254,10 @@ def run_case(
         return summary
     try:
         parsed = COUNTERFACTUAL_ANALYZER.parse_log(log_text)
-        truth = parse_truth(log_text)
+        truth = load_reference_truth(
+            reference_truth_directory, case["case_id"])
+        if truth is None:
+            truth = parse_truth(log_text)
     except (KeyError, TypeError, ValueError) as error:
         summary = {
             "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
@@ -253,12 +291,22 @@ def run_case(
             for atom in records
         ],
     })
+    write_json(case_directory / "shadow-terminal-schema-1.json", {
+        "schema_version": 1,
+        "accepted_only_checkpoint": parsed["shadow_checkpoint"],
+        "accepted_only_atoms": parsed["shadow_atoms"],
+        "terminal": parsed["audit_terminal"],
+        "terminal_atoms": parsed["audit_terminal_atoms"],
+    })
     audit = COUNTERFACTUAL_ANALYZER.analyze(parsed, truth)
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
         "status": "complete",
         "case": case,
         "thread_count": thread_count,
+        "reference_truth_directory": (
+            str(reference_truth_directory)
+            if reference_truth_directory is not None else None),
         "command": command,
         "truth_atom_count": len(truth),
         "safety_regression": detect_safety_regression(parsed, audit),
@@ -279,6 +327,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--case-id")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--reference-truth-dir", type=Path)
     return parser.parse_args(argv)
 
 
@@ -287,6 +336,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     executable = args.executable.resolve()
     if not executable.is_file():
         raise FileNotFoundError(f"Exposure runner does not exist: {executable}")
+    reference_truth_directory = (
+        args.reference_truth_dir.resolve()
+        if args.reference_truth_dir is not None else None)
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     cases = expand_manifest(manifest)
     if args.case_id:
@@ -300,7 +352,12 @@ def run(argv: Sequence[str] | None = None) -> int:
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
         futures = {
             executor.submit(
-                run_case, executable, case, args.output_dir, args.threads): case
+                run_case,
+                executable,
+                case,
+                args.output_dir,
+                args.threads,
+                reference_truth_directory): case
             for case in cases
         }
         for completed_count, future in enumerate(as_completed(futures), start=1):
@@ -327,6 +384,74 @@ def run(argv: Sequence[str] | None = None) -> int:
                 "rollback_candidate"
             ] = False
     write_json(args.output_dir / "aggregate.json", aggregate)
+    if reference_truth_directory is not None:
+        baseline_aggregate_path = reference_truth_directory / "aggregate.json"
+        if baseline_aggregate_path.is_file():
+            baseline_aggregate = json.loads(
+                baseline_aggregate_path.read_text(encoding="utf-8"))
+            comparison = CORPUS_ANALYZER.compare(baseline_aggregate, aggregate)
+            write_json(args.output_dir / "comparison.json", comparison)
+            objective = comparison["objective_delta"]
+            truth_rmse = comparison["truth_rmse_delta"]
+            markdown_lines = [
+                "# Convergence exposure before/after comparison",
+                "",
+                f"- Cases: {comparison['case_count']}",
+                f"- Production convergence: "
+                f"{comparison['before_convergence_count']} → "
+                f"{comparison['after_convergence_count']}",
+                f"- Accepted-only shadow checkpoints: "
+                f"{comparison['accepted_only_shadow_count']}",
+                f"- Objective delta median/p90: "
+                f"{objective['median']} / {objective['p90']}",
+                f"- Objective material benefit/harm: "
+                f"{objective['material_benefit_count']} / "
+                f"{objective['material_harm_count']}",
+                f"- Truth RMSE delta median/p90: "
+                f"{truth_rmse['median']} / {truth_rmse['p90']}",
+                f"- Truth material benefit/harm: "
+                f"{truth_rmse['material_benefit_count']} / "
+                f"{truth_rmse['material_harm_count']}",
+                f"- Safety regressions: "
+                f"{comparison['safety_regression_count']}",
+                "",
+                "## By family",
+                "",
+                "| Family | Cases | Convergence before→after | Shadow | "
+                "Objective Δ median/p90 | Truth RMSE Δ median/p90 | Safety |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ]
+            for family, values in comparison["by_family"].items():
+                markdown_lines.append(
+                    f"| {family} | {values['case_count']} | "
+                    f"{values['before_convergence_count']}→"
+                    f"{values['after_convergence_count']} | "
+                    f"{values['accepted_only_shadow_count']} | "
+                    f"{values['objective_delta_median']} / "
+                    f"{values['objective_delta_p90']} | "
+                    f"{values['truth_rmse_delta_median']} / "
+                    f"{values['truth_rmse_delta_p90']} | "
+                    f"{values['safety_regression_count']} |"
+                )
+            markdown_lines.extend((
+                "",
+                "## By topology",
+                "",
+                "| Topology | Cases | Convergence before→after | Shadow | Safety |",
+                "|---|---:|---:|---:|---:|",
+            ))
+            for topology, values in comparison["by_topology"].items():
+                markdown_lines.append(
+                    f"| {topology} | {values['case_count']} | "
+                    f"{values['before_convergence_count']}→"
+                    f"{values['after_convergence_count']} | "
+                    f"{values['accepted_only_shadow_count']} | "
+                    f"{values['safety_regression_count']} |"
+                )
+            markdown_lines.append("")
+            markdown = "\n".join(markdown_lines)
+            (args.output_dir / "comparison.md").write_text(
+                markdown, encoding="utf-8")
     write_json(args.output_dir / "replay-manifest.json", {
         "schema_version": 1,
         "case_ids": aggregate["replay_case_ids"],

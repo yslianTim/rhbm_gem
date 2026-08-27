@@ -70,6 +70,11 @@ struct ConvergencePredicates
             accepted_percentile_converged &&
             raw_percentile_converged;
     }
+
+    bool AcceptedOnlyConverged() const
+    {
+        return qualification_passed && accepted_percentile_converged;
+    }
 };
 
 ConvergencePredicates EvaluateConvergencePredicates(
@@ -152,6 +157,10 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     const FitState & previous_state,
     const ActiveCoordinatePopulation & population);
 
+SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
+    const SuspiciousBlockActivity & block_activity,
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom);
+
 struct SolverQualificationAudit
 {
     bool production_qualified{ false };
@@ -225,6 +234,9 @@ struct QuarantineFailureState
 };
 
 using QuarantineFailureStateMap = std::map<QuarantineTarget, QuarantineFailureState>;
+
+bool HasPendingQuarantineLifecycle(
+    const QuarantineFailureStateMap & state_by_target);
 
 struct QuarantineStateTransition
 {

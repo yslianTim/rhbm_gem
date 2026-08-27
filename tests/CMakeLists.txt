@@ -365,6 +365,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             convergence_exposure_case_runner_smoke
             PROPERTIES
                 LABELS "domain:integration;intent:algorithm"
+                PASS_REGULAR_EXPRESSION
+                    "Counterfactual convergence checkpoint: schema=3.*policy=production"
                 TIMEOUT 60
         )
 

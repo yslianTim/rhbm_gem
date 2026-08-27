@@ -8,6 +8,8 @@
 #include <numeric>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -4802,6 +4804,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     EXPECT_TRUE(accepted_small.qualification_passed);
     EXPECT_TRUE(accepted_small.accepted_percentile_converged);
     EXPECT_FALSE(accepted_small.raw_percentile_converged);
+    EXPECT_TRUE(accepted_small.AcceptedOnlyConverged());
     EXPECT_FALSE(accepted_small.Converged());
 
     const auto raw_small{
@@ -4809,6 +4812,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     };
     EXPECT_FALSE(raw_small.accepted_percentile_converged);
     EXPECT_TRUE(raw_small.raw_percentile_converged);
+    EXPECT_FALSE(raw_small.AcceptedOnlyConverged());
     EXPECT_FALSE(raw_small.Converged());
 
     const auto nonstationary_small{
@@ -4816,6 +4820,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedRawAndStationarity
     };
     EXPECT_TRUE(nonstationary_small.accepted_percentile_converged);
     EXPECT_TRUE(nonstationary_small.raw_percentile_converged);
+    EXPECT_FALSE(nonstationary_small.AcceptedOnlyConverged());
     EXPECT_FALSE(nonstationary_small.Converged());
 }
 
@@ -4876,6 +4881,27 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlo
     EXPECT_EQ(dual_shadow.population_size_list.at(0), 10U);
     EXPECT_EQ(dual_shadow.population_size_list.at(1), 10U);
     EXPECT_EQ(dual_shadow.population_size_list.at(2), 10U);
+
+    std::vector<audit_detail::SuspiciousGaussianAssessment> assessment_by_atom(
+        atom_count);
+    const auto benign_fixed_mask{
+        audit_detail::BuildSuspiciousFailureAtomMask(
+            block_activity,
+            assessment_by_atom)
+    };
+    EXPECT_EQ(
+        std::ranges::count(benign_fixed_mask, 1),
+        0);
+    assessment_by_atom.front().reason =
+        audit_detail::SuspiciousGaussianReason::WidthGrowth;
+    const auto suspicious_fixed_mask{
+        audit_detail::BuildSuspiciousFailureAtomMask(
+            block_activity,
+            assessment_by_atom)
+    };
+    EXPECT_EQ(
+        std::ranges::count(suspicious_fixed_mask, 1),
+        1);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSizeWeighting)
@@ -5098,7 +5124,11 @@ TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveD
         GetEstimateModel(*selected_atoms.at(0)),
         GetEstimateModel(*selected_atoms.at(1))
     };
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
 
     bool any_local_model_changed{ false };
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
@@ -5110,6 +5140,14 @@ TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveD
             fitted_model.GetOffset() != previous_terminal_model_list.at(i).GetOffset();
     }
     EXPECT_TRUE(any_local_model_changed);
+    constexpr std::string_view accepted_iteration_marker{
+        " - accepted_iterations = " };
+    const auto accepted_iteration_position{
+        output.find(accepted_iteration_marker) };
+    ASSERT_NE(accepted_iteration_position, std::string::npos);
+    const auto accepted_iteration_count{ std::stoull(output.substr(
+        accepted_iteration_position + accepted_iteration_marker.size())) };
+    EXPECT_GT(accepted_iteration_count, 3U);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -5138,6 +5176,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
 
     EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 1)
         .entered_target_list.empty());
+    EXPECT_TRUE(audit_detail::HasPendingQuarantineLifecycle(state_by_target));
     EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 2)
         .entered_target_list.empty());
     EXPECT_TRUE(observe(
@@ -5206,6 +5245,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         EXPECT_EQ(state_by_target.at(target).probation_count, probation);
     }
     EXPECT_TRUE(state_by_target.at(target).probation_exhausted);
+    EXPECT_FALSE(audit_detail::HasPendingQuarantineLifecycle(state_by_target));
 }
 
 TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)

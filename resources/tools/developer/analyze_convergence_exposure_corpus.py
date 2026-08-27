@@ -145,6 +145,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     family_exposure_counts: dict[str, Counter[str]] = {}
     topology_exposure_counts: dict[str, Counter[str]] = {}
     termination_counts: Counter[str] = Counter()
+    production_convergence_count = 0
+    accepted_only_shadow_count = 0
     maximum_evidence: dict[str, Counter[str]] = {
         population: Counter() for population in (
             "production", "legacy_population", "solver_qualified")
@@ -157,10 +159,17 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         family_exposure_counts.setdefault(family, Counter())[exposure_class] += 1
         topology_exposure_counts.setdefault(topology, Counter())[exposure_class] += 1
         audit = summary["audit"]
+        production_convergence_count += int(
+            audit["status"] == "counterfactual_records")
+        shadow = audit.get("accepted_only_shadow", {"reached": False})
+        accepted_only_shadow_count += int(shadow.get("reached", False))
+        terminal = audit.get("terminal")
         exposures = {
             name: False for name in POLICY_EXPOSURES.values()
         }
-        if audit["status"] == "no_convergence_trigger":
+        if terminal is not None:
+            termination_counts[terminal["reason"]] += 1
+        elif audit["status"] == "no_convergence_trigger":
             termination_counts["no-convergence-trigger"] += 1
         else:
             experiment = audit["experiments"][0]
@@ -199,6 +208,10 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "exposure_class": exposure_class,
             "exposures": exposures,
             "outcomes": outcomes,
+            "accepted_only_shadow": shadow,
+            "terminal": terminal,
+            "production_converged": audit["status"] == "counterfactual_records",
+            "safety_regression": bool(summary.get("safety_regression", False)),
         })
 
     decisions: dict[str, Any] = {}
@@ -284,9 +297,26 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         values["total"] == 0 and not any(values["families"].values())
         for values in shortfall.values()
     )
+    accepted_only_saved_attempts = [
+        row["terminal"]["attempts_after_accepted_only"]
+        for row in rows
+        if row["terminal"] is not None and
+        "attempts_after_accepted_only" in row["terminal"]
+    ]
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "case_count": len(summaries),
+        "production_convergence_count": production_convergence_count,
+        "accepted_only_shadow_count": accepted_only_shadow_count,
+        "accepted_only_saved_attempts": {
+            "median": (
+                statistics.median(accepted_only_saved_attempts)
+                if accepted_only_saved_attempts else None),
+            "p90": _percentile(accepted_only_saved_attempts, 0.90),
+            "maximum": (
+                max(accepted_only_saved_attempts)
+                if accepted_only_saved_attempts else None),
+        },
         "genuine_exposure_count": genuine_exposure_count,
         "exposure_counts": dict(sorted(exposure_counts.items())),
         "comparator_exposure_counts": {
@@ -310,6 +340,146 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "corpus_shortfall": shortfall,
         "replay_case_ids": select_replay_cases(rows),
         "policy_decisions": decisions,
+        "cases": rows,
+    }
+
+
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    before_by_id = {row["case_id"]: row for row in before["cases"]}
+    after_by_id = {row["case_id"]: row for row in after["cases"]}
+    if set(before_by_id) != set(after_by_id):
+        raise ValueError("Before and after corpus case IDs do not match")
+
+    rows = []
+    objective_deltas: list[float] = []
+    truth_deltas: list[float] = []
+    objective_harm_count = 0
+    objective_benefit_count = 0
+    truth_harm_count = 0
+    truth_benefit_count = 0
+    for case_id in sorted(before_by_id):
+        baseline = before_by_id[case_id]
+        candidate = after_by_id[case_id]
+        baseline_terminal = baseline.get("terminal") or {}
+        candidate_terminal = candidate.get("terminal") or {}
+        baseline_objective = baseline_terminal.get("objective")
+        candidate_objective = candidate_terminal.get("objective")
+        objective_delta = None
+        if baseline_objective is not None and candidate_objective is not None:
+            objective_delta = candidate_objective - baseline_objective
+            objective_deltas.append(objective_delta)
+            objective_harm_count += int(
+                _materially_higher(candidate_objective, baseline_objective))
+            objective_benefit_count += int(
+                _materially_lower(candidate_objective, baseline_objective))
+        baseline_truth = (
+            baseline_terminal.get("truth_metrics") or {}).get(
+                "transformed_aggregate_rmse")
+        candidate_truth = (
+            candidate_terminal.get("truth_metrics") or {}).get(
+                "transformed_aggregate_rmse")
+        truth_delta = None
+        if baseline_truth is not None and candidate_truth is not None:
+            truth_delta = candidate_truth - baseline_truth
+            truth_deltas.append(truth_delta)
+            truth_harm_count += int(
+                _materially_higher(candidate_truth, baseline_truth))
+            truth_benefit_count += int(
+                _materially_lower(candidate_truth, baseline_truth))
+        rows.append({
+            "case_id": case_id,
+            "family": candidate["family"],
+            "topology": candidate["topology"],
+            "before_converged": baseline.get("production_converged", False),
+            "after_converged": candidate.get("production_converged", False),
+            "before_stop_reason": baseline_terminal.get("reason"),
+            "after_stop_reason": candidate_terminal.get("reason"),
+            "objective_delta": objective_delta,
+            "truth_rmse_delta": truth_delta,
+            "accepted_only_shadow": candidate.get("accepted_only_shadow"),
+            "safety_regression": candidate.get("safety_regression", False),
+        })
+
+    def summarize_group(group_rows: list[dict[str, Any]]) -> dict[str, Any]:
+        group_objective_deltas = [
+            row["objective_delta"] for row in group_rows
+            if row["objective_delta"] is not None]
+        group_truth_deltas = [
+            row["truth_rmse_delta"] for row in group_rows
+            if row["truth_rmse_delta"] is not None]
+        return {
+            "case_count": len(group_rows),
+            "before_convergence_count": sum(
+                row["before_converged"] for row in group_rows),
+            "after_convergence_count": sum(
+                row["after_converged"] for row in group_rows),
+            "accepted_only_shadow_count": sum(
+                bool((row.get("accepted_only_shadow") or {}).get("reached"))
+                for row in group_rows),
+            "objective_delta_median": (
+                statistics.median(group_objective_deltas)
+                if group_objective_deltas else None),
+            "objective_delta_p90": _percentile(group_objective_deltas, 0.90),
+            "truth_rmse_delta_median": (
+                statistics.median(group_truth_deltas)
+                if group_truth_deltas else None),
+            "truth_rmse_delta_p90": _percentile(group_truth_deltas, 0.90),
+            "safety_regression_count": sum(
+                row["safety_regression"] for row in group_rows),
+        }
+
+    family_names = sorted({row["family"] for row in rows})
+    topology_names = sorted({
+        (row["family"], row["topology"]) for row in rows})
+    by_family = {
+        family: summarize_group([
+            row for row in rows if row["family"] == family])
+        for family in family_names
+    }
+    by_topology = {
+        f"{family}/{topology}": summarize_group([
+            row for row in rows
+            if row["family"] == family and row["topology"] == topology])
+        for family, topology in topology_names
+    }
+
+    return {
+        "schema_version": 1,
+        "case_count": len(rows),
+        "before_convergence_count": before.get("production_convergence_count", 0),
+        "after_convergence_count": after.get("production_convergence_count", 0),
+        "accepted_only_shadow_count": after.get("accepted_only_shadow_count", 0),
+        "before_stop_reasons": before.get("termination_counts", {}),
+        "after_stop_reasons": after.get("termination_counts", {}),
+        "objective_delta": {
+            "median": statistics.median(objective_deltas) if objective_deltas else None,
+            "p90": _percentile(objective_deltas, 0.90),
+            "material_benefit_count": objective_benefit_count,
+            "material_harm_count": objective_harm_count,
+        },
+        "truth_rmse_delta": {
+            "median": statistics.median(truth_deltas) if truth_deltas else None,
+            "p90": _percentile(truth_deltas, 0.90),
+            "material_benefit_count": truth_benefit_count,
+            "material_harm_count": truth_harm_count,
+        },
+        "safety_regression_count": sum(
+            row["safety_regression"] for row in rows),
+        "by_family": by_family,
+        "by_topology": by_topology,
         "cases": rows,
     }
 

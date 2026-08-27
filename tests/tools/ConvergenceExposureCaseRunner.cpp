@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -240,19 +241,38 @@ Scenario BuildScenario(const Request & request)
             request.topology == "c-c" ? Spot::C :
             request.topology == "ca-c" ? Spot::CA : Spot::UNK };
         const auto element{
-            spot == Spot::O ? Element::OXYGEN :
-            spot == Spot::N ? Element::NITROGEN : Element::CARBON };
+            spot == Spot::O || request.topology == "unk-o" ? Element::OXYGEN :
+            spot == Spot::N || request.topology == "unk-n" ? Element::NITROGEN :
+            Element::CARBON };
         const auto charge{
             element == Element::OXYGEN ? -0.4 :
             element == Element::NITROGEN ? -0.1 : 0.3 };
         ElectricPotential potential_model;
         potential_model.SetModelChoice(0);
         potential_model.SetBlurringWidth(0.5);
+        rt::PotentialModelScenario reference_scenario;
+        reference_scenario.spot = Spot::UNK;
+        reference_scenario.element = element;
+        reference_scenario.charge = charge;
+        reference_scenario.potential_model = potential_model;
+        reference_scenario.data_error_sigma = 0.0;
+        reference_scenario.replica_size = 1;
+        reference_scenario.random_seed = 0;
+        rt::FitOptions reference_options;
+        reference_options.distance_min = 0.0;
+        reference_options.distance_max = 1.0;
+        reference_options.thread_size = request.threads;
+        reference_options.quiet_mode = true;
+        const auto reference_gaussian{
+            rt::EstimateAtomicModelFullStageMean(
+                rt::BuildPotentialModelTestData(reference_scenario),
+                reference_options)
+        };
         rt::PotentialModelScenario natural_scenario;
         natural_scenario.spot = spot;
         natural_scenario.element = element;
         natural_scenario.charge = charge;
-        natural_scenario.gaus_true = rg::GaussianModel3D{ 8.0, 0.5, charge };
+        natural_scenario.gaus_true = reference_gaussian;
         natural_scenario.potential_model = potential_model;
         natural_scenario.data_error_sigma = request.noise_sigma;
         natural_scenario.replica_size = 1;
