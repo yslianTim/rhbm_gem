@@ -3,7 +3,6 @@ get_filename_component(_rhbm_gem_source_dir "${_rhbm_gem_source_dir}" ABSOLUTE)
 
 set(_rhbm_gem_presets
     debug
-    relwithdebinfo
     release
 )
 
@@ -33,4 +32,4 @@ foreach(_rhbm_gem_preset IN LISTS _rhbm_gem_presets)
     endif()
 endforeach()
 
-message(STATUS "All Debug, RelWithDebInfo, and Release presets built successfully.")
+message(STATUS "All Debug and Release presets built successfully.")

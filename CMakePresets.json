@@ -31,16 +31,6 @@
       }
     },
     {
-      "name": "relwithdebinfo",
-      "displayName": "RelWithDebInfo",
-      "description": "Optimized CLI build with debug information",
-      "inherits": "common",
-      "binaryDir": "${sourceDir}/build/relwithdebinfo",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-      }
-    },
-    {
       "name": "release",
       "displayName": "Release",
       "description": "Optimized CLI build without debug information",
@@ -65,15 +55,6 @@
       "inherits": "common-build",
       "configurePreset": "debug",
       "configuration": "Debug",
-      "targets": "rhbm_gem_cli",
-      "jobs": 0
-    },
-    {
-      "name": "relwithdebinfo",
-      "displayName": "Build RelWithDebInfo",
-      "inherits": "common-build",
-      "configurePreset": "relwithdebinfo",
-      "configuration": "RelWithDebInfo",
       "targets": "rhbm_gem_cli",
       "jobs": 0
     },

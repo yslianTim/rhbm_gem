@@ -228,7 +228,7 @@ Notes:
 
 ## CMake Preset Workflow
 
-The project provides Debug, RelWithDebInfo, and Release configure/build presets.
+The project provides Debug and Release configure/build presets.
 The presets require CMake 3.21 or newer and the Ninja generator. They use
 separate build directories, disable tests and Python bindings, and build the
 CLI target with the shared project feature settings:
@@ -236,17 +236,16 @@ CLI target with the shared project feature settings:
 | Preset | Build type | Executable |
 | --- | --- | --- |
 | `debug` | `Debug` | `build/debug/bin/RHBM-GEM` |
-| `relwithdebinfo` | `RelWithDebInfo` | `build/relwithdebinfo/bin/RHBM-GEM` |
 | `release` | `Release` | `build/release/bin/RHBM-GEM` |
 
-To configure and incrementally build all three variants in order:
+To configure and incrementally build both variants in order:
 
 ```bash
 cmake -P cmake/BuildAllPresets.cmake
 ```
 
 The script stops at the first configure or build failure and identifies the
-failed preset. Running it again reuses the three existing build directories.
+failed preset. Running it again reuses the two existing build directories.
 
 To configure or build one variant independently:
 
@@ -254,14 +253,11 @@ To configure or build one variant independently:
 cmake --preset debug
 cmake --build --preset debug
 
-cmake --preset relwithdebinfo
-cmake --build --preset relwithdebinfo
-
 cmake --preset release
 cmake --build --preset release
 ```
 
-In VS Code, `CMake: Build Debug + RelWithDebInfo + Release` is the default build
+In VS Code, `CMake: Build Debug + Release` is the default build
 task, so `Cmd/Ctrl + Shift + B` runs the same all-variants build script.
 
 `CMakePresets.json` is the single source of truth for the standard configure and
@@ -271,7 +267,7 @@ The shared Ninja progress format is defined by the build presets so the same
 output is used from VS Code and the command line.
 
 VS Code IntelliSense is provided by the CMake Tools configuration provider in
-`.vscode/c_cpp_properties.json`. Select a Debug, RelWithDebInfo, or Release
+`.vscode/c_cpp_properties.json`. Select a Debug or Release
 configure preset before editing. Do not add compiler paths or third-party
 include paths there; CMake Tools supplies them from the active CMake target.
 The common configure preset also exports `compile_commands.json` for each
@@ -285,7 +281,7 @@ Debug preset configured when using clangd for the default core source tree.
 For coverage, external regression data, or other option-specific validation,
 continue to use explicit `cmake -S/-B` build directories as shown in the
 sections above. This keeps those specialized configurations independent from
-the three standard preset directories.
+the two standard preset directories.
 
 ## Validation Examples
 
