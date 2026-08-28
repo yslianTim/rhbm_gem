@@ -5539,6 +5539,178 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
         change_audit));
 }
 
+TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAndNominalPopulations)
+{
+    const std::vector<std::size_t> atom_index_list{ 0, 1, 2 };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0, 1, 2 };
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask{ 1, 1, 0 },
+        audit_detail::SuspiciousUpdateMask{ 1, 1, 0 },
+        audit_detail::SuspiciousUpdateMask(3, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask{ 0, 1, 0 },
+        audit_detail::SuspiciousUpdateMask{ 0, 1, 0 },
+        audit_detail::SuspiciousUpdateMask(3, 0)
+    };
+    audit_detail::SuspiciousBlockActivity nominal_activity{
+        audit_detail::SuspiciousUpdateMask(3, 0),
+        audit_detail::SuspiciousUpdateMask(3, 0),
+        audit_detail::SuspiciousUpdateMask(3, 0)
+    };
+    const auto accepted_population{ audit_detail::BuildActiveCoordinatePopulation(
+        atom_index_list,
+        cluster_key_list,
+        group_id_by_atom_index,
+        activity,
+        quarantine_activity) };
+    const auto nominal_population{ audit_detail::BuildActiveCoordinatePopulation(
+        atom_index_list,
+        cluster_key_list,
+        group_id_by_atom_index,
+        nominal_activity,
+        nominal_activity) };
+    std::vector<alg::ParameterChange> changes(
+        3, alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    changes.at(0).value_list.assign(3, 2.0e-3);
+    changes.at(1).value_list.assign(3, 2.0e-3);
+    changes.at(2).value_list.assign(3, 5.0e-5);
+
+    audit_detail::ConvergenceCertificate certificate;
+    certificate.accepted_active_population = accepted_population;
+    certificate.accepted_active_movement =
+        audit_detail::SummarizeActiveDofChanges(changes, accepted_population);
+    certificate.operator_nominal_population = nominal_population;
+    certificate.operator_nominal_residual =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    certificate.solver_qualification.solver_qualified = true;
+    certificate.solver_qualification.restricted_active_set = true;
+    certificate.solver_qualification.fixed_shape_count = 1;
+    certificate.solver_qualification.quarantined_shape_count = 1;
+
+    EXPECT_EQ(certificate.accepted_active_movement.population_size_list.at(0), 1U);
+    EXPECT_EQ(certificate.accepted_active_movement.population_size_list.at(2), 1U);
+    EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(0), 3U);
+    EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(2), 3U);
+    EXPECT_TRUE(certificate.ActiveSetRestricted());
+    EXPECT_TRUE(certificate.AcceptedPercentilePassed());
+    EXPECT_FALSE(certificate.OperatorPercentilePassed());
+    EXPECT_FALSE(certificate.ProductionConverged());
+
+    changes.at(0).value_list.assign(3, 5.0e-5);
+    changes.at(1).value_list.assign(3, 5.0e-5);
+    certificate.operator_nominal_residual =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    EXPECT_TRUE(certificate.ProductionConverged());
+}
+
+TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedSharedGroup)
+{
+    const std::vector<std::size_t> atom_index_list{ 0, 1 };
+    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0 };
+    audit_detail::SuspiciousBlockActivity activity{
+        audit_detail::SuspiciousUpdateMask(2, 0),
+        audit_detail::SuspiciousUpdateMask{ 0, 1 },
+        audit_detail::SuspiciousUpdateMask(2, 0)
+    };
+    audit_detail::SuspiciousBlockActivity quarantine_activity{
+        audit_detail::SuspiciousUpdateMask(2, 0),
+        audit_detail::SuspiciousUpdateMask(2, 0),
+        audit_detail::SuspiciousUpdateMask(2, 0)
+    };
+    const auto population{ audit_detail::BuildActiveCoordinatePopulation(
+        atom_index_list,
+        std::vector<audit_detail::ClusterKey>{ atom_index_list },
+        group_id_by_atom_index,
+        activity,
+        quarantine_activity) };
+    std::vector<alg::ParameterChange> changes(
+        2, alg::ParameterChange{ std::vector<double>(3, 0.0) });
+
+    audit_detail::ConvergenceCertificate certificate;
+    certificate.accepted_active_population = population;
+    certificate.accepted_active_movement =
+        audit_detail::SummarizeActiveDofChanges(changes, population);
+    certificate.operator_nominal_residual = certificate.accepted_active_movement;
+    certificate.solver_qualification.solver_qualified = true;
+    certificate.solver_qualification.mixed_offset_group_count = 1;
+
+    EXPECT_TRUE(certificate.MixedSharedGroup());
+    EXPECT_FALSE(certificate.InvariantsClear());
+    EXPECT_FALSE(certificate.StrictOperatorPassed());
+    EXPECT_FALSE(certificate.ProductionConverged());
+}
+
+TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequiresCompleteOperator)
+{
+    const auto make_summary = [](double value, std::size_t population)
+    {
+        change_detail::TransformedChangeSummary summary;
+        summary.percentile_stats.percentile_list.assign(3, value);
+        summary.maximum_list.assign(3, value);
+        summary.population_size_list.fill(population);
+        return summary;
+    };
+
+    audit_detail::ConvergenceCertificate certificate;
+    certificate.accepted_active_movement = make_summary(0.0, 0);
+    certificate.operator_nominal_residual = make_summary(5.0e-5, 4);
+    certificate.solver_qualification.solver_qualified = true;
+    certificate.solver_qualification.restricted_active_set = true;
+    certificate.solver_qualification.all_fixed = true;
+
+    EXPECT_TRUE(certificate.AllFixed());
+    EXPECT_TRUE(certificate.AcceptedPercentilePassed());
+    EXPECT_TRUE(certificate.StrictOperatorPassed());
+    EXPECT_TRUE(certificate.ProductionConverged());
+
+    certificate.operator_unavailable_count.at(0) = 1;
+    EXPECT_FALSE(certificate.OperatorComplete());
+    EXPECT_FALSE(certificate.StrictOperatorPassed());
+    EXPECT_FALSE(certificate.ProductionConverged());
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            certificate.OperatorComplete(),
+            certificate.solver_qualification.solver_qualified,
+            certificate.accepted_active_movement,
+            certificate.operator_nominal_residual),
+        audit_detail::FixedPointResidualInterpretation::Restricted);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CounterfactualComparatorsReadCanonicalCertificate)
+{
+    const auto make_summary = [](double percentile, double maximum)
+    {
+        change_detail::TransformedChangeSummary summary;
+        summary.percentile_stats.percentile_list.assign(3, percentile);
+        summary.maximum_list.assign(3, maximum);
+        summary.population_size_list.fill(10);
+        return summary;
+    };
+    audit_detail::ConvergenceCertificate certificate;
+    certificate.accepted_active_movement = make_summary(5.0e-5, 2.0e-3);
+    certificate.operator_nominal_residual = make_summary(5.0e-5, 2.0e-3);
+    certificate.solver_qualification.solver_qualified = true;
+    const auto passing{ audit_detail::EvaluateConvergencePredicates(
+        true,
+        make_summary(5.0e-5, 5.0e-4),
+        make_summary(5.0e-5, 5.0e-4)) };
+    const auto historical_all_selected{ audit_detail::EvaluateConvergencePredicates(
+        true,
+        make_summary(2.0e-4, 5.0e-4),
+        make_summary(5.0e-5, 5.0e-4)) };
+    const auto decision{ audit_detail::EvaluateCounterfactualPolicyDecision(
+        certificate,
+        historical_all_selected,
+        passing,
+        passing,
+        make_summary(5.0e-5, 5.0e-4)) };
+
+    EXPECT_EQ(decision.converged, (std::array<bool, 5>{
+        true, false, false, true, false }));
+}
+
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
 {
     change_detail::TransformedChangeSummary summary;
@@ -5815,13 +5987,15 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointShadowAuditNamesAllThreeStates)
     Logger::SetLogLevel(previous_level);
 
     EXPECT_NE(
-        output.find("Convergence safeguard audit: schema=7"),
+        output.find("Convergence safeguard audit: schema=8"),
         std::string::npos);
-    EXPECT_NE(output.find("production-accepted-p99="), std::string::npos);
+    EXPECT_NE(output.find("certificate-definition=1"), std::string::npos);
+    EXPECT_NE(output.find("comparator-set=1"), std::string::npos);
+    EXPECT_NE(output.find("accepted-active-p99="), std::string::npos);
     EXPECT_EQ(output.find("guarded-proposal-p99="), std::string::npos);
-    EXPECT_NE(output.find("fixed-point-residual-p99="), std::string::npos);
+    EXPECT_NE(output.find("operator-nominal-residual-p99="), std::string::npos);
     EXPECT_NE(output.find("unified-search["), std::string::npos);
-    EXPECT_NE(output.find("operator-unavailable[height/width/offset]="),
+    EXPECT_NE(output.find("operator-nominal-unavailable[height/width/offset]="),
         std::string::npos);
     EXPECT_NE(output.find("residual-state="), std::string::npos);
 }
@@ -5841,12 +6015,50 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointShadowMarksUnavailableOperatorRe
     EXPECT_NE(output.find("residual-state=restricted"), std::string::npos);
     EXPECT_NE(
         output.find(
-            "operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]="),
+            "operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]="),
         std::string::npos);
     EXPECT_EQ(
         output.find(
-            "operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=0/0/0"),
+            "operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=0/0/0"),
         std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditIsInfoDebugTrajectoryNeutral)
+{
+    auto info_model{ BuildFiniteNonphysicalProfileDefenseModel() };
+    auto debug_model{ BuildFiniteNonphysicalProfileDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    const auto info_result{ rt::RunSecondStageLocalFitting(*info_model, options) };
+    const std::string info_output{ testing::internal::GetCapturedStdout() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    const auto debug_result{ rt::RunSecondStageLocalFitting(*debug_model, options) };
+    const std::string debug_output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_EQ(info_result, debug_result);
+    EXPECT_EQ(
+        info_output.find("Convergence safeguard audit:"),
+        std::string::npos);
+    EXPECT_NE(
+        debug_output.find("Convergence safeguard audit: schema=8"),
+        std::string::npos);
+    const auto & info_atoms{ info_model->GetSelectedAtoms() };
+    const auto & debug_atoms{ debug_model->GetSelectedAtoms() };
+    ASSERT_EQ(info_atoms.size(), debug_atoms.size());
+    for (std::size_t i = 0; i < info_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*info_atoms.at(i)),
+            GetEstimateModel(*debug_atoms.at(i)),
+            1.0e-12);
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinearRidgeGuard)

@@ -15,11 +15,11 @@ from typing import Any, Iterable
 ABSOLUTE_TOLERANCE = 1.0e-8
 RELATIVE_TOLERANCE = 1.0e-3
 POLICY_EXPOSURES = {
-    "legacy-population": "legacy_population",
-    "legacy-maximum": "maximum_gate",
-    "solver-qualified": "solver_qualification",
-    "fixed-point-operator": "fixed_point_operator",
-    "fixed-point-operator-maximum": "fixed_point_operator_maximum",
+    "historical-all-selected": "historical-all-selected",
+    "historical-cluster-active-proposal-maximum": (
+        "historical-cluster-active-proposal-maximum"),
+    "historical-active-proposal": "historical-active-proposal",
+    "production-maximum": "production-maximum",
 }
 MINIMUM_TOTAL_EXPOSURES = 15
 MINIMUM_EXPOSURES_PER_FAMILY = 5
@@ -479,8 +479,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     accepted_only_shadow_count = 0
     maximum_evidence: dict[str, Counter[str]] = {
         population: Counter() for population in (
-            "production", "legacy_population", "solver_qualified",
-            "fixed_point_operator")
+            "production", "historical_all_selected",
+            "historical_active_proposal")
     }
     for summary in summaries:
         exposure_class = classify_exposure(summary)
@@ -528,7 +528,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         for population in maximum_evidence:
             for name, count in p99_implies_max.get(population, {}).items():
                 maximum_evidence[population][name] += int(count)
-        legacy_maximum_unique = unique_blockers.get("legacy_maximum", {})
+        legacy_maximum_unique = unique_blockers.get(
+            "historical_cluster_active_proposal_maximum", {})
         maximum_evidence["production"]["accepted_max_unique_catches"] += int(
             legacy_maximum_unique.get("accepted_max", 0))
         maximum_evidence["production"]["raw_max_unique_catches"] += int(
@@ -616,8 +617,9 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "aggregate_raw_median_regression": aggregate_raw_median_regression,
             "safety_regression_count": safety_regressions,
             (
-                "redesign_candidate" if policy == "solver-qualified" else
-                "promotion_candidate" if policy.startswith("fixed-point-") else
+                "redesign_candidate"
+                if policy == "historical-active-proposal" else
+                "promotion_candidate" if policy == "production-maximum" else
                 "rollback_candidate"
             ): candidate,
         }
@@ -861,7 +863,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "attempts_after_accepted_only" in row["terminal"]
     ]
     return {
-        "schema_version": 6,
+        "schema_version": 7,
         "case_count": len(summaries),
         "production_convergence_count": production_convergence_count,
         "accepted_only_shadow_count": accepted_only_shadow_count,
@@ -1090,7 +1092,7 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         not blocking_gate["accepted_iteration_median_regression"])
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "case_count": len(rows),
         "before_convergence_count": before.get("production_convergence_count", 0),
         "after_convergence_count": after.get("production_convergence_count", 0),

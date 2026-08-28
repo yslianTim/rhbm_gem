@@ -29,49 +29,54 @@ LEGACY_MAXIMUM_PREDICATE_NAMES = (
     "guarded_max",
 )
 TRACK_FIELDS = {
-    "production": "production-predicates",
-    "legacy_population": "legacy-population-predicates",
-    "solver_qualified": "solver-qualified-predicates",
-    "fixed_point_operator": "operator-predicates",
+    "production": "certificate",
+    "historical_all_selected": "historical-all-selected-predicates",
+    "historical_active_proposal": "historical-active-proposal-predicates",
 }
 POPULATION_FIELDS = {
-    "production": "production-population",
-    "legacy_population": "legacy-population",
-    "solver_qualified": "production-population",
-    "fixed_point_operator": "operator-population",
+    "production": "accepted-active-population",
+    "historical_all_selected": "historical-all-selected-population",
+    "historical_active_proposal": "accepted-active-population",
 }
 SUMMARY_FIELDS = {
     "production": (
-        "production-accepted-p99",
-        "production-accepted-max",
-        "guarded-proposal-p99",
-        "guarded-proposal-max",
+        "accepted-active-p99",
+        "accepted-active-max",
+        "operator-nominal-residual-p99",
+        "operator-nominal-residual-max",
     ),
-    "legacy_population": (
-        "legacy-accepted-p99",
-        "legacy-accepted-max",
-        "legacy-guarded-p99",
-        "legacy-guarded-max",
+    "historical_all_selected": (
+        "historical-all-selected-accepted-p99",
+        "historical-all-selected-accepted-max",
+        "historical-active-proposal-p99",
+        "historical-active-proposal-max",
     ),
-    "solver_qualified": (
-        "production-accepted-p99",
-        "production-accepted-max",
-        "guarded-proposal-p99",
-        "guarded-proposal-max",
-    ),
-    "fixed_point_operator": (
-        "production-accepted-p99",
-        "production-accepted-max",
-        "fixed-point-residual-p99",
-        "fixed-point-residual-max",
+    "historical_active_proposal": (
+        "accepted-active-p99",
+        "accepted-active-max",
+        "historical-active-proposal-p99",
+        "historical-active-proposal-max",
     ),
 }
 EXPOSURE_NAMES = (
-    "legacy_population",
-    "maximum_gate",
-    "solver_qualification",
-    "fixed_point_operator",
-    "fixed_point_operator_maximum",
+    "historical-all-selected",
+    "historical-cluster-active-proposal-maximum",
+    "historical-active-proposal",
+    "production-maximum",
+)
+SCHEMA_8_CERTIFICATE_LABEL = (
+    "certificate[solver/accepted-p99/operator-complete/operator-p99/"
+    "invariants/orthogonal/production]="
+)
+SCHEMA_8_STOP_LABEL = (
+    "stop-candidates[production/historical-all-selected/"
+    "historical-cluster-active-proposal-maximum/historical-active-proposal/"
+    "production-maximum]="
+)
+SCHEMA_8_EXPOSURE_LABEL = (
+    "exposures[historical-all-selected/"
+    "historical-cluster-active-proposal-maximum/historical-active-proposal/"
+    "production-maximum]="
 )
 
 
@@ -84,16 +89,65 @@ def _integers(value: str) -> list[int]:
 
 
 def summary_field_names(record: dict[str, str], track: str) -> tuple[str, ...]:
-    if record.get("schema") == "7":
-        accepted_prefix = (
-            "legacy" if track == "legacy_population" else "production")
-        return (
-            f"{accepted_prefix}-accepted-p99",
-            f"{accepted_prefix}-accepted-max",
-            "fixed-point-residual-p99",
-            "fixed-point-residual-max",
-        )
     return SUMMARY_FIELDS[track]
+
+
+def _join(values: list[int] | list[str]) -> str:
+    return "/".join(str(value) for value in values)
+
+
+def _normalize_legacy(fields: dict[str, str]) -> dict[str, str]:
+    schema = fields["schema"]
+    operator = _integers(fields["operator-predicates"])
+    stops = _integers(fields["stop-candidates"])
+    qualification = _integers(fields["qualification"])
+    legacy_maximum = _integers(fields["legacy-maximum-predicates"])
+    exposures = _integers(fields["exposures"])
+    if len(operator) != 5 or len(stops) != 7 or len(exposures) != 5:
+        raise ValueError("Legacy convergence audit vectors have invalid sizes")
+    guarded_p99 = fields.get(
+        "guarded-proposal-p99", fields["fixed-point-residual-p99"])
+    guarded_max = fields.get(
+        "guarded-proposal-max", fields["fixed-point-residual-max"])
+    blockers = _integers(fields["blockers"])
+    return {
+        **fields,
+        "source-schema": schema,
+        "accepted-active-population": fields["production-population"],
+        "historical-all-selected-population": fields["legacy-population"],
+        "operator-nominal-population": fields["operator-population"],
+        "certificate": _join([
+            qualification[1], operator[1], operator[3], operator[2],
+            int(len(qualification) < 17 or qualification[16] == 0),
+            stops[0], stops[1],
+        ]),
+        "historical-all-selected-predicates": fields[
+            "legacy-population-predicates"],
+        "historical-cluster-active-proposal-maximum-predicates": fields[
+            "legacy-maximum-predicates"],
+        "historical-active-proposal-predicates": fields[
+            "solver-qualified-predicates"],
+        "production-maximum-predicates": _join([
+            stops[1], legacy_maximum[2], operator[4]]),
+        "accepted-active-p99": fields["production-accepted-p99"],
+        "accepted-active-max": fields["production-accepted-max"],
+        "historical-all-selected-accepted-p99": fields["legacy-accepted-p99"],
+        "historical-all-selected-accepted-max": fields["legacy-accepted-max"],
+        "historical-active-proposal-p99": guarded_p99,
+        "historical-active-proposal-max": guarded_max,
+        "operator-nominal-residual-p99": fields["fixed-point-residual-p99"],
+        "operator-nominal-residual-max": fields["fixed-point-residual-max"],
+        "operator-nominal-unavailable": fields["operator-unavailable"],
+        "operator-nominal-unavailable-reasons": fields[
+            "operator-unavailable-reasons"],
+        "operator-nominal-tail": fields["operator-tail"],
+        "certificate-blockers": _join([
+            blockers[3], blockers[2], blockers[0], blockers[1]]),
+        "stop-candidates": _join([
+            stops[1], stops[2], stops[3], stops[4], stops[6]]),
+        "exposures": _join([
+            exposures[0], exposures[1], exposures[2], exposures[4]]),
+    }
 
 
 def parse_record(line: str) -> dict[str, str] | None:
@@ -106,29 +160,79 @@ def parse_record(line: str) -> dict[str, str] | None:
         for match in FIELD_PATTERN.finditer(payload)
     }
     schema = fields.get("schema")
-    if schema not in {"6", "7"}:
+    if schema not in {"6", "7", "8"}:
         return None
+    if schema in {"6", "7"}:
+        legacy_required = {
+            "production-population", "legacy-population", "operator-population",
+            "production-predicates", "legacy-population-predicates",
+            "legacy-maximum-predicates", "solver-qualified-predicates",
+            "operator-predicates", "production-accepted-p99",
+            "production-accepted-max", "legacy-accepted-p99",
+            "legacy-accepted-max", "fixed-point-residual-p99",
+            "fixed-point-residual-max", "operator-unavailable",
+            "operator-unavailable-reasons", "operator-tail", "blockers",
+            "qualification", "stop-candidates", "exposures", "path", "ratios",
+            "offset-groups", "joint-status", "residual-state", "limiters",
+        }
+        if schema == "7":
+            legacy_required.add("unified-search")
+        if not legacy_required.issubset(fields):
+            missing = ", ".join(sorted(legacy_required - fields.keys()))
+            raise ValueError(f"Convergence audit record is missing: {missing}")
+        if {"certificate-definition", "comparator-set", "certificate"} & fields.keys():
+            raise ValueError("Convergence audit record mixes schema definitions")
+        return _normalize_legacy(fields)
+
     required = set(TRACK_FIELDS.values()) | set(POPULATION_FIELDS.values()) | {
+        "certificate-definition", "comparator-set",
         "qualification",
         "stop-candidates",
         "exposures",
-        "legacy-maximum-predicates",
+        "historical-cluster-active-proposal-maximum-predicates",
+        "production-maximum-predicates",
         "path",
         "ratios",
         "offset-groups",
         "joint-status",
-        "operator-unavailable",
-        "operator-unavailable-reasons",
-        "operator-tail",
+        "operator-nominal-unavailable",
+        "operator-nominal-unavailable-reasons",
+        "operator-nominal-tail",
         "residual-state",
         "limiters",
+        "certificate-blockers",
+        "unified-search",
     }
-    if schema == "7":
-        required.add("unified-search")
+    required.update(field for names in SUMMARY_FIELDS.values() for field in names)
     if not required.issubset(fields):
         missing = ", ".join(sorted(required - fields.keys()))
         raise ValueError(f"Convergence audit record is missing: {missing}")
+    legacy_only = {
+        "production-population", "legacy-population", "operator-population",
+        "production-predicates", "legacy-population-predicates",
+        "legacy-maximum-predicates", "solver-qualified-predicates",
+        "operator-predicates", "production-accepted-p99",
+        "fixed-point-residual-p99",
+    }
+    if legacy_only & fields.keys():
+        raise ValueError("Convergence audit record mixes schema definitions")
+    if fields["certificate-definition"] != "1" or fields["comparator-set"] != "1":
+        raise ValueError("Unsupported convergence certificate definition")
+    if not all(label in payload for label in (
+            SCHEMA_8_CERTIFICATE_LABEL,
+            SCHEMA_8_STOP_LABEL,
+            SCHEMA_8_EXPOSURE_LABEL)):
+        raise ValueError("Schema-8 comparator names or order do not match")
     return fields
+
+
+def normalize_record(record: dict[str, str]) -> dict[str, str]:
+    """Normalize a previously parsed schema-6/7/8 record."""
+    if record.get("schema") in {"6", "7"}:
+        return _normalize_legacy(dict(record))
+    if record.get("schema") == "8":
+        return dict(record)
+    raise ValueError("Unsupported convergence audit schema")
 
 
 def _truth_tables(vectors: list[list[int]]) -> dict[str, dict[str, int]]:
@@ -199,11 +303,16 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         vector_by_track: dict[str, list[int]] = {}
         for track, field in TRACK_FIELDS.items():
             vector = _integers(record[field])
-            if track == "fixed_point_operator":
-                if len(vector) != 5:
+            if track == "production":
+                if len(vector) != 7:
                     raise ValueError(
-                        "operator-predicates must contain five predicates")
-                vector = vector[:3]
+                        "certificate must contain seven predicates")
+                expected_production = int(all(vector[:6]))
+                if (record.get("schema") == "8" and
+                        vector[6] != expected_production):
+                    raise ValueError(
+                        "Serialized production decision contradicts certificate")
+                vector = [vector[0], vector[1], vector[3]]
             elif len(vector) != len(PREDICATE_NAMES):
                 raise ValueError(f"{field} must contain three predicates")
             vector_by_track[track] = vector
@@ -214,30 +323,31 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             if len(failed) == 1:
                 unique_blocker_count[track][PREDICATE_NAMES[failed[0]]] += 1
 
-        legacy_maximum_vector = _integers(record["legacy-maximum-predicates"])
+        legacy_maximum_vector = _integers(
+            record["historical-cluster-active-proposal-maximum-predicates"])
         if len(legacy_maximum_vector) != len(LEGACY_MAXIMUM_PREDICATE_NAMES):
             raise ValueError(
-                "legacy-maximum-predicates must contain five predicates")
+                "historical maximum predicates must contain five predicates")
         legacy_maximum_failed = [
             index for index, passed in enumerate(legacy_maximum_vector)
             if not passed
         ]
         for index in legacy_maximum_failed:
-            blocker_count["legacy_maximum"][
+            blocker_count["historical_cluster_active_proposal_maximum"][
                 LEGACY_MAXIMUM_PREDICATE_NAMES[index]
             ] += 1
         if len(legacy_maximum_failed) == 1:
-            unique_blocker_count["legacy_maximum"][
+            unique_blocker_count["historical_cluster_active_proposal_maximum"][
                 LEGACY_MAXIMUM_PREDICATE_NAMES[legacy_maximum_failed[0]]
             ] += 1
 
         qualification = _integers(record["qualification"])
         stops = _integers(record["stop-candidates"])
         exposures = _integers(record["exposures"])
-        if len(stops) != 7:
-            raise ValueError("stop-candidates must contain seven values")
+        if len(stops) != 5:
+            raise ValueError("stop-candidates must contain five values")
         if len(exposures) != len(EXPOSURE_NAMES):
-            raise ValueError("exposures must contain five values")
+            raise ValueError("exposures must contain four values")
         for name, exposed in zip(EXPOSURE_NAMES, exposures):
             exposure_count[name] += int(bool(exposed))
 
@@ -245,7 +355,8 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             implication_name = "production_qualification=>solver_qualified"
             implication_counterexamples[implication_name] += 1
             implication_examples[implication_name].append(record_ref)
-        for comparison_track in ("legacy_population", "fixed_point_operator"):
+        for comparison_track in (
+                "historical_all_selected", "historical_active_proposal"):
             for index, name in enumerate(PREDICATE_NAMES[1:], start=1):
                 if (vector_by_track["production"][index] and
                         not vector_by_track[comparison_track][index]):
@@ -260,10 +371,9 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             actual_exposure_examples.append(record_ref)
         production_predicate_pass = all(vector_by_track["production"])
         comparison_mismatch = (
-            not all(vector_by_track["legacy_population"]) or
+            not all(vector_by_track["historical_all_selected"]) or
             not all(legacy_maximum_vector) or
-            not all(vector_by_track["solver_qualified"]) or
-            not all(vector_by_track["fixed_point_operator"])
+            not all(vector_by_track["historical_active_proposal"])
         )
         diagnostic_mismatch_count += int(
             production_predicate_pass and comparison_mismatch and not stops[0])
@@ -312,7 +422,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         _record_stratum(strata, "solver_status", solver_label, actual_exposure)
         path_names = (
             ("limited", "polish", "boundary", "rescue")
-            if record.get("schema") == "7"
+            if record.get("schema") in {"7", "8"}
             else ("trust", "backtrack", "polish", "boundary", "rescue")
         )
         active_paths = [name for name, count in zip(path_names, path) if count]
@@ -328,7 +438,7 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
             record["residual-state"],
             actual_exposure,
         )
-        unavailable = _integers(record["operator-unavailable"])
+        unavailable = _integers(record["operator-nominal-unavailable"])
         _record_stratum(
             strata,
             "operator_availability",
@@ -343,8 +453,9 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         }
         for track in TRACK_FIELDS
     }
-    normalized_blockers["legacy_maximum"] = {
-        predicate: blocker_count["legacy_maximum"].get(predicate, 0)
+    normalized_blockers["historical_cluster_active_proposal_maximum"] = {
+        predicate: blocker_count[
+            "historical_cluster_active_proposal_maximum"].get(predicate, 0)
         for predicate in LEGACY_MAXIMUM_PREDICATE_NAMES
     }
     normalized_unique = {
@@ -354,8 +465,9 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, object]:
         }
         for track in TRACK_FIELDS
     }
-    normalized_unique["legacy_maximum"] = {
-        predicate: unique_blocker_count["legacy_maximum"].get(predicate, 0)
+    normalized_unique["historical_cluster_active_proposal_maximum"] = {
+        predicate: unique_blocker_count[
+            "historical_cluster_active_proposal_maximum"].get(predicate, 0)
         for predicate in LEGACY_MAXIMUM_PREDICATE_NAMES
     }
     return {
@@ -433,7 +545,8 @@ def format_markdown(report: dict[str, object]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "log", type=Path, help="Debug log containing schema=6 or schema=7 audit records")
+        "log", type=Path,
+        help="Debug log containing schema=6, schema=7, or schema=8 audit records")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

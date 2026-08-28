@@ -339,6 +339,62 @@ ConvergencePredicates EvaluateConvergencePredicates(
     };
 }
 
+bool ConvergenceOrthogonalBlockers::Clear() const
+{
+    return !objective_domain_changed && !quarantine_transition &&
+        !suspicious_offset_fallback && !rejected_cluster;
+}
+
+bool ConvergenceCertificate::AcceptedPercentilePassed() const
+{
+    return IsTransformedPercentileConverged(accepted_active_movement);
+}
+
+bool ConvergenceCertificate::OperatorPercentilePassed() const
+{
+    return IsTransformedPercentileConverged(operator_nominal_residual);
+}
+
+bool ConvergenceCertificate::OperatorComplete() const
+{
+    return std::ranges::all_of(
+        operator_unavailable_count,
+        [](std::size_t count) { return count == 0; });
+}
+
+bool ConvergenceCertificate::InvariantsClear() const
+{
+    return !MixedSharedGroup();
+}
+
+bool ConvergenceCertificate::ActiveSetRestricted() const
+{
+    return solver_qualification.restricted_active_set;
+}
+
+bool ConvergenceCertificate::AllFixed() const
+{
+    return solver_qualification.all_fixed;
+}
+
+bool ConvergenceCertificate::MixedSharedGroup() const
+{
+    return accepted_active_population.mixed_offset_group_count != 0 ||
+        solver_qualification.mixed_offset_group_count != 0;
+}
+
+bool ConvergenceCertificate::StrictOperatorPassed() const
+{
+    return solver_qualification.solver_qualified && OperatorComplete() &&
+        InvariantsClear() && OperatorPercentilePassed();
+}
+
+bool ConvergenceCertificate::ProductionConverged() const
+{
+    return StrictOperatorPassed() && AcceptedPercentilePassed() &&
+        blockers.Clear();
+}
+
 FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
     bool operator_complete,
     bool qualification_passed,
@@ -515,6 +571,30 @@ static bool IsLegacyMaximumConverged(
         IsLegacyMaximumSummaryConverged(raw_change);
 }
 
+CounterfactualPolicyDecision EvaluateCounterfactualPolicyDecision(
+    const ConvergenceCertificate & certificate,
+    const ConvergencePredicates & historical_all_selected_predicates,
+    const ConvergencePredicates & historical_cluster_active_proposal_predicates,
+    const ConvergencePredicates & historical_active_proposal_predicates,
+    const TransformedChangeSummary & historical_active_proposal)
+{
+    const auto orthogonal_clear{ certificate.blockers.Clear() };
+    const auto production{ certificate.ProductionConverged() };
+    return CounterfactualPolicyDecision{ std::array{
+        production,
+        orthogonal_clear && historical_all_selected_predicates.Converged(),
+        orthogonal_clear &&
+            historical_cluster_active_proposal_predicates.Converged() &&
+            IsLegacyMaximumConverged(
+                certificate.accepted_active_movement,
+                historical_active_proposal),
+        orthogonal_clear && historical_active_proposal_predicates.Converged(),
+        production && IsLegacyMaximumConverged(
+            certificate.accepted_active_movement,
+            certificate.operator_nominal_residual)
+    } };
+}
+
 CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
     const CounterfactualPolicyDecision & decision,
     std::size_t attempt_number,
@@ -542,22 +622,22 @@ CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
         }
     }
 
-    const auto legacy_population_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::LegacyPopulation) };
-    const auto legacy_maximum_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::LegacyMaximum) };
-    const auto solver_qualified_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::SolverQualified) };
-    const auto fixed_point_operator_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::FixedPointOperator) };
-    const auto fixed_point_operator_maximum_index{ static_cast<std::size_t>(
-        CounterfactualConvergencePolicy::FixedPointOperatorMaximum) };
+    const auto historical_all_selected_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::HistoricalAllSelected) };
+    const auto historical_cluster_active_proposal_maximum_index{
+        static_cast<std::size_t>(
+            CounterfactualConvergencePolicy::
+                HistoricalClusterActiveProposalMaximum) };
+    const auto historical_active_proposal_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::HistoricalActiveProposal) };
+    const auto production_maximum_index{ static_cast<std::size_t>(
+        CounterfactualConvergencePolicy::ProductionMaximum) };
     update.all_candidate_policies_reached =
-        state.checkpoint_reached.at(legacy_population_index) &&
-        state.checkpoint_reached.at(legacy_maximum_index) &&
-        state.checkpoint_reached.at(solver_qualified_index) &&
-        state.checkpoint_reached.at(fixed_point_operator_index) &&
-        state.checkpoint_reached.at(fixed_point_operator_maximum_index);
+        state.checkpoint_reached.at(historical_all_selected_index) &&
+        state.checkpoint_reached.at(
+            historical_cluster_active_proposal_maximum_index) &&
+        state.checkpoint_reached.at(historical_active_proposal_index) &&
+        state.checkpoint_reached.at(production_maximum_index);
     update.policy_agreement = update.triggered_now &&
         update.all_candidate_policies_reached;
     state.continuation_active = !update.all_candidate_policies_reached;
@@ -843,18 +923,7 @@ static std::vector<double> EvaluateActiveDofMedian(
     return result;
 }
 
-struct FixedPointResidualEvidenceSummary
-{
-    TransformedChangeSummary change{};
-    ActiveCoordinatePopulation nominal_population{};
-    std::array<std::size_t, kTransformedChangeSize> unavailable_count{};
-    std::array<std::size_t, 3> unavailable_reason_count{};
-    std::array<std::size_t, kTransformedChangeSize> tail_count{};
-    bool complete{ false };
-    bool shadow_shape_refit_performed{ false };
-};
-
-static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
+static ConvergenceCertificate SummarizeFixedPointOperator(
     const FixedPointOperatorEvidence & evidence,
     const FitState & previous_state,
     const std::vector<std::size_t> & atom_index_list,
@@ -866,14 +935,14 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
         SuspiciousUpdateMask(previous_state.size(), 0),
         SuspiciousUpdateMask(previous_state.size(), 0)
     };
-    FixedPointResidualEvidenceSummary result;
-    result.nominal_population = BuildActiveCoordinatePopulation(
+    ConvergenceCertificate result;
+    result.operator_nominal_population = BuildActiveCoordinatePopulation(
         atom_index_list,
         cluster_key_list,
         group_id_by_atom_index,
         nominal_activity,
         nominal_activity);
-    result.shadow_shape_refit_performed =
+    result.operator_shadow_shape_refit_performed =
         evidence.shadow_shape_refit_performed;
 
     std::vector<algorithm::ParameterChange> change_list;
@@ -900,8 +969,8 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
         }
         change_list.emplace_back(std::move(change));
     }
-    result.change = SummarizeActiveDofChanges(
-        change_list, result.nominal_population);
+    result.operator_nominal_residual = SummarizeActiveDofChanges(
+        change_list, result.operator_nominal_population);
 
     for (const auto atom_index : atom_index_list)
     {
@@ -914,12 +983,12 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
         {
             if (!shape_available)
             {
-                result.unavailable_count.at(coordinate)++;
+                result.operator_unavailable_count.at(coordinate)++;
             }
             else if (std::abs(change_list.at(atom_index).value_list.at(coordinate)) >=
                 kLegacyMaximumTransformedChangeTolerance)
             {
-                result.tail_count.at(coordinate)++;
+                result.operator_tail_count.at(coordinate)++;
             }
         }
         if (!shape_available)
@@ -927,20 +996,20 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
             const auto status{ evidence.shape_status_by_atom.at(atom_index) };
             if (status == OperatorEndpointStatus::OffsetSolverFailure)
             {
-                result.unavailable_reason_count.at(0)++;
+                result.operator_unavailable_reason_count.at(0)++;
             }
             else if (status == OperatorEndpointStatus::InvalidOffset)
             {
-                result.unavailable_reason_count.at(1)++;
+                result.operator_unavailable_reason_count.at(1)++;
             }
             else
             {
-                result.unavailable_reason_count.at(2)++;
+                result.operator_unavailable_reason_count.at(2)++;
             }
         }
     }
     for (const auto & group :
-        result.nominal_population.active_offset_group_atom_index_list)
+        result.operator_nominal_population.active_offset_group_atom_index_list)
     {
         bool available{ true };
         double maximum_change{ 0.0 };
@@ -956,7 +1025,8 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
         }
         if (!available)
         {
-            result.unavailable_count.at(kOffsetToPeakRatioChangeIndex)++;
+            result.operator_unavailable_count.at(
+                kOffsetToPeakRatioChangeIndex)++;
             const auto failed_atom{ *std::ranges::find_if(
                 group,
                 [&](std::size_t atom_index)
@@ -969,21 +1039,18 @@ static FixedPointResidualEvidenceSummary SummarizeFixedPointOperator(
             };
             if (status == OperatorEndpointStatus::OffsetSolverFailure)
             {
-                result.unavailable_reason_count.at(0)++;
+                result.operator_unavailable_reason_count.at(0)++;
             }
             else
             {
-                result.unavailable_reason_count.at(1)++;
+                result.operator_unavailable_reason_count.at(1)++;
             }
         }
         else if (maximum_change >= kLegacyMaximumTransformedChangeTolerance)
         {
-            result.tail_count.at(kOffsetToPeakRatioChangeIndex)++;
+            result.operator_tail_count.at(kOffsetToPeakRatioChangeIndex)++;
         }
     }
-    result.complete = std::ranges::all_of(
-        result.unavailable_count,
-        [](std::size_t count) { return count == 0; });
     return result;
 }
 
@@ -2790,16 +2857,14 @@ static void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     std::size_t attempt_number,
     const IterationProgress & progress,
-    const ConvergencePredicates & production_predicates,
-    const ConvergencePredicates & fixed_point_predicates,
-    const ConvergencePredicates & legacy_population_predicates,
-    const ConvergencePredicates & solver_qualified_predicates,
+    const ConvergenceCertificate & certificate,
+    const ConvergencePredicates & historical_cluster_active_proposal_predicates,
+    const ConvergencePredicates & historical_all_selected_predicates,
+    const ConvergencePredicates & historical_active_proposal_predicates,
     const TransformedChangeSummary & accepted_legacy_change,
     const TransformedChangeSummary & accepted_production_change,
     const TransformedChangeSummary & operator_production_change,
-    const FixedPointResidualEvidenceSummary & fixed_point_summary,
     const ActiveCoordinatePopulation & active_population,
-    const SolverQualificationAudit & solver_qualification,
     const IterationDiagnostics & diagnostics,
     const SuspiciousBlockActivity & block_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
@@ -2807,15 +2872,15 @@ static void LogConvergenceSafeguardAudit(
     bool assembled_uses_polish,
     bool has_quarantine_transition,
     bool objective_domain_changed,
-    bool orthogonal_blockers_clear,
     bool production_stop_candidate,
-    bool legacy_population_stop_candidate,
-    bool legacy_maximum_stop_candidate,
-    bool solver_qualified_stop_candidate,
-    bool fixed_point_stop_candidate,
-    bool fixed_point_maximum_stop_candidate)
+    bool historical_all_selected_stop_candidate,
+    bool historical_cluster_active_proposal_maximum_stop_candidate,
+    bool historical_active_proposal_stop_candidate,
+    bool production_maximum_stop_candidate)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+
+    const auto & solver_qualification{ certificate.solver_qualification };
 
     const auto accepted_limited_count{ static_cast<std::size_t>(std::ranges::count_if(
         diagnostics.accepted_cluster_diagnostic_list,
@@ -2937,76 +3002,88 @@ static void LogConvergenceSafeguardAudit(
     const auto operator_legacy_maximum_passes{
         IsLegacyMaximumSummaryConverged(operator_production_change)
     };
+    const auto operator_nominal_maximum_passes{
+        IsLegacyMaximumSummaryConverged(certificate.operator_nominal_residual)
+    };
 
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: schema=7, try=" << attempt_number
+        << "Convergence safeguard audit: schema=8"
+        << ", certificate-definition=1, comparator-set=1, try=" << attempt_number
         << ", acc=" << progress.accepted_iteration_count
         << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
         << ", quarantine=" << progress.quarantine_atom_count
-        << ", production-population=";
+        << ", accepted-active-population=";
     AppendAuditPopulation(message, accepted_production_change.population_size_list);
-    message << ", legacy-population=";
+    message << ", historical-all-selected-population=";
     AppendAuditPopulation(message, accepted_legacy_change.population_size_list);
-    message << ", operator-population=";
+    message << ", operator-nominal-population=";
     AppendAuditPopulation(
-        message, fixed_point_summary.change.population_size_list);
+        message, certificate.operator_nominal_residual.population_size_list);
     message
-        << ", production-predicates[q/a99/fp99]="
-        << production_predicates.qualification_passed << "/"
-        << production_predicates.accepted_percentile_converged << "/"
-        << production_predicates.residual_percentile_converged
-        << ", legacy-population-predicates[q/a99/op99]="
-        << legacy_population_predicates.qualification_passed << "/"
-        << legacy_population_predicates.accepted_percentile_converged << "/"
-        << legacy_population_predicates.residual_percentile_converged
-        << ", legacy-maximum-predicates[q/a99/amax/op99/opmax]="
-        << production_predicates.qualification_passed << "/"
-        << production_predicates.accepted_percentile_converged << "/"
+        << ", certificate[solver/accepted-p99/operator-complete/operator-p99/invariants/orthogonal/production]="
+        << solver_qualification.solver_qualified << "/"
+        << certificate.AcceptedPercentilePassed() << "/"
+        << certificate.OperatorComplete() << "/"
+        << certificate.OperatorPercentilePassed() << "/"
+        << certificate.InvariantsClear() << "/"
+        << certificate.blockers.Clear() << "/"
+        << certificate.ProductionConverged()
+        << ", historical-all-selected-predicates[q/a99/op99]="
+        << historical_all_selected_predicates.qualification_passed << "/"
+        << historical_all_selected_predicates.accepted_percentile_converged << "/"
+        << historical_all_selected_predicates.residual_percentile_converged
+        << ", historical-cluster-active-proposal-maximum-predicates[q/a99/amax/op99/opmax]="
+        << historical_cluster_active_proposal_predicates.qualification_passed << "/"
+        << historical_cluster_active_proposal_predicates.accepted_percentile_converged << "/"
         << accepted_legacy_maximum_passes << "/"
-        << production_predicates.residual_percentile_converged << "/"
+        << historical_cluster_active_proposal_predicates.residual_percentile_converged << "/"
         << operator_legacy_maximum_passes
-        << ", solver-qualified-predicates[q/a99/op99]="
-        << solver_qualified_predicates.qualification_passed << "/"
-        << solver_qualified_predicates.accepted_percentile_converged << "/"
-        << solver_qualified_predicates.residual_percentile_converged
-        << ", operator-predicates[q/a99/fp99/complete/fpmax]="
-        << fixed_point_predicates.qualification_passed << "/"
-        << fixed_point_predicates.accepted_percentile_converged << "/"
-        << fixed_point_predicates.residual_percentile_converged << "/"
-        << fixed_point_summary.complete << "/"
-        << IsLegacyMaximumSummaryConverged(fixed_point_summary.change)
-        << ", production-accepted-p99=";
+        << ", historical-active-proposal-predicates[q/a99/op99]="
+        << historical_active_proposal_predicates.qualification_passed << "/"
+        << historical_active_proposal_predicates.accepted_percentile_converged << "/"
+        << historical_active_proposal_predicates.residual_percentile_converged
+        << ", production-maximum-predicates[production/accepted-max/operator-max]="
+        << certificate.ProductionConverged() << "/"
+        << accepted_legacy_maximum_passes << "/"
+        << operator_nominal_maximum_passes
+        << ", accepted-active-p99=";
     AppendAuditValues(
         message,
         accepted_production_change.percentile_stats.percentile_list);
-    message << ", production-accepted-max=";
+    message << ", accepted-active-max=";
     AppendAuditValues(message, accepted_production_change.maximum_list);
-    message << ", legacy-accepted-p99=";
+    message << ", historical-all-selected-accepted-p99=";
     AppendAuditValues(message, accepted_legacy_change.percentile_stats.percentile_list);
-    message << ", legacy-accepted-max=";
+    message << ", historical-all-selected-accepted-max=";
     AppendAuditValues(message, accepted_legacy_change.maximum_list);
-    message << ", fixed-point-residual-p99=";
+    message << ", historical-active-proposal-p99=";
     AppendAuditValues(
         message,
-        fixed_point_summary.change.percentile_stats.percentile_list);
-    message << ", fixed-point-residual-max=";
-    AppendAuditValues(message, fixed_point_summary.change.maximum_list);
-    message << ", operator-unavailable[height/width/offset]=";
-    AppendAuditPopulation(message, fixed_point_summary.unavailable_count);
-    message << ", operator-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=";
-    AppendAuditPopulation(message, fixed_point_summary.unavailable_reason_count);
-    message << ", operator-tail[height/width/offset]=";
-    AppendAuditPopulation(message, fixed_point_summary.tail_count);
+        operator_production_change.percentile_stats.percentile_list);
+    message << ", historical-active-proposal-max=";
+    AppendAuditValues(message, operator_production_change.maximum_list);
+    message << ", operator-nominal-residual-p99=";
+    AppendAuditValues(
+        message,
+        certificate.operator_nominal_residual.percentile_stats.percentile_list);
+    message << ", operator-nominal-residual-max=";
+    AppendAuditValues(message, certificate.operator_nominal_residual.maximum_list);
+    message << ", operator-nominal-unavailable[height/width/offset]=";
+    AppendAuditPopulation(message, certificate.operator_unavailable_count);
+    message << ", operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=";
+    AppendAuditPopulation(message, certificate.operator_unavailable_reason_count);
+    message << ", operator-nominal-tail[height/width/offset]=";
+    AppendAuditPopulation(message, certificate.operator_tail_count);
     message
         << ", residual-state=" << GetFixedPointResidualInterpretationText(
             EvaluateFixedPointResidualInterpretation(
-                fixed_point_summary.complete,
-                production_predicates.qualification_passed,
+                certificate.OperatorComplete(),
+                solver_qualification.solver_qualified,
                 accepted_production_change,
-                fixed_point_summary.change))
+                certificate.operator_nominal_residual))
         << ", operator-shadow-refit="
-        << fixed_point_summary.shadow_shape_refit_performed
+        << certificate.operator_shadow_shape_refit_performed
         << ", accepted-equals-operator=" << accepted_equals_operator
         << ", unified-search[trials/invalid/trust-skipped/guard-rejected/objective-rejected/accepted-limited/terminal]="
         << trial_count << "/"
@@ -3070,20 +3147,23 @@ static void LogConvergenceSafeguardAudit(
         << ratio(active_population.active_atom_index_list_by_parameter.at(
             kOffsetToPeakRatioChangeIndex).size()) << "/"
         << ratio(progress.quarantine_atom_count)
-        << ", stop-candidates[orthogonal-clear/production/legacy-population/legacy-maximum/solver-qualified/operator/operator-maximum]="
-        << orthogonal_blockers_clear << "/"
+        << ", certificate-blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
+        << certificate.blockers.objective_domain_changed << "/"
+        << certificate.blockers.quarantine_transition << "/"
+        << certificate.blockers.suspicious_offset_fallback << "/"
+        << certificate.blockers.rejected_cluster
+        << ", stop-candidates[production/historical-all-selected/historical-cluster-active-proposal-maximum/historical-active-proposal/production-maximum]="
         << production_stop_candidate << "/"
-        << legacy_population_stop_candidate << "/"
-        << legacy_maximum_stop_candidate << "/"
-        << solver_qualified_stop_candidate << "/"
-        << fixed_point_stop_candidate << "/"
-        << fixed_point_maximum_stop_candidate
-        << ", exposures[legacy-population/maximum-gate/solver-qualification/operator/operator-maximum]="
-        << (production_stop_candidate && !legacy_population_stop_candidate) << "/"
-        << (production_stop_candidate && !legacy_maximum_stop_candidate) << "/"
-        << (production_stop_candidate && !solver_qualified_stop_candidate) << "/"
-        << (production_stop_candidate && !fixed_point_stop_candidate) << "/"
-        << (production_stop_candidate && !fixed_point_maximum_stop_candidate)
+        << historical_all_selected_stop_candidate << "/"
+        << historical_cluster_active_proposal_maximum_stop_candidate << "/"
+        << historical_active_proposal_stop_candidate << "/"
+        << production_maximum_stop_candidate
+        << ", exposures[historical-all-selected/historical-cluster-active-proposal-maximum/historical-active-proposal/production-maximum]="
+        << (production_stop_candidate && !historical_all_selected_stop_candidate) << "/"
+        << (production_stop_candidate &&
+            !historical_cluster_active_proposal_maximum_stop_candidate) << "/"
+        << (production_stop_candidate && !historical_active_proposal_stop_candidate) << "/"
+        << (production_stop_candidate && !production_maximum_stop_candidate)
         << ", limiters[guard/fixed/quarantine/trust/objective/reject/polish/boundary/rescue]="
         << guard_rejected_trial_count << "/"
         << shape_fixed_count + offset_fixed_count + hard_fixed_count << "/"
@@ -4310,7 +4390,7 @@ static IterationResult RunIteration(
             accepted_active_dof_change_summary,
             operator_active_dof_change_summary)
     };
-    const auto fixed_point_summary{
+    auto certificate{
         SummarizeFixedPointOperator(
             raw_iteration_result.fixed_point_operator,
             previous_state,
@@ -4318,17 +4398,17 @@ static IterationResult RunIteration(
             cluster_key_list,
             group_id_by_atom_index)
     };
-    const auto solver_qualified{
-        std::ranges::all_of(
-            raw_iteration_result.health_by_key | std::views::values,
-            &ClusterHealth::IsSolverQualified)
-    };
-    const auto fixed_point_predicates{
-        EvaluateConvergencePredicates(
-            solver_qualified,
-            accepted_active_dof_change_summary,
-            fixed_point_summary.change)
-    };
+    certificate.accepted_active_population = active_population;
+    certificate.accepted_active_movement =
+        accepted_active_dof_change_summary;
+    certificate.solver_qualification = EvaluateSolverQualificationAudit(
+        iteration_state.active_index_list,
+        cluster_key_list,
+        group_id_by_atom_index,
+        raw_iteration_result.block_activity,
+        quarantine_activity,
+        raw_iteration_result.local_refit_status_by_atom,
+        raw_iteration_result.health_by_key);
     iteration_state.accepted_iteration_count++;
     iteration_state.accepted_iterations_since_topology_rebuild++;
     if (TryRebuildAdaptiveTopology(
@@ -4403,21 +4483,16 @@ static IterationResult RunIteration(
     result.transformed_change_stats =
         accepted_active_dof_change_summary.percentile_stats;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
-    const auto orthogonal_blockers_clear{
-        !objective_domain_changed &&
-        !has_quarantine_transition &&
-        !has_suspicious_offset_fallback &&
-        selection.rejected_key_list.empty()
+    certificate.blockers = ConvergenceOrthogonalBlockers{
+        objective_domain_changed,
+        has_quarantine_transition,
+        has_suspicious_offset_fallback,
+        !selection.rejected_key_list.empty()
     };
-    result.converged =
-        orthogonal_blockers_clear &&
-        fixed_point_summary.complete &&
-        fixed_point_predicates.Converged();
+    const auto orthogonal_blockers_clear{ certificate.blockers.Clear() };
+    result.converged = certificate.ProductionConverged();
     result.accepted_only_stop_candidate =
-        !objective_domain_changed &&
-        !has_quarantine_transition &&
-        !has_suspicious_offset_fallback &&
-        selection.rejected_key_list.empty() &&
+        orthogonal_blockers_clear &&
         proposal_predicates.AcceptedOnlyConverged();
 
     if (kCounterfactualConvergenceAuditEnabled ||
@@ -4456,19 +4531,9 @@ static IterationResult RunIteration(
                 operator_change_list,
                 active_population)
         };
-        const auto solver_qualification{
-            EvaluateSolverQualificationAudit(
-                iteration_state.active_index_list,
-                cluster_key_list,
-                group_id_by_atom_index,
-                raw_iteration_result.block_activity,
-                quarantine_activity,
-                raw_iteration_result.local_refit_status_by_atom,
-                raw_iteration_result.health_by_key)
-        };
         const auto solver_qualified_predicates{
             EvaluateConvergencePredicates(
-                solver_qualification.solver_qualified,
+                certificate.solver_qualification.solver_qualified,
                 accepted_active_dof_change_summary,
                 operator_active_dof_change_summary)
         };
@@ -4484,35 +4549,34 @@ static IterationResult RunIteration(
                 operator_proposal_state,
                 iteration_state.active_index_list)
         };
-        const auto legacy_population_stop_candidate{
-            orthogonal_blockers_clear && legacy_population_predicates.Converged()
+        const auto policy_decision{ EvaluateCounterfactualPolicyDecision(
+            certificate,
+            legacy_population_predicates,
+            proposal_predicates,
+            solver_qualified_predicates,
+            operator_active_dof_change_summary) };
+        const auto policy_passed = [&](CounterfactualConvergencePolicy policy)
+        {
+            return policy_decision.converged.at(
+                static_cast<std::size_t>(policy));
         };
-        const auto legacy_maximum_stop_candidate{
-            orthogonal_blockers_clear && proposal_predicates.Converged() &&
-                IsLegacyMaximumConverged(
-                    accepted_active_dof_change_summary,
-                    operator_active_dof_change_summary)
-        };
-        const auto solver_qualified_stop_candidate{
-            orthogonal_blockers_clear && solver_qualified_predicates.Converged()
-        };
-        const auto fixed_point_stop_candidate{
-            orthogonal_blockers_clear && fixed_point_summary.complete &&
-                fixed_point_predicates.Converged()
-        };
-        const auto fixed_point_maximum_stop_candidate{
-            fixed_point_stop_candidate && IsLegacyMaximumConverged(
-                accepted_active_dof_change_summary,
-                fixed_point_summary.change)
-        };
+        const auto legacy_population_stop_candidate{ policy_passed(
+            CounterfactualConvergencePolicy::HistoricalAllSelected) };
+        const auto legacy_maximum_stop_candidate{ policy_passed(
+            CounterfactualConvergencePolicy::
+                HistoricalClusterActiveProposalMaximum) };
+        const auto solver_qualified_stop_candidate{ policy_passed(
+            CounterfactualConvergencePolicy::HistoricalActiveProposal) };
+        const auto production_maximum_stop_candidate{ policy_passed(
+            CounterfactualConvergencePolicy::ProductionMaximum) };
         auto fixed_point_median{ EvaluateActiveDofMedian(
             raw_iteration_result.fixed_point_operator.state,
             previous_state,
-            fixed_point_summary.nominal_population) };
+            certificate.operator_nominal_population) };
         for (std::size_t coordinate = 0;
             coordinate < kTransformedChangeSize; coordinate++)
         {
-            if (fixed_point_summary.unavailable_count.at(coordinate) != 0)
+            if (certificate.operator_unavailable_count.at(coordinate) != 0)
             {
                 fixed_point_median.at(coordinate) =
                     std::numeric_limits<double>::infinity();
@@ -4520,30 +4584,23 @@ static IterationResult RunIteration(
         }
         CounterfactualIterationEvidence evidence;
         evidence.available = true;
-        evidence.policy_decision = CounterfactualPolicyDecision{ std::array{
-            result.converged,
-            legacy_population_stop_candidate,
-            legacy_maximum_stop_candidate,
-            solver_qualified_stop_candidate,
-            fixed_point_stop_candidate,
-            fixed_point_maximum_stop_candidate
-        } };
+        evidence.policy_decision = policy_decision;
         evidence.accepted_current = transformed_change_summary;
         evidence.guarded_current = operator_proposal_change_summary;
         evidence.accepted_dof = accepted_active_dof_change_summary;
         evidence.guarded_dof = operator_active_dof_change_summary;
-        evidence.fixed_point_residual = fixed_point_summary.change;
-        evidence.fixed_point_tail_count = fixed_point_summary.tail_count;
-        evidence.fixed_point_operator_complete = fixed_point_summary.complete;
+        evidence.fixed_point_residual = certificate.operator_nominal_residual;
+        evidence.fixed_point_tail_count = certificate.operator_tail_count;
+        evidence.fixed_point_operator_complete = certificate.OperatorComplete();
         evidence.fixed_point_shadow_refit_performed =
             raw_iteration_result.fixed_point_operator
                 .shadow_shape_refit_performed;
         evidence.fixed_point_interpretation =
             EvaluateFixedPointResidualInterpretation(
-                fixed_point_summary.complete,
-                production_convergence_qualified,
+                certificate.OperatorComplete(),
+                certificate.solver_qualification.solver_qualified,
                 accepted_active_dof_change_summary,
-                fixed_point_summary.change);
+                certificate.operator_nominal_residual);
         evidence.accepted_current_median = SummarizeTransformedChangeMedian(
             accepted_change_list,
             selected_index_list_by_parameter);
@@ -4558,23 +4615,21 @@ static IterationResult RunIteration(
         evidence.weak_peak_dominant_group_count =
             weak_peak_group_audit.weak_peak_dominant_group_count;
         evidence.weak_peak_ratio_summary = weak_peak_group_audit.ratio_summary;
-        evidence.solver_qualification = solver_qualification;
+        evidence.solver_qualification = certificate.solver_qualification;
         evidence.active_population = active_population;
         result.counterfactual_evidence = std::move(evidence);
         LogConvergenceSafeguardAudit(
             options.quiet_mode,
             attempt_number,
             result.progress,
-            fixed_point_predicates,
-            fixed_point_predicates,
+            certificate,
+            proposal_predicates,
             legacy_population_predicates,
             solver_qualified_predicates,
             transformed_change_summary,
             accepted_active_dof_change_summary,
             operator_active_dof_change_summary,
-            fixed_point_summary,
             active_population,
-            solver_qualification,
             result.diagnostics,
             raw_iteration_result.block_activity,
             raw_iteration_result.local_refit_status_by_atom,
@@ -4582,13 +4637,11 @@ static IterationResult RunIteration(
             assembled_uses_polish,
             has_quarantine_transition,
             objective_domain_changed,
-            orthogonal_blockers_clear,
             result.converged,
             legacy_population_stop_candidate,
             legacy_maximum_stop_candidate,
             solver_qualified_stop_candidate,
-            fixed_point_stop_candidate,
-            fixed_point_maximum_stop_candidate);
+            production_maximum_stop_candidate);
     }
 
     iteration_state.previous_state = std::move(assembled_state);
@@ -4623,8 +4676,7 @@ static void LogFinalDependencyPolish(
     const FinalDependencyPolishResult & polish_result,
     std::string_view certificate_status,
     bool applied,
-    const FixedPointResidualEvidenceSummary * certificate_evidence = nullptr,
-    bool certificate_solver_qualified = false)
+    const ConvergenceCertificate * certificate = nullptr)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
@@ -4661,18 +4713,18 @@ static void LogFinalDependencyPolish(
     message << ", accepted=" << (polish_result.accepted ? "yes" : "no")
         << ", certificate=" << certificate_status
         << ", applied=" << (applied ? "yes" : "no");
-    if (certificate_evidence != nullptr)
+    if (certificate != nullptr)
     {
         message << ", certificate-solver-qualified="
-            << (certificate_solver_qualified ? "yes" : "no")
+            << (certificate->solver_qualification.solver_qualified ? "yes" : "no")
             << ", certificate-operator-complete="
-            << (certificate_evidence->complete ? "yes" : "no")
+            << (certificate->OperatorComplete() ? "yes" : "no")
             << ", certificate-residual-p99=";
         AppendAuditValues(
             message,
-            certificate_evidence->change.percentile_stats.percentile_list);
+            certificate->operator_nominal_residual.percentile_stats.percentile_list);
         message << ", certificate-residual-max=";
-        AppendAuditValues(message, certificate_evidence->change.maximum_list);
+        AppendAuditValues(message, certificate->operator_nominal_residual.maximum_list);
     }
     message
         << ", elapsed_ms=" << std::fixed << std::setprecision(3)
@@ -4739,15 +4791,15 @@ enum class FinalPolishCertificateStatus
     Error
 };
 
-struct FinalPolishCertificate
+struct FinalPolishCertificationResult
 {
     FinalPolishCertificateStatus status{ FinalPolishCertificateStatus::NotEvaluated };
-    FixedPointResidualEvidenceSummary evidence{};
-    bool solver_qualified{ false };
+    std::optional<ConvergenceCertificate> certificate{};
 
     bool Passed() const
     {
-        return status == FinalPolishCertificateStatus::Passed;
+        return status == FinalPolishCertificateStatus::Passed &&
+            certificate.has_value() && certificate->StrictOperatorPassed();
     }
 };
 
@@ -4770,14 +4822,14 @@ static std::string_view GetFinalPolishCertificateStatusText(
     throw std::invalid_argument("Unknown final polish certificate status.");
 }
 
-static FinalPolishCertificate EvaluateFinalPolishCertificate(
+static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
     const SecondStageContext & context,
     const FitOptions & options,
     IterationState & iteration_state,
     const SuspiciousBlockActivity & final_block_activity,
     const FitState & candidate_state)
 {
-    FinalPolishCertificate certificate;
+    FinalPolishCertificationResult result;
     try
     {
         const auto cluster_key_list{
@@ -4816,30 +4868,40 @@ static FinalPolishCertificate EvaluateFinalPolishCertificate(
         {
             group_id_by_atom_index.emplace_back(atom_context.group_id);
         }
-        certificate.evidence = SummarizeFixedPointOperator(
+        auto certificate{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             candidate_state,
             iteration_state.active_index_list,
             cluster_key_list,
-            group_id_by_atom_index);
-        certificate.solver_qualified = std::ranges::all_of(
-            proposal_result.health_by_key | std::views::values,
-            &ClusterHealth::IsSolverQualified);
-        certificate.status = certificate.solver_qualified &&
-                certificate.evidence.complete &&
-                IsTransformedPercentileConverged(certificate.evidence.change) ?
+            group_id_by_atom_index) };
+        certificate.accepted_active_population = BuildActiveCoordinatePopulation(
+            iteration_state.active_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            proposal_result.block_activity,
+            final_block_activity);
+        certificate.solver_qualification = EvaluateSolverQualificationAudit(
+            iteration_state.active_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            proposal_result.block_activity,
+            final_block_activity,
+            proposal_result.local_refit_status_by_atom,
+            proposal_result.health_by_key);
+        result.certificate = std::move(certificate);
+        result.status = result.certificate->StrictOperatorPassed() ?
             FinalPolishCertificateStatus::Passed :
             FinalPolishCertificateStatus::Failed;
     }
     catch (const std::exception &)
     {
-        certificate.status = FinalPolishCertificateStatus::Error;
+        result.status = FinalPolishCertificateStatus::Error;
     }
     catch (...)
     {
-        certificate.status = FinalPolishCertificateStatus::Error;
+        result.status = FinalPolishCertificateStatus::Error;
     }
-    return certificate;
+    return result;
 }
 
 static void FinalizeSecondStageState(
@@ -4873,7 +4935,7 @@ static void FinalizeSecondStageState(
             iteration_state.boundary_joint_correction_workspace_by_key,
             performance_counters)
     };
-    FinalPolishCertificate certificate;
+    FinalPolishCertificationResult certificate;
     if (certification_policy == FinalPolishCertificationPolicy::ObjectiveOnly)
     {
         certificate.status = FinalPolishCertificateStatus::NotRequired;
@@ -4902,8 +4964,7 @@ static void FinalizeSecondStageState(
         polish_result,
         GetFinalPolishCertificateStatusText(certificate.status),
         polish_applied,
-        certificate_evaluated ? &certificate.evidence : nullptr,
-        certificate.solver_qualified);
+        certificate_evaluated ? &*certificate.certificate : nullptr);
     if (polish_applied)
     {
         if (use_best_audit_state &&
@@ -5252,16 +5313,14 @@ static std::string_view GetCounterfactualPolicyText(
     {
     case CounterfactualConvergencePolicy::Production:
         return "production";
-    case CounterfactualConvergencePolicy::LegacyPopulation:
-        return "legacy-population";
-    case CounterfactualConvergencePolicy::LegacyMaximum:
-        return "legacy-maximum";
-    case CounterfactualConvergencePolicy::SolverQualified:
-        return "solver-qualified";
-    case CounterfactualConvergencePolicy::FixedPointOperator:
-        return "fixed-point-operator";
-    case CounterfactualConvergencePolicy::FixedPointOperatorMaximum:
-        return "fixed-point-operator-maximum";
+    case CounterfactualConvergencePolicy::HistoricalAllSelected:
+        return "historical-all-selected";
+    case CounterfactualConvergencePolicy::HistoricalClusterActiveProposalMaximum:
+        return "historical-cluster-active-proposal-maximum";
+    case CounterfactualConvergencePolicy::HistoricalActiveProposal:
+        return "historical-active-proposal";
+    case CounterfactualConvergencePolicy::ProductionMaximum:
+        return "production-maximum";
     case CounterfactualConvergencePolicy::Count:
         break;
     }
@@ -5275,12 +5334,11 @@ static const TransformedChangeSummary & GetCounterfactualAcceptedChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::SolverQualified:
-    case CounterfactualConvergencePolicy::FixedPointOperator:
-    case CounterfactualConvergencePolicy::FixedPointOperatorMaximum:
+    case CounterfactualConvergencePolicy::HistoricalClusterActiveProposalMaximum:
+    case CounterfactualConvergencePolicy::HistoricalActiveProposal:
+    case CounterfactualConvergencePolicy::ProductionMaximum:
         return evidence.accepted_dof;
-    case CounterfactualConvergencePolicy::LegacyPopulation:
+    case CounterfactualConvergencePolicy::HistoricalAllSelected:
         return evidence.accepted_current;
     case CounterfactualConvergencePolicy::Count:
         break;
@@ -5295,13 +5353,12 @@ static const TransformedChangeSummary & GetCounterfactualRawChange(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::SolverQualified:
-        return evidence.guarded_dof;
-    case CounterfactualConvergencePolicy::FixedPointOperator:
-    case CounterfactualConvergencePolicy::FixedPointOperatorMaximum:
+    case CounterfactualConvergencePolicy::ProductionMaximum:
         return evidence.fixed_point_residual;
-    case CounterfactualConvergencePolicy::LegacyPopulation:
+    case CounterfactualConvergencePolicy::HistoricalClusterActiveProposalMaximum:
+    case CounterfactualConvergencePolicy::HistoricalActiveProposal:
+        return evidence.guarded_dof;
+    case CounterfactualConvergencePolicy::HistoricalAllSelected:
         return evidence.guarded_current;
     case CounterfactualConvergencePolicy::Count:
         break;
@@ -5316,12 +5373,11 @@ static const std::vector<double> & GetCounterfactualAcceptedMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::SolverQualified:
-    case CounterfactualConvergencePolicy::FixedPointOperator:
-    case CounterfactualConvergencePolicy::FixedPointOperatorMaximum:
+    case CounterfactualConvergencePolicy::HistoricalClusterActiveProposalMaximum:
+    case CounterfactualConvergencePolicy::HistoricalActiveProposal:
+    case CounterfactualConvergencePolicy::ProductionMaximum:
         return evidence.accepted_dof_median;
-    case CounterfactualConvergencePolicy::LegacyPopulation:
+    case CounterfactualConvergencePolicy::HistoricalAllSelected:
         return evidence.accepted_current_median;
     case CounterfactualConvergencePolicy::Count:
         break;
@@ -5336,13 +5392,12 @@ static const std::vector<double> & GetCounterfactualRawMedian(
     switch (policy)
     {
     case CounterfactualConvergencePolicy::Production:
-    case CounterfactualConvergencePolicy::LegacyMaximum:
-    case CounterfactualConvergencePolicy::SolverQualified:
-        return evidence.guarded_dof_median;
-    case CounterfactualConvergencePolicy::FixedPointOperator:
-    case CounterfactualConvergencePolicy::FixedPointOperatorMaximum:
+    case CounterfactualConvergencePolicy::ProductionMaximum:
         return evidence.fixed_point_residual_median;
-    case CounterfactualConvergencePolicy::LegacyPopulation:
+    case CounterfactualConvergencePolicy::HistoricalClusterActiveProposalMaximum:
+    case CounterfactualConvergencePolicy::HistoricalActiveProposal:
+        return evidence.guarded_dof_median;
+    case CounterfactualConvergencePolicy::HistoricalAllSelected:
         return evidence.guarded_current_median;
     case CounterfactualConvergencePolicy::Count:
         break;
@@ -5394,7 +5449,8 @@ static void AppendCounterfactualChangeSummary(
     const auto & raw_median{ GetCounterfactualRawMedian(policy, evidence) };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Counterfactual convergence checkpoint: schema=3"
+        << "Counterfactual convergence checkpoint: schema=4"
+        << ", comparator-set=1"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -5473,7 +5529,8 @@ static void AppendCounterfactualChangeSummary(
         const auto & model{ outcome.finalized_state.at(atom_index).mdpde.GetModel() };
         std::ostringstream atom_message;
         atom_message << std::scientific << std::setprecision(17)
-            << "Counterfactual convergence atom: schema=3"
+            << "Counterfactual convergence atom: schema=4"
+            << ", comparator-set=1"
             << ", experiment=" << continuation.trigger_attempt << "-"
             << continuation.trigger_accepted_iteration
             << ", policy=" << GetCounterfactualPolicyText(policy)
@@ -5505,7 +5562,8 @@ static void AppendCounterfactualChangeSummary(
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
         !continuation.triggered) return;
     std::ostringstream message;
-    message << "Counterfactual convergence termination: schema=3"
+    message << "Counterfactual convergence termination: schema=4"
+        << ", comparator-set=1"
         << ", experiment=" << continuation.trigger_attempt << "-"
         << continuation.trigger_accepted_iteration
         << ", reason=" << reason

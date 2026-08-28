@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 import importlib.util
 import json
 import math
@@ -20,7 +21,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 10
+CASE_SUMMARY_SCHEMA_VERSION = 11
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -37,6 +38,7 @@ COUNTERFACTUAL_ANALYZER = _load_module(
     "counterfactual_convergence_analyzer", COUNTERFACTUAL_ANALYZER_PATH)
 CORPUS_ANALYZER = _load_module(
     "convergence_exposure_corpus_analyzer", CORPUS_ANALYZER_PATH)
+CONVERGENCE_ANALYZER = COUNTERFACTUAL_ANALYZER.CONVERGENCE_ANALYZER
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -172,9 +174,11 @@ def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> b
         blockers = [
             int(float(value)) for value in record["blockers"].split("/")]
         summary_fields = (
-            "production-accepted-p99", "production-accepted-max",
-            "legacy-accepted-p99", "legacy-accepted-max",
-            "fixed-point-residual-p99", "fixed-point-residual-max")
+            "accepted-active-p99", "accepted-active-max",
+            "historical-all-selected-accepted-p99",
+            "historical-all-selected-accepted-max",
+            "operator-nominal-residual-p99",
+            "operator-nominal-residual-max")
         nonfinite = any(
             not math.isfinite(value)
             for field in summary_fields for value in _numbers(record[field]))
@@ -197,6 +201,35 @@ def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> b
     return False
 
 
+def semantic_digest(value: Any) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+SEMANTIC_TRAJECTORY_FIELDS = (
+    "try", "acc", "accepted-active-population", "operator-nominal-population",
+    "certificate", "accepted-active-p99", "accepted-active-max",
+    "operator-nominal-residual-p99", "operator-nominal-residual-max",
+    "operator-nominal-unavailable", "operator-nominal-unavailable-reasons",
+    "operator-nominal-tail", "residual-state", "qualification",
+    "unified-search", "path", "limiters", "fixed", "blockers",
+    "accepted-equals-operator",
+)
+
+
+def semantic_trajectory(records: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Return the timing- and schema-independent production trajectory."""
+    return [
+        {
+            name: normalized.get(name, "-")
+            for name in SEMANTIC_TRAJECTORY_FIELDS
+        }
+        for record in records
+        for normalized in [CONVERGENCE_ANALYZER.normalize_record(record)]
+    ]
+
+
 def run_case(
     executable: Path,
     case: dict[str, Any],
@@ -209,7 +242,7 @@ def run_case(
     summary_path = case_directory / "case-summary.json"
     if summary_path.is_file():
         value = json.loads(summary_path.read_text(encoding="utf-8"))
-        trajectory_path = case_directory / "trajectory-schema-7.json"
+        trajectory_path = case_directory / "trajectory-schema-8.json"
         trajectory = (
             json.loads(trajectory_path.read_text(encoding="utf-8"))
             if trajectory_path.is_file() else {})
@@ -218,13 +251,15 @@ def run_case(
             json.loads(trust_model_path.read_text(encoding="utf-8"))
             if trust_model_path.is_file() else {})
         if (value.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
+                value.get("certificate_definition") == 1 and
+                value.get("comparator_set") == 1 and
                 value.get("case") == case and
                 value.get("thread_count") == thread_count and
                 value.get("reference_truth_directory") == (
                     str(reference_truth_directory)
                     if reference_truth_directory is not None else None) and
                 value.get("status") == "complete" and
-                trajectory.get("schema_version") == 7 and
+                trajectory.get("schema_version") == 8 and
                 trust_model.get("schema_version") == 2):
             return value
 
@@ -279,17 +314,18 @@ def run_case(
         }
         write_json(summary_path, summary)
         return summary
-    write_json(case_directory / "scenario-truth.json", {
+    scenario_truth = {
         "schema_version": 1,
         "case": case,
         "atoms": [
             {"serial_id": serial_id, **parameters}
             for serial_id, parameters in sorted(truth.items())
         ],
-    })
+    }
+    write_json(case_directory / "scenario-truth.json", scenario_truth)
     write_json(
-        case_directory / "trajectory-schema-7.json",
-        {"schema_version": 7, "records": parsed["trajectory_records"]})
+        case_directory / "trajectory-schema-8.json",
+        {"schema_version": 8, "records": parsed["trajectory_records"]})
     write_json(
         case_directory / "trust-model-shadow-schema-2.json",
         {
@@ -304,8 +340,8 @@ def run_case(
                 for record in parsed["trust_model_shadow_records"]
             ],
         })
-    write_json(case_directory / "counterfactual-schema-3.json", {
-        "schema_version": 3,
+    write_json(case_directory / "counterfactual-schema-4.json", {
+        "schema_version": 4,
         "checkpoints": parsed["checkpoints"],
         "terminations": parsed["terminations"],
         "atoms": [
@@ -337,8 +373,12 @@ def run_case(
     if reference_truth_directory is not None:
         baseline_case_directory = (
             reference_truth_directory / "cases" / case["case_id"])
-        baseline_trajectory_path = (
-            baseline_case_directory / "trajectory-schema-7.json")
+        baseline_trajectory_path = next(
+            (path for path in (
+                baseline_case_directory / "trajectory-schema-8.json",
+                baseline_case_directory / "trajectory-schema-7.json")
+             if path.is_file()),
+            baseline_case_directory / "trajectory-schema-8.json")
         baseline_summary_path = baseline_case_directory / "case-summary.json"
         if baseline_trajectory_path.is_file() and baseline_summary_path.is_file():
             baseline_trajectory = json.loads(
@@ -346,14 +386,14 @@ def run_case(
             baseline_summary = json.loads(
                 baseline_summary_path.read_text(encoding="utf-8"))
             production_artifacts_identical = (
-                baseline_trajectory == {
-                    "schema_version": 7,
-                    "records": parsed["trajectory_records"],
-                } and
+                semantic_trajectory(baseline_trajectory["records"]) ==
+                semantic_trajectory(parsed["trajectory_records"]) and
                 baseline_summary.get("audit", {}).get("terminal") ==
                 audit.get("terminal"))
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
+        "certificate_definition": 1,
+        "comparator_set": 1,
         "status": "complete",
         "case": case,
         "thread_count": thread_count,
@@ -364,10 +404,102 @@ def run_case(
         "truth_atom_count": len(truth),
         "safety_regression": detect_safety_regression(parsed, audit),
         "production_artifacts_identical": production_artifacts_identical,
+        "semantic_trajectory_sha256": semantic_digest(
+            semantic_trajectory(parsed["trajectory_records"])),
+        "terminal_state_sha256": semantic_digest({
+            "terminal": parsed["audit_terminal"],
+            "atoms": parsed["audit_terminal_atoms"],
+        }),
+        "frozen_truth_sha256": semantic_digest(scenario_truth),
         "audit": audit,
     }
     write_json(summary_path, summary)
     return summary
+
+
+def build_compact_baseline(
+    manifest_bytes: bytes,
+    summaries: list[dict[str, Any]],
+    aggregate: dict[str, Any],
+) -> dict[str, Any]:
+    complete_summaries = [
+        summary for summary in summaries
+        if summary.get("status") == "complete"
+    ]
+    cases = [
+        [
+            summary["case"]["case_id"],
+            summary["case"]["seed"],
+            semantic_digest({
+                "trajectory": summary["semantic_trajectory_sha256"],
+                "terminal": summary["terminal_state_sha256"],
+                "stop_reason": (
+                    summary.get("audit", {}).get("terminal") or {}
+                ).get("reason"),
+            }),
+            (
+                summary.get("audit", {}).get("terminal") or {}
+            ).get("reason"),
+        ]
+        for summary in complete_summaries
+    ]
+    case_identity = [
+        {
+            "case_id": summary["case"]["case_id"],
+            "seed": summary["case"]["seed"],
+        }
+        for summary in complete_summaries
+    ]
+    truth_identity = [
+        {
+            "case_id": summary["case"]["case_id"],
+            "sha256": summary["frozen_truth_sha256"],
+        }
+        for summary in complete_summaries
+    ]
+    return {
+        "schema_version": 1,
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "case_identity_sha256": semantic_digest(case_identity),
+        "frozen_truth_sha256": semantic_digest(truth_identity),
+        "schema_contract": {
+            "certificate_definition": 1,
+            "comparator_set": 1,
+            "trajectory": 8,
+            "counterfactual": 4,
+            "case_summary": CASE_SUMMARY_SCHEMA_VERSION,
+            "aggregate": 7,
+            "comparison": 3,
+        },
+        "production_definition": (
+            "solver-qualified && accepted-active-p99 && operator-complete && "
+            "operator-nominal-p99 && invariants-clear && orthogonal-clear"),
+        "comparator_definitions": [
+            "production",
+            "historical-all-selected",
+            "historical-cluster-active-proposal-maximum",
+            "historical-active-proposal",
+            "production-maximum",
+        ],
+        "case_count": aggregate["case_count"],
+        "failed_case_count": aggregate.get("failed_case_count", 0),
+        "production_convergence_count": aggregate[
+            "production_convergence_count"],
+        "termination_counts": aggregate["termination_counts"],
+        "comparator_exposure_counts": aggregate[
+            "comparator_exposure_counts"],
+        "safety_regression_count": sum(
+            bool(summary.get("safety_regression", False))
+            for summary in summaries
+            if summary.get("status") == "complete"),
+        "production_semantic_match_count": sum(
+            summary.get("production_artifacts_identical") is True
+            for summary in summaries
+            if summary.get("status") == "complete"),
+        "case_fields": [
+            "case_id", "seed", "production_semantic_sha256", "stop_reason"],
+        "cases": cases,
+    }
 
 
 def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -396,7 +528,8 @@ def run(argv: Sequence[str] | None = None) -> int:
     reference_truth_directory = (
         args.reference_truth_dir.resolve()
         if args.reference_truth_dir is not None else None)
-    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    manifest_bytes = args.manifest.read_bytes()
+    manifest = json.loads(manifest_bytes.decode("utf-8"))
     cases = expand_manifest(manifest)
     if args.case_list is not None:
         selection = json.loads(args.case_list.read_text(encoding="utf-8"))
@@ -449,10 +582,13 @@ def run(argv: Sequence[str] | None = None) -> int:
     if failed:
         aggregate["corpus_target_met"] = False
         for policy, decision in aggregate["policy_decisions"].items():
-            decision[
-                "redesign_candidate" if policy == "solver-qualified" else
-                "rollback_candidate"
-            ] = False
+            candidate_field = (
+                "redesign_candidate"
+                if policy == "historical-active-proposal" else
+                "promotion_candidate"
+                if policy == "production-maximum" else
+                "rollback_candidate")
+            decision[candidate_field] = False
     write_json(args.output_dir / "aggregate.json", aggregate)
     if reference_truth_directory is not None:
         baseline_aggregate_path = reference_truth_directory / "aggregate.json"
@@ -554,6 +690,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             markdown = "\n".join(markdown_lines)
             (args.output_dir / "comparison.md").write_text(
                 markdown, encoding="utf-8")
+    write_json(
+        args.output_dir / "compact-baseline.json",
+        build_compact_baseline(manifest_bytes, summaries, aggregate))
     write_json(args.output_dir / "replay-manifest.json", {
         "schema_version": 1,
         "case_ids": aggregate["replay_case_ids"],

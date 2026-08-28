@@ -4,8 +4,9 @@
 > passed a paired 600-case comparison against the guard/radius-decoupled
 > `2d9b878c` baseline. The sampled trajectories were neutral. Production now
 > requires accepted active-DOF p99 plus complete nominal-DOF fixed-point
-> residual p99, with solver qualification. Maximum remains an independent
-> diagnostic comparator.
+> residual p99, with solver qualification, clear invariants, and clear
+> orthogonal blockers. One `ConvergenceCertificate` owns the production
+> decision. Maximum remains an independent diagnostic comparator.
 
 The unified production controller uses one geometric factor search in the
 order validity, trust, guard, then objective. Guard is feasibility-only,
@@ -212,20 +213,23 @@ python3 resources/tools/developer/run_convergence_exposure_corpus.py \
 
 Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
-`scenario-truth.json`, `trajectory-schema-7.json`,
-`counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
+`scenario-truth.json`, `trajectory-schema-8.json`,
+`counterfactual-schema-4.json`, `shadow-continuation-schema-2.json`, the
 legacy shadow/terminal audit artifact, `trust-model-shadow-schema-2.json`, and
-schema-10 `case-summary.json`. The trust-model artifact records the candidate
+schema-11 `case-summary.json`. The trust-model artifact records the candidate
 funnel plus trial identity, status, source, disposition, rejection causes,
 prediction components, reductions, rho, boundary utilization, current/shadow
 actions, objective-backtracking, and unselected dependency count. Per-record measured
-audit time remains in `run.log` and schema-10 case/aggregate analysis but is
+audit time remains in `run.log` and case/aggregate analysis but is
 excluded from the canonical trust-model artifact, so identical calculations
 can be verified byte-for-byte without wall-clock noise. The aggregate report is
-schema 6. A paired run additionally writes schema-2
+schema 7. A paired run additionally writes schema-3
 `comparison.json`, including terminal accepted-iteration deltas and the
 guard/trust decoupling blocking gate. Old summaries
-are intentionally not resumed across the baseline change.
+are intentionally not resumed across the baseline change. A
+`compact-baseline.json` freezes manifest, case/seed, truth, production semantic
+trajectory, terminal-state digests, stop reasons, evaluation aggregates, and
+the versioned certificate/comparator definitions without elapsed time.
 
 ## Historical exposure and outcome definitions
 
@@ -233,11 +237,10 @@ At the production checkpoint `T0`:
 
 | Exposure | Comparator at `T0` | Isolated question |
 | --- | --- | --- |
-| `legacy_population` | Historical cluster qualification + all-selected p99 | Would the former population delay the stop? |
-| `maximum_gate` | Historical cluster qualification + active-DOF p99/max | Would restoring maximum delay the stop? |
-| `solver_qualification` | Solver qualification + accepted active-DOF and active operator-proposal p99 | Would the historical active-proposal policy delay the stop? |
-| `fixed_point_operator` | Solver qualification + accepted active-DOF p99 + complete nominal-DOF operator p99 | Current production-equivalent compatibility policy |
-| `fixed_point_operator_maximum` | Current production predicates + accepted/operator maximum | Does a sparse residual tail justify restoring the maximum gate? |
+| `historical-all-selected` | Historical cluster qualification + all-selected p99 | Would the former population delay the stop? |
+| `historical-cluster-active-proposal-maximum` | Historical cluster qualification + active-DOF proposal p99/max | Would the former proposal/maximum conjunction delay the stop? |
+| `historical-active-proposal` | Solver qualification + accepted active-DOF and active operator-proposal p99 | Would the historical active-proposal policy delay the stop? |
+| `production-maximum` | Current production predicates + accepted/operator maximum | Does a sparse residual tail justify restoring the maximum gate? |
 | policy agreement | All comparators accept | No continuation is required. |
 
 No production convergence trigger is a separate negative control. Outcomes are
@@ -252,7 +255,7 @@ Safety regressions are counted independently: new hard failures, non-finite
 states, mixed shared-group activity, or new quarantine after `T0`. Maximum
 statistics remain diagnostic and support the isolated rollback comparison.
 
-The accepted-only shadow checkpoint is separate from those five comparators.
+The accepted-only shadow checkpoint is separate from those four comparators.
 It requires the historical cluster qualification, accepted active-DOF p99, a stable
 objective domain, no quarantine transition, no genuine suspicious/hard failure,
 and no rejection, but ignores fixed-point residual p99. Only the
@@ -268,9 +271,9 @@ exposures, not only this replay subset, feed the decision statistics.
 Each comparator requires at least 15 exposures and at least five from every
 corpus family. At least 70% must show material objective or truth benefit,
 material harm must be at most 10%, aggregate raw-residual median must not
-worsen, and no safety regression may appear. Legacy population/maximum results
-are reported as `rollback_candidate`; `solver-qualified` is reported as
-`redesign_candidate`; the strict-operator policies were reported as
+worsen, and no safety regression may appear. Historical population/maximum
+results are reported as `rollback_candidate`; `historical-active-proposal` is
+reported as `redesign_candidate`; and `production-maximum` is reported as
 `promotion_candidate`. The strict-operator and solver-qualification redesign
 was subsequently promoted into production. An incomplete run or unmet quota
 still forces a diagnostic-only conclusion for any remaining comparator.
@@ -309,10 +312,10 @@ material truth harm (`+1.7153815119742974e-05`) while its objective delta is not
 material. No non-finite, hard-failure, suspicious/quarantine, or other safety
 regression is observed.
 
-All five counterfactual policies have no genuine production-checkpoint
+All four non-production comparators have no genuine production-checkpoint
 exposure in this corpus, so their minimum exposure/family quotas remain unmet.
-The 42 production convergence checkpoints agree with both strict-operator
-comparators. Consequently `rollback_candidate=false`, `redesign_candidate=false`,
+The 42 production convergence checkpoints agree with every comparator.
+Consequently `rollback_candidate=false`, `redesign_candidate=false`,
 and `promotion_candidate=false` mean only that no comparator has enough
 exposure for a policy change; they do not prove the production policy is
 optimal. The accepted-only shadow result is reported independently and is not
@@ -385,14 +388,27 @@ Current verification on 2026-08-28:
 - the converged final-dependency-polish path now re-evaluates a strict operator
   certificate on the polished candidate; the existing core-estimator suite
   passes with the certificate and base-state fallback behavior;
-- audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
+- the certificate-consolidated audit build and complete C++/Python CTest suite
+  pass 20/20;
 - fold-168 still stops after seven accepted iterations with `audit-patience` in
   both builds and produces byte-identical `actual.json` files;
 - C/N/O positive controls pass 3/3 and `natural-v00` passes 8/8;
-- the schema-7 unified-stabilisation corpus completes 600/600 with 42 production
-  convergence cases, zero failed cases, and zero safety regressions;
-- against the frozen schema-6 baseline, transformed truth RMSE median improves
-  from `0.0067853` to `0.0054550` and accepted-iteration p90 improves from
+- the schema-8 certificate corpus completes 600/600 with zero failed cases,
+  zero safety regressions, 600/600 normalized production semantic matches, and
+  zero exposure for every renamed comparator. Stop counts remain 42
+  `converged`, 372 `audit-patience`, 163
+  `all-rejected-backtracking-exhausted`, and 23 `maximum-iterations`;
+- the paired objective, transformed-truth RMSE, and accepted-iteration deltas
+  all have median/p90 `0`; the 1.3 GB case artifacts remain under the audit
+  build, while the tracked compact baseline is
+  [`convergence_certificate_baseline.json`](../../tests/benchmarks/convergence_certificate_baseline.json);
+- the frozen manifest, case identity, and truth hashes are respectively
+  `2b0d74c249a4723575696d98f99df9d3c449a30837adf8117aaf744145d0a87a`,
+  `63985f81c5b188cfc9992742cad1f4b9418cc36c88b12398e5775a324289bd98`,
+  and `04e3cda3b49857b2d5e4f63e973b2392dfe3095360974db988770e7468edd628`;
+- in the earlier unified-stabilisation comparison against its frozen schema-6
+  baseline, transformed truth RMSE median improved
+  from `0.0067853` to `0.0054550` and accepted-iteration p90 improved from
   `100` to `37`, but objective median worsens from `0.16498` to `0.23613`,
   accepted-iteration median worsens from `11` to `12`, and only `68.7%` of the
   150 overlap cases reduce objective evaluations. The planned quality and 70%

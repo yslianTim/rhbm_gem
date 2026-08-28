@@ -2,8 +2,10 @@
 
 > Current baseline (2026-08-28): production requires solver qualification,
 > accepted active-DOF p99 below `1e-4`, and a complete nominal-DOF fixed-point
-> residual p99 below `1e-4`. Maximum remains a tail diagnostic. The first-round
-> measurements below remain historical evidence.
+> residual p99 below `1e-4`, with invariants and orthogonal blockers clear.
+> These terms are evaluated by one internal `ConvergenceCertificate`. Maximum
+> remains a tail diagnostic. The first-round measurements below remain
+> historical evidence.
 
 ## Current resolution
 
@@ -19,8 +21,10 @@
   residual over the complete nominal-DOF population, including fixed and
   quarantined shapes and shared offsets; unavailable evidence makes the
   operator incomplete rather than substituting a zero residual.
-- Remove accepted/operator maximum from the production stopping conjunction. The
-  historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
+- Remove accepted/operator maximum from the production stopping conjunction.
+  The historical `1e-3` gate is retained only by the
+  `historical-cluster-active-proposal-maximum` and `production-maximum`
+  diagnostic comparators.
 - Require solver qualification in production.
 - Treat objective-accepted final dependency polish on a `converged` path as
   provisional. Persist it only after the polished state independently passes
@@ -43,8 +47,9 @@ Historically, accepted change was `|z(S[k+1]) - z(S[k])|` and the guarded
 proposal was described as `|z(F(S[k])) - z(S[k])|`. That second description
 was imprecise because guard damping and fixed/quarantined rollback had already
 been applied. Historical schema 6 called it `guarded-proposal` and reserved
-`fixed-point-residual` for the undamped offset-to-shape operator; current
-schema 7 reports the strict operator residual directly. The
+`fixed-point-residual` for the undamped offset-to-shape operator; legacy
+schema 7 reports the strict operator residual directly and is normalized by a
+read-only adapter. Current schema 8 serializes the canonical certificate. The
 transformed coordinates `z` are log peak
 height, log width, and offset/peak. Every coordinate must have p99 below
 `1e-4` and maximum below `1e-3`. Objective-domain changes, quarantine
@@ -107,18 +112,22 @@ parallel selection and for behavioral neutrality between Info and Debug runs.
 
 ## Current Debug trace contract
 
-At Debug verbosity (`-v 4`) every accepted attempt emits schema `7` on a line
+At Debug verbosity (`-v 4`) every accepted attempt emits schema `8` on a line
 beginning with `Convergence safeguard audit:`. The record contains:
 
+- `certificate-definition=1` and `comparator-set=1`;
 - attempt, accepted iteration, selected/quarantined population;
-- production active-DOF, legacy all-selected, and strict-operator nominal
+- accepted active-DOF, historical all-selected, and operator nominal-DOF
   population sizes for all three coordinates;
-- production, `legacy-population`, `legacy-maximum`, and `solver-qualified`
-  predicate vectors;
-- accepted and fixed-point-residual p99/maximum values;
+- the seven-term serialized certificate and the five ordered decisions:
+  `production`, `historical-all-selected`,
+  `historical-cluster-active-proposal-maximum`,
+  `historical-active-proposal`, and `production-maximum`;
+- accepted active and operator nominal residual p99/maximum values;
 - strict-operator unavailable and sparse-tail counts plus residual-state
   classification;
-- isolated stop-candidate and exposure flags for five comparators;
+- isolated stop-candidate flags for the five decisions and exposure flags for
+  the four non-production comparators;
 - whether accepted and operator states are equal;
 - unified-search invalid, trust-skipped, guard-rejected, objective-rejected,
   accepted-factor, and terminal counts, plus polish, boundary, and rescue paths;
@@ -132,6 +141,13 @@ counterexample searches, blocker/unique-blocker counts, and stratification by
 population size, active ratio, quarantine ratio, and proposal path. A lack of
 observed counterexamples is empirical dominance only; it is not treated as a
 mathematical implication.
+
+The schema-8 consolidation was replayed against the same frozen 600-case
+reference on 2026-08-28. All 600 normalized production semantic digests match,
+with zero safety regression and zero comparator exposure; the stop distribution
+remains 42/372/163/23 for converged/audit-patience/all-rejected/maximum-
+iterations. The tracked compact result is
+[`convergence_certificate_baseline.json`](../../tests/benchmarks/convergence_certificate_baseline.json).
 
 ## Historical first-round decisions
 

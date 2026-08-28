@@ -1,12 +1,14 @@
 # Counterfactual convergence continuation audit
 
 > Current baseline (2026-08-28): production uses solver qualification plus
-> accepted active-DOF and complete nominal-DOF fixed-point residual p99.
+> accepted active-DOF and complete nominal-DOF fixed-point residual p99, with
+> invariants and orthogonal blockers clear. The single
+> `ConvergenceCertificate` is authoritative.
 
-The production policy is therefore equivalent to the audit's
-`fixed-point-operator` compatibility policy. The policy named
-`solver-qualified` is an older active-operator-proposal residual comparator;
-it does not mean that solver qualification is absent from current production.
+The production-equivalent `fixed-point-operator` duplicate has been removed.
+The older active-operator-proposal residual comparator is now named
+`historical-active-proposal`; it does not mean that solver qualification is
+absent from current production.
 
 ## Purpose and isolation boundary
 
@@ -35,16 +37,15 @@ One continuation trajectory evaluates the first stop checkpoint for:
 | Policy | Stationarity | Change population |
 | --- | --- | --- |
 | `production` | Full solver qualification | Accepted active-DOF p99 plus complete nominal-DOF strict operator p99 |
-| `legacy-population` | Historical cluster qualification | All-selected accepted/guarded-proposal p99 |
-| `legacy-maximum` | Historical cluster qualification | Active accepted/guarded-proposal p99 plus maximum `< 1e-3` |
-| `solver-qualified` | Full solver qualification | Accepted active-DOF plus active operator-proposal p99; historical comparator |
-| `fixed-point-operator` | Full solver qualification | Same accepted and complete nominal-DOF strict-operator p99 predicates as current production |
-| `fixed-point-operator-maximum` | Full solver qualification | Current production predicates plus accepted/operator maximum `< 1e-3` |
+| `historical-all-selected` | Historical cluster qualification | All-selected accepted/active-proposal p99 |
+| `historical-cluster-active-proposal-maximum` | Historical cluster qualification | Active accepted/active-proposal p99 plus maximum `< 1e-3` |
+| `historical-active-proposal` | Full solver qualification | Accepted active-DOF plus active operator-proposal p99; historical comparator |
+| `production-maximum` | Full solver qualification | Current production predicates plus accepted/operator maximum `< 1e-3` |
 
-The legacy-population comparator includes fixed and quarantined zero changes.
-The legacy-maximum comparator stays on active DOFs so it isolates only the
-removed gate. Active-member summaries remain diagnostic but are not a
-continuation policy.
+The historical-all-selected comparator includes fixed and quarantined zero
+changes. The historical cluster/maximum comparator stays on active DOFs so it
+isolates the older qualification/proposal/maximum conjunction. Active-member
+summaries remain diagnostic but are not a continuation policy.
 
 If all policy candidates agree at the original stop, the run ends normally
 as `policy-agreement`. Otherwise the state immediately before the production
@@ -66,20 +67,22 @@ so cross-policy `delta J` does not confound fit progress with a changing domain.
 
 Debug output uses an independent schema:
 
-- `Counterfactual convergence checkpoint: schema=3` records policy, attempt,
+- `Counterfactual convergence checkpoint: schema=4, comparator-set=1` records policy, attempt,
   elapsed continuation time, activity/domain sizes, latest and best-audit
   objectives, final-polish result, population, and accepted/raw median, p99,
   and maximum transformed changes.
-- `Counterfactual convergence atom: schema=3` records the finalized
+- `Counterfactual convergence atom: schema=4, comparator-set=1` records the finalized
   amplitude, width, and offset by atom serial ID together with group,
   shape/offset activity, and quarantine state.
-- `Counterfactual convergence termination: schema=3` records policy
+- `Counterfactual convergence termination: schema=4, comparator-set=1` records policy
   completion, budget exhaustion, or the unchanged production safeguard that
   ended continuation.
 
-The checkpoint also reports multi-member shared groups, the distribution of
+The schema-3 reader is a normalization-only adapter for frozen baselines; a
+record may not mix schema-3 names with schema-4 fields. The checkpoint also
+reports multi-member shared groups, the distribution of
 `Hmin/Hmedian`, and how often the weakest-peak member supplies the largest raw
-offset/peak change. The analyzer joins these records with the schema-7
+offset/peak change. The analyzer joins these records with the schema-8
 trajectory aggregation, which retains solver/path strata, active population
 sizes, strict-operator availability and tail evidence, `N<=91`
 p99-to-maximum evidence, and unique blockers.
@@ -140,8 +143,9 @@ ctest --test-dir build/counterfactual-audit \
   not observed quality loss.
 - Policies that only add attempts, numerical churn, or a later failure remain
   shadow-only.
-- Maximum remains diagnostic; only the `legacy-maximum` comparator can delay an
-  audit build after a production convergence checkpoint.
+- Maximum remains diagnostic; the historical cluster/maximum and
+  `production-maximum` comparators may delay an audit build after a production
+  convergence checkpoint.
 - An empty active set remains labelled restricted/all-fixed; this diagnostic
   classification does not add a production stop condition.
 

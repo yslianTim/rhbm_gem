@@ -29,12 +29,18 @@ FIELD_PATTERN = re.compile(
 )
 POLICIES = (
     "production",
-    "legacy-population",
-    "legacy-maximum",
-    "solver-qualified",
-    "fixed-point-operator",
-    "fixed-point-operator-maximum",
+    "historical-all-selected",
+    "historical-cluster-active-proposal-maximum",
+    "historical-active-proposal",
+    "production-maximum",
 )
+LEGACY_POLICY_MAP = {
+    "production": "production",
+    "legacy-population": "historical-all-selected",
+    "legacy-maximum": "historical-cluster-active-proposal-maximum",
+    "solver-qualified": "historical-active-proposal",
+    "fixed-point-operator-maximum": "production-maximum",
+}
 SHADOW_POLICIES = (
     "accepted-only-k2",
     "accepted-only-k3",
@@ -67,6 +73,59 @@ def _fields(
     }
     if fields.get("schema") != schema:
         return None
+    return fields
+
+
+def _counterfactual_fields(line: str, marker: str) -> dict[str, str] | None:
+    if fields := _fields(line, marker, "4"):
+        if fields.get("comparator-set") != "1":
+            raise ValueError("Unsupported counterfactual comparator set")
+        required_by_marker = {
+            CHECKPOINT_MARKER: {
+                "experiment", "policy", "try", "acc", "extra-try",
+                "extra-acc", "extra-ms", "final-polish",
+                "solver-qualified", "restricted", "all-fixed", "population",
+                "objective", "accepted-median", "accepted-p99",
+                "accepted-max", "raw-median", "raw-p99", "raw-max",
+            },
+            ATOM_MARKER: {
+                "experiment", "policy", "serial", "group", "shape-active",
+                "offset-active", "quarantined", "amplitude", "width", "offset",
+            },
+            TERMINATION_MARKER: {
+                "experiment", "reason", "try", "acc", "extra-try",
+                "extra-acc", "extra-ms", "checkpoints",
+            },
+        }
+        required = required_by_marker[marker]
+        if not required.issubset(fields):
+            missing = ", ".join(sorted(required - fields.keys()))
+            raise ValueError(
+                f"Counterfactual schema-4 record is missing: {missing}")
+        policy = fields.get("policy")
+        if policy is not None and policy not in POLICIES:
+            raise ValueError(f"Unknown counterfactual policy: {policy}")
+        if "checkpoints" in fields and len(fields["checkpoints"].split("/")) != 5:
+            raise ValueError("Checkpoint vector must contain five values")
+        return fields
+    fields = _fields(line, marker, "3")
+    if fields is None:
+        return None
+    policy = fields.get("policy")
+    if policy == "fixed-point-operator":
+        return None
+    if policy is not None:
+        if policy not in LEGACY_POLICY_MAP:
+            raise ValueError(f"Unknown legacy counterfactual policy: {policy}")
+        fields["policy"] = LEGACY_POLICY_MAP[policy]
+    if "checkpoints" in fields:
+        checkpoints = fields["checkpoints"].split("/")
+        if len(checkpoints) != 6:
+            raise ValueError("Legacy checkpoint vector must contain six values")
+        fields["checkpoints"] = "/".join(
+            checkpoints[index] for index in (0, 1, 2, 3, 5))
+    fields["source-schema"] = "3"
+    fields["comparator-set"] = "1"
     return fields
 
 
@@ -136,11 +195,11 @@ def parse_log(text: str) -> dict[str, Any]:
                 "candidate-ms": float(performance["candidate-ms"]),
                 "total-ms": float(performance["total-ms"]),
             }
-        if checkpoint := _fields(line, CHECKPOINT_MARKER):
+        if checkpoint := _counterfactual_fields(line, CHECKPOINT_MARKER):
             checkpoints.append(checkpoint)
-        elif atom := _fields(line, ATOM_MARKER):
+        elif atom := _counterfactual_fields(line, ATOM_MARKER):
             atoms[(atom["experiment"], atom["policy"])].append(atom)
-        elif termination := _fields(line, TERMINATION_MARKER):
+        elif termination := _counterfactual_fields(line, TERMINATION_MARKER):
             terminations.append(termination)
         elif shadow := _fields(line, SHADOW_CHECKPOINT_MARKER, "1"):
             shadow_checkpoint = shadow
@@ -407,8 +466,8 @@ def _continuation_safety_events(
             counts["quarantine_transition"] += blockers[2]
             counts["domain_change"] += blockers[3]
         summary_fields = (
-            "production-accepted-p99", "production-accepted-max",
-            "fixed-point-residual-p99", "fixed-point-residual-max")
+            "accepted-active-p99", "accepted-active-max",
+            "operator-nominal-residual-p99", "operator-nominal-residual-max")
         if any(
                 not math.isfinite(value)
                 for field in summary_fields
@@ -590,12 +649,13 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "trigger_try": trigger_try,
             "trigger_accepted_iteration": int(production["acc"]),
             "exposures": {
-                "legacy_population": exposed("legacy-population"),
-                "maximum_gate": exposed("legacy-maximum"),
-                "solver_qualification": exposed("solver-qualified"),
-                "fixed_point_operator": exposed("fixed-point-operator"),
-                "fixed_point_operator_maximum": exposed(
-                    "fixed-point-operator-maximum"),
+                "historical-all-selected": exposed(
+                    "historical-all-selected"),
+                "historical-cluster-active-proposal-maximum": exposed(
+                    "historical-cluster-active-proposal-maximum"),
+                "historical-active-proposal": exposed(
+                    "historical-active-proposal"),
+                "production-maximum": exposed("production-maximum"),
             },
             "actual_continuation": any(
                 report.get("extra_attempts", 0) > 0
@@ -608,7 +668,11 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "policies": policy_reports,
         })
     exposure_names = (
-        "legacy_population", "maximum_gate", "solver_qualification")
+        "historical-all-selected",
+        "historical-cluster-active-proposal-maximum",
+        "historical-active-proposal",
+        "production-maximum",
+    )
     exposure_counts = {
         name: sum(report["exposures"][name] for report in reports)
         for name in exposure_names

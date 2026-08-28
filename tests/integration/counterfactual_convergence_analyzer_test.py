@@ -20,9 +20,10 @@ SPEC.loader.exec_module(MODULE)
 
 def checkpoint(policy: str, attempt: int, objective: float) -> str:
     return (
-        "[Debug] Counterfactual convergence checkpoint: schema=3, "
+        "[Debug] Counterfactual convergence checkpoint: schema=4, comparator-set=1, "
         f"experiment=4-4, policy={policy}, try={attempt}, acc={attempt}, "
-        f"extra-try={attempt - 4}, extra-acc={attempt - 4}, final-polish=0, "
+        f"extra-try={attempt - 4}, extra-acc={attempt - 4}, extra-ms=0, "
+        "final-polish=0, "
         "solver-qualified=1, restricted=0, all-fixed=0, population=2/2/2, "
         f"objective=1/0/0/{objective}, accepted-median=5e-6/5e-6/5e-6, "
         "accepted-p99=1e-5/1e-5/1e-5, "
@@ -32,8 +33,9 @@ def checkpoint(policy: str, attempt: int, objective: float) -> str:
 
 def atom(policy: str, serial: int, amplitude: float) -> str:
     return (
-        "[Debug] Counterfactual convergence atom: schema=3, "
+        "[Debug] Counterfactual convergence atom: schema=4, comparator-set=1, "
         f"experiment=4-4, policy={policy}, serial={serial}, "
+        "group=1, shape-active=1, offset-active=1, quarantined=0, "
         f"amplitude={amplitude}, width=0.5, offset=1.0")
 
 
@@ -43,14 +45,15 @@ class CounterfactualConvergenceAnalyzerTest(unittest.TestCase):
             checkpoint("production", 4, 1.0),
             atom("production", 1, 5.0),
             atom("production", 2, 7.0),
-            checkpoint("legacy-population", 4, 1.0),
-            checkpoint("legacy-maximum", 6, 0.998),
-            checkpoint("solver-qualified", 6, 0.998),
-            atom("solver-qualified", 1, 6.0),
-            atom("solver-qualified", 2, 7.0),
-            "[Debug] Counterfactual convergence termination: schema=3, "
+            checkpoint("historical-all-selected", 4, 1.0),
+            checkpoint("historical-cluster-active-proposal-maximum", 6, 0.998),
+            checkpoint("historical-active-proposal", 6, 0.998),
+            atom("historical-active-proposal", 1, 6.0),
+            atom("historical-active-proposal", 2, 7.0),
+            checkpoint("production-maximum", 6, 0.998),
+            "[Debug] Counterfactual convergence termination: schema=4, comparator-set=1, "
             "experiment=4-4, reason=all-policies-reached, try=6, acc=6, "
-            "extra-try=2, extra-acc=2, checkpoints=1/1/1/1",
+            "extra-try=2, extra-acc=2, extra-ms=0, checkpoints=1/1/1/1/1",
         ))
         parsed = MODULE.parse_log(text)
         truth = {
@@ -61,44 +64,55 @@ class CounterfactualConvergenceAnalyzerTest(unittest.TestCase):
         report = MODULE.analyze(parsed, truth)
         experiment = report["experiments"][0]
 
-        self.assertFalse(experiment["exposures"]["legacy_population"])
-        self.assertTrue(experiment["exposures"]["maximum_gate"])
-        self.assertTrue(experiment["exposures"]["solver_qualification"])
+        self.assertFalse(experiment["exposures"]["historical-all-selected"])
+        self.assertTrue(experiment["exposures"][
+            "historical-cluster-active-proposal-maximum"])
+        self.assertTrue(experiment["exposures"]["historical-active-proposal"])
         self.assertTrue(experiment["actual_continuation"])
-        solver_qualified = experiment["policies"]["solver-qualified"]
+        solver_qualified = experiment["policies"]["historical-active-proposal"]
         self.assertTrue(solver_qualified["material_objective_improvement"])
         self.assertEqual(
             solver_qualified["truth_metrics"]["amplitude_rmse"], 0.0)
-        self.assertEqual(report["exposure_counts"]["solver_qualification"], 1)
-        self.assertEqual(report["exposure_counts"]["legacy_population"], 0)
+        self.assertEqual(report["exposure_counts"]["historical-active-proposal"], 1)
+        self.assertEqual(report["exposure_counts"]["historical-all-selected"], 0)
         self.assertEqual(
             report["exposure_overlap"],
-            {"maximum_gate+solver_qualification": 1})
+            {"historical-cluster-active-proposal-maximum+historical-active-proposal+production-maximum": 1})
         self.assertEqual(
-            report["material_objective_improvement_counts"]["solver-qualified"], 1)
+            report["material_objective_improvement_counts"][
+                "historical-active-proposal"], 1)
         self.assertEqual(report["actual_continuation_count"], 1)
 
     def test_reports_unresolved_policy_and_budget_termination(self) -> None:
         text = "\n".join((
             checkpoint("production", 4, 1.0),
-            "[Debug] Counterfactual convergence termination: schema=3, "
+            "[Debug] Counterfactual convergence termination: schema=4, comparator-set=1, "
             "experiment=4-4, reason=budget-exhausted, try=29, acc=10, "
-            "extra-try=25, extra-acc=6, checkpoints=1/0/0/0",
+            "extra-try=25, extra-acc=6, extra-ms=0, checkpoints=1/0/0/0/0",
         ))
         report = MODULE.analyze(MODULE.parse_log(text), {})
         experiment = report["experiments"][0]
         self.assertEqual(experiment["termination_reason"], "budget-exhausted")
-        self.assertFalse(experiment["policies"]["solver-qualified"]["reached"])
+        self.assertFalse(experiment["policies"][
+            "historical-active-proposal"]["reached"])
         self.assertEqual(report["termination_counts"], {"budget-exhausted": 1})
         self.assertEqual(
             report["termination_category_counts"], {"budget_exhaustion": 1})
         self.assertEqual(
-            report["unresolved_policy_counts"]["solver-qualified"], 1)
+            report["unresolved_policy_counts"]["historical-active-proposal"], 1)
 
     def test_no_checkpoint_is_negative_control(self) -> None:
         report = MODULE.analyze(MODULE.parse_log("ordinary log"), {})
         self.assertEqual(report["status"], "no_convergence_trigger")
         self.assertEqual(report["experiment_count"], 0)
+
+    def test_schema4_rejects_legacy_policy_and_missing_fields(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unknown counterfactual policy"):
+            MODULE.parse_log(checkpoint("legacy-population", 4, 1.0))
+        with self.assertRaisesRegex(ValueError, "record is missing"):
+            MODULE.parse_log(
+                "Counterfactual convergence checkpoint: schema=4, "
+                "comparator-set=1, experiment=4-4, policy=production")
 
 
 if __name__ == "__main__":

@@ -137,11 +137,10 @@ AcceptedOnlyAuditUpdate UpdateAcceptedOnlyAuditPolicies(
 enum class CounterfactualConvergencePolicy : std::size_t
 {
     Production,
-    LegacyPopulation,
-    LegacyMaximum,
-    SolverQualified,
-    FixedPointOperator,
-    FixedPointOperatorMaximum,
+    HistoricalAllSelected,
+    HistoricalClusterActiveProposalMaximum,
+    HistoricalActiveProposal,
+    ProductionMaximum,
     Count
 };
 
@@ -236,6 +235,47 @@ struct SolverQualificationAudit
     std::size_t mixed_offset_group_count{ 0 };
     std::array<std::size_t, 7> joint_offset_status_count{};
 };
+
+struct ConvergenceOrthogonalBlockers
+{
+    bool objective_domain_changed{ false };
+    bool quarantine_transition{ false };
+    bool suspicious_offset_fallback{ false };
+    bool rejected_cluster{ false };
+
+    bool Clear() const;
+};
+
+struct ConvergenceCertificate
+{
+    ActiveCoordinatePopulation accepted_active_population{};
+    TransformedChangeSummary accepted_active_movement{};
+    ActiveCoordinatePopulation operator_nominal_population{};
+    TransformedChangeSummary operator_nominal_residual{};
+    SolverQualificationAudit solver_qualification{};
+    std::array<std::size_t, kTransformedChangeSize> operator_unavailable_count{};
+    std::array<std::size_t, 3> operator_unavailable_reason_count{};
+    std::array<std::size_t, kTransformedChangeSize> operator_tail_count{};
+    bool operator_shadow_shape_refit_performed{ false };
+    ConvergenceOrthogonalBlockers blockers{};
+
+    bool AcceptedPercentilePassed() const;
+    bool OperatorPercentilePassed() const;
+    bool OperatorComplete() const;
+    bool InvariantsClear() const;
+    bool ActiveSetRestricted() const;
+    bool AllFixed() const;
+    bool MixedSharedGroup() const;
+    bool StrictOperatorPassed() const;
+    bool ProductionConverged() const;
+};
+
+CounterfactualPolicyDecision EvaluateCounterfactualPolicyDecision(
+    const ConvergenceCertificate & certificate,
+    const ConvergencePredicates & historical_all_selected_predicates,
+    const ConvergencePredicates & historical_cluster_active_proposal_predicates,
+    const ConvergencePredicates & historical_active_proposal_predicates,
+    const TransformedChangeSummary & historical_active_proposal);
 
 SolverQualificationAudit EvaluateSolverQualificationAudit(
     const std::vector<std::size_t> & atom_index_list,

@@ -200,7 +200,7 @@ log width
 offset-to-peak ratio
 ```
 
-Convergence statistics are evaluated over active optimization degrees of
+Accepted-movement statistics are evaluated over active optimization degrees of
 freedom, not every selected atom. Shape-active atoms contribute one log-peak
 and one log-width sample each. Every active shared offset within one
 `(cluster, group_id)` contributes one offset-to-peak sample equal to the
@@ -210,8 +210,9 @@ fail convergence.
 
 Production convergence requires accepted active-DOF p99 and complete nominal-
 DOF fixed-point residual p99 below `1e-4`, with solver qualification and all
-orthogonal blockers clear. Maximum transformed change remains a tail diagnostic
-and topology-drift metric, but is not a convergence predicate.
+certificate invariants and orthogonal blockers clear. Maximum transformed
+change remains a tail diagnostic and topology-drift metric, but is not a
+convergence predicate.
 
 The strict fixed-point operator
 `F(S[k])`: one undamped joint-offset solve followed by undamped local shape
@@ -220,14 +221,14 @@ offset, all selected shapes are refit once in an isolated workspace. If an
 unrestricted offset is unavailable, shape residuals are marked unavailable
 rather than replaced with zero. This strict operator uses the nominal selected
 shape and shared-offset DOFs, including fixed and quarantined blocks, and does
-is the production residual source.
+not reuse the accepted active population.
 
-Production convergence qualification is the existing active-block cluster
-rollup. Solver qualification is a separate developer comparator: active local
-shape refits must report `SUCCESS`, active shared offsets must report
+Production uses full solver qualification: active local shape refits must
+report `SUCCESS`, active shared offsets must report
 `Converged`, and both require a full undamped, non-fallback endpoint. A usable
 soft endpoint may continue through candidate selection without being solver
-qualified. This distinction does not change the production stopping policy.
+qualified. The older cluster rollup and active proposal residual remain only in
+the explicitly named historical comparators; they do not define production.
 
 The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
@@ -566,12 +567,26 @@ partition change are never compared with the new domain.
 The global audit uses the fixed per-cluster fit/tail scales and retains the
 earliest state that improves the best objective beyond the strict tolerance.
 
+One internal `ConvergenceCertificate` is the sole source of convergence truth.
+`ProductionConverged()` requires solver qualification, accepted active-DOF p99
+below `1e-4`, a complete nominal-DOF operator, nominal fixed-point residual p99
+below `1e-4`, clear invariants, and clear orthogonal blockers. Fixed and
+quarantined coordinates are excluded only from the accepted population; they
+remain in the nominal operator population. An empty accepted population passes
+its percentile check vacuously, but an all-fixed state still needs qualified,
+complete, sufficiently small nominal operator evidence. Mixed shared-offset
+activity is an invariant violation, and an unavailable endpoint makes the
+operator incomplete instead of substituting the previous state as a zero
+residual. `StrictOperatorPassed()` reuses the same certificate for converged
+final-polish certification without the accepted-movement or orthogonal-blocker
+terms.
+
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
 - accepted active-DOF p99 and complete nominal-DOF fixed-point residual p99 are
-  both below `1e-4`, every solver is qualified, all clusters are accepted, and
-  no orthogonal blocker is present;
+  both below `1e-4`, every solver is qualified, certificate invariants are
+  clear, all clusters are accepted, and no orthogonal blocker is present;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
 - an all-rejected attempt terminates after applying its per-cluster radius

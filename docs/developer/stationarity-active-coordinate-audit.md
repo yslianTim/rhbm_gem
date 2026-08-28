@@ -2,7 +2,9 @@
 
 > Current baseline (2026-08-28): production requires solver qualification,
 > accepted active-DOF p99 below `1e-4`, and a complete nominal-DOF strict
-> operator residual p99 below `1e-4`. Maximum change is diagnostic-only.
+> operator residual p99 below `1e-4`, with invariants and orthogonal blockers
+> clear. One `ConvergenceCertificate` owns this conjunction. Maximum change is
+> diagnostic-only.
 
 ## Current resolution
 
@@ -17,9 +19,9 @@ The strict fixed-point residual uses the complete nominal-DOF population
 instead. Fixed and quarantined shapes and shared offsets remain in that
 population, and missing or non-finite endpoint evidence makes the operator
 incomplete rather than contributing a zero. Production now also requires full,
-undamped, non-fallback solver qualification; the older `solver-qualified`
-proposal-residual policy remains only as a compatibility comparator in audit
-output.
+undamped, non-fallback solver qualification. The older active
+operator-proposal residual policy remains only as the explicitly historical
+`historical-active-proposal` comparator in audit output.
 
 ## Purpose and constraints
 
@@ -134,19 +136,21 @@ themselves establish the frequency or quality impact on production datasets.
 ## Debug record and aggregation
 
 The second-round audit originally emitted schema `5`. Current accepted Debug
-attempts emit schema `7` on the existing `Convergence safeguard audit:` record;
-the analyzer remains backward-compatible with the historical schema. The
-current record includes:
+attempts emit schema `8` on the existing `Convergence safeguard audit:` record;
+the analyzer retains read-only normalization for historical schemas 6 and 7.
+The current record includes:
 
 - accepted active-DOF, legacy all-selected, historical guarded-proposal, and
   complete nominal-DOF strict-operator summaries;
-- production, legacy-population, legacy-maximum, historical
-  solver-qualified-proposal, and strict-operator predicate vectors;
+- the canonical production certificate and the ordered
+  `historical-all-selected`,
+  `historical-cluster-active-proposal-maximum`,
+  `historical-active-proposal`, and `production-maximum` comparator vectors;
 - activity/qualification counts for shape and offset blocks;
 - shared-offset group counts and min/p50/p99/max group sizes;
 - shape-active, offset-active, and quarantine ratios;
-- orthogonal-clear and five compatibility policy stop candidates;
-- isolated legacy-population, maximum-gate, and solver-qualification exposures.
+- invariant/orthogonal blockers and five policy decisions;
+- isolated exposures for the four non-production comparators.
 
 The former active-member p99/maximum/median track is no longer emitted or
 aggregated. Active atom membership and group-size diagnostics remain because
@@ -184,7 +188,7 @@ The subsequent production changes adopted the preferred shared-DOF accepted
 population, removed the maximum gate, added the complete nominal-DOF strict
 operator residual, and promoted solver qualification into the production
 conjunction. The active-member comparison was then retired. The old
-solver-qualified proposal-residual policy remains diagnostic only; it must not
+historical active-proposal residual policy remains diagnostic only; it must not
 be read as evidence that current production omits solver qualification.
 
 ## Verification and external evidence

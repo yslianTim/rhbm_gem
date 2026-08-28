@@ -61,9 +61,12 @@ def case_summary(
 ) -> dict[str, object]:
     policies = {
         "production": policy(1.0, 0.1),
-        "legacy-population": policy(candidate_objective, candidate_truth, 2),
-        "legacy-maximum": policy(candidate_objective, candidate_truth, 2),
-        "solver-qualified": policy(candidate_objective, candidate_truth, 2),
+        "historical-all-selected": policy(candidate_objective, candidate_truth, 2),
+        "historical-cluster-active-proposal-maximum": policy(
+            candidate_objective, candidate_truth, 2),
+        "historical-active-proposal": policy(
+            candidate_objective, candidate_truth, 2),
+        "production-maximum": policy(candidate_objective, candidate_truth, 2),
     }
     return {
         "status": "complete",
@@ -78,9 +81,10 @@ def case_summary(
                 "trigger_try": 4,
                 "termination_reason": "all-policies-reached",
                 "exposures": {
-                    "legacy_population": legacy_population,
-                    "maximum_gate": maximum_gate,
-                    "solver_qualification": solver_qualification,
+                    "historical-all-selected": legacy_population,
+                    "historical-cluster-active-proposal-maximum": maximum_gate,
+                    "historical-active-proposal": solver_qualification,
+                    "production-maximum": False,
                 },
                 "policies": policies,
             }],
@@ -89,7 +93,8 @@ def case_summary(
                     "production": {"accepted:N<=91:samples": 2},
                 },
                 "unique_blocker_count": {
-                    "legacy_maximum": {"accepted_max": 1, "raw_max": 0},
+                    "historical_cluster_active_proposal_maximum": {
+                        "accepted_max": 1, "raw_max": 0},
                 },
             },
         },
@@ -118,12 +123,56 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "five topologies and levels"):
             RUNNER.expand_manifest(manifest)
 
+    def test_compact_baseline_freezes_identity_and_semantic_digests(self) -> None:
+        summary = {
+            "status": "complete",
+            "case": {
+                "case_id": "case-a", "family": "natural",
+                "topology": "c-c", "seed": 410000,
+            },
+            "semantic_trajectory_sha256": "trajectory",
+            "terminal_state_sha256": "terminal",
+            "frozen_truth_sha256": "truth",
+            "production_artifacts_identical": True,
+            "safety_regression": False,
+            "audit": {"terminal": {"reason": "converged"}},
+        }
+        aggregate = {
+            "case_count": 1,
+            "failed_case_count": 0,
+            "production_convergence_count": 1,
+            "termination_counts": {"converged": 1},
+            "comparator_exposure_counts": {
+                "historical-all-selected": 0,
+                "historical-cluster-active-proposal-maximum": 0,
+                "historical-active-proposal": 0,
+                "production-maximum": 0,
+            },
+        }
+        baseline = RUNNER.build_compact_baseline(
+            b'{"schema_version":1}', [summary], aggregate)
+
+        self.assertEqual(baseline["schema_version"], 1)
+        self.assertEqual(baseline["schema_contract"]["trajectory"], 8)
+        self.assertEqual(baseline["schema_contract"]["case_summary"], 11)
+        self.assertEqual(baseline["production_semantic_match_count"], 1)
+        self.assertEqual(
+            baseline["case_fields"],
+            ["case_id", "seed", "production_semantic_sha256", "stop_reason"])
+        self.assertEqual(baseline["cases"][0][3], "converged")
+        self.assertEqual(len(baseline["cases"][0][2]), 64)
+        self.assertEqual(
+            baseline,
+            RUNNER.build_compact_baseline(
+                b'{"schema_version":1}', [summary], aggregate))
+
     def test_truth_parser_and_transformed_truth_metrics(self) -> None:
         text = "\n".join((
             "Convergence exposure truth: schema=1, case=x, serial=1, "
             "amplitude=6, width=0.5, offset=0.1.",
-            "[Debug] Counterfactual convergence atom: schema=3, "
+            "[Debug] Counterfactual convergence atom: schema=4, comparator-set=1, "
             "experiment=1-1, policy=production, serial=1, "
+            "group=1, shape-active=1, offset-active=1, quarantined=0, "
             "amplitude=6, width=0.5, offset=0.1",
             "[Debug] Accepted-only shadow checkpoint: schema=1, try=1, acc=1, "
             "objective=1/0/0/1, accepted-p99=0/0/0, raw-p99=1/1/1",
@@ -195,11 +244,13 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
 
         self.assertEqual(report["genuine_exposure_count"], 15)
         self.assertEqual(
-            report["comparator_exposure_counts"]["maximum_gate"], 5)
+            report["comparator_exposure_counts"][
+                "historical-cluster-active-proposal-maximum"], 5)
         self.assertEqual(len(report["replay_case_ids"]), 15)
         self.assertFalse(report["corpus_target_met"])
         self.assertEqual(
-            report["policy_decisions"]["solver-qualified"]["benefit_ratio"], 1.0)
+            report["policy_decisions"][
+                "historical-active-proposal"]["benefit_ratio"], 1.0)
         self.assertEqual(
             report["maximum_evidence"]["production"]
             ["accepted:N<=91:samples"], 30)
@@ -233,12 +284,13 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             },
         }
         report = ANALYZER.analyze([harmful])
-        outcome = report["cases"][0]["outcomes"]["solver-qualified"]
+        outcome = report["cases"][0]["outcomes"][
+            "historical-active-proposal"]
 
         self.assertEqual(outcome["category"], "material-harm")
         self.assertTrue(outcome["safety_regression"])
         self.assertFalse(
-            report["policy_decisions"]["solver-qualified"][
+            report["policy_decisions"]["historical-active-proposal"][
                 "redesign_candidate"])
         shadow_decision = report["shadow_policy_decisions"]["accepted-only-k2"]
         self.assertEqual(shadow_decision["objective_material_harm_count"], 1)
@@ -299,7 +351,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         paired = ANALYZER.compare(
             ANALYZER.analyze(before_summaries),
             ANALYZER.analyze(after_summaries))
-        self.assertEqual(paired["schema_version"], 2)
+        self.assertEqual(paired["schema_version"], 3)
         self.assertEqual(
             paired["accepted_iteration_delta"]["before_median"], 5)
         self.assertEqual(
@@ -323,19 +375,21 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         budget = case_summary("budget", False, False, True)
         budget_experiment = budget["audit"]["experiments"][0]
         budget_experiment["termination_reason"] = "budget-exhausted"
-        budget_experiment["policies"]["solver-qualified"] = {"reached": False}
+        budget_experiment["policies"][
+            "historical-active-proposal"] = {"reached": False}
         safeguarded = case_summary("safeguarded", False, False, True)
         safeguard_experiment = safeguarded["audit"]["experiments"][0]
         safeguard_experiment["termination_reason"] = "audit-patience"
-        safeguard_experiment["policies"]["solver-qualified"] = {"reached": False}
+        safeguard_experiment["policies"][
+            "historical-active-proposal"] = {"reached": False}
 
         self.assertEqual(
             ANALYZER.classify_policy_outcome(
-                budget, "solver-qualified")["category"],
+                budget, "historical-active-proposal")["category"],
             "unresolved-budget-exhausted")
         self.assertEqual(
             ANALYZER.classify_policy_outcome(
-                safeguarded, "solver-qualified")["category"],
+                safeguarded, "historical-active-proposal")["category"],
             "terminated-existing-safeguard")
 
     def test_runner_resumes_completed_case(self) -> None:
@@ -405,21 +459,23 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                 path.name for path in case_directory.iterdir()
             }
             trajectory = json.loads(
-                (case_directory / "trajectory-schema-7.json").read_text(
+                (case_directory / "trajectory-schema-8.json").read_text(
                     encoding="utf-8"))
             trust_model = json.loads(
                 (case_directory / "trust-model-shadow-schema-2.json").read_text(
                     encoding="utf-8"))
 
         self.assertEqual(summary["status"], "complete")
+        self.assertEqual(summary["certificate_definition"], 1)
+        self.assertEqual(summary["comparator_set"], 1)
         self.assertTrue({
-            "run.log", "scenario-truth.json", "trajectory-schema-7.json",
-            "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
+            "run.log", "scenario-truth.json", "trajectory-schema-8.json",
+            "counterfactual-schema-4.json", "shadow-terminal-schema-1.json",
             "shadow-continuation-schema-2.json",
             "trust-model-shadow-schema-2.json",
             "case-summary.json",
         }.issubset(artifact_names))
-        self.assertEqual(trajectory["schema_version"], 7)
+        self.assertEqual(trajectory["schema_version"], 8)
         self.assertEqual(trust_model["schema_version"], 2)
         self.assertEqual(trust_model["records"][0]["rho"], 1.0)
         self.assertNotIn("elapsed-ms", trust_model["records"][0])
