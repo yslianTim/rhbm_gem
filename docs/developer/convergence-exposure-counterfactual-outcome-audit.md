@@ -40,9 +40,9 @@ objective-backtracking shrink precedence, and guard-only backtracking.
 
 ## Predicted-reduction and rho shadow audit
 
-The audit-enabled build also records a developer-only frozen-IRLS directional
-prediction for every locally accepted base or polished patch. For the complete
-outer-previous-to-final-local step `p`, it computes:
+The audit-enabled build records a developer-only frozen-IRLS directional
+prediction for every material base or polished trial that reaches the objective
+gate. For the complete outer-previous-to-trial step `p`, it computes:
 
 ```text
 ared = J(previous) - J(candidate)
@@ -65,16 +65,33 @@ The record status is one of `available`, `nonmaterial-step`,
 counterfactual action uses rho bands at `0.25` and `0.75`, with `0.8` boundary
 utilization required for growth. Objective backtracking remains the first
 shrink rule, and unusable prediction falls back to the current actual-only
-action. Boundary-reconciled, rescued, and globally rejected local records are
-marked `suppressed` and excluded from action-readiness exposure.
+action. Only the final locally accepted candidate may be action-ready.
+Boundary-reconciled, rescued, globally rejected, and non-final local records
+are suppressed from action comparison while remaining in coverage and
+calibration statistics. A separate funnel records generated, invalid,
+trust-skipped, guard-rejected, nonmaterial, base-objective, and polish-objective
+counts without evaluating a model before the objective gate.
 
 This instrumentation does not modify acceptance, radius action, trajectory,
 stopping, public settings, or the production trajectory schema. The corpus
 report summarizes model coverage, rho calibration, current/shadow action
-confusion, elapsed audit cost, and family, topology, base/polish, boundary,
-cluster-size, and unselected-dependency strata. It always reports
-`production_promotion_recommended = false`; adopting a rho controller requires
-a separate decision after the shadow corpus is reviewed.
+confusion, elapsed audit cost, and family, topology, base/polish, trial
+disposition, factor, prediction status, boundary, cluster-size, and unselected
+dependency strata. A conservative paired-corpus evidence gate may set
+`model_based_controller_experiment_recommended = true`; it always reports
+`production_promotion_recommended = false`. Production adoption requires a
+separate shadow-controller trajectory replay.
+
+The experiment recommendation requires all 600 paired cases to preserve their
+schema-7 trajectory and terminal artifacts without safety regressions; usable
+rho coverage of at least 70% overall, 60% per family, and 50% per topology;
+at least 100 low, mid, and high ratios with 20 of each band per family plus 50
+high-boundary ratios; median/p90 absolute calibration error no greater than
+0.5/2.0 and family medians no greater than 0.75; at least 100 action changes
+covering 1% of action-ready records, 25 shrink opportunities, and 25
+growth-related opportunities; and audit/candidate-phase cost ratios no greater
+than 25% median and 40% p90. Every failed condition and up to 30 priority replay
+cases are written to the aggregate report.
 
 The paired shadow audit against `7ce0595c` completed the baseline and two
 shadow runs at 600/600 cases with frozen baseline truth and one fitting thread
@@ -174,14 +191,15 @@ Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
 `scenario-truth.json`, `trajectory-schema-7.json`,
 `counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
-legacy shadow/terminal audit artifact, `trust-model-shadow-schema-1.json`, and
-schema-9 `case-summary.json`. The trust-model artifact records status, source,
-disposition, reductions, rho, boundary utilization, current/shadow actions,
-objective-backtracking, and unselected dependency count. Per-record measured
-audit time remains in `run.log` and schema-9 case/aggregate analysis but is
+legacy shadow/terminal audit artifact, `trust-model-shadow-schema-2.json`, and
+schema-10 `case-summary.json`. The trust-model artifact records the candidate
+funnel plus trial identity, status, source, disposition, rejection causes,
+prediction components, reductions, rho, boundary utilization, current/shadow
+actions, objective-backtracking, and unselected dependency count. Per-record measured
+audit time remains in `run.log` and schema-10 case/aggregate analysis but is
 excluded from the canonical trust-model artifact, so identical calculations
 can be verified byte-for-byte without wall-clock noise. The aggregate report is
-schema 5. A paired run additionally writes schema-2
+schema 6. A paired run additionally writes schema-2
 `comparison.json`, including terminal accepted-iteration deltas and the
 guard/trust decoupling blocking gate. Old summaries
 are intentionally not resumed across the baseline change.

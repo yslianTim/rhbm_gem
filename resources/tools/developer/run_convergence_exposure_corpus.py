@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 9
+CASE_SUMMARY_SCHEMA_VERSION = 10
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -213,7 +213,7 @@ def run_case(
         trajectory = (
             json.loads(trajectory_path.read_text(encoding="utf-8"))
             if trajectory_path.is_file() else {})
-        trust_model_path = case_directory / "trust-model-shadow-schema-1.json"
+        trust_model_path = case_directory / "trust-model-shadow-schema-2.json"
         trust_model = (
             json.loads(trust_model_path.read_text(encoding="utf-8"))
             if trust_model_path.is_file() else {})
@@ -225,7 +225,7 @@ def run_case(
                     if reference_truth_directory is not None else None) and
                 value.get("status") == "complete" and
                 trajectory.get("schema_version") == 7 and
-                trust_model.get("schema_version") == 1):
+                trust_model.get("schema_version") == 2):
             return value
 
     command = build_command(executable, case, thread_count)
@@ -291,10 +291,11 @@ def run_case(
         case_directory / "trajectory-schema-7.json",
         {"schema_version": 7, "records": parsed["trajectory_records"]})
     write_json(
-        case_directory / "trust-model-shadow-schema-1.json",
+        case_directory / "trust-model-shadow-schema-2.json",
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "diagnostic_only": True,
+            "funnels": parsed["trust_model_funnel_records"],
             "records": [
                 {
                     name: value for name, value in record.items()
@@ -332,6 +333,25 @@ def run_case(
         "terminal_atoms": parsed["audit_terminal_atoms"],
     })
     audit = COUNTERFACTUAL_ANALYZER.analyze(parsed, truth)
+    production_artifacts_identical: bool | None = None
+    if reference_truth_directory is not None:
+        baseline_case_directory = (
+            reference_truth_directory / "cases" / case["case_id"])
+        baseline_trajectory_path = (
+            baseline_case_directory / "trajectory-schema-7.json")
+        baseline_summary_path = baseline_case_directory / "case-summary.json"
+        if baseline_trajectory_path.is_file() and baseline_summary_path.is_file():
+            baseline_trajectory = json.loads(
+                baseline_trajectory_path.read_text(encoding="utf-8"))
+            baseline_summary = json.loads(
+                baseline_summary_path.read_text(encoding="utf-8"))
+            production_artifacts_identical = (
+                baseline_trajectory == {
+                    "schema_version": 7,
+                    "records": parsed["trajectory_records"],
+                } and
+                baseline_summary.get("audit", {}).get("terminal") ==
+                audit.get("terminal"))
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
         "status": "complete",
@@ -343,6 +363,7 @@ def run_case(
         "command": command,
         "truth_atom_count": len(truth),
         "safety_regression": detect_safety_regression(parsed, audit),
+        "production_artifacts_identical": production_artifacts_identical,
         "audit": audit,
     }
     write_json(summary_path, summary)

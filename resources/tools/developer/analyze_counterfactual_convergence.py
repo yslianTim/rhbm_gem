@@ -10,6 +10,7 @@ import json
 import math
 from pathlib import Path
 import re
+import statistics
 from typing import Any
 
 
@@ -21,6 +22,8 @@ SHADOW_ATOM_MARKER = "Accepted-only shadow atom:"
 AUDIT_TERMINAL_MARKER = "Second-stage audit terminal:"
 AUDIT_TERMINAL_ATOM_MARKER = "Second-stage audit terminal atom:"
 TRUST_MODEL_SHADOW_MARKER = "Trust-model shadow:"
+TRUST_MODEL_FUNNEL_MARKER = "Trust-model funnel:"
+TRUST_MODEL_PERFORMANCE_MARKER = "Trust-model performance:"
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)"
 )
@@ -79,13 +82,17 @@ def parse_log(text: str) -> dict[str, Any]:
     audit_terminal_atoms: list[dict[str, str]] = []
     trajectory_records: list[dict[str, str]] = []
     trust_model_shadow_records: list[dict[str, Any]] = []
+    trust_model_funnel_records: list[dict[str, Any]] = []
+    trust_model_performance: dict[str, float] | None = None
     for line in text.splitlines():
         trajectory_record = CONVERGENCE_ANALYZER.parse_record(line)
         if trajectory_record is not None:
             trajectory_records.append(trajectory_record)
-        if trust_model := _fields(line, TRUST_MODEL_SHADOW_MARKER, "1"):
+        if trust_model := _fields(line, TRUST_MODEL_SHADOW_MARKER, "2"):
             optional_float_fields = (
-                "actual-reduction", "predicted-reduction", "rho")
+                "actual-reduction", "polish-reduction",
+                "predicted-residual-reduction",
+                "predicted-penalty-reduction", "predicted-reduction", "rho")
             trust_model_shadow_records.append({
                 **trust_model,
                 **{
@@ -99,13 +106,36 @@ def parse_log(text: str) -> dict[str, Any]:
                     for name in (
                         "try", "acc", "atoms", "key-first", "key-last",
                         "boundary-touched", "boundary-rescued",
-                        "readiness-eligible", "objective-backtracked",
+                        "readiness-eligible", "final-local-candidate",
+                        "search-pass", "trial", "rejected-by-previous",
+                        "rejected-by-best", "rejected-by-strict-polish",
+                        "objective-backtracked",
                         "unselected-dependencies")
                 },
+                "factor": float(trust_model["factor"]),
+                "step-norm": float(trust_model["step-norm"]),
                 "boundary-utilization": float(
                     trust_model["boundary-utilization"]),
                 "elapsed-ms": float(trust_model["elapsed-ms"]),
             })
+        if funnel := _fields(line, TRUST_MODEL_FUNNEL_MARKER, "1"):
+            trust_model_funnel_records.append({
+                **funnel,
+                **{
+                    name: int(funnel[name])
+                    for name in (
+                        "try", "acc", "atoms", "key-first", "key-last",
+                        "generated", "invalid", "trust-skipped",
+                        "guard-rejected", "nonmaterial", "objective-evaluated",
+                        "polish-objective-evaluated")
+                },
+            })
+        if performance := _fields(
+                line, TRUST_MODEL_PERFORMANCE_MARKER, "1"):
+            trust_model_performance = {
+                "candidate-ms": float(performance["candidate-ms"]),
+                "total-ms": float(performance["total-ms"]),
+            }
         if checkpoint := _fields(line, CHECKPOINT_MARKER):
             checkpoints.append(checkpoint)
         elif atom := _fields(line, ATOM_MARKER):
@@ -137,23 +167,45 @@ def parse_log(text: str) -> dict[str, Any]:
         "audit_terminal_atoms": audit_terminal_atoms,
         "trajectory_records": trajectory_records,
         "trust_model_shadow_records": trust_model_shadow_records,
+        "trust_model_funnel_records": trust_model_funnel_records,
+        "trust_model_performance": trust_model_performance,
     }
 
 
-def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def analyze_trust_model_shadow(
+    records: list[dict[str, Any]],
+    funnel_records: list[dict[str, Any]],
+    performance: dict[str, float] | None,
+) -> dict[str, Any]:
     status_counts: dict[str, int] = defaultdict(int)
     rho_bins: dict[str, int] = defaultdict(int)
     action_confusion: dict[str, int] = defaultdict(int)
     strata: dict[str, dict[str, dict[str, int]]] = {
         name: defaultdict(lambda: defaultdict(int))
         for name in (
-            "source", "boundary", "cluster-size", "unselected-dependencies")
+            "source", "trial-disposition", "factor", "prediction-status",
+            "boundary", "cluster-size", "unselected-dependencies")
     }
+    rho_values: list[float] = []
     for record in records:
         status = str(record["status"])
         status_counts[status] += 1
         rho = record.get("rho")
         if rho is not None:
+            rho_values.append(float(rho))
             if rho < 0.25:
                 rho_bin = "low"
             elif rho <= 0.75:
@@ -166,8 +218,9 @@ def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             rho_bin = "unavailable"
             rho_bins[rho_bin] += 1
-        action_confusion[
-            f'{record["current-action"]}->{record["shadow-action"]}'] += 1
+        if record["readiness-eligible"] and record["shadow-action"] != "suppressed":
+            action_confusion[
+                f'{record["current-action"]}->{record["shadow-action"]}'] += 1
         boundary = (
             "rescued" if record["boundary-rescued"] else
             "touched" if record["boundary-touched"] else "none")
@@ -177,6 +230,9 @@ def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
             "1" if unselected_count == 1 else "2+")
         values = {
             "source": str(record["source"]),
+            "trial-disposition": str(record["trial-disposition"]),
+            "factor": f'{float(record["factor"]):.8g}',
+            "prediction-status": status,
             "boundary": boundary,
             "cluster-size": str(record["atoms"]),
             "unselected-dependencies": unselected_stratum,
@@ -186,18 +242,47 @@ def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
             group["records"] += 1
             group[f"status:{status}"] += 1
             group[f"rho:{rho_bin}"] += 1
+    eligible_count = sum(
+        record["status"] != "nonmaterial-step" for record in records)
+    elapsed_milliseconds = sum(
+        float(record["elapsed-ms"]) for record in records)
+    candidate_milliseconds = (
+        float(performance["candidate-ms"]) if performance is not None else None)
+    funnel_totals = {
+        name: sum(int(record[name]) for record in funnel_records)
+        for name in (
+            "generated", "invalid", "trust-skipped", "guard-rejected",
+            "nonmaterial", "objective-evaluated",
+            "polish-objective-evaluated")
+    }
+    calibration_errors = [abs(value - 1.0) for value in rho_values]
     return {
         "diagnostic_only": True,
         "record_count": len(records),
+        "eligible_count": eligible_count,
         "available_count": status_counts.get("available", 0),
         "availability_ratio": (
-            status_counts.get("available", 0) / len(records)
-            if records else None),
+            status_counts.get("available", 0) / eligible_count
+            if eligible_count else None),
         "status_counts": dict(sorted(status_counts.items())),
         "rho_bins": dict(sorted(rho_bins.items())),
         "action_confusion": dict(sorted(action_confusion.items())),
-        "elapsed_milliseconds": sum(
-            float(record["elapsed-ms"]) for record in records),
+        "rho": {
+            "median": statistics.median(rho_values) if rho_values else None,
+            "p90": _percentile(rho_values, 0.90),
+            "absolute_calibration_error_median": (
+                statistics.median(calibration_errors)
+                if calibration_errors else None),
+            "absolute_calibration_error_p90": _percentile(
+                calibration_errors, 0.90),
+        },
+        "elapsed_milliseconds": elapsed_milliseconds,
+        "candidate_milliseconds": candidate_milliseconds,
+        "candidate_phase_ratio": (
+            elapsed_milliseconds / candidate_milliseconds
+            if candidate_milliseconds is not None and candidate_milliseconds > 0.0
+            else None),
+        "funnel": funnel_totals,
         "strata": {
             name: {
                 value: dict(sorted(counts.items()))
@@ -205,6 +290,7 @@ def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
             }
             for name, groups in strata.items()
         },
+        "funnels": funnel_records,
         "records": records,
     }
 
@@ -340,7 +426,9 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
     trajectory_audit = CONVERGENCE_ANALYZER.analyze_records(
         parsed.get("trajectory_records", []))
     trust_model_shadow = analyze_trust_model_shadow(
-        parsed.get("trust_model_shadow_records", []))
+        parsed.get("trust_model_shadow_records", []),
+        parsed.get("trust_model_funnel_records", []),
+        parsed.get("trust_model_performance"))
     shadow_record = parsed.get("shadow_checkpoint")
     terminal_record = parsed.get("audit_terminal")
     shadow_report = {

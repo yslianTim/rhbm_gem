@@ -71,7 +71,8 @@ struct ClusterCandidateResult
     PolishProgress polish_progress{};
     TrustRegionRadiusAction radius_action{ TrustRegionRadiusAction::Keep };
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-    std::optional<TrustModelShadowDiagnostic> trust_model_shadow{};
+    std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
+    TrustModelCandidateFunnel trust_model_candidate_funnel{};
 #endif
     std::vector<std::pair<std::size_t, SuspiciousUpdateMode>>
         terminal_guard_block_list{};
@@ -291,6 +292,14 @@ PerformanceCounters::~PerformanceCounters()
         
     Logger::Log(LogLevel::Info, message_info.str());
     Logger::Log(LogLevel::Debug, message_debug.str());
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+    std::ostringstream audit_performance;
+    audit_performance << std::scientific << std::setprecision(17)
+        << "Trust-model performance: schema=1"
+        << ", candidate-ms=" << m_candidate_phase_milliseconds
+        << ", total-ms=" << total_milliseconds;
+    Logger::Log(LogLevel::Debug, audit_performance.str());
+#endif
 }
 
 void PerformanceCounters::RecordFullStateMaterialization()
@@ -2368,6 +2377,7 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         result.shadow_action = DetermineTrustModelShadowAction(result);
         return result;
     }
+    result.step_norm = *step_norm;
     result.boundary_utilization =
         std::isfinite(trust_region_radius) && trust_region_radius > 0.0 ?
             *step_norm / trust_region_radius : 0.0;
@@ -2506,10 +2516,13 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         predicted_residual_reduction += contribution;
     }
     result.unselected_dependency_count = changed_unselected_dependency_set.size();
-    const auto predicted_reduction{
-        predicted_residual_reduction +
+    result.predicted_residual_reduction = predicted_residual_reduction;
+    result.predicted_penalty_reduction =
         previous_objective->offset_plausibility_penalty -
-        candidate_objective->offset_plausibility_penalty
+        candidate_objective->offset_plausibility_penalty;
+    const auto predicted_reduction{
+        *result.predicted_residual_reduction +
+        *result.predicted_penalty_reduction
     };
     if (!std::isfinite(predicted_reduction) ||
         !result.actual_reduction.has_value() ||
@@ -2672,8 +2685,64 @@ static ClusterCandidateResult SelectClusterCandidate(
     std::optional<FitStatePatch> accepted_patch;
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+    std::optional<std::size_t> final_trust_model_trial_index;
+    std::size_t trust_model_search_pass{ 0 };
+    const auto record_trust_model_trial = [&]
+        (const FitStatePatch & patch,
+         const ObjectiveAttemptDiagnostic & diagnostic,
+         TrustModelCandidateSource source,
+         std::size_t search_pass,
+         std::size_t trial_number,
+         double factor,
+         bool accepted,
+         bool rejected_by_strict_polish)
+    {
+        const auto start{ std::chrono::steady_clock::now() };
+        auto shadow{ EvaluateTrustModelShadow(
+            context,
+            residual_baseline,
+            previous_state,
+            patch,
+            key,
+            objective_sample_ref_list,
+            objective_domain,
+            previous_objective_entry,
+            diagnostic.candidate_objective,
+            trust_region_radius,
+            TrustRegionRadiusAction::Keep,
+            source,
+            false) };
+        shadow.search_pass = search_pass;
+        shadow.trial_number = trial_number;
+        shadow.factor = factor;
+        shadow.trial_disposition = accepted ?
+            TrustModelTrialDisposition::Accepted :
+            TrustModelTrialDisposition::ObjectiveRejected;
+        shadow.rejected_by_previous = diagnostic.rejected_by_previous;
+        shadow.rejected_by_best = diagnostic.rejected_by_best;
+        shadow.rejected_by_strict_polish = rejected_by_strict_polish;
+        if (source == TrustModelCandidateSource::Polish &&
+            diagnostic.previous_objective.has_value() &&
+            diagnostic.candidate_objective.has_value())
+        {
+            shadow.polish_reduction =
+                diagnostic.previous_objective->GetTotalObjective() -
+                diagnostic.candidate_objective->GetTotalObjective();
+        }
+        shadow.shadow_action.reset();
+        shadow.elapsed_milliseconds =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start).count();
+        result.trust_model_shadow_trial_list.emplace_back(std::move(shadow));
+        return result.trust_model_shadow_trial_list.size() - 1;
+    };
+#endif
     for (;;)
     {
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+        trust_model_search_pass++;
+#endif
         result.objective_state = previous_objective_state;
         result.diagnostic = ObjectiveAttemptDiagnostic{};
         result.diagnostic.trust_region_radius = trust_region_radius;
@@ -2719,6 +2788,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             factor >= std::numeric_limits<double>::epsilon(); factor *= 0.5)
         {
             trial_number++;
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+            result.trust_model_candidate_funnel.generated_count++;
+#endif
             auto proposal_result{
                 BuildSharedOffsetProposal(
                     context,
@@ -2731,6 +2803,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.proposal.has_value())
             {
                 invalid_trial_count++;
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                result.trust_model_candidate_funnel.invalid_count++;
+#endif
                 result.diagnostic.pre_objective_failure_reason =
                     proposal_result.failure_reason;
                 continue;
@@ -2748,6 +2823,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             if (maximum_change < kTransformedChangeTolerance)
             {
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                result.trust_model_candidate_funnel.nonmaterial_count++;
+#endif
                 if (factor == 1.0 && is_polish_eligible)
                 {
                     result.diagnostic.accepted_factor = 1.0;
@@ -2761,6 +2839,9 @@ static ClusterCandidateResult SelectClusterCandidate(
                     proposal.step_norm, trust_region_radius))
             {
                 trust_skipped_trial_count++;
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                result.trust_model_candidate_funnel.trust_skipped_count++;
+#endif
                 result.diagnostic.pre_objective_failure_reason =
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
@@ -2775,6 +2856,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (guard_failure.has_value())
             {
                 guard_rejected_trial_count++;
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                result.trust_model_candidate_funnel.guard_rejected_count++;
+#endif
                 last_guard_failure = guard_failure;
                 continue;
             }
@@ -2793,7 +2877,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 residual_baseline,
                 candidate_state_view
             };
-            if (TryCommitClusterCandidate(
+            const auto committed{ TryCommitClusterCandidate(
                     candidate_overlay,
                     key,
                     objective_sample_ref_list,
@@ -2802,8 +2886,24 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain,
                     result.objective_state,
                     trial_diagnostic,
-                    performance_counters))
+                    performance_counters) };
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+            result.trust_model_candidate_funnel.objective_evaluated_count++;
+            const auto trust_model_trial_index{ record_trust_model_trial(
+                proposal.patch,
+                trial_diagnostic,
+                TrustModelCandidateSource::Base,
+                trust_model_search_pass,
+                trial_number,
+                factor,
+                committed,
+                false) };
+#endif
+            if (committed)
             {
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                final_trust_model_trial_index = trust_model_trial_index;
+#endif
                 result.diagnostic = std::move(trial_diagnostic);
                 accepted_patch = std::move(proposal.patch);
                 break;
@@ -2900,10 +3000,6 @@ static ClusterCandidateResult SelectClusterCandidate(
     result.radius_action = DetermineAcceptedTrustRegionRadiusAction(
         first_objective_evaluated_factor,
         result.diagnostic);
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-    auto final_candidate_objective{ result.diagnostic.candidate_objective };
-    auto trust_model_candidate_source{ TrustModelCandidateSource::Base };
-#endif
     if (is_polish_eligible)
     {
         auto polished_candidate{
@@ -2935,7 +3031,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 residual_baseline,
                 polished_state_view
             };
-            if (!TryCommitClusterCandidate(
+            const auto polish_committed{ TryCommitClusterCandidate(
                     polished_overlay,
                     key,
                     objective_sample_ref_list,
@@ -2945,12 +3041,35 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain,
                     result.objective_state,
                     polish_diagnostic,
-                    performance_counters))
+                    performance_counters) };
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+            result.trust_model_candidate_funnel.polish_objective_evaluated_count++;
+            const auto rejected_by_strict_polish{
+                !polish_committed &&
+                polish_diagnostic.candidate_objective.has_value() &&
+                polish_diagnostic.previous_objective.has_value() &&
+                !polish_diagnostic.rejected_by_previous &&
+                !polish_diagnostic.rejected_by_best
+            };
+            const auto trust_model_trial_index{ record_trust_model_trial(
+                polished_candidate->patch,
+                polish_diagnostic,
+                TrustModelCandidateSource::Polish,
+                trust_model_search_pass,
+                1,
+                polished_candidate->effective_damping,
+                polish_committed,
+                rejected_by_strict_polish) };
+#endif
+            if (!polish_committed)
             {
                 result.polish_progress.rejected_count = 1;
             }
             else
             {
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+                final_trust_model_trial_index = trust_model_trial_index;
+#endif
                 result.polish_progress.accepted_count = 1;
                 for (std::size_t position = 0; position < key.size(); position++)
                 {
@@ -2966,10 +3085,6 @@ static ClusterCandidateResult SelectClusterCandidate(
                     }
                 }
                 result.accepted_patch = std::move(polished_candidate->patch);
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-                final_candidate_objective = polish_diagnostic.candidate_objective;
-                trust_model_candidate_source = TrustModelCandidateSource::Polish;
-#endif
                 if (result.radius_action != TrustRegionRadiusAction::Shrink &&
                     ShouldGrowTrustRegion(polish_diagnostic))
                 {
@@ -2983,26 +3098,20 @@ static ClusterCandidateResult SelectClusterCandidate(
         result.accepted_patch = std::move(base_patch);
     }
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-    const auto trust_model_start{ std::chrono::steady_clock::now() };
-    result.trust_model_shadow = EvaluateTrustModelShadow(
-        context,
-        residual_baseline,
-        previous_state,
-        *result.accepted_patch,
-        key,
-        objective_sample_ref_list,
-        objective_domain,
-        previous_objective_entry,
-        final_candidate_objective,
-        trust_region_radius,
-        result.radius_action,
-        trust_model_candidate_source,
-        first_objective_evaluated_factor.has_value() &&
+    if (final_trust_model_trial_index.has_value())
+    {
+        auto & final_shadow{
+            result.trust_model_shadow_trial_list.at(*final_trust_model_trial_index)
+        };
+        final_shadow.final_local_candidate = true;
+        final_shadow.readiness_eligible = true;
+        final_shadow.current_action = result.radius_action;
+        final_shadow.objective_backtracked =
+            first_objective_evaluated_factor.has_value() &&
             result.diagnostic.accepted_factor.has_value() &&
-            *result.diagnostic.accepted_factor < *first_objective_evaluated_factor);
-    result.trust_model_shadow->elapsed_milliseconds =
-        std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - trust_model_start).count();
+            *result.diagnostic.accepted_factor < *first_objective_evaluated_factor;
+        final_shadow.shadow_action = DetermineTrustModelShadowAction(final_shadow);
+    }
 #endif
     return result;
 }
@@ -3127,8 +3236,10 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
                 std::move(result.diagnostic)
             };
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-            cluster_diagnostic.trust_model_shadow =
-                std::move(result.trust_model_shadow);
+            cluster_diagnostic.trust_model_shadow_trial_list =
+                std::move(result.trust_model_shadow_trial_list);
+            cluster_diagnostic.trust_model_candidate_funnel =
+                result.trust_model_candidate_funnel;
 #endif
             selection.rejected_cluster_diagnostic_list.emplace_back(
                 std::move(cluster_diagnostic));
@@ -3148,8 +3259,10 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
             std::move(result.diagnostic)
         };
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-        cluster_diagnostic.trust_model_shadow =
-            std::move(result.trust_model_shadow);
+        cluster_diagnostic.trust_model_shadow_trial_list =
+            std::move(result.trust_model_shadow_trial_list);
+        cluster_diagnostic.trust_model_candidate_funnel =
+            result.trust_model_candidate_funnel;
 #endif
         selection.accepted_cluster_diagnostic_list.emplace_back(
             std::move(cluster_diagnostic));
@@ -4282,12 +4395,15 @@ static void FinalizeTrustModelShadowDisposition(CandidateSelection & selection)
     const auto update = [&](ClusterCandidateDiagnostic & diagnostic, bool accepted)
     {
         diagnostic.boundary_touched = touches_boundary(diagnostic.key);
-        if (!diagnostic.trust_model_shadow.has_value()) return;
-        auto & shadow{ *diagnostic.trust_model_shadow };
-        shadow.readiness_eligible = accepted &&
-            !diagnostic.boundary_touched &&
-            !diagnostic.boundary_rescued;
-        if (!shadow.readiness_eligible) shadow.shadow_action.reset();
+        for (auto & shadow : diagnostic.trust_model_shadow_trial_list)
+        {
+            shadow.readiness_eligible =
+                shadow.final_local_candidate &&
+                accepted &&
+                !diagnostic.boundary_touched &&
+                !diagnostic.boundary_rescued;
+            if (!shadow.readiness_eligible) shadow.shadow_action.reset();
+        }
     };
     for (auto & diagnostic : selection.accepted_cluster_diagnostic_list)
     {

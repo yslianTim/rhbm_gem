@@ -44,7 +44,12 @@ GUARD_TRUST_DECOUPLING_CASE_COUNT = 600
 
 def summarize_trust_model_shadow(rows: list[dict[str, Any]]) -> dict[str, Any]:
     records = [
-        {**record, "family": row["family"], "topology": row["topology"]}
+        {
+            **record,
+            "case-id": row["case_id"],
+            "family": row["family"],
+            "topology": f'{row["family"]}/{row["topology"]}',
+        }
         for row in rows
         for record in row.get("trust_model_shadow", {}).get("records", [])
     ]
@@ -65,18 +70,24 @@ def summarize_trust_model_shadow(rows: list[dict[str, Any]]) -> dict[str, Any]:
     def summarize(group: list[dict[str, Any]]) -> dict[str, Any]:
         statuses = Counter(str(record["status"]) for record in group)
         rho_bins = Counter(rho_bin(record) for record in group)
+        eligible_count = sum(
+            record["status"] != "nonmaterial-step" for record in group)
         action_confusion = Counter(
             f'{record["current-action"]}->{record["shadow-action"]}'
-            for record in group)
+            for record in group
+            if record["readiness-eligible"] and
+            record["shadow-action"] != "suppressed")
         rho_values = [
             float(record["rho"]) for record in group
             if record.get("rho") is not None]
         calibration_errors = [abs(value - 1.0) for value in rho_values]
         return {
             "record_count": len(group),
+            "eligible_count": eligible_count,
             "available_count": statuses["available"],
             "availability_ratio": (
-                statuses["available"] / len(group) if group else None),
+                statuses["available"] / eligible_count
+                if eligible_count else None),
             "status_counts": dict(sorted(statuses.items())),
             "rho_bins": dict(sorted(rho_bins.items())),
             "rho": {
@@ -97,6 +108,9 @@ def summarize_trust_model_shadow(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "family": lambda record: str(record["family"]),
         "topology": lambda record: str(record["topology"]),
         "source": lambda record: str(record["source"]),
+        "trial-disposition": lambda record: str(record["trial-disposition"]),
+        "factor": lambda record: f'{float(record["factor"]):.8g}',
+        "prediction-status": lambda record: str(record["status"]),
         "boundary": lambda record: (
             "rescued" if record["boundary-rescued"] else
             "touched" if record["boundary-touched"] else "none"),
@@ -105,17 +119,179 @@ def summarize_trust_model_shadow(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "0" if int(record["unselected-dependencies"]) == 0 else
             "1" if int(record["unselected-dependencies"]) == 1 else "2+"),
     }
+    overall = summarize(records)
+    strata = {
+        name: {
+            value: summarize([
+                record for record in records if classifier(record) == value])
+            for value in sorted({classifier(record) for record in records})
+        }
+        for name, classifier in stratum_value.items()
+    }
+    action_records = [
+        record for record in records
+        if record["readiness-eligible"] and
+        record["shadow-action"] != "suppressed"
+    ]
+    action_differences = [
+        record for record in action_records
+        if record["current-action"] != record["shadow-action"]
+    ]
+    shrink_opportunities = sum(
+        record["current-action"] != "shrink" and
+        record["shadow-action"] == "shrink"
+        for record in action_differences)
+    growth_related_opportunities = sum(
+        "grow" in (record["current-action"], record["shadow-action"])
+        for record in action_differences)
+    performance_ratios = [
+        float(value)
+        for row in rows
+        if (value := row.get("trust_model_shadow", {}).get(
+            "candidate_phase_ratio")) is not None
+    ]
+    performance = {
+        "case_count": len(performance_ratios),
+        "candidate_phase_ratio_median": (
+            statistics.median(performance_ratios)
+            if performance_ratios else None),
+        "candidate_phase_ratio_p90": _percentile(performance_ratios, 0.90),
+    }
+    family_summaries = strata["family"]
+    topology_summaries = strata["topology"]
+    high_count = (
+        overall["rho_bins"].get("high-interior", 0) +
+        overall["rho_bins"].get("high-boundary", 0))
+    diversity_counts = {
+        "low": overall["rho_bins"].get("low", 0),
+        "mid": overall["rho_bins"].get("mid", 0),
+        "high": high_count,
+        "high-boundary": overall["rho_bins"].get("high-boundary", 0),
+    }
+    family_diversity_passed = all(
+        summary["rho_bins"].get("low", 0) >= 20 and
+        summary["rho_bins"].get("mid", 0) >= 20 and
+        summary["rho_bins"].get("high-interior", 0) +
+        summary["rho_bins"].get("high-boundary", 0) >= 20
+        for family, summary in family_summaries.items()
+        if family in REQUIRED_FAMILIES
+    ) and all(family in family_summaries for family in REQUIRED_FAMILIES)
+    family_calibration_passed = all(
+        summary["rho"]["absolute_calibration_error_median"] is not None and
+        summary["rho"]["absolute_calibration_error_median"] <= 0.75
+        for family, summary in family_summaries.items()
+        if family in REQUIRED_FAMILIES
+    ) and all(family in family_summaries for family in REQUIRED_FAMILIES)
+    integrity_passed = (
+        len(rows) == GUARD_TRUST_DECOUPLING_CASE_COUNT and
+        not any(row.get("safety_regression", False) for row in rows) and
+        all(row.get("production_artifacts_identical") is True for row in rows)
+    )
+    conditions = {
+        "paired-production-integrity": integrity_passed,
+        "overall-coverage": (
+            overall["availability_ratio"] is not None and
+            overall["availability_ratio"] >= 0.70),
+        "family-coverage": (
+            all(family in family_summaries for family in REQUIRED_FAMILIES) and
+            all(
+                family_summaries[family]["availability_ratio"] is not None and
+                family_summaries[family]["availability_ratio"] >= 0.60
+                for family in REQUIRED_FAMILIES)),
+        "topology-coverage": (
+            bool(topology_summaries) and all(
+                summary["availability_ratio"] is not None and
+                summary["availability_ratio"] >= 0.50
+                for summary in topology_summaries.values())),
+        "rho-diversity": (
+            diversity_counts["low"] >= 100 and
+            diversity_counts["mid"] >= 100 and
+            diversity_counts["high"] >= 100 and
+            diversity_counts["high-boundary"] >= 50 and
+            family_diversity_passed),
+        "rho-calibration": (
+            overall["rho"]["absolute_calibration_error_median"] is not None and
+            overall["rho"]["absolute_calibration_error_median"] <= 0.50 and
+            overall["rho"]["absolute_calibration_error_p90"] is not None and
+            overall["rho"]["absolute_calibration_error_p90"] <= 2.0 and
+            family_calibration_passed),
+        "action-opportunity": (
+            len(action_records) > 0 and
+            len(action_differences) >= 100 and
+            len(action_differences) / len(action_records) >= 0.01 and
+            shrink_opportunities >= 25 and
+            growth_related_opportunities >= 25),
+        "instrumentation-cost": (
+            len(performance_ratios) == len(rows) and bool(rows) and
+            performance["candidate_phase_ratio_median"] is not None and
+            performance["candidate_phase_ratio_median"] <= 0.25 and
+            performance["candidate_phase_ratio_p90"] is not None and
+            performance["candidate_phase_ratio_p90"] <= 0.40),
+    }
+    failed_conditions = [
+        name for name, passed in conditions.items() if not passed]
+    replay_reason_by_case: dict[str, set[str]] = {}
+    for record in records:
+        reasons = replay_reason_by_case.setdefault(record["case-id"], set())
+        bin_name = rho_bin(record)
+        if bin_name in ("low", "mid"):
+            reasons.add(f"rho-{bin_name}")
+        if bin_name == "unavailable":
+            reasons.add(f'status-{record["status"]}')
+        if (record["readiness-eligible"] and
+                record["shadow-action"] != "suppressed" and
+                record["current-action"] != record["shadow-action"]):
+            reasons.add("action-divergence")
+    reason_priority = {
+        "action-divergence": 0,
+        "rho-low": 1,
+        "rho-mid": 2,
+    }
+    prioritized_replays = sorted(
+        (
+            min((reason_priority.get(reason, 3) for reason in reasons), default=3),
+            case_id,
+            reasons,
+        )
+        for case_id, reasons in replay_reason_by_case.items()
+        if reasons)
+    replay_cases = [
+        {"case_id": case_id, "reasons": sorted(reasons)}
+        for _, case_id, reasons in prioritized_replays[:30]
+    ]
+    recommendation = not failed_conditions
     return {
         "diagnostic_only": True,
-        **summarize(records),
-        "strata": {
-            name: {
-                value: summarize([
-                    record for record in records if classifier(record) == value])
-                for value in sorted({classifier(record) for record in records})
-            }
-            for name, classifier in stratum_value.items()
+        **overall,
+        "strata": strata,
+        "candidate_funnel": {
+            name: sum(
+                int(row.get("trust_model_shadow", {}).get("funnel", {}).get(
+                    name, 0))
+                for row in rows)
+            for name in (
+                "generated", "invalid", "trust-skipped", "guard-rejected",
+                "nonmaterial", "objective-evaluated",
+                "polish-objective-evaluated")
         },
+        "diversity_counts": diversity_counts,
+        "action_opportunity": {
+            "eligible_count": len(action_records),
+            "difference_count": len(action_differences),
+            "difference_ratio": (
+                len(action_differences) / len(action_records)
+                if action_records else None),
+            "shrink_count": shrink_opportunities,
+            "growth_related_count": growth_related_opportunities,
+        },
+        "performance": performance,
+        "evidence_gate": {
+            "passed": recommendation,
+            "conditions": conditions,
+            "failed_conditions": failed_conditions,
+        },
+        "priority_replay_cases": replay_cases,
+        "model_based_controller_experiment_recommended": recommendation,
         "production_promotion_recommended": False,
     }
 
@@ -379,6 +555,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "terminal": terminal,
             "production_converged": audit["status"] == "counterfactual_records",
             "safety_regression": bool(summary.get("safety_regression", False)),
+            "production_artifacts_identical": summary.get(
+                "production_artifacts_identical"),
         })
 
     decisions: dict[str, Any] = {}
@@ -683,7 +861,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "attempts_after_accepted_only" in row["terminal"]
     ]
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "case_count": len(summaries),
         "production_convergence_count": production_convergence_count,
         "accepted_only_shadow_count": accepted_only_shadow_count,

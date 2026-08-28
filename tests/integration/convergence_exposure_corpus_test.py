@@ -142,11 +142,17 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             "reason=audit-patience, try=3, acc=3, objective=1/0/0/1",
             "[Debug] Second-stage audit terminal atom: schema=1, serial=1, "
             "group=1, amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Trust-model shadow: schema=1, try=2, acc=2, atoms=1, "
+            "[Debug] Trust-model shadow: schema=2, try=2, acc=2, atoms=1, "
             "key-first=0, key-last=0, disposition=accepted, "
             "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
-            "status=available, source=polish, actual-reduction=0.2, "
-            "predicted-reduction=0.2, rho=1.0, boundary-utilization=0.9, "
+            "final-local-candidate=1, status=available, source=polish, "
+            "search-pass=1, trial=1, factor=1.0, "
+            "trial-disposition=accepted, rejected-by-previous=0, "
+            "rejected-by-best=0, rejected-by-strict-polish=0, "
+            "step-norm=0.9, actual-reduction=0.2, polish-reduction=0.1, "
+            "predicted-residual-reduction=0.19, "
+            "predicted-penalty-reduction=0.01, predicted-reduction=0.2, "
+            "rho=1.0, boundary-utilization=0.9, "
             "current-action=keep, shadow-action=grow, "
             "objective-backtracked=0, unselected-dependencies=1, "
             "elapsed-ms=0.25",
@@ -372,11 +378,17 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         log = (
             "Convergence exposure truth: schema=1, case=natural-v00-r0, "
             "serial=1, amplitude=6, width=0.5, offset=0.1.\n"
-            "Trust-model shadow: schema=1, try=1, acc=1, atoms=1, "
+            "Trust-model shadow: schema=2, try=1, acc=1, atoms=1, "
             "key-first=0, key-last=0, disposition=accepted, "
             "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
-            "status=available, source=base, actual-reduction=0.2, "
-            "predicted-reduction=0.2, rho=1.0, boundary-utilization=0.9, "
+            "final-local-candidate=1, status=available, source=base, "
+            "search-pass=1, trial=1, factor=1.0, "
+            "trial-disposition=accepted, rejected-by-previous=0, "
+            "rejected-by-best=0, rejected-by-strict-polish=0, "
+            "step-norm=0.9, actual-reduction=0.2, polish-reduction=-, "
+            "predicted-residual-reduction=0.19, "
+            "predicted-penalty-reduction=0.01, predicted-reduction=0.2, "
+            "rho=1.0, boundary-utilization=0.9, "
             "current-action=keep, shadow-action=grow, "
             "objective-backtracked=0, unselected-dependencies=0, "
             "elapsed-ms=0.25\n")
@@ -396,7 +408,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
                 (case_directory / "trajectory-schema-7.json").read_text(
                     encoding="utf-8"))
             trust_model = json.loads(
-                (case_directory / "trust-model-shadow-schema-1.json").read_text(
+                (case_directory / "trust-model-shadow-schema-2.json").read_text(
                     encoding="utf-8"))
 
         self.assertEqual(summary["status"], "complete")
@@ -404,11 +416,11 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             "run.log", "scenario-truth.json", "trajectory-schema-7.json",
             "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
             "shadow-continuation-schema-2.json",
-            "trust-model-shadow-schema-1.json",
+            "trust-model-shadow-schema-2.json",
             "case-summary.json",
         }.issubset(artifact_names))
         self.assertEqual(trajectory["schema_version"], 7)
-        self.assertEqual(trust_model["schema_version"], 1)
+        self.assertEqual(trust_model["schema_version"], 2)
         self.assertEqual(trust_model["records"][0]["rho"], 1.0)
         self.assertNotIn("elapsed-ms", trust_model["records"][0])
 

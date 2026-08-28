@@ -2154,6 +2154,13 @@ static std::string_view GetTrustModelCandidateSourceText(
     return source == TrustModelCandidateSource::Polish ? "polish" : "base";
 }
 
+static std::string_view GetTrustModelTrialDispositionText(
+    TrustModelTrialDisposition disposition)
+{
+    return disposition == TrustModelTrialDisposition::Accepted ?
+        "accepted" : "objective-rejected";
+}
+
 static std::string_view GetTrustRegionRadiusActionText(
     TrustRegionRadiusAction action)
 {
@@ -2184,45 +2191,90 @@ static void LogTrustModelShadowDiagnostics(
     {
         for (const auto & cluster_diagnostic : diagnostic_list)
         {
-            if (!cluster_diagnostic.trust_model_shadow.has_value()) continue;
-            const auto & diagnostic{ *cluster_diagnostic.trust_model_shadow };
-            std::ostringstream message;
-            message << std::scientific << std::setprecision(17)
-                << "Trust-model shadow: schema=1"
+            const auto & funnel{ cluster_diagnostic.trust_model_candidate_funnel };
+            std::ostringstream funnel_message;
+            funnel_message
+                << "Trust-model funnel: schema=1"
                 << ", try=" << progress.attempt_number
                 << ", acc=" << progress.accepted_iteration_count
                 << ", atoms=" << cluster_diagnostic.key.size()
                 << ", key-first=" << cluster_diagnostic.key.front()
                 << ", key-last=" << cluster_diagnostic.key.back()
                 << ", disposition=" << disposition
-                << ", boundary-touched=" << cluster_diagnostic.boundary_touched
-                << ", boundary-rescued=" << cluster_diagnostic.boundary_rescued
-                << ", readiness-eligible=" << diagnostic.readiness_eligible
-                << ", status=" << GetTrustModelPredictionStatusText(diagnostic.status)
-                << ", source=" << GetTrustModelCandidateSourceText(diagnostic.candidate_source)
-                << ", actual-reduction=";
-            AppendTrustModelOptionalValue(message, diagnostic.actual_reduction);
-            message << ", predicted-reduction=";
-            AppendTrustModelOptionalValue(message, diagnostic.predicted_reduction);
-            message << ", rho=";
-            AppendTrustModelOptionalValue(message, diagnostic.rho);
-            message
-                << ", boundary-utilization=" << diagnostic.boundary_utilization
-                << ", current-action=" << GetTrustRegionRadiusActionText(diagnostic.current_action)
-                << ", shadow-action=";
-            if (diagnostic.shadow_action.has_value())
+                << ", generated=" << funnel.generated_count
+                << ", invalid=" << funnel.invalid_count
+                << ", trust-skipped=" << funnel.trust_skipped_count
+                << ", guard-rejected=" << funnel.guard_rejected_count
+                << ", nonmaterial=" << funnel.nonmaterial_count
+                << ", objective-evaluated=" << funnel.objective_evaluated_count
+                << ", polish-objective-evaluated="
+                << funnel.polish_objective_evaluated_count;
+            Logger::Log(LogLevel::Debug, funnel_message.str());
+
+            for (const auto & diagnostic :
+                cluster_diagnostic.trust_model_shadow_trial_list)
             {
-                message << GetTrustRegionRadiusActionText(*diagnostic.shadow_action);
+                std::ostringstream message;
+                message << std::scientific << std::setprecision(17)
+                    << "Trust-model shadow: schema=2"
+                    << ", try=" << progress.attempt_number
+                    << ", acc=" << progress.accepted_iteration_count
+                    << ", atoms=" << cluster_diagnostic.key.size()
+                    << ", key-first=" << cluster_diagnostic.key.front()
+                    << ", key-last=" << cluster_diagnostic.key.back()
+                    << ", disposition=" << disposition
+                    << ", boundary-touched=" << cluster_diagnostic.boundary_touched
+                    << ", boundary-rescued=" << cluster_diagnostic.boundary_rescued
+                    << ", readiness-eligible=" << diagnostic.readiness_eligible
+                    << ", final-local-candidate=" << diagnostic.final_local_candidate
+                    << ", status=" << GetTrustModelPredictionStatusText(diagnostic.status)
+                    << ", source=" << GetTrustModelCandidateSourceText(
+                        diagnostic.candidate_source)
+                    << ", search-pass=" << diagnostic.search_pass
+                    << ", trial=" << diagnostic.trial_number
+                    << ", factor=" << diagnostic.factor
+                    << ", trial-disposition=" << GetTrustModelTrialDispositionText(
+                        diagnostic.trial_disposition)
+                    << ", rejected-by-previous=" << diagnostic.rejected_by_previous
+                    << ", rejected-by-best=" << diagnostic.rejected_by_best
+                    << ", rejected-by-strict-polish="
+                    << diagnostic.rejected_by_strict_polish
+                    << ", step-norm=" << diagnostic.step_norm
+                    << ", actual-reduction=";
+                AppendTrustModelOptionalValue(message, diagnostic.actual_reduction);
+                message << ", polish-reduction=";
+                AppendTrustModelOptionalValue(message, diagnostic.polish_reduction);
+                message << ", predicted-residual-reduction=";
+                AppendTrustModelOptionalValue(
+                    message, diagnostic.predicted_residual_reduction);
+                message << ", predicted-penalty-reduction=";
+                AppendTrustModelOptionalValue(
+                    message, diagnostic.predicted_penalty_reduction);
+                message << ", predicted-reduction=";
+                AppendTrustModelOptionalValue(message, diagnostic.predicted_reduction);
+                message << ", rho=";
+                AppendTrustModelOptionalValue(message, diagnostic.rho);
+                message
+                    << ", boundary-utilization=" << diagnostic.boundary_utilization
+                    << ", current-action="
+                    << GetTrustRegionRadiusActionText(diagnostic.current_action)
+                    << ", shadow-action=";
+                if (diagnostic.shadow_action.has_value())
+                {
+                    message << GetTrustRegionRadiusActionText(
+                        *diagnostic.shadow_action);
+                }
+                else
+                {
+                    message << "suppressed";
+                }
+                message
+                    << ", objective-backtracked=" << diagnostic.objective_backtracked
+                    << ", unselected-dependencies="
+                    << diagnostic.unselected_dependency_count
+                    << ", elapsed-ms=" << diagnostic.elapsed_milliseconds;
+                Logger::Log(LogLevel::Debug, message.str());
             }
-            else
-            {
-                message << "suppressed";
-            }
-            message
-                << ", objective-backtracked=" << diagnostic.objective_backtracked
-                << ", unselected-dependencies=" << diagnostic.unselected_dependency_count
-                << ", elapsed-ms=" << diagnostic.elapsed_milliseconds;
-            Logger::Log(LogLevel::Debug, message.str());
         }
     };
     Logger::FinishProgressLine();

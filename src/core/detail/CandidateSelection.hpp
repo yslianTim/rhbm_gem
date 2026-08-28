@@ -56,18 +56,48 @@ enum class TrustModelCandidateSource
     Polish
 };
 
+enum class TrustModelTrialDisposition
+{
+    Accepted,
+    ObjectiveRejected
+};
+
+struct TrustModelCandidateFunnel
+{
+    std::size_t generated_count{ 0 };
+    std::size_t invalid_count{ 0 };
+    std::size_t trust_skipped_count{ 0 };
+    std::size_t guard_rejected_count{ 0 };
+    std::size_t nonmaterial_count{ 0 };
+    std::size_t objective_evaluated_count{ 0 };
+    std::size_t polish_objective_evaluated_count{ 0 };
+};
+
 struct TrustModelShadowDiagnostic
 {
     TrustModelPredictionStatus status{ TrustModelPredictionStatus::ModelUnavailable };
     TrustModelCandidateSource candidate_source{ TrustModelCandidateSource::Base };
+    TrustModelTrialDisposition trial_disposition{
+        TrustModelTrialDisposition::ObjectiveRejected };
+    std::size_t search_pass{ 0 };
+    std::size_t trial_number{ 0 };
+    double factor{ 0.0 };
+    double step_norm{ 0.0 };
     std::optional<double> actual_reduction{};
+    std::optional<double> polish_reduction{};
+    std::optional<double> predicted_residual_reduction{};
+    std::optional<double> predicted_penalty_reduction{};
     std::optional<double> predicted_reduction{};
     std::optional<double> rho{};
     double boundary_utilization{ 0.0 };
     TrustRegionRadiusAction current_action{ TrustRegionRadiusAction::Keep };
     std::optional<TrustRegionRadiusAction> shadow_action{};
     bool objective_backtracked{ false };
-    bool readiness_eligible{ true };
+    bool rejected_by_previous{ false };
+    bool rejected_by_best{ false };
+    bool rejected_by_strict_polish{ false };
+    bool final_local_candidate{ false };
+    bool readiness_eligible{ false };
     std::size_t unselected_dependency_count{ 0 };
     double elapsed_milliseconds{ 0.0 };
 };
@@ -536,7 +566,8 @@ struct ClusterCandidateDiagnostic
     ClusterKey key{};
     ObjectiveAttemptDiagnostic attempt{};
 #ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-    std::optional<TrustModelShadowDiagnostic> trust_model_shadow{};
+    std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
+    TrustModelCandidateFunnel trust_model_candidate_funnel{};
     bool boundary_touched{ false };
 #endif
     bool boundary_rescued{ false };

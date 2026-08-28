@@ -357,15 +357,18 @@ or actual/predicted reduction ratio. Candidate acceptance and historical-best
 gates are unchanged; actual reduction only controls whether the next radius may
 grow.
 
-An audit build can compute a developer-only frozen-IRLS directional model for
-the final local patch, including accepted joint polish. It freezes Cauchy
+An audit build computes a developer-only frozen-IRLS directional model for
+every material base or joint-polish trial that reaches the objective gate,
+including locally accepted and objective-rejected candidates. It freezes Cauchy
 weights and objective scales at the outer previous state, applies the existing
 transformed response Jacobian to the complete previous-to-candidate step, and
 includes selected targets, selected neighbours, and group-median-derived
 unselected contributors. The residual surrogate uses the production fit/tail
 sample coefficients and the exact previous-to-candidate offset-plausibility
 penalty change. A ratio is emitted only when predicted reduction exceeds the
-same progress materiality tolerance and both reductions are finite.
+same progress materiality tolerance and both reductions are finite. Polish rho
+uses the complete outer-previous-to-polished step; improvement relative to the
+accepted base candidate is recorded separately.
 
 The shadow status distinguishes `available`, `nonmaterial-step`,
 `objective-unavailable`, `model-unavailable`, `residual-unavailable`,
@@ -373,9 +376,12 @@ The shadow status distinguishes `available`, `nonmaterial-step`,
 counterfactual action preserves objective-backtracking shrink precedence,
 falls back to the current actual-only action when prediction is unusable, uses
 rho bands `0.25` and `0.75`, and requires at least `0.8` boundary utilization
-for counterfactual growth. Boundary-reconciled, rescued, and globally rejected
-records are retained as suppressed diagnostics but are excluded from action
-readiness. None of these calculations run unless
+for counterfactual growth. Only the final locally accepted candidate can become
+action-ready. Boundary-reconciled, rescued, globally rejected, and non-final
+trial records remain available for coverage and calibration but are suppressed
+from action comparison. Pre-objective validity, trust, guard, and nonmaterial
+outcomes are counted in a separate candidate funnel without running the model.
+None of these calculations run unless
 `RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON`, and no shadow result is
 applied to candidate acceptance, radius updates, convergence, or output state.
 
