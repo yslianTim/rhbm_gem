@@ -3,11 +3,16 @@
 > Current baseline (2026-08-28): production uses solver qualification plus
 > accepted active-DOF and complete nominal-DOF fixed-point residual p99.
 
+The production policy is therefore equivalent to the audit's
+`fixed-point-operator` compatibility policy. The policy named
+`solver-qualified` is an older active-operator-proposal residual comparator;
+it does not mean that solver qualification is absent from current production.
+
 ## Purpose and isolation boundary
 
-This audit asks whether continuing past a current production convergence stop
-under one isolated legacy or solver-qualified comparator yields material progress. It
-follows the
+This historical audit asks whether continuing past a production convergence
+stop under an isolated alternative population or residual policy yields
+material progress. It follows the
 [stationarity and active-coordinate audit](stationarity-active-coordinate-audit.md).
 
 The experiment is compiled only when
@@ -29,30 +34,33 @@ One continuation trajectory evaluates the first stop checkpoint for:
 
 | Policy | Stationarity | Change population |
 | --- | --- | --- |
-| `production` | Production convergence qualification | Active shared DOFs; p99 only |
-| `legacy-population` | Production convergence qualification | All selected atoms; p99 only |
-| `legacy-maximum` | Production convergence qualification | Active shared DOFs; p99 plus accepted/raw maximum `< 1e-3` |
-| `solver-qualified` | Active-block solver qualification | Active shape atoms and shared-offset DOFs |
-| `fixed-point-operator` | Production convergence qualification | Accepted active DOFs plus nominal-DOF strict operator p99 |
-| `fixed-point-operator-maximum` | Production convergence qualification | Strict operator policy plus accepted/operator maximum `< 1e-3` |
+| `production` | Full solver qualification | Accepted active-DOF p99 plus complete nominal-DOF strict operator p99 |
+| `legacy-population` | Historical cluster qualification | All-selected accepted/guarded-proposal p99 |
+| `legacy-maximum` | Historical cluster qualification | Active accepted/guarded-proposal p99 plus maximum `< 1e-3` |
+| `solver-qualified` | Full solver qualification | Accepted active-DOF plus active operator-proposal p99; historical comparator |
+| `fixed-point-operator` | Full solver qualification | Same accepted and complete nominal-DOF strict-operator p99 predicates as current production |
+| `fixed-point-operator-maximum` | Full solver qualification | Current production predicates plus accepted/operator maximum `< 1e-3` |
 
 The legacy-population comparator includes fixed and quarantined zero changes.
 The legacy-maximum comparator stays on active DOFs so it isolates only the
 removed gate. Active-member summaries remain diagnostic but are not a
 continuation policy.
 
-If all production candidates agree at the original stop, the run ends normally
+If all policy candidates agree at the original stop, the run ends normally
 as `policy-agreement`. Otherwise the state immediately before the production
 stop remains the common trajectory origin, and no estimator or safeguard is
 changed while continuing.
 
-Every first-stop checkpoint runs final dependency polish in isolated solver
-workspaces. The simulated finalized state is logged for comparison but never
-feeds back into the continuation state. This preserves the pre-checkpoint
-trajectory and makes each checkpoint equivalent to stopping and finalizing at
-that iteration. Final polish uses the checkpoint's current domain, while every
-reported objective is reevaluated on the objective domain frozen at `T0`, so
-cross-policy `delta J` does not confound fit progress with a changing domain.
+Every first-stop checkpoint runs objective-only final dependency polish in
+isolated solver workspaces. The simulated finalized state is logged for
+comparison but never feeds back into the continuation state. This preserves the
+pre-checkpoint trajectory and makes each checkpoint comparable to stopping and
+finalizing at that iteration. Production `converged` finalization now adds a
+separate persisted-state strict-operator certificate; that production-only
+certificate is not retroactively part of these historical counterfactual
+checkpoint outcomes. Final polish uses the checkpoint's current domain, while
+every reported objective is reevaluated on the objective domain frozen at `T0`,
+so cross-policy `delta J` does not confound fit progress with a changing domain.
 
 ## Records and analysis
 
@@ -121,12 +129,13 @@ ctest --test-dir build/counterfactual-audit \
   -R counterfactual_fold_168_audit --output-on-failure
 ```
 
-## Decision rules
+## Historical decision rules
 
 - Restoring the legacy population or maximum gate requires a real isolated
   exposure followed by repeatable material benefit without a new failure.
-- Promoting solver qualification uses the same requirement but is reported as a
-  redesign candidate rather than a rollback candidate.
+- At the time of this audit, promoting solver qualification used the same
+  requirement and was reported as a redesign candidate. Solver qualification
+  has since become part of production together with the strict operator gate.
 - A predicate mismatch without continuation benefit remains semantic evidence,
   not observed quality loss.
 - Policies that only add attempts, numerical churn, or a later failure remain
@@ -136,15 +145,14 @@ ctest --test-dir build/counterfactual-audit \
 - An empty active set remains labelled restricted/all-fixed; this diagnostic
   classification does not add a production stop condition.
 
-The current fold-168 result is a valid negative control but supplies no evidence
-for changing production convergence. A representative trajectory with an
-actual production convergence exposure is still required before any rollback
-or solver-qualification redesign.
+The fold-168 result was a valid negative control but supplied no evidence for
+the then-pending production redesign. It remains historical evidence rather
+than a description of the current gate.
 
 The targeted discovery and cross-case outcome rules are continued in the
 [convergence exposure and counterfactual outcome audit](convergence-exposure-counterfactual-outcome-audit.md).
 
-## Current refresh verification (2026-08-27)
+## Historical refresh verification (2026-08-27)
 
 - Audit-enabled CTest passes 21/21; audit-disabled CTest passes 19/19.
 - Fold-168 stops after seven accepted iterations with `audit-patience` in both

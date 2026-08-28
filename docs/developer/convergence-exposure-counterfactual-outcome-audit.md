@@ -7,6 +7,14 @@
 > residual p99, with solver qualification. Maximum remains an independent
 > diagnostic comparator.
 
+The unified production controller uses one geometric factor search in the
+order validity, trust, guard, then objective. Guard is feasibility-only,
+guard-only factor reduction does not request radius shrink, and radius growth
+requires boundary utilization of at least `0.8` plus material actual objective
+reduction. On a `converged` stop, objective-accepted final dependency polish is
+persisted only if the polished state independently passes the same strict
+operator certificate; otherwise the already converged base state is retained.
+
 ## Actual-reduction radius-growth refresh
 
 Radius growth now requires a boundary-active accepted step and an actual
@@ -93,26 +101,34 @@ growth-related opportunities; and audit/candidate-phase cost ratios no greater
 than 25% median and 40% p90. Every failed condition and up to 30 priority replay
 cases are written to the aggregate report.
 
-The paired shadow audit against `7ce0595c` completed the baseline and two
-shadow runs at 600/600 cases with frozen baseline truth and one fitting thread
-per case. There were no failed cases or safety regressions, the existing paired
-blocking gate passed, and terminal-state and schema-7 trajectory artifacts were
-identical for every before/after case. Objective, transformed-truth RMSE, and
+The latest paired shadow audit used the same production trajectory before and
+after adding objective-trial instrumentation. The baseline and two shadow runs
+completed 600/600 cases with frozen truth and one fitting thread per case.
+There were no failed cases or safety regressions, the paired blocking gate
+passed, and terminal-state and schema-7 trajectory artifacts were identical for
+every before/after case. Objective, transformed-truth RMSE, and
 accepted-iteration deltas had median and p90 `0`; both objective and truth had
-zero material benefit and harm cases. The two canonical schema-1 trust-model
-artifacts were byte-identical for all 600 cases.
+zero material benefit and harm cases. The two current
+`trust-model-shadow-schema-2.json` artifacts were byte-identical for all 600
+cases.
 
-The shadow runs produced 39,634 local records. Only 4,400 (`11.10%`) had an
-available material positive prediction and finite rho. Status counts were
-20,377 `nonmaterial-step`, 9,342 `nonpositive-prediction`, 5,515
-`nonmaterial-prediction`, and 4,400 `available`. All available ratios were in
-the high band: 4,351 interior and 49 boundary-active; no low or mid rho was
-observed. Among readiness-eligible action comparisons, 47 current growths
-remained growth, three became keep, and 4,278 current keeps remained keep.
-Other records either preserved shrink or were suppressed by boundary/final
-disposition. The available coverage and rho diversity are therefore
-insufficient for a production rho policy; the instrumentation remains
-diagnostic-only.
+The candidate funnel generated 369,204 trials: 118,787 were trust-skipped, one
+was guard-rejected, 24,245 were nonmaterial, 226,171 base trials reached the
+objective gate, and 11,824 polish trials reached it. The 237,995 trial records
+therefore exactly match the objective-evaluated count. Of 237,060 material
+objective trials, only 5,507 (`2.323%`) produced a usable finite rho. The main
+statuses were 225,799 `nonpositive-prediction`, 5,754
+`nonmaterial-prediction`, and 935 `nonmaterial-step`.
+
+Rho diversity was also insufficient: low/mid/high-interior/high-boundary counts
+were `8/5/5,427/67`. Only three of 6,787 action-ready records changed action
+(`0.0442%`), all growth-related, with no shrink opportunity. Instrumentation
+cost relative to candidate phase was `35.47%` median and `45.00%` p90, above
+the `25%/40%` gate. Thus
+`model_based_controller_experiment_recommended = false` and
+`production_promotion_recommended = false`; the frozen-IRLS rho model remains
+diagnostic-only. The earlier 39,634-record, `11.10%` final-local-patch result is
+historical and is not a valid current coverage denominator.
 
 ## Guard/trust-radius decoupling refresh
 
@@ -139,13 +155,20 @@ that the semantic separation is neutral for its sampled trajectories; the
 existing trust-controller test supplies direct coverage that guard-only factor
 reduction does not request shrink while objective backtracking still does.
 
-## Purpose and scope
+## Historical purpose and scope
 
-The refreshed audit searches for production convergence checkpoints at which
-the legacy all-selected population, the removed maximum gate, solver
-qualification, or either strict-operator policy rejects the stop. It then uses the isolated continuation from the
+The audit originally searched for production convergence checkpoints at which
+the legacy all-selected population, the removed maximum gate, full solver
+qualification, or either strict-operator policy rejected the then-current stop.
+It then used the isolated continuation from the
 [third-round audit](counterfactual-convergence-continuation-audit.md) to compare
 outcomes. A mismatch alone is an exposure, not evidence of quality loss.
+
+Current production has since promoted full solver qualification and the
+complete nominal-DOF strict-operator p99 predicate. Consequently the historical
+`fixed_point_operator` comparator is now equivalent to production, while
+`solver_qualification` below still names the older active
+operator-proposal-residual policy rather than the current gate.
 
 The implementation remains behind
 `RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON`. It adds a test-only case
@@ -204,17 +227,17 @@ schema 6. A paired run additionally writes schema-2
 guard/trust decoupling blocking gate. Old summaries
 are intentionally not resumed across the baseline change.
 
-## Exposure and outcome definitions
+## Historical exposure and outcome definitions
 
 At the production checkpoint `T0`:
 
 | Exposure | Comparator at `T0` | Isolated question |
 | --- | --- | --- |
-| `legacy_population` | Production qualification + all-selected p99 | Would the former population delay the current stop? |
-| `maximum_gate` | Production qualification + active-DOF p99/max | Would restoring maximum delay the current stop? |
-| `solver_qualification` | Solver qualification + active-DOF p99 | Would solver qualification delay the current stop? |
-| `fixed_point_operator` | Production qualification + accepted active-DOF p99 + complete nominal-DOF operator p99 | Was the guarded proposal hiding a material fixed-point residual? |
-| `fixed_point_operator_maximum` | Fixed-point operator policy + accepted/operator maximum | Does a sparse residual tail justify the maximum gate? |
+| `legacy_population` | Historical cluster qualification + all-selected p99 | Would the former population delay the stop? |
+| `maximum_gate` | Historical cluster qualification + active-DOF p99/max | Would restoring maximum delay the stop? |
+| `solver_qualification` | Solver qualification + accepted active-DOF and active operator-proposal p99 | Would the historical active-proposal policy delay the stop? |
+| `fixed_point_operator` | Solver qualification + accepted active-DOF p99 + complete nominal-DOF operator p99 | Current production-equivalent compatibility policy |
+| `fixed_point_operator_maximum` | Current production predicates + accepted/operator maximum | Does a sparse residual tail justify restoring the maximum gate? |
 | policy agreement | All comparators accept | No continuation is required. |
 
 No production convergence trigger is a separate negative control. Outcomes are
@@ -230,13 +253,13 @@ states, mixed shared-group activity, or new quarantine after `T0`. Maximum
 statistics remain diagnostic and support the isolated rollback comparison.
 
 The accepted-only shadow checkpoint is separate from those five comparators.
-It requires production qualification, accepted active-DOF p99, a stable
+It requires the historical cluster qualification, accepted active-DOF p99, a stable
 objective domain, no quarantine transition, no genuine suspicious/hard failure,
 and no rejection, but ignores fixed-point residual p99. Only the
 first shadow checkpoint is retained and final polish runs on isolated state, so
 it cannot alter the production trajectory or output.
 
-## Replay selection and production decision
+## Historical replay selection and production decision
 
 Replay cases are deterministic: take at most ten sorted case IDs from each
 isolated exposure, then fill to 30 from the remaining sorted exposures. All
@@ -247,9 +270,10 @@ corpus family. At least 70% must show material objective or truth benefit,
 material harm must be at most 10%, aggregate raw-residual median must not
 worsen, and no safety regression may appear. Legacy population/maximum results
 are reported as `rollback_candidate`; `solver-qualified` is reported as
-`redesign_candidate`; the strict-operator policies are reported as
-`promotion_candidate`. An incomplete run or unmet quota forces a
-diagnostic-only conclusion.
+`redesign_candidate`; the strict-operator policies were reported as
+`promotion_candidate`. The strict-operator and solver-qualification redesign
+was subsequently promoted into production. An incomplete run or unmet quota
+still forces a diagnostic-only conclusion for any remaining comparator.
 
 ## Verification and observed evidence
 
@@ -358,6 +382,9 @@ remain on the original geometric first-passing policy.
 
 Current verification on 2026-08-28:
 
+- the converged final-dependency-polish path now re-evaluates a strict operator
+  certificate on the polished candidate; the existing core-estimator suite
+  passes with the certificate and base-state fallback behavior;
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
 - fold-168 still stops after seven accepted iterations with `audit-patience` in
   both builds and produces byte-identical `actual.json` files;
@@ -370,6 +397,10 @@ Current verification on 2026-08-28:
   accepted-iteration median worsens from `11` to `12`, and only `68.7%` of the
   150 overlap cases reduce objective evaluations. The planned quality and 70%
   case-level efficiency acceptance gates therefore remain unmet;
+- the objective-trial rho audit records 237,995 objective-evaluated trials,
+  only 5,507 usable ratios (`2.323%`), just 8 low and 5 mid ratios, three
+  action divergences, and `35.47%/45.00%` median/p90 instrumentation cost;
+  its evidence gate is no-go and diagnostic-only;
 - the 137-case isolated continuation replay completes twice with no failures,
   no non-time artifact mismatch, and no production-policy recommendation;
 - repository lint passes.

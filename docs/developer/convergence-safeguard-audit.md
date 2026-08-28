@@ -13,12 +13,19 @@
   computed before guard feasibility, terminal freeze, trust limiting, objective
   gates, and polish.
   Unavailable nominal DOFs produce a restricted classification, not a zero.
-- Evaluate both summaries over active optimization DOFs. Fixed and quarantined
-  coordinates do not dilute the population, and each shared offset contributes
-  one group-level sample.
+- Evaluate accepted movement over active optimization DOFs. Fixed and
+  quarantined coordinates do not dilute that population, and each active shared
+  offset contributes one group-level sample. Evaluate the strict operator
+  residual over the complete nominal-DOF population, including fixed and
+  quarantined shapes and shared offsets; unavailable evidence makes the
+  operator incomplete rather than substituting a zero residual.
 - Remove accepted/operator maximum from the production stopping conjunction. The
   historical `1e-3` gate is now the isolated `legacy-maximum` comparator.
 - Require solver qualification in production.
+- Treat objective-accepted final dependency polish on a `converged` path as
+  provisional. Persist it only after the polished state independently passes
+  the same solver-qualified, complete nominal-DOF strict-operator p99
+  certificate; otherwise retain the already converged base state.
 
 ## Historical purpose and scope
 
@@ -35,8 +42,9 @@ five predicates without changing the stopping policy:
 Historically, accepted change was `|z(S[k+1]) - z(S[k])|` and the guarded
 proposal was described as `|z(F(S[k])) - z(S[k])|`. That second description
 was imprecise because guard damping and fixed/quarantined rollback had already
-been applied. Schema 6 now calls it `guarded-proposal` and reserves
-`fixed-point-residual` for the undamped offset-to-shape operator. The
+been applied. Historical schema 6 called it `guarded-proposal` and reserved
+`fixed-point-residual` for the undamped offset-to-shape operator; current
+schema 7 reports the strict operator residual directly. The
 transformed coordinates `z` are log peak
 height, log width, and offset/peak. Every coordinate must have p99 below
 `1e-4` and maximum below `1e-3`. Objective-domain changes, quarantine
@@ -91,8 +99,8 @@ The targeted tests exercise the predicate truth table directly:
 | Both changes small, stationarity false | 0 | 1/1 | 1/1 | Small change does not imply stationarity. |
 | 999 zeros plus one `2e-3` tail | — | 1/0 | 1/0 | Maximum has unique sparse-tail coverage. |
 | 1000 values at `5e-4` | — | 0/1 | 0/1 | p99 has unique coherent-drift coverage. |
-| 990 fixed zeros plus ten active values at `5e-4` | — | all-selected p99=1; shadow p99=0 | same | Current population can hide active-block drift. |
-| Active cluster with IRLS maximum-iteration status | current=1, full=0 | — | — | Current active-block flag can hide soft joint non-convergence. |
+| 990 fixed zeros plus ten active values at `5e-4` | — | all-selected p99=1; shadow p99=0 | same | The historical all-selected population can hide active-block drift. |
+| Active cluster with IRLS maximum-iteration status | historical=1, full=0 | — | — | The historical cluster rollup can hide soft joint non-convergence. |
 
 The debug trace is also checked for deterministic equality between serial and
 parallel selection and for behavioral neutrality between Info and Debug runs.
@@ -148,17 +156,18 @@ block-level stationarity, active-member changes, and one-sample-per-shared-DOF
 offset changes.
 
 The subsequent audits completed this follow-up. Production now uses the
-  preferred active-DOF population without a maximum gate; the accepted/guarded and
-qualification independence results remain valid. The active-member comparison
-was retired after the shared-DOF population became authoritative; its results
-above remain historical evidence only.
+preferred active-DOF population for accepted movement and the complete
+nominal-DOF population for strict operator residuals, without a maximum gate.
+The accepted/guarded and qualification independence results remain valid. The
+active-member comparison was retired after the shared-DOF population became
+authoritative; its results above remain historical evidence only.
 
 The external fold-168 regression remains optional for this round because its
 model and map inputs are not stored in the repository. When hash-matching inputs
 are available, its Debug trace can be aggregated with the same contract without
 changing the fitting configuration.
 
-## Current refresh verification (2026-08-27)
+## Historical refresh verification (2026-08-27)
 
 - Audit-enabled CTest passes 21/21, including analyzer fixtures, runner
   smoke/determinism, and the external counterfactual fold-168 audit.

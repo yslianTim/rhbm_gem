@@ -1,22 +1,25 @@
 # Stationarity semantics and active-coordinate population audit
 
-> Current baseline (2026-08-27): active shared-DOF p99 is the production
-> convergence population, maximum change is diagnostic-only, and solver
-> qualification remains a counterfactual comparator.
+> Current baseline (2026-08-28): production requires solver qualification,
+> accepted active-DOF p99 below `1e-4`, and a complete nominal-DOF strict
+> operator residual p99 below `1e-4`. Maximum change is diagnostic-only.
 
 ## Current resolution
 
-Production samples shape-active atoms once for log peak and log width and
-samples each active `(cluster, group_id)` offset DOF once, using the maximum
-absolute member change. Fixed and quarantined blocks are excluded. Mixed
-shared-group activity and non-finite member changes fail convergence. This
-removes fixed-zero dilution and group-size weighting without changing the p99
-threshold.
+For accepted movement, production samples shape-active atoms once for log peak
+and log width and samples each active `(cluster, group_id)` offset DOF once,
+using the maximum absolute member change. Fixed and quarantined blocks are
+excluded from this accepted-step population. Mixed shared-group activity and
+non-finite member changes fail convergence. This removes fixed-zero dilution
+and group-size weighting without changing the p99 threshold.
 
-Production convergence qualification remains
-`ClusterHealth::production_convergence_qualified`. Solver qualification is
-retained in Debug/audit builds as `solver-qualified`; it is
-not promoted without continuation evidence of material benefit.
+The strict fixed-point residual uses the complete nominal-DOF population
+instead. Fixed and quarantined shapes and shared offsets remain in that
+population, and missing or non-finite endpoint evidence makes the operator
+incomplete rather than contributing a zero. Production now also requires full,
+undamped, non-fallback solver qualification; the older `solver-qualified`
+proposal-residual policy remains only as a compatibility comparator in audit
+output.
 
 ## Purpose and constraints
 
@@ -28,15 +31,21 @@ definitions against the production convergence gate:
 - solver qualification for truly active parameter blocks;
 - active-member and independent shared-offset-DOF change populations.
 
-The audit is observation-only. It does not change the production conjunction,
-thresholds, stop reason, trajectory, or final model. Debug-disabled runs do not
-build the second-round summaries.
+The original audit was observation-only: it did not change the production
+conjunction, thresholds, stop reason, trajectory, or final model. Its later
+findings were incorporated into the current production predicate summarized
+above. Debug-disabled runs still do not build the historical comparison
+summaries.
 
 At the time of this audit, the implementation still computed production p99
 and maximum from every selected atom even though the algorithm description
 specified active-coordinate semantics. That discrepancy is now resolved.
 
 ## Qualification semantics
+
+The activity table remains current for the solver-qualified conjunction.
+Fixed and quarantined blocks are excluded from active solver qualification but
+remain required members of the nominal strict-operator residual population.
 
 Activity and qualification are separate axes:
 
@@ -54,15 +63,16 @@ Activity and qualification are separate axes:
 
 Proposal usability is deliberately not equivalent to solver qualification.
 Soft endpoints retain their existing update and objective-gate behavior but
-fail the `solver-qualified` comparator. Fixed and quarantined blocks are
-excluded from its active conjunction. An empty active set passes the solver
-qualification conjunction vacuously and remains explicitly labelled
-`all-fixed/restricted`; this label does not add a production stop condition.
+cannot satisfy production convergence. Fixed and quarantined blocks are
+excluded from the active solver conjunction. An empty active set may pass that
+conjunction vacuously, but it is not sufficient by itself: the complete
+nominal-DOF strict operator and orthogonal blockers still control convergence.
 
-The production predicate remains
-`ClusterHealth::production_convergence_qualified`. The Debug snapshot also
-records solver qualification, shape/offset qualification counts, restricted
-state, and `production=true, solver=false` disagreements.
+Production uses the full solver qualification exposed by
+`ClusterHealth::IsSolverQualified` together with accepted active-DOF movement
+and the strict operator residual. The Debug snapshot also records the older
+cluster rollup, shape/offset qualification counts, restricted state, and
+historical policy disagreements.
 
 ## Historical population comparison
 
@@ -82,13 +92,14 @@ inside one shared-offset group are an invariant violation: the DOF summary is
 forced to fail instead of choosing a partial group silently.
 
 The historical comparison applied p99 `1e-4` and maximum `1e-3` to all three
-populations. Current production applies only p99 `1e-4` to the active-DOF
-population. A zero-sized coordinate population still passes vacuously and is
-reported as restricted/all-fixed rather than full convergence.
+populations. Current production applies p99 `1e-4` to accepted active DOFs and
+separately to the complete nominal-DOF strict operator residual. A zero-sized
+accepted coordinate population may pass vacuously, but an incomplete nominal
+operator is reported as restricted and cannot converge.
 
-## Failure Mode x Safeguard matrix
+## Historical Failure Mode x Safeguard matrix
 
-| Failure mode | Current stationarity | Strict stationarity | Active member | Shared DOF |
+| Failure mode | Historical cluster rollup | Strict stationarity | Active member | Shared DOF |
 | --- | --- | --- | --- | --- |
 | Active IRLS reaches its iteration limit with a finite endpoint | Can pass | Unique blocker | - | - |
 | Active local refit has a finite non-success status | Can depend on cluster rollup | Unique blocker | - | - |
@@ -101,8 +112,8 @@ reported as restricted/all-fixed rather than full convergence.
 
 ## Reproduced synthetic evidence
 
-- Active `IrlsMaximumIterationsReached`: production qualification is true while
-  solver qualification is false; the offset group is classified soft
+- Active `IrlsMaximumIterationsReached`: the historical cluster qualification
+  is true while solver qualification is false; the offset group is classified soft
   unqualified.
 - All shape and offset blocks quarantined: solver qualification passes
   vacuously and reports both `restricted` and `all-fixed`.
@@ -122,16 +133,19 @@ themselves establish the frequency or quality impact on production datasets.
 
 ## Debug record and aggregation
 
-Every accepted Debug attempt now emits schema `5` on the existing
-`Convergence safeguard audit:` record. It includes:
+The second-round audit originally emitted schema `5`. Current accepted Debug
+attempts emit schema `7` on the existing `Convergence safeguard audit:` record;
+the analyzer remains backward-compatible with the historical schema. The
+current record includes:
 
-- production active-DOF and legacy all-selected accepted/raw summaries;
-- production, legacy-population, legacy-maximum, and solver-qualified
-  predicate vectors;
+- accepted active-DOF, legacy all-selected, historical guarded-proposal, and
+  complete nominal-DOF strict-operator summaries;
+- production, legacy-population, legacy-maximum, historical
+  solver-qualified-proposal, and strict-operator predicate vectors;
 - activity/qualification counts for shape and offset blocks;
 - shared-offset group counts and min/p50/p99/max group sizes;
 - shape-active, offset-active, and quarantine ratios;
-- orthogonal-clear and four policy stop candidates;
+- orthogonal-clear and five compatibility policy stop candidates;
 - isolated legacy-population, maximum-gate, and solver-qualification exposures.
 
 The former active-member p99/maximum/median track is no longer emitted or
@@ -156,7 +170,7 @@ mismatch alone does not claim downstream quality loss.
 
 | Mechanism | Decision | Evidence needed before production change |
 | --- | --- | --- |
-| Current stationarity rollup | Semantic redesign candidate | Count actual `production=true, solver=false` stop exposures on representative trajectories. |
+| Historical stationarity rollup | Semantic redesign candidate | Count actual `production=true, solver=false` stop exposures on representative trajectories. |
 | All-selected population | Semantic redesign needed | The implementation contradicts the documented active-coordinate semantics and admits fixed-zero dilution. |
 | Active-member offset population | Retain as comparison | It preserves per-atom transformed geometry but remains group-size weighted. |
 | Shared-DOF offset population | Preferred redesign candidate | It removes group-size weighting and preserves within-group extremes in targeted tests; confirm on real trajectories. |
@@ -166,10 +180,12 @@ Zero observed unique catches remain empirical evidence only. A safeguard is not
 called redundant without a mathematical implication or a subsequent
 trajectory-changing ablation.
 
-The subsequent production change adopted the preferred shared-DOF population
-and removed the maximum gate. The active-member comparison was then retired.
-Solver qualification remains diagnostic because the available counterfactual
-evidence did not justify a production change.
+The subsequent production changes adopted the preferred shared-DOF accepted
+population, removed the maximum gate, added the complete nominal-DOF strict
+operator residual, and promoted solver qualification into the production
+conjunction. The active-member comparison was then retired. The old
+solver-qualified proposal-residual policy remains diagnostic only; it must not
+be read as evidence that current production omits solver qualification.
 
 ## Verification and external evidence
 
@@ -178,7 +194,7 @@ unequal group weighting, extreme/non-finite members, mixed activity, Debug
 schema, serial/parallel trace equality, and exact Info/Debug final model values.
 The developer analyzer now has a schema-5 fixture using isolated comparators.
 
-Fold-168 inputs remain external to the repository. The current refresh uses
+Fold-168 inputs remain external to the repository. The 2026-08-27 refresh used
 the locally available hash-matching inputs as a negative control without
 changing fitting options or stopping behavior.
 
@@ -187,7 +203,7 @@ The trajectory-changing follow-up is the build-gated
 It suppresses only an exposed production convergence stop and evaluates policy
 checkpoints on isolated finalization workspaces.
 
-Current refresh verification on 2026-08-27:
+Historical refresh verification on 2026-08-27:
 
 - Audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19.
 - Fold-168 stops after seven accepted iterations with `audit-patience` in both
