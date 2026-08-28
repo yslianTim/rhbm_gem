@@ -337,14 +337,18 @@ loop, not a recursive candidate selection or a new outer attempt.
 The polish step is limited by the radius remaining after the accepted base
 movement. A rejected polish keeps the base candidate and is not backtracked.
 Radius updates use one controller entry point while preserving the validated
-baseline order: accepted-factor shrink, accepted growth, then retryable
-rejection shrink. Local terminal rejection remains retryable; an exhausted
-boundary or final-audit search keeps its radius because another shrink cannot
-produce a material candidate. An accepted cluster grows its radius only when
-the objective strictly improves, its step is close to the current boundary,
-and no accepted-factor shrink is already required. No radius update reruns the
-same validated state; updates remain isolated by cluster and clamp to
-`0.0625...4.0`.
+baseline order: accepted objective-backtracking shrink, accepted growth, then
+retryable rejection shrink. The first guard-feasible factor that reaches the
+objective gate is the accepted-shrink reference. Guard-only factor reduction
+therefore does not shrink the radius; a later objective rejection followed by
+acceptance at a smaller factor does. Local terminal rejection remains
+retryable; an exhausted boundary or final-audit search keeps its radius because
+another shrink cannot produce a material candidate. An accepted cluster grows
+its radius only when the objective strictly improves, its step is close to the
+current boundary, and no objective-backtracking shrink is already required.
+Guard-only backtracking does not suppress this independent growth rule. No
+radius update reruns the same validated state; updates remain isolated by
+cluster and clamp to `0.0625...4.0`.
 
 Accepted clusters are first connected only when they both affect the same boundary
 sample. Each multi-cluster component

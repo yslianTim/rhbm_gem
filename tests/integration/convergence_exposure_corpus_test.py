@@ -245,6 +245,57 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertEqual(comparison["after_convergence_count"], 1)
         self.assertEqual(comparison["safety_regression_count"], 0)
 
+        before_summaries = []
+        after_summaries = []
+        for index in range(600):
+            before = case_summary(
+                f"paired-{index:03d}", False, False, False)
+            after = case_summary(
+                f"paired-{index:03d}", False, False, False)
+            terminal_truth = {
+                "amplitude_rmse": 0.1,
+                "width_rmse": 0.1,
+                "offset_rmse": 0.1,
+                "transformed_aggregate_rmse": 0.1,
+            }
+            before["audit"]["terminal"] = {
+                "reason": "audit-patience",
+                "accepted_iteration": 5,
+                "objective": 1.0,
+                "truth_metrics": terminal_truth,
+            }
+            after["audit"]["terminal"] = {
+                "reason": "audit-patience",
+                "accepted_iteration": 4,
+                "objective": 0.999,
+                "truth_metrics": terminal_truth,
+            }
+            before_summaries.append(before)
+            after_summaries.append(after)
+
+        paired = ANALYZER.compare(
+            ANALYZER.analyze(before_summaries),
+            ANALYZER.analyze(after_summaries))
+        self.assertEqual(paired["schema_version"], 2)
+        self.assertEqual(
+            paired["accepted_iteration_delta"]["before_median"], 5)
+        self.assertEqual(
+            paired["accepted_iteration_delta"]["after_median"], 4)
+        self.assertEqual(paired["accepted_iteration_delta"]["median"], -1)
+        self.assertTrue(
+            paired["guard_trust_decoupling_blocking_gate"]["passed"])
+
+        for summary in after_summaries:
+            summary["audit"]["terminal"]["accepted_iteration"] = 6
+        regressed = ANALYZER.compare(
+            ANALYZER.analyze(before_summaries),
+            ANALYZER.analyze(after_summaries))
+        self.assertTrue(
+            regressed["guard_trust_decoupling_blocking_gate"]
+            ["accepted_iteration_median_regression"])
+        self.assertFalse(
+            regressed["guard_trust_decoupling_blocking_gate"]["passed"])
+
     def test_analyzer_separates_budget_and_existing_safeguard_termination(self) -> None:
         budget = case_summary("budget", False, False, True)
         budget_experiment = budget["audit"]["experiments"][0]

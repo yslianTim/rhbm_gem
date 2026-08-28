@@ -445,6 +445,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             write_json(args.output_dir / "comparison.json", comparison)
             objective = comparison["objective_delta"]
             truth_rmse = comparison["truth_rmse_delta"]
+            accepted_iteration = comparison["accepted_iteration_delta"]
+            blocking_gate = comparison[
+                "guard_trust_decoupling_blocking_gate"]
             markdown_lines = [
                 "# Convergence exposure before/after comparison",
                 "",
@@ -459,6 +462,12 @@ def run(argv: Sequence[str] | None = None) -> int:
                 f"- Objective material benefit/harm: "
                 f"{objective['material_benefit_count']} / "
                 f"{objective['material_harm_count']}",
+                f"- Accepted iterations before/after median: "
+                f"{accepted_iteration['before_median']} / "
+                f"{accepted_iteration['after_median']}",
+                f"- Accepted-iteration delta median/p90: "
+                f"{accepted_iteration['median']} / "
+                f"{accepted_iteration['p90']}",
                 f"- Truth RMSE delta median/p90: "
                 f"{truth_rmse['median']} / {truth_rmse['p90']}",
                 f"- Truth material benefit/harm: "
@@ -466,6 +475,8 @@ def run(argv: Sequence[str] | None = None) -> int:
                 f"{truth_rmse['material_harm_count']}",
                 f"- Safety regressions: "
                 f"{comparison['safety_regression_count']}",
+                f"- Guard/trust decoupling blocking gate: "
+                f"{'PASS' if blocking_gate['passed'] else 'FAIL'}",
                 "",
                 "## By family",
                 "",

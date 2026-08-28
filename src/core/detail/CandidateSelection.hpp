@@ -31,6 +31,13 @@ struct TrustRegionRadiusUpdate
     std::vector<ClusterKey> saturated_key_list{};
 };
 
+enum class TrustRegionRadiusAction
+{
+    Keep,
+    Grow,
+    Shrink
+};
+
 enum class AllRejectedResolution
 {
     MaximumIterations,
@@ -332,6 +339,10 @@ struct ObjectiveAttemptDiagnostic
     std::size_t objective_rejected_trial_count{ 0 };
     std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list{};
 };
+
+TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
+    std::optional<double> first_objective_evaluated_factor,
+    const ObjectiveAttemptDiagnostic & diagnostic);
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
 

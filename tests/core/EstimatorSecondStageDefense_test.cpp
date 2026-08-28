@@ -1915,6 +1915,34 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
+    using Action = trust_detail::TrustRegionRadiusAction;
+    trust_detail::ObjectiveAttemptDiagnostic accepted_diagnostic;
+    accepted_diagnostic.accepted_factor = 0.5;
+    accepted_diagnostic.trust_region_radius = 1.0;
+    accepted_diagnostic.trust_region_step_norm = 0.25;
+    accepted_diagnostic.previous_objective =
+        trust_detail::BuildObjectiveBreakdown(2.0, 0.0, 0.0);
+    accepted_diagnostic.candidate_objective =
+        trust_detail::BuildObjectiveBreakdown(1.0, 0.0, 0.0);
+
+    EXPECT_EQ(
+        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
+            0.5, accepted_diagnostic),
+        Action::Keep);
+
+    accepted_diagnostic.accepted_factor = 0.25;
+    accepted_diagnostic.trust_region_step_norm = 1.0;
+    EXPECT_EQ(
+        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
+            0.5, accepted_diagnostic),
+        Action::Shrink);
+
+    accepted_diagnostic.accepted_factor = 0.5;
+    EXPECT_EQ(
+        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
+            0.5, accepted_diagnostic),
+        Action::Grow);
+
     trust_detail::TrustRegionStateSet state;
     const trust_detail::ClusterKey key{ 0 };
     state.Reconcile({ key });

@@ -39,6 +39,7 @@ TRUTH_RMSE_METRICS = (
     "offset_rmse",
     "transformed_aggregate_rmse",
 )
+GUARD_TRUST_DECOUPLING_CASE_COUNT = 600
 
 
 def _materially_lower(candidate: float | None, reference: float | None) -> bool:
@@ -667,6 +668,11 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     rows = []
     objective_deltas: list[float] = []
     truth_deltas: list[float] = []
+    before_objectives: list[float] = []
+    after_objectives: list[float] = []
+    before_accepted_iterations: list[int] = []
+    after_accepted_iterations: list[int] = []
+    accepted_iteration_deltas: list[int] = []
     objective_harm_count = 0
     objective_benefit_count = 0
     truth_harm_count = 0
@@ -682,6 +688,8 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         if baseline_objective is not None and candidate_objective is not None:
             objective_delta = candidate_objective - baseline_objective
             objective_deltas.append(objective_delta)
+            before_objectives.append(baseline_objective)
+            after_objectives.append(candidate_objective)
             objective_harm_count += int(
                 _materially_higher(candidate_objective, baseline_objective))
             objective_benefit_count += int(
@@ -700,6 +708,18 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
                 _materially_higher(candidate_truth, baseline_truth))
             truth_benefit_count += int(
                 _materially_lower(candidate_truth, baseline_truth))
+        baseline_accepted_iteration = baseline_terminal.get("accepted_iteration")
+        candidate_accepted_iteration = candidate_terminal.get("accepted_iteration")
+        accepted_iteration_delta = None
+        if (baseline_accepted_iteration is not None and
+                candidate_accepted_iteration is not None):
+            baseline_accepted_iteration = int(baseline_accepted_iteration)
+            candidate_accepted_iteration = int(candidate_accepted_iteration)
+            accepted_iteration_delta = (
+                candidate_accepted_iteration - baseline_accepted_iteration)
+            before_accepted_iterations.append(baseline_accepted_iteration)
+            after_accepted_iterations.append(candidate_accepted_iteration)
+            accepted_iteration_deltas.append(accepted_iteration_delta)
         rows.append({
             "case_id": case_id,
             "family": candidate["family"],
@@ -710,6 +730,9 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             "after_stop_reason": candidate_terminal.get("reason"),
             "objective_delta": objective_delta,
             "truth_rmse_delta": truth_delta,
+            "before_accepted_iteration": baseline_accepted_iteration,
+            "after_accepted_iteration": candidate_accepted_iteration,
+            "accepted_iteration_delta": accepted_iteration_delta,
             "accepted_only_shadow": candidate.get("accepted_only_shadow"),
             "safety_regression": candidate.get("safety_regression", False),
         })
@@ -721,6 +744,9 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         group_truth_deltas = [
             row["truth_rmse_delta"] for row in group_rows
             if row["truth_rmse_delta"] is not None]
+        group_accepted_iteration_deltas = [
+            row["accepted_iteration_delta"] for row in group_rows
+            if row["accepted_iteration_delta"] is not None]
         return {
             "case_count": len(group_rows),
             "before_convergence_count": sum(
@@ -738,6 +764,11 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
                 statistics.median(group_truth_deltas)
                 if group_truth_deltas else None),
             "truth_rmse_delta_p90": _percentile(group_truth_deltas, 0.90),
+            "accepted_iteration_delta_median": (
+                statistics.median(group_accepted_iteration_deltas)
+                if group_accepted_iteration_deltas else None),
+            "accepted_iteration_delta_p90": _percentile(
+                group_accepted_iteration_deltas, 0.90),
             "safety_regression_count": sum(
                 row["safety_regression"] for row in group_rows),
         }
@@ -757,8 +788,49 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         for family, topology in topology_names
     }
 
+    before_objective_median = (
+        statistics.median(before_objectives) if before_objectives else None)
+    after_objective_median = (
+        statistics.median(after_objectives) if after_objectives else None)
+    before_accepted_iteration_median = (
+        statistics.median(before_accepted_iterations)
+        if before_accepted_iterations else None)
+    after_accepted_iteration_median = (
+        statistics.median(after_accepted_iterations)
+        if after_accepted_iterations else None)
+    safety_regression_count = sum(row["safety_regression"] for row in rows)
+    objective_harm_ratio = (
+        objective_harm_count / len(objective_deltas)
+        if objective_deltas else None)
+    complete_pair_count = min(
+        len(objective_deltas), len(accepted_iteration_deltas))
+    blocking_gate = {
+        "expected_case_count": GUARD_TRUST_DECOUPLING_CASE_COUNT,
+        "complete_pair_count": complete_pair_count,
+        "complete_corpus": (
+            len(rows) == GUARD_TRUST_DECOUPLING_CASE_COUNT and
+            complete_pair_count == GUARD_TRUST_DECOUPLING_CASE_COUNT),
+        "safety_regression_free": safety_regression_count == 0,
+        "objective_median_regression": _materially_higher(
+            after_objective_median, before_objective_median),
+        "objective_harm_ratio": objective_harm_ratio,
+        "objective_harm_ratio_passed": (
+            objective_harm_ratio is not None and
+            objective_harm_ratio <= MAXIMUM_HARM_RATIO),
+        "accepted_iteration_median_regression": (
+            before_accepted_iteration_median is None or
+            after_accepted_iteration_median is None or
+            after_accepted_iteration_median > before_accepted_iteration_median),
+    }
+    blocking_gate["passed"] = (
+        blocking_gate["complete_corpus"] and
+        blocking_gate["safety_regression_free"] and
+        not blocking_gate["objective_median_regression"] and
+        blocking_gate["objective_harm_ratio_passed"] and
+        not blocking_gate["accepted_iteration_median_regression"])
+
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "case_count": len(rows),
         "before_convergence_count": before.get("production_convergence_count", 0),
         "after_convergence_count": after.get("production_convergence_count", 0),
@@ -766,6 +838,8 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
         "before_stop_reasons": before.get("termination_counts", {}),
         "after_stop_reasons": after.get("termination_counts", {}),
         "objective_delta": {
+            "before_median": before_objective_median,
+            "after_median": after_objective_median,
             "median": statistics.median(objective_deltas) if objective_deltas else None,
             "p90": _percentile(objective_deltas, 0.90),
             "material_benefit_count": objective_benefit_count,
@@ -777,8 +851,16 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             "material_benefit_count": truth_benefit_count,
             "material_harm_count": truth_harm_count,
         },
-        "safety_regression_count": sum(
-            row["safety_regression"] for row in rows),
+        "accepted_iteration_delta": {
+            "before_median": before_accepted_iteration_median,
+            "after_median": after_accepted_iteration_median,
+            "median": (
+                statistics.median(accepted_iteration_deltas)
+                if accepted_iteration_deltas else None),
+            "p90": _percentile(accepted_iteration_deltas, 0.90),
+        },
+        "safety_regression_count": safety_regression_count,
+        "guard_trust_decoupling_blocking_gate": blocking_gate,
         "by_family": by_family,
         "by_topology": by_topology,
         "cases": rows,

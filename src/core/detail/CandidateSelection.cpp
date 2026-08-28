@@ -24,13 +24,6 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
-enum class TrustRegionRadiusAction
-{
-    Keep,
-    Grow,
-    Shrink
-};
-
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
@@ -2250,6 +2243,20 @@ static bool ShouldGrowTrustRegion(
             kObjectiveStrictTolerance);
 }
 
+TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
+    std::optional<double> first_objective_evaluated_factor,
+    const ObjectiveAttemptDiagnostic & diagnostic)
+{
+    if (first_objective_evaluated_factor.has_value() &&
+        diagnostic.accepted_factor.has_value() &&
+        *diagnostic.accepted_factor < *first_objective_evaluated_factor)
+    {
+        return TrustRegionRadiusAction::Shrink;
+    }
+    return ShouldGrowTrustRegion(diagnostic) ?
+        TrustRegionRadiusAction::Grow : TrustRegionRadiusAction::Keep;
+}
+
 static void TryRetainRescueCandidate(
     const FitStatePatch & patch,
     const ObjectiveAttemptDiagnostic & diagnostic,
@@ -2373,7 +2380,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     auto search_block_activity{ inputs.block_activity };
     std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list;
     std::optional<FitStatePatch> accepted_patch;
-    std::optional<double> first_trust_admissible_factor;
+    std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
     for (;;)
     {
@@ -2411,7 +2418,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             break;
         }
 
-        first_trust_admissible_factor.reset();
+        first_objective_evaluated_factor.reset();
         std::size_t invalid_trial_count{ 0 };
         std::size_t trust_skipped_trial_count{ 0 };
         std::size_t guard_rejected_trial_count{ 0 };
@@ -2468,10 +2475,6 @@ static ClusterCandidateResult SelectClusterCandidate(
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
             }
-            if (!first_trust_admissible_factor.has_value())
-            {
-                first_trust_admissible_factor = factor;
-            }
             const auto guard_failure{
                 EvaluateClusterCandidateGuard(
                     inputs,
@@ -2484,6 +2487,10 @@ static ClusterCandidateResult SelectClusterCandidate(
                 guard_rejected_trial_count++;
                 last_guard_failure = guard_failure;
                 continue;
+            }
+            if (!first_objective_evaluated_factor.has_value())
+            {
+                first_objective_evaluated_factor = factor;
             }
 
             ObjectiveAttemptDiagnostic trial_diagnostic;
@@ -2600,15 +2607,9 @@ static ClusterCandidateResult SelectClusterCandidate(
                 non_polished_endpoint_provenance.at(position);
         }
     }
-    const auto shrink_trust_region{
-        first_trust_admissible_factor.has_value() &&
-        result.diagnostic.accepted_factor.has_value() &&
-        *result.diagnostic.accepted_factor < *first_trust_admissible_factor
-    };
-    result.radius_action = shrink_trust_region ?
-        TrustRegionRadiusAction::Shrink :
-        (ShouldGrowTrustRegion(result.diagnostic) ?
-            TrustRegionRadiusAction::Grow : TrustRegionRadiusAction::Keep);
+    result.radius_action = DetermineAcceptedTrustRegionRadiusAction(
+        first_objective_evaluated_factor,
+        result.diagnostic);
     if (is_polish_eligible)
     {
         auto polished_candidate{
@@ -2671,7 +2672,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     }
                 }
                 result.accepted_patch = std::move(polished_candidate->patch);
-                if (!shrink_trust_region &&
+                if (result.radius_action != TrustRegionRadiusAction::Shrink &&
                     ShouldGrowTrustRegion(polish_diagnostic))
                 {
                     result.radius_action = TrustRegionRadiusAction::Grow;

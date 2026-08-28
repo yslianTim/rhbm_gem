@@ -7,6 +7,31 @@
 > fixed-point residual p99, with solver qualification. Maximum remains an
 > independent diagnostic comparator.
 
+## Guard/trust-radius decoupling refresh
+
+The guard-to-radius-shrink decoupling was evaluated against the unchanged
+`7fb994a3` baseline with the same 600-case manifest, seeds, frozen truth, and
+single-thread fitting configuration. Both paired runs completed 600/600 cases.
+The comparison-schema-2 blocking gate passed:
+
+| Measure | Baseline | Decoupled |
+| --- | ---: | ---: |
+| Production convergence | 42 | 42 |
+| Accepted-only shadow checkpoint | 138 | 138 |
+| Accepted-iteration median | 12 | 12 |
+| `audit-patience` stops | 372 | 372 |
+| `all-rejected-backtracking-exhausted` stops | 163 | 163 |
+| `maximum-iterations` stops | 23 | 23 |
+| Safety regressions | 0 | 0 |
+
+Paired terminal objective and transformed-truth RMSE deltas both had median
+and p90 `0`; there were no material objective-benefit, objective-harm,
+truth-benefit, or truth-harm cases. Accepted-iteration delta also had median
+and p90 `0`, and the objective-harm ratio was `0`. The corpus therefore verifies
+that the semantic separation is neutral for its sampled trajectories; the
+existing trust-controller test supplies direct coverage that guard-only factor
+reduction does not request shrink while objective backtracking still does.
+
 ## Purpose and scope
 
 The refreshed audit searches for production convergence checkpoints at which
@@ -60,7 +85,9 @@ Historical case directories used `trajectory-schema-2.json` and
 `scenario-truth.json`, `trajectory-schema-7.json`,
 `counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
 legacy shadow/terminal audit artifact, and schema-8 `case-summary.json`. The
-aggregate report is schema 5. Old summaries
+aggregate report is schema 5. A paired run additionally writes schema-2
+`comparison.json`, including terminal accepted-iteration deltas and the
+guard/trust decoupling blocking gate. Old summaries
 are intentionally not resumed across the baseline change.
 
 ## Exposure and outcome definitions
