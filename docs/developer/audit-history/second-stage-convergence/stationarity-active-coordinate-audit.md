@@ -1,3 +1,8 @@
+---
+Status: Historical audit record.
+Current policy: second-stage-outer-iteration-algorithm-audit.md
+---
+
 # Stationarity semantics and active-coordinate population audit
 
 > Current baseline (2026-08-28): production requires solver qualification,

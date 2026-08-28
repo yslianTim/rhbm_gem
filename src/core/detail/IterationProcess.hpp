@@ -72,10 +72,6 @@ struct ConvergencePredicates
             residual_percentile_converged;
     }
 
-    bool AcceptedOnlyConverged() const
-    {
-        return qualification_passed && accepted_percentile_converged;
-    }
 };
 
 ConvergencePredicates EvaluateConvergencePredicates(
@@ -103,90 +99,10 @@ FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
 std::string_view GetFixedPointResidualInterpretationText(
     FixedPointResidualInterpretation interpretation);
 
-enum class AcceptedOnlyAuditPolicy : std::size_t
-{
-    Persistence2,
-    Persistence3,
-    Persistence5,
-    DynamicRaw,
-    Count
-};
-
-constexpr std::size_t kAcceptedOnlyAuditPolicyCount{
-    static_cast<std::size_t>(AcceptedOnlyAuditPolicy::Count) };
-
-struct AcceptedOnlyAuditState
-{
-    std::size_t eligible_streak{ 0 };
-    std::array<bool, kAcceptedOnlyAuditPolicyCount> checkpoint_reached{};
-};
-
-struct AcceptedOnlyAuditUpdate
-{
-    std::size_t eligible_streak{ 0 };
-    double dynamic_raw_threshold{ 0.0 };
-    std::array<bool, kAcceptedOnlyAuditPolicyCount> triggered_now{};
-};
-
-AcceptedOnlyAuditUpdate UpdateAcceptedOnlyAuditPolicies(
-    bool eligible,
-    bool production_converged,
-    const TransformedChangeSummary & raw_change,
-    AcceptedOnlyAuditState & state);
-
-enum class CounterfactualConvergencePolicy : std::size_t
-{
-    Production,
-    HistoricalAllSelected,
-    HistoricalClusterActiveProposalMaximum,
-    HistoricalActiveProposal,
-    ProductionMaximum,
-    Count
-};
-
-constexpr std::size_t kCounterfactualPolicyCount{
-    static_cast<std::size_t>(CounterfactualConvergencePolicy::Count) };
-constexpr std::size_t kCounterfactualAcceptedIterationBudget{ 10 };
-constexpr std::size_t kCounterfactualAttemptBudget{ 25 };
-
-struct CounterfactualPolicyDecision
-{
-    std::array<bool, kCounterfactualPolicyCount> converged{};
-};
-
-struct CounterfactualContinuationState
-{
-    bool triggered{ false };
-    bool continuation_active{ false };
-    std::size_t trigger_attempt{ 0 };
-    std::size_t trigger_accepted_iteration{ 0 };
-    std::array<bool, kCounterfactualPolicyCount> checkpoint_reached{};
-};
-
-struct CounterfactualContinuationUpdate
-{
-    bool triggered_now{ false };
-    bool policy_agreement{ false };
-    bool all_candidate_policies_reached{ false };
-    std::array<bool, kCounterfactualPolicyCount> new_checkpoint{};
-};
-
-CounterfactualContinuationUpdate UpdateCounterfactualContinuation(
-    const CounterfactualPolicyDecision & decision,
-    std::size_t attempt_number,
-    std::size_t accepted_iteration_count,
-    CounterfactualContinuationState & state);
-
-bool IsCounterfactualContinuationBudgetExhausted(
-    const CounterfactualContinuationState & state,
-    std::size_t attempt_number,
-    std::size_t accepted_iteration_count);
-
 struct ActiveCoordinatePopulation
 {
     TransformedChangeIndexListByParameter active_atom_index_list_by_parameter{};
     std::vector<ClusterKey> active_offset_group_atom_index_list{};
-    std::vector<std::size_t> active_offset_group_size_list{};
     std::vector<char> mixed_offset_group_mask{};
     std::size_t total_offset_group_count{ 0 };
     std::size_t fixed_offset_group_count{ 0 };
@@ -269,13 +185,6 @@ struct ConvergenceCertificate
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;
 };
-
-CounterfactualPolicyDecision EvaluateCounterfactualPolicyDecision(
-    const ConvergenceCertificate & certificate,
-    const ConvergencePredicates & historical_all_selected_predicates,
-    const ConvergencePredicates & historical_cluster_active_proposal_predicates,
-    const ConvergencePredicates & historical_active_proposal_predicates,
-    const TransformedChangeSummary & historical_active_proposal);
 
 SolverQualificationAudit EvaluateSolverQualificationAudit(
     const std::vector<std::size_t> & atom_index_list,

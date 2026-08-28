@@ -1949,6 +1949,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
             0.5, accepted_diagnostic),
         Action::Grow);
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     trust_detail::TrustModelShadowDiagnostic shadow{
         .status = trust_detail::TrustModelPredictionStatus::Available,
         .rho = 0.20,
@@ -1981,6 +1982,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_EQ(
         trust_detail::DetermineTrustModelShadowAction(shadow),
         Action::Grow);
+#endif
 
     trust_detail::TrustRegionStateSet state;
     const trust_detail::ClusterKey key{ 0 };
@@ -2015,6 +2017,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
 }
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalPrediction)
 {
     using Action = trust_detail::TrustRegionRadiusAction;
@@ -2400,6 +2403,8 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         trust_detail::TrustModelPredictionStatus::NonmaterialStep);
     EXPECT_FALSE(nonmaterial.rho.has_value());
 }
+
+#endif
 
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
 {
@@ -5218,15 +5223,12 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualifi
     };
     const auto small{ make_summary(5.0e-5, 2.0e-3) };
     const auto large{ make_summary(2.0e-4, 2.0e-3) };
-    const auto raw_blocked{ make_summary(2.0e-3, 2.0e-3) };
-
     const auto accepted_small{
         audit_detail::EvaluateConvergencePredicates(true, small, large)
     };
     EXPECT_TRUE(accepted_small.qualification_passed);
     EXPECT_TRUE(accepted_small.accepted_percentile_converged);
     EXPECT_FALSE(accepted_small.residual_percentile_converged);
-    EXPECT_TRUE(accepted_small.AcceptedOnlyConverged());
     EXPECT_FALSE(accepted_small.Converged());
 
     const auto residual_small{
@@ -5234,7 +5236,6 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualifi
     };
     EXPECT_FALSE(residual_small.accepted_percentile_converged);
     EXPECT_TRUE(residual_small.residual_percentile_converged);
-    EXPECT_FALSE(residual_small.AcceptedOnlyConverged());
     EXPECT_FALSE(residual_small.Converged());
 
     const auto nonstationary_small{
@@ -5242,54 +5243,20 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualifi
     };
     EXPECT_TRUE(nonstationary_small.accepted_percentile_converged);
     EXPECT_TRUE(nonstationary_small.residual_percentile_converged);
-    EXPECT_FALSE(nonstationary_small.AcceptedOnlyConverged());
     EXPECT_FALSE(nonstationary_small.Converged());
 
-    audit_detail::AcceptedOnlyAuditState audit_state;
-    const auto first_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state) };
-    EXPECT_EQ(first_update.eligible_streak, 1U);
-    EXPECT_DOUBLE_EQ(first_update.dynamic_raw_threshold, 1.0e-4);
-    EXPECT_TRUE(std::ranges::none_of(
-        first_update.triggered_now, [](bool value) { return value; }));
-
-    const auto second_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state) };
-    EXPECT_EQ(second_update.eligible_streak, 2U);
-    EXPECT_DOUBLE_EQ(second_update.dynamic_raw_threshold, 2.0e-4);
-    EXPECT_TRUE(second_update.triggered_now.at(static_cast<std::size_t>(
-        audit_detail::AcceptedOnlyAuditPolicy::Persistence2)));
-    EXPECT_FALSE(second_update.triggered_now.at(static_cast<std::size_t>(
-        audit_detail::AcceptedOnlyAuditPolicy::DynamicRaw)));
-
-    const auto reset_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        false, false, raw_blocked, audit_state) };
-    EXPECT_EQ(reset_update.eligible_streak, 0U);
-    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state);
-    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state);
-    const auto third_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state) };
-    EXPECT_TRUE(third_update.triggered_now.at(static_cast<std::size_t>(
-        audit_detail::AcceptedOnlyAuditPolicy::Persistence3)));
-    (void)audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, raw_blocked, audit_state);
-    const auto capped_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, false, small, audit_state) };
-    EXPECT_EQ(capped_update.eligible_streak, 5U);
-    EXPECT_DOUBLE_EQ(capped_update.dynamic_raw_threshold, 1.0e-3);
-    EXPECT_TRUE(capped_update.triggered_now.at(static_cast<std::size_t>(
-        audit_detail::AcceptedOnlyAuditPolicy::Persistence5)));
-    EXPECT_TRUE(capped_update.triggered_now.at(static_cast<std::size_t>(
-        audit_detail::AcceptedOnlyAuditPolicy::DynamicRaw)));
-
-    audit_detail::AcceptedOnlyAuditState production_priority_state;
-    const auto production_update{ audit_detail::UpdateAcceptedOnlyAuditPolicies(
-        true, true, small, production_priority_state) };
-    EXPECT_EQ(production_update.eligible_streak, 1U);
-    EXPECT_TRUE(std::ranges::none_of(
-        production_update.triggered_now, [](bool value) { return value; }));
+    audit_detail::ConvergenceCertificate certificate;
+    certificate.accepted_active_movement = small;
+    certificate.operator_nominal_residual = large;
+    certificate.solver_qualification.solver_qualified = true;
+    EXPECT_FALSE(certificate.ProductionConverged());
+    EXPECT_EQ(
+        audit_detail::EvaluateFixedPointResidualInterpretation(
+            certificate.OperatorComplete(),
+            certificate.solver_qualification.solver_qualified,
+            certificate.accepted_active_movement,
+            certificate.operator_nominal_residual),
+        audit_detail::FixedPointResidualInterpretation::StepLimited);
 }
 
 TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesLimitedSteps)
@@ -5678,39 +5645,6 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
         audit_detail::FixedPointResidualInterpretation::Restricted);
 }
 
-TEST(EstimatorSecondStageDefenseTest, CounterfactualComparatorsReadCanonicalCertificate)
-{
-    const auto make_summary = [](double percentile, double maximum)
-    {
-        change_detail::TransformedChangeSummary summary;
-        summary.percentile_stats.percentile_list.assign(3, percentile);
-        summary.maximum_list.assign(3, maximum);
-        summary.population_size_list.fill(10);
-        return summary;
-    };
-    audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_movement = make_summary(5.0e-5, 2.0e-3);
-    certificate.operator_nominal_residual = make_summary(5.0e-5, 2.0e-3);
-    certificate.solver_qualification.solver_qualified = true;
-    const auto passing{ audit_detail::EvaluateConvergencePredicates(
-        true,
-        make_summary(5.0e-5, 5.0e-4),
-        make_summary(5.0e-5, 5.0e-4)) };
-    const auto historical_all_selected{ audit_detail::EvaluateConvergencePredicates(
-        true,
-        make_summary(2.0e-4, 5.0e-4),
-        make_summary(5.0e-5, 5.0e-4)) };
-    const auto decision{ audit_detail::EvaluateCounterfactualPolicyDecision(
-        certificate,
-        historical_all_selected,
-        passing,
-        passing,
-        make_summary(5.0e-5, 5.0e-4)) };
-
-    EXPECT_EQ(decision.converged, (std::array<bool, 5>{
-        true, false, false, true, false }));
-}
-
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
 {
     change_detail::TransformedChangeSummary summary;
@@ -5987,13 +5921,22 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointShadowAuditNamesAllThreeStates)
     Logger::SetLogLevel(previous_level);
 
     EXPECT_NE(
-        output.find("Convergence safeguard audit: schema=8"),
+        output.find("Convergence safeguard audit: schema=9"),
         std::string::npos);
     EXPECT_NE(output.find("certificate-definition=1"), std::string::npos);
-    EXPECT_NE(output.find("comparator-set=1"), std::string::npos);
+    EXPECT_EQ(output.find("comparator-set="), std::string::npos);
+    EXPECT_EQ(output.find("historical-"), std::string::npos);
+    EXPECT_EQ(output.find("production-maximum"), std::string::npos);
+    EXPECT_EQ(output.find("exposures["), std::string::npos);
+    EXPECT_EQ(output.find("accepted-only"), std::string::npos);
+    EXPECT_EQ(output.find("rho="), std::string::npos);
     EXPECT_NE(output.find("accepted-active-p99="), std::string::npos);
+    EXPECT_NE(output.find("accepted-active-max="), std::string::npos);
     EXPECT_EQ(output.find("guarded-proposal-p99="), std::string::npos);
     EXPECT_NE(output.find("operator-nominal-residual-p99="), std::string::npos);
+    EXPECT_NE(output.find("operator-nominal-residual-max="), std::string::npos);
+    EXPECT_NE(output.find("operator-nominal-tail[height/width/offset]="),
+        std::string::npos);
     EXPECT_NE(output.find("unified-search["), std::string::npos);
     EXPECT_NE(output.find("operator-nominal-unavailable[height/width/offset]="),
         std::string::npos);
@@ -6047,7 +5990,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditIsInfoDebugTrajectoryNeutr
         info_output.find("Convergence safeguard audit:"),
         std::string::npos);
     EXPECT_NE(
-        debug_output.find("Convergence safeguard audit: schema=8"),
+        debug_output.find("Convergence safeguard audit: schema=9"),
         std::string::npos);
     const auto & info_atoms{ info_model->GetSelectedAtoms() };
     const auto & debug_atoms{ debug_model->GetSelectedAtoms() };

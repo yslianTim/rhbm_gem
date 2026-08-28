@@ -205,7 +205,7 @@ Beginner / common:
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
 | `RHBM_GEM_ENABLE_FOLD_168_REGRESSION` | `OFF` | Enable the opt-in external-data 168-atom simulation regression. |
-| `RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT` | `OFF` | Enable the developer-only convergence continuation audit; requires tests. |
+| `RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT` | `OFF` | Enable developer-only frozen-IRLS trust-model instrumentation; requires tests. |
 | `RHBM_GEM_FOLD_168_MODEL` | empty | Path to the hash-verified fold-168 CIF input. |
 | `RHBM_GEM_FOLD_168_MAP` | empty | Path to the hash-verified fold-168 map input. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
@@ -314,13 +314,15 @@ cmake -S . -B build-fold-168 \
 cmake --build build-fold-168 --target tests_all -j
 ctest --test-dir build-fold-168 -R fold_168_simulation_regression --output-on-failure
 
-# Enable the developer-only convergence continuation and exposure corpus
-cmake -S . -B build-counterfactual \
+# Enable the developer-only frozen-IRLS trust-model experiment
+cmake -S . -B build-trust-model \
   -DBUILD_TESTING=ON \
   -DBUILD_PYTHON_BINDINGS=OFF \
-  -DRHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON
-cmake --build build-counterfactual --target tests_all -j
-cmake --build build-counterfactual --target convergence_exposure_corpus
+  -DRHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON
+cmake --build build-trust-model --target tests_all -j
+
+# Run the production-only convergence corpus (no experiment flag required)
+cmake --build build --target convergence_exposure_corpus
 
 # Install Python module into <prefix>/<CMAKE_INSTALL_LIBDIR>/pythonX.Y/site-packages (default layout)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON

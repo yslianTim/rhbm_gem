@@ -204,32 +204,30 @@ target_include_directories(rhbm_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/src/data"
     "${PROJECT_SOURCE_DIR}/tests"
 )
-if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
+if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     target_compile_definitions(rhbm_tests PRIVATE
-        RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
+        RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
 endif()
 
 add_dependencies(tests_all rhbm_tests)
 
-if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
-    add_executable(
-        convergence_exposure_case_runner
-        tools/ConvergenceExposureCaseRunner.cpp
-    )
-    set_target_properties(
-        convergence_exposure_case_runner
-        PROPERTIES OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-CONVERGENCE-EXPOSURE"
-    )
-    target_link_libraries(
-        convergence_exposure_case_runner
-        PRIVATE rhbm_gem CompilerFlags
-    )
-    target_include_directories(
-        convergence_exposure_case_runner
-        PRIVATE "${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/src"
-    )
-    add_dependencies(tests_all convergence_exposure_case_runner)
-endif()
+add_executable(
+    convergence_exposure_case_runner
+    tools/ConvergenceExposureCaseRunner.cpp
+)
+set_target_properties(
+    convergence_exposure_case_runner
+    PROPERTIES OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-CONVERGENCE-EXPOSURE"
+)
+target_link_libraries(
+    convergence_exposure_case_runner
+    PRIVATE rhbm_gem CompilerFlags
+)
+target_include_directories(
+    convergence_exposure_case_runner
+    PRIVATE "${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/src"
+)
+add_dependencies(tests_all convergence_exposure_case_runner)
 
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
@@ -319,14 +317,26 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     )
 
     add_test(
-        NAME counterfactual_convergence_analyzer_test
+        NAME convergence_audit_documentation_test
         COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/counterfactual_convergence_analyzer_test.py"
+            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_audit_documentation_test.py"
     )
     set_tests_properties(
-        counterfactual_convergence_analyzer_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm"
+        convergence_audit_documentation_test
+        PROPERTIES LABELS "domain:integration;intent:contract"
     )
+
+    if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
+        add_test(
+            NAME trust_model_experiment_analyzer_test
+            COMMAND "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tests/integration/trust_model_experiment_analyzer_test.py"
+        )
+        set_tests_properties(
+            trust_model_experiment_analyzer_test
+            PROPERTIES LABELS "domain:integration;intent:algorithm"
+        )
+    endif()
 
     add_test(
         NAME fold_168_regression_runner_test
@@ -348,57 +358,55 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         PROPERTIES LABELS "domain:integration;intent:algorithm"
     )
 
-    if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
-        add_test(
-            NAME convergence_exposure_case_runner_smoke
-            COMMAND $<TARGET_FILE:convergence_exposure_case_runner>
-                --case-id natural-v00-r0
-                --family natural
-                --topology unk-c
-                --level 0
-                --replica 0
-                --seed 410000
-                --threads 1
-                --noise-sigma 0
-        )
-        set_tests_properties(
-            convergence_exposure_case_runner_smoke
-            PROPERTIES
-                LABELS "domain:integration;intent:algorithm"
-                PASS_REGULAR_EXPRESSION
-                    "Second-stage audit terminal: schema=1, reason=converged"
-                TIMEOUT 60
-        )
+    add_test(
+        NAME convergence_exposure_case_runner_smoke
+        COMMAND $<TARGET_FILE:convergence_exposure_case_runner>
+            --case-id natural-v00-r0
+            --family natural
+            --topology unk-c
+            --level 0
+            --replica 0
+            --seed 410000
+            --threads 1
+            --noise-sigma 0
+    )
+    set_tests_properties(
+        convergence_exposure_case_runner_smoke
+        PROPERTIES
+            LABELS "domain:integration;intent:algorithm"
+            PASS_REGULAR_EXPRESSION
+                "Second-stage audit terminal: schema=2, reason=converged"
+            TIMEOUT 60
+    )
 
-        add_test(
-            NAME convergence_exposure_runner_determinism
-            COMMAND "${Python_EXECUTABLE}"
-                "${PROJECT_SOURCE_DIR}/tests/integration/convergence_exposure_runner_test.py"
-                --executable $<TARGET_FILE:convergence_exposure_case_runner>
-        )
-        set_tests_properties(
-            convergence_exposure_runner_determinism
-            PROPERTIES
-                LABELS "domain:integration;intent:algorithm"
-                TIMEOUT 120
-        )
+    add_test(
+        NAME convergence_exposure_runner_determinism
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_exposure_runner_test.py"
+            --executable $<TARGET_FILE:convergence_exposure_case_runner>
+    )
+    set_tests_properties(
+        convergence_exposure_runner_determinism
+        PROPERTIES
+            LABELS "domain:integration;intent:algorithm"
+            TIMEOUT 120
+    )
 
-        add_custom_target(
-            convergence_exposure_corpus
-            COMMAND "${Python_EXECUTABLE}"
-                "${PROJECT_SOURCE_DIR}/resources/tools/developer/run_convergence_exposure_corpus.py"
-                --executable $<TARGET_FILE:convergence_exposure_case_runner>
-                --manifest
-                    "${PROJECT_SOURCE_DIR}/tests/benchmarks/convergence_exposure_manifest.json"
-                --output-dir
-                    "${PROJECT_BINARY_DIR}/benchmark-results/convergence-exposure-corpus"
-                --threads 1
-                --jobs 4
-            DEPENDS convergence_exposure_case_runner
-            USES_TERMINAL
-            VERBATIM
-        )
-    endif()
+    add_custom_target(
+        convergence_exposure_corpus
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/resources/tools/developer/run_convergence_exposure_corpus.py"
+            --executable $<TARGET_FILE:convergence_exposure_case_runner>
+            --manifest
+                "${PROJECT_SOURCE_DIR}/tests/benchmarks/convergence_exposure_manifest.json"
+            --output-dir
+                "${PROJECT_BINARY_DIR}/benchmark-results/convergence-exposure-corpus"
+            --threads 1
+            --jobs 4
+        DEPENDS convergence_exposure_case_runner
+        USES_TERMINAL
+        VERBATIM
+    )
 endif()
 
 if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION)
@@ -419,15 +427,9 @@ if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION)
     endforeach()
 
     add_dependencies(tests_all rhbm_gem_cli)
-    if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT)
-        set(fold_168_test_name counterfactual_fold_168_audit)
-        set(fold_168_test_script counterfactual_fold_168_audit.py)
-        set(fold_168_output_directory counterfactual-fold-168)
-    else()
-        set(fold_168_test_name fold_168_simulation_regression)
-        set(fold_168_test_script fold_168_regression.py)
-        set(fold_168_output_directory fold_168)
-    endif()
+    set(fold_168_test_name fold_168_simulation_regression)
+    set(fold_168_test_script fold_168_regression.py)
+    set(fold_168_output_directory fold_168)
     add_test(
         NAME ${fold_168_test_name}
         COMMAND "${Python_EXECUTABLE}"

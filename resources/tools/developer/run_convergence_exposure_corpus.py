@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run and aggregate the build-gated convergence-exposure corpus."""
+"""Run and aggregate the production-only convergence corpus."""
 
 from __future__ import annotations
 
@@ -12,16 +12,17 @@ import math
 from pathlib import Path
 import re
 import subprocess
+import time
 from typing import Any, Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
-    "analyze_counterfactual_convergence.py")
+CONVERGENCE_ANALYZER_PATH = Path(__file__).with_name(
+    "analyze_convergence_audit.py")
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 11
+CASE_SUMMARY_SCHEMA_VERSION = 12
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -34,11 +35,10 @@ def _load_module(name: str, path: Path) -> Any:
     return module
 
 
-COUNTERFACTUAL_ANALYZER = _load_module(
-    "counterfactual_convergence_analyzer", COUNTERFACTUAL_ANALYZER_PATH)
+CONVERGENCE_ANALYZER = _load_module(
+    "convergence_audit_analyzer", CONVERGENCE_ANALYZER_PATH)
 CORPUS_ANALYZER = _load_module(
     "convergence_exposure_corpus_analyzer", CORPUS_ANALYZER_PATH)
-CONVERGENCE_ANALYZER = COUNTERFACTUAL_ANALYZER.CONVERGENCE_ANALYZER
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -57,7 +57,8 @@ def expand_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
         topologies = family["topologies"]
         levels = family["levels"]
         if len(topologies) != 5 or len(levels) != 5:
-            raise ValueError("Each exposure family must define five topologies and levels")
+            raise ValueError(
+                "Each exposure family must define five topologies and levels")
         for topology_index, topology in enumerate(topologies):
             for level_index, level in enumerate(levels):
                 variant = topology_index * len(levels) + level_index
@@ -99,7 +100,8 @@ def build_command(
     ]
     for name in (
         "noise_sigma", "separation", "initial_perturbation",
-        "active_target", "largest_group_ratio"):
+        "active_target", "largest_group_ratio",
+    ):
         if name in case:
             command.extend(("--" + name.replace("_", "-"), str(case[name])))
     return command
@@ -116,21 +118,21 @@ def parse_truth(log_text: str) -> dict[int, dict[str, float]]:
             match.group("name"): match.group("value").strip().rstrip(".")
             for match in FIELD_PATTERN.finditer(payload)
         }
-        if fields.get("schema") != "1":
-            continue
-        truth[int(fields["serial"])] = {
-            name: float(fields[name]) for name in ("amplitude", "width", "offset")
-        }
+        if fields.get("schema") == "1":
+            truth[int(fields["serial"])] = {
+                name: float(fields[name])
+                for name in ("amplitude", "width", "offset")
+            }
     return truth
 
 
 def load_reference_truth(
-    reference_truth_directory: Path | None,
+    reference_directory: Path | None,
     case_id: str,
 ) -> dict[int, dict[str, float]] | None:
-    if reference_truth_directory is None:
+    if reference_directory is None:
         return None
-    path = reference_truth_directory / "cases" / case_id / "scenario-truth.json"
+    path = reference_directory / "cases" / case_id / "scenario-truth.json"
     value = json.loads(path.read_text(encoding="utf-8"))
     return {
         int(row["serial_id"]): {
@@ -140,94 +142,141 @@ def load_reference_truth(
     }
 
 
-def _numbers(value: str) -> list[float]:
-    return [float(item) for item in value.split("/")]
-
-
-def detect_safety_regression(parsed: dict[str, Any], audit: dict[str, Any]) -> bool:
-    terminal = parsed.get("audit_terminal")
-    if terminal is not None:
-        objective = terminal.get("objective", "-/-/-/-")
-        if objective == "-/-/-/-" or any(
-                not math.isfinite(value) for value in _numbers(objective)):
-            return True
-        for atom in parsed.get("audit_terminal_atoms", []):
-            amplitude = float(atom["amplitude"])
-            width = float(atom["width"])
-            offset = float(atom["offset"])
-            if (not all(math.isfinite(value) for value in
-                        (amplitude, width, offset)) or
-                    amplitude <= 0.0 or width <= 0.0):
-                return True
-    if audit["status"] == "no_convergence_trigger":
-        return False
-    trigger_try = int(audit["experiments"][0]["trigger_try"])
-    records = parsed.get("trajectory_records", [])
-    baseline = next(
-        (record for record in records if int(record["try"]) == trigger_try), None)
-    if baseline is None:
-        return True
-
-    def safety_signature(record: dict[str, str]) -> tuple[int, int, int, bool]:
-        qualification = [
-            int(float(value)) for value in record["qualification"].split("/")]
-        blockers = [
-            int(float(value)) for value in record["blockers"].split("/")]
-        summary_fields = (
-            "accepted-active-p99", "accepted-active-max",
-            "historical-all-selected-accepted-p99",
-            "historical-all-selected-accepted-max",
-            "operator-nominal-residual-p99",
-            "operator-nominal-residual-max")
-        nonfinite = any(
-            not math.isfinite(value)
-            for field in summary_fields for value in _numbers(record[field]))
-        return (
-            qualification[7] + qualification[13],
-            qualification[16],
-            blockers[2],
-            nonfinite,
-        )
-
-    baseline_signature = safety_signature(baseline)
-    for record in records:
-        if int(record["try"]) <= trigger_try:
-            continue
-        signature = safety_signature(record)
-        if any(signature[index] > baseline_signature[index] for index in range(3)):
-            return True
-        if signature[3] and not baseline_signature[3]:
-            return True
-    return False
-
-
 def semantic_digest(value: Any) -> str:
     payload = json.dumps(
         value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-SEMANTIC_TRAJECTORY_FIELDS = (
-    "try", "acc", "accepted-active-population", "operator-nominal-population",
-    "certificate", "accepted-active-p99", "accepted-active-max",
-    "operator-nominal-residual-p99", "operator-nominal-residual-max",
-    "operator-nominal-unavailable", "operator-nominal-unavailable-reasons",
-    "operator-nominal-tail", "residual-state", "qualification",
-    "unified-search", "path", "limiters", "fixed", "blockers",
-    "accepted-equals-operator",
-)
-
-
 def semantic_trajectory(records: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Return the timing- and schema-independent production trajectory."""
     return [
         {
-            name: normalized.get(name, "-")
-            for name in SEMANTIC_TRAJECTORY_FIELDS
+            name: normalized[name]
+            for name in CONVERGENCE_ANALYZER.PRODUCTION_FIELDS
         }
         for record in records
         for normalized in [CONVERGENCE_ANALYZER.normalize_record(record)]
     ]
+
+
+def normalized_terminal(parsed: dict[str, Any]) -> dict[str, Any]:
+    terminal = parsed.get("terminal")
+    if terminal is None:
+        raise ValueError("Missing terminal record")
+    atoms = [
+        {
+            name: atom[name]
+            for name in ("serial", "group", "amplitude", "width", "offset")
+        }
+        for atom in sorted(
+            parsed["terminal_atoms"], key=lambda row: int(row["serial"]))
+    ]
+    return {
+        "reason": terminal["reason"],
+        "try": terminal["try"],
+        "acc": terminal["acc"],
+        "objective": terminal["objective"],
+        "atoms": atoms,
+    }
+
+
+def _objective_total(value: str) -> float:
+    values = [float(item) for item in value.split("/")]
+    return values[-1] if len(values) == 4 else sum(values)
+
+
+def _truth_metrics(
+    atom_rows: list[dict[str, str]],
+    truth: dict[int, dict[str, float]],
+) -> dict[str, float] | None:
+    if not truth:
+        return None
+    squared = {name: 0.0 for name in ("amplitude", "width", "offset")}
+    transformed_squared = [0.0, 0.0, 0.0]
+    maximum_absolute_offset_error = 0.0
+    seen: set[int] = set()
+    for row in atom_rows:
+        serial = int(row["serial"])
+        if serial not in truth:
+            continue
+        seen.add(serial)
+        for name in squared:
+            error = float(row[name]) - truth[serial][name]
+            squared[name] += error * error
+            if name == "offset":
+                maximum_absolute_offset_error = max(
+                    maximum_absolute_offset_error, abs(error))
+        amplitude = float(row["amplitude"])
+        width = float(row["width"])
+        truth_amplitude = truth[serial]["amplitude"]
+        truth_width = truth[serial]["width"]
+        if min(amplitude, width, truth_amplitude, truth_width) <= 0.0:
+            return None
+        height = amplitude / (2.0 * math.pi * width * width) ** 1.5
+        truth_height = truth_amplitude / (
+            2.0 * math.pi * truth_width * truth_width) ** 1.5
+        errors = (
+            math.log(height) - math.log(truth_height),
+            math.log(width) - math.log(truth_width),
+            float(row["offset"]) / height -
+            truth[serial]["offset"] / truth_height,
+        )
+        if not all(math.isfinite(value) for value in errors):
+            return None
+        for index, error in enumerate(errors):
+            transformed_squared[index] += error * error
+    if seen != set(truth):
+        return None
+    count = len(seen)
+    result = {
+        f"{name}_rmse": math.sqrt(total / count)
+        for name, total in squared.items()
+    }
+    for name, total in zip(
+        ("log_peak", "log_width", "offset_over_peak"), transformed_squared
+    ):
+        result[f"transformed_{name}_rmse"] = math.sqrt(total / count)
+    result["transformed_aggregate_rmse"] = math.sqrt(
+        sum(transformed_squared) / (3 * count))
+    result["maximum_absolute_offset_error"] = maximum_absolute_offset_error
+    return result
+
+
+def _safety_regression(parsed: dict[str, Any]) -> bool:
+    terminal = parsed.get("terminal")
+    if terminal is None:
+        return True
+    try:
+        if not all(math.isfinite(float(value)) for value in
+                   terminal["objective"].split("/")):
+            return True
+        return any(
+            not all(math.isfinite(float(atom[name])) for name in
+                    ("amplitude", "width", "offset")) or
+            float(atom["amplitude"]) <= 0.0 or float(atom["width"]) <= 0.0
+            for atom in parsed["terminal_atoms"])
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
+def _failed_summary(
+    case: dict[str, Any],
+    thread_count: int,
+    command: list[str],
+    elapsed_seconds: float,
+    return_code: int | None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
+        "status": "failed",
+        "case": case,
+        "thread_count": thread_count,
+        "return_code": return_code,
+        "command": command,
+        "elapsed_seconds": elapsed_seconds,
+        **({"error": error} if error is not None else {}),
+    }
 
 
 def run_case(
@@ -235,83 +284,59 @@ def run_case(
     case: dict[str, Any],
     output_directory: Path,
     thread_count: int,
-    reference_truth_directory: Path | None,
+    reference_directory: Path | None,
 ) -> dict[str, Any]:
     case_directory = output_directory / "cases" / case["case_id"]
     case_directory.mkdir(parents=True, exist_ok=True)
     summary_path = case_directory / "case-summary.json"
-    if summary_path.is_file():
-        value = json.loads(summary_path.read_text(encoding="utf-8"))
-        trajectory_path = case_directory / "trajectory-schema-8.json"
-        trajectory = (
-            json.loads(trajectory_path.read_text(encoding="utf-8"))
-            if trajectory_path.is_file() else {})
-        trust_model_path = case_directory / "trust-model-shadow-schema-2.json"
-        trust_model = (
-            json.loads(trust_model_path.read_text(encoding="utf-8"))
-            if trust_model_path.is_file() else {})
-        if (value.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
-                value.get("certificate_definition") == 1 and
-                value.get("comparator_set") == 1 and
-                value.get("case") == case and
-                value.get("thread_count") == thread_count and
-                value.get("reference_truth_directory") == (
-                    str(reference_truth_directory)
-                    if reference_truth_directory is not None else None) and
-                value.get("status") == "complete" and
-                trajectory.get("schema_version") == 8 and
-                trust_model.get("schema_version") == 2):
-            return value
-
+    expected_reference = (
+        str(reference_directory) if reference_directory is not None else None)
+    required_artifacts = (
+        "run.log", "scenario-truth.json", "trajectory-schema-9.json",
+        "terminal-schema-2.json", "case-summary.json")
+    if summary_path.is_file() and all(
+        (case_directory / name).is_file() for name in required_artifacts
+    ):
+        cached = json.loads(summary_path.read_text(encoding="utf-8"))
+        if (cached.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
+                cached.get("status") == "complete" and
+                cached.get("case") == case and
+                cached.get("thread_count") == thread_count and
+                cached.get("reference_truth_directory") == expected_reference):
+            return cached
     command = build_command(executable, case, thread_count)
+    started = time.perf_counter()
     try:
         completed = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-        )
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            check=False)
     except OSError as error:
-        summary = {
-            "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
-            "status": "failed",
-            "case": case,
-            "thread_count": thread_count,
-            "return_code": None,
-            "command": command,
-            "error": str(error),
-        }
+        summary = _failed_summary(
+            case, thread_count, command, time.perf_counter() - started,
+            None, str(error))
         write_json(summary_path, summary)
         return summary
+    elapsed_seconds = time.perf_counter() - started
     log_text = completed.stdout.decode("utf-8", errors="replace")
     (case_directory / "run.log").write_text(log_text, encoding="utf-8")
     if completed.returncode != 0:
-        summary = {
-            "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
-            "status": "failed",
-            "case": case,
-            "thread_count": thread_count,
-            "return_code": completed.returncode,
-            "command": command,
-        }
+        summary = _failed_summary(
+            case, thread_count, command, elapsed_seconds, completed.returncode)
         write_json(summary_path, summary)
         return summary
     try:
-        parsed = COUNTERFACTUAL_ANALYZER.parse_log(log_text)
-        truth = load_reference_truth(
-            reference_truth_directory, case["case_id"])
+        parsed = CONVERGENCE_ANALYZER.parse_log(log_text)
+        terminal_digest_value = normalized_terminal(parsed)
+        truth = load_reference_truth(reference_directory, case["case_id"])
         if truth is None:
             truth = parse_truth(log_text)
+        truth_metrics = _truth_metrics(parsed["terminal_atoms"], truth)
+        if truth_metrics is None:
+            raise ValueError("Terminal atoms do not cover frozen truth")
     except (KeyError, TypeError, ValueError) as error:
-        summary = {
-            "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
-            "status": "failed",
-            "case": case,
-            "thread_count": thread_count,
-            "return_code": completed.returncode,
-            "command": command,
-            "error": f"audit record parsing failed: {error}",
-        }
+        summary = _failed_summary(
+            case, thread_count, command, elapsed_seconds, completed.returncode,
+            f"audit record parsing failed: {error}")
         write_json(summary_path, summary)
         return summary
     scenario_truth = {
@@ -322,96 +347,54 @@ def run_case(
             for serial_id, parameters in sorted(truth.items())
         ],
     }
+    trajectory = semantic_trajectory(parsed["trajectory_records"])
+    terminal = parsed["terminal"]
+    terminal_report = {
+        "reason": terminal["reason"],
+        "try": int(terminal["try"]),
+        "accepted_iteration": int(terminal["acc"]),
+        "objective": _objective_total(terminal["objective"]),
+        "truth_metrics": truth_metrics,
+    }
+    trajectory_digest = semantic_digest(trajectory)
+    terminal_digest = semantic_digest(terminal_digest_value)
+    reference_matches: bool | None = None
+    if reference_directory is not None:
+        baseline_summary = json.loads((
+            reference_directory / "cases" / case["case_id"] /
+            "case-summary.json").read_text(encoding="utf-8"))
+        reference_matches = (
+            baseline_summary.get("semantic_trajectory_sha256") ==
+            trajectory_digest and
+            baseline_summary.get("terminal_state_sha256") == terminal_digest)
     write_json(case_directory / "scenario-truth.json", scenario_truth)
-    write_json(
-        case_directory / "trajectory-schema-8.json",
-        {"schema_version": 8, "records": parsed["trajectory_records"]})
-    write_json(
-        case_directory / "trust-model-shadow-schema-2.json",
-        {
-            "schema_version": 2,
-            "diagnostic_only": True,
-            "funnels": parsed["trust_model_funnel_records"],
-            "records": [
-                {
-                    name: value for name, value in record.items()
-                    if name != "elapsed-ms"
-                }
-                for record in parsed["trust_model_shadow_records"]
-            ],
-        })
-    write_json(case_directory / "counterfactual-schema-4.json", {
-        "schema_version": 4,
-        "checkpoints": parsed["checkpoints"],
-        "terminations": parsed["terminations"],
-        "atoms": [
-            atom
-            for records in parsed["atoms"].values()
-            for atom in records
-        ],
+    write_json(case_directory / "trajectory-schema-9.json", {
+        "schema_version": 9,
+        "certificate_definition": 1,
+        "records": trajectory,
     })
-    write_json(case_directory / "shadow-terminal-schema-1.json", {
-        "schema_version": 1,
-        "accepted_only_checkpoint": parsed["shadow_checkpoint"],
-        "accepted_only_atoms": parsed["shadow_atoms"],
-        "terminal": parsed["audit_terminal"],
-        "terminal_atoms": parsed["audit_terminal_atoms"],
-    })
-    write_json(case_directory / "shadow-continuation-schema-2.json", {
+    write_json(case_directory / "terminal-schema-2.json", {
         "schema_version": 2,
-        "checkpoints": parsed["shadow_policy_checkpoints"],
-        "atoms": [
-            atom
-            for records in parsed["shadow_policy_atoms"].values()
-            for atom in records
-        ],
-        "terminal": parsed["audit_terminal"],
-        "terminal_atoms": parsed["audit_terminal_atoms"],
+        **terminal_digest_value,
     })
-    audit = COUNTERFACTUAL_ANALYZER.analyze(parsed, truth)
-    production_artifacts_identical: bool | None = None
-    if reference_truth_directory is not None:
-        baseline_case_directory = (
-            reference_truth_directory / "cases" / case["case_id"])
-        baseline_trajectory_path = next(
-            (path for path in (
-                baseline_case_directory / "trajectory-schema-8.json",
-                baseline_case_directory / "trajectory-schema-7.json")
-             if path.is_file()),
-            baseline_case_directory / "trajectory-schema-8.json")
-        baseline_summary_path = baseline_case_directory / "case-summary.json"
-        if baseline_trajectory_path.is_file() and baseline_summary_path.is_file():
-            baseline_trajectory = json.loads(
-                baseline_trajectory_path.read_text(encoding="utf-8"))
-            baseline_summary = json.loads(
-                baseline_summary_path.read_text(encoding="utf-8"))
-            production_artifacts_identical = (
-                semantic_trajectory(baseline_trajectory["records"]) ==
-                semantic_trajectory(parsed["trajectory_records"]) and
-                baseline_summary.get("audit", {}).get("terminal") ==
-                audit.get("terminal"))
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
         "certificate_definition": 1,
-        "comparator_set": 1,
         "status": "complete",
         "case": case,
         "thread_count": thread_count,
         "reference_truth_directory": (
-            str(reference_truth_directory)
-            if reference_truth_directory is not None else None),
+            expected_reference),
         "command": command,
+        "elapsed_seconds": elapsed_seconds,
         "truth_atom_count": len(truth),
-        "safety_regression": detect_safety_regression(parsed, audit),
-        "production_artifacts_identical": production_artifacts_identical,
-        "semantic_trajectory_sha256": semantic_digest(
-            semantic_trajectory(parsed["trajectory_records"])),
-        "terminal_state_sha256": semantic_digest({
-            "terminal": parsed["audit_terminal"],
-            "atoms": parsed["audit_terminal_atoms"],
-        }),
+        "production_converged": terminal["reason"] == "converged",
+        "safety_regression": _safety_regression(parsed),
+        "production_artifacts_identical": reference_matches,
+        "semantic_trajectory_sha256": trajectory_digest,
+        "terminal_state_sha256": terminal_digest,
         "frozen_truth_sha256": semantic_digest(scenario_truth),
-        "audit": audit,
+        "terminal": terminal_report,
     }
     write_json(summary_path, summary)
     return summary
@@ -422,83 +405,55 @@ def build_compact_baseline(
     summaries: list[dict[str, Any]],
     aggregate: dict[str, Any],
 ) -> dict[str, Any]:
-    complete_summaries = [
-        summary for summary in summaries
-        if summary.get("status") == "complete"
-    ]
-    cases = [
-        [
-            summary["case"]["case_id"],
-            summary["case"]["seed"],
-            semantic_digest({
-                "trajectory": summary["semantic_trajectory_sha256"],
-                "terminal": summary["terminal_state_sha256"],
-                "stop_reason": (
-                    summary.get("audit", {}).get("terminal") or {}
-                ).get("reason"),
-            }),
-            (
-                summary.get("audit", {}).get("terminal") or {}
-            ).get("reason"),
-        ]
-        for summary in complete_summaries
+    complete = [
+        summary for summary in summaries if summary.get("status") == "complete"
     ]
     case_identity = [
-        {
-            "case_id": summary["case"]["case_id"],
-            "seed": summary["case"]["seed"],
-        }
-        for summary in complete_summaries
+        {"case_id": row["case"]["case_id"], "seed": row["case"]["seed"]}
+        for row in complete
     ]
     truth_identity = [
         {
-            "case_id": summary["case"]["case_id"],
-            "sha256": summary["frozen_truth_sha256"],
+            "case_id": row["case"]["case_id"],
+            "sha256": row["frozen_truth_sha256"],
         }
-        for summary in complete_summaries
+        for row in complete
     ]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "case_identity_sha256": semantic_digest(case_identity),
         "frozen_truth_sha256": semantic_digest(truth_identity),
         "schema_contract": {
             "certificate_definition": 1,
-            "comparator_set": 1,
-            "trajectory": 8,
-            "counterfactual": 4,
+            "trajectory": 9,
+            "terminal": 2,
             "case_summary": CASE_SUMMARY_SCHEMA_VERSION,
-            "aggregate": 7,
-            "comparison": 3,
+            "aggregate": CORPUS_ANALYZER.SCHEMA_VERSION,
+            "comparison": CORPUS_ANALYZER.COMPARISON_SCHEMA_VERSION,
         },
         "production_definition": (
             "solver-qualified && accepted-active-p99 && operator-complete && "
             "operator-nominal-p99 && invariants-clear && orthogonal-clear"),
-        "comparator_definitions": [
-            "production",
-            "historical-all-selected",
-            "historical-cluster-active-proposal-maximum",
-            "historical-active-proposal",
-            "production-maximum",
-        ],
         "case_count": aggregate["case_count"],
         "failed_case_count": aggregate.get("failed_case_count", 0),
         "production_convergence_count": aggregate[
             "production_convergence_count"],
         "termination_counts": aggregate["termination_counts"],
-        "comparator_exposure_counts": aggregate[
-            "comparator_exposure_counts"],
-        "safety_regression_count": sum(
-            bool(summary.get("safety_regression", False))
-            for summary in summaries
-            if summary.get("status") == "complete"),
-        "production_semantic_match_count": sum(
-            summary.get("production_artifacts_identical") is True
-            for summary in summaries
-            if summary.get("status") == "complete"),
+        "safety_regression_count": aggregate["safety_regression_count"],
         "case_fields": [
-            "case_id", "seed", "production_semantic_sha256", "stop_reason"],
-        "cases": cases,
+            "case_id", "seed", "semantic_trajectory_sha256",
+            "terminal_state_sha256", "stop_reason"],
+        "cases": [
+            [
+                summary["case"]["case_id"],
+                summary["case"]["seed"],
+                summary["semantic_trajectory_sha256"],
+                summary["terminal_state_sha256"],
+                summary["terminal"]["reason"],
+            ]
+            for summary in complete
+        ],
     }
 
 
@@ -514,9 +469,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--reference-truth-dir", type=Path)
-    parser.add_argument(
-        "--case-list", type=Path,
-        help="JSON object containing the sorted case_ids to replay")
+    parser.add_argument("--case-list", type=Path)
     return parser.parse_args(argv)
 
 
@@ -525,42 +478,36 @@ def run(argv: Sequence[str] | None = None) -> int:
     executable = args.executable.resolve()
     if not executable.is_file():
         raise FileNotFoundError(f"Exposure runner does not exist: {executable}")
-    reference_truth_directory = (
+    if args.jobs <= 0:
+        raise ValueError("--jobs must be positive")
+    reference_directory = (
         args.reference_truth_dir.resolve()
         if args.reference_truth_dir is not None else None)
     manifest_bytes = args.manifest.read_bytes()
-    manifest = json.loads(manifest_bytes.decode("utf-8"))
-    cases = expand_manifest(manifest)
+    cases = expand_manifest(json.loads(manifest_bytes.decode("utf-8")))
     if args.case_list is not None:
         selection = json.loads(args.case_list.read_text(encoding="utf-8"))
         if selection.get("schema_version") != 1:
             raise ValueError("Case-list schema_version must be 1")
-        requested_case_ids = list(selection.get("case_ids", []))
-        if (requested_case_ids != sorted(requested_case_ids) or
-                len(requested_case_ids) != len(set(requested_case_ids))):
+        requested = list(selection.get("case_ids", []))
+        if requested != sorted(set(requested)):
             raise ValueError("Case-list case_ids must be sorted and unique")
         case_by_id = {case["case_id"]: case for case in cases}
-        unknown = [case_id for case_id in requested_case_ids if case_id not in case_by_id]
+        unknown = [case_id for case_id in requested if case_id not in case_by_id]
         if unknown:
             raise ValueError(f"Unknown case-list case_id: {unknown[0]}")
-        cases = [case_by_id[case_id] for case_id in requested_case_ids]
-    if args.case_id:
+        cases = [case_by_id[case_id] for case_id in requested]
+    if args.case_id is not None:
         cases = [case for case in cases if case["case_id"] == args.case_id]
         if not cases:
             raise ValueError(f"Unknown exposure case_id: {args.case_id}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    if args.jobs <= 0:
-        raise ValueError("--jobs must be positive")
     summaries_by_id: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
         futures = {
             executor.submit(
-                run_case,
-                executable,
-                case,
-                args.output_dir,
-                args.threads,
-                reference_truth_directory): case
+                run_case, executable, case, args.output_dir, args.threads,
+                reference_directory): case
             for case in cases
         }
         for completed_count, future in enumerate(as_completed(futures), start=1):
@@ -569,190 +516,40 @@ def run(argv: Sequence[str] | None = None) -> int:
             if (completed_count == 1 or completed_count % 25 == 0 or
                     completed_count == len(cases)):
                 print(
-                    f"Convergence exposure corpus progress: "
-                    f"{completed_count}/{len(cases)} ({case['case_id']})",
-                    flush=True)
+                    f"Convergence corpus progress: {completed_count}/"
+                    f"{len(cases)} ({case['case_id']})", flush=True)
     summaries = [summaries_by_id[case["case_id"]] for case in cases]
-    complete = [summary for summary in summaries if summary["status"] == "complete"]
-    failed = [summary for summary in summaries if summary["status"] == "failed"]
+    complete = [row for row in summaries if row["status"] == "complete"]
+    failed = [row for row in summaries if row["status"] == "failed"]
     aggregate = CORPUS_ANALYZER.analyze(complete)
-    aggregate["failed_case_count"] = len(failed)
-    aggregate["failed_case_ids"] = [summary["case"]["case_id"] for summary in failed]
-    aggregate["incomplete_corpus"] = bool(failed)
-    if failed:
-        aggregate["corpus_target_met"] = False
-        for policy, decision in aggregate["policy_decisions"].items():
-            candidate_field = (
-                "redesign_candidate"
-                if policy == "historical-active-proposal" else
-                "promotion_candidate"
-                if policy == "production-maximum" else
-                "rollback_candidate")
-            decision[candidate_field] = False
+    aggregate.update({
+        "failed_case_count": len(failed),
+        "failed_case_ids": [row["case"]["case_id"] for row in failed],
+        "incomplete_corpus": bool(failed),
+    })
     write_json(args.output_dir / "aggregate.json", aggregate)
-    if reference_truth_directory is not None:
-        baseline_aggregate_path = reference_truth_directory / "aggregate.json"
-        if baseline_aggregate_path.is_file():
-            baseline_aggregate = json.loads(
-                baseline_aggregate_path.read_text(encoding="utf-8"))
-            aggregate_case_ids = {
-                row["case_id"] for row in aggregate["cases"]
-            }
-            baseline_case_ids = {
-                row["case_id"] for row in baseline_aggregate["cases"]
-            }
-            if aggregate_case_ids != baseline_case_ids:
-                if not aggregate_case_ids.issubset(baseline_case_ids):
-                    raise ValueError(
-                        "Reference truth aggregate does not contain every replay case")
-                baseline_aggregate = dict(baseline_aggregate)
-                baseline_aggregate["cases"] = [
-                    row for row in baseline_aggregate["cases"]
-                    if row["case_id"] in aggregate_case_ids
-                ]
-                baseline_aggregate["production_convergence_count"] = sum(
-                    row.get("production_converged", False)
-                    for row in baseline_aggregate["cases"])
-                baseline_aggregate["accepted_only_shadow_count"] = sum(
-                    bool(row.get("accepted_only_shadow", {}).get("reached"))
-                    for row in baseline_aggregate["cases"])
-            comparison = CORPUS_ANALYZER.compare(baseline_aggregate, aggregate)
-            write_json(args.output_dir / "comparison.json", comparison)
-            objective = comparison["objective_delta"]
-            truth_rmse = comparison["truth_rmse_delta"]
-            accepted_iteration = comparison["accepted_iteration_delta"]
-            blocking_gate = comparison[
-                "guard_trust_decoupling_blocking_gate"]
-            markdown_lines = [
-                "# Convergence exposure before/after comparison",
-                "",
-                f"- Cases: {comparison['case_count']}",
-                f"- Production convergence: "
-                f"{comparison['before_convergence_count']} → "
-                f"{comparison['after_convergence_count']}",
-                f"- Accepted-only shadow checkpoints: "
-                f"{comparison['accepted_only_shadow_count']}",
-                f"- Objective delta median/p90: "
-                f"{objective['median']} / {objective['p90']}",
-                f"- Objective material benefit/harm: "
-                f"{objective['material_benefit_count']} / "
-                f"{objective['material_harm_count']}",
-                f"- Accepted iterations before/after median: "
-                f"{accepted_iteration['before_median']} / "
-                f"{accepted_iteration['after_median']}",
-                f"- Accepted-iteration delta median/p90: "
-                f"{accepted_iteration['median']} / "
-                f"{accepted_iteration['p90']}",
-                f"- Truth RMSE delta median/p90: "
-                f"{truth_rmse['median']} / {truth_rmse['p90']}",
-                f"- Truth material benefit/harm: "
-                f"{truth_rmse['material_benefit_count']} / "
-                f"{truth_rmse['material_harm_count']}",
-                f"- Safety regressions: "
-                f"{comparison['safety_regression_count']}",
-                f"- Guard/trust decoupling blocking gate: "
-                f"{'PASS' if blocking_gate['passed'] else 'FAIL'}",
-                "",
-                "## By family",
-                "",
-                "| Family | Cases | Convergence before→after | Shadow | "
-                "Objective Δ median/p90 | Truth RMSE Δ median/p90 | Safety |",
-                "|---|---:|---:|---:|---:|---:|---:|",
-            ]
-            for family, values in comparison["by_family"].items():
-                markdown_lines.append(
-                    f"| {family} | {values['case_count']} | "
-                    f"{values['before_convergence_count']}→"
-                    f"{values['after_convergence_count']} | "
-                    f"{values['accepted_only_shadow_count']} | "
-                    f"{values['objective_delta_median']} / "
-                    f"{values['objective_delta_p90']} | "
-                    f"{values['truth_rmse_delta_median']} / "
-                    f"{values['truth_rmse_delta_p90']} | "
-                    f"{values['safety_regression_count']} |"
-                )
-            markdown_lines.extend((
-                "",
-                "## By topology",
-                "",
-                "| Topology | Cases | Convergence before→after | Shadow | Safety |",
-                "|---|---:|---:|---:|---:|",
-            ))
-            for topology, values in comparison["by_topology"].items():
-                markdown_lines.append(
-                    f"| {topology} | {values['case_count']} | "
-                    f"{values['before_convergence_count']}→"
-                    f"{values['after_convergence_count']} | "
-                    f"{values['accepted_only_shadow_count']} | "
-                    f"{values['safety_regression_count']} |"
-                )
-            markdown_lines.append("")
-            markdown = "\n".join(markdown_lines)
-            (args.output_dir / "comparison.md").write_text(
-                markdown, encoding="utf-8")
+    if reference_directory is not None:
+        baseline = json.loads((
+            reference_directory / "aggregate.json").read_text(encoding="utf-8"))
+        comparison = CORPUS_ANALYZER.compare(baseline, aggregate)
+        comparison["baseline_complete_count"] = baseline.get("case_count", 0)
+        comparison["candidate_complete_count"] = aggregate["case_count"]
+        comparison["baseline_failed_case_count"] = baseline.get(
+            "failed_case_count", 0)
+        comparison["candidate_failed_case_count"] = len(failed)
+        if (comparison["baseline_complete_count"] != 600 or
+                comparison["candidate_complete_count"] != 600 or
+                comparison["baseline_failed_case_count"] != 0 or
+                comparison["candidate_failed_case_count"] != 0):
+            comparison["blocking_gate"]["conditions"]["complete-pair"] = False
+            comparison["blocking_gate"]["passed"] = False
+        write_json(args.output_dir / "comparison.json", comparison)
     write_json(
         args.output_dir / "compact-baseline.json",
         build_compact_baseline(manifest_bytes, summaries, aggregate))
-    write_json(args.output_dir / "replay-manifest.json", {
-        "schema_version": 1,
-        "case_ids": aggregate["replay_case_ids"],
-    })
-    shadow_case_ids = sorted(
-        row["case_id"] for row in aggregate["cases"]
-        if row.get("accepted_only_shadow", {}).get("reached", False))
-    write_json(args.output_dir / "shadow-replay-manifest.json", {
-        "schema_version": 1,
-        "case_ids": shadow_case_ids,
-    })
-    decision = {
-        "schema_version": 1,
-        "case_count": aggregate["case_count"],
-        "failed_case_count": len(failed),
-        "accepted_only_shadow_count": aggregate["accepted_only_shadow_count"],
-        "policy_decisions": aggregate["shadow_policy_decisions"],
-        "recommended_policy": aggregate["recommended_shadow_policy"],
-        "production_change_recommended": aggregate[
-            "shadow_policy_production_change_recommended"],
-    }
-    write_json(args.output_dir / "shadow-continuation-decision.json", decision)
-    decision_lines = [
-        "# Accepted-only shadow continuation decision",
-        "",
-        f"- Cases: {decision['case_count']}",
-        f"- Accepted-only shadow cases: {decision['accepted_only_shadow_count']}",
-        f"- Failed cases: {decision['failed_case_count']}",
-        f"- Recommended policy: {decision['recommended_policy'] or 'none'}",
-        f"- Production change recommended: "
-        f"{str(decision['production_change_recommended']).lower()}",
-        "",
-        "| Policy | Exposure | Natural | Stationarity | Attempts saved total | "
-        "Objective Δ median/p90 | Truth aggregate Δ median/p90 | "
-        "Objective harm | Truth harm | Safety | Incomplete | Promote |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-    ]
-    for policy, values in decision["policy_decisions"].items():
-        decision_lines.append(
-            f"| {policy} | {values['effective_exposure_count']} | "
-            f"{values['family_counts'].get('natural', 0)} | "
-            f"{values['family_counts'].get('stationarity', 0)} | "
-            f"{values['attempts_saved']['total']} | "
-            f"{values['objective_delta']['median']} / "
-            f"{values['objective_delta']['p90']} | "
-            f"{values['truth_rmse_delta']['transformed_aggregate_rmse']['median']} / "
-            f"{values['truth_rmse_delta']['transformed_aggregate_rmse']['p90']} | "
-            f"{values['objective_material_harm_count']} | "
-            f"{values['truth_material_harm_case_count']} | "
-            f"{values['endpoint_safety_violation_count']} | "
-            f"{values['incomplete_comparison_count']} | "
-            f"{str(values['promotion_candidate']).lower()} |"
-        )
-    decision_lines.append("")
-    (args.output_dir / "shadow-continuation-decision.md").write_text(
-        "\n".join(decision_lines), encoding="utf-8")
     print(
-        f"Convergence exposure corpus: cases={len(summaries)}, "
-        f"exposures={aggregate['genuine_exposure_count']}, "
-        f"failed={len(failed)}, target_met={aggregate['corpus_target_met']}.")
+        f"Convergence corpus: cases={len(summaries)}, complete={len(complete)}, "
+        f"failed={len(failed)}.")
     return 1 if failed else 0
 
 

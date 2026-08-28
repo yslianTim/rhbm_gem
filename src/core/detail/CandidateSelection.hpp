@@ -38,6 +38,7 @@ enum class TrustRegionRadiusAction
     Shrink
 };
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 enum class TrustModelPredictionStatus
 {
     Available,
@@ -101,6 +102,7 @@ struct TrustModelShadowDiagnostic
     std::size_t unselected_dependency_count{ 0 };
     double elapsed_milliseconds{ 0.0 };
 };
+#endif
 
 enum class AllRejectedResolution
 {
@@ -410,6 +412,7 @@ TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic);
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 TrustRegionRadiusAction DetermineTrustModelShadowAction(
     const TrustModelShadowDiagnostic & diagnostic);
 
@@ -427,6 +430,7 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     TrustRegionRadiusAction current_action,
     TrustModelCandidateSource candidate_source,
     bool objective_backtracked);
+#endif
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
 
@@ -565,7 +569,7 @@ struct ClusterCandidateDiagnostic
 {
     ClusterKey key{};
     ObjectiveAttemptDiagnostic attempt{};
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
     TrustModelCandidateFunnel trust_model_candidate_funnel{};
     bool boundary_touched{ false };

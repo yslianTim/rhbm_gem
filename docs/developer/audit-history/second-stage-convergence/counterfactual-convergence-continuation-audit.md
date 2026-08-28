@@ -1,3 +1,8 @@
+---
+Status: Historical audit record.
+Current policy: second-stage-outer-iteration-algorithm-audit.md
+---
+
 # Counterfactual convergence continuation audit
 
 > Current baseline (2026-08-28): production uses solver qualification plus

@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
+"""Contract tests for production-only convergence corpus tooling."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
-import tempfile
 import unittest
-from unittest import mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -30,72 +28,41 @@ ANALYZER = load_module(
     "exposure_corpus_analyzer",
     PROJECT_ROOT / "resources" / "tools" / "developer" /
     "analyze_convergence_exposure_corpus.py")
-COUNTERFACTUAL = load_module(
-    "counterfactual_convergence_analyzer_for_exposure_test",
-    PROJECT_ROOT / "resources" / "tools" / "developer" /
-    "analyze_counterfactual_convergence.py")
-
-
-def policy(
-    objective: float,
-    truth_error: float,
-    extra_attempts: int = 0,
-) -> dict[str, object]:
-    return {
-        "reached": True,
-        "extra_attempts": extra_attempts,
-        "objective": objective,
-        "material_objective_improvement": objective < 0.999,
-        "raw_median": [1.0e-5, 1.0e-5, 1.0e-5],
-        "truth_metrics": {"transformed_aggregate_rmse": truth_error},
-    }
 
 
 def case_summary(
     case_id: str,
-    legacy_population: bool,
-    maximum_gate: bool,
-    solver_qualification: bool,
-    candidate_objective: float = 0.998,
-    candidate_truth: float = 0.08,
+    *,
+    objective: float = 1.0,
+    truth_rmse: float = 0.1,
+    accepted_iteration: int = 4,
+    elapsed_seconds: float = 1.0,
+    trajectory_digest: str = "trajectory",
+    terminal_digest: str = "terminal",
+    stop_reason: str = "converged",
 ) -> dict[str, object]:
-    policies = {
-        "production": policy(1.0, 0.1),
-        "historical-all-selected": policy(candidate_objective, candidate_truth, 2),
-        "historical-cluster-active-proposal-maximum": policy(
-            candidate_objective, candidate_truth, 2),
-        "historical-active-proposal": policy(
-            candidate_objective, candidate_truth, 2),
-        "production-maximum": policy(candidate_objective, candidate_truth, 2),
-    }
     return {
+        "schema_version": 12,
         "status": "complete",
         "case": {
-            "case_id": case_id, "family": "fixture",
-            "topology": "fixture", "level": 0,
+            "case_id": case_id,
+            "family": "natural",
+            "topology": "c-c",
+            "seed": 410000,
         },
+        "elapsed_seconds": elapsed_seconds,
+        "production_converged": stop_reason == "converged",
+        "semantic_trajectory_sha256": trajectory_digest,
+        "terminal_state_sha256": terminal_digest,
+        "frozen_truth_sha256": "truth",
         "safety_regression": False,
-        "audit": {
-            "status": "counterfactual_records",
-            "experiments": [{
-                "trigger_try": 4,
-                "termination_reason": "all-policies-reached",
-                "exposures": {
-                    "historical-all-selected": legacy_population,
-                    "historical-cluster-active-proposal-maximum": maximum_gate,
-                    "historical-active-proposal": solver_qualification,
-                    "production-maximum": False,
-                },
-                "policies": policies,
-            }],
-            "trajectory_audit": {
-                "p99_implies_max": {
-                    "production": {"accepted:N<=91:samples": 2},
-                },
-                "unique_blocker_count": {
-                    "historical_cluster_active_proposal_maximum": {
-                        "accepted_max": 1, "raw_max": 0},
-                },
+        "terminal": {
+            "reason": stop_reason,
+            "try": accepted_iteration,
+            "accepted_iteration": accepted_iteration,
+            "objective": objective,
+            "truth_metrics": {
+                "transformed_aggregate_rmse": truth_rmse,
             },
         },
     }
@@ -107,7 +74,6 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             PROJECT_ROOT / "tests" / "benchmarks" /
             "convergence_exposure_manifest.json").read_text(encoding="utf-8"))
         cases = RUNNER.expand_manifest(manifest)
-
         self.assertEqual(len(cases), 600)
         self.assertEqual(len({case["case_id"] for case in cases}), 600)
         self.assertEqual(cases[0]["seed"], 410000)
@@ -123,382 +89,79 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "five topologies and levels"):
             RUNNER.expand_manifest(manifest)
 
-    def test_compact_baseline_freezes_identity_and_semantic_digests(self) -> None:
-        summary = {
-            "status": "complete",
-            "case": {
-                "case_id": "case-a", "family": "natural",
-                "topology": "c-c", "seed": 410000,
-            },
-            "semantic_trajectory_sha256": "trajectory",
-            "terminal_state_sha256": "terminal",
-            "frozen_truth_sha256": "truth",
-            "production_artifacts_identical": True,
-            "safety_regression": False,
-            "audit": {"terminal": {"reason": "converged"}},
-        }
-        aggregate = {
-            "case_count": 1,
-            "failed_case_count": 0,
-            "production_convergence_count": 1,
-            "termination_counts": {"converged": 1},
-            "comparator_exposure_counts": {
-                "historical-all-selected": 0,
-                "historical-cluster-active-proposal-maximum": 0,
-                "historical-active-proposal": 0,
-                "production-maximum": 0,
-            },
-        }
+    def test_compact_baseline_is_production_only(self) -> None:
+        summary = case_summary("case-a")
+        aggregate = ANALYZER.analyze([summary])
         baseline = RUNNER.build_compact_baseline(
             b'{"schema_version":1}', [summary], aggregate)
-
-        self.assertEqual(baseline["schema_version"], 1)
-        self.assertEqual(baseline["schema_contract"]["trajectory"], 8)
-        self.assertEqual(baseline["schema_contract"]["case_summary"], 11)
-        self.assertEqual(baseline["production_semantic_match_count"], 1)
-        self.assertEqual(
-            baseline["case_fields"],
-            ["case_id", "seed", "production_semantic_sha256", "stop_reason"])
-        self.assertEqual(baseline["cases"][0][3], "converged")
-        self.assertEqual(len(baseline["cases"][0][2]), 64)
-        self.assertEqual(
-            baseline,
-            RUNNER.build_compact_baseline(
-                b'{"schema_version":1}', [summary], aggregate))
+        self.assertEqual(baseline["schema_version"], 2)
+        self.assertEqual(baseline["schema_contract"]["trajectory"], 9)
+        self.assertEqual(baseline["schema_contract"]["terminal"], 2)
+        self.assertEqual(baseline["schema_contract"]["case_summary"], 12)
+        self.assertEqual(baseline["schema_contract"]["aggregate"], 8)
+        self.assertEqual(baseline["schema_contract"]["comparison"], 4)
+        self.assertNotIn("comparator_set", baseline["schema_contract"])
+        self.assertNotIn("comparator_definitions", baseline)
+        self.assertEqual(baseline["cases"][0][4], "converged")
 
     def test_truth_parser_and_transformed_truth_metrics(self) -> None:
-        text = "\n".join((
+        truth = RUNNER.parse_truth(
             "Convergence exposure truth: schema=1, case=x, serial=1, "
-            "amplitude=6, width=0.5, offset=0.1.",
-            "[Debug] Counterfactual convergence atom: schema=4, comparator-set=1, "
-            "experiment=1-1, policy=production, serial=1, "
-            "group=1, shape-active=1, offset-active=1, quarantined=0, "
-            "amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Accepted-only shadow checkpoint: schema=1, try=1, acc=1, "
-            "objective=1/0/0/1, accepted-p99=0/0/0, raw-p99=1/1/1",
-            "[Debug] Accepted-only shadow atom: schema=1, serial=1, group=1, "
-            "amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Accepted-only shadow checkpoint: schema=2, "
-            "policy=dynamic-raw, try=2, acc=2, streak=2, "
-            "raw-threshold=2e-4, final-polish=0, checkpoint-safe=1, "
-            "production-qualified=1, blockers=0/0/0/0, "
-            "accepted-p99=0/0/0, raw-p99=1e-4/1e-4/1e-4, "
-            "objective=1/0/0/1",
-            "[Debug] Accepted-only shadow atom: schema=2, "
-            "policy=dynamic-raw, serial=1, group=1, "
-            "amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Second-stage audit terminal: schema=1, "
-            "reason=audit-patience, try=3, acc=3, objective=1/0/0/1",
-            "[Debug] Second-stage audit terminal atom: schema=1, serial=1, "
-            "group=1, amplitude=6, width=0.5, offset=0.1",
-            "[Debug] Trust-model shadow: schema=2, try=2, acc=2, atoms=1, "
-            "key-first=0, key-last=0, disposition=accepted, "
-            "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
-            "final-local-candidate=1, status=available, source=polish, "
-            "search-pass=1, trial=1, factor=1.0, "
-            "trial-disposition=accepted, rejected-by-previous=0, "
-            "rejected-by-best=0, rejected-by-strict-polish=0, "
-            "step-norm=0.9, actual-reduction=0.2, polish-reduction=0.1, "
-            "predicted-residual-reduction=0.19, "
-            "predicted-penalty-reduction=0.01, predicted-reduction=0.2, "
-            "rho=1.0, boundary-utilization=0.9, "
-            "current-action=keep, shadow-action=grow, "
-            "objective-backtracked=0, unselected-dependencies=1, "
-            "elapsed-ms=0.25",
-        ))
-        truth = RUNNER.parse_truth(text)
-        parsed = COUNTERFACTUAL.parse_log(text)
-        atom_rows = parsed["atoms"][("1-1", "production")]
-        metrics = COUNTERFACTUAL._truth_metrics(atom_rows, truth)
-
-        self.assertEqual(len(truth), 1)
+            "amplitude=6, width=0.5, offset=0.1.")
+        metrics = RUNNER._truth_metrics([{
+            "serial": "1", "group": "1", "amplitude": "6",
+            "width": "0.5", "offset": "0.1",
+        }], truth)
+        self.assertIsNotNone(metrics)
+        assert metrics is not None
         self.assertEqual(metrics["transformed_aggregate_rmse"], 0.0)
-        shadow = COUNTERFACTUAL.analyze(parsed, truth)["accepted_only_shadow"]
-        self.assertTrue(shadow["reached"])
-        self.assertEqual(shadow["truth_metrics"]["transformed_aggregate_rmse"], 0.0)
-        policies = COUNTERFACTUAL.analyze(parsed, truth)["shadow_policies"]
-        self.assertTrue(policies["dynamic-raw"]["reached"])
-        self.assertEqual(policies["dynamic-raw"]["attempts_saved"], 1)
-        self.assertTrue(policies["dynamic-raw"]["endpoint_safe"])
+
+    def test_analyzer_reports_only_production_metrics(self) -> None:
+        report = ANALYZER.analyze([
+            case_summary("a"),
+            case_summary("b", stop_reason="audit-patience"),
+        ])
+        self.assertEqual(report["schema_version"], 8)
+        self.assertEqual(report["case_count"], 2)
+        self.assertEqual(report["production_convergence_count"], 1)
         self.assertEqual(
-            policies["dynamic-raw"]["truth_metrics"]
-            ["transformed_aggregate_rmse"], 0.0)
-        self.assertFalse(policies["accepted-only-k2"]["reached"])
-        trust_model = COUNTERFACTUAL.analyze(
-            parsed, truth)["trust_model_shadow"]
-        self.assertEqual(trust_model["status_counts"], {"available": 1})
-        self.assertEqual(trust_model["rho_bins"], {"high-boundary": 1})
+            report["termination_counts"],
+            {"audit-patience": 1, "converged": 1})
+        serialized = json.dumps(report)
+        for retired in ("comparator", "exposure", "accepted_only", "rho"):
+            self.assertNotIn(retired, serialized)
+
+    def test_paired_gate_checks_digests_deltas_safety_and_cost(self) -> None:
+        before = ANALYZER.analyze([
+            case_summary("a", elapsed_seconds=2.0),
+            case_summary("b", elapsed_seconds=4.0),
+        ])
+        after = ANALYZER.analyze([
+            case_summary("a", elapsed_seconds=1.0),
+            case_summary("b", elapsed_seconds=3.0),
+        ])
+        comparison = ANALYZER.compare(before, after)
+        self.assertEqual(comparison["schema_version"], 4)
+        self.assertEqual(comparison["production_semantic_match_count"], 2)
+        self.assertEqual(comparison["terminal_state_match_count"], 2)
+        self.assertEqual(comparison["objective_delta"]["median"], 0.0)
+        self.assertEqual(comparison["truth_rmse_delta"]["p90"], 0.0)
         self.assertEqual(
-            trust_model["action_confusion"], {"keep->grow": 1})
+            comparison["accepted_iteration_delta"]["median"], 0.0)
+        self.assertTrue(comparison["elapsed_seconds"]["strictly_lower"])
+        self.assertTrue(comparison["blocking_gate"]["passed"])
+
+    def test_timing_is_excluded_from_semantic_digest(self) -> None:
+        value = [{"try": "1", "certificate": "1/1/1/1/1/1/1"}]
         self.assertEqual(
-            trust_model["strata"]["unselected-dependencies"]["1"]
-            ["records"], 1)
-
-    def test_analyzer_classifies_exposures_outcomes_and_replay_order(self) -> None:
-        summaries = []
-        for index in range(5):
-            summaries.append(case_summary(f"p-{index}", True, False, False))
-            summaries.append(case_summary(f"m-{index}", False, True, False))
-            summaries.append(case_summary(f"s-{index}", False, False, True))
-        report = ANALYZER.analyze(summaries)
-
-        self.assertEqual(report["genuine_exposure_count"], 15)
+            RUNNER.semantic_digest(value), RUNNER.semantic_digest(value))
+        before = case_summary("a", elapsed_seconds=10.0)
+        after = case_summary("a", elapsed_seconds=1.0)
         self.assertEqual(
-            report["comparator_exposure_counts"][
-                "historical-cluster-active-proposal-maximum"], 5)
-        self.assertEqual(len(report["replay_case_ids"]), 15)
-        self.assertFalse(report["corpus_target_met"])
+            before["semantic_trajectory_sha256"],
+            after["semantic_trajectory_sha256"])
         self.assertEqual(
-            report["policy_decisions"][
-                "historical-active-proposal"]["benefit_ratio"], 1.0)
-        self.assertEqual(
-            report["maximum_evidence"]["production"]
-            ["accepted:N<=91:samples"], 30)
-        self.assertEqual(
-            report["maximum_evidence"]["production"]
-            ["accepted_max_unique_catches"], 15)
-
-    def test_analyzer_reports_harm_and_safety_regression(self) -> None:
-        harmful = case_summary("harm", False, False, True, 1.01, 0.12)
-        harmful["safety_regression"] = True
-        harmful["audit"]["accepted_only_shadow"] = {"reached": True}
-        harmful["audit"]["terminal"] = {
-            "reason": "audit-patience", "try": 6,
-            "accepted_iteration": 6, "objective": 1.0,
-            "truth_metrics": {
-                "amplitude_rmse": 0.1, "width_rmse": 0.1,
-                "offset_rmse": 0.1, "transformed_aggregate_rmse": 0.1,
-            },
-        }
-        harmful["audit"]["shadow_policies"] = {
-            "accepted-only-k2": {
-                "reached": True, "source": "shadow-policy", "try": 4,
-                "accepted_iteration": 4, "attempts_saved": 2,
-                "accepted_iterations_saved": 2, "objective": 1.01,
-                "endpoint_safe": False, "continuation_safety_events": {},
-                "truth_metrics": {
-                    "amplitude_rmse": 0.12, "width_rmse": 0.12,
-                    "offset_rmse": 0.12,
-                    "transformed_aggregate_rmse": 0.12,
-                },
-            },
-        }
-        report = ANALYZER.analyze([harmful])
-        outcome = report["cases"][0]["outcomes"][
-            "historical-active-proposal"]
-
-        self.assertEqual(outcome["category"], "material-harm")
-        self.assertTrue(outcome["safety_regression"])
-        self.assertFalse(
-            report["policy_decisions"]["historical-active-proposal"][
-                "redesign_candidate"])
-        shadow_decision = report["shadow_policy_decisions"]["accepted-only-k2"]
-        self.assertEqual(shadow_decision["objective_material_harm_count"], 1)
-        self.assertEqual(shadow_decision["endpoint_safety_violation_count"], 1)
-        self.assertFalse(shadow_decision["promotion_candidate"])
-
-    def test_analyzer_keeps_agreement_and_no_trigger_as_controls(self) -> None:
-        agreement = case_summary("agreement", False, False, False)
-        no_trigger = {
-            "status": "complete",
-            "case": {
-                "case_id": "no-trigger", "family": "fixture",
-                "topology": "fixture", "level": 0,
-            },
-            "audit": {
-                "status": "no_convergence_trigger", "experiments": [],
-                "trajectory_audit": {},
-            },
-        }
-        report = ANALYZER.analyze([agreement, no_trigger])
-
-        self.assertEqual(report["exposure_counts"]["policy-agreement"], 1)
-        self.assertEqual(report["exposure_counts"]["no-trigger"], 1)
-        self.assertEqual(report["genuine_exposure_count"], 0)
-        comparison = ANALYZER.compare(report, report)
-        self.assertEqual(comparison["before_convergence_count"], 1)
-        self.assertEqual(comparison["after_convergence_count"], 1)
-        self.assertEqual(comparison["safety_regression_count"], 0)
-
-        before_summaries = []
-        after_summaries = []
-        for index in range(600):
-            before = case_summary(
-                f"paired-{index:03d}", False, False, False)
-            after = case_summary(
-                f"paired-{index:03d}", False, False, False)
-            terminal_truth = {
-                "amplitude_rmse": 0.1,
-                "width_rmse": 0.1,
-                "offset_rmse": 0.1,
-                "transformed_aggregate_rmse": 0.1,
-            }
-            before["audit"]["terminal"] = {
-                "reason": "audit-patience",
-                "accepted_iteration": 5,
-                "objective": 1.0,
-                "truth_metrics": terminal_truth,
-            }
-            after["audit"]["terminal"] = {
-                "reason": "audit-patience",
-                "accepted_iteration": 4,
-                "objective": 0.999,
-                "truth_metrics": terminal_truth,
-            }
-            before_summaries.append(before)
-            after_summaries.append(after)
-
-        paired = ANALYZER.compare(
-            ANALYZER.analyze(before_summaries),
-            ANALYZER.analyze(after_summaries))
-        self.assertEqual(paired["schema_version"], 3)
-        self.assertEqual(
-            paired["accepted_iteration_delta"]["before_median"], 5)
-        self.assertEqual(
-            paired["accepted_iteration_delta"]["after_median"], 4)
-        self.assertEqual(paired["accepted_iteration_delta"]["median"], -1)
-        self.assertTrue(
-            paired["guard_trust_decoupling_blocking_gate"]["passed"])
-
-        for summary in after_summaries:
-            summary["audit"]["terminal"]["accepted_iteration"] = 6
-        regressed = ANALYZER.compare(
-            ANALYZER.analyze(before_summaries),
-            ANALYZER.analyze(after_summaries))
-        self.assertTrue(
-            regressed["guard_trust_decoupling_blocking_gate"]
-            ["accepted_iteration_median_regression"])
-        self.assertFalse(
-            regressed["guard_trust_decoupling_blocking_gate"]["passed"])
-
-    def test_analyzer_separates_budget_and_existing_safeguard_termination(self) -> None:
-        budget = case_summary("budget", False, False, True)
-        budget_experiment = budget["audit"]["experiments"][0]
-        budget_experiment["termination_reason"] = "budget-exhausted"
-        budget_experiment["policies"][
-            "historical-active-proposal"] = {"reached": False}
-        safeguarded = case_summary("safeguarded", False, False, True)
-        safeguard_experiment = safeguarded["audit"]["experiments"][0]
-        safeguard_experiment["termination_reason"] = "audit-patience"
-        safeguard_experiment["policies"][
-            "historical-active-proposal"] = {"reached": False}
-
-        self.assertEqual(
-            ANALYZER.classify_policy_outcome(
-                budget, "historical-active-proposal")["category"],
-            "unresolved-budget-exhausted")
-        self.assertEqual(
-            ANALYZER.classify_policy_outcome(
-                safeguarded, "historical-active-proposal")["category"],
-            "terminated-existing-safeguard")
-
-    def test_runner_resumes_completed_case(self) -> None:
-        case = {
-            "case_id": "natural-v00-r0", "family": "natural",
-            "topology": "unk-c", "level": 0, "replica": 0,
-            "seed": 410000, "noise_sigma": 0.0,
-        }
-        with tempfile.TemporaryDirectory() as temp_directory:
-            case_directory = (
-                Path(temp_directory) / "cases" / case["case_id"])
-            case_directory.mkdir(parents=True)
-            legacy = {
-                "schema_version": 5,
-                "status": "complete", "case": case, "thread_count": 1,
-            }
-            RUNNER.write_json(case_directory / "case-summary.json", legacy)
-            with mock.patch.object(
-                    RUNNER.subprocess, "run",
-                    return_value=subprocess.CompletedProcess(
-                        [], 0, stdout=b"")) as initial_run_mock:
-                expected = RUNNER.run_case(
-                    Path("unused"), case, Path(temp_directory), 1, None)
-            with mock.patch.object(RUNNER.subprocess, "run") as resume_run_mock:
-                actual = RUNNER.run_case(
-                    Path("unused"), case, Path(temp_directory), 1, None)
-
-        self.assertEqual(actual, expected)
-        self.assertEqual(
-            actual["schema_version"], RUNNER.CASE_SUMMARY_SCHEMA_VERSION)
-        initial_run_mock.assert_called_once()
-        resume_run_mock.assert_not_called()
-
-    def test_runner_writes_complete_case_artifacts(self) -> None:
-        case = {
-            "case_id": "natural-v00-r0", "family": "natural",
-            "topology": "unk-c", "level": 0, "replica": 0,
-            "seed": 410000, "noise_sigma": 0.0,
-        }
-        log = (
-            "Convergence exposure truth: schema=1, case=natural-v00-r0, "
-            "serial=1, amplitude=6, width=0.5, offset=0.1.\n"
-            "Trust-model shadow: schema=2, try=1, acc=1, atoms=1, "
-            "key-first=0, key-last=0, disposition=accepted, "
-            "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
-            "final-local-candidate=1, status=available, source=base, "
-            "search-pass=1, trial=1, factor=1.0, "
-            "trial-disposition=accepted, rejected-by-previous=0, "
-            "rejected-by-best=0, rejected-by-strict-polish=0, "
-            "step-norm=0.9, actual-reduction=0.2, polish-reduction=-, "
-            "predicted-residual-reduction=0.19, "
-            "predicted-penalty-reduction=0.01, predicted-reduction=0.2, "
-            "rho=1.0, boundary-utilization=0.9, "
-            "current-action=keep, shadow-action=grow, "
-            "objective-backtracked=0, unselected-dependencies=0, "
-            "elapsed-ms=0.25\n")
-        with tempfile.TemporaryDirectory() as temp_directory:
-            output_directory = Path(temp_directory)
-            with mock.patch.object(
-                    RUNNER.subprocess, "run",
-                    return_value=subprocess.CompletedProcess(
-                        [], 0, stdout=log.encode("utf-8"))):
-                summary = RUNNER.run_case(
-                    Path("unused"), case, output_directory, 1, None)
-            case_directory = output_directory / "cases" / case["case_id"]
-            artifact_names = {
-                path.name for path in case_directory.iterdir()
-            }
-            trajectory = json.loads(
-                (case_directory / "trajectory-schema-8.json").read_text(
-                    encoding="utf-8"))
-            trust_model = json.loads(
-                (case_directory / "trust-model-shadow-schema-2.json").read_text(
-                    encoding="utf-8"))
-
-        self.assertEqual(summary["status"], "complete")
-        self.assertEqual(summary["certificate_definition"], 1)
-        self.assertEqual(summary["comparator_set"], 1)
-        self.assertTrue({
-            "run.log", "scenario-truth.json", "trajectory-schema-8.json",
-            "counterfactual-schema-4.json", "shadow-terminal-schema-1.json",
-            "shadow-continuation-schema-2.json",
-            "trust-model-shadow-schema-2.json",
-            "case-summary.json",
-        }.issubset(artifact_names))
-        self.assertEqual(trajectory["schema_version"], 8)
-        self.assertEqual(trust_model["schema_version"], 2)
-        self.assertEqual(trust_model["records"][0]["rho"], 1.0)
-        self.assertNotIn("elapsed-ms", trust_model["records"][0])
-
-    def test_runner_isolates_failed_case(self) -> None:
-        case = {
-            "case_id": "failed", "family": "natural",
-            "topology": "unk-c", "level": 0, "replica": 0,
-            "seed": 410000, "noise_sigma": 0.0,
-        }
-        with tempfile.TemporaryDirectory() as temp_directory:
-            output_directory = Path(temp_directory)
-            with mock.patch.object(
-                    RUNNER.subprocess, "run",
-                    return_value=subprocess.CompletedProcess(
-                        [], 7, stdout=b"isolated failure\n")):
-                summary = RUNNER.run_case(
-                    Path("unused"), case, output_directory, 1, None)
-            log = (output_directory / "cases" / "failed" / "run.log").read_text()
-
-        self.assertEqual(summary["status"], "failed")
-        self.assertEqual(summary["return_code"], 7)
-        self.assertEqual(log, "isolated failure\n")
+            before["terminal_state_sha256"], after["terminal_state_sha256"])
 
 
 if __name__ == "__main__":

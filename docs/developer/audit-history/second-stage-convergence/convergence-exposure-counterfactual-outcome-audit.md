@@ -1,3 +1,8 @@
+---
+Status: Historical audit record.
+Current policy: second-stage-outer-iteration-algorithm-audit.md
+---
+
 # Convergence exposure and counterfactual outcome audit
 
 > Current result (2026-08-28): the actual-reduction-aware radius-growth update
@@ -179,7 +184,7 @@ a normal CTest because its fixed budget is 600 complete fits.
 
 ## Historical reproducible corpus
 
-[`convergence_exposure_manifest.json`](../../tests/benchmarks/convergence_exposure_manifest.json)
+[`convergence_exposure_manifest.json`](../../../../tests/benchmarks/convergence_exposure_manifest.json)
 expands to three families, 25 variants per family, and eight replicas per
 variant. Seeds are fixed by
 
@@ -401,7 +406,7 @@ Current verification on 2026-08-28:
 - the paired objective, transformed-truth RMSE, and accepted-iteration deltas
   all have median/p90 `0`; the 1.3 GB case artifacts remain under the audit
   build, while the tracked compact baseline is
-  [`convergence_certificate_baseline.json`](../../tests/benchmarks/convergence_certificate_baseline.json);
+  [`convergence_certificate_baseline.json`](../../../../tests/benchmarks/convergence_certificate_baseline.json);
 - the frozen manifest, case identity, and truth hashes are respectively
   `2b0d74c249a4723575696d98f99df9d3c449a30837adf8117aaf744145d0a87a`,
   `63985f81c5b188cfc9992742cad1f4b9418cc36c88b12398e5775a324289bd98`,

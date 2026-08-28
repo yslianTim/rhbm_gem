@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def load_analyzer():
     path = (PROJECT_ROOT / "resources" / "tools" / "developer" /
-            "analyze_counterfactual_convergence.py")
+            "analyze_convergence_audit.py")
     spec = importlib.util.spec_from_file_location("exposure_runner_analyzer", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -63,37 +63,30 @@ def main() -> int:
         raise AssertionError("identical seeds did not reproduce the predicate sequence")
     if parsed_a["trajectory_records"] != parsed_parallel["trajectory_records"]:
         raise AssertionError("one-thread and four-thread predicate sequences differ")
-    if parsed_a["shadow_policy_checkpoints"] != parsed_b["shadow_policy_checkpoints"]:
-        raise AssertionError("identical seeds did not reproduce shadow policies")
-    if (parsed_a["shadow_policy_checkpoints"] !=
-            parsed_parallel["shadow_policy_checkpoints"]):
-        raise AssertionError("one-thread and four-thread shadow policies differ")
-    if parsed_a["audit_terminal"] != parsed_b["audit_terminal"]:
+    if parsed_a["terminal"] != parsed_b["terminal"]:
         raise AssertionError("identical seeds did not reproduce terminal state")
+    if parsed_a["terminal_atoms"] != parsed_b["terminal_atoms"]:
+        raise AssertionError("identical seeds did not reproduce terminal atoms")
 
     for topology in ("unk-c", "unk-n", "unk-o"):
         _, parsed = run_case(
             args.executable, 410000, 1, topology=topology, noise_sigma=0.0)
-        production = next(
-            (record for record in parsed["checkpoints"]
-             if record["policy"] == "production"),
-            None)
-        if production is None:
+        terminal = parsed["terminal"]
+        if terminal is None or terminal["reason"] != "converged":
             raise AssertionError(
                 f"{topology} positive control did not reach production convergence")
-        objective = [float(value) for value in production["objective"].split("/")]
+        objective = [float(value) for value in terminal["objective"].split("/")]
         if not all(math.isfinite(value) for value in objective):
             raise AssertionError(f"{topology} produced a non-finite objective")
-        production_try = production["try"]
         trajectory = next(
             record for record in parsed["trajectory_records"]
-            if record["try"] == production_try)
+            if record["try"] == terminal["try"])
         blockers = [
             int(float(value)) for value in trajectory["blockers"].split("/")]
         if any(blockers):
             raise AssertionError(
                 f"{topology} production checkpoint retained safety blockers")
-        for atom in parsed["atoms"][(production["experiment"], "production")]:
+        for atom in parsed["terminal_atoms"]:
             parameters = [
                 float(atom[name]) for name in ("amplitude", "width", "offset")]
             if not all(math.isfinite(value) for value in parameters):

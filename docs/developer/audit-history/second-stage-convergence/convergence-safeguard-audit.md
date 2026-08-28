@@ -1,3 +1,8 @@
+---
+Status: Historical audit record.
+Current policy: second-stage-outer-iteration-algorithm-audit.md
+---
+
 # Second-stage convergence safeguard audit
 
 > Current baseline (2026-08-28): production requires solver qualification,
@@ -147,7 +152,7 @@ reference on 2026-08-28. All 600 normalized production semantic digests match,
 with zero safety regression and zero comparator exposure; the stop distribution
 remains 42/372/163/23 for converged/audit-patience/all-rejected/maximum-
 iterations. The tracked compact result is
-[`convergence_certificate_baseline.json`](../../tests/benchmarks/convergence_certificate_baseline.json).
+[`convergence_certificate_baseline.json`](../../../../tests/benchmarks/convergence_certificate_baseline.json).
 
 ## Historical first-round decisions
 

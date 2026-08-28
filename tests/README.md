@@ -72,15 +72,14 @@ The 168-atom simulation regression is intentionally excluded unless configured
 with `RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON`. It uses hash-verified external
 inputs and can be selected with `-R fold_168_simulation_regression` or
 `-L benchmark:external`; see the developer build guide for configuration.
-When the developer-only
-`RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON` option is also enabled,
-the external test is registered as `counterfactual_fold_168_audit` and writes
-its continuation report to a separate benchmark artifact directory.
-The same developer option builds `RHBM-GEM-CONVERGENCE-EXPOSURE`. Its smoke,
-manifest/analyzer, and determinism checks are normal small CTest entries; the
-600-case targeted search is deliberately excluded from CTest and is run with
-the `convergence_exposure_corpus` build target. Full per-case artifacts remain
-under the specialized build directory.
+`RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON` builds the developer-only
+frozen-IRLS trust-model instrumentation and requires `BUILD_TESTING=ON`.
+`RHBM-GEM-CONVERGENCE-EXPOSURE` is a production-only corpus runner and does not
+require that experiment. Its smoke, schema/analyzer, and determinism checks are
+normal small CTest entries; the paired 600-case gate is deliberately excluded
+from CTest and is run with the `convergence_exposure_corpus` build target. Each
+case retains only the current run log, frozen truth, schema-9 trajectory,
+schema-2 terminal state, and schema-12 case summary.
 
 Run repository guards and install consumer smoke (lint lane):
 

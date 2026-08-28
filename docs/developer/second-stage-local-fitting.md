@@ -9,12 +9,10 @@ and unselected model atoms while updating each selected atom's amplitude,
 width, and offset. Unselected atoms contribute background responses but are
 never added to the optimizer state.
 
-The implication and redundancy review of the stopping predicates is recorded
-in [Second-stage convergence safeguard audit](convergence-safeguard-audit.md).
-Its shadow-only follow-up is the
-[solver-qualification and active-coordinate population audit](stationarity-active-coordinate-audit.md).
-The third-round causal experiment is the
-[counterfactual convergence continuation audit](counterfactual-convergence-continuation-audit.md).
+The current decision and evidence authority for the outer iteration is the
+[Second-stage outer-iteration algorithm audit](second-stage-outer-iteration-algorithm-audit.md).
+Earlier safeguard, population, continuation, and corpus reviews are immutable
+historical records linked only from that audit.
 
 The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the
@@ -227,8 +225,8 @@ Production uses full solver qualification: active local shape refits must
 report `SUCCESS`, active shared offsets must report
 `Converged`, and both require a full undamped, non-fallback endpoint. A usable
 soft endpoint may continue through candidate selection without being solver
-qualified. The older cluster rollup and active proposal residual remain only in
-the explicitly named historical comparators; they do not define production.
+qualified. Historical cluster rollups and active proposal residuals are not
+evaluated by the current runtime and do not define production.
 
 The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
@@ -358,8 +356,9 @@ or actual/predicted reduction ratio. Candidate acceptance and historical-best
 gates are unchanged; actual reduction only controls whether the next radius may
 grow.
 
-An audit build computes a developer-only frozen-IRLS directional model for
-every material base or joint-polish trial that reaches the objective gate,
+A trust-model experiment build computes a developer-only frozen-IRLS
+directional model for every material base or joint-polish trial that reaches
+the objective gate,
 including locally accepted and objective-rejected candidates. It freezes Cauchy
 weights and objective scales at the outer previous state, applies the existing
 transformed response Jacobian to the complete previous-to-candidate step, and
@@ -374,16 +373,16 @@ accepted base candidate is recorded separately.
 The shadow status distinguishes `available`, `nonmaterial-step`,
 `objective-unavailable`, `model-unavailable`, `residual-unavailable`,
 `nonfinite`, `nonpositive-prediction`, and `nonmaterial-prediction`. Its
-counterfactual action preserves objective-backtracking shrink precedence,
+shadow action preserves objective-backtracking shrink precedence,
 falls back to the current actual-only action when prediction is unusable, uses
 rho bands `0.25` and `0.75`, and requires at least `0.8` boundary utilization
-for counterfactual growth. Only the final locally accepted candidate can become
+for shadow growth. Only the final locally accepted candidate can become
 action-ready. Boundary-reconciled, rescued, globally rejected, and non-final
 trial records remain available for coverage and calibration but are suppressed
 from action comparison. Pre-objective validity, trust, guard, and nonmaterial
 outcomes are counted in a separate candidate funnel without running the model.
 None of these calculations run unless
-`RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON`, and no shadow result is
+`RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON`, and no shadow result is
 applied to candidate acceptance, radius updates, convergence, or output state.
 
 Accepted clusters are first connected only when they both affect the same boundary
@@ -728,6 +727,15 @@ affected atom's reason, margin, and fixed shape/offset/hard block. Completion
 warnings report cumulative quarantine
 entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
+
+The current convergence trace is schema 9. It serializes only the production
+certificate and the active/nominal populations, accepted/operator p99 and
+maximum, operator tail/unavailable counts, qualification, blockers, residual
+classification, and search-path statistics required to explain that
+certificate. Maximum and tail remain diagnostic and never form a separate
+policy decision. Historical comparator, exposure, accepted-only persistence,
+active-member comparison, and rho fields are absent. Schema 8 is supported
+only by the frozen compatibility fixture used by the analyzer test.
 
 Adaptive rebuild diagnostics use a distinct
 `Adaptive local-fitting topology rebuild` record so the one-time initial

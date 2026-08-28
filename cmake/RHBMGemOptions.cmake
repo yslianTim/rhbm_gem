@@ -21,8 +21,8 @@ option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
 option(RHBM_GEM_ENABLE_FOLD_168_REGRESSION
     "Enable the external 168-atom simulation regression benchmark" OFF)
-option(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
-    "Enable the developer-only counterfactual convergence continuation audit" OFF)
+option(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+    "Enable developer-only frozen-IRLS trust-model instrumentation" OFF)
 
 set(RHBM_GEM_FOLD_168_MODEL "" CACHE FILEPATH
     "Path to the fixed fold-168 regression CIF model")
@@ -68,9 +68,9 @@ if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION AND NOT BUILD_TESTING)
         "RHBM_GEM_ENABLE_FOLD_168_REGRESSION requires BUILD_TESTING=ON")
 endif()
 
-if(RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT AND NOT BUILD_TESTING)
+if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT AND NOT BUILD_TESTING)
     message(FATAL_ERROR
-        "RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT requires BUILD_TESTING=ON")
+        "RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT requires BUILD_TESTING=ON")
 endif()
 
 add_library(CompilerFlags INTERFACE)

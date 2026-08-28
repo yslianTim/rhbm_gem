@@ -70,7 +70,7 @@ struct ClusterCandidateResult
     ObjectiveAttemptDiagnostic diagnostic{};
     PolishProgress polish_progress{};
     TrustRegionRadiusAction radius_action{ TrustRegionRadiusAction::Keep };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
     TrustModelCandidateFunnel trust_model_candidate_funnel{};
 #endif
@@ -292,7 +292,7 @@ PerformanceCounters::~PerformanceCounters()
         
     Logger::Log(LogLevel::Info, message_info.str());
     Logger::Log(LogLevel::Debug, message_debug.str());
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     std::ostringstream audit_performance;
     audit_performance << std::scientific << std::setprecision(17)
         << "Trust-model performance: schema=1"
@@ -2269,6 +2269,7 @@ TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
         TrustRegionRadiusAction::Grow : TrustRegionRadiusAction::Keep;
 }
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 TrustRegionRadiusAction DetermineTrustModelShadowAction(
     const TrustModelShadowDiagnostic & diagnostic)
 {
@@ -2559,6 +2560,7 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     result.shadow_action = DetermineTrustModelShadowAction(result);
     return result;
 }
+#endif
 
 static void TryRetainRescueCandidate(
     const FitStatePatch & patch,
@@ -2685,7 +2687,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     std::optional<FitStatePatch> accepted_patch;
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     std::optional<std::size_t> final_trust_model_trial_index;
     std::size_t trust_model_search_pass{ 0 };
     const auto record_trust_model_trial = [&]
@@ -2740,7 +2742,7 @@ static ClusterCandidateResult SelectClusterCandidate(
 #endif
     for (;;)
     {
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
         trust_model_search_pass++;
 #endif
         result.objective_state = previous_objective_state;
@@ -2788,7 +2790,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             factor >= std::numeric_limits<double>::epsilon(); factor *= 0.5)
         {
             trial_number++;
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             result.trust_model_candidate_funnel.generated_count++;
 #endif
             auto proposal_result{
@@ -2803,7 +2805,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.proposal.has_value())
             {
                 invalid_trial_count++;
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 result.trust_model_candidate_funnel.invalid_count++;
 #endif
                 result.diagnostic.pre_objective_failure_reason =
@@ -2823,7 +2825,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             if (maximum_change < kTransformedChangeTolerance)
             {
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 result.trust_model_candidate_funnel.nonmaterial_count++;
 #endif
                 if (factor == 1.0 && is_polish_eligible)
@@ -2839,7 +2841,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     proposal.step_norm, trust_region_radius))
             {
                 trust_skipped_trial_count++;
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 result.trust_model_candidate_funnel.trust_skipped_count++;
 #endif
                 result.diagnostic.pre_objective_failure_reason =
@@ -2856,7 +2858,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (guard_failure.has_value())
             {
                 guard_rejected_trial_count++;
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 result.trust_model_candidate_funnel.guard_rejected_count++;
 #endif
                 last_guard_failure = guard_failure;
@@ -2887,7 +2889,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     result.objective_state,
                     trial_diagnostic,
                     performance_counters) };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             result.trust_model_candidate_funnel.objective_evaluated_count++;
             const auto trust_model_trial_index{ record_trust_model_trial(
                 proposal.patch,
@@ -2901,7 +2903,7 @@ static ClusterCandidateResult SelectClusterCandidate(
 #endif
             if (committed)
             {
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 final_trust_model_trial_index = trust_model_trial_index;
 #endif
                 result.diagnostic = std::move(trial_diagnostic);
@@ -3042,7 +3044,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     result.objective_state,
                     polish_diagnostic,
                     performance_counters) };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             result.trust_model_candidate_funnel.polish_objective_evaluated_count++;
             const auto rejected_by_strict_polish{
                 !polish_committed &&
@@ -3067,7 +3069,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
             else
             {
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 final_trust_model_trial_index = trust_model_trial_index;
 #endif
                 result.polish_progress.accepted_count = 1;
@@ -3097,7 +3099,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     {
         result.accepted_patch = std::move(base_patch);
     }
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     if (final_trust_model_trial_index.has_value())
     {
         auto & final_shadow{
@@ -3235,7 +3237,7 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
                 key,
                 std::move(result.diagnostic)
             };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             cluster_diagnostic.trust_model_shadow_trial_list =
                 std::move(result.trust_model_shadow_trial_list);
             cluster_diagnostic.trust_model_candidate_funnel =
@@ -3258,7 +3260,7 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
             key,
             std::move(result.diagnostic)
         };
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
         cluster_diagnostic.trust_model_shadow_trial_list =
             std::move(result.trust_model_shadow_trial_list);
         cluster_diagnostic.trust_model_candidate_funnel =
@@ -4380,7 +4382,7 @@ static void SalvageFinalSelectionAudit(
     selection.final_audit_objective.reset();
 }
 
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 static void FinalizeTrustModelShadowDisposition(CandidateSelection & selection)
 {
     const auto touches_boundary = [&](const ClusterKey & key)
@@ -4550,7 +4552,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     selection.polish_progress = SummarizeFinalPolishProgress(
         individual_selection.polish_progress_by_key,
         selection.accepted_key_list);
-#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     FinalizeTrustModelShadowDisposition(selection);
 #endif
     return selection;
