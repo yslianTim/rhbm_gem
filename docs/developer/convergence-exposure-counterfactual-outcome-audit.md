@@ -303,6 +303,41 @@ The earlier accepted-only persistence and dynamic-raw experiments remain
 historical controls. They are not the production policy after the unified
 stabilisation change.
 
+## Rejected coarse-to-fine candidate-factor refinement
+
+A production candidate evaluated a main-cluster-only step-size refinement on
+2026-08-28. The existing `1, 1/2, 1/4, ...` search first found a passing lower
+bound, then attempted at most two arithmetic midpoints against the immutable
+pre-search objective state. The largest passing factor was retained. Boundary
+reconciliation and rescue backtracking were unchanged.
+
+The same 600-case manifest, seeds, frozen truth, and single-thread estimator
+configuration were run against `32e484a7` and the candidate. Both sides
+completed 600/600 cases with zero runner failures and zero safety regressions.
+Refinement was materially exercised: 8,853 accepted local records in 521 cases
+used non-dyadic factors.
+
+| Measure | Baseline | Candidate |
+| --- | ---: | ---: |
+| Production convergence | 42 | 42 |
+| Accepted-iteration median | 12 | 11 |
+| Accepted-iteration delta p90 | - | +3.1 |
+| Objective delta median / p90 | - | 0 / +0.000370533 |
+| Objective material benefit / harm | - | 55 / 62 |
+| Truth RMSE delta median / p90 | - | +2.54642e-7 / +0.000630830 |
+| Truth material benefit / harm | - | 138 / 277 |
+| Unified search trials | 361,133 | 364,169 |
+| Objective-rejected trials | 201,068 | 207,249 |
+| Candidate-phase time sum (ms) | 83,330.522 | 92,886.559 |
+| Candidate-phase time median / p90 (ms) | 41.1025 / 460.048 | 45.3795 / 469.713 |
+
+The existing blocking gate failed because objective material harm reached
+`62/600 = 10.33%`, above the permitted 10%. Accepted-iteration p90 and truth
+RMSE p90 also worsened, while unified trials grew 0.84%, objective-rejected
+trials grew 3.07%, and aggregate candidate-phase time grew 11.47%. The strategy
+was therefore not promoted; production code and the main algorithm description
+remain on the original geometric first-passing policy.
+
 Current verification on 2026-08-28:
 
 - audit-enabled CTest passes 21/21 and audit-disabled CTest passes 19/19;
