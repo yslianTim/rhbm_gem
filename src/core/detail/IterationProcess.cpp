@@ -4118,9 +4118,11 @@ void ApplyFitState(
 static void LogFinalDependencyPolish(
     bool quiet_mode,
     const FinalDependencyPolishResult & polish_result,
-    std::string_view certificate_status,
+    std::string_view safety_policy,
+    std::string_view safety_status,
     bool applied,
-    const ConvergenceCertificate * certificate = nullptr)
+    const ConvergenceCertificate * base_certificate = nullptr,
+    const ConvergenceCertificate * candidate_certificate = nullptr)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
@@ -4155,20 +4157,31 @@ static void LogFinalDependencyPolish(
         message << "-";
     }
     message << ", accepted=" << (polish_result.accepted ? "yes" : "no")
-        << ", certificate=" << certificate_status
+        << ", residual-safety-policy=" << safety_policy
+        << ", residual-safety=" << safety_status
         << ", applied=" << (applied ? "yes" : "no");
-    if (certificate != nullptr)
+    const auto append_certificate = [&](
+        std::string_view prefix,
+        const ConvergenceCertificate & certificate)
     {
-        message << ", certificate-solver-qualified="
-            << (certificate->solver_qualification.solver_qualified ? "yes" : "no")
-            << ", certificate-operator-complete="
-            << (certificate->OperatorComplete() ? "yes" : "no")
-            << ", certificate-residual-p99=";
+        message << ", " << prefix << "-solver-qualified="
+            << (certificate.solver_qualification.solver_qualified ? "yes" : "no")
+            << ", " << prefix << "-operator-complete="
+            << (certificate.OperatorComplete() ? "yes" : "no")
+            << ", " << prefix << "-residual-p99=";
         AppendAuditValues(
             message,
-            certificate->operator_nominal_residual.percentile_stats.percentile_list);
-        message << ", certificate-residual-max=";
-        AppendAuditValues(message, certificate->operator_nominal_residual.maximum_list);
+            certificate.operator_nominal_residual.percentile_stats.percentile_list);
+        message << ", " << prefix << "-residual-max=";
+        AppendAuditValues(message, certificate.operator_nominal_residual.maximum_list);
+    };
+    if (base_certificate != nullptr)
+    {
+        append_certificate("base", *base_certificate);
+    }
+    if (candidate_certificate != nullptr)
+    {
+        append_certificate("candidate", *candidate_certificate);
     }
     message
         << ", elapsed_ms=" << std::fixed << std::setprecision(3)
@@ -4222,13 +4235,12 @@ static void LogFinalDependencyPolish(
 
 enum class FinalPolishCertificationPolicy
 {
-    ObjectiveOnly,
+    RequireResidualNonRegression,
     RequireStrictFixedPoint
 };
 
 enum class FinalPolishCertificateStatus
 {
-    NotRequired,
     NotEvaluated,
     Passed,
     Failed,
@@ -4247,23 +4259,60 @@ struct FinalPolishCertificationResult
     }
 };
 
-static std::string_view GetFinalPolishCertificateStatusText(
-    FinalPolishCertificateStatus status)
+enum class FinalPolishResidualSafetyStatus
+{
+    NotEvaluated,
+    AbsolutePassed,
+    RelativePassed,
+    Failed,
+    Error
+};
+
+struct FinalPolishResidualSafetyResult
+{
+    FinalPolishResidualSafetyStatus status{
+        FinalPolishResidualSafetyStatus::NotEvaluated
+    };
+    FinalPolishCertificationResult base{};
+    FinalPolishCertificationResult candidate{};
+
+    bool Passed() const
+    {
+        return status == FinalPolishResidualSafetyStatus::AbsolutePassed ||
+            status == FinalPolishResidualSafetyStatus::RelativePassed;
+    }
+};
+
+static std::string_view GetFinalPolishCertificationPolicyText(
+    FinalPolishCertificationPolicy policy)
+{
+    switch (policy)
+    {
+    case FinalPolishCertificationPolicy::RequireResidualNonRegression:
+        return "non-regression";
+    case FinalPolishCertificationPolicy::RequireStrictFixedPoint:
+        return "strict-fixed-point";
+    }
+    throw std::invalid_argument("Unknown final polish certification policy.");
+}
+
+static std::string_view GetFinalPolishResidualSafetyStatusText(
+    FinalPolishResidualSafetyStatus status)
 {
     switch (status)
     {
-    case FinalPolishCertificateStatus::NotRequired:
-        return "not-required";
-    case FinalPolishCertificateStatus::NotEvaluated:
+    case FinalPolishResidualSafetyStatus::NotEvaluated:
         return "not-evaluated";
-    case FinalPolishCertificateStatus::Passed:
-        return "passed";
-    case FinalPolishCertificateStatus::Failed:
+    case FinalPolishResidualSafetyStatus::AbsolutePassed:
+        return "absolute-passed";
+    case FinalPolishResidualSafetyStatus::RelativePassed:
+        return "relative-passed";
+    case FinalPolishResidualSafetyStatus::Failed:
         return "failed";
-    case FinalPolishCertificateStatus::Error:
+    case FinalPolishResidualSafetyStatus::Error:
         return "error";
     }
-    throw std::invalid_argument("Unknown final polish certificate status.");
+    throw std::invalid_argument("Unknown final polish residual safety status.");
 }
 
 static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
@@ -4348,6 +4397,104 @@ static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
     return result;
 }
 
+static bool HasComparableFinalPolishOperatorEvidence(
+    const ConvergenceCertificate & certificate)
+{
+    const auto & percentile_list{
+        certificate.operator_nominal_residual.percentile_stats.percentile_list
+    };
+    return certificate.solver_qualification.solver_qualified &&
+        certificate.OperatorComplete() &&
+        certificate.InvariantsClear() &&
+        percentile_list.size() == kTransformedChangeSize &&
+        std::ranges::all_of(
+            percentile_list,
+            [](double value) { return std::isfinite(value); });
+}
+
+static bool IsFinalPolishResidualNonWorsening(
+    const ConvergenceCertificate & base_certificate,
+    const ConvergenceCertificate & candidate_certificate)
+{
+    if (!HasComparableFinalPolishOperatorEvidence(base_certificate) ||
+        !HasComparableFinalPolishOperatorEvidence(candidate_certificate))
+    {
+        return false;
+    }
+    const auto & base_percentile_list{
+        base_certificate.operator_nominal_residual.percentile_stats.percentile_list
+    };
+    const auto & candidate_percentile_list{
+        candidate_certificate.operator_nominal_residual.percentile_stats.percentile_list
+    };
+    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    {
+        if (candidate_percentile_list.at(index) >
+            std::max(base_percentile_list.at(index), kTransformedChangeTolerance))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    IterationState & iteration_state,
+    const SuspiciousBlockActivity & final_block_activity,
+    const FitState & base_state,
+    const FitState & candidate_state,
+    FinalPolishCertificationPolicy policy)
+{
+    FinalPolishResidualSafetyResult result;
+    result.candidate = EvaluateFinalPolishCertificate(
+        context,
+        options,
+        iteration_state,
+        final_block_activity,
+        candidate_state);
+    if (result.candidate.status == FinalPolishCertificateStatus::Error)
+    {
+        result.status = FinalPolishResidualSafetyStatus::Error;
+        return result;
+    }
+    if (result.candidate.Passed())
+    {
+        result.status = FinalPolishResidualSafetyStatus::AbsolutePassed;
+        return result;
+    }
+    if (policy == FinalPolishCertificationPolicy::RequireStrictFixedPoint)
+    {
+        result.status = FinalPolishResidualSafetyStatus::Failed;
+        return result;
+    }
+    if (!result.candidate.certificate.has_value() ||
+        !HasComparableFinalPolishOperatorEvidence(*result.candidate.certificate))
+    {
+        result.status = FinalPolishResidualSafetyStatus::Failed;
+        return result;
+    }
+    result.base = EvaluateFinalPolishCertificate(
+        context,
+        options,
+        iteration_state,
+        final_block_activity,
+        base_state);
+    if (result.base.status == FinalPolishCertificateStatus::Error)
+    {
+        result.status = FinalPolishResidualSafetyStatus::Error;
+        return result;
+    }
+    result.status = result.base.certificate.has_value() &&
+        IsFinalPolishResidualNonWorsening(
+            *result.base.certificate,
+            *result.candidate.certificate) ?
+        FinalPolishResidualSafetyStatus::RelativePassed :
+        FinalPolishResidualSafetyStatus::Failed;
+    return result;
+}
+
 static void FinalizeSecondStageState(
     ModelObject & model_object,
     const SecondStageContext & context,
@@ -4379,36 +4526,33 @@ static void FinalizeSecondStageState(
             iteration_state.boundary_joint_correction_workspace_by_key,
             performance_counters)
     };
-    FinalPolishCertificationResult certificate;
-    if (certification_policy == FinalPolishCertificationPolicy::ObjectiveOnly)
+    FinalPolishResidualSafetyResult residual_safety;
+    if (polish_result.accepted && polish_result.objective.has_value())
     {
-        certificate.status = FinalPolishCertificateStatus::NotRequired;
-    }
-    else if (polish_result.accepted && polish_result.objective.has_value())
-    {
-        certificate = EvaluateFinalPolishCertificate(
+        residual_safety = EvaluateFinalPolishResidualSafety(
             context,
             options,
             iteration_state,
             final_block_activity,
-            polish_result.state);
+            base_state,
+            polish_result.state,
+            certification_policy);
     }
     const auto polish_applied{
         polish_result.accepted &&
         polish_result.objective.has_value() &&
-        (certification_policy == FinalPolishCertificationPolicy::ObjectiveOnly ||
-            certificate.Passed())
-    };
-    const auto certificate_evaluated{
-        certificate.status == FinalPolishCertificateStatus::Passed ||
-        certificate.status == FinalPolishCertificateStatus::Failed
+        residual_safety.Passed()
     };
     LogFinalDependencyPolish(
         options.quiet_mode,
         polish_result,
-        GetFinalPolishCertificateStatusText(certificate.status),
+        GetFinalPolishCertificationPolicyText(certification_policy),
+        GetFinalPolishResidualSafetyStatusText(residual_safety.status),
         polish_applied,
-        certificate_evaluated ? &*certificate.certificate : nullptr);
+        residual_safety.base.certificate.has_value() ?
+            &*residual_safety.base.certificate : nullptr,
+        residual_safety.candidate.certificate.has_value() ?
+            &*residual_safety.candidate.certificate : nullptr);
     if (polish_applied)
     {
         if (use_best_audit_state &&
@@ -4819,7 +4963,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 graph_topology,
                 iteration_state,
                 false,
-                FinalPolishCertificationPolicy::ObjectiveOnly,
+                FinalPolishCertificationPolicy::RequireResidualNonRegression,
                 performance_counters);
             log_audit_terminal("quarantine", false);
             if (iteration_state.quarantine_state.HasFailures())
@@ -4944,7 +5088,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             graph_topology,
             iteration_state,
             audit_state != nullptr,
-            FinalPolishCertificationPolicy::ObjectiveOnly,
+            FinalPolishCertificationPolicy::RequireResidualNonRegression,
             performance_counters);
         log_audit_terminal(final_stop_reason, audit_state != nullptr);
         if (maximum_iterations_reached)

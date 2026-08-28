@@ -62,7 +62,7 @@ validated S(k)
   -> production convergence certificate
   -> stop policy selects a base final state
   -> final uncut dependency polish candidate
-  -> converged path recertifies the persisted candidate
+  -> strict or residual-non-regression persistence safety check
   -> persist Gaussian and peeling state
 ```
 
@@ -117,8 +117,18 @@ path, a changed polished state is persisted only when a new certificate built
 at that state passes `StrictOperatorPassed()`: solver qualification, complete
 nominal operator evidence, residual p99, and invariants must all pass. Failure,
 incomplete evidence, or evaluation error retains the already converged base
-state. Non-convergence stop reasons retain the existing objective-only polish
-policy.
+state.
+
+Non-convergence stop reasons use a residual non-regression policy. A strict
+candidate is always safe to apply. Otherwise, both the selected base state and
+polished candidate must have solver-qualified, complete, invariant-clear,
+finite nominal operator evidence, and every candidate coordinate must satisfy
+`candidate_p99 <= max(base_p99, 1e-4)`. This comparison is coordinate-wise for
+log peak, log width, and shared offset. If the base is not comparable, only a
+strict candidate can pass. Any evaluation error, unavailable evidence, or
+residual regression retains the base state. Maximum residual stays diagnostic.
+The fallback does not resume the outer loop, increment accepted iterations, or
+change the original stop reason.
 
 ## Current diagnostic contract
 
@@ -200,6 +210,38 @@ Timing is excluded from both semantic digests. With the experiment flag off,
 the trust-model data structures and calculations are not compiled. Schema 9
 contains maximum and tail diagnostics but no rho, comparator, exposure, or
 accepted-only persistence fields.
+
+### Non-converged final-polish residual safety result (2026-08-29)
+
+The paired comparison used `8e65fa41` as the baseline and the same checked
+600-case manifest, frozen truth, AppleClang 21 `RelWithDebInfo` build, one
+estimator thread, and four corpus jobs. Both sides completed 600/600 cases with
+zero failed cases and zero safety regressions. Production semantic digests
+matched 600/600, stop-reason distributions remained exactly `converged 42`,
+`audit-patience 372`, `all-rejected-backtracking-exhausted 163`, and
+`maximum-iterations 23`, and accepted-iteration delta median/p90 was `0/0`.
+
+The new safety result distribution was `relative-passed 11`, `failed 278`, and
+`not-evaluated 311`; no corpus candidate required the absolute-pass fallback.
+Every applied non-converged polish was one of the 11 relative passes, while all
+278 failed candidates retained their base state. Of those failures, 134 had an
+incomplete candidate operator and 144 had comparable evidence but regressed at
+least one residual coordinate; one incomplete case was also solver-unqualified.
+
+| Stop reason | Objective-accepted | Applied | Safety-rejected |
+| --- | ---: | ---: | ---: |
+| `all-rejected-backtracking-exhausted` | 104 | 8 | 96 |
+| `audit-patience` | 167 | 3 | 164 |
+| `maximum-iterations` | 18 | 0 | 18 |
+| `converged` | 0 | 0 | 0 |
+
+Terminal-state digests matched 322/600; the 278 intentional differences are
+exactly the objective-accepted polishes rejected by the new safety gate.
+Candidate-minus-baseline objective delta median/p90 was `0/0.160499662`, while
+truth-RMSE delta median/p90 remained `0/0`: truth RMSE improved in 241 changed
+cases and worsened in 37. The generic cleanup blocking gate reports failure
+because it requires trajectory-neutral terminal states and zero outcome deltas;
+those conditions do not apply to this intentional persistence-policy change.
 
 ## Historical provenance
 

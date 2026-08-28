@@ -480,11 +480,28 @@ fixed-point operator is evaluated again on the polished state. The polish is
 applied only when every solver is qualified, the nominal-DOF operator is
 complete, and every operator-residual p99 is below `1e-4`. An unavailable,
 failed, or above-threshold certificate discards the polish and writes the
-already converged base state unchanged. Other stop reasons retain the
-objective-only final-polish policy. An applied final polish updates the final
-audit and provenance but does not increment the outer accepted-iteration count
-or change the stop reason. The final-polish diagnostic distinguishes objective
-acceptance, certificate status, and actual application.
+already converged base state unchanged.
+
+For `quarantine`, `audit-patience`, `all-rejected-*`, and
+`maximum-iterations`, objective acceptance is also provisional. The candidate
+is applied immediately when it passes the same strict operator certificate.
+Otherwise, both base and candidate must have solver-qualified, complete,
+invariant-clear, finite nominal operator evidence, and each candidate residual
+p99 must satisfy
+
+```text
+candidate_p99 <= max(base_p99, 1e-4)
+```
+
+independently for log peak, log width, and shared offset. If the base evidence
+cannot be evaluated, only a strict candidate can be applied. Evaluation error,
+unavailable evidence, or any coordinate regression retains the base state.
+Maximum residual remains diagnostic and is not a gate. An applied final polish
+updates the final audit and provenance but does not increment the outer
+accepted-iteration count or change the stop reason. The final-polish diagnostic
+distinguishes objective acceptance, the strict or non-regression policy,
+`absolute-passed`, `relative-passed`, `failed`, `error`, or `not-evaluated`
+safety status, base/candidate residual evidence, and actual application.
 
 ## Numerical defenses, partial active set, and quarantine
 
@@ -748,9 +765,10 @@ same sample-based work accounting as the initial topology build.
 
 Finalization emits a separate `Final dependency polish` record with aggregate
 component, atom, parameter, round, acceptance/fallback, objective-before/after,
-and elapsed-time values. Debug logging adds one record per component, including
-symbolic-analysis and suspicious-candidate counts. These records are emitted
-before the existing stable final summary.
+residual-safety policy/status, application, base/candidate solver and operator
+evidence, residual p99/maximum, and elapsed-time values. Debug logging adds one
+record per component, including symbolic-analysis and suspicious-candidate
+counts. These records are emitted before the existing stable final summary.
 
 Non-quiet runs end with this summary format:
 
