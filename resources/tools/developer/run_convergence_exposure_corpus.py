@@ -20,7 +20,7 @@ COUNTERFACTUAL_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 8
+CASE_SUMMARY_SCHEMA_VERSION = 9
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -213,6 +213,10 @@ def run_case(
         trajectory = (
             json.loads(trajectory_path.read_text(encoding="utf-8"))
             if trajectory_path.is_file() else {})
+        trust_model_path = case_directory / "trust-model-shadow-schema-1.json"
+        trust_model = (
+            json.loads(trust_model_path.read_text(encoding="utf-8"))
+            if trust_model_path.is_file() else {})
         if (value.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
                 value.get("case") == case and
                 value.get("thread_count") == thread_count and
@@ -220,7 +224,8 @@ def run_case(
                     str(reference_truth_directory)
                     if reference_truth_directory is not None else None) and
                 value.get("status") == "complete" and
-                trajectory.get("schema_version") == 7):
+                trajectory.get("schema_version") == 7 and
+                trust_model.get("schema_version") == 1):
             return value
 
     command = build_command(executable, case, thread_count)
@@ -285,6 +290,19 @@ def run_case(
     write_json(
         case_directory / "trajectory-schema-7.json",
         {"schema_version": 7, "records": parsed["trajectory_records"]})
+    write_json(
+        case_directory / "trust-model-shadow-schema-1.json",
+        {
+            "schema_version": 1,
+            "diagnostic_only": True,
+            "records": [
+                {
+                    name: value for name, value in record.items()
+                    if name != "elapsed-ms"
+                }
+                for record in parsed["trust_model_shadow_records"]
+            ],
+        })
     write_json(case_directory / "counterfactual-schema-3.json", {
         "schema_version": 3,
         "checkpoints": parsed["checkpoints"],

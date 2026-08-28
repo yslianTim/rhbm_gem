@@ -295,11 +295,11 @@ All second-stage audit tolerances use:
 tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
 ```
 
-Progress and deterioration guards use `1e-8 + 1e-3 * abs(reference)`. Strict
-best, tie, polish-improvement, and trust-growth comparisons use
-`1e-10 + 1e-8 * abs(reference)`. Candidate comparisons against previous and
-best compute separate tolerances from their respective references. The
-joint-offset IRLS objective retains its independent tolerance.
+Progress, deterioration, and actual-reduction trust-growth comparisons use
+`1e-8 + 1e-3 * abs(reference)`. Strict best, tie, and polish-improvement
+comparisons use `1e-10 + 1e-8 * abs(reference)`. Candidate comparisons against
+previous and best compute separate tolerances from their respective references.
+The joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
 
@@ -352,10 +352,32 @@ independent growth rule. No radius update reruns the same validated state;
 updates remain isolated by cluster and clamp to `0.0625...4.0`.
 
 This remains an actual-reduction-aware transformed-step cap, not a model-based
-trust region: the controller does not construct a predicted reduction or an
-actual/predicted reduction ratio. Candidate acceptance and historical-best
-gates are unchanged; actual reduction only controls whether the next radius
-may grow.
+trust region: the production controller does not consume a predicted reduction
+or actual/predicted reduction ratio. Candidate acceptance and historical-best
+gates are unchanged; actual reduction only controls whether the next radius may
+grow.
+
+An audit build can compute a developer-only frozen-IRLS directional model for
+the final local patch, including accepted joint polish. It freezes Cauchy
+weights and objective scales at the outer previous state, applies the existing
+transformed response Jacobian to the complete previous-to-candidate step, and
+includes selected targets, selected neighbours, and group-median-derived
+unselected contributors. The residual surrogate uses the production fit/tail
+sample coefficients and the exact previous-to-candidate offset-plausibility
+penalty change. A ratio is emitted only when predicted reduction exceeds the
+same progress materiality tolerance and both reductions are finite.
+
+The shadow status distinguishes `available`, `nonmaterial-step`,
+`objective-unavailable`, `model-unavailable`, `residual-unavailable`,
+`nonfinite`, `nonpositive-prediction`, and `nonmaterial-prediction`. Its
+counterfactual action preserves objective-backtracking shrink precedence,
+falls back to the current actual-only action when prediction is unusable, uses
+rho bands `0.25` and `0.75`, and requires at least `0.8` boundary utilization
+for counterfactual growth. Boundary-reconciled, rescued, and globally rejected
+records are retained as suppressed diagnostics but are excluded from action
+readiness. None of these calculations run unless
+`RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT=ON`, and no shadow result is
+applied to candidate acceptance, radius updates, convergence, or output state.
 
 Accepted clusters are first connected only when they both affect the same boundary
 sample. Each multi-cluster component

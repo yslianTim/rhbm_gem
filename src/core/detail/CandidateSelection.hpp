@@ -38,6 +38,40 @@ enum class TrustRegionRadiusAction
     Shrink
 };
 
+enum class TrustModelPredictionStatus
+{
+    Available,
+    NonmaterialStep,
+    ObjectiveUnavailable,
+    ModelUnavailable,
+    ResidualUnavailable,
+    Nonfinite,
+    NonpositivePrediction,
+    NonmaterialPrediction
+};
+
+enum class TrustModelCandidateSource
+{
+    Base,
+    Polish
+};
+
+struct TrustModelShadowDiagnostic
+{
+    TrustModelPredictionStatus status{ TrustModelPredictionStatus::ModelUnavailable };
+    TrustModelCandidateSource candidate_source{ TrustModelCandidateSource::Base };
+    std::optional<double> actual_reduction{};
+    std::optional<double> predicted_reduction{};
+    std::optional<double> rho{};
+    double boundary_utilization{ 0.0 };
+    TrustRegionRadiusAction current_action{ TrustRegionRadiusAction::Keep };
+    std::optional<TrustRegionRadiusAction> shadow_action{};
+    bool objective_backtracked{ false };
+    bool readiness_eligible{ true };
+    std::size_t unselected_dependency_count{ 0 };
+    double elapsed_milliseconds{ 0.0 };
+};
+
 enum class AllRejectedResolution
 {
     MaximumIterations,
@@ -340,9 +374,29 @@ struct ObjectiveAttemptDiagnostic
     std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list{};
 };
 
+struct ObjectiveDomain;
+
 TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic);
+
+TrustRegionRadiusAction DetermineTrustModelShadowAction(
+    const TrustModelShadowDiagnostic & diagnostic);
+
+TrustModelShadowDiagnostic EvaluateTrustModelShadow(
+    const SecondStageContext & context,
+    const ResidualBaseline & residual_baseline,
+    const FitState & previous_state,
+    const FitStatePatch & candidate_patch,
+    const ClusterKey & key,
+    const std::vector<SampleRef> & objective_sample_ref_list,
+    const ObjectiveDomain & objective_domain,
+    const std::optional<ObjectiveBreakdown> & previous_objective,
+    const std::optional<ObjectiveBreakdown> & candidate_objective,
+    double trust_region_radius,
+    TrustRegionRadiusAction current_action,
+    TrustModelCandidateSource candidate_source,
+    bool objective_backtracked);
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
 
@@ -481,6 +535,10 @@ struct ClusterCandidateDiagnostic
 {
     ClusterKey key{};
     ObjectiveAttemptDiagnostic attempt{};
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+    std::optional<TrustModelShadowDiagnostic> trust_model_shadow{};
+    bool boundary_touched{ false };
+#endif
     bool boundary_rescued{ false };
 };
 

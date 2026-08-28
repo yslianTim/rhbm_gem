@@ -38,6 +38,65 @@ not demonstrate a quality or efficiency improvement. The existing trust
 controller test directly covers weak-reduction keep, material-reduction grow,
 objective-backtracking shrink precedence, and guard-only backtracking.
 
+## Predicted-reduction and rho shadow audit
+
+The audit-enabled build also records a developer-only frozen-IRLS directional
+prediction for every locally accepted base or polished patch. For the complete
+outer-previous-to-final-local step `p`, it computes:
+
+```text
+ared = J(previous) - J(candidate)
+r_lin = r_previous + J_r p
+pred = sum(0.5 * sample_coefficient * frozen_Cauchy_weight
+           * ((r_previous / scale)^2 - (r_lin / scale)^2))
+       + exact_offset_penalty_reduction
+rho = ared / pred
+```
+
+Fit samples use weight `1.0`, tail samples use `0.25`, and the production owner
+cluster normalization and fixed fit/tail scales are reused. `J_r p` includes
+selected targets and neighbours plus unselected contributors derived from
+selected-group medians. The ratio is unavailable unless `pred` is finite,
+positive, and larger than `1e-8 + 1e-3 * abs(J(previous))`.
+
+The record status is one of `available`, `nonmaterial-step`,
+`objective-unavailable`, `model-unavailable`, `residual-unavailable`,
+`nonfinite`, `nonpositive-prediction`, or `nonmaterial-prediction`. A reported
+counterfactual action uses rho bands at `0.25` and `0.75`, with `0.8` boundary
+utilization required for growth. Objective backtracking remains the first
+shrink rule, and unusable prediction falls back to the current actual-only
+action. Boundary-reconciled, rescued, and globally rejected local records are
+marked `suppressed` and excluded from action-readiness exposure.
+
+This instrumentation does not modify acceptance, radius action, trajectory,
+stopping, public settings, or the production trajectory schema. The corpus
+report summarizes model coverage, rho calibration, current/shadow action
+confusion, elapsed audit cost, and family, topology, base/polish, boundary,
+cluster-size, and unselected-dependency strata. It always reports
+`production_promotion_recommended = false`; adopting a rho controller requires
+a separate decision after the shadow corpus is reviewed.
+
+The paired shadow audit against `7ce0595c` completed the baseline and two
+shadow runs at 600/600 cases with frozen baseline truth and one fitting thread
+per case. There were no failed cases or safety regressions, the existing paired
+blocking gate passed, and terminal-state and schema-7 trajectory artifacts were
+identical for every before/after case. Objective, transformed-truth RMSE, and
+accepted-iteration deltas had median and p90 `0`; both objective and truth had
+zero material benefit and harm cases. The two canonical schema-1 trust-model
+artifacts were byte-identical for all 600 cases.
+
+The shadow runs produced 39,634 local records. Only 4,400 (`11.10%`) had an
+available material positive prediction and finite rho. Status counts were
+20,377 `nonmaterial-step`, 9,342 `nonpositive-prediction`, 5,515
+`nonmaterial-prediction`, and 4,400 `available`. All available ratios were in
+the high band: 4,351 interior and 49 boundary-active; no low or mid rho was
+observed. Among readiness-eligible action comparisons, 47 current growths
+remained growth, three became keep, and 4,278 current keeps remained keep.
+Other records either preserved shrink or were suppressed by boundary/final
+disposition. The available coverage and rho diversity are therefore
+insufficient for a production rho policy; the instrumentation remains
+diagnostic-only.
+
 ## Guard/trust-radius decoupling refresh
 
 The guard-to-radius-shrink decoupling was evaluated against the unchanged
@@ -115,8 +174,14 @@ Historical case directories used `trajectory-schema-2.json` and
 `counterfactual-schema-1.json`. The current runner writes `run.log`,
 `scenario-truth.json`, `trajectory-schema-7.json`,
 `counterfactual-schema-3.json`, `shadow-continuation-schema-2.json`, the
-legacy shadow/terminal audit artifact, and schema-8 `case-summary.json`. The
-aggregate report is schema 5. A paired run additionally writes schema-2
+legacy shadow/terminal audit artifact, `trust-model-shadow-schema-1.json`, and
+schema-9 `case-summary.json`. The trust-model artifact records status, source,
+disposition, reductions, rho, boundary utilization, current/shadow actions,
+objective-backtracking, and unselected dependency count. Per-record measured
+audit time remains in `run.log` and schema-9 case/aggregate analysis but is
+excluded from the canonical trust-model artifact, so identical calculations
+can be verified byte-for-byte without wall-clock noise. The aggregate report is
+schema 5. A paired run additionally writes schema-2
 `comparison.json`, including terminal accepted-iteration deltas and the
 guard/trust decoupling blocking gate. Old summaries
 are intentionally not resumed across the baseline change.

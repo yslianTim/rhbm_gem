@@ -42,6 +42,84 @@ TRUTH_RMSE_METRICS = (
 GUARD_TRUST_DECOUPLING_CASE_COUNT = 600
 
 
+def summarize_trust_model_shadow(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    records = [
+        {**record, "family": row["family"], "topology": row["topology"]}
+        for row in rows
+        for record in row.get("trust_model_shadow", {}).get("records", [])
+    ]
+
+    def rho_bin(record: dict[str, Any]) -> str:
+        rho = record.get("rho")
+        if rho is None:
+            return "unavailable"
+        if rho < 0.25:
+            return "low"
+        if rho <= 0.75:
+            return "mid"
+        return (
+            "high-boundary"
+            if float(record["boundary-utilization"]) >= 0.8 else
+            "high-interior")
+
+    def summarize(group: list[dict[str, Any]]) -> dict[str, Any]:
+        statuses = Counter(str(record["status"]) for record in group)
+        rho_bins = Counter(rho_bin(record) for record in group)
+        action_confusion = Counter(
+            f'{record["current-action"]}->{record["shadow-action"]}'
+            for record in group)
+        rho_values = [
+            float(record["rho"]) for record in group
+            if record.get("rho") is not None]
+        calibration_errors = [abs(value - 1.0) for value in rho_values]
+        return {
+            "record_count": len(group),
+            "available_count": statuses["available"],
+            "availability_ratio": (
+                statuses["available"] / len(group) if group else None),
+            "status_counts": dict(sorted(statuses.items())),
+            "rho_bins": dict(sorted(rho_bins.items())),
+            "rho": {
+                "median": statistics.median(rho_values) if rho_values else None,
+                "p90": _percentile(rho_values, 0.90),
+                "absolute_calibration_error_median": (
+                    statistics.median(calibration_errors)
+                    if calibration_errors else None),
+                "absolute_calibration_error_p90": _percentile(
+                    calibration_errors, 0.90),
+            },
+            "action_confusion": dict(sorted(action_confusion.items())),
+            "elapsed_milliseconds": sum(
+                float(record["elapsed-ms"]) for record in group),
+        }
+
+    stratum_value = {
+        "family": lambda record: str(record["family"]),
+        "topology": lambda record: str(record["topology"]),
+        "source": lambda record: str(record["source"]),
+        "boundary": lambda record: (
+            "rescued" if record["boundary-rescued"] else
+            "touched" if record["boundary-touched"] else "none"),
+        "cluster-size": lambda record: str(record["atoms"]),
+        "unselected-dependencies": lambda record: (
+            "0" if int(record["unselected-dependencies"]) == 0 else
+            "1" if int(record["unselected-dependencies"]) == 1 else "2+"),
+    }
+    return {
+        "diagnostic_only": True,
+        **summarize(records),
+        "strata": {
+            name: {
+                value: summarize([
+                    record for record in records if classifier(record) == value])
+                for value in sorted({classifier(record) for record in records})
+            }
+            for name, classifier in stratum_value.items()
+        },
+        "production_promotion_recommended": False,
+    }
+
+
 def _materially_lower(candidate: float | None, reference: float | None) -> bool:
     if candidate is None or reference is None:
         return False
@@ -239,6 +317,8 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         production_convergence_count += int(
             audit["status"] == "counterfactual_records")
         shadow = audit.get("accepted_only_shadow", {"reached": False})
+        trust_model_shadow = audit.get(
+            "trust_model_shadow", {"diagnostic_only": True, "records": []})
         terminal = audit.get("terminal")
         shadow_policy_outcomes = {
             policy: classify_shadow_policy_outcome(
@@ -294,6 +374,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "exposures": exposures,
             "outcomes": outcomes,
             "accepted_only_shadow": shadow,
+            "trust_model_shadow": trust_model_shadow,
             "shadow_policy_outcomes": shadow_policy_outcomes,
             "terminal": terminal,
             "production_converged": audit["status"] == "counterfactual_records",
@@ -619,6 +700,7 @@ def analyze(case_summaries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "recommended_shadow_policy": recommended_shadow_policy,
         "shadow_policy_production_change_recommended": (
             recommended_shadow_policy is not None),
+        "trust_model_shadow": summarize_trust_model_shadow(rows),
         "genuine_exposure_count": genuine_exposure_count,
         "exposure_counts": dict(sorted(exposure_counts.items())),
         "comparator_exposure_counts": {

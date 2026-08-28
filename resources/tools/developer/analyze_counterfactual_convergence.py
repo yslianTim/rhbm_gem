@@ -20,6 +20,7 @@ SHADOW_CHECKPOINT_MARKER = "Accepted-only shadow checkpoint:"
 SHADOW_ATOM_MARKER = "Accepted-only shadow atom:"
 AUDIT_TERMINAL_MARKER = "Second-stage audit terminal:"
 AUDIT_TERMINAL_ATOM_MARKER = "Second-stage audit terminal atom:"
+TRUST_MODEL_SHADOW_MARKER = "Trust-model shadow:"
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)"
 )
@@ -77,10 +78,34 @@ def parse_log(text: str) -> dict[str, Any]:
     audit_terminal: dict[str, str] | None = None
     audit_terminal_atoms: list[dict[str, str]] = []
     trajectory_records: list[dict[str, str]] = []
+    trust_model_shadow_records: list[dict[str, Any]] = []
     for line in text.splitlines():
         trajectory_record = CONVERGENCE_ANALYZER.parse_record(line)
         if trajectory_record is not None:
             trajectory_records.append(trajectory_record)
+        if trust_model := _fields(line, TRUST_MODEL_SHADOW_MARKER, "1"):
+            optional_float_fields = (
+                "actual-reduction", "predicted-reduction", "rho")
+            trust_model_shadow_records.append({
+                **trust_model,
+                **{
+                    name: (
+                        None if trust_model[name] == "-" else
+                        float(trust_model[name]))
+                    for name in optional_float_fields
+                },
+                **{
+                    name: int(trust_model[name])
+                    for name in (
+                        "try", "acc", "atoms", "key-first", "key-last",
+                        "boundary-touched", "boundary-rescued",
+                        "readiness-eligible", "objective-backtracked",
+                        "unselected-dependencies")
+                },
+                "boundary-utilization": float(
+                    trust_model["boundary-utilization"]),
+                "elapsed-ms": float(trust_model["elapsed-ms"]),
+            })
         if checkpoint := _fields(line, CHECKPOINT_MARKER):
             checkpoints.append(checkpoint)
         elif atom := _fields(line, ATOM_MARKER):
@@ -111,6 +136,76 @@ def parse_log(text: str) -> dict[str, Any]:
         "audit_terminal": audit_terminal,
         "audit_terminal_atoms": audit_terminal_atoms,
         "trajectory_records": trajectory_records,
+        "trust_model_shadow_records": trust_model_shadow_records,
+    }
+
+
+def analyze_trust_model_shadow(records: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts: dict[str, int] = defaultdict(int)
+    rho_bins: dict[str, int] = defaultdict(int)
+    action_confusion: dict[str, int] = defaultdict(int)
+    strata: dict[str, dict[str, dict[str, int]]] = {
+        name: defaultdict(lambda: defaultdict(int))
+        for name in (
+            "source", "boundary", "cluster-size", "unselected-dependencies")
+    }
+    for record in records:
+        status = str(record["status"])
+        status_counts[status] += 1
+        rho = record.get("rho")
+        if rho is not None:
+            if rho < 0.25:
+                rho_bin = "low"
+            elif rho <= 0.75:
+                rho_bin = "mid"
+            elif float(record["boundary-utilization"]) >= 0.8:
+                rho_bin = "high-boundary"
+            else:
+                rho_bin = "high-interior"
+            rho_bins[rho_bin] += 1
+        else:
+            rho_bin = "unavailable"
+            rho_bins[rho_bin] += 1
+        action_confusion[
+            f'{record["current-action"]}->{record["shadow-action"]}'] += 1
+        boundary = (
+            "rescued" if record["boundary-rescued"] else
+            "touched" if record["boundary-touched"] else "none")
+        unselected_count = int(record["unselected-dependencies"])
+        unselected_stratum = (
+            "0" if unselected_count == 0 else
+            "1" if unselected_count == 1 else "2+")
+        values = {
+            "source": str(record["source"]),
+            "boundary": boundary,
+            "cluster-size": str(record["atoms"]),
+            "unselected-dependencies": unselected_stratum,
+        }
+        for stratum_name, stratum_value in values.items():
+            group = strata[stratum_name][stratum_value]
+            group["records"] += 1
+            group[f"status:{status}"] += 1
+            group[f"rho:{rho_bin}"] += 1
+    return {
+        "diagnostic_only": True,
+        "record_count": len(records),
+        "available_count": status_counts.get("available", 0),
+        "availability_ratio": (
+            status_counts.get("available", 0) / len(records)
+            if records else None),
+        "status_counts": dict(sorted(status_counts.items())),
+        "rho_bins": dict(sorted(rho_bins.items())),
+        "action_confusion": dict(sorted(action_confusion.items())),
+        "elapsed_milliseconds": sum(
+            float(record["elapsed-ms"]) for record in records),
+        "strata": {
+            name: {
+                value: dict(sorted(counts.items()))
+                for value, counts in sorted(groups.items())
+            }
+            for name, groups in strata.items()
+        },
+        "records": records,
     }
 
 
@@ -244,6 +339,8 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
     checkpoints = parsed["checkpoints"]
     trajectory_audit = CONVERGENCE_ANALYZER.analyze_records(
         parsed.get("trajectory_records", []))
+    trust_model_shadow = analyze_trust_model_shadow(
+        parsed.get("trust_model_shadow_records", []))
     shadow_record = parsed.get("shadow_checkpoint")
     terminal_record = parsed.get("audit_terminal")
     shadow_report = {
@@ -337,6 +434,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
             "shadow_policies": shadow_policy_reports,
             "terminal": terminal_report,
             "trajectory_audit": trajectory_audit,
+            "trust_model_shadow": trust_model_shadow,
         }
 
     by_experiment: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
@@ -470,6 +568,7 @@ def analyze(parsed: dict[str, Any], truth: dict[int, dict[str, float]]) -> dict[
         "shadow_policies": shadow_policy_reports,
         "terminal": terminal_report,
         "trajectory_audit": trajectory_audit,
+        "trust_model_shadow": trust_model_shadow,
     }
 
 

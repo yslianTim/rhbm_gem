@@ -1949,6 +1949,39 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
             0.5, accepted_diagnostic),
         Action::Grow);
 
+    trust_detail::TrustModelShadowDiagnostic shadow{
+        .status = trust_detail::TrustModelPredictionStatus::Available,
+        .rho = 0.20,
+        .boundary_utilization = 1.0,
+        .current_action = Action::Grow
+    };
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Shrink);
+    shadow.rho = 0.50;
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Keep);
+    shadow.rho = 0.90;
+    shadow.boundary_utilization = 0.79;
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Keep);
+    shadow.boundary_utilization = 0.80;
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Grow);
+    shadow.objective_backtracked = true;
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Shrink);
+    shadow.objective_backtracked = false;
+    shadow.status = trust_detail::TrustModelPredictionStatus::NonmaterialPrediction;
+    shadow.current_action = Action::Grow;
+    EXPECT_EQ(
+        trust_detail::DetermineTrustModelShadowAction(shadow),
+        Action::Grow);
+
     trust_detail::TrustRegionStateSet state;
     const trust_detail::ClusterKey key{ 0 };
     state.Reconcile({ key });
@@ -1980,6 +2013,392 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     state.Reconcile({ replacement_key });
     EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
+}
+
+TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalPrediction)
+{
+    using Action = trust_detail::TrustRegionRadiusAction;
+    const rg::GaussianModel3D previous_model{ 5.4, 0.52, 0.05 };
+    const rg::GaussianModel3D target_model{ 6.0, 0.55, 0.10 };
+    auto fixture{
+        BuildJointPolishFixture({ 10 }, { previous_model }, { target_model })
+    };
+    constexpr double unselected_distance{ 0.25 };
+    fixture.context.unselected_atom_list.emplace_back(
+        trust_detail::UnselectedAtomContributor{
+            2,
+            0,
+            fixture.state.at(0).mdpde
+        });
+    auto & atom_context{ fixture.context.at(0) };
+    atom_context.neighbor_atom_sample_list.clear();
+    atom_context.neighbor_atom_sample_offset_list.clear();
+    atom_context.neighbor_atom_sample_offset_list.emplace_back(0);
+    for (auto & sample : atom_context.raw_sampling_entries)
+    {
+        sample.response += static_cast<float>(
+            target_model.ResponseAtDistance(unselected_distance));
+        atom_context.neighbor_atom_sample_list.emplace_back(
+            trust_detail::NeighborAtomSample{
+                false,
+                0,
+                unselected_distance
+            });
+        atom_context.neighbor_atom_sample_offset_list.emplace_back(
+            atom_context.neighbor_atom_sample_list.size());
+    }
+
+    const trust_detail::ClusterKey key{ 0 };
+    const auto previous_snapshot{
+        trust_detail::BuildSecondStageModelSnapshot(
+            fixture.context,
+            fixture.state)
+    };
+    const auto objective_domain{
+        trust_detail::BuildObjectiveDomain(
+            fixture.context,
+            previous_snapshot,
+            { key },
+            0.0,
+            1.0)
+    };
+    const auto residual_baseline{
+        trust_detail::BuildResidualBaseline(fixture.context, fixture.state)
+    };
+    const auto previous_objective{
+        trust_detail::EvaluateAuditObjective(
+            objective_domain,
+            residual_baseline)
+    };
+    ASSERT_TRUE(previous_objective.has_value());
+
+    const auto previous_coordinates{
+        trust_detail::EncodeTransformedCoordinates(previous_model)
+    };
+    const auto target_coordinates{
+        trust_detail::EncodeTransformedCoordinates(target_model)
+    };
+    ASSERT_TRUE(previous_coordinates.has_value());
+    ASSERT_TRUE(target_coordinates.has_value());
+    const auto candidate_model{
+        trust_detail::DecodeTransformedCoordinates(
+            *previous_coordinates + 0.05 *
+                (*target_coordinates - *previous_coordinates))
+    };
+    ASSERT_TRUE(candidate_model.has_value());
+    auto candidate_state{ fixture.state };
+    candidate_state.at(0) = MakeGaussianResult(*candidate_model);
+    const auto candidate_patch{
+        trust_detail::FitStatePatch::FromState(candidate_state, key)
+    };
+    const auto candidate_snapshot{
+        trust_detail::BuildSecondStageModelSnapshot(
+            fixture.context,
+            candidate_state)
+    };
+    const auto candidate_objective{
+        trust_detail::EvaluateAuditObjective(
+            objective_domain,
+            trust_detail::SnapshotResidualEvaluator{
+                fixture.context,
+                candidate_snapshot
+            })
+    };
+    ASSERT_TRUE(candidate_objective.has_value());
+
+    const auto diagnostic{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            candidate_patch,
+            key,
+            fixture.sample_ref_list,
+            objective_domain,
+            previous_objective,
+            candidate_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        diagnostic.status,
+        trust_detail::TrustModelPredictionStatus::Available);
+    ASSERT_TRUE(diagnostic.actual_reduction.has_value());
+    ASSERT_TRUE(diagnostic.predicted_reduction.has_value());
+    ASSERT_TRUE(diagnostic.rho.has_value());
+    EXPECT_GT(*diagnostic.actual_reduction, 0.0);
+    EXPECT_GT(*diagnostic.predicted_reduction, 0.0);
+    EXPECT_NEAR(*diagnostic.rho, 1.0, 0.10);
+    EXPECT_EQ(diagnostic.unselected_dependency_count, 1U);
+
+    constexpr double intensity_scale{ 1.0e4 };
+    auto scaled_fixture{ fixture };
+    for (auto & sample : scaled_fixture.context.at(0).raw_sampling_entries)
+    {
+        sample.response *= static_cast<float>(intensity_scale);
+    }
+    const auto scale_model = [](const rg::GaussianModel3D & model)
+    {
+        return rg::GaussianModel3D{
+            model.GetAmplitude() * intensity_scale,
+            model.GetWidth(),
+            model.GetOffset() * intensity_scale
+        };
+    };
+    scaled_fixture.state.at(0) = MakeGaussianResult(scale_model(previous_model));
+    scaled_fixture.context.unselected_atom_list.at(0).initial_seed =
+        scaled_fixture.state.at(0).mdpde;
+    auto scaled_candidate_state{ scaled_fixture.state };
+    scaled_candidate_state.at(0) = MakeGaussianResult(scale_model(*candidate_model));
+    const auto scaled_previous_snapshot{
+        trust_detail::BuildSecondStageModelSnapshot(
+            scaled_fixture.context,
+            scaled_fixture.state)
+    };
+    const auto scaled_domain{
+        trust_detail::BuildObjectiveDomain(
+            scaled_fixture.context,
+            scaled_previous_snapshot,
+            { key },
+            0.0,
+            1.0)
+    };
+    const auto scaled_baseline{
+        trust_detail::BuildResidualBaseline(
+            scaled_fixture.context,
+            scaled_fixture.state)
+    };
+    const auto scaled_previous_objective{
+        trust_detail::EvaluateAuditObjective(scaled_domain, scaled_baseline)
+    };
+    const auto scaled_candidate_snapshot{
+        trust_detail::BuildSecondStageModelSnapshot(
+            scaled_fixture.context,
+            scaled_candidate_state)
+    };
+    const auto scaled_candidate_objective{
+        trust_detail::EvaluateAuditObjective(
+            scaled_domain,
+            trust_detail::SnapshotResidualEvaluator{
+                scaled_fixture.context,
+                scaled_candidate_snapshot
+            })
+    };
+    ASSERT_TRUE(scaled_previous_objective.has_value());
+    ASSERT_TRUE(scaled_candidate_objective.has_value());
+    const auto scaled_diagnostic{
+        trust_detail::EvaluateTrustModelShadow(
+            scaled_fixture.context,
+            scaled_baseline,
+            scaled_fixture.state,
+            trust_detail::FitStatePatch::FromState(
+                scaled_candidate_state,
+                key),
+            key,
+            scaled_fixture.sample_ref_list,
+            scaled_domain,
+            scaled_previous_objective,
+            scaled_candidate_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    ASSERT_TRUE(scaled_diagnostic.predicted_reduction.has_value());
+    ASSERT_TRUE(scaled_diagnostic.rho.has_value());
+    EXPECT_NEAR(
+        *scaled_diagnostic.predicted_reduction,
+        *diagnostic.predicted_reduction,
+        1.0e-6);
+    EXPECT_NEAR(*scaled_diagnostic.rho, *diagnostic.rho, 1.0e-6);
+
+    auto previous_with_penalty{ *previous_objective };
+    auto candidate_with_penalty{ *candidate_objective };
+    previous_with_penalty.offset_plausibility_penalty = 0.20;
+    candidate_with_penalty.offset_plausibility_penalty = 0.05;
+    const auto penalty_diagnostic{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            candidate_patch,
+            key,
+            fixture.sample_ref_list,
+            objective_domain,
+            previous_with_penalty,
+            candidate_with_penalty,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Polish,
+            false)
+    };
+    ASSERT_TRUE(penalty_diagnostic.predicted_reduction.has_value());
+    EXPECT_NEAR(
+        *penalty_diagnostic.predicted_reduction -
+            *diagnostic.predicted_reduction,
+        0.15,
+        1.0e-12);
+
+    const auto tail_domain{
+        trust_detail::BuildObjectiveDomain(
+            fixture.context,
+            previous_snapshot,
+            { key },
+            0.0,
+            0.30)
+    };
+    const auto tail_previous_objective{
+        trust_detail::EvaluateAuditObjective(
+            tail_domain,
+            residual_baseline)
+    };
+    const auto tail_candidate_objective{
+        trust_detail::EvaluateAuditObjective(
+            tail_domain,
+            trust_detail::SnapshotResidualEvaluator{
+                fixture.context,
+                candidate_snapshot
+            })
+    };
+    ASSERT_TRUE(tail_previous_objective.has_value());
+    ASSERT_TRUE(tail_candidate_objective.has_value());
+    const auto tail_diagnostic{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            candidate_patch,
+            key,
+            fixture.sample_ref_list,
+            tail_domain,
+            tail_previous_objective,
+            tail_candidate_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        tail_diagnostic.status,
+        trust_detail::TrustModelPredictionStatus::Available);
+    ASSERT_TRUE(tail_diagnostic.rho.has_value());
+    EXPECT_NEAR(*tail_diagnostic.rho, 1.0, 0.10);
+
+    auto nonmaterial_prediction_domain{ objective_domain };
+    nonmaterial_prediction_domain.cluster_by_key.at(key).scale->fit *= 1.0e6;
+    const auto nonmaterial_prediction{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            candidate_patch,
+            key,
+            fixture.sample_ref_list,
+            nonmaterial_prediction_domain,
+            previous_objective,
+            candidate_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        nonmaterial_prediction.status,
+        trust_detail::TrustModelPredictionStatus::NonmaterialPrediction);
+    EXPECT_FALSE(nonmaterial_prediction.rho.has_value());
+
+    auto nonfinite_baseline{ residual_baseline };
+    nonfinite_baseline.sample_list.at(0).at(0)->residual =
+        std::numeric_limits<double>::infinity();
+    const auto nonfinite_prediction{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            nonfinite_baseline,
+            fixture.state,
+            candidate_patch,
+            key,
+            fixture.sample_ref_list,
+            objective_domain,
+            previous_objective,
+            candidate_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        nonfinite_prediction.status,
+        trust_detail::TrustModelPredictionStatus::Nonfinite);
+    EXPECT_FALSE(nonfinite_prediction.rho.has_value());
+
+    const auto opposite_model{
+        trust_detail::DecodeTransformedCoordinates(
+            *previous_coordinates - 0.05 *
+                (*target_coordinates - *previous_coordinates))
+    };
+    ASSERT_TRUE(opposite_model.has_value());
+    auto opposite_state{ fixture.state };
+    opposite_state.at(0) = MakeGaussianResult(*opposite_model);
+    const auto opposite_patch{
+        trust_detail::FitStatePatch::FromState(opposite_state, key)
+    };
+    const auto opposite_snapshot{
+        trust_detail::BuildSecondStageModelSnapshot(
+            fixture.context,
+            opposite_state)
+    };
+    const auto opposite_objective{
+        trust_detail::EvaluateAuditObjective(
+            objective_domain,
+            trust_detail::SnapshotResidualEvaluator{
+                fixture.context,
+                opposite_snapshot
+            })
+    };
+    ASSERT_TRUE(opposite_objective.has_value());
+    const auto nonpositive_prediction{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            opposite_patch,
+            key,
+            fixture.sample_ref_list,
+            objective_domain,
+            previous_objective,
+            opposite_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        nonpositive_prediction.status,
+        trust_detail::TrustModelPredictionStatus::NonpositivePrediction);
+    EXPECT_FALSE(nonpositive_prediction.rho.has_value());
+
+    const auto nonmaterial{
+        trust_detail::EvaluateTrustModelShadow(
+            fixture.context,
+            residual_baseline,
+            fixture.state,
+            trust_detail::FitStatePatch::FromState(fixture.state, key),
+            key,
+            fixture.sample_ref_list,
+            objective_domain,
+            previous_objective,
+            previous_objective,
+            1.0,
+            Action::Keep,
+            trust_detail::TrustModelCandidateSource::Base,
+            false)
+    };
+    EXPECT_EQ(
+        nonmaterial.status,
+        trust_detail::TrustModelPredictionStatus::NonmaterialStep);
+    EXPECT_FALSE(nonmaterial.rho.has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)

@@ -142,6 +142,14 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             "reason=audit-patience, try=3, acc=3, objective=1/0/0/1",
             "[Debug] Second-stage audit terminal atom: schema=1, serial=1, "
             "group=1, amplitude=6, width=0.5, offset=0.1",
+            "[Debug] Trust-model shadow: schema=1, try=2, acc=2, atoms=1, "
+            "key-first=0, key-last=0, disposition=accepted, "
+            "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
+            "status=available, source=polish, actual-reduction=0.2, "
+            "predicted-reduction=0.2, rho=1.0, boundary-utilization=0.9, "
+            "current-action=keep, shadow-action=grow, "
+            "objective-backtracked=0, unselected-dependencies=1, "
+            "elapsed-ms=0.25",
         ))
         truth = RUNNER.parse_truth(text)
         parsed = COUNTERFACTUAL.parse_log(text)
@@ -161,6 +169,15 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             policies["dynamic-raw"]["truth_metrics"]
             ["transformed_aggregate_rmse"], 0.0)
         self.assertFalse(policies["accepted-only-k2"]["reached"])
+        trust_model = COUNTERFACTUAL.analyze(
+            parsed, truth)["trust_model_shadow"]
+        self.assertEqual(trust_model["status_counts"], {"available": 1})
+        self.assertEqual(trust_model["rho_bins"], {"high-boundary": 1})
+        self.assertEqual(
+            trust_model["action_confusion"], {"keep->grow": 1})
+        self.assertEqual(
+            trust_model["strata"]["unselected-dependencies"]["1"]
+            ["records"], 1)
 
     def test_analyzer_classifies_exposures_outcomes_and_replay_order(self) -> None:
         summaries = []
@@ -354,7 +371,15 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         }
         log = (
             "Convergence exposure truth: schema=1, case=natural-v00-r0, "
-            "serial=1, amplitude=6, width=0.5, offset=0.1.\n")
+            "serial=1, amplitude=6, width=0.5, offset=0.1.\n"
+            "Trust-model shadow: schema=1, try=1, acc=1, atoms=1, "
+            "key-first=0, key-last=0, disposition=accepted, "
+            "boundary-touched=0, boundary-rescued=0, readiness-eligible=1, "
+            "status=available, source=base, actual-reduction=0.2, "
+            "predicted-reduction=0.2, rho=1.0, boundary-utilization=0.9, "
+            "current-action=keep, shadow-action=grow, "
+            "objective-backtracked=0, unselected-dependencies=0, "
+            "elapsed-ms=0.25\n")
         with tempfile.TemporaryDirectory() as temp_directory:
             output_directory = Path(temp_directory)
             with mock.patch.object(
@@ -370,15 +395,22 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             trajectory = json.loads(
                 (case_directory / "trajectory-schema-7.json").read_text(
                     encoding="utf-8"))
+            trust_model = json.loads(
+                (case_directory / "trust-model-shadow-schema-1.json").read_text(
+                    encoding="utf-8"))
 
         self.assertEqual(summary["status"], "complete")
         self.assertTrue({
             "run.log", "scenario-truth.json", "trajectory-schema-7.json",
             "counterfactual-schema-3.json", "shadow-terminal-schema-1.json",
             "shadow-continuation-schema-2.json",
+            "trust-model-shadow-schema-1.json",
             "case-summary.json",
         }.issubset(artifact_names))
         self.assertEqual(trajectory["schema_version"], 7)
+        self.assertEqual(trust_model["schema_version"], 1)
+        self.assertEqual(trust_model["records"][0]["rho"], 1.0)
+        self.assertNotIn("elapsed-ms", trust_model["records"][0])
 
     def test_runner_isolates_failed_case(self) -> None:
         case = {

@@ -2130,6 +2130,107 @@ static std::string_view GetStabilizationTerminalReasonText(
     return "unknown";
 }
 
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+static std::string_view GetTrustModelPredictionStatusText(
+    TrustModelPredictionStatus status)
+{
+    switch (status)
+    {
+    case TrustModelPredictionStatus::Available: return "available";
+    case TrustModelPredictionStatus::NonmaterialStep: return "nonmaterial-step";
+    case TrustModelPredictionStatus::ObjectiveUnavailable: return "objective-unavailable";
+    case TrustModelPredictionStatus::ModelUnavailable: return "model-unavailable";
+    case TrustModelPredictionStatus::ResidualUnavailable: return "residual-unavailable";
+    case TrustModelPredictionStatus::Nonfinite: return "nonfinite";
+    case TrustModelPredictionStatus::NonpositivePrediction: return "nonpositive-prediction";
+    case TrustModelPredictionStatus::NonmaterialPrediction: return "nonmaterial-prediction";
+    }
+    return "model-unavailable";
+}
+
+static std::string_view GetTrustModelCandidateSourceText(
+    TrustModelCandidateSource source)
+{
+    return source == TrustModelCandidateSource::Polish ? "polish" : "base";
+}
+
+static std::string_view GetTrustRegionRadiusActionText(
+    TrustRegionRadiusAction action)
+{
+    switch (action)
+    {
+    case TrustRegionRadiusAction::Keep: return "keep";
+    case TrustRegionRadiusAction::Grow: return "grow";
+    case TrustRegionRadiusAction::Shrink: return "shrink";
+    }
+    return "keep";
+}
+
+static void AppendTrustModelOptionalValue(
+    std::ostringstream & stream,
+    const std::optional<double> & value)
+{
+    if (value.has_value()) stream << *value;
+    else stream << "-";
+}
+
+static void LogTrustModelShadowDiagnostics(
+    bool quiet_mode,
+    const IterationDiagnostics & diagnostics,
+    const IterationProgress & progress)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+    const auto log_records = [&](const auto & diagnostic_list, std::string_view disposition)
+    {
+        for (const auto & cluster_diagnostic : diagnostic_list)
+        {
+            if (!cluster_diagnostic.trust_model_shadow.has_value()) continue;
+            const auto & diagnostic{ *cluster_diagnostic.trust_model_shadow };
+            std::ostringstream message;
+            message << std::scientific << std::setprecision(17)
+                << "Trust-model shadow: schema=1"
+                << ", try=" << progress.attempt_number
+                << ", acc=" << progress.accepted_iteration_count
+                << ", atoms=" << cluster_diagnostic.key.size()
+                << ", key-first=" << cluster_diagnostic.key.front()
+                << ", key-last=" << cluster_diagnostic.key.back()
+                << ", disposition=" << disposition
+                << ", boundary-touched=" << cluster_diagnostic.boundary_touched
+                << ", boundary-rescued=" << cluster_diagnostic.boundary_rescued
+                << ", readiness-eligible=" << diagnostic.readiness_eligible
+                << ", status=" << GetTrustModelPredictionStatusText(diagnostic.status)
+                << ", source=" << GetTrustModelCandidateSourceText(diagnostic.candidate_source)
+                << ", actual-reduction=";
+            AppendTrustModelOptionalValue(message, diagnostic.actual_reduction);
+            message << ", predicted-reduction=";
+            AppendTrustModelOptionalValue(message, diagnostic.predicted_reduction);
+            message << ", rho=";
+            AppendTrustModelOptionalValue(message, diagnostic.rho);
+            message
+                << ", boundary-utilization=" << diagnostic.boundary_utilization
+                << ", current-action=" << GetTrustRegionRadiusActionText(diagnostic.current_action)
+                << ", shadow-action=";
+            if (diagnostic.shadow_action.has_value())
+            {
+                message << GetTrustRegionRadiusActionText(*diagnostic.shadow_action);
+            }
+            else
+            {
+                message << "suppressed";
+            }
+            message
+                << ", objective-backtracked=" << diagnostic.objective_backtracked
+                << ", unselected-dependencies=" << diagnostic.unselected_dependency_count
+                << ", elapsed-ms=" << diagnostic.elapsed_milliseconds;
+            Logger::Log(LogLevel::Debug, message.str());
+        }
+    };
+    Logger::FinishProgressLine();
+    log_records(diagnostics.accepted_cluster_diagnostic_list, "accepted");
+    log_records(diagnostics.rejected_cluster_diagnostic_list, "rejected");
+}
+#endif
+
 static void LogRejectedClusterDiagnostics(
     bool quiet_mode,
     const std::vector<ClusterCandidateDiagnostic> & diagnostic_list)
@@ -5709,6 +5810,12 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         LogAcceptedCandidateSearchDiagnostics(
             options.quiet_mode,
             iteration_result.diagnostics);
+#ifdef RHBM_GEM_ENABLE_COUNTERFACTUAL_CONVERGENCE_AUDIT
+        LogTrustModelShadowDiagnostics(
+            options.quiet_mode,
+            iteration_result.diagnostics,
+            iteration_result.progress);
+#endif
         if (iteration_result.all_rejected_resolution.has_value())
         {
             LogRejectedClusterDiagnostics(
