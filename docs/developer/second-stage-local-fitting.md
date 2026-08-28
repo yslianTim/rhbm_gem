@@ -435,9 +435,17 @@ Accepted component patches are assembled and subjected to a complete global
 audit. If it fails, exact full-audit deltas are used to remove the worst
 non-improving component patches. Unless the surviving state strictly improves
 the pre-polish global objective, the complete polish is discarded and the base
-state is written unchanged. A successful final polish updates the final audit
-and provenance but does not increment the outer accepted-iteration count or
-change the stop reason.
+state is written unchanged. When the selected base state stopped by production
+convergence, an objective-accepted polish remains provisional until the strict
+fixed-point operator is evaluated again on the polished state. The polish is
+applied only when every solver is qualified, the nominal-DOF operator is
+complete, and every operator-residual p99 is below `1e-4`. An unavailable,
+failed, or above-threshold certificate discards the polish and writes the
+already converged base state unchanged. Other stop reasons retain the
+objective-only final-polish policy. An applied final polish updates the final
+audit and provenance but does not increment the outer accepted-iteration count
+or change the stop reason. The final-polish diagnostic distinguishes objective
+acceptance, certificate status, and actual application.
 
 ## Numerical defenses, partial active set, and quarantine
 

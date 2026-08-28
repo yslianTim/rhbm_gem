@@ -4467,7 +4467,11 @@ void ApplyFitState(
 
 static void LogFinalDependencyPolish(
     bool quiet_mode,
-    const FinalDependencyPolishResult & polish_result)
+    const FinalDependencyPolishResult & polish_result,
+    std::string_view certificate_status,
+    bool applied,
+    const FixedPointResidualEvidenceSummary * certificate_evidence = nullptr,
+    bool certificate_solver_qualified = false)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
@@ -4502,6 +4506,22 @@ static void LogFinalDependencyPolish(
         message << "-";
     }
     message << ", accepted=" << (polish_result.accepted ? "yes" : "no")
+        << ", certificate=" << certificate_status
+        << ", applied=" << (applied ? "yes" : "no");
+    if (certificate_evidence != nullptr)
+    {
+        message << ", certificate-solver-qualified="
+            << (certificate_solver_qualified ? "yes" : "no")
+            << ", certificate-operator-complete="
+            << (certificate_evidence->complete ? "yes" : "no")
+            << ", certificate-residual-p99=";
+        AppendAuditValues(
+            message,
+            certificate_evidence->change.percentile_stats.percentile_list);
+        message << ", certificate-residual-max=";
+        AppendAuditValues(message, certificate_evidence->change.maximum_list);
+    }
+    message
         << ", elapsed_ms=" << std::fixed << std::setprecision(3)
         << diagnostic.elapsed_milliseconds << ".";
     Logger::Log(LogLevel::Info, message.str());
@@ -4551,6 +4571,124 @@ static void LogFinalDependencyPolish(
     }
 }
 
+enum class FinalPolishCertificationPolicy
+{
+    ObjectiveOnly,
+    RequireStrictFixedPoint
+};
+
+enum class FinalPolishCertificateStatus
+{
+    NotRequired,
+    NotEvaluated,
+    Passed,
+    Failed,
+    Error
+};
+
+struct FinalPolishCertificate
+{
+    FinalPolishCertificateStatus status{ FinalPolishCertificateStatus::NotEvaluated };
+    FixedPointResidualEvidenceSummary evidence{};
+    bool solver_qualified{ false };
+
+    bool Passed() const
+    {
+        return status == FinalPolishCertificateStatus::Passed;
+    }
+};
+
+static std::string_view GetFinalPolishCertificateStatusText(
+    FinalPolishCertificateStatus status)
+{
+    switch (status)
+    {
+    case FinalPolishCertificateStatus::NotRequired:
+        return "not-required";
+    case FinalPolishCertificateStatus::NotEvaluated:
+        return "not-evaluated";
+    case FinalPolishCertificateStatus::Passed:
+        return "passed";
+    case FinalPolishCertificateStatus::Failed:
+        return "failed";
+    case FinalPolishCertificateStatus::Error:
+        return "error";
+    }
+    throw std::invalid_argument("Unknown final polish certificate status.");
+}
+
+static FinalPolishCertificate EvaluateFinalPolishCertificate(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    IterationState & iteration_state,
+    const SuspiciousBlockActivity & final_block_activity,
+    const FitState & candidate_state)
+{
+    FinalPolishCertificate certificate;
+    try
+    {
+        const auto cluster_key_list{
+            BuildGraphClusterKeyList(iteration_state.graph_partition)
+        };
+        auto ridge_atom_mask{ iteration_state.rollback_atom_mask };
+        const auto quarantine_atom_mask{
+            final_block_activity.BuildCombinedFixedAtomMask()
+        };
+        for (std::size_t atom_index = 0;
+            atom_index < ridge_atom_mask.size(); atom_index++)
+        {
+            if (quarantine_atom_mask.at(atom_index) != 0)
+            {
+                ridge_atom_mask.at(atom_index) = 1;
+            }
+        }
+        const auto joint_offset_ridge_multiplier_list{
+            BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
+        };
+        auto certificate_options{ options };
+        certificate_options.quiet_mode = true;
+        auto proposal_result{
+            RunProposalIteration(
+                context,
+                cluster_key_list,
+                candidate_state,
+                certificate_options,
+                joint_offset_ridge_multiplier_list,
+                final_block_activity,
+                iteration_state.solver_workspace_by_key)
+        };
+        std::vector<std::size_t> group_id_by_atom_index;
+        group_id_by_atom_index.reserve(context.size());
+        for (const auto & atom_context : context)
+        {
+            group_id_by_atom_index.emplace_back(atom_context.group_id);
+        }
+        certificate.evidence = SummarizeFixedPointOperator(
+            proposal_result.fixed_point_operator,
+            candidate_state,
+            iteration_state.active_index_list,
+            cluster_key_list,
+            group_id_by_atom_index);
+        certificate.solver_qualified = std::ranges::all_of(
+            proposal_result.health_by_key | std::views::values,
+            &ClusterHealth::IsSolverQualified);
+        certificate.status = certificate.solver_qualified &&
+                certificate.evidence.complete &&
+                IsTransformedPercentileConverged(certificate.evidence.change) ?
+            FinalPolishCertificateStatus::Passed :
+            FinalPolishCertificateStatus::Failed;
+    }
+    catch (const std::exception &)
+    {
+        certificate.status = FinalPolishCertificateStatus::Error;
+    }
+    catch (...)
+    {
+        certificate.status = FinalPolishCertificateStatus::Error;
+    }
+    return certificate;
+}
+
 static void FinalizeSecondStageState(
     ModelObject & model_object,
     const SecondStageContext & context,
@@ -4558,6 +4696,7 @@ static void FinalizeSecondStageState(
     const GraphTopology & graph_topology,
     IterationState & iteration_state,
     bool use_best_audit_state,
+    FinalPolishCertificationPolicy certification_policy,
     PerformanceCounters & performance_counters)
 {
     const auto & base_state{
@@ -4581,8 +4720,38 @@ static void FinalizeSecondStageState(
             iteration_state.boundary_joint_correction_workspace_by_key,
             performance_counters)
     };
-    LogFinalDependencyPolish(options.quiet_mode, polish_result);
-    if (polish_result.accepted && polish_result.objective.has_value())
+    FinalPolishCertificate certificate;
+    if (certification_policy == FinalPolishCertificationPolicy::ObjectiveOnly)
+    {
+        certificate.status = FinalPolishCertificateStatus::NotRequired;
+    }
+    else if (polish_result.accepted && polish_result.objective.has_value())
+    {
+        certificate = EvaluateFinalPolishCertificate(
+            context,
+            options,
+            iteration_state,
+            final_block_activity,
+            polish_result.state);
+    }
+    const auto polish_applied{
+        polish_result.accepted &&
+        polish_result.objective.has_value() &&
+        (certification_policy == FinalPolishCertificationPolicy::ObjectiveOnly ||
+            certificate.Passed())
+    };
+    const auto certificate_evaluated{
+        certificate.status == FinalPolishCertificateStatus::Passed ||
+        certificate.status == FinalPolishCertificateStatus::Failed
+    };
+    LogFinalDependencyPolish(
+        options.quiet_mode,
+        polish_result,
+        GetFinalPolishCertificateStatusText(certificate.status),
+        polish_applied,
+        certificate_evaluated ? &certificate.evidence : nullptr,
+        certificate.solver_qualified);
+    if (polish_applied)
     {
         if (use_best_audit_state &&
             iteration_state.best_audit_state.has_value())
@@ -5503,6 +5672,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 graph_topology,
                 iteration_state,
                 false,
+                FinalPolishCertificationPolicy::ObjectiveOnly,
                 performance_counters);
             log_audit_terminal("quarantine", false);
             if (iteration_state.quarantine_state.HasFailures())
@@ -5746,6 +5916,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 graph_topology,
                 iteration_state,
                 false,
+                FinalPolishCertificationPolicy::RequireStrictFixedPoint,
                 performance_counters);
             log_audit_terminal("converged", false);
             if (iteration_state.quarantine_state.HasFailures())
@@ -5813,6 +5984,7 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             graph_topology,
             iteration_state,
             audit_state != nullptr,
+            FinalPolishCertificationPolicy::ObjectiveOnly,
             performance_counters);
         log_audit_terminal(final_stop_reason, audit_state != nullptr);
         if (maximum_iterations_reached)
