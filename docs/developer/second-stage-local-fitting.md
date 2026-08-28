@@ -344,11 +344,18 @@ therefore does not shrink the radius; a later objective rejection followed by
 acceptance at a smaller factor does. Local terminal rejection remains
 retryable; an exhausted boundary or final-audit search keeps its radius because
 another shrink cannot produce a material candidate. An accepted cluster grows
-its radius only when the objective strictly improves, its step is close to the
-current boundary, and no objective-backtracking shrink is already required.
-Guard-only backtracking does not suppress this independent growth rule. No
-radius update reruns the same validated state; updates remain isolated by
-cluster and clamp to `0.0625...4.0`.
+its radius only when the actual objective reduction exceeds the existing
+progress materiality tolerance (`1e-8 + 1e-3 * abs(previous)`), its step is
+within the outer 20% of the current radius, and no objective-backtracking
+shrink is already required. Guard-only backtracking does not suppress this
+independent growth rule. No radius update reruns the same validated state;
+updates remain isolated by cluster and clamp to `0.0625...4.0`.
+
+This remains an actual-reduction-aware transformed-step cap, not a model-based
+trust region: the controller does not construct a predicted reduction or an
+actual/predicted reduction ratio. Candidate acceptance and historical-best
+gates are unchanged; actual reduction only controls whether the next radius
+may grow.
 
 Accepted clusters are first connected only when they both affect the same boundary
 sample. Each multi-cluster component

@@ -1,11 +1,42 @@
 # Convergence exposure and counterfactual outcome audit
 
-> Current result (2026-08-28): the post-fix (`after`) 600-case corpus is the
-> canonical result for the current implementation. The instrumentation-only
-> pre-fix (`before`) corpus is retained as the paired historical baseline.
-> Production now requires accepted active-DOF p99 plus complete nominal-DOF
-> fixed-point residual p99, with solver qualification. Maximum remains an
-> independent diagnostic comparator.
+> Current result (2026-08-28): the actual-reduction-aware radius-growth update
+> passed a paired 600-case comparison against the guard/radius-decoupled
+> `2d9b878c` baseline. The sampled trajectories were neutral. Production now
+> requires accepted active-DOF p99 plus complete nominal-DOF fixed-point
+> residual p99, with solver qualification. Maximum remains an independent
+> diagnostic comparator.
+
+## Actual-reduction radius-growth refresh
+
+Radius growth now requires a boundary-active accepted step and an actual
+objective reduction larger than the existing progress tolerance
+`1e-8 + 1e-3 * abs(previous)`. It does not construct a predicted reduction or
+an actual/predicted reduction ratio. Candidate acceptance, objective-induced
+shrink, terminal rejection, and radius bounds are unchanged.
+
+The update was evaluated against `2d9b878c` with the same 600-case manifest,
+seeds, frozen truth, and single-thread fitting configuration. Both paired runs
+completed 600/600 cases, and the existing comparison-schema-2 blocking gate
+passed:
+
+| Measure | Baseline | Actual-reduction growth |
+| --- | ---: | ---: |
+| Production convergence | 42 | 42 |
+| Accepted-only shadow checkpoint | 138 | 138 |
+| Accepted-iteration median | 12 | 12 |
+| `audit-patience` stops | 372 | 372 |
+| `all-rejected-backtracking-exhausted` stops | 163 | 163 |
+| `maximum-iterations` stops | 23 | 23 |
+| Safety regressions | 0 | 0 |
+
+Paired objective, transformed-truth RMSE, and accepted-iteration deltas all
+had median and p90 `0`; there were no material objective-benefit,
+objective-harm, truth-benefit, or truth-harm cases. The result verifies that
+the stricter growth semantic is safe for the sampled trajectories, but it does
+not demonstrate a quality or efficiency improvement. The existing trust
+controller test directly covers weak-reduction keep, material-reduction grow,
+objective-backtracking shrink precedence, and guard-only backtracking.
 
 ## Guard/trust-radius decoupling refresh
 

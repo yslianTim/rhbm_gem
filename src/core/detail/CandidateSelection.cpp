@@ -2240,7 +2240,7 @@ static bool ShouldGrowTrustRegion(
         IsBetterAuditObjective(
             diagnostic.candidate_objective->GetTotalObjective(),
             diagnostic.previous_objective->GetTotalObjective(),
-            kObjectiveStrictTolerance);
+            kObjectiveProgressTolerance);
 }
 
 TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(

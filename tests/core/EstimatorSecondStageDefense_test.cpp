@@ -1919,19 +1919,25 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     trust_detail::ObjectiveAttemptDiagnostic accepted_diagnostic;
     accepted_diagnostic.accepted_factor = 0.5;
     accepted_diagnostic.trust_region_radius = 1.0;
-    accepted_diagnostic.trust_region_step_norm = 0.25;
+    accepted_diagnostic.trust_region_step_norm = 1.0;
     accepted_diagnostic.previous_objective =
         trust_detail::BuildObjectiveBreakdown(2.0, 0.0, 0.0);
     accepted_diagnostic.candidate_objective =
-        trust_detail::BuildObjectiveBreakdown(1.0, 0.0, 0.0);
+        trust_detail::BuildObjectiveBreakdown(1.999, 0.0, 0.0);
 
     EXPECT_EQ(
         trust_detail::DetermineAcceptedTrustRegionRadiusAction(
             0.5, accepted_diagnostic),
         Action::Keep);
 
+    accepted_diagnostic.candidate_objective =
+        trust_detail::BuildObjectiveBreakdown(1.997, 0.0, 0.0);
+    EXPECT_EQ(
+        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
+            0.5, accepted_diagnostic),
+        Action::Grow);
+
     accepted_diagnostic.accepted_factor = 0.25;
-    accepted_diagnostic.trust_region_step_norm = 1.0;
     EXPECT_EQ(
         trust_detail::DetermineAcceptedTrustRegionRadiusAction(
             0.5, accepted_diagnostic),
