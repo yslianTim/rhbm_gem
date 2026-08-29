@@ -27,6 +27,31 @@ constexpr std::array<double, kTransformedChangeSize>
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
 constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
+std::vector<double> SummarizeMaximumTransformedChanges(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const std::vector<std::size_t> & index_list)
+{
+    std::vector<double> maximum_list(kTransformedChangeSize, 0.0);
+    for (const auto index : index_list)
+    {
+        if (index >= change_list.size() ||
+            change_list.at(index).value_list.size() != kTransformedChangeSize)
+        {
+            throw std::invalid_argument(
+                "Local fitting maximum transformed change input is inconsistent.");
+        }
+        for (std::size_t parameter_index = 0;
+            parameter_index < kTransformedChangeSize;
+            parameter_index++)
+        {
+            maximum_list.at(parameter_index) = std::max(
+                maximum_list.at(parameter_index),
+                change_list.at(index).value_list.at(parameter_index));
+        }
+    }
+    return maximum_list;
+}
+
 double CalculateSecondStageAdjustedResponse(
     const AtomContext & atom_context,
     std::size_t sample_index,
@@ -163,13 +188,6 @@ void FitStatePatch::ApplyTo(FitState & state) const
     {
         state.at(atom_index_list.at(i)).mdpde = mdpde_list.at(i);
     }
-}
-
-FitState FitStateView::Materialize() const
-{
-    auto state{ m_base_state };
-    m_patch.ApplyTo(state);
-    return state;
 }
 
 std::optional<ResidualSample> SnapshotResidualEvaluator::operator()(
@@ -390,6 +408,16 @@ std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
 {
     return EncodeTransformedCoordinates(model).has_value();
+}
+
+GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
+    const GaussianModel3DWithUncertainty & gaussian,
+    double offset)
+{
+    return {
+        gaussian.GetModel().WithOffset(offset),
+        gaussian.GetStandardDeviationModel()
+    };
 }
 
 std::optional<GaussianModel3D> BuildGaussianParameterMedian(
@@ -1073,31 +1101,6 @@ bool IsTransformedChangeMaterial(
     return false;
 }
 
-std::vector<double> SummarizeMaximumTransformedChanges(
-    const std::vector<algorithm::ParameterChange> & change_list,
-    const std::vector<std::size_t> & index_list)
-{
-    std::vector<double> maximum_list(kTransformedChangeSize, 0.0);
-    for (const auto index : index_list)
-    {
-        if (index >= change_list.size() ||
-            change_list.at(index).value_list.size() != kTransformedChangeSize)
-        {
-            throw std::invalid_argument(
-                "Local fitting maximum transformed change input is inconsistent.");
-        }
-        for (std::size_t parameter_index = 0;
-            parameter_index < kTransformedChangeSize;
-            parameter_index++)
-        {
-            maximum_list.at(parameter_index) = std::max(
-                maximum_list.at(parameter_index),
-                change_list.at(index).value_list.at(parameter_index));
-        }
-    }
-    return maximum_list;
-}
-
 double GetMaximumTransformedChange(const TransformedChangeSummary & summary)
 {
     return GetMaximumTransformedChange(summary.maximum_list);
@@ -1146,51 +1149,6 @@ static double CalculateScaledTransformedStepNorm(
                 kTrustRegionParameterScale.at(parameter_index));
     }
     return step_norm;
-}
-
-TrustRegionDamping LimitTrustRegionDamping(
-    const std::vector<Eigen::Vector3d> & previous_estimation_list,
-    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    double requested_damping,
-    double radius)
-{
-    if (candidate_estimation_list.size() != previous_estimation_list.size() ||
-        !std::isfinite(requested_damping) ||
-        requested_damping <= 0.0 ||
-        requested_damping > 1.0 ||
-        !std::isfinite(radius) ||
-        radius <= 0.0)
-    {
-        throw std::invalid_argument("Local fitting trust-region inputs are invalid.");
-    }
-    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
-    {
-        if (!previous_estimation_list.at(i).allFinite() ||
-            !candidate_estimation_list.at(i).allFinite())
-        {
-            throw std::invalid_argument("Local fitting trust-region estimation is invalid.");
-        }
-    }
-
-    double undamped_step_norm{ 0.0 };
-    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
-    {
-        undamped_step_norm = std::max(
-            undamped_step_norm,
-            CalculateScaledTransformedStepNorm(
-                previous_estimation_list.at(i),
-                candidate_estimation_list.at(i)));
-    }
-
-    const auto effective_damping{
-        undamped_step_norm > 0.0 ?
-            std::min(requested_damping, radius / undamped_step_norm) :
-            requested_damping
-    };
-    return TrustRegionDamping{
-        effective_damping,
-        effective_damping * undamped_step_norm
-    };
 }
 
 std::optional<double> CalculateModelTrustRegionStepNorm(

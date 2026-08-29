@@ -59,26 +59,6 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-struct ConvergencePredicates
-{
-    bool qualification_passed{ false };
-    bool accepted_percentile_converged{ false };
-    bool residual_percentile_converged{ false };
-
-    bool Converged() const
-    {
-        return qualification_passed &&
-            accepted_percentile_converged &&
-            residual_percentile_converged;
-    }
-
-};
-
-ConvergencePredicates EvaluateConvergencePredicates(
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & residual_change);
-
 enum class FixedPointResidualInterpretation
 {
     Restricted,
@@ -179,8 +159,6 @@ struct ConvergenceCertificate
     bool OperatorPercentilePassed() const;
     bool OperatorComplete() const;
     bool InvariantsClear() const;
-    bool ActiveSetRestricted() const;
-    bool AllFixed() const;
     bool MixedSharedGroup() const;
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;

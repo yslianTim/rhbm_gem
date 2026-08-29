@@ -206,10 +206,6 @@ SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     const GaussianModel3D & previous_model,
     const FitOptions & options);
 
-SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
-    const std::vector<std::size_t> & group_id_by_position,
-    const SuspiciousUpdateMask & suspicious_seed_mask);
-
 class PerformanceCounters
 {
     const bool m_quiet_mode;
@@ -551,7 +547,6 @@ public:
     BacktrackingWorkspace(const BacktrackingWorkspace &) = delete;
     BacktrackingWorkspace & operator=(const BacktrackingWorkspace &) = delete;
     BacktrackingStep BuildNextCandidate();
-    FitStatePatch TakeCandidatePatch() { return std::move(m_candidate_patch); }
     const FitStatePatch & GetCandidatePatch() const { return m_candidate_patch; }
 
     PolishProvenance BuildCandidatePolishProvenance(

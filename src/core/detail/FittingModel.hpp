@@ -36,6 +36,10 @@ std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3
 
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model);
 
+GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
+    const GaussianModel3DWithUncertainty & gaussian,
+    double offset);
+
 std::optional<GaussianModel3D> BuildGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list);
 
@@ -240,8 +244,6 @@ public:
         return m_patch.atom_index_list;
     }
 
-    FitState Materialize() const;
-
     std::size_t size() const { return m_base_state.size(); }
 };
 
@@ -365,10 +367,6 @@ bool IsTransformedChangeMaterial(
     const algorithm::ParameterChange & change,
     double minimum_change);
 
-std::vector<double> SummarizeMaximumTransformedChanges(
-    const std::vector<algorithm::ParameterChange> & change_list,
-    const std::vector<std::size_t> & index_list);
-
 TransformedChangeSummary SummarizeTransformedChanges(
     const FitState & current_state,
     const FitState & previous_state,
@@ -396,18 +394,6 @@ bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
 
 bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius);
-
-struct TrustRegionDamping
-{
-    double effective_damping{ 1.0 };
-    double step_norm{ 0.0 };
-};
-
-TrustRegionDamping LimitTrustRegionDamping(
-    const std::vector<Eigen::Vector3d> & previous_estimation_list,
-    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    double requested_damping,
-    double radius);
 
 std::optional<double> CalculateModelTrustRegionStepNorm(
     const std::vector<GaussianModel3D> & previous_model_list,

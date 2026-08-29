@@ -68,10 +68,7 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
                 result.capital_sigma_posterior_list.at(member_index))
         };
         const auto gaussian_with_offset{
-            GaussianModel3DWithUncertainty{
-                gaussian.GetModel().WithOffset(offset),
-                gaussian.GetStandardDeviationModel()
-            }
+            detail::WithPreservedUncertaintyOffset(gaussian, offset)
         };
         member_results.emplace_back(LocalGaussianResult{
             0.0,
@@ -104,10 +101,7 @@ GroupGaussianResult DecodeGroupGaussianResult(
         alpha_g,
         mean,
         mdpde,
-        GaussianModel3DWithUncertainty{
-            prior.GetModel().WithOffset(group_offset),
-            prior.GetStandardDeviationModel()
-        },
+        detail::WithPreservedUncertaintyOffset(prior, group_offset),
         DecodeMemberGaussianResults(result, member_offset_list)
     };
 }

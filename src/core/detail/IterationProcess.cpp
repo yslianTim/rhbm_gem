@@ -47,6 +47,12 @@ constexpr double kNeighborAtomSearchRange{
     2.0 * kNeighborContributionDistanceMax
 };
 
+void SetLocalResultOffset(LocalGaussianResult & result, double offset)
+{
+    result.ols = WithPreservedUncertaintyOffset(result.ols, offset);
+    result.mdpde = WithPreservedUncertaintyOffset(result.mdpde, offset);
+}
+
 struct SecondStageSeedSelectionRecord
 {
     SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
@@ -294,18 +300,6 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     };
 }
 
-ConvergencePredicates EvaluateConvergencePredicates(
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & residual_change)
-{
-    return ConvergencePredicates{
-        qualification_passed,
-        IsTransformedPercentileConverged(accepted_change),
-        IsTransformedPercentileConverged(residual_change)
-    };
-}
-
 bool ConvergenceOrthogonalBlockers::Clear() const
 {
     return !objective_domain_changed && !quarantine_transition &&
@@ -332,16 +326,6 @@ bool ConvergenceCertificate::OperatorComplete() const
 bool ConvergenceCertificate::InvariantsClear() const
 {
     return !MixedSharedGroup();
-}
-
-bool ConvergenceCertificate::ActiveSetRestricted() const
-{
-    return solver_qualification.restricted_active_set;
-}
-
-bool ConvergenceCertificate::AllFixed() const
-{
-    return solver_qualification.all_fixed;
 }
 
 bool ConvergenceCertificate::MixedSharedGroup() const
@@ -1425,27 +1409,18 @@ static void ApplyQuarantineFallbackTargets(
                 const auto previous_offset{
                     previous_state.at(atom_index).mdpde.GetModel().GetOffset()
                 };
-                assembled_state.at(atom_index).ols = GaussianModel3DWithUncertainty{
-                    assembled_state.at(atom_index).ols.GetModel().WithOffset(previous_offset),
-                    assembled_state.at(atom_index).ols.GetStandardDeviationModel()
-                };
-                assembled_state.at(atom_index).mdpde = GaussianModel3DWithUncertainty{
-                    assembled_state.at(atom_index).mdpde.GetModel().WithOffset(previous_offset),
-                    assembled_state.at(atom_index).mdpde.GetStandardDeviationModel()
-                };
+                SetLocalResultOffset(assembled_state.at(atom_index), previous_offset);
                 continue;
             }
             const auto assembled_offset{
                 assembled_state.at(atom_index).mdpde.GetModel().GetOffset()
             };
-            assembled_state.at(atom_index).ols = GaussianModel3DWithUncertainty{
-                previous_state.at(atom_index).ols.GetModel().WithOffset(assembled_offset),
-                previous_state.at(atom_index).ols.GetStandardDeviationModel()
-            };
-            assembled_state.at(atom_index).mdpde = GaussianModel3DWithUncertainty{
-                previous_state.at(atom_index).mdpde.GetModel().WithOffset(assembled_offset),
-                previous_state.at(atom_index).mdpde.GetStandardDeviationModel()
-            };
+            assembled_state.at(atom_index).ols = WithPreservedUncertaintyOffset(
+                previous_state.at(atom_index).ols,
+                assembled_offset);
+            assembled_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
+                previous_state.at(atom_index).mdpde,
+                assembled_offset);
             assembled_polish_provenance.at(atom_index) =
                 previous_polish_provenance.at(atom_index);
         }
@@ -2839,14 +2814,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     }
 
     auto result{ previous_result };
-    result.ols = GaussianModel3DWithUncertainty{
-        result.ols.GetModel().WithOffset(offset_model.GetOffset()),
-        result.ols.GetStandardDeviationModel()
-    };
-    result.mdpde = GaussianModel3DWithUncertainty{
-        result.mdpde.GetModel().WithOffset(offset_model.GetOffset()),
-        result.mdpde.GetStandardDeviationModel()
-    };
+    SetLocalResultOffset(result, offset_model.GetOffset());
     auto fallback_assessment{
         AssessSuspiciousGaussianUpdate(
             adjusted_sampling_entries,
@@ -3025,14 +2993,7 @@ static IterationProposalResult RunProposalIteration(
                 continue;
             }
             auto & operator_result{ fixed_point_operator.state.at(atom_index) };
-            operator_result.ols = GaussianModel3DWithUncertainty{
-                operator_result.ols.GetModel().WithOffset(proposed_offset),
-                operator_result.ols.GetStandardDeviationModel()
-            };
-            operator_result.mdpde = GaussianModel3DWithUncertainty{
-                operator_model,
-                operator_result.mdpde.GetStandardDeviationModel()
-            };
+            SetLocalResultOffset(operator_result, proposed_offset);
             fixed_point_operator.offset_status_by_atom.at(atom_index) =
                 OperatorEndpointStatus::Available;
         }
@@ -3409,14 +3370,7 @@ static IterationProposalResult RunProposalIteration(
         const auto previous_offset{
             previous_state.at(atom_index).mdpde.GetModel().GetOffset()
         };
-        iteration_state.at(atom_index).ols = GaussianModel3DWithUncertainty{
-            iteration_state.at(atom_index).ols.GetModel().WithOffset(previous_offset),
-            iteration_state.at(atom_index).ols.GetStandardDeviationModel()
-        };
-        iteration_state.at(atom_index).mdpde = GaussianModel3DWithUncertainty{
-            iteration_state.at(atom_index).mdpde.GetModel().WithOffset(previous_offset),
-            iteration_state.at(atom_index).mdpde.GetStandardDeviationModel()
-        };
+        SetLocalResultOffset(iteration_state.at(atom_index), previous_offset);
     }
 
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
@@ -3426,14 +3380,12 @@ static IterationProposalResult RunProposalIteration(
             const auto accepted_offset{
                 iteration_state.at(atom_index).mdpde.GetModel().GetOffset()
             };
-            iteration_state.at(atom_index).ols = GaussianModel3DWithUncertainty{
-                previous_state.at(atom_index).ols.GetModel().WithOffset(accepted_offset),
-                previous_state.at(atom_index).ols.GetStandardDeviationModel()
-            };
-            iteration_state.at(atom_index).mdpde = GaussianModel3DWithUncertainty{
-                previous_state.at(atom_index).mdpde.GetModel().WithOffset(accepted_offset),
-                previous_state.at(atom_index).mdpde.GetStandardDeviationModel()
-            };
+            iteration_state.at(atom_index).ols = WithPreservedUncertaintyOffset(
+                previous_state.at(atom_index).ols,
+                accepted_offset);
+            iteration_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
+                previous_state.at(atom_index).mdpde,
+                accepted_offset);
             block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
         }
         if (!quarantine_activity.HasActiveOffset(atom_index))
@@ -3441,14 +3393,7 @@ static IterationProposalResult RunProposalIteration(
             const auto previous_offset{
                 previous_state.at(atom_index).mdpde.GetModel().GetOffset()
             };
-            iteration_state.at(atom_index).ols = GaussianModel3DWithUncertainty{
-                iteration_state.at(atom_index).ols.GetModel().WithOffset(previous_offset),
-                iteration_state.at(atom_index).ols.GetStandardDeviationModel()
-            };
-            iteration_state.at(atom_index).mdpde = GaussianModel3DWithUncertainty{
-                iteration_state.at(atom_index).mdpde.GetModel().WithOffset(previous_offset),
-                iteration_state.at(atom_index).mdpde.GetStandardDeviationModel()
-            };
+            SetLocalResultOffset(iteration_state.at(atom_index), previous_offset);
             block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
         }
         if (quarantine_activity.hard_failure_atom_mask.at(atom_index) != 0)

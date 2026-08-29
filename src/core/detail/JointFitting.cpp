@@ -322,28 +322,6 @@ bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
     throw std::logic_error("Joint offset solve status is invalid.");
 }
 
-const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
-{
-    switch (status)
-    {
-    case JointOffsetSolveStatus::Converged:
-        return "converged";
-    case JointOffsetSolveStatus::SystemBuildFailed:
-        return "system-build-failed";
-    case JointOffsetSolveStatus::EmptySystem:
-        return "empty-system";
-    case JointOffsetSolveStatus::InitialSolveFailed:
-        return "initial-solve-failed";
-    case JointOffsetSolveStatus::IrlsSolveFailed:
-        return "irls-solve-failed";
-    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
-        return "irls-objective-deteriorated";
-    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
-        return "irls-maximum-iterations-reached";
-    }
-    throw std::logic_error("Joint offset solve status is invalid.");
-}
-
 void ResetClusterSolverWorkspace(
     const std::vector<ClusterKey> & cluster_key_list,
     ClusterSolverWorkspaceMap & workspace_by_key)
@@ -353,13 +331,6 @@ void ResetClusterSolverWorkspace(
     {
         workspace_by_key.try_emplace(key);
     }
-}
-
-bool AreClustersSolverQualified(const ClusterHealthMap & health_by_key)
-{
-    return std::ranges::all_of(
-        health_by_key | std::views::values,
-        &ClusterHealth::IsSolverQualified);
 }
 
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status)

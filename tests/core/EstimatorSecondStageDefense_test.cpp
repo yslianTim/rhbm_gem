@@ -777,20 +777,6 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         audit_detail::SuspiciousGaussianReason::None);
 }
 
-TEST(EstimatorSecondStageDefenseTest, SuspiciousRollbackExpandsOnlyWithinSharedOffsetGroup)
-{
-    EXPECT_EQ(
-        audit_detail::ExpandSuspiciousSharedOffsetGroups(
-            std::vector<std::size_t>{ 10, 10, 20, 30, 20 },
-            std::vector<char>{ 0, 1, 0, 0, 0 }),
-        (std::vector<char>{ 1, 1, 0, 0, 0 }));
-    EXPECT_EQ(
-        audit_detail::ExpandSuspiciousSharedOffsetGroups(
-            std::vector<std::size_t>{ 10, 20, 10, 20 },
-            std::vector<char>{ 0, 1, 0, 0 }),
-        (std::vector<char>{ 0, 1, 0, 1 }));
-}
-
 std::unique_ptr<rg::ModelObject> BuildDefenseModel(
     const std::vector<std::array<float, 3>> & position_list,
     const std::vector<Spot> & spot_list,
@@ -1848,71 +1834,6 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         0.0);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
-{
-    std::vector<Eigen::Vector3d> previous{
-        Eigen::Vector3d::Zero()
-    };
-    auto candidate{ previous };
-    candidate.at(0) << 1.0, 0.35, 0.5;
-
-    const auto capped{
-        trust_detail::LimitTrustRegionDamping(
-            previous, candidate, 1.0, 1.0)
-    };
-    EXPECT_DOUBLE_EQ(capped.effective_damping, 0.5);
-    EXPECT_DOUBLE_EQ(capped.step_norm, 1.0);
-
-    const auto inside{
-        trust_detail::LimitTrustRegionDamping(
-            previous, candidate, 0.25, 1.0)
-    };
-    EXPECT_DOUBLE_EQ(inside.effective_damping, 0.25);
-    EXPECT_DOUBLE_EQ(inside.step_norm, 0.5);
-}
-
-TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvariant)
-{
-    const auto encode = [](const rg::GaussianModel3D & model)
-    {
-        const auto estimation{
-            change_detail::EncodeTransformedCoordinates(model)
-        };
-        EXPECT_TRUE(estimation.has_value());
-        return estimation.value_or(Eigen::Vector3d::Zero());
-    };
-    const std::vector<Eigen::Vector3d> base_previous{
-        encode(rg::GaussianModel3D{ 2.0, 0.8, 0.2 })
-    };
-    const std::vector<Eigen::Vector3d> base_candidate{
-        encode(rg::GaussianModel3D{ 4.0, 1.0, 0.4 })
-    };
-    constexpr double intensity_scale{ 1.0e5 };
-    const std::vector<Eigen::Vector3d> scaled_previous{
-        encode(rg::GaussianModel3D{
-            2.0 * intensity_scale,
-            0.8,
-            0.2 * intensity_scale })
-    };
-    const std::vector<Eigen::Vector3d> scaled_candidate{
-        encode(rg::GaussianModel3D{
-            4.0 * intensity_scale,
-            1.0,
-            0.4 * intensity_scale })
-    };
-
-    const auto base{
-        trust_detail::LimitTrustRegionDamping(
-            base_previous, base_candidate, 1.0, 0.5)
-    };
-    const auto scaled{
-        trust_detail::LimitTrustRegionDamping(
-            scaled_previous, scaled_candidate, 1.0, 0.5)
-    };
-    EXPECT_NEAR(base.effective_damping, scaled.effective_damping, 1.0e-12);
-    EXPECT_NEAR(base.step_norm, scaled.step_norm, 1.0e-12);
-}
-
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
     using Action = trust_detail::TrustRegionRadiusAction;
@@ -2734,38 +2655,6 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
         offset_detail::JointOffsetSolveStatus::SystemBuildFailed);
     ASSERT_EQ(invalid_result.offset.size(), 1);
     EXPECT_DOUBLE_EQ(invalid_result.offset(0), 2.0);
-}
-
-TEST(EstimatorSecondStageDefenseTest, JointOffsetStatusTextCoversAllStatuses)
-{
-    using Status = offset_detail::JointOffsetSolveStatus;
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(Status::Converged),
-        "converged");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(Status::SystemBuildFailed),
-        "system-build-failed");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(Status::EmptySystem),
-        "empty-system");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(Status::InitialSolveFailed),
-        "initial-solve-failed");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(Status::IrlsSolveFailed),
-        "irls-solve-failed");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(
-            Status::IrlsObjectiveDeteriorated),
-        "irls-objective-deteriorated");
-    EXPECT_STREQ(
-        offset_detail::GetJointOffsetSolveStatusText(
-            Status::IrlsMaximumIterationsReached),
-        "irls-maximum-iterations-reached");
-    EXPECT_THROW(
-        offset_detail::GetJointOffsetSolveStatusText(
-            static_cast<Status>(-1)),
-        std::logic_error);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant)
@@ -4828,9 +4717,8 @@ TEST(EstimatorSecondStageDefenseTest,
             .GetStandardDeviationModel().GetWidth(),
         endpoint_uncertainty_list.at(1).GetWidth());
 
-    const auto candidate_state{
-        backtracking_detail::FitStateView{ previous_state, candidate_patch }.Materialize()
-    };
+    auto candidate_state{ previous_state };
+    candidate_patch.ApplyTo(candidate_state);
     for (const auto atom_index : candidate_patch.atom_index_list)
     {
         ExpectGaussianModelsNear(
@@ -5207,7 +5095,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximum
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(summary));
 }
 
-TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualificationIndependent)
+TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateKeepsAcceptedResidualIndependent)
 {
     const auto make_summary = [](double percentile, double maximum)
     {
@@ -5223,28 +5111,6 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceKeepsAcceptedResidualAndQualifi
     };
     const auto small{ make_summary(5.0e-5, 2.0e-3) };
     const auto large{ make_summary(2.0e-4, 2.0e-3) };
-    const auto accepted_small{
-        audit_detail::EvaluateConvergencePredicates(true, small, large)
-    };
-    EXPECT_TRUE(accepted_small.qualification_passed);
-    EXPECT_TRUE(accepted_small.accepted_percentile_converged);
-    EXPECT_FALSE(accepted_small.residual_percentile_converged);
-    EXPECT_FALSE(accepted_small.Converged());
-
-    const auto residual_small{
-        audit_detail::EvaluateConvergencePredicates(true, large, small)
-    };
-    EXPECT_FALSE(residual_small.accepted_percentile_converged);
-    EXPECT_TRUE(residual_small.residual_percentile_converged);
-    EXPECT_FALSE(residual_small.Converged());
-
-    const auto nonstationary_small{
-        audit_detail::EvaluateConvergencePredicates(false, small, small)
-    };
-    EXPECT_TRUE(nonstationary_small.accepted_percentile_converged);
-    EXPECT_TRUE(nonstationary_small.residual_percentile_converged);
-    EXPECT_FALSE(nonstationary_small.Converged());
-
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_movement = small;
     certificate.operator_nominal_residual = large;
@@ -5560,7 +5426,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     EXPECT_EQ(certificate.accepted_active_movement.population_size_list.at(2), 1U);
     EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(0), 3U);
     EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(2), 3U);
-    EXPECT_TRUE(certificate.ActiveSetRestricted());
+    EXPECT_TRUE(certificate.solver_qualification.restricted_active_set);
     EXPECT_TRUE(certificate.AcceptedPercentilePassed());
     EXPECT_FALSE(certificate.OperatorPercentilePassed());
     EXPECT_FALSE(certificate.ProductionConverged());
@@ -5627,7 +5493,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     certificate.solver_qualification.restricted_active_set = true;
     certificate.solver_qualification.all_fixed = true;
 
-    EXPECT_TRUE(certificate.AllFixed());
+    EXPECT_TRUE(certificate.solver_qualification.all_fixed);
     EXPECT_TRUE(certificate.AcceptedPercentilePassed());
     EXPECT_TRUE(certificate.StrictOperatorPassed());
     EXPECT_TRUE(certificate.ProductionConverged());

@@ -1284,33 +1284,6 @@ SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     };
 }
 
-SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
-    const std::vector<std::size_t> & group_id_by_position,
-    const SuspiciousUpdateMask & suspicious_seed_mask)
-{
-    if (group_id_by_position.size() != suspicious_seed_mask.size())
-    {
-        throw std::invalid_argument("Suspicious shared-offset group input sizes are inconsistent.");
-    }
-
-    std::set<std::size_t> suspicious_seed_group_id_set;
-    for (std::size_t position = 0; position < group_id_by_position.size(); position++)
-    {
-        if (suspicious_seed_mask.at(position) == 0) continue;
-        suspicious_seed_group_id_set.emplace(group_id_by_position.at(position));
-    }
-
-    SuspiciousUpdateMask rollback_mask(group_id_by_position.size(), 0);
-    for (std::size_t position = 0; position < group_id_by_position.size(); position++)
-    {
-        if (suspicious_seed_group_id_set.contains(group_id_by_position.at(position)))
-        {
-            rollback_mask.at(position) = 1;
-        }
-    }
-    return rollback_mask;
-}
-
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count)
 {
     if (cluster_atom_count == 0 || active_atom_count == 0 || cluster_atom_count > active_atom_count)
@@ -2936,12 +2909,9 @@ static ClusterCandidateResult SelectClusterCandidate(
                         previous_state.at(member_index).mdpde.GetModel().GetOffset()
                     };
                     search_endpoint_state.at(member_index).mdpde =
-                        GaussianModel3DWithUncertainty{
-                            search_endpoint_state.at(member_index).mdpde.GetModel()
-                                .WithOffset(previous_offset),
-                            search_endpoint_state.at(member_index).mdpde
-                                .GetStandardDeviationModel()
-                        };
+                        WithPreservedUncertaintyOffset(
+                            search_endpoint_state.at(member_index).mdpde,
+                            previous_offset);
                     search_block_activity.offset_fixed_atom_mask.at(member_index) = 1;
                 }
             }
@@ -2951,12 +2921,9 @@ static ClusterCandidateResult SelectClusterCandidate(
                     search_endpoint_state.at(atom_index).mdpde.GetModel().GetOffset()
                 };
                 search_endpoint_state.at(atom_index).mdpde =
-                    GaussianModel3DWithUncertainty{
-                        previous_state.at(atom_index).mdpde.GetModel()
-                            .WithOffset(retained_offset),
-                        previous_state.at(atom_index).mdpde
-                            .GetStandardDeviationModel()
-                    };
+                    WithPreservedUncertaintyOffset(
+                        previous_state.at(atom_index).mdpde,
+                        retained_offset);
                 search_block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
             }
             result.terminal_guard_block_list.emplace_back(atom_index, mode);

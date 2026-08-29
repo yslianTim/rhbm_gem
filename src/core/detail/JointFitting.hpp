@@ -39,9 +39,6 @@ enum class JointOffsetSolveStatus
 
 bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status);
 
-const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status);
-
-
 class ReusableWeightedRidgeSolver
 {
     algorithm::WeightedRidgeSolver m_solver{};
@@ -112,16 +109,9 @@ struct ClusterHealth
             all_local_refits_solver_qualified;
     }
 
-    bool IsBoundaryCorrectionEligible() const
-    {
-        return !IsJointOffsetSolveHardFailure(joint_offset_status) &&
-            is_boundary_correction_eligible;
-    }
 };
 
 using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
-
-bool AreClustersSolverQualified(const ClusterHealthMap & health_by_key);
 
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
 
