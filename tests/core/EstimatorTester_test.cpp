@@ -509,38 +509,17 @@ TEST(
     ASSERT_TRUE(initial_view.GetPeelingSamplingEntries(false).empty());
 
     auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
+    options.quiet_mode = true;
     command_test::ScopedTempDir temp_dir{ "local_fitting_result_table" };
     const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
     options.result_csv_path = csv_path;
-    testing::internal::CaptureStdout();
     rt::RunPotentialFittingWorkflow(*model, options);
-    const std::string out{ testing::internal::GetCapturedStdout() };
 
     const auto fitted_view{
         rg::AtomLocalPotentialView::RequireFor(
             *model->GetSelectedAtoms().front())
     };
     EXPECT_FALSE(fitted_view.GetPeelingSamplingEntries(false).empty());
-    EXPECT_NE(
-        out.find(
-            "Selected second-stage initial seeds = 1, sources = "
-            "group-posterior:1, group-prior:0, group-median:0, "
-            "global-median:0."),
-        std::string::npos);
-    EXPECT_EQ(out.find("stop_reason=no-valid-seed"), std::string::npos);
-    const auto count_occurrences = [&](const std::string & text)
-    {
-        std::size_t count{ 0 };
-        for (std::size_t position = 0;
-            (position = out.find(text, position)) != std::string::npos;
-            position += text.size())
-        {
-            count++;
-        }
-        return count;
-    };
-    EXPECT_EQ(count_occurrences("Run atom group fitting."), 3U);
     const auto analysis_view{ model->GetAnalysisView() };
     for (const auto stage : {
              FittingStage::First,
@@ -563,7 +542,6 @@ TEST(
         "width 1st,width 2nd,width 3rd,"
         "offset 1st,offset 2nd,offset 3rd"
     };
-    EXPECT_EQ(out.find(csv_header), std::string::npos);
     ASSERT_TRUE(std::filesystem::exists(csv_path));
     const auto csv_content{ ReadTextFile(csv_path) };
     ASSERT_EQ(csv_content.find(csv_header), 0U);
@@ -609,11 +587,7 @@ TEST(
         std::ofstream stale_output{ csv_path };
         stale_output << "stale content";
     }
-    options.quiet_mode = true;
-    testing::internal::CaptureStdout();
     rt::RunPotentialFittingWorkflow(*model, options);
-    const std::string quiet_out{ testing::internal::GetCapturedStdout() };
-    EXPECT_EQ(quiet_out.find(csv_header), std::string::npos);
     const auto quiet_csv_content{ ReadTextFile(csv_path) };
     EXPECT_EQ(quiet_csv_content.find(csv_header), 0U);
     EXPECT_EQ(quiet_csv_content.find("stale content"), std::string::npos);

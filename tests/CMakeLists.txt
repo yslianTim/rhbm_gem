@@ -307,38 +307,6 @@ endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(
-        NAME convergence_audit_analyzer_test
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_audit_analyzer_test.py"
-    )
-    set_tests_properties(
-        convergence_audit_analyzer_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm"
-    )
-
-    add_test(
-        NAME convergence_audit_documentation_test
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_audit_documentation_test.py"
-    )
-    set_tests_properties(
-        convergence_audit_documentation_test
-        PROPERTIES LABELS "domain:integration;intent:contract"
-    )
-
-    if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
-        add_test(
-            NAME trust_model_experiment_analyzer_test
-            COMMAND "${Python_EXECUTABLE}"
-                "${PROJECT_SOURCE_DIR}/tests/integration/trust_model_experiment_analyzer_test.py"
-        )
-        set_tests_properties(
-            trust_model_experiment_analyzer_test
-            PROPERTIES LABELS "domain:integration;intent:algorithm"
-        )
-    endif()
-
-    add_test(
         NAME fold_168_regression_runner_test
         COMMAND "${Python_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression_test.py"

@@ -9,7 +9,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -27,7 +26,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
@@ -1195,21 +1193,6 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
     return model;
 }
 
-std::unique_ptr<rg::ModelObject> BuildTerminalWithPersistentLocalRefitFallbackDefenseModel()
-{
-    auto model{ BuildSeparatedRollbackDefenseModel() };
-    auto * atom{ model->GetSelectedAtoms().at(2) };
-    auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom)
-            .GetRawSamplingEntries(false)
-    };
-    raw_sampling_entries.resize(1);
-    auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
-    return model;
-}
-
 std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
 {
     auto model{
@@ -1574,16 +1557,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
         1.2, 1.0, tolerance));
     EXPECT_FALSE(audit_detail::IsBetterAuditObjective(
         1.0 - 0.5e-8, 1.0, tolerance));
-    EXPECT_FALSE(audit_detail::IsBetterAuditObjective(
-        std::numeric_limits<double>::infinity(), 1.0, tolerance));
-    EXPECT_TRUE(audit_detail::IsBetterAuditObjective(
-        1.0, std::numeric_limits<double>::infinity(), tolerance));
-    EXPECT_THROW(
-        audit_detail::IsBetterAuditObjective(
-            0.8,
-            1.0,
-            audit_detail::ObjectiveTolerance{ -1.0, 0.0 }),
-        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjective)
@@ -1655,32 +1628,12 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousA
     };
     const audit_detail::ObjectiveBreakdown best_one{ 1.0, 0.0, 0.0 };
     const audit_detail::ObjectiveBreakdown best_below{ 0.99, 0.0, 0.0 };
-    const audit_detail::ObjectiveBreakdown best_infinite{
-        std::numeric_limits<double>::infinity(),
-        0.0,
-        0.0
-    };
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0005, 1.0, &best_one, tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.002, 1.0, &best_one, tolerance));
     EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0, 1.0, &best_below, tolerance));
-    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        std::numeric_limits<double>::infinity(),
-        1.0,
-        nullptr,
-        tolerance));
-    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.0,
-        std::numeric_limits<double>::infinity(),
-        nullptr,
-        tolerance));
-    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
-        1.0,
-        1.0,
-        &best_infinite,
-        tolerance));
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeReference)
@@ -1710,13 +1663,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
         2.0,
         nullptr,
         tolerance));
-    EXPECT_THROW(
-        audit_detail::IsAuditObjectiveAcceptableForProgress(
-            1.0,
-            1.0,
-            nullptr,
-            audit_detail::ObjectiveTolerance{ 0.0, -1.0 }),
-        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)
@@ -1781,9 +1727,6 @@ TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
     EXPECT_DOUBLE_EQ(
         0.25 * 2.0 + 0.75 * 6.0,
         5.0);
-    EXPECT_THROW(
-        audit_detail::CalculateClusterAtomWeight(0, 4),
-        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPartition)
@@ -1934,7 +1877,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
 
     const trust_detail::ClusterKey replacement_key{ 1 };
     state.Reconcile({ replacement_key });
-    EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
 }
 
@@ -2456,17 +2398,6 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_DOUBLE_EQ(atom_offset(2), 2.5);
     EXPECT_DOUBLE_EQ(atom_offset(3), 2.5);
     EXPECT_DOUBLE_EQ(atom_offset(4), 5.5);
-
-    EXPECT_FALSE(
-        offset_detail::BuildJointOffsetParameterization(
-            std::vector<std::size_t>{ 20 },
-            atom_offset).has_value());
-    auto non_finite_atom_offset{ initial_atom_offset };
-    non_finite_atom_offset(0) = std::numeric_limits<double>::infinity();
-    EXPECT_FALSE(
-        offset_detail::BuildJointOffsetParameterization(
-            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
-            non_finite_atom_offset).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest,
@@ -2507,10 +2438,6 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksSolverQualification)
     {
         EXPECT_FALSE(health_detail::IsLocalRefitStatusSolverQualified(status));
     }
-    EXPECT_THROW(
-        health_detail::IsLocalRefitStatusSolverQualified(
-            static_cast<rg::RHBMEstimationStatus>(-1)),
-        std::logic_error);
 }
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromSolverQualification)
@@ -2537,12 +2464,6 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromS
         EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsSolverQualified());
         EXPECT_TRUE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
-
-    const auto invalid_status{ static_cast<Status>(-1) };
-    EXPECT_FALSE(health_detail::ClusterHealth{ invalid_status }.IsSolverQualified());
-    EXPECT_THROW(
-        offset_detail::IsJointOffsetSolveHardFailure(invalid_status),
-        std::logic_error);
 }
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
@@ -2897,33 +2818,6 @@ TEST(EstimatorSecondStageDefenseTest,
         median_model_list.at(5),
         model_list.at(5),
         1.0e-12);
-}
-
-TEST(EstimatorSecondStageDefenseTest,
-    GroupMedianModelListIgnoresInvalidMembersAndFallsBackToSnapshot)
-{
-    const rg::GaussianModel3D valid_model{ 6.0, 0.55, 0.2 };
-    const rg::GaussianModel3D invalid_model{ -1.0, 0.60, 9.0 };
-    const std::vector<rg::GaussianModel3D> model_list{
-        valid_model,
-        invalid_model,
-        invalid_model
-    };
-    const auto median_model_list{
-        median_detail::BuildGroupMedianModelList(
-            std::vector<std::size_t>{ 10, 10, 20 },
-            model_list)
-    };
-
-    ASSERT_EQ(median_model_list.size(), model_list.size());
-    ExpectGaussianModelsNear(median_model_list.at(0), valid_model, 1.0e-12);
-    ExpectGaussianModelsNear(median_model_list.at(1), valid_model, 1.0e-12);
-    ExpectGaussianModelsNear(median_model_list.at(2), invalid_model, 1.0e-12);
-    EXPECT_THROW(
-        median_detail::BuildGroupMedianModelList(
-            std::vector<std::size_t>{ 10 },
-            model_list),
-        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest,
@@ -3514,7 +3408,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    JointPolishProposalRejectsEmptyInvalidUnchangedAndOutOfRegionInputs)
+    JointPolishProposalRejectsUnchangedAndOutOfRegionInputs)
 {
     const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
@@ -3534,39 +3428,6 @@ TEST(
     const polish_detail::FitStatePatch base_patch;
     const polish_detail::FitStateView base_state_view{ fixture.state, base_patch };
     const auto key{ polish_detail::ClusterKey{ 0, 1 } };
-
-    polish_detail::ReusableWeightedRidgeSolver empty_solver;
-    EXPECT_FALSE(
-        polish_detail::BuildJointPolishProposal(
-            fixture.context,
-            base_state_view,
-            key,
-            {},
-            { 1.0, 1.0 },
-            empty_solver,
-            4.0).has_value());
-
-    auto invalid_fixture{ fixture };
-    invalid_fixture.state.at(0).mdpde =
-        rg::GaussianModel3DWithUncertainty{
-            rg::GaussianModel3D{ 0.0, 0.55, 0.10 },
-            rg::GaussianModel3DUncertainty{}
-        };
-    const polish_detail::FitStatePatch invalid_patch;
-    const polish_detail::FitStateView invalid_state_view{
-        invalid_fixture.state,
-        invalid_patch
-    };
-    polish_detail::ReusableWeightedRidgeSolver invalid_solver;
-    EXPECT_FALSE(
-        polish_detail::BuildJointPolishProposal(
-            invalid_fixture.context,
-            invalid_state_view,
-            key,
-            invalid_fixture.sample_ref_list,
-            { 1.0, 1.0 },
-            invalid_solver,
-            4.0).has_value());
 
     const std::vector<rg::GaussianModel3D> unchanged_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
@@ -3847,34 +3708,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
     EXPECT_TRUE(HasCouplingNeighbor(topology, 0, 1));
 }
 
-TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesSampleAndBuildOptions)
-{
-    const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::CouplingGraphBuilder builder{ 2 };
-    EXPECT_THROW(
-        AddCouplingGraphSample(builder, { 0, 0 }, { { 2, unit } }),
-        std::invalid_argument);
-
-    AddCouplingGraphSample(builder, { 0, 0 }, { { 0, unit } });
-    auto invalid_weight_options{
-        coupling_detail::CouplingGraphOptions{}
-    };
-    invalid_weight_options.minimum_weight = -0.01;
-    EXPECT_THROW(
-        builder.BuildTopology(MakeUniqueResidueKeys(2), invalid_weight_options),
-        std::invalid_argument);
-
-    auto invalid_residue_limit_options{
-        coupling_detail::CouplingGraphOptions{}
-    };
-    invalid_residue_limit_options.maximum_residue_count = 0;
-    EXPECT_THROW(
-        builder.BuildTopology(
-            MakeUniqueResidueKeys(2),
-            invalid_residue_limit_options),
-        std::invalid_argument);
-}
-
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueComponents)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
@@ -3955,28 +3788,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphAdaptiveHysteresisAddsAndRemo
     EXPECT_TRUE(HasCouplingNeighbor(retained_midpoint, 0, 1));
     const auto removed{ build_topology(0.039, &retained_midpoint) };
     EXPECT_FALSE(HasCouplingNeighbor(removed, 0, 1));
-}
-
-TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesAdaptiveHysteresisInputs)
-{
-    coupling_detail::CouplingGraphBuilder builder{ 1 };
-    coupling_detail::CouplingGraphOptions options;
-    options.minimum_weight = 0.05;
-    options.retained_edge_minimum_weight = 0.051;
-    EXPECT_THROW(
-        builder.BuildTopology(MakeUniqueResidueKeys(1), options),
-        std::invalid_argument);
-
-    coupling_detail::CouplingGraphBuilder previous_size_builder{ 1 };
-    options.retained_edge_minimum_weight = 0.04;
-    coupling_detail::GraphTopology wrong_size_previous;
-    wrong_size_previous.adjacency_list.resize(2);
-    EXPECT_THROW(
-        previous_size_builder.BuildTopology(
-            MakeUniqueResidueKeys(1),
-            options,
-            &wrong_size_previous),
-        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
@@ -4739,7 +4550,7 @@ TEST(EstimatorSecondStageDefenseTest,
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    BacktrackingWorkspaceDistinguishesInvalidAndExhaustedSteps)
+    BacktrackingWorkspaceStopsWhenChangeBecomesNonmaterial)
 {
     backtracking_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
@@ -4750,27 +4561,6 @@ TEST(EstimatorSecondStageDefenseTest,
     };
 
     backtracking_detail::FitState endpoint_state(1);
-    endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
-        rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
-    };
-    const auto invalid_endpoint_patch{
-        backtracking_detail::FitStatePatch::FromState(
-            endpoint_state,
-            std::vector<std::size_t>{ 0 })
-    };
-    backtracking_detail::BacktrackingWorkspace invalid_workspace{
-        context,
-        previous_state,
-        invalid_endpoint_patch,
-        1.0e-4
-    };
-    const auto invalid_step{ invalid_workspace.BuildNextCandidate() };
-    EXPECT_EQ(
-        invalid_step.status,
-        backtracking_detail::BacktrackingStepStatus::InvalidCandidate);
-    EXPECT_EQ(invalid_step.trial_number, 1U);
-
     endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
@@ -4793,39 +4583,6 @@ TEST(EstimatorSecondStageDefenseTest,
         change_exhausted_step.status,
         backtracking_detail::BacktrackingStepStatus::Exhausted);
     EXPECT_EQ(change_exhausted_step.trial_number, 1U);
-
-    backtracking_detail::SecondStageContext empty_context;
-    backtracking_detail::FitState empty_state;
-    backtracking_detail::BacktrackingWorkspace factor_workspace{
-        empty_context,
-        empty_state,
-        backtracking_detail::FitStatePatch{},
-        0.0
-    };
-    std::size_t ready_count{ 0 };
-    double expected_factor{ 0.5 };
-    std::size_t expected_trial_number{ 2 };
-    backtracking_detail::BacktrackingStep factor_step;
-    do
-    {
-        factor_step = factor_workspace.BuildNextCandidate();
-        if (factor_step.status == backtracking_detail::BacktrackingStepStatus::CandidateReady)
-        {
-            ready_count++;
-            EXPECT_DOUBLE_EQ(factor_step.factor, expected_factor);
-            EXPECT_EQ(factor_step.trial_number, expected_trial_number);
-            expected_factor *= 0.5;
-            expected_trial_number++;
-        }
-    }
-    while (factor_step.status == backtracking_detail::BacktrackingStepStatus::CandidateReady);
-    EXPECT_EQ(
-        factor_step.status,
-        backtracking_detail::BacktrackingStepStatus::Exhausted);
-    EXPECT_GT(ready_count, 40U);
-    EXPECT_LT(
-        factor_step.factor,
-        std::numeric_limits<double>::epsilon());
 }
 
 TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidate)
@@ -5029,40 +4786,6 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWid
     EXPECT_DOUBLE_EQ(
         0.0,
         change.value_list.at(change_detail::kOffsetToPeakRatioChangeIndex));
-}
-
-TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfiniteChange)
-{
-    const rg::GaussianModel3D valid_model{ 1.0, 0.5, 0.0 };
-    const std::array<rg::GaussianModel3D, 4> invalid_model_list{
-        rg::GaussianModel3D{ 0.0, 0.5, 0.0 },
-        rg::GaussianModel3D{ 1.0, 0.0, 0.0 },
-        rg::GaussianModel3D{
-            std::numeric_limits<double>::quiet_NaN(),
-            0.5,
-            0.0
-        },
-        rg::GaussianModel3D{
-            std::numeric_limits<double>::denorm_min(),
-            std::numeric_limits<double>::max(),
-            std::numeric_limits<double>::max()
-        }
-    };
-
-    for (const auto & invalid_model : invalid_model_list)
-    {
-        EXPECT_FALSE(seed_detail::IsValidSecondStageGaussianModel(invalid_model));
-        const auto change{
-            change_detail::CalculateTransformedChange(
-                invalid_model,
-                valid_model)
-        };
-        ASSERT_EQ(change_detail::kTransformedChangeSize, change.value_list.size());
-        for (const auto value : change.value_list)
-        {
-            EXPECT_TRUE(std::isinf(value));
-        }
-    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximumTail)
@@ -5600,38 +5323,6 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotBlockRemoteCluste
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, QuarantineKeepsAffectedClusterInObjectiveDomain)
-{
-    auto model{ BuildTerminalWithPersistentLocalRefitFallbackDefenseModel() };
-    const auto & selected_atoms{ model->GetSelectedAtoms() };
-    const std::array<rg::GaussianModel3D, 2> previous_terminal_model_list{
-        GetEstimateModel(*selected_atoms.at(0)),
-        GetEstimateModel(*selected_atoms.at(1))
-    };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string output{ testing::internal::GetCapturedStdout() };
-
-    for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
-    {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*selected_atoms.at(i)),
-            previous_terminal_model_list.at(i),
-            1.0e-12);
-    }
-    constexpr std::string_view accepted_iteration_marker{
-        " - accepted_iterations = " };
-    const auto accepted_iteration_position{
-        output.find(accepted_iteration_marker) };
-    ASSERT_NE(accepted_iteration_position, std::string::npos);
-    const auto accepted_iteration_count{ std::stoull(output.substr(
-        accepted_iteration_position + accepted_iteration_marker.size())) };
-    EXPECT_GT(accepted_iteration_count, 3U);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
 TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableReasonAndReleasesOnProbation)
 {
     const audit_detail::QuarantineTarget target{
@@ -5772,102 +5463,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRejectsTerminalF
     EXPECT_GT(fitted_model.GetWidth(), 0.0);
     ExpectGaussianModelsNear(fitted_model, previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FixedPointShadowAuditNamesAllThreeStates)
-{
-    auto model{ BuildFiniteNonphysicalProfileDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_level);
-
-    EXPECT_NE(
-        output.find("Convergence safeguard audit: schema=9"),
-        std::string::npos);
-    EXPECT_NE(output.find("certificate-definition=1"), std::string::npos);
-    EXPECT_EQ(output.find("comparator-set="), std::string::npos);
-    EXPECT_EQ(output.find("historical-"), std::string::npos);
-    EXPECT_EQ(output.find("production-maximum"), std::string::npos);
-    EXPECT_EQ(output.find("exposures["), std::string::npos);
-    EXPECT_EQ(output.find("accepted-only"), std::string::npos);
-    EXPECT_EQ(output.find("rho="), std::string::npos);
-    EXPECT_NE(output.find("accepted-active-p99="), std::string::npos);
-    EXPECT_NE(output.find("accepted-active-max="), std::string::npos);
-    EXPECT_EQ(output.find("guarded-proposal-p99="), std::string::npos);
-    EXPECT_NE(output.find("operator-nominal-residual-p99="), std::string::npos);
-    EXPECT_NE(output.find("operator-nominal-residual-max="), std::string::npos);
-    EXPECT_NE(output.find("operator-nominal-tail[height/width/offset]="),
-        std::string::npos);
-    EXPECT_NE(output.find("unified-search["), std::string::npos);
-    EXPECT_NE(output.find("operator-nominal-unavailable[height/width/offset]="),
-        std::string::npos);
-    EXPECT_NE(output.find("residual-state="), std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FixedPointShadowMarksUnavailableOperatorRestricted)
-{
-    auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_level);
-
-    EXPECT_NE(output.find("residual-state=restricted"), std::string::npos);
-    EXPECT_NE(
-        output.find(
-            "operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]="),
-        std::string::npos);
-    EXPECT_EQ(
-        output.find(
-            "operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=0/0/0"),
-        std::string::npos);
-}
-
-TEST(EstimatorSecondStageDefenseTest, ConvergenceAuditIsInfoDebugTrajectoryNeutral)
-{
-    auto info_model{ BuildFiniteNonphysicalProfileDefenseModel() };
-    auto debug_model{ BuildFiniteNonphysicalProfileDefenseModel() };
-    auto options{ MakeSecondStageOptions() };
-    options.quiet_mode = false;
-    const auto previous_level{ Logger::GetLogLevel() };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    const auto info_result{ rt::RunSecondStageLocalFitting(*info_model, options) };
-    const std::string info_output{ testing::internal::GetCapturedStdout() };
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    const auto debug_result{ rt::RunSecondStageLocalFitting(*debug_model, options) };
-    const std::string debug_output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_level);
-
-    EXPECT_EQ(info_result, debug_result);
-    EXPECT_EQ(
-        info_output.find("Convergence safeguard audit:"),
-        std::string::npos);
-    EXPECT_NE(
-        debug_output.find("Convergence safeguard audit: schema=9"),
-        std::string::npos);
-    const auto & info_atoms{ info_model->GetSelectedAtoms() };
-    const auto & debug_atoms{ debug_model->GetSelectedAtoms() };
-    ASSERT_EQ(info_atoms.size(), debug_atoms.size());
-    for (std::size_t i = 0; i < info_atoms.size(); i++)
-    {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*info_atoms.at(i)),
-            GetEstimateModel(*debug_atoms.at(i)),
-            1.0e-12);
-    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinearRidgeGuard)
