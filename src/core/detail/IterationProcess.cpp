@@ -3728,7 +3728,7 @@ static IterationResult RunIteration(
     const auto debug_convergence_audit_enabled{
         !options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug };
     const auto iteration_phase_start{
-        performance_counters.StartIterationPhase()
+        std::chrono::steady_clock::now()
     };
     auto raw_iteration_result{
         RunProposalIteration(
@@ -3802,7 +3802,6 @@ static IterationResult RunIteration(
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
-        .thread_size = options.thread_size,
         .performance_counters = performance_counters
     };
     auto selection{ SelectClusterCandidates(candidate_inputs) };

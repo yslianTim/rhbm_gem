@@ -101,7 +101,6 @@ struct ClusterHealth
     JointOffsetSolveStatus joint_offset_status;
     bool all_local_refits_solver_qualified{ true };
     bool production_convergence_qualified{ true };
-    bool is_boundary_correction_eligible{ true };
 
     bool IsSolverQualified() const
     {

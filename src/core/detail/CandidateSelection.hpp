@@ -10,8 +10,6 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <span>
-#include <utility>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
@@ -262,9 +260,7 @@ public:
     void RecordGaussianCacheMisses();
     void RecordGaussianCacheHits();
     void RecordObjectiveSampleEvaluation(std::size_t recomputed_sample_count, std::size_t total_sample_count);
-    [[nodiscard]] std::chrono::steady_clock::time_point StartIterationPhase() const;
     void FinishIterationPhase(std::chrono::steady_clock::time_point start_time);
-    [[nodiscard]] std::chrono::steady_clock::time_point StartCandidatePhase() const;
     void FinishCandidatePhase(std::chrono::steady_clock::time_point start_time);
     void RecordSolverWorkspaceReset();
     void RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed);
@@ -657,7 +653,6 @@ struct CandidateSelectionInputs
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
     BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
-    int thread_size;
     PerformanceCounters & performance_counters;
 };
 

@@ -330,19 +330,9 @@ void PerformanceCounters::RecordObjectiveSampleEvaluation(
         std::memory_order_relaxed);
 }
 
-std::chrono::steady_clock::time_point PerformanceCounters::StartIterationPhase() const
-{
-    return std::chrono::steady_clock::now();
-}
-
 void PerformanceCounters::FinishIterationPhase(std::chrono::steady_clock::time_point start_time)
 {
     m_iteration_phase_milliseconds += CalculateElapsedMilliseconds(start_time);
-}
-
-std::chrono::steady_clock::time_point PerformanceCounters::StartCandidatePhase() const
-{
-    return std::chrono::steady_clock::now();
 }
 
 void PerformanceCounters::FinishCandidatePhase(std::chrono::steady_clock::time_point start_time)
@@ -2558,11 +2548,7 @@ EvaluateClusterCandidateGuard(
     const FitStateView & candidate_state,
     const SuspiciousBlockActivity & block_activity)
 {
-    const auto previous_snapshot{
-        BuildSecondStageModelSnapshot(
-            inputs.context,
-            BuildFittedGaussianSnapshot(inputs.previous_state))
-    };
+    const auto & previous_snapshot{ inputs.residual_baseline.model_snapshot };
     const auto candidate_snapshot{
         BuildSecondStageModelSnapshot(
             inputs.context,
@@ -2793,7 +2779,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 GetMaximumTransformedChange(
                     SummarizeTransformedChanges(
                         candidate_state_view,
-                        BuildFittedGaussianSnapshot(previous_state),
+                        residual_baseline.model_snapshot.selected,
                         key))
             };
             if (maximum_change < kTransformedChangeTolerance)
@@ -3124,10 +3110,10 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
         }
     };
 #ifdef USE_OPENMP
-    if (inputs.thread_size > 1 && candidate_work_list.size() > 1)
+    if (inputs.options.thread_size > 1 && candidate_work_list.size() > 1)
     {
         eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
-#pragma omp parallel for schedule(dynamic) num_threads(inputs.thread_size)
+#pragma omp parallel for schedule(dynamic) num_threads(inputs.options.thread_size)
         for (std::size_t position = 0; position < candidate_work_list.size(); position++)
         {
             select_candidate(position);
@@ -3176,10 +3162,6 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
         }
         individual_selection.polish_progress_by_key.emplace(key, result.polish_progress);
         working_objective_state.at(key) = std::move(result.objective_state);
-        selection.polish_progress.eligible_count += result.polish_progress.eligible_count;
-        selection.polish_progress.accepted_count += result.polish_progress.accepted_count;
-        selection.polish_progress.rejected_count += result.polish_progress.rejected_count;
-        selection.polish_progress.skipped_count += result.polish_progress.skipped_count;
         if (!result.accepted_patch.has_value())
         {
             if (result.rescue_patch.has_value())
@@ -3190,8 +3172,8 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
             {
                 individual_selection.rescue_hard_failure_exclusion_count++;
             }
-            else if (!inputs.health_by_key.at(key).is_boundary_correction_eligible ||
-                result.diagnostic.pre_objective_failure_reason != PreObjectiveFailureReason::None)
+            else if (result.diagnostic.pre_objective_failure_reason !=
+                PreObjectiveFailureReason::None)
             {
                 individual_selection.rescue_invalid_proposal_exclusion_count++;
             }
@@ -4388,7 +4370,7 @@ static void FinalizeTrustModelShadowDisposition(CandidateSelection & selection)
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
 {
     auto working_objective_state{ inputs.cluster_objective_state };
-    const auto candidate_phase_start{ inputs.performance_counters.StartCandidatePhase() };
+    const auto candidate_phase_start{ std::chrono::steady_clock::now() };
     auto individual_selection{
         SelectIndividualClusterCandidates(inputs, working_objective_state)
     };
@@ -4406,12 +4388,12 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             inputs,
             selection.accepted_key_list)
     };
+    const auto previous_audit_objective{
+        EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
+    };
     if (!boundary_component_list.empty())
     {
         const auto boundary_reconciliation_start{ std::chrono::steady_clock::now() };
-        const auto previous_audit_objective{
-            EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
-        };
         for (const auto & component : boundary_component_list)
         {
             ReconcileBoundaryComponent(
@@ -4473,14 +4455,11 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - boundary_reconciliation_start).count());
     }
-    const auto rescue_previous_audit_objective{
-        EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
-    };
     const auto rescued_any{
-        rescue_previous_audit_objective.has_value() &&
+        previous_audit_objective.has_value() &&
         RescueRejectedBoundaryClusters(
             inputs,
-            *rescue_previous_audit_objective,
+            *previous_audit_objective,
             individual_selection.candidate_patch_by_key,
             working_objective_state,
             selection)
@@ -4489,22 +4468,22 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     {
         selection.final_audit_objective = EvaluateFinalSelectionAudit(
             inputs,
-            &*rescue_previous_audit_objective,
+            &*previous_audit_objective,
             selection);
         if (!selection.final_audit_objective.has_value() && !selection.accepted_key_list.empty())
         {
             SalvageFinalSelectionAudit(
                 inputs,
-                *rescue_previous_audit_objective,
+                *previous_audit_objective,
                 working_objective_state,
                 selection);
         }
     }
-    if (rescue_previous_audit_objective.has_value() &&
+    if (previous_audit_objective.has_value() &&
         selection.final_audit_objective.has_value())
     {
         const auto global_improvement{
-            rescue_previous_audit_objective->GetTotalObjective() -
+            previous_audit_objective->GetTotalObjective() -
             selection.final_audit_objective->GetTotalObjective()
         };
         for (auto & diagnostic : selection.boundary_reconciliation_diagnostic_list)
