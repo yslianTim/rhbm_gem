@@ -24,7 +24,6 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
-constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
 constexpr double kSuspiciousProfileScaleMin{ 1.0e-12 };
@@ -46,6 +45,7 @@ constexpr double kOffsetPeakRatioMax{ 1.0 };
 constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
 constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
 enum class SuspiciousProfileAnalysisMode
 {
@@ -53,12 +53,13 @@ enum class SuspiciousProfileAnalysisMode
     PreviousBaseline
 };
 
-struct BaseProposalBuildResult
+bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
 {
-    std::optional<FitStateProposal> proposal{};
-    PreObjectiveFailureReason failure_reason{ PreObjectiveFailureReason::None };
-    std::optional<double> attempted_step_norm{};
-};
+    return std::isfinite(step_norm) &&
+        std::isfinite(radius) &&
+        radius > 0.0 &&
+        step_norm >= kTrustRegionGrowthBoundaryRatio * radius;
+}
 
 struct ClusterCandidateResult
 {
@@ -671,11 +672,6 @@ double BacktrackingWorkspace::GetMaximumTransformedChange() const
     return maximum_change;
 }
 
-std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask)
-{
-    return static_cast<std::size_t>(std::ranges::count_if(suspicious_mask, std::identity{}));
-}
-
 SuspiciousUpdateMask SuspiciousBlockActivity::BuildCombinedFixedAtomMask() const
 {
     if (shape_fixed_atom_mask.size() != offset_fixed_atom_mask.size() ||
@@ -703,19 +699,6 @@ bool SuspiciousBlockActivity::HasActiveOffset(std::size_t atom_index) const
 {
     return offset_fixed_atom_mask.at(atom_index) == 0 &&
         hard_failure_atom_mask.at(atom_index) == 0;
-}
-
-std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(const SuspiciousUpdateMask & suspicious_mask)
-{
-    std::vector<double> ridge_multiplier_list(suspicious_mask.size(), 1.0);
-    for (std::size_t atom_index = 0; atom_index < suspicious_mask.size(); atom_index++)
-    {
-        if (suspicious_mask.at(atom_index) != 0)
-        {
-            ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
-        }
-    }
-    return ridge_multiplier_list;
 }
 
 static bool HasSuspiciousCenterSignFlip(
@@ -1977,7 +1960,7 @@ static bool TryCommitClusterCandidate(
     return true;
 }
 
-static BaseProposalBuildResult BuildSharedOffsetProposal(
+static std::optional<FitStateProposal> BuildSharedOffsetProposal(
     const SecondStageContext & context,
     const FitState & outer_previous_state,
     const FitState & operator_proposal_state,
@@ -1987,11 +1970,7 @@ static BaseProposalBuildResult BuildSharedOffsetProposal(
 {
     if (key.empty())
     {
-        return BaseProposalBuildResult{
-            std::nullopt,
-            PreObjectiveFailureReason::InvalidModel,
-            std::nullopt
-        };
+        return std::nullopt;
     }
 
     std::vector<std::size_t> group_id_by_atom_position;
@@ -2044,22 +2023,14 @@ static BaseProposalBuildResult BuildSharedOffsetProposal(
             0.0,
             seed_model_list))
     {
-        return BaseProposalBuildResult{
-            std::nullopt,
-            PreObjectiveFailureReason::InvalidModel,
-            std::nullopt
-        };
+        return std::nullopt;
     }
     const auto seed_step_norm{
         CalculateModelTrustRegionStepNorm(previous_model_list, seed_model_list)
     };
     if (!seed_step_norm.has_value())
     {
-        return BaseProposalBuildResult{
-            std::nullopt,
-            PreObjectiveFailureReason::InvalidModel,
-            std::nullopt
-        };
+        return std::nullopt;
     }
     std::vector<GaussianModel3D> candidate_model_list;
     if (!TryBuildSharedOffsetDampedModelList(
@@ -2070,22 +2041,14 @@ static BaseProposalBuildResult BuildSharedOffsetProposal(
             factor,
             candidate_model_list))
     {
-        return BaseProposalBuildResult{
-            std::nullopt,
-            PreObjectiveFailureReason::InvalidModel,
-            std::nullopt
-        };
+        return std::nullopt;
     }
     const auto step_norm{
         CalculateModelTrustRegionStepNorm(previous_model_list, candidate_model_list)
     };
     if (!step_norm.has_value())
     {
-        return BaseProposalBuildResult{
-            std::nullopt,
-            PreObjectiveFailureReason::InvalidModel,
-            std::nullopt
-        };
+        return std::nullopt;
     }
     FitStateProposal proposal{
         .patch{ .atom_index_list = key },
@@ -2103,11 +2066,7 @@ static BaseProposalBuildResult BuildSharedOffsetProposal(
                     .GetStandardDeviationModel()
             });
     }
-    return BaseProposalBuildResult{
-        std::move(proposal),
-        PreObjectiveFailureReason::None,
-        std::nullopt
-    };
+    return proposal;
 }
 
 static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const ClusterKey & key)
@@ -2761,17 +2720,17 @@ static ClusterCandidateResult SelectClusterCandidate(
                     key,
                     factor)
             };
-            if (!proposal_result.proposal.has_value())
+            if (!proposal_result.has_value())
             {
                 invalid_trial_count++;
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
                 result.trust_model_candidate_funnel.invalid_count++;
 #endif
                 result.diagnostic.pre_objective_failure_reason =
-                    proposal_result.failure_reason;
+                    PreObjectiveFailureReason::InvalidModel;
                 continue;
             }
-            auto proposal{ std::move(*proposal_result.proposal) };
+            auto proposal{ std::move(*proposal_result) };
             result.diagnostic.pre_objective_attempted_step_norm = proposal.step_norm;
             result.diagnostic.trust_region_step_norm = proposal.step_norm;
             const FitStateView candidate_state_view{ previous_state, proposal.patch };
@@ -3537,7 +3496,6 @@ static bool TryBoundaryJointCorrection(
         });
     }
     const BoundaryJointCorrectionWorkspaceKey workspace_key{
-        component.key_list,
         shape_active_atom_index_list,
         offset_active_atom_index_list,
         component.offset_closure_atom_index_list,
@@ -4649,7 +4607,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         });
                     }
                     const BoundaryJointCorrectionWorkspaceKey workspace_key{
-                        component.key_list,
                         shape_active_index_list,
                         offset_active_index_list,
                         component.atom_index_list,

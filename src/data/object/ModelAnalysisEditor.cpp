@@ -197,7 +197,7 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
         atom_entry.SetPosteriorResult(
             stage,
-            member_result.mdpde,
+            member_result.posterior,
             member_result.is_outlier,
             member_result.statistical_distance);
     }

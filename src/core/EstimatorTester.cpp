@@ -55,14 +55,13 @@ LocalReplicaBias EstimateLocalReplicaBias(
 }
 
 GroupReplicaBias EstimateGroupReplicaBias(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<LocalGaussianResult> & member_results,
+    const std::vector<GroupGaussianMemberInput> & member_list,
     const GaussianModel3D & truth,
     double alpha_g,
     const FitOptions & options)
 {
     const auto estimate{
-        EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
+        EstimateGroupGaussian(member_list, alpha_g, options)
     };
     return GroupReplicaBias{
         CalculateNormalizedBias(estimate.mean, truth),
@@ -262,18 +261,24 @@ GroupTestBias RunGroupEstimationTest(
         const auto & sample_entries_list{
             input.replica_member_sampling_entries.at(static_cast<size_t>(i))
         };
-        std::vector<LocalGaussianResult> member_results;
-        member_results.reserve(sample_entries_list.size());
+        std::vector<GroupGaussianMemberInput> member_list;
+        member_list.reserve(sample_entries_list.size());
         for (const auto & sample_entries : sample_entries_list)
         {
-            member_results.emplace_back(
-                EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
+            const auto local_result{
+                EstimateLocalGaussian(sample_entries, 0.0, estimator_options)
+            };
+            const auto local_model{ local_result.mdpde.GetModel() };
+            member_list.emplace_back(GroupGaussianMemberInput{
+                sample_entries,
+                local_result.alpha_r,
+                local_model
+            });
         }
 
         const auto requested_result{
             EstimateGroupReplicaBias(
-                sample_entries_list,
-                member_results,
+                member_list,
                 input.gaus_true,
                 options.requested_alpha_g,
                 estimator_options)
@@ -283,16 +288,21 @@ GroupTestBias RunGroupEstimationTest(
 
         if (options.alpha_training)
         {
+            std::vector<GaussianModel3D> member_model_list;
+            member_model_list.reserve(member_list.size());
+            for (const auto & member : member_list)
+            {
+                member_model_list.emplace_back(member.local_model);
+            }
             const auto trained_alpha_g{
                 TrainAlphaG(
-                    std::vector<std::vector<LocalGaussianResult>>{ member_results },
+                    std::vector<std::vector<GaussianModel3D>>{ member_model_list },
                     estimator_options)
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
                 EstimateGroupReplicaBias(
-                    sample_entries_list,
-                    member_results,
+                    member_list,
                     input.gaus_true,
                     trained_alpha_g,
                     estimator_options)

@@ -17,10 +17,6 @@
 
 namespace rhbm_gem {
 class AtomObject;
-
-namespace core {
-struct FitOptions;
-}
 }
 
 namespace rhbm_gem::core::detail {
@@ -95,7 +91,7 @@ struct LocalGaussianDesignTemplate
     RHBMDesignMatrix design_matrix{};
 };
 
-RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options);
+RHBMExecutionOptions MakeExecutionOptions(int thread_size);
 
 LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     const LocalPotentialSampleList & sample_entries,
@@ -115,7 +111,7 @@ LocalGaussianResult EstimateLocalGaussianPrepared(
     const LocalGaussianDesignTemplate & design_template,
     const std::vector<double> & sample_response_list,
     double alpha_r,
-    const FitOptions & options,
+    int thread_size,
     const GaussianModel3D & offset_model);
 
 
@@ -252,8 +248,6 @@ const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_ind
 const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index);
 
 using PolishProvenance = std::vector<char>;
-
-bool UsesPolish(const PolishProvenance & provenance);
 
 
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
@@ -392,8 +386,6 @@ bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 
 
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
-
-bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius);
 
 std::optional<double> CalculateModelTrustRegionStepNorm(
     const std::vector<GaussianModel3D> & previous_model_list,

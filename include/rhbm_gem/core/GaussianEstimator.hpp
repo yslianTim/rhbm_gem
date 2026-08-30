@@ -32,7 +32,7 @@ double TrainAlphaR(
     const FitOptions & options);
 
 double TrainAlphaG(
-    const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
+    const std::vector<std::vector<GaussianModel3D>> & model_group_list,
     const FitOptions & options);
 
 LocalGaussianResult EstimateLocalGaussian(
@@ -42,8 +42,7 @@ LocalGaussianResult EstimateLocalGaussian(
     const GaussianModel3D & offset_model = GaussianModel3D{ 0.0, 1.0, 0.0 });
 
 GroupGaussianResult EstimateGroupGaussian(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<LocalGaussianResult> & member_result_list,
+    const std::vector<GroupGaussianMemberInput> & member_list,
     double alpha_g,
     const FitOptions & options);
 

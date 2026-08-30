@@ -1148,7 +1148,6 @@ CouplingGraphPartition BuildGraphPartition(
         partition.boundary_sample_dependency_list,
         {},
         &CouplingGraphPartition::BoundarySampleDependency::sample_id);
-    partition.boundary_sample_count = partition.boundary_sample_dependency_list.size();
 
     for (auto & [root, key] : key_by_root)
     {

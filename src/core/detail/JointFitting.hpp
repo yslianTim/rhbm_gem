@@ -72,7 +72,6 @@ using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
 
 struct BoundaryJointCorrectionWorkspaceKey
 {
-    std::vector<ClusterKey> member_key_list{};
     std::vector<std::size_t> shape_active_atom_index_list{};
     std::vector<std::size_t> offset_active_atom_index_list{};
     std::vector<std::size_t> offset_closure_atom_index_list{};
@@ -85,11 +84,6 @@ struct BoundaryJointCorrectionWorkspaceKey
 
 using BoundaryJointCorrectionWorkspaceMap =
     std::map<BoundaryJointCorrectionWorkspaceKey, ReusableWeightedRidgeSolver>;
-
-void ResetClusterSolverWorkspace(
-    const std::vector<ClusterKey> & cluster_key_list,
-    ClusterSolverWorkspaceMap & workspace_by_key);
-
 
 struct ClusterHealth
 {

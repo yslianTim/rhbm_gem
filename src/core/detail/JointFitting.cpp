@@ -322,17 +322,6 @@ bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
     throw std::logic_error("Joint offset solve status is invalid.");
 }
 
-void ResetClusterSolverWorkspace(
-    const std::vector<ClusterKey> & cluster_key_list,
-    ClusterSolverWorkspaceMap & workspace_by_key)
-{
-    workspace_by_key.clear();
-    for (const auto & key : cluster_key_list)
-    {
-        workspace_by_key.try_emplace(key);
-    }
-}
-
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status)
 {
     switch (status)

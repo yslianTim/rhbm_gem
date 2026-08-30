@@ -1074,8 +1074,8 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     result.member_results.reserve(atom_list.size());
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
-        rg::LocalGaussianResult member_result;
-        member_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GroupGaussianMemberResult member_result;
+        member_result.posterior = rg::GaussianModel3DWithUncertainty{
             rg::GaussianModel3D{ 0.4 + 0.1 * static_cast<double>(i), 0.9 },
             rg::GaussianModel3DUncertainty{ 0.01, 0.02 }
         };
@@ -1125,7 +1125,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
         gaussian_result.mdpde.GetModel().GetWidth(),
         1e-12);
     ASSERT_TRUE(gaussian_result.posterior.has_value());
-    const auto expected_gaussian{ result.member_results.front().mdpde };
+    const auto expected_gaussian{ result.member_results.front().posterior };
     EXPECT_NEAR(
         expected_gaussian.GetModel().GetAmplitude(),
         gaussian_result.posterior->GetModel().GetAmplitude(),

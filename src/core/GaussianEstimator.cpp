@@ -35,11 +35,11 @@ constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
-    training_options.execution_options = detail::MakeExecutionOptions(options);
+    training_options.execution_options = detail::MakeExecutionOptions(options.thread_size);
     return training_options;
 }
 
-std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
+std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
     const RHBMGroupEstimationResult & result,
     const std::vector<double> & member_offset_list)
 {
@@ -56,7 +56,7 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         result.statistical_distance_array, result.beta_posterior_matrix.cols(),
         "statistical_distance_array", "Group Gaussian member result count is inconsistent.");
 
-    std::vector<LocalGaussianResult> member_results;
+    std::vector<GroupGaussianMemberResult> member_results;
     member_results.reserve(member_count);
     for (Eigen::Index i = 0; i < result.beta_posterior_matrix.cols(); i++)
     {
@@ -70,10 +70,7 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         const auto gaussian_with_offset{
             detail::WithPreservedUncertaintyOffset(gaussian, offset)
         };
-        member_results.emplace_back(LocalGaussianResult{
-            0.0,
-            gaussian_with_offset,
-            gaussian_with_offset,
+        member_results.emplace_back(GroupGaussianMemberResult{
             gaussian_with_offset,
             static_cast<bool>(result.outlier_flag_array(i)),
             result.statistical_distance_array(i)
@@ -138,8 +135,8 @@ void RunGroupAlphaTraining(
     const auto analysis_view{ model_object.GetAnalysisView() };
     const auto group_key_list{ analysis_view.CollectAtomGroupKeys(stage) };
 
-    std::vector<std::vector<LocalGaussianResult>> member_result_list;
-    member_result_list.reserve(group_key_list.size());
+    std::vector<std::vector<GaussianModel3D>> model_group_list;
+    model_group_list.reserve(group_key_list.size());
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
@@ -149,17 +146,18 @@ void RunGroupAlphaTraining(
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         analysis.EnsureAtomGroupLocalPotentials(stage, group_key);
 
-        std::vector<LocalGaussianResult> group_member_results;
-        group_member_results.reserve(group_atom_list.size());
+        std::vector<GaussianModel3D> group_member_models;
+        group_member_models.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            group_member_results.emplace_back(local_view.GetGaussianResult(stage));
+            group_member_models.emplace_back(
+                local_view.GetGaussianResult(stage).mdpde.GetModel());
         }
-        member_result_list.emplace_back(std::move(group_member_results));
+        model_group_list.emplace_back(std::move(group_member_models));
     }
 
-    const auto alpha_g{ TrainAlphaG(member_result_list, options) };
+    const auto alpha_g{ TrainAlphaG(model_group_list, options) };
     analysis.InitializeGroupAlpha(stage, alpha_g);
 }
 
@@ -257,19 +255,19 @@ double TrainAlphaR(
 }
 
 double TrainAlphaG(
-    const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
+    const std::vector<std::vector<GaussianModel3D>> & model_group_list,
     const FitOptions & options)
 {
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
-    beta_group_list.reserve(member_result_list.size());
-    for (const auto & member_results : member_result_list)
+    beta_group_list.reserve(model_group_list.size());
+    for (const auto & model_group : model_group_list)
     {
         std::vector<RHBMParameterVector> beta_list;
-        beta_list.reserve(member_results.size());
-        for (const auto & member_result : member_results)
+        beta_list.reserve(model_group.size());
+        for (const auto & model : model_group)
         {
             beta_list.emplace_back(
-                linearization_service::EncodeGaussianToParameterVector(member_result.mdpde.GetModel()));
+                linearization_service::EncodeGaussianToParameterVector(model));
         }
         beta_group_list.emplace_back(std::move(beta_list));
     }
@@ -305,13 +303,12 @@ LocalGaussianResult EstimateLocalGaussian(
         design_template,
         sample_response_list,
         alpha_r,
-        options,
+        options.thread_size,
         offset_model);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<LocalGaussianResult> & member_result_list,
+    const std::vector<GroupGaussianMemberInput> & member_list,
     double alpha_g,
     const FitOptions & options)
 {
@@ -319,26 +316,19 @@ GroupGaussianResult EstimateGroupGaussian(
         options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
 
-    if (sample_entries_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
-    }
-
-    const auto execution_options{ detail::MakeExecutionOptions(options) };
+    const auto execution_options{ detail::MakeExecutionOptions(options.thread_size) };
     std::vector<RHBMMemberDataset> dataset_list;
-    dataset_list.reserve(sample_entries_list.size());
+    dataset_list.reserve(member_list.size());
     std::vector<RHBMBetaEstimateResult> fit_result_list;
-    fit_result_list.reserve(member_result_list.size());
+    fit_result_list.reserve(member_list.size());
     std::vector<double> member_offset_list;
-    member_offset_list.reserve(member_result_list.size());
-    for (std::size_t i = 0; i < member_result_list.size(); i++)
+    member_offset_list.reserve(member_list.size());
+    for (const auto & member : member_list)
     {
-        const auto & member_result{ member_result_list.at(i) };
-        const auto & member_model{ member_result.mdpde.GetModel() };
         const auto sampling_entries{
             detail::BuildSamplesForZeroOffsetGaussianFit(
-                sample_entries_list.at(i),
-                member_model)
+                member.sample_entries,
+                member.local_model)
         };
         auto dataset{
             rhbm_helper::BuildMemberDataset(
@@ -348,11 +338,11 @@ GroupGaussianResult EstimateGroupGaussian(
         };
         fit_result_list.emplace_back(
             rhbm_helper::EstimateBetaMDPDE(
-                member_result.alpha_r,
+                member.alpha_r,
                 dataset,
                 execution_options));
         dataset_list.emplace_back(std::move(dataset));
-        member_offset_list.emplace_back(member_model.GetOffset());
+        member_offset_list.emplace_back(member.local_model.GetOffset());
     }
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
@@ -382,13 +372,12 @@ void RunLocalAlphaTraining(
         for (auto * atom : group_atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            auto sample_entries{ local_view.GetSamplingEntries(stage) };
             if (!local_view.HasEnoughSamplingEntriesInRange(
                     stage,
                     options.distance_min,
                     options.distance_max,
                     kMinimumAlphaRTrainingSampleCount)) continue;
-            sample_entries_list.emplace_back(std::move(sample_entries));
+            sample_entries_list.emplace_back(local_view.GetSamplingEntries(stage));
         }
         if (!sample_entries_list.empty())
         {
@@ -428,18 +417,21 @@ void RunGroupPotentialFitting(
         auto group_key{ group_key_list[k] };
         const auto & atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
         const auto alpha_g{ analysis_view.GetAtomAlphaG(stage, group_key) };
-        std::vector<LocalPotentialSampleList> sample_entries_list;
-        std::vector<LocalGaussianResult> member_result_list;
-        sample_entries_list.reserve(atom_list.size());
-        member_result_list.reserve(atom_list.size());
+        std::vector<GroupGaussianMemberInput> member_list;
+        member_list.reserve(atom_list.size());
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(local_view.GetSamplingEntries(stage));
-            member_result_list.emplace_back(local_view.GetGaussianResult(stage));
+            const auto & local_result{ local_view.GetGaussianResult(stage) };
+            auto sample_entries{ local_view.GetSamplingEntries(stage) };
+            member_list.emplace_back(GroupGaussianMemberInput{
+                std::move(sample_entries),
+                local_result.alpha_r,
+                local_result.mdpde.GetModel()
+            });
         }
         const auto result{
-            EstimateGroupGaussian(sample_entries_list, member_result_list, alpha_g, options)
+            EstimateGroupGaussian(member_list, alpha_g, options)
         };
 
 #ifdef USE_OPENMP

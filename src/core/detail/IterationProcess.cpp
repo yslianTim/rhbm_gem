@@ -46,6 +46,44 @@ constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{
     2.0 * kNeighborContributionDistanceMax
 };
+constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
+
+namespace iteration_internal {
+
+bool UsesPolish(const PolishProvenance & provenance)
+{
+    return std::ranges::any_of(
+        provenance,
+        [](char value) { return value != 0; });
+}
+
+std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
+    const SuspiciousUpdateMask & suspicious_mask)
+{
+    std::vector<double> ridge_multiplier_list(suspicious_mask.size(), 1.0);
+    for (std::size_t atom_index = 0; atom_index < suspicious_mask.size(); atom_index++)
+    {
+        if (suspicious_mask.at(atom_index) != 0)
+        {
+            ridge_multiplier_list.at(atom_index) =
+                kSuspiciousJointOffsetRidgeMultiplier;
+        }
+    }
+    return ridge_multiplier_list;
+}
+
+void ResetClusterSolverWorkspace(
+    const std::vector<ClusterKey> & cluster_key_list,
+    ClusterSolverWorkspaceMap & workspace_by_key)
+{
+    workspace_by_key.clear();
+    for (const auto & key : cluster_key_list)
+    {
+        workspace_by_key.try_emplace(key);
+    }
+}
+
+} // namespace iteration_internal
 
 void SetLocalResultOffset(LocalGaussianResult & result, double offset)
 {
@@ -2774,7 +2812,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 atom_context.refit_design_template,
                 adjusted_response_list,
                 atom_context.alpha_r,
-                options,
+                options.thread_size,
                 offset_model)
         };
         if (candidate_result.fit_result.has_value())
@@ -2861,13 +2899,13 @@ RunUnrestrictedShapeRefits(
     }
     std::vector<std::optional<GaussianModel3DWithUncertainty>> result(
         context.size());
-    FitOptions refit_options{ options };
+    int refit_thread_size{ options.thread_size };
 #ifdef USE_OPENMP
     const bool parallel_refits{
         Logger::GetLogLevel() < LogLevel::Debug &&
         options.thread_size > 1 && atom_index_list.size() > 1
     };
-    if (parallel_refits) refit_options.thread_size = 1;
+    if (parallel_refits) refit_thread_size = 1;
 #pragma omp parallel for schedule(dynamic) if(parallel_refits) num_threads(options.thread_size)
 #endif
     for (std::size_t position = 0; position < atom_index_list.size(); position++)
@@ -2880,7 +2918,7 @@ RunUnrestrictedShapeRefits(
                     context.at(atom_index).refit_design_template,
                     adjusted_response_cache.at(atom_index),
                     context.at(atom_index).alpha_r,
-                    refit_options,
+                    refit_thread_size,
                     GetFitModel(operator_model_bundle.selected, atom_index))
             };
             if (IsValidSecondStageGaussianModel(candidate.mdpde.GetModel()))
@@ -3443,7 +3481,8 @@ static std::size_t CountGraphEdgeDifference(const GraphEdgeSet & source, const G
 
 static bool AreGraphPartitionsEqual(const CouplingGraphPartition & lhs, const CouplingGraphPartition & rhs)
 {
-    return lhs.boundary_sample_count == rhs.boundary_sample_count &&
+    return lhs.boundary_sample_dependency_list.size() ==
+            rhs.boundary_sample_dependency_list.size() &&
         lhs.boundary_sample_dependency_list == rhs.boundary_sample_dependency_list &&
         lhs.sample_id_list_by_key == rhs.sample_id_list_by_key;
 }
@@ -3507,7 +3546,7 @@ static void ResetIterationStateForPartition(
     }
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
-    ResetClusterSolverWorkspace(
+    iteration_internal::ResetClusterSolverWorkspace(
         cluster_key_list,
         iteration_state.solver_workspace_by_key);
     iteration_state.boundary_joint_correction_workspace_by_key.clear();
@@ -3579,8 +3618,8 @@ static bool TryRebuildAdaptiveTopology(
             << iteration_state.graph_partition.sample_id_list_by_key.size()
             << "/" << rebuilt_partition.sample_id_list_by_key.size()
             << ", boundary_samples="
-            << iteration_state.graph_partition.boundary_sample_count
-            << "/" << rebuilt_partition.boundary_sample_count
+            << iteration_state.graph_partition.boundary_sample_dependency_list.size()
+            << "/" << rebuilt_partition.boundary_sample_dependency_list.size()
             << ", edges_added/removed="
             << added_edge_count << "/" << removed_edge_count
             << ", partition_changed="
@@ -3628,7 +3667,7 @@ static IterationState BuildIterationState(
         0);
     iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.active_index_list);
     const auto cluster_key_list{ BuildGraphClusterKeyList(iteration_state.graph_partition) };
-    ResetClusterSolverWorkspace(
+    iteration_internal::ResetClusterSolverWorkspace(
         cluster_key_list,
         iteration_state.solver_workspace_by_key);
     const auto initial_model_snapshot{
@@ -3649,7 +3688,8 @@ static IterationState BuildIterationState(
     {
         TryUpdateBestAuditState(
             iteration_state.previous_state,
-            UsesPolish(iteration_state.previous_polish_provenance),
+            iteration_internal::UsesPolish(
+                iteration_state.previous_polish_provenance),
             0,
             *initial_audit_objective,
             iteration_state.best_audit_state);
@@ -3723,7 +3763,8 @@ static IterationResult RunIteration(
         }
     }
     const auto joint_offset_ridge_multiplier_list{
-        BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
+        iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(
+            ridge_atom_mask)
     };
     const auto debug_convergence_audit_enabled{
         !options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug };
@@ -3811,7 +3852,9 @@ static IterationResult RunIteration(
             raw_iteration_result.assessment_by_atom)
     };
     const auto iteration_suspicious_atom_count{
-        CountSuspiciousAtoms(iteration_failure_atom_mask)
+        static_cast<std::size_t>(std::ranges::count_if(
+            iteration_failure_atom_mask,
+            [](char value) { return value != 0; }))
     };
     const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
 
@@ -3845,7 +3888,7 @@ static IterationResult RunIteration(
     };
     if (has_quarantine_transition) selection.final_audit_objective.reset();
     const auto assembled_uses_polish{
-        UsesPolish(assembled_polish_provenance)
+        iteration_internal::UsesPolish(assembled_polish_provenance)
     };
     bool objective_domain_changed{ false };
 
@@ -4183,26 +4226,6 @@ enum class FinalPolishCertificationPolicy
     RequireStrictFixedPoint
 };
 
-enum class FinalPolishCertificateStatus
-{
-    NotEvaluated,
-    Passed,
-    Failed,
-    Error
-};
-
-struct FinalPolishCertificationResult
-{
-    FinalPolishCertificateStatus status{ FinalPolishCertificateStatus::NotEvaluated };
-    std::optional<ConvergenceCertificate> certificate{};
-
-    bool Passed() const
-    {
-        return status == FinalPolishCertificateStatus::Passed &&
-            certificate.has_value() && certificate->StrictOperatorPassed();
-    }
-};
-
 enum class FinalPolishResidualSafetyStatus
 {
     NotEvaluated,
@@ -4217,8 +4240,8 @@ struct FinalPolishResidualSafetyResult
     FinalPolishResidualSafetyStatus status{
         FinalPolishResidualSafetyStatus::NotEvaluated
     };
-    FinalPolishCertificationResult base{};
-    FinalPolishCertificationResult candidate{};
+    std::optional<ConvergenceCertificate> base{};
+    std::optional<ConvergenceCertificate> candidate{};
 
     bool Passed() const
     {
@@ -4259,14 +4282,13 @@ static std::string_view GetFinalPolishResidualSafetyStatusText(
     throw std::invalid_argument("Unknown final polish residual safety status.");
 }
 
-static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
+static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
     const SecondStageContext & context,
     const FitOptions & options,
     IterationState & iteration_state,
     const SuspiciousBlockActivity & final_block_activity,
     const FitState & candidate_state)
 {
-    FinalPolishCertificationResult result;
     try
     {
         const auto cluster_key_list{
@@ -4285,7 +4307,8 @@ static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
             }
         }
         const auto joint_offset_ridge_multiplier_list{
-            BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
+            iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(
+                ridge_atom_mask)
         };
         auto certificate_options{ options };
         certificate_options.quiet_mode = true;
@@ -4325,20 +4348,16 @@ static FinalPolishCertificationResult EvaluateFinalPolishCertificate(
             final_block_activity,
             proposal_result.local_refit_status_by_atom,
             proposal_result.health_by_key);
-        result.certificate = std::move(certificate);
-        result.status = result.certificate->StrictOperatorPassed() ?
-            FinalPolishCertificateStatus::Passed :
-            FinalPolishCertificateStatus::Failed;
+        return certificate;
     }
     catch (const std::exception &)
     {
-        result.status = FinalPolishCertificateStatus::Error;
+        return std::nullopt;
     }
     catch (...)
     {
-        result.status = FinalPolishCertificateStatus::Error;
+        return std::nullopt;
     }
-    return result;
 }
 
 static bool HasComparableFinalPolishOperatorEvidence(
@@ -4398,12 +4417,12 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         iteration_state,
         final_block_activity,
         candidate_state);
-    if (result.candidate.status == FinalPolishCertificateStatus::Error)
+    if (!result.candidate.has_value())
     {
         result.status = FinalPolishResidualSafetyStatus::Error;
         return result;
     }
-    if (result.candidate.Passed())
+    if (result.candidate->StrictOperatorPassed())
     {
         result.status = FinalPolishResidualSafetyStatus::AbsolutePassed;
         return result;
@@ -4413,8 +4432,7 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         result.status = FinalPolishResidualSafetyStatus::Failed;
         return result;
     }
-    if (!result.candidate.certificate.has_value() ||
-        !HasComparableFinalPolishOperatorEvidence(*result.candidate.certificate))
+    if (!HasComparableFinalPolishOperatorEvidence(*result.candidate))
     {
         result.status = FinalPolishResidualSafetyStatus::Failed;
         return result;
@@ -4425,15 +4443,14 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         iteration_state,
         final_block_activity,
         base_state);
-    if (result.base.status == FinalPolishCertificateStatus::Error)
+    if (!result.base.has_value())
     {
         result.status = FinalPolishResidualSafetyStatus::Error;
         return result;
     }
-    result.status = result.base.certificate.has_value() &&
-        IsFinalPolishResidualNonWorsening(
-            *result.base.certificate,
-            *result.candidate.certificate) ?
+    result.status = IsFinalPolishResidualNonWorsening(
+            *result.base,
+            *result.candidate) ?
         FinalPolishResidualSafetyStatus::RelativePassed :
         FinalPolishResidualSafetyStatus::Failed;
     return result;
@@ -4493,10 +4510,8 @@ static void FinalizeSecondStageState(
         GetFinalPolishCertificationPolicyText(certification_policy),
         GetFinalPolishResidualSafetyStatusText(residual_safety.status),
         polish_applied,
-        residual_safety.base.certificate.has_value() ?
-            &*residual_safety.base.certificate : nullptr,
-        residual_safety.candidate.certificate.has_value() ?
-            &*residual_safety.candidate.certificate : nullptr);
+        residual_safety.base.has_value() ? &*residual_safety.base : nullptr,
+        residual_safety.candidate.has_value() ? &*residual_safety.candidate : nullptr);
     if (polish_applied)
     {
         if (use_best_audit_state &&
@@ -4545,7 +4560,6 @@ struct TerminalAuditOutcome
 {
     FitState finalized_state{};
     std::optional<ObjectiveBreakdown> objective{};
-    bool final_polish_accepted{ false };
     std::array<std::size_t, 3> comparison_domain_size{};
 };
 
@@ -4562,7 +4576,6 @@ static TerminalAuditOutcome BuildTerminalAuditOutcome(
         EvaluateAuditObjective(
             comparison_objective_domain,
             SnapshotResidualEvaluator{ context, model_snapshot }),
-        false,
         std::array{
             comparison_objective_domain.active_atom_count,
             comparison_objective_domain.fit_sample_count,
@@ -4766,7 +4779,8 @@ void LogSecondStageSummary(
     const auto final_uses_polish{
         final_uses_best_audit && best_audit_state.has_value() ?
             best_audit_state->uses_polish :
-            UsesPolish(iteration_state.previous_polish_provenance)
+            iteration_internal::UsesPolish(
+                iteration_state.previous_polish_provenance)
     };
     Logger::FinishProgressLine();
     std::ostringstream message;

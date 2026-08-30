@@ -102,7 +102,6 @@ struct CouplingGraphPartition
 
     std::map<ClusterKey, std::vector<SampleRef>> sample_id_list_by_key{};
     std::vector<BoundarySampleDependency> boundary_sample_dependency_list{};
-    std::size_t boundary_sample_count{ 0 };
 };
 
 struct BoundaryReconciliationComponent

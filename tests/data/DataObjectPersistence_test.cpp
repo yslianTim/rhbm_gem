@@ -430,8 +430,8 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
         group_result.member_results.reserve(atom_list.size());
         for (std::size_t i = 0; i < atom_list.size(); i++)
         {
-            rg::LocalGaussianResult member_result;
-            member_result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GroupGaussianMemberResult member_result;
+            member_result.posterior = rg::GaussianModel3DWithUncertainty{
                 rg::GaussianModel3D{ 0.4 + 0.1 * static_cast<double>(i), 0.9, 0.66 },
                 rg::GaussianModel3DUncertainty{ 0.01, 0.02, 0.04 }
             };

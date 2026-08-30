@@ -3874,7 +3874,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     ASSERT_EQ(partition.sample_id_list_by_key.size(), 2U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
-    EXPECT_EQ(partition.boundary_sample_count, 1U);
     ASSERT_EQ(partition.boundary_sample_dependency_list.size(), 1U);
     EXPECT_EQ(
         partition.boundary_sample_dependency_list.front().sample_id,
@@ -3915,7 +3914,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     };
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 0 }), 1U);
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 2 }), 1U);
-    EXPECT_EQ(inactive_partition.boundary_sample_count, 0U);
+    EXPECT_TRUE(inactive_partition.boundary_sample_dependency_list.empty());
 }
 
 TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAcceptedSharedSamples)
@@ -3943,9 +3942,6 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         { sample_bc, { key_b, key_c }, { 1, 2 } },
         { sample_de, { key_d, key_e }, { 3, 4 } }
     };
-    partition.boundary_sample_count =
-        partition.boundary_sample_dependency_list.size();
-
     coupling_detail::SecondStageContext context;
     context.selected_atom_list.resize(6);
     context.at(0).group_id = 0;
@@ -4275,7 +4271,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
             capped_topology,
             active_index_list)
     };
-    EXPECT_EQ(partition.boundary_sample_count, 1U);
+    EXPECT_EQ(partition.boundary_sample_dependency_list.size(), 1U);
     EXPECT_GE(partition.sample_id_list_by_key.size(), 2U);
 
     bool found_first_residue{ false };
@@ -5499,24 +5495,25 @@ TEST(
             analysis_view.GetAtomObjectList(
                 rg::FittingStage::Second, group_key)
         };
-        std::vector<LocalPotentialSampleList> sample_entries_list;
-        std::vector<rg::LocalGaussianResult> member_result_list;
-        sample_entries_list.reserve(atom_list.size());
-        member_result_list.reserve(atom_list.size());
+        std::vector<rg::GroupGaussianMemberInput> member_list;
+        member_list.reserve(atom_list.size());
         for (const auto * atom : atom_list)
         {
             const auto local_view{
                 rg::AtomLocalPotentialView::RequireFor(*atom)
             };
-            sample_entries_list.emplace_back(
-                local_view.GetPeelingSamplingEntries(false));
-            member_result_list.emplace_back(
-                local_view.GetGaussianResult(FittingStage::Second));
+            const auto & local_result{
+                local_view.GetGaussianResult(FittingStage::Second)
+            };
+            member_list.emplace_back(rg::GroupGaussianMemberInput{
+                local_view.GetPeelingSamplingEntries(false),
+                local_result.alpha_r,
+                local_result.mdpde.GetModel()
+            });
         }
         const auto expected_group_result{
             rt::EstimateGroupGaussian(
-                sample_entries_list,
-                member_result_list,
+                member_list,
                 analysis_view.GetAtomAlphaG(
                     rg::FittingStage::Second, group_key),
                 options)
@@ -5549,7 +5546,7 @@ TEST(
             ASSERT_TRUE(actual_result.posterior.has_value());
             ExpectGaussianModelsNear(
                 actual_result.posterior->GetModel(),
-                expected_group_result.member_results.at(i).mdpde.GetModel(),
+                expected_group_result.member_results.at(i).posterior.GetModel(),
                 1.0e-10);
         }
     }

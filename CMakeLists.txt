@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(RHBM_GEM
-    VERSION 1.0
+    VERSION 2.0.0
     DESCRIPTION RHBM-GEM
     HOMEPAGE_URL https://github.com/yslianTim/rhbm_gem
     LANGUAGES C CXX

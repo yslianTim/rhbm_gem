@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <utility>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -25,7 +24,6 @@ constexpr double kTransformedChangePercentile{ 0.99 };
 constexpr std::array<double, kTransformedChangeSize>
     kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
-constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
 std::vector<double> SummarizeMaximumTransformedChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
@@ -689,11 +687,11 @@ std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     return jacobian;
 }
 
-RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
+RHBMExecutionOptions MakeExecutionOptions(int thread_size)
 {
     RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = false;
-    execution_options.thread_size = options.thread_size;
+    execution_options.thread_size = thread_size;
     return execution_options;
 }
 
@@ -847,7 +845,7 @@ LocalGaussianResult EstimateLocalGaussianPrepared(
     const LocalGaussianDesignTemplate & design_template,
     const std::vector<double> & sample_response_list,
     double alpha_r,
-    const FitOptions & options,
+    int thread_size,
     const GaussianModel3D & offset_model)
 {
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
@@ -855,14 +853,9 @@ LocalGaussianResult EstimateLocalGaussianPrepared(
         BuildLocalGaussianPreparedDataset(design_template, sample_response_list, offset_model)
     };
     const auto result{
-        rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, MakeExecutionOptions(options))
+        rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, MakeExecutionOptions(thread_size))
     };
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
-}
-
-bool UsesPolish(const PolishProvenance & provenance)
-{
-    return std::ranges::any_of(provenance, std::identity{});
 }
 
 const GaussianModel3D & ResolveNeighborAtomModel(
@@ -1121,14 +1114,6 @@ bool IsTrustRegionStepWithinRadius(double step_norm, double radius)
         std::isfinite(radius) &&
         radius > 0.0 &&
         step_norm <= radius + kTrustRegionBoundaryTolerance;
-}
-
-bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
-{
-    return std::isfinite(step_norm) &&
-        std::isfinite(radius) &&
-        radius > 0.0 &&
-        step_norm >= kTrustRegionGrowthBoundaryRatio * radius;
 }
 
 static double CalculateScaledTransformedStepNorm(

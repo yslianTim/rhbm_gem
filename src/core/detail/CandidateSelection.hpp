@@ -12,6 +12,10 @@
 #include <optional>
 #include <vector>
 
+namespace rhbm_gem::core {
+struct FitOptions;
+}
+
 namespace rhbm_gem::core::detail {
 
 struct TrustRegionOptions
@@ -151,10 +155,6 @@ struct SuspiciousBlockActivity
     bool HasActiveShape(std::size_t atom_index) const;
     bool HasActiveOffset(std::size_t atom_index) const;
 };
-
-std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask);
-
-std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(const SuspiciousUpdateMask & suspicious_mask);
 
 struct ZeroOffsetProfileDiagnostics
 {
