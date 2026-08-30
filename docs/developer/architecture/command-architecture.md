@@ -14,8 +14,14 @@ That typed list is visited by:
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
-The catalog stores typed executor functions, so CLI and Python bindings reuse the same command
-execution path without exposing concrete command classes or per-command headers.
+The catalog stores typed executor functions, so CLI and Python bindings converge on the same command
+execution path after dispatch without exposing concrete command classes or per-command headers.
+
+Stable entries live in `kStableCommands`. Experimental entries live in
+`kExperimentalCommands` and are visible only when `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is
+enabled; that option is off by default. The same feature guard covers experimental request DTOs,
+request fields, executor declarations, command sources, and catalog entries, so catalog visitors
+only see commands compiled into the current build.
 
 ## Public Surface
 
@@ -40,7 +46,7 @@ become public includes.
 
 CLI and Python bindings share one internal request field catalog in
 [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
-Those request field helpers live under `rhbm_gem::command_internal`.
+Those request field helpers live under `rhbm_gem::core::command_internal`.
 Each request field entry uses `RequestField{...}`; CLI binding behavior is inferred from the request member
 type. CSV lists use `,`, and reference groups use `group=item1,item2` parsing as fixed binder
 behavior rather than schema configuration.
@@ -53,7 +59,7 @@ That schema is the single source for:
 
 Enum alias and binding metadata live in
 [`src/core/command/detail/CommandEnumCatalog.hpp`](/src/core/command/detail/CommandEnumCatalog.hpp)
-under `rhbm_gem::command_internal`.
+under `rhbm_gem::core::command_internal`.
 
 ## Execution Surfaces
 
@@ -85,28 +91,46 @@ does not expose CLI11 setup or parsing details.
 
 Request type registration, `RunCommand(...)` overload membership, and request fields come from
 the internal command catalog.
+Each Python `RunCommand(...)` overload captures the catalog entry's typed executor directly. It
+does not pass through the C++ `RunCommandByRequestType(...)` type dispatcher, but it converges on
+the same executor and `CommandBase` lifecycle.
 
 ## Runtime Flow
 
-All public execution entrypoints converge on the same flow:
+The C++/CLI and Python entrypoints use different dispatch paths and converge at the catalog's typed
+executor:
 
 ```mermaid
-flowchart LR
-    A["CLI callback or Python call"] --> B["rhbm_gem::core::RunCommand(request)"]
-    B --> C["Catalog executor"]
-    C --> D["Construct local command"]
-    D --> E["ExecuteRequest(request)"]
-    E --> F["Normalize and validate request"]
-    F --> G["Output folder preflight"]
-    G --> H["ExecuteImpl(request)"]
-    H --> I["CommandResult"]
+flowchart TD
+    A["C++ caller"] --> B["rhbm_gem::core::RunCommand(request)"]
+    C["CLI callback"] --> B
+    B --> D["RunCommandByRequestType(typeid, base request)"]
+    D --> E["VisitCommandCatalog and match exact request type"]
+    F["Python RunCommand overload"] --> G["entry.execute(request)"]
+    E --> G
+    G --> H["Construct local command"]
+    H --> I["ExecuteRequest(request)"]
+    I --> J["Normalize, validate, and preflight"]
+    J --> K["ExecuteImpl(request)"]
+    K --> L["CommandResult"]
 ```
 
-`rhbm_gem::core::RunCommand(request)` returns `CommandResult` with:
+The C++ template accepts any type derived from `CommandRequestBase`. If its exact type is not in the
+catalog, the dispatcher returns a failed result with a `request_type` diagnostic instead of invoking
+an executor. Python exposes only the overloads generated from the current catalog.
 
-- `succeeded == true` when execution completes
+Each execution surface returns or consumes a `CommandResult` with:
+
+- `succeeded == true` when validation and preflight pass and `ExecuteImpl(...)` returns `true`
 - `succeeded == false` when validation, preflight, or execution stops the command
-- `issues` containing public validation diagnostics as option/message pairs
+- `issues` containing framework routing, normalization, validation, and preflight diagnostics as
+  option/message pairs
+
+Warnings remain in `issues` without failing the command. Diagnostic severity is retained only while
+the command runs, for control flow and logging; it is not part of the public result. An
+`ExecuteImpl(...)` failure can therefore return `succeeded == false` without adding an issue if the
+concrete command reports the runtime error only through logging. The CLI converts any failed result
+to exit code `1`; C++ and Python callers receive the result object.
 
 ## Concrete Command Shape
 
@@ -129,10 +153,15 @@ The standard shape is:
 `CommandBase<XxxRequest>`:
 
 1. copies the typed request for one execution
-2. coerces shared base options
-3. calls `NormalizeAndValidateRequest(request)`
-4. calls `ValidatePreparedRequest(request)`
-5. runs output-directory preflight before `ExecuteImpl(request)`
+2. clears issues left from any previous execution of that command object
+3. normalizes shared base options and sets the logger level
+4. calls `NormalizeAndValidateRequest(request)` and stops on validation errors
+5. calls `ValidatePreparedRequest(request)` and stops on semantic errors
+6. runs output-directory preflight and stops if directory creation fails
+7. calls `ExecuteImpl(request)`, reports pending issues, and builds the public result
+
+`NormalizeAndValidateRequest(...)` and `ValidatePreparedRequest(...)` default to no-ops, so a
+concrete command overrides only the phases it needs. `ExecuteImpl(...)` is required.
 
 ## Shared Request Base
 
@@ -148,9 +177,11 @@ Command-specific fields live directly on each request DTO.
 
 `CommandBase` performs:
 
-1. request normalization and validation issue tracking
-2. output-directory preflight for `output_dir`
-3. logger-level setup from `verbosity`
+1. common normalization for `job_count`, `verbosity`, and `output_dir`
+2. logger-level setup from the normalized `verbosity`
+3. command-specific normalization and two-stage validation issue tracking
+4. output-directory preflight for `output_dir` only after validation succeeds
 
-The generic layer manages only the shared `output_dir`. Internal validation still tracks
-option name, level, and message. The public result keeps only option/message diagnostics.
+The generic filesystem layer manages only the shared `output_dir`. Internal validation still tracks
+option name, level, and message. The public result keeps only option/message diagnostics, while
+warnings and errors are both logged at their internal levels.
