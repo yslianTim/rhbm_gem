@@ -72,6 +72,11 @@ void BindCommandSystem(py::module_ & module)
         base_request.def_readwrite(field.field_name, field.member);
     });
 
+    py::class_<CommandResult>(module, "CommandResult")
+        .def(py::init<>())
+        .def_readonly("succeeded", &CommandResult::succeeded)
+        .def_readonly("issues", &CommandResult::issues);
+
     command_internal::VisitCommandCatalog([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
@@ -83,22 +88,7 @@ void BindCommandSystem(py::module_ & module)
         {
             py_request.def_readwrite(field.field_name, field.member);
         });
-    });
-
-    py::class_<CommandResult>(module, "CommandResult")
-        .def(py::init<>())
-        .def_readonly("succeeded", &CommandResult::succeeded)
-        .def_readonly("issues", &CommandResult::issues);
-
-    command_internal::VisitCommandCatalog([&](const auto & entry)
-    {
-        using RequestType = typename std::decay_t<decltype(entry)>::Request;
-        module.def(
-            "RunCommand",
-            [execute = entry.execute](const RequestType & request)
-            {
-                return execute(request);
-            });
+        module.def("RunCommand", entry.execute);
     });
 }
 

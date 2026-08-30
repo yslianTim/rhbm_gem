@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -22,17 +22,6 @@
 #include <vector>
 
 namespace rhbm_gem::core {
-
-class MapSimulationCommand final : public CommandBase<MapSimulationRequest>
-{
-public:
-    MapSimulationCommand();
-
-private:
-    void NormalizeAndValidateRequest(MapSimulationRequest & request) override;
-    void ValidatePreparedRequest(const MapSimulationRequest & request) override;
-    bool ExecuteImpl(const MapSimulationRequest & request) override;
-};
 
 namespace {
 
@@ -299,19 +288,15 @@ void PopulateMapValueArray(
     map_object->SetMapValueArray(std::move(map_value_array));
     LogMapSummary(*map_object);
 }
-} // namespace
-
-MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>{}
+void NormalizeAndValidateRequest(
+    CommandRunner<MapSimulationRequest> & runner,
+    MapSimulationRequest & request)
 {
-}
-
-void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & request)
-{
-    RequireExistingPath(request, &MapSimulationRequest::model_file_path);
-    RequireEnum(request, &MapSimulationRequest::potential_model_choice);
-    RequireEnum(request, &MapSimulationRequest::partial_charge_choice);
-    NormalizeFinitePositiveScalar(request, &MapSimulationRequest::cutoff_distance, 5.0);
-    NormalizeFinitePositiveScalar(request, &MapSimulationRequest::grid_spacing, 0.5);
+    runner.RequireExistingPath(request, &MapSimulationRequest::model_file_path);
+    runner.RequireEnum(request, &MapSimulationRequest::potential_model_choice);
+    runner.RequireEnum(request, &MapSimulationRequest::partial_charge_choice);
+    runner.NormalizeFinitePositiveScalar(request, &MapSimulationRequest::cutoff_distance, 5.0);
+    runner.NormalizeFinitePositiveScalar(request, &MapSimulationRequest::grid_spacing, 0.5);
 
     std::vector<double> filtered_widths;
     filtered_widths.reserve(request.blurring_width_list.size());
@@ -319,7 +304,7 @@ void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & re
     {
         if (!numeric_validation::IsFinitePositive(width))
         {
-            AddFieldNormalizationWarning(&MapSimulationRequest::blurring_width_list,
+            runner.AddFieldNormalizationWarning(&MapSimulationRequest::blurring_width_list,
                 "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));
             continue;
@@ -329,7 +314,7 @@ void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & re
     request.blurring_width_list = std::move(filtered_widths);
 }
 
-bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
+bool ExecutePreparedRequest(const MapSimulationRequest & request)
 {
     std::unique_ptr<ModelObject> model_object;
     try
@@ -369,19 +354,26 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
     return true;
 }
 
-void MapSimulationCommand::ValidatePreparedRequest(const MapSimulationRequest & request)
+void ValidatePreparedRequest(
+    CommandRunner<MapSimulationRequest> & runner,
+    const MapSimulationRequest & request)
 {
-    RequirePrepareCondition(
+    runner.RequirePrepareCondition(
         !request.blurring_width_list.empty(),
         "At least one positive blurring width is required.");
 }
+
+} // namespace
 
 namespace command_internal {
 
 CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request)
 {
-    MapSimulationCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<MapSimulationRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ValidatePreparedRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

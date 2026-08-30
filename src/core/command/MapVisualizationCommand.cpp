@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -28,16 +28,6 @@
 #endif
 
 namespace rhbm_gem::core {
-
-class MapVisualizationCommand final : public CommandBase<MapVisualizationRequest>
-{
-public:
-    MapVisualizationCommand();
-
-private:
-    void NormalizeAndValidateRequest(MapVisualizationRequest & request) override;
-    bool ExecuteImpl(const MapVisualizationRequest & request) override;
-};
 
 namespace {
 
@@ -267,22 +257,18 @@ bool RunAtomMapValueSampling(
     return true;
 }
 
-} // namespace
-
-MapVisualizationCommand::MapVisualizationCommand() : CommandBase<MapVisualizationRequest>{}
+void NormalizeAndValidateRequest(
+    CommandRunner<MapVisualizationRequest> & runner,
+    MapVisualizationRequest & request)
 {
+    runner.RequireExistingPath(request, &MapVisualizationRequest::model_file_path);
+    runner.RequireExistingPath(request, &MapVisualizationRequest::map_file_path);
+    runner.RequirePositiveScalar(request, &MapVisualizationRequest::atom_serial_id);
+    runner.NormalizePositiveScalar(request, &MapVisualizationRequest::sampling_size, 100);
+    runner.RequireFinitePositiveScalar(request, &MapVisualizationRequest::window_size);
 }
 
-void MapVisualizationCommand::NormalizeAndValidateRequest(MapVisualizationRequest & request)
-{
-    RequireExistingPath(request, &MapVisualizationRequest::model_file_path);
-    RequireExistingPath(request, &MapVisualizationRequest::map_file_path);
-    RequirePositiveScalar(request, &MapVisualizationRequest::atom_serial_id);
-    NormalizePositiveScalar(request, &MapVisualizationRequest::sampling_size, 100);
-    RequireFinitePositiveScalar(request, &MapVisualizationRequest::window_size);
-}
-
-bool MapVisualizationCommand::ExecuteImpl(const MapVisualizationRequest & request)
+bool ExecutePreparedRequest(const MapVisualizationRequest & request)
 {
     auto inputs{ LoadMapVisualizationInputs(request) };
     if (!inputs.has_value()) return false;
@@ -291,12 +277,16 @@ bool MapVisualizationCommand::ExecuteImpl(const MapVisualizationRequest & reques
     return RunAtomMapValueSampling(request, *inputs->map_object, *inputs->model_object, request.output_dir);
 }
 
+} // namespace
+
 namespace command_internal {
 
 CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & request)
 {
-    MapVisualizationCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<MapVisualizationRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

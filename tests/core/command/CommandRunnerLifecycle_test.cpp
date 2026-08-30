@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-#include "command/detail/CommandBase.hpp"
+#include "command/detail/CommandRunner.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 using namespace rhbm_gem;
@@ -16,7 +16,7 @@ struct TestCommandOptions
     bool force_invalid{ false };
 };
 
-class TestCommand final : public CommandBase<CommandRequestBase>
+class TestCommandHarness
 {
 public:
     int execute_impl_count{ 0 };
@@ -31,35 +31,37 @@ public:
         m_configured_request.output_dir = folder_path;
     }
 
-    void ValidatePreparedRequest(const CommandRequestBase &) override
+    CommandResult ExecuteConfiguredRequest()
     {
-        RequirePrepareCondition(!m_options.force_invalid, "forced invalid config");
+        return m_runner.Run(
+            m_configured_request,
+            [](auto &, auto &) {},
+            [this](auto & runner, const auto &)
+            {
+                runner.RequirePrepareCondition(
+                    !m_options.force_invalid,
+                    "forced invalid config");
+            },
+            [this](const auto &)
+            {
+                ++execute_impl_count;
+                return true;
+            });
     }
 
 private:
+    CommandRunner<CommandRequestBase> m_runner{};
     TestCommandOptions m_options{};
     CommandRequestBase m_configured_request{};
-
-    bool ExecuteImpl(const CommandRequestBase &) override
-    {
-        ++execute_impl_count;
-        return true;
-    }
-
-public:
-    CommandResult ExecuteConfiguredRequest()
-    {
-        return ExecuteRequest(m_configured_request);
-    }
 };
 
 } // namespace
 
-TEST(CommandBaseLifecycleTest, RunCreatesOutputFolder)
+TEST(CommandRunnerLifecycleTest, RunCreatesOutputFolder)
 {
     command_test::ScopedTempDir temp_dir{ "command_base_setters" };
     const auto folder_path{ temp_dir.path() / "out" };
-    TestCommand command{};
+    TestCommandHarness command{};
     command.ConfigureFilesystemOptions(folder_path);
 
     EXPECT_FALSE(std::filesystem::exists(folder_path));
@@ -69,9 +71,9 @@ TEST(CommandBaseLifecycleTest, RunCreatesOutputFolder)
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 
-TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
+TEST(CommandRunnerLifecycleTest, RunReportsValidationIssues)
 {
-    TestCommand command{};
+    TestCommandHarness command{};
     command.SetForceInvalid(true);
 
     testing::internal::CaptureStderr();
@@ -84,11 +86,11 @@ TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
     EXPECT_NE(error_output.find("Option request: forced invalid config"), std::string::npos);
 }
 
-TEST(CommandBaseLifecycleTest, ValidationFailureSkipsFilesystemPreflight)
+TEST(CommandRunnerLifecycleTest, ValidationFailureSkipsFilesystemPreflight)
 {
     command_test::ScopedTempDir temp_dir{ "command_base_prepare_validation_failure" };
     const auto folder_path{ temp_dir.path() / "out" };
-    TestCommand command{};
+    TestCommandHarness command{};
     command.ConfigureFilesystemOptions(folder_path);
     command.SetForceInvalid(true);
 

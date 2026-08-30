@@ -64,41 +64,30 @@ Expected result contract:
 
 ## Command Behavior
 
-`PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles request normalization and field validation:
+The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field validation:
 
 - validates required model and map paths
 - leaves map normalization as an execution-time choice: simulation requests always skip it,
   and non-simulation requests use `map_normalization_flag`
-- coerces invalid scalar inputs back to command defaults when the command is designed to recover
-- resets empty `saved_key_tag` values back to `"model"` and records a validation issue
+- rejects invalid scalar inputs that this command cannot safely recover from
+- rejects an empty `saved_key_tag`
 
-`PotentialAnalysisCommand::ValidatePreparedRequest()` performs semantic checks after normalization:
+`ValidatePreparedRequest(...)` performs semantic checks after normalization:
 
 - `--simulation` requires positive simulated resolution
 - fit ranges must be ordered correctly
 
-`PotentialAnalysisCommand::ExecuteImpl()`:
+`ExecutePreparedRequest(...)`:
 
-- builds command-owned data objects through `BuildDataObject()`
+- loads command-owned model and map objects through `ReadModel(...)` and `ReadMap(...)`
 - optionally switches the model object into simulation mode
 - optionally runs map normalization, then runs model preprocessing
 - delegates atom sampling to `MapSampler`, then performs alpha training and fitting
-- saves the prepared model through `SavePreparedModel()`
-
-`PotentialAnalysisCommand::BuildDataObject()`:
-
-- loads the model and map through `ReadModel(...)` and `ReadMap(...)`
-- assigns command-local key tags before storing the loaded objects
-- stores loaded objects directly in typed command-owned members
-- wraps load failures with command-specific error context
-
-`PotentialAnalysisCommand::SavePreparedModel()`:
-
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 
-`CommandBase` also creates `output_dir` during filesystem preflight when needed.
+`CommandRunner` creates `output_dir` during filesystem preflight when needed.
 
 ## Tests to Update When Behavior Changes
 

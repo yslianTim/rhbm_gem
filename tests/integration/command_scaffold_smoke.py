@@ -56,12 +56,25 @@ def main() -> int:
             raise AssertionError(f"Expected dry-run output to mention {fragment}.\n{stdout}")
 
     scaffold_source = scaffold_script.read_text(encoding="utf-8")
-    if "NormalizeAndValidateRequest" not in scaffold_source:
-        raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
-    if "ValidatePreparedRequest" not in scaffold_source:
-        raise AssertionError("Scaffold template should use ValidatePreparedRequest().")
-    if "CommandBase.hpp" not in scaffold_source:
-        raise AssertionError("Scaffold template should use CommandBase.hpp.")
+    required_source_fragments = [
+        "CommandRunner.hpp",
+        "ExecutePreparedRequest",
+        ".Run(request, ExecutePreparedRequest)",
+    ]
+    for fragment in required_source_fragments:
+        if fragment not in scaffold_source:
+            raise AssertionError(f"Scaffold template should contain {fragment}.")
+
+    removed_source_fragments = [
+        "CommandBase.hpp",
+        "NormalizeAndValidateRequest",
+        "ValidatePreparedRequest",
+        "ExecuteImpl",
+        "class {spec.command_type}",
+    ]
+    for fragment in removed_source_fragments:
+        if fragment in scaffold_source:
+            raise AssertionError(f"Scaffold template still contains {fragment}.")
     removed_executor_header = "Command" + "Executor.hpp"
     if removed_executor_header in scaffold_source:
         raise AssertionError(f"Scaffold template still references {removed_executor_header}.")

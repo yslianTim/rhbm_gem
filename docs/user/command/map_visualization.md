@@ -51,7 +51,7 @@ map_slice_<model_name>_atom<atom_serial_id>.pdf
 
 `MapVisualizationCommand` currently follows this sequence:
 
-1. `NormalizeAndValidateRequest()` validates required paths, forces `atom_serial_id > 0`, and resets invalid `sampling_size` and `window_size` values to defaults.
+1. The `NormalizeAndValidateRequest(...)` runner phase validates required paths, forces `atom_serial_id > 0`, normalizes invalid `sampling_size`, and rejects invalid `window_size` values.
 2. `BuildDataObject()` loads the model and map objects.
 3. `RunMapObjectPreprocessing()` normalizes the map array.
 4. `RunModelObjectPreprocessing()` selects all atoms and bonds so the command can derive local bond context.

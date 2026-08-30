@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-#include "command/detail/CommandBase.hpp"
+#include "command/detail/CommandRunner.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
 
 using namespace rhbm_gem;
@@ -21,7 +21,7 @@ struct UnsupportedRequest : CommandRequestBase
 {
 };
 
-class LifecycleCommand final : public CommandBase<CommandRequestBase>
+class LifecycleCommandHarness
 {
 public:
     int validate_count{ 0 };
@@ -32,20 +32,26 @@ public:
         m_options.fail_prepare = value;
     }
 
-    void ValidatePreparedRequest(const CommandRequestBase &) override
+    CommandResult ExecuteRequest(const CommandRequestBase & request)
     {
-        ++validate_count;
-        RequirePrepareCondition(!m_options.fail_prepare, "prepare failed");
+        return m_runner.Run(
+            request,
+            [](auto &, auto &) {},
+            [this](auto & runner, const auto &)
+            {
+                ++validate_count;
+                runner.RequirePrepareCondition(!m_options.fail_prepare, "prepare failed");
+            },
+            [this](const auto &)
+            {
+                ++execute_impl_count;
+                return true;
+            });
     }
 
 private:
+    CommandRunner<CommandRequestBase> m_runner{};
     LifecycleCommandOptions m_options{};
-
-    bool ExecuteImpl(const CommandRequestBase &) override
-    {
-        ++execute_impl_count;
-        return true;
-    }
 };
 
 bool HasDiagnosticForOption(
@@ -65,7 +71,7 @@ bool HasDiagnosticForOption(
 
 TEST(CommandExecutionContractTest, RunValidatesBeforeExecuteImpl)
 {
-    LifecycleCommand command{};
+    LifecycleCommandHarness command{};
     command.SetFailPrepare(true);
 
     const auto result{ command.ExecuteRequest(CommandRequestBase{}) };
@@ -78,7 +84,7 @@ TEST(CommandExecutionContractTest, RunValidatesBeforeExecuteImpl)
 
 TEST(CommandExecutionContractTest, RunExecutesValidationAndExecuteOnce)
 {
-    LifecycleCommand command{};
+    LifecycleCommandHarness command{};
 
     ASSERT_TRUE(command.ExecuteRequest(CommandRequestBase{}).succeeded);
     EXPECT_EQ(command.validate_count, 1);
@@ -87,7 +93,7 @@ TEST(CommandExecutionContractTest, RunExecutesValidationAndExecuteOnce)
 
 TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
 {
-    LifecycleCommand command{};
+    LifecycleCommandHarness command{};
 
     command.SetFailPrepare(true);
     const auto failed_result{ command.ExecuteRequest(CommandRequestBase{}) };
@@ -105,7 +111,7 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
 
 TEST(CommandExecutionContractTest, RepeatedRunExecutesEachTime)
 {
-    LifecycleCommand command{};
+    LifecycleCommandHarness command{};
 
     ASSERT_TRUE(command.ExecuteRequest(CommandRequestBase{}).succeeded);
     EXPECT_EQ(command.validate_count, 1);

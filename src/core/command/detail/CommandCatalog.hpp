@@ -14,18 +14,6 @@ struct RequestField
     const char * cli_flags;
     const char * help;
     ValueType Owner::* member;
-
-    RequestField(
-        const char * field_name_value,
-        const char * cli_flags_value,
-        const char * help_value,
-        ValueType Owner::* member_value) :
-        field_name{ field_name_value },
-        cli_flags{ cli_flags_value },
-        help{ help_value },
-        member{ member_value }
-    {
-    }
 };
 
 template <typename Visitor, typename... Fields>

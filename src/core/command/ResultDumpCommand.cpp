@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -28,17 +28,6 @@
 #include <vector>
 
 namespace rhbm_gem::core {
-
-class ResultDumpCommand final : public CommandBase<ResultDumpRequest>
-{
-public:
-    ResultDumpCommand();
-
-private:
-    void NormalizeAndValidateRequest(ResultDumpRequest & request) override;
-    void ValidatePreparedRequest(const ResultDumpRequest & request) override;
-    bool ExecuteImpl(const ResultDumpRequest & request) override;
-};
 
 namespace {
 
@@ -352,27 +341,25 @@ void RunGroupGausEstimatesDumping(
     }
 }
 
-} // namespace
-
-ResultDumpCommand::ResultDumpCommand() : CommandBase<ResultDumpRequest>{}
+void NormalizeAndValidateRequest(
+    CommandRunner<ResultDumpRequest> & runner,
+    ResultDumpRequest & request)
 {
+    runner.RequireEnum(request, &ResultDumpRequest::printer_choice);
+    runner.RequireOptionalExistingPath(request, &ResultDumpRequest::map_file_path);
+    runner.RequireNonEmptyList(request, &ResultDumpRequest::model_key_tag_list);
 }
 
-void ResultDumpCommand::NormalizeAndValidateRequest(ResultDumpRequest & request)
+void ValidatePreparedRequest(
+    CommandRunner<ResultDumpRequest> & runner,
+    const ResultDumpRequest & request)
 {
-    RequireEnum(request, &ResultDumpRequest::printer_choice);
-    RequireOptionalExistingPath(request, &ResultDumpRequest::map_file_path);
-    RequireNonEmptyList(request, &ResultDumpRequest::model_key_tag_list);
-}
-
-void ResultDumpCommand::ValidatePreparedRequest(const ResultDumpRequest & request)
-{
-    RequirePrepareCondition(
+    runner.RequirePrepareCondition(
         request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
         "A map file is required when '--printer map' is selected.");
 }
 
-bool ResultDumpCommand::ExecuteImpl(const ResultDumpRequest & request)
+bool ExecutePreparedRequest(const ResultDumpRequest & request)
 {
     auto inputs{ LoadResultDumpInputs(request) };
     if (!inputs.has_value())
@@ -431,12 +418,17 @@ bool ResultDumpCommand::ExecuteImpl(const ResultDumpRequest & request)
     return true;
 }
 
+} // namespace
+
 namespace command_internal {
 
 CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request)
 {
-    ResultDumpCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<ResultDumpRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ValidatePreparedRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

@@ -8,6 +8,7 @@
 #include <system_error>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/CommandTypes.hpp>
@@ -22,10 +23,10 @@
 namespace rhbm_gem::core {
 
 template <typename Request>
-class CommandBase
+class CommandRunner
 {
     static_assert(std::is_base_of_v<CommandRequestBase, Request>,
-        "CommandBase<Request> requires Request to derive from CommandRequestBase.");
+        "CommandRunner<Request> requires Request to derive from CommandRequestBase.");
 
     struct PendingIssue
     {
@@ -42,47 +43,43 @@ class CommandBase
     std::vector<PendingIssue> m_issues;
 
 public:
-    virtual ~CommandBase() = default;
-
-    CommandResult ExecuteRequest(const Request & request)
+    template <typename Execute>
+    CommandResult Run(const Request & request, Execute && execute)
     {
-        Request command_request{ request };
-        m_issues.clear();
-        NormalizeCommonRequestOptions(command_request);
-        Logger::SetLogLevel(command_request.verbosity);
-
-        NormalizeAndValidateRequest(command_request);
-        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
-        {
-            return *failure_result;
-        }
-        ValidatePreparedRequest(command_request);
-        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
-        {
-            return *failure_result;
-        }
-        EnsureOutputDirectoryExists(command_request);
-        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
-        {
-            return *failure_result;
-        }
-
-        CommandResult result;
-        result.succeeded = ExecuteImpl(command_request);
-        if (!result.succeeded)
-        {
-            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
-        }
-        ReportPendingIssues();
-        result.issues = BuildDiagnostics();
-        return result;
+        return RunWithPhases(
+            request,
+            [](CommandRunner &, Request &) {},
+            [](CommandRunner &, const Request &) {},
+            std::forward<Execute>(execute));
     }
 
-protected:
-    CommandBase() = default;
-    virtual void NormalizeAndValidateRequest(Request &) {}
-    virtual void ValidatePreparedRequest(const Request &) {}
-    virtual bool ExecuteImpl(const Request &) = 0;
+    template <typename NormalizeAndValidate, typename Execute>
+    CommandResult Run(
+        const Request & request,
+        NormalizeAndValidate && normalize_and_validate,
+        Execute && execute)
+    {
+        return RunWithPhases(
+            request,
+            std::forward<NormalizeAndValidate>(normalize_and_validate),
+            [](CommandRunner &, const Request &) {},
+            std::forward<Execute>(execute));
+    }
+
+    template <typename NormalizeAndValidate, typename ValidatePrepared, typename Execute>
+    CommandResult Run(
+        const Request & request,
+        NormalizeAndValidate && normalize_and_validate,
+        ValidatePrepared && validate_prepared,
+        Execute && execute)
+    {
+        return RunWithPhases(
+            request,
+            std::forward<NormalizeAndValidate>(normalize_and_validate),
+            std::forward<ValidatePrepared>(validate_prepared),
+            std::forward<Execute>(execute));
+    }
+
     template <typename Owner, typename FieldType>
     void AddFieldValidationError(FieldType Owner::* member, const std::string & message)
     {
@@ -238,6 +235,48 @@ protected:
     }
 
 private:
+    template <typename NormalizeAndValidate, typename ValidatePrepared, typename Execute>
+    CommandResult RunWithPhases(
+        const Request & request,
+        NormalizeAndValidate && normalize_and_validate,
+        ValidatePrepared && validate_prepared,
+        Execute && execute)
+    {
+        Request command_request{ request };
+        m_issues.clear();
+        NormalizeCommonRequestOptions(command_request);
+        Logger::SetLogLevel(command_request.verbosity);
+
+        std::forward<NormalizeAndValidate>(normalize_and_validate)(*this, command_request);
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
+        {
+            return *failure_result;
+        }
+
+        const Request & prepared_request{ command_request };
+        std::forward<ValidatePrepared>(validate_prepared)(*this, prepared_request);
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
+        {
+            return *failure_result;
+        }
+
+        EnsureOutputDirectoryExists(prepared_request);
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
+        {
+            return *failure_result;
+        }
+
+        CommandResult result;
+        result.succeeded = std::forward<Execute>(execute)(prepared_request);
+        if (!result.succeeded)
+        {
+            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
+        }
+        ReportPendingIssues();
+        result.issues = BuildDiagnostics();
+        return result;
+    }
+
     std::vector<CommandDiagnostic> BuildDiagnostics() const
     {
         std::vector<CommandDiagnostic> diagnostics;

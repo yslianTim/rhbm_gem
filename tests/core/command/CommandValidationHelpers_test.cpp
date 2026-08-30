@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "command/detail/CommandBase.hpp"
+#include "command/detail/CommandRunner.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandTypes.hpp>
 
@@ -95,7 +95,7 @@ struct ValidationHelperCommandOptions
     bool add_prepare_error{ false };
 };
 
-class ValidationHelperCommand final : public CommandBase<ValidationHelperRequest>
+class ValidationHelperCommand
 {
 public:
     int validate_prepared_count{ 0 };
@@ -192,94 +192,117 @@ public:
         return ExecuteRequest(m_configured_request);
     }
 
-    void NormalizeAndValidateRequest(ValidationHelperRequest & request) override
+    CommandResult ExecuteRequest(const ValidationHelperRequest & request)
+    {
+        return m_runner.Run(
+            request,
+            [this](auto & runner, auto & prepared_request)
+            {
+                NormalizeAndValidateRequest(runner, prepared_request);
+            },
+            [this](auto & runner, const auto & prepared_request)
+            {
+                ValidatePreparedRequest(runner, prepared_request);
+            },
+            [this](const auto & prepared_request)
+            {
+                return ExecutePreparedRequest(prepared_request);
+            });
+    }
+
+private:
+    void NormalizeAndValidateRequest(
+        CommandRunner<ValidationHelperRequest> & runner,
+        ValidationHelperRequest & request)
     {
         if (m_options.validate_required_path)
         {
-            RequireExistingPath(request, &ValidationHelperRequest::required_path);
+            runner.RequireExistingPath(request, &ValidationHelperRequest::required_path);
         }
         if (m_options.validate_optional_path)
         {
-            RequireOptionalExistingPath(request, &ValidationHelperRequest::optional_path);
+            runner.RequireOptionalExistingPath(request, &ValidationHelperRequest::optional_path);
         }
         if (m_options.validate_count)
         {
-            NormalizePositiveScalar(
+            runner.NormalizePositiveScalar(
                 request,
                 &ValidationHelperRequest::normalized_count,
                 4);
         }
         if (m_options.validate_printer)
         {
-            RequireEnum(request, &ValidationHelperRequest::printer);
+            runner.RequireEnum(request, &ValidationHelperRequest::printer);
         }
         if (m_options.validate_finite_positive)
         {
-            RequireFinitePositiveScalar(
+            runner.RequireFinitePositiveScalar(
                 request,
                 &ValidationHelperRequest::finite_positive_value);
         }
         if (m_options.validate_finite_non_negative)
         {
-            RequireFiniteNonNegativeScalar(
+            runner.RequireFiniteNonNegativeScalar(
                 request,
                 &ValidationHelperRequest::finite_non_negative_value);
         }
         if (m_options.validate_positive_count)
         {
-            RequirePositiveScalar(
+            runner.RequirePositiveScalar(
                 request,
                 &ValidationHelperRequest::positive_count);
         }
         if (m_options.validate_required_list)
         {
-            RequireNonEmptyList(request, &ValidationHelperRequest::required_list);
+            runner.RequireNonEmptyList(request, &ValidationHelperRequest::required_list);
         }
         if (m_options.validate_alpha_r)
         {
-            RequireFinitePositiveScalar(
+            runner.RequireFinitePositiveScalar(
                 request,
                 &ValidationHelperRequest::alpha_r);
         }
         if (m_options.validate_uncataloged_value)
         {
-            RequirePositiveScalar(
+            runner.RequirePositiveScalar(
                 request,
                 &ValidationHelperRequest::uncataloged_value);
         }
         if (m_options.validate_command_local_value && request.command_local_value != 3.5)
         {
             request.command_local_value = 1.25;
-            AddFieldValidationError(
+            runner.AddFieldValidationError(
                 &ValidationHelperRequest::command_local_value,
                 "Validated value must equal 3.5.");
         }
         if (m_options.add_problematic_parse_warnings)
         {
-            AddFieldNormalizationWarning(
+            runner.AddFieldNormalizationWarning(
                 &ValidationHelperRequest::problematic_value,
                 "normalized to 1");
-            AddFieldNormalizationWarning(
+            runner.AddFieldNormalizationWarning(
                 &ValidationHelperRequest::problematic_value,
                 "clamped to safe range");
         }
         m_last_request = request;
     }
 
-    void ValidatePreparedRequest(const ValidationHelperRequest &) override
+    void ValidatePreparedRequest(
+        CommandRunner<ValidationHelperRequest> & runner,
+        const ValidationHelperRequest &)
     {
         ++validate_prepared_count;
-        RequirePrepareCondition(
+        runner.RequirePrepareCondition(
             !m_options.add_prepare_error,
             "semantic validation failed");
     }
 
-private:
+    CommandRunner<ValidationHelperRequest> m_runner{};
     ValidationHelperCommandOptions m_options{};
     ValidationHelperRequest m_configured_request{};
     ValidationHelperRequest m_last_request{};
 
-    bool ExecuteImpl(const ValidationHelperRequest &) override
+    bool ExecutePreparedRequest(const ValidationHelperRequest &)
     {
         ++execute_impl_count;
         return true;

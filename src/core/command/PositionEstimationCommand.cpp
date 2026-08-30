@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -26,16 +26,6 @@
 #endif
 
 namespace rhbm_gem::core {
-
-class PositionEstimationCommand final : public CommandBase<PositionEstimationRequest>
-{
-public:
-    PositionEstimationCommand();
-
-private:
-    void NormalizeAndValidateRequest(PositionEstimationRequest & request) override;
-    bool ExecuteImpl(const PositionEstimationRequest & request) override;
-};
 
 namespace {
 
@@ -349,24 +339,21 @@ void OutputPointList(
     Logger::Log(LogLevel::Info, "Output file: " + output_file.string());
 }
 
-} // namespace
-
-PositionEstimationCommand::PositionEstimationCommand() : CommandBase<PositionEstimationRequest>{}
-{
-}
-
-void PositionEstimationCommand::NormalizeAndValidateRequest(PositionEstimationRequest & request)
+void NormalizeAndValidateRequest(
+    CommandRunner<PositionEstimationRequest> & runner,
+    PositionEstimationRequest & request)
 {
     using Request = PositionEstimationRequest;
-    RequireExistingPath(request, &Request::map_file_path);
-    NormalizePositiveScalar(request, &Request::iteration_count, 15);
-    NormalizePositiveScalar(request, &Request::knn_size, static_cast<std::size_t>(20));
-    NormalizeFinitePositiveScalar(request, &Request::alpha, 2.0);
-    NormalizeFiniteExclusiveInclusiveRangeScalar(request, &Request::threshold_ratio, 0.0, 1.0, 0.01);
-    NormalizeFinitePositiveScalar(request, &Request::dedup_tolerance, 1.0e-2);
+    runner.RequireExistingPath(request, &Request::map_file_path);
+    runner.NormalizePositiveScalar(request, &Request::iteration_count, 15);
+    runner.NormalizePositiveScalar(request, &Request::knn_size, static_cast<std::size_t>(20));
+    runner.NormalizeFinitePositiveScalar(request, &Request::alpha, 2.0);
+    runner.NormalizeFiniteExclusiveInclusiveRangeScalar(
+        request, &Request::threshold_ratio, 0.0, 1.0, 0.01);
+    runner.NormalizeFinitePositiveScalar(request, &Request::dedup_tolerance, 1.0e-2);
 }
 
-bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & request)
+bool ExecutePreparedRequest(const PositionEstimationRequest & request)
 {
     auto map_object{ LoadPositionEstimationMap(request) };
     if (!map_object.has_value()) return false;
@@ -379,12 +366,16 @@ bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & re
     return true;
 }
 
+} // namespace
+
 namespace command_internal {
 
 CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest & request)
 {
-    PositionEstimationCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<PositionEstimationRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

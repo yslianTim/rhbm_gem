@@ -14,8 +14,8 @@ That typed list is visited by:
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
-The catalog stores typed executor functions, so CLI and Python bindings converge on the same command
-execution path after dispatch without exposing concrete command classes or per-command headers.
+The catalog stores typed executor functions, so C++, CLI, and Python converge on the same
+`CommandRunner` lifecycle without exposing per-command implementation headers.
 
 Stable entries live in `kStableCommands`. Experimental entries live in
 `kExperimentalCommands` and are visible only when `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is
@@ -76,7 +76,7 @@ does not expose CLI11 setup or parsing details.
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `RequestFieldCatalog`
-6. routes the callback to `rhbm_gem::core::RunCommand(request)`
+6. captures the catalog entry's typed executor directly
 7. wraps CLI11 parsing and exit-code handling in `RunCommandCLI(...)`
 
 ### Python
@@ -91,27 +91,25 @@ does not expose CLI11 setup or parsing details.
 
 Request type registration, `RunCommand(...)` overload membership, and request fields come from
 the internal command catalog.
-Each Python `RunCommand(...)` overload captures the catalog entry's typed executor directly. It
-does not pass through the C++ `RunCommandByRequestType(...)` type dispatcher, but it converges on
-the same executor and `CommandBase` lifecycle.
+Each Python `RunCommand(...)` overload binds the catalog entry's typed executor directly. It does
+not pass through the C++ `RunCommandByRequestType(...)` type dispatcher, but it converges on the
+same executor and `CommandRunner` lifecycle.
 
 ## Runtime Flow
 
-The C++/CLI and Python entrypoints use different dispatch paths and converge at the catalog's typed
-executor:
+The entrypoints use different dispatch paths and converge at the catalog's typed executor:
 
 ```mermaid
 flowchart TD
     A["C++ caller"] --> B["rhbm_gem::core::RunCommand(request)"]
-    C["CLI callback"] --> B
     B --> D["RunCommandByRequestType(typeid, base request)"]
     D --> E["VisitCommandCatalog and match exact request type"]
-    F["Python RunCommand overload"] --> G["entry.execute(request)"]
+    C["CLI callback"] --> G["entry.execute(request)"]
+    F["Python RunCommand overload"] --> G
     E --> G
-    G --> H["Construct local command"]
-    H --> I["ExecuteRequest(request)"]
+    G --> I["CommandRunner::Run(request, phase callbacks)"]
     I --> J["Normalize, validate, and preflight"]
-    J --> K["ExecuteImpl(request)"]
+    J --> K["ExecutePreparedRequest(request)"]
     K --> L["CommandResult"]
 ```
 
@@ -121,22 +119,22 @@ an executor. Python exposes only the overloads generated from the current catalo
 
 Each execution surface returns or consumes a `CommandResult` with:
 
-- `succeeded == true` when validation and preflight pass and `ExecuteImpl(...)` returns `true`
+- `succeeded == true` when validation and preflight pass and the execution callback returns `true`
 - `succeeded == false` when validation, preflight, or execution stops the command
 - `issues` containing framework routing, normalization, validation, and preflight diagnostics as
   option/message pairs
 
 Warnings remain in `issues` without failing the command. Diagnostic severity is retained only while
 the command runs, for control flow and logging; it is not part of the public result. An
-`ExecuteImpl(...)` failure can therefore return `succeeded == false` without adding an issue if the
+Execution failure can therefore return `succeeded == false` without adding an issue if the
 concrete command reports the runtime error only through logging. The CLI converts any failed result
 to exit code `1`; C++ and Python callers receive the result object.
 
 ## Concrete Command Shape
 
-Concrete command classes live inside their implementation files under
-[`src/core/command/`](/src/core/command/).
-Do not add per-command headers; each `.cpp` exposes only its internal executor function.
+Command phase functions live inside anonymous namespaces in their implementation files under
+[`src/core/command/`](/src/core/command/). Do not add per-command headers; each `.cpp` exposes only
+its internal catalog executor function.
 
 Shared command-framework internals live in:
 
@@ -144,24 +142,25 @@ Shared command-framework internals live in:
 
 The standard shape is:
 
-1. derive from `CommandBase<XxxRequest>`
-2. keep request normalization and field validation in `NormalizeAndValidateRequest(request)`
-3. keep semantic checks in `ValidatePreparedRequest(request)`
-4. keep orchestration in `ExecuteImpl(request)`
-5. expose `command_internal::ExecuteXxxCommand(...)` through `CommandCatalog.hpp`
+1. define `ExecutePreparedRequest(const XxxRequest &)` for typed orchestration
+2. add `NormalizeAndValidateRequest(CommandRunner<XxxRequest> &, XxxRequest &)` only when needed
+3. add `ValidatePreparedRequest(CommandRunner<XxxRequest> &, const XxxRequest &)` only when needed
+4. compose the present phases in `command_internal::ExecuteXxxCommand(...)`
+5. expose that executor through `CommandCatalog.hpp`
 
-`CommandBase<XxxRequest>`:
+`CommandRunner<XxxRequest>`:
 
 1. copies the typed request for one execution
-2. clears issues left from any previous execution of that command object
+2. clears issues left from any previous execution of that runner
 3. normalizes shared base options and sets the logger level
-4. calls `NormalizeAndValidateRequest(request)` and stops on validation errors
-5. calls `ValidatePreparedRequest(request)` and stops on semantic errors
+4. calls the optional normalization/field-validation callback and stops on errors
+5. calls the optional semantic-validation callback and stops on errors
 6. runs output-directory preflight and stops if directory creation fails
-7. calls `ExecuteImpl(request)`, reports pending issues, and builds the public result
+7. calls the required execution callback, reports pending issues, and builds the public result
 
-`NormalizeAndValidateRequest(...)` and `ValidatePreparedRequest(...)` default to no-ops, so a
-concrete command overrides only the phases it needs. `ExecuteImpl(...)` is required.
+`Run(request, execute)`, `Run(request, normalize_and_validate, execute)`, and
+`Run(request, normalize_and_validate, validate_prepared, execute)` let each executor supply only the
+phases it actually needs. No concrete command class or virtual hook is involved.
 
 ## Shared Request Base
 
@@ -175,7 +174,7 @@ Command-specific fields live directly on each request DTO.
 
 ## Filesystem and Validation Behavior
 
-`CommandBase` performs:
+`CommandRunner` performs:
 
 1. common normalization for `job_count`, `verbosity`, and `output_dir`
 2. logger-level setup from the normalized `verbosity`

@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/core/EstimatorTester.hpp>
@@ -14,17 +14,6 @@
 #include <vector>
 
 namespace rhbm_gem::core {
-
-class RHBMTestCommand final : public CommandBase<RHBMTestRequest>
-{
-public:
-    RHBMTestCommand();
-
-private:
-    void NormalizeAndValidateRequest(RHBMTestRequest & request) override;
-    void ValidatePreparedRequest(const RHBMTestRequest & request) override;
-    bool ExecuteImpl(const RHBMTestRequest & request) override;
-};
 
 namespace rhbm_test_plotting = command_detail::rhbm_test_plotting;
 using rhbm_test_plotting::AppendBiasCurvePoint;
@@ -473,27 +462,29 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
     rhbm_test_plotting::SaveMemberOutlierBiasPlot(request, plot_request);
 }
 
-RHBMTestCommand::RHBMTestCommand() : CommandBase<RHBMTestRequest>{}
+namespace {
+
+void NormalizeAndValidateRequest(
+    CommandRunner<RHBMTestRequest> & runner,
+    RHBMTestRequest & request)
 {
+    runner.RequireEnum(request, &RHBMTestRequest::tester_choice);
+    runner.RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_min);
+    runner.RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_max);
+    runner.RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_r);
+    runner.RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_g);
 }
 
-void RHBMTestCommand::NormalizeAndValidateRequest(RHBMTestRequest & request)
+void ValidatePreparedRequest(
+    CommandRunner<RHBMTestRequest> & runner,
+    const RHBMTestRequest & request)
 {
-    RequireEnum(request, &RHBMTestRequest::tester_choice);
-    RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_min);
-    RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_max);
-    RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_r);
-    RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_g);
-}
-
-void RHBMTestCommand::ValidatePreparedRequest(const RHBMTestRequest & request)
-{
-    RequirePrepareCondition(
+    runner.RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "Expected --fit-min <= --fit-max.");
 }
 
-bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
+bool ExecutePreparedRequest(const RHBMTestRequest & request)
 {
     switch (request.tester_choice)
     {
@@ -523,12 +514,17 @@ bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
     }
 }
 
+} // namespace
+
 namespace command_internal {
 
 CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request)
 {
-    RHBMTestCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<RHBMTestRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ValidatePreparedRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

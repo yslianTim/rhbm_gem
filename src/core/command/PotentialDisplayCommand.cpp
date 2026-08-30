@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -17,16 +17,6 @@
 #include <vector>
 
 namespace rhbm_gem::core {
-
-class PotentialDisplayCommand final : public CommandBase<PotentialDisplayRequest>
-{
-public:
-    PotentialDisplayCommand();
-
-private:
-    void NormalizeAndValidateRequest(PotentialDisplayRequest & request) override;
-    bool ExecuteImpl(const PotentialDisplayRequest & request) override;
-};
 
 namespace {
 
@@ -153,33 +143,29 @@ ReferenceModelGroupMap BuildReferenceModelGroupMap(
     return reference_model_group_map;
 }
 
-} // namespace
-
-PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDisplayRequest>{}
+void NormalizeAndValidateRequest(
+    CommandRunner<PotentialDisplayRequest> & runner,
+    PotentialDisplayRequest & request)
 {
-}
-
-void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
-{
-    RequireEnum(request, &PotentialDisplayRequest::painter_choice);
-    RequireNonEmptyList(request, &PotentialDisplayRequest::model_key_tag_list);
+    runner.RequireEnum(request, &PotentialDisplayRequest::painter_choice);
+    runner.RequireNonEmptyList(request, &PotentialDisplayRequest::model_key_tag_list);
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
         {
-            AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
+            runner.AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
                 "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
-            AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
+            runner.AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
                 "Reference group '" + group_name + "' cannot be empty.");
         }
     }
 }
 
-bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & request)
+bool ExecutePreparedRequest(const PotentialDisplayRequest & request)
 {
     auto inputs{ LoadPotentialDisplayInputs(request) };
     if (!inputs.has_value()) return false;
@@ -234,12 +220,16 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
     return true;
 }
 
+} // namespace
+
 namespace command_internal {
 
 CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & request)
 {
-    PotentialDisplayCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<PotentialDisplayRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

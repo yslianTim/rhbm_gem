@@ -174,49 +174,25 @@ def _update_file(
 
 
 def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "detail/CommandBase.hpp"
+    return f"""#include "detail/CommandRunner.hpp"
 
 namespace rhbm_gem::core {{
 
-class {spec.command_type} final : public CommandBase<{spec.command_id}Request>
-{{
-public:
-    {spec.command_type}();
+namespace {{
 
-private:
-    void NormalizeAndValidateRequest({spec.command_id}Request & request) override;
-    void ValidatePreparedRequest(const {spec.command_id}Request & request) override;
-    bool ExecuteImpl(const {spec.command_id}Request & request) override;
-}};
-
-{spec.command_type}::{spec.command_type}() :
-    CommandBase<{spec.command_id}Request>{{}}
-{{
-}}
-
-void {spec.command_type}::NormalizeAndValidateRequest({spec.command_id}Request & request)
-{{
-    (void)request;
-    // Normalize typed request fields and emit validation issues here.
-}}
-
-void {spec.command_type}::ValidatePreparedRequest(const {spec.command_id}Request & request)
-{{
-    (void)request;
-}}
-
-bool {spec.command_type}::ExecuteImpl(const {spec.command_id}Request & request)
+bool ExecutePreparedRequest(const {spec.command_id}Request & request)
 {{
     (void)request;
     return true;
 }}
 
+}} // namespace
+
 namespace command_internal {{
 
 CommandResult Execute{spec.command_type}(const {spec.command_id}Request & request)
 {{
-    {spec.command_type} command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<{spec.command_id}Request>{{}}.Run(request, ExecutePreparedRequest);
 }}
 
 }} // namespace command_internal

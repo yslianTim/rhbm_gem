@@ -91,7 +91,7 @@ cmake --build build --target lint_repo
 
 - Place new tests in the matching domain directory.
 - For `tests/core/command/`, prefer extending the existing grouped files:
-- `CommandBaseLifecycle_test.cpp` for base lifecycle/preflight behavior.
+- `CommandRunnerLifecycle_test.cpp` for runner lifecycle/preflight behavior.
 - `CommandValidationHelpers_test.cpp` for reusable helper semantics.
 - `CommandScenarios_test.cpp` for command-specific validation rules, workflows, and output side effects.
 - Only create a new command `*_test.cpp` when you are introducing a new testing responsibility.

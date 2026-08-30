@@ -1,4 +1,4 @@
-#include "detail/CommandBase.hpp"
+#include "detail/CommandRunner.hpp"
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
@@ -51,35 +51,21 @@ std::string BuildAtomGroupingSummary(const ModelObject & model_object)
         + " atom groups.";
 }
 
-} // namespace
-
-class PotentialAnalysisCommand final : public CommandBase<PotentialAnalysisRequest>
+void NormalizeAndValidateRequest(
+    CommandRunner<PotentialAnalysisRequest> & runner,
+    PotentialAnalysisRequest & request)
 {
-public:
-    PotentialAnalysisCommand();
-
-private:
-    void NormalizeAndValidateRequest(PotentialAnalysisRequest & request) override;
-    void ValidatePreparedRequest(const PotentialAnalysisRequest & request) override;
-    bool ExecuteImpl(const PotentialAnalysisRequest & request) override;
-};
-
-PotentialAnalysisCommand::PotentialAnalysisCommand() : CommandBase<PotentialAnalysisRequest>{}
-{
+    runner.RequireExistingPath(request, &PotentialAnalysisRequest::model_file_path);
+    runner.RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
+    runner.RequireFiniteNonNegativeScalar(
+        request, &PotentialAnalysisRequest::simulated_map_resolution);
+    runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
+    runner.RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
+    runner.RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
+    runner.RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
 }
 
-void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequest & request)
-{
-    RequireExistingPath(request, &PotentialAnalysisRequest::model_file_path);
-    RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
-    RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
-    RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
-}
-
-bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
+bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
 {
     std::unique_ptr<ModelObject> model_object;
     std::unique_ptr<MapObject> map_object;
@@ -168,22 +154,29 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     return true;
 }
 
-void PotentialAnalysisCommand::ValidatePreparedRequest(const PotentialAnalysisRequest & request)
+void ValidatePreparedRequest(
+    CommandRunner<PotentialAnalysisRequest> & runner,
+    const PotentialAnalysisRequest & request)
 {
-    RequirePrepareCondition(
+    runner.RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    RequirePrepareCondition(
+    runner.RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "Expected --fit-min <= --fit-max.");
 }
+
+} // namespace
 
 namespace command_internal {
 
 CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request)
 {
-    PotentialAnalysisCommand command;
-    return command.ExecuteRequest(request);
+    return CommandRunner<PotentialAnalysisRequest>{}.Run(
+        request,
+        NormalizeAndValidateRequest,
+        ValidatePreparedRequest,
+        ExecutePreparedRequest);
 }
 
 } // namespace command_internal

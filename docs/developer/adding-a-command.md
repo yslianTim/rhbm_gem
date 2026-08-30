@@ -69,7 +69,7 @@ Each request type is associated with its executor through the internal
 
 Add a `RequestFieldCatalog<<YourCommand>Request>` specialization to
 [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
-The request field catalog helpers live in `rhbm_gem::command_internal`.
+The request field catalog helpers live in `rhbm_gem::core::command_internal`.
 
 That internal field catalog is the single source for:
 
@@ -93,27 +93,39 @@ lists, enum fields use `CommandEnumTraits` from
 [`src/core/command/detail/CommandEnumCatalog.hpp`](/src/core/command/detail/CommandEnumCatalog.hpp),
 and reference-group maps bind as repeated group assignments.
 
-## Concrete Command
+## Command Implementation
 
 Implement the concrete command under [`src/core/command/`](/src/core/command/).
 Shared command-framework helpers stay under [`src/core/command/detail/`](/src/core/command/detail/).
-The command class stays local to its `.cpp`; do not add a matching command header.
+Phase functions stay in an anonymous namespace in the `.cpp`; do not add a matching command header.
 
 Use this shape:
 
-1. include `detail/CommandBase.hpp`
-2. define a local class deriving from `CommandBase<XxxRequest>`
-3. implement `NormalizeAndValidateRequest(XxxRequest & request)`
-4. implement `ValidatePreparedRequest(const XxxRequest & request)`
-5. implement `ExecuteImpl(const XxxRequest & request)`
-6. expose `command_internal::ExecuteXxxCommand(const XxxRequest & request)`
+1. include `detail/CommandRunner.hpp`
+2. define `ExecutePreparedRequest(const XxxRequest & request)` in an anonymous namespace
+3. add `NormalizeAndValidateRequest(CommandRunner<XxxRequest> &, XxxRequest &)` when field normalization or validation is needed
+4. add `ValidatePreparedRequest(CommandRunner<XxxRequest> &, const XxxRequest &)` when post-normalization semantic validation is needed
+5. compose only the present phases in `command_internal::ExecuteXxxCommand(const XxxRequest & request)`
 
-`CommandBase<XxxRequest>` already:
+`CommandRunner<XxxRequest>` already:
 
-- stores the typed request internally
-- coerces `CommandRequestBase` shared options
-- uses shared options for lifecycle/preflight
-- calls `NormalizeAndValidateRequest(request)`
+- copies the typed request for one execution
+- normalizes `CommandRequestBase` shared options
+- preserves the field-validation then semantic-validation short circuit
+- performs output-directory preflight before execution
+- reports diagnostics and builds `CommandResult`
+
+Use the shortest matching overload:
+
+```cpp
+runner.Run(request, ExecutePreparedRequest);
+runner.Run(request, NormalizeAndValidateRequest, ExecutePreparedRequest);
+runner.Run(
+    request,
+    NormalizeAndValidateRequest,
+    ValidatePreparedRequest,
+    ExecutePreparedRequest);
+```
 
 ## Registration Surfaces
 
@@ -139,7 +151,7 @@ Before merge, verify:
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandCatalog.hpp` contains the internal request field catalog specialization
 4. `CommandCatalog.hpp` contains the executor declaration and typed request entry in the correct stable or experimental section
-5. the command implementation derives from `CommandBase<XxxRequest>` inside the `.cpp`
+5. the command implementation composes `CommandRunner<XxxRequest>` with only its required phases
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

@@ -52,7 +52,7 @@ If you change database persistence behavior:
 
 If you change command-side loading or persistence orchestration:
 
-- `/src/core/command/detail/CommandBase.hpp`
+- `/src/core/command/detail/CommandRunner.hpp`
 - the relevant command implementation under `/src/core/command/`
 - related command tests under `/tests/core/command/`
 
@@ -99,7 +99,7 @@ Typical command flow:
 3. when persisting a command-owned model, call `DataRepository::SaveModel(...)`; maps remain file-backed
 4. keep loaded `shared_ptr` objects in typed command-owned members
 5. wrap failures with command-specific context near the orchestration boundary
-6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
+6. keep `ExecutePreparedRequest()` and local workflow helpers focused on typed orchestration
 
 Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/CommandTypes.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
 

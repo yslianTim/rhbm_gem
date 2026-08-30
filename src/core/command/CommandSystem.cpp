@@ -57,27 +57,10 @@ struct VectorTraits<std::vector<ElementType, Allocator>>
     using Element = ElementType;
 };
 
-template <typename FieldType>
-struct IsReferenceGroupField : std::false_type
-{
-};
-
-template <>
-struct IsReferenceGroupField<std::unordered_map<std::string, std::vector<std::string>>> : std::true_type
-{
-};
-
-template <typename EnumType, typename = void>
-struct HasCommandEnumTraits : std::false_type
-{
-};
-
 template <typename EnumType>
-struct HasCommandEnumTraits<
-    EnumType,
-    std::void_t<decltype(command_internal::CommandEnumTraits<EnumType>::kOptions)>>
-    : std::true_type
+concept HasCommandEnumTraits = requires
 {
+    command_internal::CommandEnumTraits<EnumType>::kOptions;
 };
 
 template <typename Request>
@@ -200,12 +183,9 @@ void BindEnumCliField(
     const command_internal::RequestField<Request, FieldType> & field)
 {
     auto & option{
-        *command.add_option_function<FieldType>(
+        *command.add_option(
             field.cli_flags,
-            [request, member = field.member](const FieldType & value)
-            {
-                request->*member = value;
-            },
+            request->*(field.member),
             field.help)
     };
     option.default_val(request->*(field.member));
@@ -229,12 +209,9 @@ void BindScalarCliField(
 {
     const auto & current_value{ request->*(field.member) };
     auto & option{
-        *command.add_option_function<FieldType>(
+        *command.add_option(
             field.cli_flags,
-            [request, member = field.member](const FieldType & value)
-            {
-                request->*member = value;
-            },
+            request->*(field.member),
             field.help)
     };
     if constexpr (std::is_same_v<FieldType, std::string>)
@@ -260,7 +237,9 @@ void BindCliField(
     {
         BindPathCliField(command, request, field);
     }
-    else if constexpr (IsReferenceGroupField<FieldType>::value)
+    else if constexpr (std::is_same_v<
+        FieldType,
+        std::unordered_map<std::string, std::vector<std::string>>>)
     {
         BindReferenceGroupCliField(command, request, field);
     }
@@ -268,7 +247,7 @@ void BindCliField(
     {
         BindVectorCliField(command, request, field);
     }
-    else if constexpr (HasCommandEnumTraits<FieldType>::value)
+    else if constexpr (HasCommandEnumTraits<FieldType>)
     {
         BindEnumCliField(command, request, field);
     }
@@ -326,10 +305,10 @@ int RunCommandCLI(int argc, char * argv[])
             BindCliField(command, request.get(), field);
         });
 
-        command.callback([request]()
+        command.callback([request, execute = entry.execute]()
         {
             ScopeTimer timer("Command CLI callback");
-            const auto result{ rhbm_gem::core::RunCommand(*request) };
+            const auto result{ execute(*request) };
             if (!result.succeeded) throw CLI::RuntimeError(1);
         });
     });
