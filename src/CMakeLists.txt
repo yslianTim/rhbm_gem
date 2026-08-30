@@ -37,7 +37,6 @@ target_sources(rhbm_gem PRIVATE
 
     # data
     data/detail/AtomClassifier.cpp
-    data/object/AtomLocalPotentialEditor.cpp
     data/object/AtomLocalPotentialView.cpp
     data/object/AtomObject.cpp
     data/io/DataRepository.cpp
@@ -58,7 +57,6 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
     data/io/sqlite/ModelObjectStorage.cpp
-    data/io/sqlite/SQLitePersistence.cpp
 
     # utils
     utils/domain/AtomKeySystem.cpp

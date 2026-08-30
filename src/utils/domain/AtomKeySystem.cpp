@@ -78,14 +78,3 @@ std::string AtomKeySystem::GetAtomId(AtomKey atom_key)
     }
     return m_key_to_id_map.at(atom_key);
 }
-
-bool AtomKeySystem::IsBuildInAtom(const std::string & atom_id) const
-{
-    if (m_id_to_key_map.find(atom_id) == m_id_to_key_map.end()) return false;
-    return m_id_to_key_map.at(atom_id) < k_dynamic_base;
-}
-
-bool AtomKeySystem::IsBuildInAtom(AtomKey atom_key) const
-{
-    return atom_key < k_dynamic_base;
-}

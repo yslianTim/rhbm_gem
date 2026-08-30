@@ -454,7 +454,7 @@ void DemoPainter::PaintAtomMapValueExample(
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
+    auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -472,15 +472,15 @@ void DemoPainter::PaintAtomMapValueExample(
     double width_prior;
     std::vector<double> y_array;
         auto group_key{ data_internal::GetMainChainGroupKey(0, Residue::ALA) };
-    if (!entry_iter->HasAtomGroup(FittingStage::Third, group_key)) return;
-    for (auto atom : entry_iter->GetAtomObjectList(
+    if (!entry_iter.HasAtomGroup(FittingStage::Third, group_key)) return;
+    for (auto atom : entry_iter.GetAtomObjectList(
         FittingStage::Third, group_key))
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
         auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
         root_helper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
-        const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        const auto atom_view{ AtomLocalPotentialView::For(*atom) };
         auto map_value_range{
             local_potential_series::ComputeResponseRange(
                 atom_view.GetRawSamplingEntries(), 0.0)
@@ -489,8 +489,8 @@ void DemoPainter::PaintAtomMapValueExample(
         y_array.emplace_back(std::get<1>(map_value_range));
     }
     gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key);
-    amplitude_prior = entry_iter->GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(0);
-    width_prior = entry_iter->GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(1);
+    amplitude_prior = entry_iter.GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(0);
+    width_prior = entry_iter.GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(1);
 
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -594,7 +594,6 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         std::vector<double> amplitude_array, width_array;
         info_text[j] = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         resolution_text[j] = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t k = 0; k < main_chain_element_count; k++)
         {
@@ -711,7 +710,6 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -909,9 +907,9 @@ void DemoPainter::PaintGroupGausToFSC(
         auto count{ 0 };
         for (auto model : model_list)
         {
-            auto entry_iter{ std::make_unique<ModelAnalysisView>(*model) };
+            auto entry_iter{ model->GetAnalysisView() };
             const auto average_prior{
-                PotentialPlotBuilder::ComputeComponentAtomAveragePrior(*entry_iter, atom_key)
+                PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_iter, atom_key)
             };
             if (!average_prior.has_value()) continue;
             auto width_value{ average_prior->GetDisplayParameter(1) };
@@ -1018,7 +1016,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     (void)draw_box_plot;
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
+    auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1067,7 +1065,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
             auto group_key{ data_internal::GetMainChainGroupKey(i, residue) };
-            if (!entry_iter->HasAtomGroup(
+            if (!entry_iter.HasAtomGroup(
                     FittingStage::Third, group_key)) continue;
             auto gaus_graph{ plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
@@ -1252,12 +1250,12 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (size_t j = 0; j < row_size; j++)
         {
             auto model_id{ j };
-            auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_list.at(model_id)) };
+            auto entry_iter{ model_list.at(model_id)->GetAnalysisView() };
             auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_list.at(model_id)) };
             for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
                 auto group_key{ data_internal::GetMainChainGroupKey(element_id, residue) };
-                if (!entry_iter->HasAtomGroup(
+                if (!entry_iter.HasAtomGroup(
                         FittingStage::Third, group_key)) continue;
                 auto graph{ (par_id == 0) ?
                     plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) :
@@ -1440,9 +1438,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     (void)par_id;
     
     if (model_object1 == nullptr || model_object2 == nullptr) return;
-    auto entry_iter1{ std::make_unique<ModelAnalysisView>(*model_object1) };
     auto plot_builder1{ std::make_unique<PotentialPlotBuilder>(model_object1) };
-    auto entry_iter2{ std::make_unique<ModelAnalysisView>(*model_object2) };
     auto plot_builder2{ std::make_unique<PotentialPlotBuilder>(model_object2) };
     
     #ifdef HAVE_ROOT
@@ -1546,7 +1542,6 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     (void)par_id;
     
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -1674,7 +1669,6 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
     for (size_t j = 0; j < model_size; j++)
     {
         auto model_object{ model_list.at(j) };
-        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
         auto group_key_list{ data_internal::GetMainChainGroupKeyList(member_id) };
@@ -1764,7 +1758,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     for (size_t i = 0; i < model_list.size(); i++)
     {
         auto model_object{ model_list.at(i) };
-        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
+        auto entry_iter{ model_object->GetAnalysisView() };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t p = 0; p < spot_list.size(); p++)
         {
@@ -1774,7 +1768,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             auto & group_key_list{ group_key_list_map[i].at(spot) };
             for (auto it = group_key_list.begin(); it != group_key_list.end(); )
             {
-                if (!entry_iter->HasAtomGroup(FittingStage::Third, *it))
+                if (!entry_iter.HasAtomGroup(FittingStage::Third, *it))
                 {
                     it = group_key_list.erase(it);
                 }
@@ -1804,7 +1798,6 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     for (size_t i = 0; i < model_list.size(); i++)
     {
         auto model_object{ model_list.at(i) };
-        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (auto & [spot, group_key_list] : group_key_list_map[i])
         {

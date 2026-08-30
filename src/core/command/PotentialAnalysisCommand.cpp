@@ -7,15 +7,51 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
 namespace rhbm_gem::core {
+
+namespace {
+
+std::string BuildAtomCountingSummary(const ModelObject & model_object)
+{
+    std::map<Element, std::size_t> element_counts;
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        element_counts[atom->GetElement()]++;
+    }
+
+    std::string description{
+        "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount())
+    };
+    for (const auto & [element, count] : element_counts)
+    {
+        description +=
+            "\n - Element type: " + ChemicalDataHelper::GetLabel(element) + " include "
+            + std::to_string(count) + " atoms.";
+    }
+    return description;
+}
+
+std::string BuildAtomGroupingSummary(const ModelObject & model_object)
+{
+    return "Atomic model includes "
+        + std::to_string(model_object.GetAnalysisView()
+            .CollectAtomGroupKeys(FittingStage::Third).size())
+        + " atom groups.";
+}
+
+} // namespace
 
 class PotentialAnalysisCommand final : public CommandBase<PotentialAnalysisRequest>
 {
@@ -104,8 +140,9 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->ApplyBackboneSelection(request.only_backbone);
-    model_object->LocalPotentialInitialization();
-    model_object->PrintSummary();
+    model_object->EditAnalysis().InitializeFromSelection();
+    Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
+    Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
@@ -127,7 +164,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);
-    model_object->ClearTransientFitStates();
+    model_object->EditAnalysis().ClearTransientFitStates();
     return true;
 }
 

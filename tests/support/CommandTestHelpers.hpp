@@ -74,10 +74,12 @@ inline void SeedSavedModel(
     auto model{ rhbm_gem::ReadModel(model_path) };
     model->SetKeyTag("model");
     model->SetPdbID(pdb_id);
+    model->SelectAllAtoms();
     auto analysis{ model->EditAnalysis() };
     for (auto & atom : model->GetAtomList())
     {
-        analysis.EnsureAtomLocalPotential(*atom);
+        analysis.SetAtomLocalAlphaR(
+            rhbm_gem::FittingStage::First, *atom, 0.0);
     }
     repository.SaveModel(*model, saved_key);
 }

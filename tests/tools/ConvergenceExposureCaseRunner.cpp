@@ -323,8 +323,8 @@ Scenario BuildScenario(const Request & request)
     std::vector<rg::AtomObject *> selected_atoms{ model->GetSelectedAtoms() };
     for (std::size_t index = 0; index < atom_count; index++)
     {
-        auto local{ analysis.EnsureAtomLocalPotential(*selected_atoms.at(index)) };
-        local.SetAlphaR(rg::FittingStage::Second, 0.0);
+        auto * atom{ selected_atoms.at(index) };
+        analysis.SetAtomLocalAlphaR(rg::FittingStage::Second, *atom, 0.0);
         auto perturbation{ request.initial_perturbation };
         if (request.family == "population")
         {
@@ -333,12 +333,13 @@ Scenario BuildScenario(const Request & request)
             perturbation = index == 0 ? request.initial_perturbation : 0.0;
             if (index >= active_count) perturbation = 0.0;
         }
-        local.SetGaussianResult(
+        analysis.SetAtomLocalGaussianResult(
             rg::FittingStage::Second,
+            *atom,
             MakeGaussianResult(PerturbModel(
                 truth.at(index), perturbation, index)));
-        local.SetRawSamplingEntries(BuildSamples(
-            *selected_atoms.at(index),
+        analysis.SetAtomLocalRawSamplingEntries(*atom, BuildSamples(
+            *atom,
             selected_atoms,
             truth,
             request.noise_sigma,
@@ -352,7 +353,7 @@ Scenario BuildScenario(const Request & request)
         for (std::size_t index = active_count; index < atom_count; index++)
         {
             auto entries{
-                rg::AtomLocalPotentialView::RequireFor(*selected_atoms.at(index))
+                rg::AtomLocalPotentialView::For(*selected_atoms.at(index))
                     .GetRawSamplingEntries(false) };
             if (request.topology == "quarantine-dilution")
             {
@@ -378,8 +379,8 @@ Scenario BuildScenario(const Request & request)
             {
                 entries.resize(request.topology == "offset-fixed-dilution" ? 2 : 1);
             }
-            analysis.EnsureAtomLocalPotential(*selected_atoms.at(index))
-                .SetRawSamplingEntries(std::move(entries));
+            analysis.SetAtomLocalRawSamplingEntries(
+                *selected_atoms.at(index), std::move(entries));
         }
     }
     return Scenario{ std::move(model), std::move(truth) };

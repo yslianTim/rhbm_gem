@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
@@ -10,14 +12,12 @@
 namespace rhbm_gem {
 
 class AtomObject;
-class BondObject;
 
-template <typename MemberT>
-class GroupPotentialEntry
+class AtomGroupPotentialEntry
 {
     struct GroupPotentialBucket
     {
-        std::vector<MemberT *> members;
+        std::vector<AtomObject *> members;
         GaussianModel3D mean{ 0.0, 0.0 };
         GaussianModel3D mdpde{ 0.0, 0.0 };
         GaussianModel3DWithUncertainty prior{
@@ -29,13 +29,11 @@ class GroupPotentialEntry
 
     using GroupMap = std::unordered_map<GroupKey, GroupPotentialBucket>;
 
-    GroupMap m_group_map_1st;
-    GroupMap m_group_map_2nd;
-    GroupMap m_group_map_3rd;
+    std::array<GroupMap, 3> m_group_maps{};
 
 public:
-    GroupPotentialEntry() = default;
-    ~GroupPotentialEntry() = default;
+    AtomGroupPotentialEntry() = default;
+    ~AtomGroupPotentialEntry() = default;
 
     bool HasGroup(FittingStage stage, GroupKey group_key) const
     {
@@ -61,7 +59,7 @@ public:
         return GetGroupMap(stage).size();
     }
 
-    void AddMember(FittingStage stage, GroupKey group_key, MemberT & member)
+    void AddMember(FittingStage stage, GroupKey group_key, AtomObject & member)
     {
         EnsureGroup(stage, group_key).members.emplace_back(&member);
     }
@@ -74,7 +72,7 @@ public:
         EnsureGroup(stage, group_key).members.reserve(member_count);
     }
 
-    const std::vector<MemberT *> & GetMembers(
+    const std::vector<AtomObject *> & GetMembers(
         FittingStage stage,
         GroupKey group_key) const
     {
@@ -145,24 +143,12 @@ public:
 private:
     GroupMap & GetGroupMap(FittingStage stage)
     {
-        switch (stage)
-        {
-            case FittingStage::First: return m_group_map_1st;
-            case FittingStage::Second: return m_group_map_2nd;
-            case FittingStage::Third: return m_group_map_3rd;
-        }
-        throw std::invalid_argument("Unknown local fitting stage.");
+        return m_group_maps.at(StageIndex(stage));
     }
 
     const GroupMap & GetGroupMap(FittingStage stage) const
     {
-        switch (stage)
-        {
-            case FittingStage::First: return m_group_map_1st;
-            case FittingStage::Second: return m_group_map_2nd;
-            case FittingStage::Third: return m_group_map_3rd;
-        }
-        throw std::invalid_argument("Unknown local fitting stage.");
+        return m_group_maps.at(StageIndex(stage));
     }
 
     GroupPotentialBucket & EnsureGroup(FittingStage stage, GroupKey group_key)
@@ -193,9 +179,16 @@ private:
         }
         return iter->second;
     }
-};
 
-using AtomGroupPotentialEntry = GroupPotentialEntry<AtomObject>;
-using BondGroupPotentialEntry = GroupPotentialEntry<BondObject>;
+    static std::size_t StageIndex(FittingStage stage)
+    {
+        const auto index{ static_cast<std::size_t>(stage) };
+        if (index >= 3)
+        {
+            throw std::invalid_argument("Unknown local fitting stage.");
+        }
+        return index;
+    }
+};
 
 } // namespace rhbm_gem

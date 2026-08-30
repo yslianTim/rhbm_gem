@@ -81,14 +81,3 @@ std::string ComponentKeySystem::GetComponentId(ComponentKey component_key)
     }
     return m_key_to_id_map.at(component_key);
 }
-
-bool ComponentKeySystem::IsBuildInComponent(const std::string & component_id) const
-{
-    if (m_id_to_key_map.find(component_id) == m_id_to_key_map.end()) return false;
-    return m_id_to_key_map.at(component_id) < k_dynamic_base;
-}
-
-bool ComponentKeySystem::IsBuildInComponent(ComponentKey component_key) const
-{
-    return component_key < k_dynamic_base;
-}

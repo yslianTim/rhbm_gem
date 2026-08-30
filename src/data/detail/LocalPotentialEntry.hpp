@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <stdexcept>
 #include <utility>
 
@@ -12,9 +14,7 @@ class LocalPotentialEntry
 {
     LocalPotentialSampleList m_raw_sampling_entries;
     LocalPotentialSampleList m_peeling_sampling_entries;
-    LocalGaussianResult m_gaussian_result_1st;
-    LocalGaussianResult m_gaussian_result_2nd;
-    LocalGaussianResult m_gaussian_result_3rd;
+    std::array<LocalGaussianResult, 3> m_gaussian_results{};
     int m_neighbor_count_for_peeling{ 0 };
 
 public:
@@ -68,26 +68,25 @@ public:
     int NeighborCountForPeeling() const { return m_neighbor_count_for_peeling; }
     LocalGaussianResult & GaussianResult(FittingStage stage)
     {
-        switch (stage)
-        {
-            case FittingStage::First:  return m_gaussian_result_1st;
-            case FittingStage::Second: return m_gaussian_result_2nd;
-            case FittingStage::Third:  return m_gaussian_result_3rd;
-        }
-        throw std::invalid_argument("Unknown local fitting stage.");
+        return m_gaussian_results.at(StageIndex(stage));
     }
     const LocalGaussianResult & GaussianResult(FittingStage stage) const
     {
-        switch (stage)
-        {
-            case FittingStage::First:  return m_gaussian_result_1st;
-            case FittingStage::Second: return m_gaussian_result_2nd;
-            case FittingStage::Third:  return m_gaussian_result_3rd;
-        }
-        throw std::invalid_argument("Unknown local fitting stage.");
+        return m_gaussian_results.at(StageIndex(stage));
     }
     const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
     const LocalPotentialSampleList & PeelingSamplingEntries() const { return m_peeling_sampling_entries; }
+
+private:
+    static std::size_t StageIndex(FittingStage stage)
+    {
+        const auto index{ static_cast<std::size_t>(stage) };
+        if (index >= 3)
+        {
+            throw std::invalid_argument("Unknown local fitting stage.");
+        }
+        return index;
+    }
 };
 
 } // namespace rhbm_gem

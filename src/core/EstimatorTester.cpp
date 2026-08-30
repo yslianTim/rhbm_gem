@@ -105,7 +105,7 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
         RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
 
         const auto local_view{
-            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+            AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
             local_view.GetGaussianResult(FittingStage::First)
@@ -136,7 +136,7 @@ Eigen::MatrixXd EstimateAtomicModelFullStageModels(
         RunPotentialFittingWorkflow(model_object, options);
 
         const auto local_view{
-            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+            AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
             local_view.GetGaussianResult(FittingStage::Third)
@@ -376,7 +376,7 @@ LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
     {
         const auto & model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
         const auto local_view{
-            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+            AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto estimate{
             EstimateLocalGaussian(
@@ -429,7 +429,7 @@ BiasStatistics RunAtomicModelFullEstimationTest(
         RunPotentialFittingWorkflow(model_object, options);
 
         const auto local_view{
-            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+            AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
             local_view.GetGaussianResult(FittingStage::Third)

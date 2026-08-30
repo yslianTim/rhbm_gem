@@ -13,6 +13,20 @@
 
 namespace rhbm_gem {
 
+namespace {
+
+constexpr double kInitialLocalAlpha{ 0.0 };
+constexpr double kInitialGroupAlpha{ 0.0 };
+
+LocalPotentialEntry & EnsureAtomLocalPotential(
+    ModelObject & model_object,
+    const AtomObject & atom_object)
+{
+    return ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(atom_object);
+}
+
+} // namespace
+
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
     m_model_object{ model_object }
 {
@@ -37,13 +51,27 @@ void ModelAnalysisEditor::ClearTransientFitStates()
     }
 }
 
+void ModelAnalysisEditor::InitializeFromSelection()
+{
+    Clear();
+    RebuildAtomGroupsFromSelection();
+    for (const auto stage : {
+            FittingStage::First,
+            FittingStage::Second,
+            FittingStage::Third })
+    {
+        InitializeLocalAlpha(stage, kInitialLocalAlpha);
+        InitializeGroupAlpha(stage, kInitialGroupAlpha);
+    }
+}
+
 void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
 {
     const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        auto local_editor{ EnsureAtomLocalPotential(*atom) };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        EnsureAtomLocalPotential(m_model_object, *atom);
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
         auto result{ local_view.GetGaussianResult(FittingStage::First) };
         result.ols = GaussianModel3DWithUncertainty{
             seed_model,
@@ -57,23 +85,17 @@ void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
         result.is_outlier = false;
         result.statistical_distance = 0.0;
         result.fit_result.reset();
-        local_editor.SetGaussianResult(FittingStage::First, result);
-        local_editor.SetGaussianResult(FittingStage::Second, result);
-        local_editor.SetGaussianResult(FittingStage::Third, result);
+        SetAtomLocalGaussianResult(FittingStage::First, *atom, result);
+        SetAtomLocalGaussianResult(FittingStage::Second, *atom, result);
+        SetAtomLocalGaussianResult(FittingStage::Third, *atom, std::move(result));
     }
-}
-
-AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
-{
-    auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureAtomLocalEntry(atom_object) };
-    return AtomLocalPotentialEditor(entry);
 }
 
 void ModelAnalysisEditor::EnsureSelectedAtomLocalPotentials()
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        EnsureAtomLocalPotential(*atom);
+        EnsureAtomLocalPotential(m_model_object, *atom);
     }
 }
 
@@ -84,19 +106,41 @@ void ModelAnalysisEditor::EnsureAtomGroupLocalPotentials(FittingStage stage, Gro
     };
     for (auto * atom : atom_list)
     {
-        EnsureAtomLocalPotential(*atom);
+        EnsureAtomLocalPotential(m_model_object, *atom);
     }
 }
 
-AtomLocalPotentialEditor ModelAnalysisEditor::GetAtomLocalPotentialEditor(
-    const AtomObject & atom_object) const
+void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
+    const AtomObject & atom_object,
+    LocalPotentialSampleList value)
 {
-    auto * entry{ ModelAnalysisData::Of(m_model_object).FindAtomLocalEntry(atom_object) };
-    if (entry == nullptr)
-    {
-        throw std::runtime_error("Atom local potential entry is not available.");
-    }
-    return AtomLocalPotentialEditor(*entry);
+    EnsureAtomLocalPotential(m_model_object, atom_object)
+        .SetRawSamplingEntries(std::move(value));
+}
+
+void ModelAnalysisEditor::SetAtomLocalPeelingSamplingEntries(
+    const AtomObject & atom_object,
+    LocalPotentialSampleList value)
+{
+    EnsureAtomLocalPotential(m_model_object, atom_object)
+        .SetPeelingSamplingEntries(std::move(value));
+}
+
+void ModelAnalysisEditor::SetAtomLocalGaussianResult(
+    FittingStage stage,
+    const AtomObject & atom_object,
+    LocalGaussianResult result)
+{
+    EnsureAtomLocalPotential(m_model_object, atom_object)
+        .SetGaussianResult(stage, std::move(result));
+}
+
+void ModelAnalysisEditor::SetAtomLocalAlphaR(
+    FittingStage stage,
+    const AtomObject & atom_object,
+    double alpha_r)
+{
+    EnsureAtomLocalPotential(m_model_object, atom_object).SetAlphaR(stage, alpha_r);
 }
 
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
@@ -117,7 +161,7 @@ void ModelAnalysisEditor::InitializeLocalAlpha(FittingStage stage, double alpha_
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        EnsureAtomLocalPotential(*atom).SetAlphaR(stage, alpha_r);
+        SetAtomLocalAlphaR(stage, *atom, alpha_r);
     }
 }
 
@@ -131,7 +175,7 @@ void ModelAnalysisEditor::SetAtomGroupAlphaR(
     };
     for (auto * atom : atom_list)
     {
-        EnsureAtomLocalPotential(*atom).SetAlphaR(stage, alpha_r);
+        SetAtomLocalAlphaR(stage, *atom, alpha_r);
     }
 }
 
@@ -150,10 +194,9 @@ void ModelAnalysisEditor::CopyLocalFittingStageResult(
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        EnsureAtomLocalPotential(*atom).SetGaussianResult(
-            destination_stage,
-            local_view.GetGaussianResult(source_stage));
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        SetAtomLocalGaussianResult(
+            destination_stage, *atom, local_view.GetGaussianResult(source_stage));
     }
 }
 
@@ -204,19 +247,12 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     group_entry.SetGaussianResult(stage, group_key, group_result);
 }
 
-void ModelAnalysisEditor::ApplyAtomLocalGaussianResult(
-    FittingStage stage,
-    const AtomObject & atom_object,
-    LocalGaussianResult result)
-{
-    GetAtomLocalPotentialEditor(atom_object).SetGaussianResult(stage, std::move(result));
-}
-
 void ModelAnalysisEditor::SetAtomLocalNeighborCountForPeeling(
     const AtomObject & atom_object,
     int neighbor_count)
 {
-    EnsureAtomLocalPotential(atom_object).SetNeighborCountForPeeling(neighbor_count);
+    EnsureAtomLocalPotential(m_model_object, atom_object)
+        .SetNeighborCountForPeeling(neighbor_count);
 }
 
 void ModelAnalysisEditor::ApplyAtomLocalSecondStageResult(
@@ -224,9 +260,8 @@ void ModelAnalysisEditor::ApplyAtomLocalSecondStageResult(
     LocalGaussianResult result,
     LocalPotentialSampleList peeling_sampling_entries)
 {
-    auto local_editor{ EnsureAtomLocalPotential(atom_object) };
-    local_editor.SetGaussianResult(FittingStage::Second, std::move(result));
-    local_editor.SetPeelingSamplingEntries(std::move(peeling_sampling_entries));
+    SetAtomLocalGaussianResult(FittingStage::Second, atom_object, std::move(result));
+    SetAtomLocalPeelingSamplingEntries(atom_object, std::move(peeling_sampling_entries));
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(

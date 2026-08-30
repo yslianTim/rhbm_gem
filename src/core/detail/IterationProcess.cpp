@@ -971,7 +971,7 @@ static SecondStageContext BuildSecondStageContext(
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         atom_context.initial_result = local_view.GetGaussianResult(FittingStage::Second);
         atom_context.group_prior = analysis_view.FindAtomGroupPriorWithUncertainty(FittingStage::Second, *atom);

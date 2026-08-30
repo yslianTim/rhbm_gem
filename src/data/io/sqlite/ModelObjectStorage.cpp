@@ -19,6 +19,7 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <array>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -34,8 +35,7 @@ using namespace std::literals;
 
 inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_object (
-        key_tag TEXT PRIMARY KEY REFERENCES object_catalog(key_tag) ON DELETE CASCADE,
-        atom_size INTEGER,
+        key_tag TEXT PRIMARY KEY,
         pdb_id TEXT,
         emd_id TEXT,
         map_resolution DOUBLE,
@@ -115,6 +115,7 @@ inline constexpr std::string_view kCreateModelAtomTableSql = R"sql(
         element INTEGER,
         structure INTEGER,
         is_special_atom INTEGER,
+        is_selected INTEGER NOT NULL DEFAULT 0,
         position_x DOUBLE,
         position_y DOUBLE,
         position_z DOUBLE,
@@ -135,6 +136,7 @@ inline constexpr std::string_view kCreateModelBondTableSql = R"sql(
         bond_type INTEGER,
         bond_order INTEGER,
         is_special_bond INTEGER,
+        is_selected INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
@@ -144,9 +146,7 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_local_potential (
         key_tag TEXT,
         serial_id INTEGER,
-        raw_sampling_size INTEGER,
         raw_distance_and_map_value_list BLOB,
-        peeling_sampling_size INTEGER,
         peeling_distance_and_map_value_list BLOB,
         amplitude_estimate_ols_1st DOUBLE,
         width_estimate_ols_1st DOUBLE,
@@ -175,25 +175,6 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::string_view kCreateModelBondLocalTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_bond_local_potential (
-        key_tag TEXT,
-        atom_serial_id_1 INTEGER,
-        atom_serial_id_2 INTEGER,
-        sampling_size INTEGER,
-        distance_and_map_value_list BLOB,
-        amplitude_estimate_ols DOUBLE,
-        width_estimate_ols DOUBLE,
-        intercept_estimate_ols DOUBLE,
-        amplitude_estimate_mdpde DOUBLE,
-        width_estimate_mdpde DOUBLE,
-        intercept_estimate_mdpde DOUBLE,
-        alpha_r DOUBLE,
-        PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
 inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_posterior (
         key_tag TEXT,
@@ -211,30 +192,10 @@ inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::string_view kCreateModelBondPosteriorTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_bond_posterior (
-        key_tag TEXT,
-        class_key TEXT,
-        atom_serial_id_1 INTEGER,
-        atom_serial_id_2 INTEGER,
-        amplitude_estimate_posterior DOUBLE,
-        width_estimate_posterior DOUBLE,
-        intercept_estimate_posterior DOUBLE,
-        amplitude_variance_posterior DOUBLE,
-        width_variance_posterior DOUBLE,
-        intercept_variance_posterior DOUBLE,
-        outlier_tag INTEGER,
-        statistical_distance DOUBLE,
-        PRIMARY KEY (key_tag, class_key, atom_serial_id_1, atom_serial_id_2),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
 inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_group_potential (
         key_tag TEXT,
         group_key INTEGER,
-        member_size INTEGER,
         amplitude_estimate_mean_1st DOUBLE,
         width_estimate_mean_1st DOUBLE,
         intercept_estimate_mean_1st DOUBLE,
@@ -279,31 +240,7 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::string_view kCreateModelBondGroupTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_bond_group_potential (
-        key_tag TEXT,
-        class_key TEXT,
-        group_key INTEGER,
-        member_size INTEGER,
-        amplitude_estimate_mean DOUBLE,
-        width_estimate_mean DOUBLE,
-        intercept_estimate_mean DOUBLE,
-        amplitude_estimate_mdpde DOUBLE,
-        width_estimate_mdpde DOUBLE,
-        intercept_estimate_mdpde DOUBLE,
-        amplitude_estimate_prior DOUBLE,
-        width_estimate_prior DOUBLE,
-        intercept_estimate_prior DOUBLE,
-        amplitude_variance_prior DOUBLE,
-        width_variance_prior DOUBLE,
-        intercept_variance_prior DOUBLE,
-        alpha_g DOUBLE,
-        PRIMARY KEY (key_tag, class_key, group_key),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
-inline constexpr std::array<std::string_view, 13> kCreateModelTableSqlList{
+inline constexpr std::array<std::string_view, 10> kCreateModelTableSqlList{
     kCreateModelObjectTableSql,
     kCreateModelChainMapTableSql,
     kCreateModelComponentTableSql,
@@ -312,14 +249,11 @@ inline constexpr std::array<std::string_view, 13> kCreateModelTableSqlList{
     kCreateModelAtomTableSql,
     kCreateModelBondTableSql,
     kCreateModelAtomLocalTableSql,
-    kCreateModelBondLocalTableSql,
     kCreateModelAtomPosteriorTableSql,
-    kCreateModelBondPosteriorTableSql,
-    kCreateModelAtomGroupTableSql,
-    kCreateModelBondGroupTableSql
+    kCreateModelAtomGroupTableSql
 };
 
-inline constexpr std::array<std::string_view, 12> kModelTablesScopedByKey{
+inline constexpr std::array<std::string_view, 9> kModelTablesScopedByKey{
     "model_chain_map",
     "model_component",
     "model_component_atom",
@@ -327,20 +261,16 @@ inline constexpr std::array<std::string_view, 12> kModelTablesScopedByKey{
     "model_atom",
     "model_bond",
     "model_atom_local_potential",
-    "model_bond_local_potential",
     "model_atom_posterior",
-    "model_bond_posterior",
-    "model_atom_group_potential",
-    "model_bond_group_potential"
+    "model_atom_group_potential"
 };
 
 inline constexpr auto kUpsertModelObjectSql = R"sql(
     INSERT INTO model_object (
-        key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
+        key_tag, pdb_id, emd_id, map_resolution, resolution_method,
         standard_average_qscore, reference_height, reference_offset
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(key_tag) DO UPDATE SET
-        atom_size = excluded.atom_size,
         pdb_id = excluded.pdb_id,
         emd_id = excluded.emd_id,
         map_resolution = excluded.map_resolution,
@@ -381,22 +311,23 @@ inline constexpr auto kInsertModelAtomSql = R"sql(
     INSERT OR REPLACE INTO model_atom (
         key_tag, serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
         occupancy, temperature, element, structure, is_special_atom,
+        is_selected,
         position_x, position_y, position_z, component_key, atom_key,
         standard_qscore
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelBondSql = R"sql(
     INSERT OR REPLACE INTO model_bond (
         key_tag, atom_serial_id_1, atom_serial_id_2,
-        bond_key, bond_type, bond_order, is_special_bond
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        bond_key, bond_type, bond_order, is_special_bond, is_selected
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     INSERT OR REPLACE INTO model_atom_local_potential (
-        key_tag, serial_id, raw_sampling_size, raw_distance_and_map_value_list,
-        peeling_sampling_size, peeling_distance_and_map_value_list,
+        key_tag, serial_id, raw_distance_and_map_value_list,
+        peeling_distance_and_map_value_list,
         amplitude_estimate_ols_1st, width_estimate_ols_1st, intercept_estimate_ols_1st,
         amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st,
         intercept_estimate_mdpde_1st, alpha_r_1st,
@@ -408,8 +339,8 @@ inline constexpr auto kInsertModelAtomLocalSql = R"sql(
         intercept_estimate_mdpde_3rd, alpha_r_3rd,
         neighbor_count_for_peeling
     ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
@@ -423,7 +354,7 @@ inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
 
 inline constexpr auto kInsertModelAtomGroupSql = R"sql(
     INSERT OR REPLACE INTO model_atom_group_potential (
-        key_tag, group_key, member_size,
+        key_tag, group_key,
         amplitude_estimate_mean_1st, width_estimate_mean_1st, intercept_estimate_mean_1st,
         amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
         amplitude_estimate_prior_1st, width_estimate_prior_1st, intercept_estimate_prior_1st,
@@ -441,14 +372,14 @@ inline constexpr auto kInsertModelAtomGroupSql = R"sql(
         intercept_variance_prior_3rd, alpha_g_3rd
     ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
 inline constexpr auto kDeleteRowsForKeySqlSuffix = " WHERE key_tag = ?;"sv;
 
 inline constexpr auto kSelectModelObjectSql = R"sql(
-    SELECT key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
+    SELECT key_tag, pdb_id, emd_id, map_resolution, resolution_method,
         standard_average_qscore, reference_height, reference_offset
     FROM model_object WHERE key_tag = ? LIMIT 1;
 )sql"sv;
@@ -481,6 +412,7 @@ inline constexpr auto kSelectModelAtomSql = R"sql(
     SELECT
         serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
         occupancy, temperature, element, structure, is_special_atom,
+        is_selected,
         position_x, position_y, position_z, component_key, atom_key,
         standard_qscore
     FROM model_atom WHERE key_tag = ?
@@ -488,15 +420,15 @@ inline constexpr auto kSelectModelAtomSql = R"sql(
 )sql"sv;
 
 inline constexpr auto kSelectModelBondSql = R"sql(
-    SELECT atom_serial_id_1, atom_serial_id_2, bond_key, bond_type, bond_order, is_special_bond
+    SELECT atom_serial_id_1, atom_serial_id_2, bond_key, bond_type, bond_order,
+        is_special_bond, is_selected
     FROM model_bond WHERE key_tag = ?
     ORDER BY atom_serial_id_1, atom_serial_id_2;
 )sql"sv;
 
 inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     SELECT
-        serial_id, raw_sampling_size, raw_distance_and_map_value_list,
-        COALESCE(peeling_sampling_size, 0), peeling_distance_and_map_value_list,
+        serial_id, raw_distance_and_map_value_list, peeling_distance_and_map_value_list,
         amplitude_estimate_ols_1st, width_estimate_ols_1st, intercept_estimate_ols_1st,
         amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st,
         intercept_estimate_mdpde_1st, alpha_r_1st,
@@ -521,7 +453,7 @@ inline constexpr auto kSelectModelAtomPosteriorSql = R"sql(
 
 inline constexpr auto kSelectModelAtomGroupSql = R"sql(
     SELECT
-        group_key, member_size,
+        group_key,
         amplitude_estimate_mean_1st, width_estimate_mean_1st, intercept_estimate_mean_1st,
         amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
         amplitude_estimate_prior_1st, width_estimate_prior_1st, intercept_estimate_prior_1st,
@@ -583,14 +515,13 @@ void SaveModelObjectRow(
     batch.Execute([&](SQLiteWrapper & statement_db)
     {
         statement_db.Bind<std::string>(1, key_tag);
-        statement_db.Bind<int>(2, static_cast<int>(model_obj.GetNumberOfAtom()));
-        statement_db.Bind<std::string>(3, model_obj.GetPdbID());
-        statement_db.Bind<std::string>(4, model_obj.GetEmdID());
-        statement_db.Bind<double>(5, model_obj.GetResolution());
-        statement_db.Bind<std::string>(6, model_obj.GetResolutionMethod());
-        statement_db.Bind<double>(7, model_obj.GetStandardAverageQScore());
-        statement_db.Bind<double>(8, model_obj.GetReferenceHeight());
-        statement_db.Bind<double>(9, model_obj.GetReferenceOffset());
+        statement_db.Bind<std::string>(2, model_obj.GetPdbID());
+        statement_db.Bind<std::string>(3, model_obj.GetEmdID());
+        statement_db.Bind<double>(4, model_obj.GetResolution());
+        statement_db.Bind<std::string>(5, model_obj.GetResolutionMethod());
+        statement_db.Bind<double>(6, model_obj.GetStandardAverageQScore());
+        statement_db.Bind<double>(7, model_obj.GetReferenceHeight());
+        statement_db.Bind<double>(8, model_obj.GetReferenceOffset());
     });
 }
 
@@ -705,6 +636,8 @@ void SaveAtomObjectList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomSql) };
+    const std::unordered_set<const AtomObject *> selected_atoms{
+        model_obj.GetSelectedAtoms().begin(), model_obj.GetSelectedAtoms().end() };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
         batch.Execute([&](SQLiteWrapper & statement_db)
@@ -721,12 +654,14 @@ void SaveAtomObjectList(
             statement_db.Bind<int>(10, static_cast<int>(atom_object->GetElement()));
             statement_db.Bind<int>(11, static_cast<int>(atom_object->GetStructure()));
             statement_db.Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
-            statement_db.Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
-            statement_db.Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
-            statement_db.Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(2)));
-            statement_db.Bind<int>(16, static_cast<int>(atom_object->GetComponentKey()));
-            statement_db.Bind<int>(17, static_cast<int>(atom_object->GetAtomKey()));
-            statement_db.Bind<double>(18, atom_object->GetStandardQScore());
+            statement_db.Bind<int>(
+                13, static_cast<int>(selected_atoms.contains(atom_object.get())));
+            statement_db.Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(0)));
+            statement_db.Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(1)));
+            statement_db.Bind<double>(16, static_cast<double>(atom_object->GetPosition().at(2)));
+            statement_db.Bind<int>(17, static_cast<int>(atom_object->GetComponentKey()));
+            statement_db.Bind<int>(18, static_cast<int>(atom_object->GetAtomKey()));
+            statement_db.Bind<double>(19, atom_object->GetStandardQScore());
         });
     }
 }
@@ -737,6 +672,8 @@ void SaveBondObjectList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondSql) };
+    const std::unordered_set<const BondObject *> selected_bonds{
+        model_obj.GetSelectedBonds().begin(), model_obj.GetSelectedBonds().end() };
     for (const auto & bond_object : model_obj.GetBondList())
     {
         batch.Execute([&](SQLiteWrapper & statement_db)
@@ -748,6 +685,8 @@ void SaveBondObjectList(
             statement_db.Bind<int>(5, static_cast<int>(bond_object->GetBondType()));
             statement_db.Bind<int>(6, static_cast<int>(bond_object->GetBondOrder()));
             statement_db.Bind<int>(7, static_cast<int>(bond_object->GetSpecialBondFlag()));
+            statement_db.Bind<int>(
+                8, static_cast<int>(selected_bonds.contains(bond_object.get())));
         });
     }
 }
@@ -770,20 +709,14 @@ void LoadModelObjectRow(
         throw std::runtime_error("Step failed: " + database.ErrorMessage());
     }
 
-    const auto atom_size{ database.GetColumn<int>(1) };
     model_obj.SetKeyTag(database.GetColumn<std::string>(0));
-    model_obj.SetPdbID(database.GetColumn<std::string>(2));
-    model_obj.SetEmdID(database.GetColumn<std::string>(3));
-    model_obj.SetResolution(database.GetColumn<double>(4));
-    model_obj.SetResolutionMethod(database.GetColumn<std::string>(5));
-    model_obj.SetStandardAverageQScore(database.GetColumn<double>(6));
-    model_obj.SetReferenceHeight(database.GetColumn<double>(7));
-    model_obj.SetReferenceOffset(database.GetColumn<double>(8));
-    if (atom_size != static_cast<int>(model_obj.GetNumberOfAtom()))
-    {
-        throw std::runtime_error(
-            "The number of atoms in the model object does not match the database record.");
-    }
+    model_obj.SetPdbID(database.GetColumn<std::string>(1));
+    model_obj.SetEmdID(database.GetColumn<std::string>(2));
+    model_obj.SetResolution(database.GetColumn<double>(3));
+    model_obj.SetResolutionMethod(database.GetColumn<std::string>(4));
+    model_obj.SetStandardAverageQScore(database.GetColumn<double>(5));
+    model_obj.SetReferenceHeight(database.GetColumn<double>(6));
+    model_obj.SetReferenceOffset(database.GetColumn<double>(7));
 }
 
 void LoadChainMap(
@@ -937,7 +870,8 @@ void LoadComponentBondEntryList(
 
 std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
     SQLiteWrapper & database,
-    const std::string & key_tag)
+    const std::string & key_tag,
+    std::unordered_set<int> & selected_atom_serial_ids)
 {
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
 
@@ -968,13 +902,17 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
         atom_object->SetElement(static_cast<Element>(database.GetColumn<int>(8)));
         atom_object->SetStructure(static_cast<Structure>(database.GetColumn<int>(9)));
         atom_object->SetSpecialAtomFlag(static_cast<bool>(database.GetColumn<int>(10)));
+        if (static_cast<bool>(database.GetColumn<int>(11)))
+        {
+            selected_atom_serial_ids.insert(atom_object->GetSerialID());
+        }
         atom_object->SetPosition(
-            static_cast<float>(database.GetColumn<double>(11)),
             static_cast<float>(database.GetColumn<double>(12)),
-            static_cast<float>(database.GetColumn<double>(13)));
-        atom_object->SetComponentKey(database.GetColumn<ComponentKey>(14));
-        atom_object->SetAtomKey(database.GetColumn<AtomKey>(15));
-        atom_object->SetStandardQScore(database.GetColumn<double>(16));
+            static_cast<float>(database.GetColumn<double>(13)),
+            static_cast<float>(database.GetColumn<double>(14)));
+        atom_object->SetComponentKey(database.GetColumn<ComponentKey>(15));
+        atom_object->SetAtomKey(database.GetColumn<AtomKey>(16));
+        atom_object->SetStandardQScore(database.GetColumn<double>(17));
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;
@@ -983,7 +921,8 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
 std::vector<std::unique_ptr<BondObject>> LoadBondObjectList(
     SQLiteWrapper & database,
     const std::string & key_tag,
-    const std::vector<std::unique_ptr<AtomObject>> & atom_list)
+    const std::vector<std::unique_ptr<AtomObject>> & atom_list,
+    std::set<std::pair<int, int>> & selected_bond_serial_pairs)
 {
     std::vector<std::unique_ptr<BondObject>> bond_object_list;
     std::unordered_map<int, AtomObject *> atom_map;
@@ -1008,13 +947,19 @@ std::vector<std::unique_ptr<BondObject>> LoadBondObjectList(
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
-        auto atom_object_1{ atom_map.at(database.GetColumn<int>(0)) };
-        auto atom_object_2{ atom_map.at(database.GetColumn<int>(1)) };
+        const auto atom_serial_id_1{ database.GetColumn<int>(0) };
+        const auto atom_serial_id_2{ database.GetColumn<int>(1) };
+        auto atom_object_1{ atom_map.at(atom_serial_id_1) };
+        auto atom_object_2{ atom_map.at(atom_serial_id_2) };
         auto bond_object{ std::make_unique<BondObject>(atom_object_1, atom_object_2) };
         bond_object->SetBondKey(database.GetColumn<BondKey>(2));
         bond_object->SetBondType(static_cast<BondType>(database.GetColumn<int>(3)));
         bond_object->SetBondOrder(static_cast<BondOrder>(database.GetColumn<int>(4)));
         bond_object->SetSpecialBondFlag(static_cast<bool>(database.GetColumn<int>(5)));
+        if (static_cast<bool>(database.GetColumn<int>(6)))
+        {
+            selected_bond_serial_pairs.emplace(atom_serial_id_1, atom_serial_id_2);
+        }
         bond_object_list.emplace_back(std::move(bond_object));
     }
     return bond_object_list;
@@ -1034,18 +979,31 @@ void SaveStructure(
     SaveBondObjectList(database, model_obj, key_tag);
 }
 
-ModelObjectParts LoadStructure(
+struct LoadedModelStructure
+{
+    ModelObjectParts parts;
+    std::unordered_set<int> selected_atom_serial_ids;
+    std::set<std::pair<int, int>> selected_bond_serial_pairs;
+};
+
+LoadedModelStructure LoadStructure(
     SQLiteWrapper & database,
     const std::string & key_tag)
 {
-    ModelObjectParts parts;
+    LoadedModelStructure structure;
+    auto & parts{ structure.parts };
     LoadChemicalComponentEntryList(database, parts, key_tag);
     LoadComponentAtomEntryList(database, parts, key_tag);
     LoadComponentBondEntryList(database, parts, key_tag);
-    parts.atom_list = LoadAtomObjectList(database, key_tag);
-    parts.bond_list = LoadBondObjectList(database, key_tag, parts.atom_list);
+    parts.atom_list = LoadAtomObjectList(
+        database, key_tag, structure.selected_atom_serial_ids);
+    parts.bond_list = LoadBondObjectList(
+        database,
+        key_tag,
+        parts.atom_list,
+        structure.selected_bond_serial_pairs);
     LoadChainMap(database, parts, key_tag);
-    return parts;
+    return structure;
 }
 
 void SaveAtomLocalPotentialEntryList(
@@ -1063,12 +1021,10 @@ void SaveAtomLocalPotentialEntryList(
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<int>(3, entry->RawSamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
-                4, entry->RawSamplingEntries());
-            statement_db.Bind<int>(5, entry->PeelingSamplingEntryCount());
+                3, entry->RawSamplingEntries());
             statement_db.Bind<LocalPotentialSampleList>(
-                6, entry->PeelingSamplingEntries());
+                4, entry->PeelingSamplingEntries());
             const auto bind_gaussian_result = [&entry, &statement_db](
                 int first_parameter_index,
                 FittingStage stage)
@@ -1096,10 +1052,10 @@ void SaveAtomLocalPotentialEntryList(
                     first_parameter_index + 6,
                     gaussian_result.alpha_r);
             };
-            bind_gaussian_result(7, FittingStage::First);
-            bind_gaussian_result(14, FittingStage::Second);
-            bind_gaussian_result(21, FittingStage::Third);
-            statement_db.Bind<int>(28, entry->NeighborCountForPeeling());
+            bind_gaussian_result(5, FittingStage::First);
+            bind_gaussian_result(12, FittingStage::Second);
+            bind_gaussian_result(19, FittingStage::Third);
+            statement_db.Bind<int>(26, entry->NeighborCountForPeeling());
         });
     }
 }
@@ -1155,11 +1111,6 @@ void SaveAtomGroupPotentialEntryList(
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<GroupKey>(2, group_key);
-            statement_db.Bind<int>(
-                3,
-                static_cast<int>(group_entry.GetMemberCount(
-                    FittingStage::Third,
-                    group_key)));
             const auto bind_group_result{
                 [&](FittingStage stage, int first_parameter_index)
                 {
@@ -1201,9 +1152,9 @@ void SaveAtomGroupPotentialEntryList(
                         group_entry.GetAlphaG(stage, group_key));
                 }
             };
-            bind_group_result(FittingStage::First, 4);
-            bind_group_result(FittingStage::Second, 17);
-            bind_group_result(FittingStage::Third, 30);
+            bind_group_result(FittingStage::First, 3);
+            bind_group_result(FittingStage::Second, 16);
+            bind_group_result(FittingStage::Third, 29);
         });
     }
 }
@@ -1272,13 +1223,10 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
 
         auto entry{ std::make_unique<LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
-        const auto raw_sampling_size{ database.GetColumn<int>(1) };
         entry->SetRawSamplingEntries(
-            database.GetLocalPotentialSampleListColumn(2, raw_sampling_size));
-        const auto peeling_sampling_size{ database.GetColumn<int>(3) };
+            database.GetColumn<LocalPotentialSampleList>(1));
         entry->SetPeelingSamplingEntries(
-            database.GetLocalPotentialSampleListColumn(
-                4, peeling_sampling_size));
+            database.GetColumn<LocalPotentialSampleList>(2));
         const auto read_gaussian_result = [&database](int first_column_index)
         {
             LocalGaussianResult gaussian_result;
@@ -1302,14 +1250,14 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         };
         entry->SetGaussianResult(
             FittingStage::First,
-            read_gaussian_result(5));
+            read_gaussian_result(3));
         entry->SetGaussianResult(
             FittingStage::Second,
-            read_gaussian_result(12));
+            read_gaussian_result(10));
         entry->SetGaussianResult(
             FittingStage::Third,
-            read_gaussian_result(19));
-        entry->SetNeighborCountForPeeling(database.GetColumn<int>(26));
+            read_gaussian_result(17));
+        entry->SetNeighborCountForPeeling(database.GetColumn<int>(24));
         entry_map[serial_id] = std::move(entry);
     }
 
@@ -1339,11 +1287,9 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        const auto member_count{ static_cast<size_t>(database.GetColumn<int>(1)) };
         const auto load_group_result{
             [&](FittingStage stage, int first_column_index)
             {
-                group_entry.ReserveMembers(stage, group_key, member_count);
                 GroupGaussianResult group_result;
                 group_result.mean = GaussianModel3D{
                     database.GetColumn<double>(first_column_index),
@@ -1368,9 +1314,9 @@ void LoadAtomGroupPotentialEntryList(
                 group_entry.SetGaussianResult(stage, group_key, group_result);
             }
         };
-        load_group_result(FittingStage::First, 2);
-        load_group_result(FittingStage::Second, 15);
-        load_group_result(FittingStage::Third, 28);
+        load_group_result(FittingStage::First, 1);
+        load_group_result(FittingStage::Second, 14);
+        load_group_result(FittingStage::Third, 27);
     }
 
     for (auto & atom : model_obj.GetSelectedAtoms())
@@ -1407,8 +1353,6 @@ void LoadAnalysis(
     ModelAnalysisData::Of(model_obj).Clear();
 
     auto atom_entry_map{ LoadAtomLocalPotentialEntryMap(database, key_tag) };
-    std::unordered_set<int> selected_serial_ids;
-    selected_serial_ids.reserve(atom_entry_map.size());
     for (const auto & atom_object : model_obj.GetAtomList())
     {
         const auto serial_id{ atom_object->GetSerialID() };
@@ -1420,12 +1364,7 @@ void LoadAnalysis(
 
         ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(
             *atom_object, std::move(iter->second));
-        selected_serial_ids.insert(serial_id);
     }
-    model_obj.SelectAtoms([&selected_serial_ids](const AtomObject & atom)
-    {
-        return selected_serial_ids.find(atom.GetSerialID()) != selected_serial_ids.end();
-    });
 
     LoadAtomGroupPotentialEntryList(database, model_obj, key_tag);
 }
@@ -1461,8 +1400,18 @@ std::unique_ptr<ModelObject> Load(
     const std::string & key_tag)
 {
     ScopeTimer timer{ "model_storage::Load" };
-    auto parts{ LoadStructure(database, key_tag) };
-    auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(parts))) };
+    auto structure{ LoadStructure(database, key_tag) };
+    auto model_object{
+        std::make_unique<ModelObject>(AssembleModelObject(std::move(structure.parts))) };
+    model_object->SelectAtoms([&structure](const AtomObject & atom)
+    {
+        return structure.selected_atom_serial_ids.contains(atom.GetSerialID());
+    });
+    model_object->SelectBonds([&structure](const BondObject & bond)
+    {
+        return structure.selected_bond_serial_pairs.contains(
+            { bond.GetAtomSerialID1(), bond.GetAtomSerialID2() });
+    });
     LoadModelObjectRow(database, *model_object, key_tag);
     LoadAnalysis(database, *model_object, key_tag);
     return model_object;

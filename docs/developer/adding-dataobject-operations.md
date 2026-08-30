@@ -5,7 +5,7 @@ This guide covers how to extend behavior around the current top-level `DataObjec
 - `ModelObject`
 - `MapObject`
 
-It also covers where file loading, database loading, and command-side orchestration belong in the current codebase.
+It also covers where file loading, model database loading, and command-side orchestration belong in the current codebase.
 
 Related references:
 
@@ -45,12 +45,9 @@ If you change database persistence behavior:
 
 - `/include/rhbm_gem/data/io/DataRepository.hpp`
 - `/src/data/io/DataRepository.cpp`
-- `/src/data/io/sqlite/SQLitePersistence.*`
 - `/src/data/io/sqlite/ModelObjectStorage.*`
 - `/tests/data/DataObjectPersistence_test.cpp`
-- `/tests/data/SQLitePersistenceTypedApi_test.cpp`
-- `/tests/data/DataObjectSchemaBootstrap_test.cpp`
-- `/tests/data/DataObjectSchemaCompatibility_test.cpp`
+- `/tests/data/DataObjectSchemaLifecycle_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`
 
 If you change command-side loading or persistence orchestration:
@@ -75,9 +72,7 @@ For shared typed helpers:
   - `ReadModel(...)`
   - `ReadMap(...)`
   - `DataRepository::LoadModel(...)`
-  - `DataRepository::LoadMap(...)`
   - `DataRepository::SaveModel(...)`
-  - `DataRepository::SaveMap(...)`
 
 Example pattern:
 
@@ -100,8 +95,8 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 Typical command flow:
 
 1. for file-backed input, call `ReadModel(...)` or `ReadMap(...)` directly and assign any command-local `key_tag`
-2. for database-backed input, create `DataRepository repository{database_path}` in the command workflow and call `LoadModel(...)` or `LoadMap(...)`
-3. when persisting a command-owned object, call `DataRepository::SaveModel(...)` or `DataRepository::SaveMap(...)`
+2. for a database-backed model, create `DataRepository repository{database_path}` in the command workflow and call `LoadModel(...)`
+3. when persisting a command-owned model, call `DataRepository::SaveModel(...)`; maps remain file-backed
 4. keep loaded `shared_ptr` objects in typed command-owned members
 5. wrap failures with command-specific context near the orchestration boundary
 6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
@@ -117,10 +112,10 @@ Add or update tests for:
 - file format matrix and unsupported write behavior
 - uppercase extension dispatch
 - malformed file input
-- database round-trip for model and map objects
+- database round-trip for model structure, selection, and analysis
 - renamed persisted key semantics
 - missing database key behavior
-- schema bootstrap and invalid schema rejection
+- schema v13 bootstrap and invalid or legacy schema rejection
 - command-cache type mismatch behavior when command-local routing changes
 - command-level failure context when file or database loading fails
 
@@ -132,9 +127,7 @@ Common suites:
 - `/tests/data/DataObjectRuntimeBehavior_test.cpp`
 - `/tests/data/DataObjectDispatchAndIngestion_test.cpp`
 - `/tests/data/DataObjectPersistence_test.cpp`
-- `/tests/data/SQLitePersistenceTypedApi_test.cpp`
-- `/tests/data/DataObjectSchemaBootstrap_test.cpp`
-- `/tests/data/DataObjectSchemaCompatibility_test.cpp`
+- `/tests/data/DataObjectSchemaLifecycle_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`
 - `/tests/core/command/`
 

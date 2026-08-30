@@ -115,14 +115,13 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
-    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
-    editor.SetRawSamplingEntries({
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
         {2.0f, SamplingPoint{ 0.1f }},
         {4.0f, SamplingPoint{ 0.4f }},
         {6.0f, SamplingPoint{ 0.8f }},
     });
 
-    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
     const auto & raw_sampling_entries{ view.GetRawSamplingEntries() };
     const auto map_value_range{
         lps::ComputeResponseRange(raw_sampling_entries, 0.0)

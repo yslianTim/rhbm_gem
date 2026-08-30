@@ -17,9 +17,7 @@ class AtomLocalPotentialView
     const AtomObject * m_atom_object{ nullptr };
 
 public:
-    AtomLocalPotentialView() = default;
     static AtomLocalPotentialView For(const AtomObject & atom_object);
-    static AtomLocalPotentialView RequireFor(const AtomObject & atom_object);
     bool IsAvailable() const;
     const LocalGaussianResult & GetGaussianResult(FittingStage stage) const;
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;
@@ -40,7 +38,6 @@ private:
     explicit AtomLocalPotentialView(const AtomObject * atom_object);
     const LocalPotentialEntry * FindEntry() const;
     const LocalPotentialEntry & RequireEntry(const char * context) const;
-
 };
 
 } // namespace rhbm_gem

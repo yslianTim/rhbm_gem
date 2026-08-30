@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <string>
 #include <vector>
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -19,7 +18,6 @@ class ModelAnalysisView
     const ModelObject & m_model_object;
 
 public:
-    explicit ModelAnalysisView(const ModelObject & model_object);
     bool HasGroupedAnalysisData(FittingStage stage) const;
     bool HasAtomGroup(FittingStage stage, GroupKey group_key) const;
     const GaussianModel3D & GetAtomGroupMean(FittingStage stage, GroupKey group_key) const;
@@ -34,11 +32,10 @@ public:
     double GetAtomAlphaR(FittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaG(FittingStage stage, GroupKey group_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys(FittingStage stage) const;
-    std::string GetAtomCountingSummary() const;
-    std::string GetAtomGroupingSummary(FittingStage stage) const;
-    std::string GetGroupPriorSpotSummary(FittingStage stage) const;
-    std::string GetLocalFittingResultCsv(bool peeling_applied) const;
-    
+
+private:
+    explicit ModelAnalysisView(const ModelObject & model_object);
+    friend class ModelObject;
 };
 
 } // namespace rhbm_gem

@@ -118,7 +118,7 @@ void RunAtomOutlierDumping(
         for (auto * atom : model_object->GetSelectedAtoms())
         {
             const auto & result{
-                AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                AtomLocalPotentialView::For(*atom).GetGaussianResult(
                     FittingStage::Third)
             };
             if (!result.posterior.has_value() || !result.is_outlier) continue;
@@ -281,7 +281,7 @@ void RunGausEstimatesDumping(
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto * atom : model_object->GetSelectedAtoms())
         {
-            const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
+            const auto entry{ AtomLocalPotentialView::For(*atom) };
             const auto & estimate{
                 entry.GetEstimateMDPDE(FittingStage::Third)
             };
@@ -318,7 +318,7 @@ void RunGroupGausEstimatesDumping(
 {
     for (const auto & model_object : model_object_list)
     {
-        const ModelAnalysisView entry_view{ *model_object };
+        const auto entry_view{ model_object->GetAnalysisView() };
         const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
         const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);

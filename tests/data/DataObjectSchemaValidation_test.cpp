@@ -4,8 +4,6 @@
 #include <stdexcept>
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include "io/sqlite/SQLitePersistence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -14,28 +12,42 @@ namespace rg = rhbm_gem;
 namespace {
 
 template <typename MutateFn>
-void ExpectNormalizedSchemaValidationFailure(
+void ExpectCurrentSchemaValidationFailure(
     const char * temp_dir_name,
     const char * database_name,
     MutateFn mutate_database)
 {
     const command_test::ScopedTempDir temp_dir{ temp_dir_name };
     const auto database_path{ temp_dir.path() / database_name };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    }
+    { rg::DataRepository repository{ database_path }; }
+    ASSERT_EQ(data_test::GetUserVersion(database_path), 13);
 
     mutate_database(database_path);
-    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 13);
 }
+
+void RecreateChainMapTable(
+    const std::filesystem::path & database_path,
+    const std::string & table_constraints)
+{
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "DROP TABLE model_chain_map;");
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "CREATE TABLE model_chain_map ("
+        "key_tag TEXT, entity_id TEXT, chain_ordinal INTEGER, chain_id TEXT, "
+        + table_constraints + ");");
+}
+
+} // namespace
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingPeelingNeighborCountColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_peeling_neighbor_count",
-        "missing_peeling_neighbor_count.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_neighbor_count",
+        "missing_neighbor_count.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
@@ -47,9 +59,9 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingPeelingNeighborCountCol
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingLocalGaussianStageColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_local_gaussian_stage",
-        "missing_local_gaussian_stage.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_local_stage",
+        "missing_local_stage.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
@@ -60,9 +72,9 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingLocalGaussianStageColum
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColumn)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_legacy_local_gaussian_column",
-        "legacy_local_gaussian_column.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_legacy_local_column",
+        "legacy_local_column.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSql(
@@ -74,52 +86,48 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColu
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianStageColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_group_gaussian_stage",
-        "missing_group_gaussian_stage.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_group_stage",
+        "missing_group_stage.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
-                "ALTER TABLE model_atom_group_potential "
-                "DROP COLUMN alpha_g_2nd;");
+                "ALTER TABLE model_atom_group_potential DROP COLUMN alpha_g_2nd;");
         });
 }
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyGroupGaussianColumn)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_legacy_group_gaussian_column",
-        "legacy_group_gaussian_column.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_legacy_group_column",
+        "legacy_group_column.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSql(
                 database_path,
                 "ALTER TABLE model_atom_group_potential "
-                "ADD COLUMN alpha_g DOUBLE DEFAULT 0.0;");
+                "ADD COLUMN member_size INTEGER;");
         });
 }
 
-} // namespace
-
-TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows)
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingRequiredTableThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_v2_table",
-        "missing_v2.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_table",
+        "missing_table.sqlite",
         [](const std::filesystem::path & database_path)
         {
-            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-            data_test::ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
-            data_test::SetUserVersion(database_path, 2);
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path, "DROP TABLE model_atom_posterior;");
         });
 }
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingStandardQScoreColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_standard_qscore",
-        "missing_standard_qscore.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_qscore",
+        "missing_qscore.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
@@ -130,7 +138,7 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingStandardQScoreColumnThr
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceHeightColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
+    ExpectCurrentSchemaValidationFailure(
         "data_schema_missing_reference_height",
         "missing_reference_height.sqlite",
         [](const std::filesystem::path & database_path)
@@ -143,7 +151,7 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceHeightColumnTh
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceOffsetColumnThrows)
 {
-    ExpectNormalizedSchemaValidationFailure(
+    ExpectCurrentSchemaValidationFailure(
         "data_schema_missing_reference_offset",
         "missing_reference_offset.sqlite",
         [](const std::filesystem::path & database_path)
@@ -154,114 +162,77 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceOffsetColumnTh
         });
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsMixedSamplingColumnLayout)
+TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsUnexpectedTable)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_mixed_sampling_columns",
-        "mixed_sampling_columns.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_unexpected_table",
+        "unexpected_table.sqlite",
         [](const std::filesystem::path & database_path)
         {
-            data_test::ExecuteSqlWithForeignKeysOff(
-                database_path,
-                "ALTER TABLE model_atom_local_potential "
-                "RENAME COLUMN raw_sampling_size TO sampling_size;");
-        });
-}
-
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
-{
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_missing_fk",
-        "missing_fk.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-            data_test::ExecuteSql(database_path, "DROP TABLE map_list;");
             data_test::ExecuteSql(
                 database_path,
-                "CREATE TABLE map_list ("
-                "key_tag TEXT PRIMARY KEY, "
-                "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
-                "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
-                "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
-                "map_value_array BLOB"
-                ");");
-            data_test::SetUserVersion(database_path, 2);
-
-            EXPECT_FALSE(
-                data_test::HasForeignKey(
-                    database_path,
-                    "map_list",
-                    "key_tag",
-                    "object_catalog",
-                    "key_tag",
-                    "CASCADE"));
-        });
-}
-
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns)
-{
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_bad_catalog_columns",
-        "bad_catalog_columns.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-            data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
-            data_test::ExecuteSqlWithForeignKeysOff(
-                database_path,
                 "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
-            data_test::SetUserVersion(database_path, 2);
         });
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue)
+TEST(DataObjectSchemaValidationTest, CurrentSchemaValidationRejectsMissingForeignKeys)
 {
-    ExpectNormalizedSchemaValidationFailure(
-        "data_schema_bad_catalog_type",
-        "bad_catalog_type.sqlite",
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_missing_foreign_key",
+        "missing_foreign_key.sqlite",
         [](const std::filesystem::path & database_path)
         {
-            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-            data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
-            data_test::ExecuteSqlWithForeignKeysOff(
+            RecreateChainMapTable(
                 database_path,
-                "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY, object_type TEXT NOT NULL);");
-            data_test::ExecuteSqlWithForeignKeysOff(
+                "PRIMARY KEY (key_tag, entity_id, chain_ordinal)");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaValidationRejectsWrongPrimaryKey)
+{
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_wrong_primary_key",
+        "wrong_primary_key.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            RecreateChainMapTable(
                 database_path,
-                "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
-            data_test::SetUserVersion(database_path, 2);
+                "PRIMARY KEY (key_tag), "
+                "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE");
         });
 }
 
 TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_fk_orphan" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_orphan_child" };
     const auto database_path{ temp_dir.path() / "orphan.sqlite" };
-    rg::SQLitePersistence database_manager{ database_path };
+    { rg::DataRepository repository{ database_path }; }
 
     EXPECT_THROW(
         data_test::ExecuteSql(
             database_path,
-            "INSERT INTO model_chain_map(key_tag, entity_id, chain_ordinal, chain_id) "
-            "VALUES ('missing', '1', 0, 'A');"),
+            "INSERT INTO model_atom(key_tag, serial_id, is_selected) "
+            "VALUES ('missing', 1, 0);"),
         std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows)
+TEST(DataObjectSchemaValidationTest, DeletingModelRootCascadesPayloadRows)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_catalog_cascade" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_model_cascade" };
     const auto database_path{ temp_dir.path() / "cascade.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    auto model{ data_test::MakeModelWithBond() };
 
-    rg::DataRepository repository{ database_path };
-    auto model{ rg::ReadModel(model_path) };
-    model->SetKeyTag("model");
-    repository.SaveModel(*model, "model");
+    {
+        rg::DataRepository repository{ database_path };
+        repository.SaveModel(*model, "model");
+    }
+    ASSERT_GT(data_test::CountRows(database_path, "model_atom", "model"), 0);
 
-    data_test::ExecuteSql(database_path, "DELETE FROM object_catalog WHERE key_tag = 'model';");
+    data_test::ExecuteSql(
+        database_path,
+        "DELETE FROM model_object WHERE key_tag = 'model';");
 
-    EXPECT_EQ(data_test::CountRows(database_path, "object_catalog"), 0);
     EXPECT_EQ(data_test::CountRows(database_path, "model_object"), 0);
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom"), 0);
+    EXPECT_EQ(data_test::CountRows(database_path, "model_bond"), 0);
 }

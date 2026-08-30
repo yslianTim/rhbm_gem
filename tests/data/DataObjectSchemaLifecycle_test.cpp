@@ -1,13 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <filesystem>
 #include <stdexcept>
+#include <string_view>
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
-#include "io/sqlite/SQLitePersistence.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
@@ -16,75 +14,27 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-template <typename SetupFn>
-void ExpectSchemaOpenFails(
-    const char * temp_dir_name,
-    const char * database_name,
-    SetupFn setup_database)
-{
-    const command_test::ScopedTempDir temp_dir{ temp_dir_name };
-    const auto database_path{ temp_dir.path() / database_name };
-    setup_database(database_path);
-    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
-}
-
-int QuerySingleInt(const std::filesystem::path & database_path, const std::string & sql)
+void CreateVersionedMarkerDatabase(
+    const std::filesystem::path & database_path,
+    int user_version)
 {
     rg::SQLiteWrapper database{ database_path };
-    database.Prepare(sql);
-    rg::SQLiteWrapper::StatementGuard guard(database);
-    if (database.StepNext() != rg::SQLiteWrapper::StepRow())
-    {
-        throw std::runtime_error("Expected one integer row.");
-    }
-    return database.GetColumn<int>(0);
+    database.Execute("CREATE TABLE legacy_marker (value INTEGER PRIMARY KEY);");
+    database.Execute("INSERT INTO legacy_marker(value) VALUES (1);");
+    database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
 }
 
-void RecreateVersion4AtomResultTables(const std::filesystem::path & database_path)
+void ExpectVersionedDatabaseRejectedWithoutMutation(int user_version)
 {
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_posterior;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE model_atom_posterior ("
-        "key_tag TEXT, "
-        "class_key TEXT, "
-        "serial_id INTEGER, "
-        "amplitude_estimate_posterior DOUBLE, "
-        "width_estimate_posterior DOUBLE, "
-        "intercept_estimate_posterior DOUBLE, "
-        "amplitude_variance_posterior DOUBLE, "
-        "width_variance_posterior DOUBLE, "
-        "intercept_variance_posterior DOUBLE, "
-        "outlier_tag INTEGER, "
-        "statistical_distance DOUBLE, "
-        "PRIMARY KEY (key_tag, class_key, serial_id), "
-        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
-        ");");
+    const command_test::ScopedTempDir temp_dir{
+        "data_schema_reject_" + std::to_string(user_version) };
+    const auto database_path{ temp_dir.path() / "legacy.sqlite" };
+    CreateVersionedMarkerDatabase(database_path, user_version);
 
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_group_potential;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE model_atom_group_potential ("
-        "key_tag TEXT, "
-        "class_key TEXT, "
-        "group_key INTEGER, "
-        "member_size INTEGER, "
-        "amplitude_estimate_mean DOUBLE, "
-        "width_estimate_mean DOUBLE, "
-        "intercept_estimate_mean DOUBLE, "
-        "amplitude_estimate_mdpde DOUBLE, "
-        "width_estimate_mdpde DOUBLE, "
-        "intercept_estimate_mdpde DOUBLE, "
-        "amplitude_estimate_prior DOUBLE, "
-        "width_estimate_prior DOUBLE, "
-        "intercept_estimate_prior DOUBLE, "
-        "amplitude_variance_prior DOUBLE, "
-        "width_variance_prior DOUBLE, "
-        "intercept_variance_prior DOUBLE, "
-        "alpha_g DOUBLE, "
-        "PRIMARY KEY (key_tag, class_key, group_key), "
-        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
-        ");");
+    EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), user_version);
+    EXPECT_TRUE(data_test::HasTable(database_path, "legacy_marker"));
+    EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
 }
 
 } // namespace
@@ -94,618 +44,128 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
     const command_test::ScopedTempDir temp_dir{ "data_schema_bootstrap" };
     const auto database_path{ temp_dir.path() / "bootstrap.sqlite" };
 
-    rg::SQLitePersistence database_manager{ database_path };
+    { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
-    EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
-    EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
-    EXPECT_TRUE(data_test::HasTable(database_path, "map_list"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_object",
-        "standard_average_qscore"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "neighbor_count_for_peeling"));
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 13);
+    for (const auto table_name : std::array<std::string_view, 10>{
+             "model_object",
+             "model_chain_map",
+             "model_component",
+             "model_component_atom",
+             "model_component_bond",
+             "model_atom",
+             "model_bond",
+             "model_atom_local_potential",
+             "model_atom_posterior",
+             "model_atom_group_potential" })
     {
-        for (const auto * prefix : {
-                 "amplitude_estimate_ols_",
-                 "width_estimate_ols_",
-                 "intercept_estimate_ols_",
-                 "amplitude_estimate_mdpde_",
-                 "width_estimate_mdpde_",
-                 "intercept_estimate_mdpde_",
-                 "alpha_r_" })
-        {
-            EXPECT_TRUE(data_test::HasColumn(
-                database_path,
-                "model_atom_local_potential",
-                std::string(prefix) + suffix));
-        }
+        EXPECT_TRUE(data_test::HasTable(database_path, std::string(table_name)));
     }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "amplitude_estimate_mdpde"));
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
-    {
-        for (const auto * prefix : {
-                 "amplitude_estimate_mean_",
-                 "width_estimate_mean_",
-                 "intercept_estimate_mean_",
-                 "amplitude_estimate_mdpde_",
-                 "width_estimate_mdpde_",
-                 "intercept_estimate_mdpde_",
-                 "amplitude_estimate_prior_",
-                 "width_estimate_prior_",
-                 "intercept_estimate_prior_",
-                 "amplitude_variance_prior_",
-                 "width_variance_prior_",
-                 "intercept_variance_prior_",
-                 "alpha_g_" })
-        {
-            EXPECT_TRUE(data_test::HasColumn(
-                database_path,
-                "model_atom_group_potential",
-                std::string(prefix) + suffix));
-        }
-    }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_group_potential",
-        "amplitude_estimate_mdpde"));
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "class_key"));
-}
+    EXPECT_FALSE(data_test::HasTable(database_path, "object_catalog"));
+    EXPECT_FALSE(data_test::HasTable(database_path, "map_list"));
+    EXPECT_FALSE(data_test::HasTable(database_path, "model_bond_local_potential"));
+    EXPECT_FALSE(data_test::HasTable(database_path, "model_bond_posterior"));
+    EXPECT_FALSE(data_test::HasTable(database_path, "model_bond_group_potential"));
 
-TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaMigratesPeelingNeighborCount)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v9_peeling_neighbor_count" };
-    const auto database_path{ temp_dir.path() / "v9_peeling_neighbor_count.sqlite" };
-
-    {
-        rg::DataRepository repository{ database_path };
-        auto model{ data_test::MakeModelWithBond() };
-        model->SetKeyTag("model");
-        auto editor{
-            model->EditAnalysis().EnsureAtomLocalPotential(
-                *model->GetAtomList().at(0))
-        };
-        editor.SetNeighborCountForPeeling(7);
-        repository.SaveModel(*model, "model");
-    }
-    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "ALTER TABLE model_atom_local_potential "
-        "DROP COLUMN neighbor_count_for_peeling;");
-    data_test::SetUserVersion(database_path, 9);
-
-    rg::DataRepository repository{ database_path };
-    auto loaded_model{ repository.LoadModel("model") };
-
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "neighbor_count_for_peeling"));
-    EXPECT_EQ(
-        rg::AtomLocalPotentialView::RequireFor(
-            *loaded_model->GetAtomList().at(0))
-            .GetNeighborCountForPeeling(),
-        0);
-}
-
-TEST(DataObjectSchemaLifecycleTest, VersionTenSchemaCopiesFinalGaussianToAllStages)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v10_local_gaussian_stages" };
-    const auto database_path{ temp_dir.path() / "v10_local_gaussian_stages.sqlite" };
-
-    {
-        rg::DataRepository repository{ database_path };
-        auto model{ data_test::MakeModelWithBond() };
-        model->SetKeyTag("model");
-        rg::LocalGaussianResult result;
-        result.alpha_r = 0.45;
-        result.ols = rg::GaussianModel3DWithUncertainty{
-            rg::GaussianModel3D{ 1.0, 0.6, 0.1 },
-            rg::GaussianModel3DUncertainty{}
-        };
-        result.mdpde = rg::GaussianModel3DWithUncertainty{
-            rg::GaussianModel3D{ 2.5, 0.8, 0.2 },
-            rg::GaussianModel3DUncertainty{}
-        };
-        model->EditAnalysis().EnsureAtomLocalPotential(
-            *model->GetAtomList().at(0))
-            .SetGaussianResult(rg::FittingStage::Third, result);
-        repository.SaveModel(*model, "model");
-    }
-    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::SetUserVersion(database_path, 10);
-
-    rg::DataRepository repository{ database_path };
-    auto loaded_model{ repository.LoadModel("model") };
-
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    const auto view{ rg::AtomLocalPotentialView::RequireFor(
-        *loaded_model->GetAtomList().at(0)) };
-    for (const auto stage : {
-             rg::FittingStage::First,
-             rg::FittingStage::Second,
-             rg::FittingStage::Third })
-    {
-        EXPECT_DOUBLE_EQ(view.GetGaussianResult(stage).alpha_r, 0.45);
-        EXPECT_DOUBLE_EQ(view.GetEstimateMDPDE(stage).GetAmplitude(), 2.5);
-        EXPECT_DOUBLE_EQ(view.GetEstimateMDPDE(stage).GetOffset(), 0.2);
-    }
-}
-
-TEST(DataObjectSchemaLifecycleTest, VersionElevenSchemaCopiesFinalGroupToAllStages)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v11_group_stages" };
-    const auto database_path{ temp_dir.path() / "v11_group_stages.sqlite" };
-    GroupKey group_key{};
-
-    {
-        rg::DataRepository repository{ database_path };
-        auto model{ data_test::MakeModelWithBond() };
-        model->SetKeyTag("model");
-        model->SelectAllAtoms();
-        model->ApplySymmetrySelection(false);
-        model->LocalPotentialInitialization();
-        const auto view{ model->GetAnalysisView() };
-        const auto group_keys{ view.CollectAtomGroupKeys(
-            rg::FittingStage::Third) };
-        ASSERT_FALSE(group_keys.empty());
-        group_key = group_keys.front();
-
-        rg::GroupGaussianResult result;
-        result.alpha_g = 0.45;
-        result.mean = rg::GaussianModel3D{ 1.0, 0.6, 0.1 };
-        result.mdpde = rg::GaussianModel3D{ 2.0, 0.7, 0.2 };
-        result.prior = rg::GaussianModel3DWithUncertainty{
-            rg::GaussianModel3D{ 3.0, 0.8, 0.3 },
-            rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.03 }
-        };
-        result.member_results.resize(
-            view.GetAtomObjectList(
-                rg::FittingStage::Third, group_key).size());
-        model->EditAnalysis().ApplyAtomGroupGaussianResult(
-            rg::FittingStage::Third,
-            group_key,
-            result);
-        repository.SaveModel(*model, "model");
-    }
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::SetUserVersion(database_path, 11);
-
-    rg::DataRepository repository{ database_path };
-    auto loaded_model{ repository.LoadModel("model") };
-
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    const auto view{ loaded_model->GetAnalysisView() };
-    for (const auto stage : {
-             rg::FittingStage::First,
-             rg::FittingStage::Second,
-             rg::FittingStage::Third })
-    {
-        EXPECT_DOUBLE_EQ(
-            view.GetAtomGroupMean(stage, group_key).GetOffset(),
-            0.1);
-        EXPECT_DOUBLE_EQ(
-            view.GetAtomGroupMDPDE(stage, group_key).GetOffset(),
-            0.2);
-        EXPECT_DOUBLE_EQ(
-            view.GetAtomGroupPrior(stage, group_key).GetOffset(),
-            0.3);
-        EXPECT_DOUBLE_EQ(view.GetAtomAlphaG(stage, group_key), 0.45);
-    }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_group_potential",
-        "alpha_g"));
+    EXPECT_NO_THROW((void)rg::DataRepository(database_path));
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsRawAndPeelingSamplingEntryColumns)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_raw_peeling_sampling_columns" };
-    const auto database_path{ temp_dir.path() / "raw_peeling_sampling_columns.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_sampling_columns" };
+    const auto database_path{ temp_dir.path() / "sampling.sqlite" };
+    { rg::DataRepository repository{ database_path }; }
 
-    rg::SQLitePersistence database_manager{ database_path };
-
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
         "raw_distance_and_map_value_list"));
     EXPECT_TRUE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "peeling_sampling_size"));
-    EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
         "peeling_distance_and_map_value_list"));
     EXPECT_FALSE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "sampling_size"));
+        database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "updated_sampling_size"));
+        database_path, "model_atom_local_potential", "peeling_sampling_size"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path, "model_atom_group_potential", "member_size"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColumns)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_intercept_columns" };
-    const auto database_path{ temp_dir.path() / "gaussian_intercept_columns.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_columns" };
+    const auto database_path{ temp_dir.path() / "gaussian.sqlite" };
+    { rg::DataRepository repository{ database_path }; }
 
-    rg::SQLitePersistence database_manager{ database_path };
-
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    for (const auto suffix : { "1st", "2nd", "3rd" })
     {
         EXPECT_TRUE(data_test::HasColumn(
             database_path,
             "model_atom_local_potential",
-            std::string("intercept_estimate_ols_") + suffix));
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_local_potential",
-            std::string("intercept_estimate_mdpde_") + suffix));
-    }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "intercept_estimate_ols"));
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "intercept_estimate_mdpde"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_ols"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_mdpde"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_posterior", "intercept_estimate_posterior"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_posterior", "intercept_variance_posterior"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "intercept_estimate_posterior"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "intercept_variance_posterior"));
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
-    {
+            "intercept_estimate_ols_" + std::string(suffix)));
         EXPECT_TRUE(data_test::HasColumn(
             database_path,
             "model_atom_group_potential",
-            std::string("intercept_estimate_mean_") + suffix));
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_group_potential",
-            std::string("intercept_estimate_mdpde_") + suffix));
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_group_potential",
-            std::string("intercept_estimate_prior_") + suffix));
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_group_potential",
-            std::string("intercept_variance_prior_") + suffix));
+            "intercept_estimate_prior_" + std::string(suffix)));
     }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_group_potential",
-        "intercept_estimate_mean"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_mean"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_mdpde"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_prior"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_variance_prior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "is_selected"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond", "is_selected"));
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptColumns)
+TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaIsRejectedWithoutModification)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v3_gaussian_intercept_migration" };
-    const auto database_path{ temp_dir.path() / "v3_gaussian_intercept.sqlite" };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-    }
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_local_potential;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE model_atom_local_potential ("
-        "key_tag TEXT, "
-        "serial_id INTEGER, "
-        "sampling_size INTEGER, "
-        "distance_and_map_value_list BLOB, "
-        "amplitude_estimate_ols DOUBLE, "
-        "width_estimate_ols DOUBLE, "
-        "amplitude_estimate_mdpde DOUBLE, "
-        "width_estimate_mdpde DOUBLE, "
-        "alpha_r DOUBLE, "
-        "PRIMARY KEY (key_tag, serial_id), "
-        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
-        ");");
-    RecreateVersion4AtomResultTables(database_path);
-    data_test::SetUserVersion(database_path, 3);
-
-    rg::SQLitePersistence database_manager{ database_path };
-
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
-    {
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_local_potential",
-            std::string("intercept_estimate_ols_") + suffix));
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_local_potential",
-            std::string("intercept_estimate_mdpde_") + suffix));
-    }
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "intercept_estimate_ols"));
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
+    ExpectVersionedDatabaseRejectedWithoutMutation(9);
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleComponentClass)
+TEST(DataObjectSchemaLifecycleTest, VersionTenSchemaIsRejectedWithoutModification)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v4_atom_class_migration" };
-    const auto database_path{ temp_dir.path() / "v4_atom_class.sqlite" };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-    }
-    data_test::ExecuteSql(
-        database_path,
-        "INSERT OR REPLACE INTO object_catalog(key_tag, object_type) VALUES ('model', 'model');");
-    data_test::ExecuteSql(
-        database_path,
-        "INSERT OR REPLACE INTO model_object("
-        "key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method"
-        ") VALUES ('model', 0, 'model', '', 0.0, '');");
-    RecreateVersion4AtomResultTables(database_path);
-    data_test::ExecuteSql(
-        database_path,
-        "INSERT INTO model_atom_posterior VALUES "
-        "('model', 'component_atom_class', 1, 1.0, 2.0, 3.0, 0.1, 0.2, 0.3, 0, 1.5),"
-        "('model', 'simple_atom_class', 2, 4.0, 5.0, 6.0, 0.4, 0.5, 0.6, 1, 2.5);");
-    data_test::ExecuteSql(
-        database_path,
-        "INSERT INTO model_atom_group_potential VALUES "
-        "('model', 'component_atom_class', 10, 2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 0.1, 0.2, 0.3, 0.4),"
-        "('model', 'structure_atom_class', 20, 3, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 1.1, 1.2, 1.3, 1.4);");
-    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-    data_test::SetUserVersion(database_path, 4);
-
-    rg::SQLitePersistence database_manager{ database_path };
-
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
-    EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
-    EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
-    EXPECT_EQ(data_test::CountRows(database_path, "model_atom_group_potential", "model"), 1);
-    EXPECT_EQ(
-        QuerySingleInt(database_path, "SELECT serial_id FROM model_atom_posterior WHERE key_tag = 'model';"),
-        1);
-    EXPECT_EQ(
-        QuerySingleInt(database_path, "SELECT group_key FROM model_atom_group_potential WHERE key_tag = 'model';"),
-        10);
+    ExpectVersionedDatabaseRejectedWithoutMutation(10);
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesRawAndPeelingSamplingEntryColumns)
+TEST(DataObjectSchemaLifecycleTest, VersionElevenSchemaIsRejectedWithoutModification)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v5_raw_peeling_sampling_migration" };
-    const auto database_path{ temp_dir.path() / "v5_raw_peeling_sampling.sqlite" };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-    }
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_local_potential;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE model_atom_local_potential ("
-        "key_tag TEXT, "
-        "serial_id INTEGER, "
-        "sampling_size INTEGER, "
-        "distance_and_map_value_list BLOB, "
-        "amplitude_estimate_ols DOUBLE, "
-        "width_estimate_ols DOUBLE, "
-        "intercept_estimate_ols DOUBLE, "
-        "amplitude_estimate_mdpde DOUBLE, "
-        "width_estimate_mdpde DOUBLE, "
-        "intercept_estimate_mdpde DOUBLE, "
-        "alpha_r DOUBLE, "
-        "PRIMARY KEY (key_tag, serial_id), "
-        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
-        ");");
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::SetUserVersion(database_path, 5);
-
-    rg::SQLitePersistence database_manager{ database_path };
-
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "raw_sampling_size"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "raw_distance_and_map_value_list"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "peeling_sampling_size"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "peeling_distance_and_map_value_list"));
+    ExpectVersionedDatabaseRejectedWithoutMutation(11);
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumns)
+TEST(DataObjectSchemaLifecycleTest, VersionTwelveSchemaIsRejectedWithoutModification)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v6_standard_qscore_migration" };
-    const auto database_path{ temp_dir.path() / "v6_standard_qscore.sqlite" };
-
-    {
-        rg::DataRepository repository{ database_path };
-        auto model{ data_test::MakeModelWithBond() };
-        model->SetStandardAverageQScore(0.75);
-        model->GetAtomList().at(0)->SetStandardQScore(0.5);
-        repository.SaveModel(*model, "model");
-    }
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "ALTER TABLE model_atom DROP COLUMN standard_qscore;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "ALTER TABLE model_object DROP COLUMN standard_average_qscore;");
-    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
-    data_test::SetUserVersion(database_path, 6);
-
-    rg::DataRepository repository{ database_path };
-    auto loaded_model{ repository.LoadModel("model") };
-
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_object",
-        "standard_average_qscore"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
-    EXPECT_DOUBLE_EQ(loaded_model->GetStandardAverageQScore(), 0.0);
-    for (const auto & atom : loaded_model->GetAtomList())
-    {
-        EXPECT_DOUBLE_EQ(atom->GetStandardQScore(), 0.0);
-    }
-}
-
-TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianParameters)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v7_reference_gaussian_migration" };
-    const auto database_path{ temp_dir.path() / "v7_reference_gaussian.sqlite" };
-
-    {
-        rg::DataRepository repository{ database_path };
-        auto model{ data_test::MakeModelWithBond() };
-        model->SetReferenceHeight(1.25);
-        model->SetReferenceOffset(-0.5);
-        repository.SaveModel(*model, "model");
-    }
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "ALTER TABLE model_object DROP COLUMN reference_height;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "ALTER TABLE model_object DROP COLUMN reference_offset;");
-    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
-    data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
-    data_test::SetUserVersion(database_path, 7);
-
-    rg::DataRepository repository{ database_path };
-    auto loaded_model{ repository.LoadModel("model") };
-
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
-    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 0.0);
-    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceOffset(), 0.0);
+    ExpectVersionedDatabaseRejectedWithoutMutation(12);
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)
 {
-    ExpectSchemaOpenFails(
-        "data_schema_unknown_version",
-        "unknown.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::SetUserVersion(database_path, 99);
-        });
+    ExpectVersionedDatabaseRejectedWithoutMutation(99);
 }
 
 TEST(DataObjectSchemaLifecycleTest, VersionOneSchemaFailsFast)
 {
-    ExpectSchemaOpenFails(
-        "data_schema_version_one",
-        "version_one.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::SetUserVersion(database_path, 1);
-        });
-}
-
-TEST(DataObjectSchemaLifecycleTest, Version2WithObjectMetadataFailsFast)
-{
-    ExpectSchemaOpenFails(
-        "data_schema_v2_metadata_row",
-        "metadata_row.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            const auto map_object{ data_test::MakeTinyMapObject() };
-            {
-                rg::SQLitePersistence database_manager{ database_path };
-                database_manager.SaveMap(map_object, "map_only");
-            }
-
-            data_test::ExecuteSql(
-                database_path,
-                "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
-            data_test::ExecuteSql(
-                database_path,
-                "INSERT INTO object_metadata(key_tag, object_type) VALUES ('map_only', 'map');");
-            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
-            data_test::SetUserVersion(database_path, 2);
-        });
+    ExpectVersionedDatabaseRejectedWithoutMutation(1);
 }
 
 TEST(DataObjectSchemaLifecycleTest, Version2MetadataBasedShapeFailsFast)
 {
-    ExpectSchemaOpenFails(
-        "data_schema_v2_metadata_shape",
-        "metadata_shape.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::CreateVersion2MetadataBasedMapShapeDatabase(database_path);
-        });
+    ExpectVersionedDatabaseRejectedWithoutMutation(2);
 }
 
 TEST(DataObjectSchemaLifecycleTest, ManagedButUnversionedDatabaseFailsFast)
 {
-    ExpectSchemaOpenFails(
-        "data_schema_unversioned_nonlegacy",
-        "managed_unversioned.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_unversioned" };
+    const auto database_path{ temp_dir.path() / "unversioned.sqlite" };
+    CreateVersionedMarkerDatabase(database_path, 0);
 
-            {
-                rg::DataRepository repository{ database_path };
-                auto model{ rg::ReadModel(model_path) };
-                model->SetKeyTag("model");
-                repository.SaveModel(*model, "model");
-            }
-
-            data_test::SetUserVersion(database_path, 0);
-        });
+    EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 0);
+    EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
 }
 
 TEST(DataObjectSchemaLifecycleTest, MixedUnknownSchemaFailsFast)
 {
-    ExpectSchemaOpenFails(
-        "data_schema_mixed_unknown",
-        "mixed_unknown.sqlite",
-        [](const std::filesystem::path & database_path)
-        {
-            data_test::ExecuteSql(database_path, "CREATE TABLE foreign_table (id INTEGER PRIMARY KEY);");
-        });
+    const command_test::ScopedTempDir temp_dir{ "data_schema_mixed_unknown" };
+    const auto database_path{ temp_dir.path() / "mixed.sqlite" };
+    CreateVersionedMarkerDatabase(database_path, 13);
+
+    EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 13);
+    EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
 }

@@ -27,7 +27,5 @@ public:
     void RegisterAtom(const std::string & atom_id, AtomKey atom_key);
     AtomKey GetAtomKey(const std::string & atom_id);
     std::string GetAtomId(AtomKey atom_key);
-    bool IsBuildInAtom(const std::string & atom_id) const;
-    bool IsBuildInAtom(AtomKey atom_key) const;
 
 };

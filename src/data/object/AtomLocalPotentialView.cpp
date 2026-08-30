@@ -56,13 +56,6 @@ AtomLocalPotentialView AtomLocalPotentialView::For(const AtomObject & atom_objec
     return AtomLocalPotentialView(&atom_object);
 }
 
-AtomLocalPotentialView AtomLocalPotentialView::RequireFor(const AtomObject & atom_object)
-{
-    auto view{ AtomLocalPotentialView::For(atom_object) };
-    (void)view.RequireEntry("Atom local analysis");
-    return view;
-}
-
 bool AtomLocalPotentialView::IsAvailable() const
 {
     return FindEntry() != nullptr;

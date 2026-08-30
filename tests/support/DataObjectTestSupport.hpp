@@ -1,14 +1,12 @@
 #pragma once
 
 #include <array>
-#include <cstring>
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
-#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -16,7 +14,6 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/ModelObjectParts.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
-#include "support/CommandTestHelpers.hpp"
 
 namespace data_test {
 
@@ -48,11 +45,10 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
     auto * atom_2_ptr{ atom_2.get() };
     parts.atom_list.emplace_back(std::move(atom_1));
     parts.atom_list.emplace_back(std::move(atom_2));
-
     parts.bond_list.emplace_back(std::make_unique<rg::BondObject>(
-        atom_1_ptr,
-        atom_2_ptr));
-    return std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(parts)));
+        atom_1_ptr, atom_2_ptr));
+    return std::make_unique<rg::ModelObject>(
+        rg::AssembleModelObject(std::move(parts)));
 }
 
 inline rg::MapObject MakeMapObject()
@@ -65,7 +61,8 @@ inline rg::MapObject MakeMapObject()
     {
         values[i] = static_cast<float>(i + 1);
     }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+    return rg::MapObject{
+        grid_size, grid_spacing, origin, std::move(values) };
 }
 
 inline std::filesystem::path CopyFixtureWithNewName(
@@ -79,119 +76,21 @@ inline std::filesystem::path CopyFixtureWithNewName(
     return output_path;
 }
 
-inline rg::MapObject MakeTinyMapObject(float scale = 1.0f)
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (size_t i = 0; i < 8; ++i)
-    {
-        values[i] = static_cast<float>(i) * scale;
-    }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
-}
-
-inline void SaveTinyMapThroughRepository(
-    rg::DataRepository & repository,
-    const std::string & key_tag,
-    float scale = 1.0f)
-{
-    auto map_object{ MakeTinyMapObject(scale) };
-    repository.SaveMap(map_object, key_tag);
-}
-
-constexpr const char * kUpsertObjectMetadataSql =
-    "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
-    "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;";
-
-inline void UpsertObjectMetadata(
-    rg::SQLiteWrapper & database,
-    const std::string & key_tag,
-    const std::string & object_type)
-{
-    database.Execute(
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
-    database.Prepare(kUpsertObjectMetadataSql);
-    rg::SQLiteWrapper::StatementGuard guard(database);
-    database.Bind<std::string>(1, key_tag);
-    database.Bind<std::string>(2, object_type);
-    database.StepOnce();
-}
-
-inline void CreateLegacyMapListWithoutForeignKeyTable(
-    const std::filesystem::path & database_path,
-    const rg::MapObject & map_object,
-    const std::string & key_tag)
-{
-    rg::SQLiteWrapper database{ database_path };
-    database.Execute("DROP TABLE IF EXISTS map_list;");
-    database.Execute(
-        "CREATE TABLE map_list ("
-        "key_tag TEXT PRIMARY KEY, "
-        "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
-        "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
-        "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
-        "map_value_array BLOB"
-        ");");
-
-    const auto grid_size{ map_object.GetGridSize() };
-    const auto grid_spacing{ map_object.GetGridSpacing() };
-    const auto origin{ map_object.GetOrigin() };
-    std::vector<float> values(map_object.GetMapValueArraySize());
-    std::memcpy(values.data(), map_object.GetMapValueArray(), values.size() * sizeof(float));
-
-    database.Prepare(
-        "INSERT INTO map_list("
-        "key_tag, grid_size_x, grid_size_y, grid_size_z, "
-        "grid_spacing_x, grid_spacing_y, grid_spacing_z, "
-        "origin_x, origin_y, origin_z, map_value_array"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
-    rg::SQLiteWrapper::StatementGuard guard(database);
-    database.Bind<std::string>(1, key_tag);
-    database.Bind<int>(2, grid_size[0]);
-    database.Bind<int>(3, grid_size[1]);
-    database.Bind<int>(4, grid_size[2]);
-    database.Bind<double>(5, grid_spacing[0]);
-    database.Bind<double>(6, grid_spacing[1]);
-    database.Bind<double>(7, grid_spacing[2]);
-    database.Bind<double>(8, origin[0]);
-    database.Bind<double>(9, origin[1]);
-    database.Bind<double>(10, origin[2]);
-    database.Bind<std::vector<float>>(11, values);
-    database.StepOnce();
-}
-
-inline void CreateVersion2MetadataBasedMapShapeDatabase(const std::filesystem::path & database_path)
-{
-    auto map_object{ MakeTinyMapObject() };
-
-    CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "map_only");
-    rg::SQLiteWrapper database{ database_path };
-    UpsertObjectMetadata(database, "map_only", "map");
-    database.Execute("PRAGMA user_version = 2;");
-}
-
 inline int GetUserVersion(const std::filesystem::path & database_path)
 {
     rg::SQLiteWrapper database{ database_path };
     database.Prepare("PRAGMA user_version;");
     rg::SQLiteWrapper::StatementGuard guard(database);
-    const auto rc{ database.StepNext() };
-    if (rc != rg::SQLiteWrapper::StepRow())
+    if (database.StepNext() != rg::SQLiteWrapper::StepRow())
     {
-        return 0;
+        throw std::runtime_error("Failed to read SQLite user_version.");
     }
     return database.GetColumn<int>(0);
 }
 
-inline void SetUserVersion(const std::filesystem::path & database_path, int user_version)
-{
-    rg::SQLiteWrapper database{ database_path };
-    database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
-}
-
-inline void ExecuteSql(const std::filesystem::path & database_path, const std::string & sql)
+inline void ExecuteSql(
+    const std::filesystem::path & database_path,
+    const std::string & sql)
 {
     rg::SQLiteWrapper database{ database_path };
     database.Execute(sql);
@@ -206,136 +105,9 @@ inline void ExecuteSqlWithForeignKeysOff(
     database.Execute(sql);
 }
 
-inline void ConvertLocalGaussianColumnsToLegacyFinal(
-    const std::filesystem::path & database_path)
-{
-    rg::SQLiteWrapper database{ database_path };
-    for (const auto * column_name : {
-             "amplitude_estimate_ols",
-             "width_estimate_ols",
-             "intercept_estimate_ols",
-             "amplitude_estimate_mdpde",
-             "width_estimate_mdpde",
-             "intercept_estimate_mdpde",
-             "alpha_r" })
-    {
-        database.Execute(
-            "ALTER TABLE model_atom_local_potential ADD COLUMN "
-            + std::string(column_name) + " DOUBLE DEFAULT 0.0;");
-        database.Execute(
-            "UPDATE model_atom_local_potential SET "
-            + std::string(column_name) + " = "
-            + std::string(column_name) + "_3rd;");
-    }
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
-    {
-        for (const auto * column_prefix : {
-                 "amplitude_estimate_ols_",
-                 "width_estimate_ols_",
-                 "intercept_estimate_ols_",
-                 "amplitude_estimate_mdpde_",
-                 "width_estimate_mdpde_",
-                 "intercept_estimate_mdpde_",
-                 "alpha_r_" })
-        {
-            database.Execute(
-                "ALTER TABLE model_atom_local_potential DROP COLUMN "
-                + std::string(column_prefix) + suffix + ";");
-        }
-    }
-}
-
-inline void ConvertAtomGroupGaussianColumnsToLegacyFinal(
-    const std::filesystem::path & database_path)
-{
-    rg::SQLiteWrapper database{ database_path };
-    for (const auto * column_name : {
-             "amplitude_estimate_mean",
-             "width_estimate_mean",
-             "intercept_estimate_mean",
-             "amplitude_estimate_mdpde",
-             "width_estimate_mdpde",
-             "intercept_estimate_mdpde",
-             "amplitude_estimate_prior",
-             "width_estimate_prior",
-             "intercept_estimate_prior",
-             "amplitude_variance_prior",
-             "width_variance_prior",
-             "intercept_variance_prior",
-             "alpha_g" })
-    {
-        database.Execute(
-            "ALTER TABLE model_atom_group_potential ADD COLUMN "
-            + std::string(column_name) + " DOUBLE DEFAULT 0.0;");
-        database.Execute(
-            "UPDATE model_atom_group_potential SET "
-            + std::string(column_name) + " = "
-            + std::string(column_name) + "_3rd;");
-    }
-    for (const auto * suffix : { "1st", "2nd", "3rd" })
-    {
-        for (const auto * column_prefix : {
-                 "amplitude_estimate_mean_",
-                 "width_estimate_mean_",
-                 "intercept_estimate_mean_",
-                 "amplitude_estimate_mdpde_",
-                 "width_estimate_mdpde_",
-                 "intercept_estimate_mdpde_",
-                 "amplitude_estimate_prior_",
-                 "width_estimate_prior_",
-                 "intercept_estimate_prior_",
-                 "amplitude_variance_prior_",
-                 "width_variance_prior_",
-                 "intercept_variance_prior_",
-                 "alpha_g_" })
-        {
-            database.Execute(
-                "ALTER TABLE model_atom_group_potential DROP COLUMN "
-                + std::string(column_prefix) + suffix + ";");
-        }
-    }
-}
-
-inline void ConvertSamplingEntryColumnsToLegacyRawOnly(
-    const std::filesystem::path & database_path)
-{
-    rg::SQLiteWrapper database{ database_path };
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN raw_sampling_size TO sampling_size;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN raw_distance_and_map_value_list "
-        "TO distance_and_map_value_list;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "DROP COLUMN peeling_sampling_size;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "DROP COLUMN peeling_distance_and_map_value_list;");
-}
-
-inline void ConvertSamplingEntryColumnsToLegacyRawAndUpdated(
-    const std::filesystem::path & database_path)
-{
-    rg::SQLiteWrapper database{ database_path };
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN raw_sampling_size TO sampling_size;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN raw_distance_and_map_value_list "
-        "TO distance_and_map_value_list;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN peeling_sampling_size TO updated_sampling_size;");
-    database.Execute(
-        "ALTER TABLE model_atom_local_potential "
-        "RENAME COLUMN peeling_distance_and_map_value_list "
-        "TO updated_distance_and_map_value_list;");
-}
-
-inline bool HasTable(const std::filesystem::path & database_path, const std::string & table_name)
+inline bool HasTable(
+    const std::filesystem::path & database_path,
+    const std::string & table_name)
 {
     rg::SQLiteWrapper database{ database_path };
     database.Prepare(
@@ -385,41 +157,10 @@ inline bool HasColumn(
         }
         if (rc != rg::SQLiteWrapper::StepRow())
         {
-            throw std::runtime_error("Failed to inspect table_info for " + table_name);
+            throw std::runtime_error(
+                "Failed to inspect table_info for " + table_name);
         }
         if (database.GetColumn<std::string>(1) == column_name)
-        {
-            return true;
-        }
-    }
-}
-
-inline bool HasForeignKey(
-    const std::filesystem::path & database_path,
-    const std::string & table_name,
-    const std::string & from_column,
-    const std::string & referenced_table,
-    const std::string & referenced_column,
-    const std::string & on_delete)
-{
-    rg::SQLiteWrapper database{ database_path };
-    database.Prepare("PRAGMA foreign_key_list(" + table_name + ");");
-    rg::SQLiteWrapper::StatementGuard guard(database);
-    while (true)
-    {
-        const auto rc{ database.StepNext() };
-        if (rc == rg::SQLiteWrapper::StepDone())
-        {
-            return false;
-        }
-        if (rc != rg::SQLiteWrapper::StepRow())
-        {
-            throw std::runtime_error("Failed to inspect foreign_key_list for " + table_name);
-        }
-        if (database.GetColumn<std::string>(3) == from_column
-            && database.GetColumn<std::string>(2) == referenced_table
-            && database.GetColumn<std::string>(4) == referenced_column
-            && database.GetColumn<std::string>(6) == on_delete)
         {
             return true;
         }

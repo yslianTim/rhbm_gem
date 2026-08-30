@@ -1,248 +1,175 @@
 # DataObject I/O Architecture
 
-This document describes the current contract for:
+This document describes the current typed file I/O and Model-only SQLite v13 boundary.
 
-- the public top-level data objects
-- typed model and map file I/O
-- typed SQLite persistence and schema lifecycle
-- command-side object loading, ownership, and persistence
+## 1. Public Surface
 
-Related references:
+File I/O remains available for both object roots:
 
-- [`/docs/developer/architecture/object-architecture.md`](/docs/developer/architecture/object-architecture.md)
-- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
-- [`/docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md)
+```cpp
+std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path & path);
+void WriteModel(const std::filesystem::path & path, const ModelObject & model, int model_parameter = 1);
 
-## 1. Boundary and Top-Level Roots
-
-The public data-layer headers live under `/include/rhbm_gem/data/**`.
-
-- `/include/rhbm_gem/data/object/**` exposes object and analysis-facade types
-- `/include/rhbm_gem/data/io/**` exposes typed file and repository I/O
-- `/src/data/io/file/**`, `/src/data/io/sqlite/**`, and `/src/data/detail/**` are implementation details
-- `/src/core/command/detail/**` contains command-internal orchestration helpers
-
-There are two top-level file and SQLite roots:
-
-- `ModelObject`
-- `MapObject`
-
-`AtomObject`, `BondObject`, and `ChemicalComponentEntry` are model-owned domain data. `ModelAnalysisView`, `ModelAnalysisEditor`, `AtomLocalPotentialView`, and `AtomLocalPotentialEditor` are non-owning facades over model-owned analysis state. None of these types is an independent file or database root.
-
-There is no public type-erased `DataObjectDispatch` or shared data-object manager. Callers use the two root types explicitly.
-
-## 2. Public I/O Surface
-
-| Component | Public entry points | Ownership and responsibility |
-| --- | --- | --- |
-| `ModelMapFileIO` | `ReadModel`, `WriteModel`, `ReadMap`, `WriteMap` | Typed file import/export; reads return `std::unique_ptr` roots |
-| `DataRepository` | `DataRepository(path)`, `LoadModel`, `LoadMap`, `SaveModel`, `SaveMap` | Typed SQLite persistence; loads return `std::unique_ptr` roots |
-
-Public declarations are in:
-
-- [`/include/rhbm_gem/data/io/ModelMapFileIO.hpp`](/include/rhbm_gem/data/io/ModelMapFileIO.hpp)
-- [`/include/rhbm_gem/data/io/DataRepository.hpp`](/include/rhbm_gem/data/io/DataRepository.hpp)
-
-File readers do not derive or assign a root object's `key_tag` from the filename. A command may assign a workflow-local key after reading. Repository loads do assign the persisted catalog key to the returned root.
-
-Repository saves always use the explicit key supplied by the caller. Saving an object under a key different from its in-memory `key_tag` does not rename the source object.
-
-## 3. Supported File Formats
-
-| Top-level object | File read | File write | SQLite save/load |
-| --- | --- | --- | --- |
-| `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
-| `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
-
-Rules enforced by [`/src/data/io/ModelMapFileIO.cpp`](/src/data/io/ModelMapFileIO.cpp):
-
-- extension lookup is case-insensitive through `path_helper::GetExtension(...)`
-- `.pdb` uses `PdbFormat`
-- `.cif`, `.mmcif`, and `.mcif` use `CifFormat`
-- `.mmcif` and `.mcif` are read-only aliases; model writes to those extensions fail
-- `.mrc` uses `MrcFormat`
-- `.map` and `.ccp4` use `CCP4Format`
-- unsupported extensions and codec/open/parse/write failures surface as `std::runtime_error`
-- each public file entry point adds the operation and file path to the propagated error context
-
-`WriteModel(..., model_parameter)` is the only public file-I/O parameter whose meaning varies by caller policy. Its default value is `0`.
-
-## 4. File Import and Object Reconstruction
-
-```mermaid
-flowchart LR
-    A["ReadModel(path)"] --> B["extension-to-codec lookup"]
-    B --> C["PdbFormat / CifFormat"]
-    C --> D["ModelImportState"]
-    D --> E["ModelObjectParts"]
-    E --> F["AssembleModelObject"]
-    F --> G["attach owners / rebuild index and selection"]
-
-    H["ReadMap(path)"] --> I["extension-to-codec lookup"]
-    I --> J["MrcFormat / CCP4Format"]
-    J --> K["MapObject geometry + dense values"]
-    K --> L["derived bounds and statistics"]
+std::unique_ptr<MapObject> ReadMap(const std::filesystem::path & path);
+void WriteMap(const std::filesystem::path & path, const MapObject & map);
 ```
 
-PDB and CIF readers stage parsed structural data in `ModelImportState`. That state selects the requested model number, filters bonds to the chosen atom set, moves the payload into `ModelObjectParts`, and calls `AssembleModelObject(...)`. Assembly reattaches atom/bond ownership and endpoint pointers, invalidates derived state, and rebuilds object indexes and selection projections.
+SQLite persistence is deliberately narrower:
 
-Map readers load header geometry and a dense float array, normalize axis order when required, and construct a `MapObject`. The object derives bounds and statistics from the loaded geometry and values.
-
-## 5. SQLite Runtime Topology
-
-```mermaid
-flowchart LR
-    A["Commands / tests / consumers"] --> B["DataRepository"]
-    B --> C["SQLitePersistence"]
-    C --> D["schema bootstrap / validation / migration"]
-    C --> E["object_catalog: model or map"]
-    E --> F["ModelObjectStorage"]
-    E --> G["inline MapObject save/load helpers"]
-    F --> H["ModelObjectParts + AssembleModelObject"]
-    F --> I["model-owned analysis hydration"]
+```cpp
+DataRepository repository{ database_path };
+repository.SaveModel(model, key_tag);
+auto model = repository.LoadModel(key_tag);
 ```
 
-`DataRepository` is a thin public wrapper over internal `SQLitePersistence`. The database path is bound when the repository is constructed.
+`DataRepository` does not expose `SaveMap(...)` or `LoadMap(...)`. Maps remain supported through MRC and CCP4 files.
 
-Path behavior:
+## 2. Supported File Formats
 
-- an empty `SQLitePersistence` path falls back to the relative path `database.sqlite`
-- a non-empty parent directory is created before SQLite is opened
-- repository-backed command DTOs default to `GetDefaultDatabasePath()`
-- that command default is `$RHBM_GEM_DATA_DIR/database.sqlite` when the variable is set, otherwise `$HOME/.rhbmgem/data/database.sqlite`, with `.rhbmgem/data/database.sqlite` as the no-home fallback
+| Root | Read | Write |
+|---|---|---|
+| `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` |
+| `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` |
 
-Operation behavior:
+Extension dispatch is case-insensitive. Public file functions add filename context and report failures as `std::runtime_error`.
 
-- SQLite foreign keys are enabled for the connection
-- each save/load is serialized by the `SQLitePersistence` instance's mutex
-- each save/load is wrapped in an RAII transaction
-- `LoadModel(...)` and `LoadMap(...)` verify the catalog type before loading payload
-- a missing key or a model/map type mismatch throws `std::runtime_error`
-- model save replaces all model child rows for that key before writing the current structural and analysis payload
-- map save upserts the single `map_list` row for that key
+## 3. Model Import
 
-`object_catalog.key_tag` is a shared namespace for model and map roots. A key should not be reused to convert one root type into the other.
+PDB and CIF parsers build a `ModelImportState`. The state owns atoms, bonds, chemical components, chain metadata, and key systems until parsing finishes. `TakeModelObject()` moves those values directly into `ModelObjectParts`, and `AssembleModelObject(...)` establishes owners, indexes, selection, and derived-state invariants.
 
-## 6. Persisted Payload and Rebuilt State
+Parser-only fields that were never consumed by the runtime are not collected. Import does not retain molecule-size counts, standalone entity-ID lists, or sheet-strand counts.
 
-### 6.1 ModelObject
+## 4. Map Codecs
 
-| State | Current SQLite behavior |
-| --- | --- |
-| model metadata | persists the catalog key, PDB/EMD ids, resolution/method, standard average Q-score, reference height, and reference offset |
-| structural payload | persists chain metadata, chemical-component templates, atoms including standard Q-score, and bonds |
-| atom-local analysis | persists raw and peeling samples, sample-selection bits, peeling neighbor count, and OLS/MDPDE model parameters plus `alpha_r` for all three fitting stages |
-| atom posterior | persists the third-stage posterior and uncertainty, outlier flag, and statistical distance |
-| atom-group analysis | persists mean, MDPDE, prior with uncertainty, and `alpha_g` for all three fitting stages; rows are driven by the third-stage group-key set |
-| local fit internals | does not persist runtime `fit_result` values or local OLS/MDPDE uncertainty components |
-| bond analysis | legacy bond-analysis tables remain in the canonical schema, but the active runtime save/load path does not use them |
+MRC and CCP4 keep separate headers and origin rules:
 
-`ModelObjectStorage::Load(...)` rebuilds structure through `ModelObjectParts` and `AssembleModelObject(...)`, then applies the stored model row and analysis payload.
+- MRC uses the explicit floating-point origin stored in its header.
+- CCP4 derives origin from integer start indices multiplied by grid spacing.
 
-The following are reconstructed rather than stored as independent payload:
+They intentionally do not share a base class or format traits. `MapHelper` contains only mechanics common to both:
 
-- component, atom, and bond key registries
-- owner and bond-endpoint pointers
-- serial-id lookup, sequence-id projection, and selection caches
-- atom-group member pointers
-- model KD-tree, center of mass, and position-range caches
+- positive voxel-dimension validation and voxel counting;
+- validation that the file mode is float32 mode 2;
+- float32 voxel seek/read/write;
+- file-axis to canonical XYZ voxel reordering;
+- corresponding three-axis header-field reordering.
 
-Atom selection is indirectly restored from persisted atom-local analysis rows: atoms with a matching local entry become selected, and group membership is rebuilt from those selected atoms. Bond selection is not restored, and bond-analysis rows are not hydrated.
+Any non-float32 mode is rejected before voxel allocation or decoding. The in-memory representation is always a contiguous float32 array in canonical XYZ order.
 
-### 6.2 MapObject
+## 5. Repository Runtime
 
-Map persistence stores:
+`DataRepository` owns:
 
-- the catalog key
-- grid size
-- grid spacing
-- origin
-- the dense float value array
+- the resolved database path;
+- one `SQLiteWrapper` connection;
+- the per-repository mutex;
+- transaction boundaries;
+- schema creation and validation;
+- the public Model save/load methods.
 
-Map bounds, lengths, min/max/mean, and standard deviation are derived again by `MapObject` when the stored geometry and values are loaded.
+There is no intermediate persistence forwarding class. `ModelObjectStorage` remains separate because it maps the model graph and analysis payload to SQL rows.
 
-## 7. Schema Lifecycle Contract
+Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
 
-The schema version source is `PRAGMA user_version`; the current version is `12`.
+## 6. SQLite v13 Lifecycle
 
-| Detected state | Behavior |
-| --- | --- |
-| version `12` | validate the current canonical schema and catalog/payload consistency |
-| versions `2` through `11` | validate the expected legacy shape, migrate known changes to version `12`, then validate the result |
-| version `0` with no non-SQLite tables | bootstrap the complete version-`12` schema |
-| version `0` with existing application tables, version `1`, or any unknown version | fail fast as an unsupported schema/database state |
+The accepted states are intentionally strict:
 
-Known migrations cover Gaussian intercepts and staged results, removal of legacy atom `class_key` dimensions, raw/peeling sampling layouts, standard Q-score fields, reference Gaussian fields, peeling-neighbor count, and three-stage atom-group results.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v13.
+2. A database with `PRAGMA user_version = 13` is accepted only after structural validation.
+3. Every other version or pre-existing unexpected structure is rejected.
 
-Current canonical invariants include:
+There are no v2-v12 migrations and no overwrite-on-open fallback. Rejecting an old database does not change its version, tables, or rows.
 
-- `object_catalog(key_tag, object_type)` is the top-level catalog
-- `object_type` is non-null and limited to `model` or `map`
-- `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`
-- every model child table references `model_object(key_tag)` with `ON DELETE CASCADE`
-- the canonical model schema contains 13 model tables, including legacy bond-analysis tables
-- validation checks required tables and columns, primary-key shapes, foreign-key shapes, sampling/stage column layouts, forbidden legacy columns, and catalog/payload key consistency
-- the legacy `object_metadata` table is treated as an unsupported database shape and is rejected
+Validation checks:
 
-Schema initialization and migration happen when `SQLitePersistence` is constructed, before any typed save or load operation runs.
+- the exact ten-table set;
+- exact ordered column sets;
+- every primary-key shape;
+- `NOT NULL is_selected` on atom and bond rows;
+- direct `key_tag` foreign keys from every child table to `model_object(key_tag)` with `ON DELETE CASCADE`.
 
-## 8. Command Integration
+## 7. v13 Table Topology
 
-`CommandBase` does not own or load data objects. Concrete command workflows call the typed APIs and keep roots in command-local `std::unique_ptr` values or containers of those values.
+`model_object` is the direct root. There is no `object_catalog`, `map_list`, or legacy bond-analysis table.
 
-Current command routing is:
+```mermaid
+flowchart TD
+    M[model_object]
+    M --> C[model_chain_map]
+    M --> CC[model_component]
+    M --> CA[model_component_atom]
+    M --> CB[model_component_bond]
+    M --> A[model_atom]
+    M --> B[model_bond]
+    M --> AL[model_atom_local_potential]
+    M --> AP[model_atom_posterior]
+    M --> AG[model_atom_group_potential]
+```
 
-| Command | File I/O | Repository I/O |
-| --- | --- | --- |
-| `PotentialAnalysisCommand` | `ReadModel`, `ReadMap` | `SaveModel` |
-| `PotentialDisplayCommand` | none | `LoadModel` for primary and reference models |
-| `ResultDumpCommand` | optional `ReadMap`; `WriteModel` for CIF outputs | `LoadModel` |
-| `MapSimulationCommand` | `ReadModel`, `WriteMap` | none |
-| experimental `MapVisualizationCommand` | `ReadModel`, `ReadMap` | none |
-| experimental `PositionEstimationCommand` | `ReadMap` | none |
+The ten tables are:
 
-The public repository still supports `SaveMap(...)` and `LoadMap(...)`, and those paths are covered by data-layer tests, but no current production command persists or loads maps through the repository.
+- `model_object`;
+- `model_chain_map`;
+- `model_component`;
+- `model_component_atom`;
+- `model_component_bond`;
+- `model_atom`;
+- `model_bond`;
+- `model_atom_local_potential`;
+- `model_atom_posterior`;
+- `model_atom_group_potential`.
 
-Commands catch I/O failures where workflow recovery is possible, log contextual errors, and return an unsuccessful `CommandResult`. There is no manager-owned iteration layer; traversal and selection use typed root containers and normal container iteration.
+## 8. Stored and Derived Values
 
-## 9. Key Files
+The root stores model metadata but not `atom_size`; row counts are derived from child tables.
 
-Public entry points:
+`model_atom` and `model_bond` store `is_selected` directly. Structure loading restores both selections before analysis hydration. Analysis rows never imply selection.
 
-- `/include/rhbm_gem/data/io/DataRepository.hpp`
-- `/include/rhbm_gem/data/io/ModelMapFileIO.hpp`
+Atom-local raw and peeling samples are stored as BLOBs. Each sample is exactly three float32 values:
 
-File I/O:
+1. distance;
+2. response;
+3. selection flag encoded as `0.0f` or `1.0f`.
 
-- `/src/data/io/ModelMapFileIO.cpp`
-- `/src/data/io/file/ModelImportState.*`
-- `/src/data/io/file/PdbFormat.*`
-- `/src/data/io/file/CifFormat.*`
-- `/src/data/io/file/MrcFormat.*`
-- `/src/data/io/file/CCP4Format.*`
+Sample count is derived from BLOB byte length, so there are no raw or peeling sampling-size columns and no legacy two-float decoder.
 
-SQLite persistence:
+Atom-group membership is derived from restored selection and atom classification. The group table stores no `member_size` column.
 
-- `/src/data/io/DataRepository.cpp`
-- `/src/data/io/sqlite/SQLitePersistence.hpp`
-- `/src/data/io/sqlite/SQLitePersistence.cpp`
-- `/src/data/io/sqlite/ModelObjectStorage.hpp`
-- `/src/data/io/sqlite/ModelObjectStorage.cpp`
+Local and group Gaussian data use fixed three-stage wide rows. This matches the fixed in-memory stage arrays and avoids a separate stage table and additional joins.
 
-Command integration:
+## 9. Save and Load Flow
 
-- `/include/rhbm_gem/core/CommandTypes.hpp`
-- `/src/core/command/CommandSystem.cpp`
-- `/src/core/command/detail/CommandBase.hpp`
-- concrete command sources under `/src/core/command/`
+### Save
 
-Primary verification suites:
+1. Lock the repository.
+2. Begin a transaction.
+3. Delete existing child rows for the key.
+4. Upsert the `model_object` root row.
+5. Save chain, component, atom, bond, and selection rows.
+6. Save atom-local, posterior, and atom-group analysis rows.
+7. Commit.
 
-- `/tests/data/DataObjectFileIO_test.cpp`
-- `/tests/data/DataObjectImportRegression_test.cpp`
-- `/tests/data/DataObjectMapBehavior_test.cpp`
-- `/tests/data/DataObjectPersistence_test.cpp`
-- `/tests/data/DataObjectSchemaLifecycle_test.cpp`
-- `/tests/data/DataObjectSchemaValidation_test.cpp`
-- `/tests/integration/CommandApiPipeline_test.cpp`
-- `/tests/core/command/CommandScenarios_test.cpp`
+### Load
+
+1. Lock the repository and begin a transaction.
+2. Read components, atoms, bonds, chain metadata, and persisted selection values.
+3. Assemble `ModelObjectParts` into a valid model.
+4. Restore atom and bond selection from their rows.
+5. Load root metadata and atom-local analysis.
+6. Load atom-group results and rebuild group membership from selected atoms.
+7. Return the model and commit the read transaction.
+
+A missing `key_tag` raises an error; it does not produce an empty model.
+
+## 10. Key Files
+
+- `include/rhbm_gem/data/io/DataRepository.hpp`
+- `src/data/io/DataRepository.cpp`
+- `src/data/io/ModelMapFileIO.cpp`
+- `src/data/io/file/ModelImportState.*`
+- `src/data/io/file/MapHelper.*`
+- `src/data/io/file/MrcFormat.*`
+- `src/data/io/file/CCP4Format.*`
+- `src/data/io/sqlite/ModelObjectStorage.*`
+- `src/data/io/sqlite/SQLiteWrapper.hpp`

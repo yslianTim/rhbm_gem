@@ -798,13 +798,13 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
     const auto & selected_atoms{ model->GetSelectedAtoms() };
     for (auto * atom : selected_atoms)
     {
-        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
-        local_editor.SetAlphaR(FittingStage::Second, 0.0);
-        local_editor.SetGaussianResult(
+        analysis.SetAtomLocalAlphaR(FittingStage::Second, *atom, 0.0);
+        analysis.SetAtomLocalGaussianResult(
             FittingStage::Second,
+            *atom,
             MakeGaussianResult(initial_model));
-        local_editor.SetRawSamplingEntries(
-            BuildSamples(*atom, selected_atoms, truth_model_list));
+        analysis.SetAtomLocalRawSamplingEntries(
+            *atom, BuildSamples(*atom, selected_atoms, truth_model_list));
     }
     return model;
 }
@@ -868,13 +868,13 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
     analysis.InitializeGroupAlpha(rg::FittingStage::Second, 0.0);
     for (auto * atom : model->GetSelectedAtoms())
     {
-        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
-        local_editor.SetAlphaR(FittingStage::Second, 0.0);
-        local_editor.SetGaussianResult(
+        analysis.SetAtomLocalAlphaR(FittingStage::Second, *atom, 0.0);
+        analysis.SetAtomLocalGaussianResult(
             FittingStage::Second,
+            *atom,
             MakeGaussianResult(model_value));
-        local_editor.SetRawSamplingEntries(
-            BuildSamples(*atom, all_atoms, truth_models));
+        analysis.SetAtomLocalRawSamplingEntries(
+            *atom, BuildSamples(*atom, all_atoms, truth_models));
     }
     return model;
 }
@@ -892,7 +892,7 @@ void ExpectUnselectedContributorPeeling(
     for (const auto * atom : selected_atoms)
     {
         selected_models.emplace_back(
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE(
+            rg::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(
                 FittingStage::Second));
         selected_group_keys.emplace_back(
             rg::data_internal::GetGroupKey(atom));
@@ -900,7 +900,7 @@ void ExpectUnselectedContributorPeeling(
 
     for (const auto * target_atom : selected_atoms)
     {
-        const auto view{ rg::AtomLocalPotentialView::RequireFor(*target_atom) };
+        const auto view{ rg::AtomLocalPotentialView::For(*target_atom) };
         const auto raw_entries{ view.GetRawSamplingEntries(false) };
         const auto peeling_entries{ view.GetPeelingSamplingEntries(false) };
         ASSERT_EQ(raw_entries.size(), peeling_entries.size());
@@ -929,7 +929,7 @@ void ExpectUnselectedContributorPeeling(
                 if (selected_iter != selected_atoms.end())
                 {
                     contributor_model =
-                        rg::AtomLocalPotentialView::RequireFor(*neighbor)
+                        rg::AtomLocalPotentialView::For(*neighbor)
                             .GetEstimateMDPDE(FittingStage::Second);
                 }
                 else
@@ -999,12 +999,14 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
     const auto & atom_list{ model->GetSelectedAtoms() };
     // Keep the raw joint-offset update inside the trust region now that a
     // noise-scale rebound no longer supplies an incidental rollback.
-    analysis.EnsureAtomLocalPotential(*atom_list.at(0))
-        .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-            rg::GaussianModel3D{ 5.8, 0.47, 0.15 }));
-    analysis.EnsureAtomLocalPotential(*atom_list.at(1))
-        .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-            rg::GaussianModel3D{ 4.7, 0.68, -0.08 }));
+    analysis.SetAtomLocalGaussianResult(
+        FittingStage::Second,
+        *atom_list.at(0),
+        MakeGaussianResult(rg::GaussianModel3D{ 5.8, 0.47, 0.15 }));
+    analysis.SetAtomLocalGaussianResult(
+        FittingStage::Second,
+        *atom_list.at(1),
+        MakeGaussianResult(rg::GaussianModel3D{ 4.7, 0.68, -0.08 }));
     return model;
 }
 
@@ -1045,12 +1047,13 @@ std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
         const auto current{
-            rg::AtomLocalPotentialView::RequireFor(*atom_list.at(i))
+            rg::AtomLocalPotentialView::For(*atom_list.at(i))
                 .GetGaussianResult(FittingStage::Second).mdpde.GetModel()
         };
-        analysis.EnsureAtomLocalPotential(*atom_list.at(i))
-            .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-                current.WithOffset(initial_offset_list.at(i))));
+        analysis.SetAtomLocalGaussianResult(
+            FittingStage::Second,
+            *atom_list.at(i),
+            MakeGaussianResult(current.WithOffset(initial_offset_list.at(i))));
     }
     return model;
 }
@@ -1062,7 +1065,7 @@ void MakeAtomSamplesSuspicious(rg::ModelObject & model, std::size_t atom_index)
     const auto target_position{ target_atom->GetPosition() };
 
     auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*target_atom)
+        rg::AtomLocalPotentialView::For(*target_atom)
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.resize(256);
@@ -1083,8 +1086,8 @@ void MakeAtomSamplesSuspicious(rg::ModelObject & model, std::size_t atom_index)
     }
 
     auto analysis{ model.EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*target_atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
+    analysis.SetAtomLocalRawSamplingEntries(
+        *target_atom, std::move(raw_sampling_entries));
 }
 
 std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
@@ -1182,14 +1185,13 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
     auto model{ BuildSeparatedRollbackDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom)
+        rg::AtomLocalPotentialView::For(*atom)
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.front().response =
         std::numeric_limits<float>::quiet_NaN();
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
+    analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
     return model;
 }
 
@@ -1215,7 +1217,7 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
     };
     auto * atom{ model->GetSelectedAtoms().front() };
     auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom)
+        rg::AtomLocalPotentialView::For(*atom)
             .GetRawSamplingEntries(false)
     };
     LocalPotentialSampleList fallback_sampling_entries{
@@ -1223,8 +1225,8 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
         raw_sampling_entries.at(6)
     };
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(fallback_sampling_entries));
+    analysis.SetAtomLocalRawSamplingEntries(
+        *atom, std::move(fallback_sampling_entries));
     return model;
 }
 
@@ -1247,8 +1249,8 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedEmptyJointOffsetDefenseModel()
             rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
     };
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
-        .SetRawSamplingEntries({});
+    analysis.SetAtomLocalRawSamplingEntries(
+        *model->GetSelectedAtoms().front(), {});
     return model;
 }
 
@@ -1281,9 +1283,10 @@ std::unique_ptr<rg::ModelObject> BuildPostRefitRollbackChainDefenseModel()
             rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
     };
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
-        .SetGaussianResult(FittingStage::Second, MakeGaussianResult(
-            rg::GaussianModel3D{ 1.0e300, 0.55, 0.0 }));
+    analysis.SetAtomLocalGaussianResult(
+        FittingStage::Second,
+        *model->GetSelectedAtoms().front(),
+        MakeGaussianResult(rg::GaussianModel3D{ 1.0e300, 0.55, 0.0 }));
     return model;
 }
 
@@ -1299,14 +1302,13 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
     };
     auto * atom{ model->GetSelectedAtoms().front() };
     auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom)
+        rg::AtomLocalPotentialView::For(*atom)
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.front().response =
         std::numeric_limits<float>::quiet_NaN();
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
+    analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
     return model;
 }
 
@@ -1323,7 +1325,7 @@ std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
     };
     auto * atom{ model->GetSelectedAtoms().front() };
     auto raw_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom)
+        rg::AtomLocalPotentialView::For(*atom)
             .GetRawSamplingEntries(false)
     };
     for (auto & sample : raw_sampling_entries)
@@ -1334,8 +1336,7 @@ std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
             initial_model.SignalAtDistance(distance) + outer_bias);
     }
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
+    analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
     return model;
 }
 
@@ -1350,14 +1351,14 @@ double CalculateSelectedAtomResponseMeanSquaredError(
     for (std::size_t target_index = target_begin; target_index < target_end; target_index++)
     {
         const auto * atom{ selected_atoms.at(target_index) };
-        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        const auto local_view{ rg::AtomLocalPotentialView::For(*atom) };
         for (const auto & sample : local_view.GetRawSamplingEntries(false))
         {
             double fitted_response{ 0.0 };
             for (const auto * fitted_atom : selected_atoms)
             {
                 const auto fitted_view{
-                    rg::AtomLocalPotentialView::RequireFor(*fitted_atom)
+                    rg::AtomLocalPotentialView::For(*fitted_atom)
                 };
                 fitted_response += fitted_view.GetEstimateMDPDE(
                     FittingStage::Second).ResponseAtDistance(
@@ -1381,7 +1382,7 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
 
 rg::GaussianModel3D GetEstimateModel(const rg::AtomObject & atom)
 {
-    return rg::AtomLocalPotentialView::RequireFor(atom).GetEstimateMDPDE(
+    return rg::AtomLocalPotentialView::For(atom).GetEstimateMDPDE(
         FittingStage::Second);
 }
 
@@ -1400,7 +1401,7 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
     for (const auto * atom : model.GetSelectedAtoms())
     {
         const auto estimate{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE(
+            rg::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(
                 FittingStage::Second)
         };
         EXPECT_TRUE(std::isfinite(estimate.GetAmplitude()));
@@ -1418,7 +1419,7 @@ void ExpectPeelingSamplingEntriesMatchFinalModels(
     for (const auto * target_atom : selected_atoms)
     {
         const auto target_view{
-            rg::AtomLocalPotentialView::RequireFor(*target_atom)
+            rg::AtomLocalPotentialView::For(*target_atom)
         };
         const auto raw_sampling_entries{
             target_view.GetRawSamplingEntries(false)
@@ -5500,7 +5501,7 @@ TEST(
         for (const auto * atom : atom_list)
         {
             const auto local_view{
-                rg::AtomLocalPotentialView::RequireFor(*atom)
+                rg::AtomLocalPotentialView::For(*atom)
             };
             const auto & local_result{
                 local_view.GetGaussianResult(FittingStage::Second)
@@ -5540,7 +5541,7 @@ TEST(
         for (std::size_t i = 0; i < atom_list.size(); i++)
         {
             const auto actual_result{
-                rg::AtomLocalPotentialView::RequireFor(*atom_list.at(i))
+                rg::AtomLocalPotentialView::For(*atom_list.at(i))
                     .GetGaussianResult(FittingStage::Second)
             };
             ASSERT_TRUE(actual_result.posterior.has_value());
@@ -5571,7 +5572,7 @@ TEST(
         for (const int serial_id : { 1, 2 })
         {
             EXPECT_EQ(
-                rg::AtomLocalPotentialView::RequireFor(
+                rg::AtomLocalPotentialView::For(
                     *model->FindAtomPtr(serial_id))
                     .GetNeighborCountForPeeling(),
                 expected_neighbor_count);
@@ -5587,7 +5588,7 @@ TEST(
             exclude_hydrogen);
 
         const auto first_response{
-            rg::AtomLocalPotentialView::RequireFor(
+            rg::AtomLocalPotentialView::For(
                 *model->GetSelectedAtoms().front())
                 .GetPeelingSamplingEntries(false).front().response
         };
@@ -5944,7 +5945,7 @@ TEST(
     for (auto * atom : model->GetSelectedAtoms())
     {
         auto result{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+            rg::AtomLocalPotentialView::For(*atom).GetGaussianResult(
                 FittingStage::Second)
         };
         ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
@@ -5952,9 +5953,9 @@ TEST(
         ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
             result.ols.GetModel()));
         result.posterior.reset();
-        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
-        local_editor.SetGaussianResult(
+        analysis.SetAtomLocalGaussianResult(
             FittingStage::Second,
+            *atom,
             std::move(result));
         LocalPotentialSampleList sentinel_peeling_sampling_entries{
             LocalPotentialSample{
@@ -5962,9 +5963,9 @@ TEST(
                 SamplingPoint{ 0.5F, atom->GetPosition(), true }
             }
         };
-        local_editor.SetPeelingSamplingEntries(
-            sentinel_peeling_sampling_entries);
-        local_editor.SetNeighborCountForPeeling(99);
+        analysis.SetAtomLocalPeelingSamplingEntries(
+            *atom, sentinel_peeling_sampling_entries);
+        analysis.SetAtomLocalNeighborCountForPeeling(*atom, 99);
         previous_model_list.emplace_back(GetEstimateModel(*atom));
         previous_peeling_sampling_entries_list.emplace_back(
             std::move(sentinel_peeling_sampling_entries));
@@ -5990,7 +5991,7 @@ TEST(
             previous_model_list.at(i),
             0.0);
         const auto peeling_sampling_entries{
-            rg::AtomLocalPotentialView::RequireFor(
+            rg::AtomLocalPotentialView::For(
                 *model->GetSelectedAtoms().at(i))
                 .GetPeelingSamplingEntries(false)
         };
@@ -5999,7 +6000,7 @@ TEST(
             peeling_sampling_entries.front().response,
             previous_peeling_sampling_entries_list.at(i).front().response);
         EXPECT_NE(
-            rg::AtomLocalPotentialView::RequireFor(
+            rg::AtomLocalPotentialView::For(
                 *model->GetSelectedAtoms().at(i))
                 .GetNeighborCountForPeeling(),
             99);

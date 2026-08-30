@@ -2,17 +2,18 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace rhbm_gem {
 
-class MapObject;
 class ModelObject;
-class SQLitePersistence;
+class SQLiteWrapper;
 
 class DataRepository
 {
-    std::unique_ptr<SQLitePersistence> m_database;
+    std::unique_ptr<SQLiteWrapper> m_database;
+    mutable std::mutex m_db_mutex;
 
 public:
     explicit DataRepository(const std::filesystem::path & database_path);
@@ -21,10 +22,7 @@ public:
     DataRepository & operator=(const DataRepository &) = delete;
 
     std::unique_ptr<ModelObject> LoadModel(const std::string & key_tag) const;
-    std::unique_ptr<MapObject> LoadMap(const std::string & key_tag) const;
     void SaveModel(const ModelObject & model_object, const std::string & key_tag) const;
-    void SaveMap(const MapObject & map_object, const std::string & key_tag) const;
-    
 };
 
 } // namespace rhbm_gem

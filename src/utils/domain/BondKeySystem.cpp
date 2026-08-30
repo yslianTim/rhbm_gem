@@ -15,7 +15,6 @@ BondKeySystem::BondKeySystem() :
         auto bond_key{ static_cast<BondKey>(link) };
         m_id_to_key_map.emplace(bond_id, bond_key);
         m_key_to_id_map.emplace(bond_key, std::string{bond_id});
-        m_veto_bond_id_set.emplace(BuildReverseBondIdFromBondId(std::string{bond_id}));
     }
 }
 
@@ -121,51 +120,8 @@ bool BondKeySystem::IsRegistedBond(
     return true;
 }
 
-bool BondKeySystem::IsBuildInBond(
-    const std::string & atom_id_1, const std::string & atom_id_2) const
-{
-    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
-    if (m_id_to_key_map.find(bond_id) == m_id_to_key_map.end()) return false;
-    return m_id_to_key_map.at(bond_id) < k_dynamic_base;
-}
-
-bool BondKeySystem::IsBuildInBond(BondKey bond_key) const
-{
-    return bond_key < k_dynamic_base;
-}
-
-bool BondKeySystem::IsReverseBond(
-    const std::string & atom_id_1, const std::string & atom_id_2) const
-{
-    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
-    return m_veto_bond_id_set.find(bond_id) != m_veto_bond_id_set.end();
-}
-
 std::string BondKeySystem::BuildBondIdFromAtomIdPair(
     const std::string & atom_id_1, const std::string & atom_id_2) const
 {
     return atom_id_1 +"_"+ atom_id_2;
-}
-
-std::string BondKeySystem::BuildReverseBondIdFromBondId(
-    const std::string & bond_id) const
-{
-    auto atom_id_pair{ BuildAtomIdPairFromBondId(bond_id) };
-    if (atom_id_pair.first == atom_id_pair.second) return ".";
-    return atom_id_pair.second +"_"+ atom_id_pair.first;
-}
-
-std::pair<std::string, std::string> BondKeySystem::BuildAtomIdPairFromBondId(
-    const std::string & bond_id) const
-{
-    auto pos{ bond_id.find("_") };
-    if (pos == std::string::npos)
-    {
-        Logger::Log(LogLevel::Warning, 
-            "BondKeySystem::BuildAtomIdPairFromBondId() - Invalid bond id: " + bond_id);
-        return {"", ""};
-    }
-    auto atom_id_1{ bond_id.substr(0, pos) };
-    auto atom_id_2{ bond_id.substr(pos+1) };
-    return { atom_id_1, atom_id_2 };
 }

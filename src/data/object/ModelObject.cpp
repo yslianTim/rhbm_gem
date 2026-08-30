@@ -17,9 +17,6 @@
 
 namespace {
 
-constexpr double kInitialLocalAlpha{ 0.0 };
-constexpr double kInitialGroupAlpha{ 0.0 };
-
 double ComputeDistanceSquare(
     const rhbm_gem::AtomObject & atom_1,
     const rhbm_gem::AtomObject & atom_2)
@@ -584,24 +581,6 @@ void ModelObject::ApplySimulationMetadata(double simulated_map_resolution)
     SetResolutionMethod("Blurring Width");
 }
 
-void ModelObject::LocalPotentialInitialization()
-{
-    auto analysis{ EditAnalysis() };
-    analysis.Clear();
-    analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeLocalAlpha(FittingStage::First, kInitialLocalAlpha);
-    analysis.InitializeLocalAlpha(FittingStage::Second, kInitialLocalAlpha);
-    analysis.InitializeLocalAlpha(FittingStage::Third, kInitialLocalAlpha);
-    analysis.InitializeGroupAlpha(FittingStage::First, kInitialGroupAlpha);
-    analysis.InitializeGroupAlpha(FittingStage::Second, kInitialGroupAlpha);
-    analysis.InitializeGroupAlpha(FittingStage::Third, kInitialGroupAlpha);
-}
-
-void ModelObject::ClearTransientFitStates()
-{
-    EditAnalysis().ClearTransientFitStates();
-}
-
 void ModelObject::SetAtomSelected(int serial_id, bool selected)
 {
     FindAtomPtr(serial_id)->SetSelectedFlag(selected);
@@ -621,18 +600,6 @@ void ModelObject::SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bo
         }
     }
     throw std::out_of_range("Bond serial pair is not available.");
-}
-
-void ModelObject::RestoreBondSelectionBulk(
-    const std::set<std::pair<int, int>> & selected_serial_pairs)
-{
-    for (auto & bond : m_bond_list)
-    {
-        const auto serial_id_pair{
-            std::make_pair(bond->GetAtomSerialID1(), bond->GetAtomSerialID2()) };
-        bond->SetSelectedFlag(selected_serial_pairs.find(serial_id_pair) != selected_serial_pairs.end());
-    }
-    RebuildSelection();
 }
 
 void ModelObject::BuildSelectedAtomList()
@@ -756,14 +723,6 @@ bool ModelObject::HasStandardDNAComponent() const
         }
     }
     return false;
-}
-
-void ModelObject::PrintSummary() const
-{
-    Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomCountingSummary());
-    Logger::Log(
-        LogLevel::Info,
-        this->GetAnalysisView().GetAtomGroupingSummary(FittingStage::Third));
 }
 
 } // namespace rhbm_gem

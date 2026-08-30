@@ -130,7 +130,7 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         if (AtomLocalPotentialView::For(*atom).IsAvailable())
         {
             b_factor = static_cast<float>(
-                AtomLocalPotentialView::RequireFor(*atom)
+                AtomLocalPotentialView::For(*atom)
                     .GetEstimateMDPDE(FittingStage::Third)
                     .GetDisplayParameter(par));
         }

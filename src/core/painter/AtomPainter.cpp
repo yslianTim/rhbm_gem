@@ -112,7 +112,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ root_helper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    const auto atom_entry{ AtomLocalPotentialView::RequireFor(*atom_object) };
+    const auto atom_entry{ AtomLocalPotentialView::For(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto map_value_range{
         local_potential_series::ComputeResponseRange(
@@ -215,7 +215,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        const auto entry_view{ AtomLocalPotentialView::RequireFor(*atom_object) };
+        const auto entry_view{ AtomLocalPotentialView::For(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(
             apply_selection, use_peeling_sampling_entries) };

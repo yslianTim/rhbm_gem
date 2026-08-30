@@ -43,7 +43,7 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
     }
     rg::MapObject map{ grid_size, grid_spacing, origin, std::move(values) };
 
-    for (const std::string & extension : { ".map", ".ccp4" })
+    for (const std::string & extension : { ".mrc", ".map", ".ccp4" })
     {
         SCOPED_TRACE(extension);
         const auto path{ temp_dir.path() / ("runtime_map" + extension) };

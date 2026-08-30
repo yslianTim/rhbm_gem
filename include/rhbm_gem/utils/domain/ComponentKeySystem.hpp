@@ -25,7 +25,5 @@ public:
     void RegisterComponent(const std::string & component_id, ComponentKey component_key);
     ComponentKey GetComponentKey(const std::string & component_id);
     std::string GetComponentId(ComponentKey component_key);
-    bool IsBuildInComponent(const std::string & component_id) const;
-    bool IsBuildInComponent(ComponentKey component_key) const;
 
 };

@@ -3,10 +3,14 @@
 #include "core/detail/FittingModel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
+#include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,6 +23,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -31,6 +36,145 @@ namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
+constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
+    Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
+};
+
+struct GaussianModelParameterSamples
+{
+    std::vector<double> amplitude_list{};
+    std::vector<double> width_list{};
+    std::vector<double> offset_list{};
+};
+
+std::string BuildGroupPriorSpotSummary(
+    const ModelObject & model_object,
+    FittingStage stage)
+{
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys(stage))
+    {
+        const auto & atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
+        if (atom_list.empty()) continue;
+
+        const auto spot{ atom_list.front()->GetSpot() };
+        if (std::find(
+                kGroupPriorSummarySpotList.begin(),
+                kGroupPriorSummarySpotList.end(),
+                spot) == kGroupPriorSummarySpotList.end())
+        {
+            continue;
+        }
+        const auto & prior{ analysis_view.GetAtomGroupPrior(stage, group_key) };
+        auto & sample_list{ spot_sample_map[spot] };
+        sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
+        sample_list.width_list.emplace_back(prior.GetWidth());
+        sample_list.offset_list.emplace_back(prior.GetOffset());
+    }
+
+    if (spot_sample_map.empty())
+    {
+        return "Group fitting prior summary by Spot: no atom groups available.";
+    }
+
+    std::ostringstream summary;
+    summary << "Group fitting prior summary by Spot:\n"
+        << "|---Spot---|------Amplitude------|--------Width--------|-------Offset--------|\n"
+        << "|          |   mean   |   s.d.   |   mean   |   s.d.   |   mean   |   s.d.   |";
+    for (const auto spot : kGroupPriorSummarySpotList)
+    {
+        const auto sample_iter{ spot_sample_map.find(spot) };
+        if (sample_iter == spot_sample_map.end()) continue;
+        const auto & sample_list{ sample_iter->second };
+        const auto amplitude_mean{ array_helper::ComputeMean(
+            sample_list.amplitude_list.data(), sample_list.amplitude_list.size()) };
+        const auto width_mean{ array_helper::ComputeMean(
+            sample_list.width_list.data(), sample_list.width_list.size()) };
+        const auto offset_mean{ array_helper::ComputeMean(
+            sample_list.offset_list.data(), sample_list.offset_list.size()) };
+
+        summary << "\n| " << std::left << std::setw(8)
+            << ChemicalDataHelper::GetLabel(spot)
+            << " | " << std::right << std::fixed << std::setprecision(2)
+            << std::setw(8) << amplitude_mean
+            << " | " << std::setw(8)
+            << array_helper::ComputeStandardDeviation(
+                sample_list.amplitude_list.data(),
+                sample_list.amplitude_list.size(),
+                amplitude_mean)
+            << " | " << std::setw(8) << width_mean
+            << " | " << std::setw(8)
+            << array_helper::ComputeStandardDeviation(
+                sample_list.width_list.data(),
+                sample_list.width_list.size(),
+                width_mean)
+            << " | " << std::setw(8) << offset_mean
+            << " | " << std::setw(8)
+            << array_helper::ComputeStandardDeviation(
+                sample_list.offset_list.data(),
+                sample_list.offset_list.size(),
+                offset_mean)
+            << " |";
+    }
+    return summary.str();
+}
+
+std::string BuildLocalFittingResultCsv(
+    const ModelObject & model_object,
+    bool peeling_applied)
+{
+    auto atom_list{ model_object.GetSelectedAtoms() };
+    std::sort(
+        atom_list.begin(),
+        atom_list.end(),
+        [](const AtomObject * lhs, const AtomObject * rhs)
+        {
+            return lhs->GetSerialID() < rhs->GetSerialID();
+        });
+
+    std::ostringstream table;
+    table << std::fixed << std::setprecision(2);
+    table
+        << "serial id,residue,spot,neighbor count,peeling ratio,"
+        << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
+        << "width 1st,width 2nd,width 3rd,"
+        << "offset 1st,offset 2nd,offset 3rd";
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        const auto & first_model{ local_view.GetEstimateMDPDE(FittingStage::First) };
+        const auto & second_model{ local_view.GetEstimateMDPDE(FittingStage::Second) };
+        const auto & third_model{ local_view.GetEstimateMDPDE(FittingStage::Third) };
+
+        table << '\n'
+            << atom->GetSerialID() << ','
+            << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
+            << atom->GetAtomID() << ','
+            << local_view.GetNeighborCountForPeeling() << ',';
+        const auto peeling_ratio{ local_view.GetLocalFittingPeelingRatio(peeling_applied) };
+        if (peeling_ratio.has_value())
+        {
+            table << *peeling_ratio;
+        }
+        else
+        {
+            table << "nan";
+        }
+        table << ','
+            << first_model.GetAmplitude() << ','
+            << second_model.GetAmplitude() << ','
+            << third_model.GetAmplitude() << ','
+            << first_model.GetWidth() << ','
+            << second_model.GetWidth() << ','
+            << third_model.GetWidth() << ','
+            << first_model.GetOffset() << ','
+            << second_model.GetOffset() << ','
+            << third_model.GetOffset();
+    }
+    table << '\n';
+    return table.str();
+}
 
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
@@ -108,9 +252,7 @@ void OutputLocalFittingResultTable(
     bool peeling_applied,
     const std::filesystem::path & output_path)
 {
-    const auto table{
-        model_object.GetAnalysisView().GetLocalFittingResultCsv(peeling_applied)
-    };
+    const auto table{ BuildLocalFittingResultCsv(model_object, peeling_applied) };
     std::ofstream output{ output_path, std::ios::out | std::ios::trunc };
     if (!output.is_open())
     {
@@ -150,7 +292,7 @@ void RunGroupAlphaTraining(
         group_member_models.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            const auto local_view{ AtomLocalPotentialView::For(*atom) };
             group_member_models.emplace_back(
                 local_view.GetGaussianResult(stage).mdpde.GetModel());
         }
@@ -184,6 +326,7 @@ void RunFixedOffsetLocalFitting(
     const auto selected_atom_size{ atom_list.size() };
     auto analysis{ model_object.EditAnalysis() };
     analysis.EnsureSelectedAtomLocalPotentials();
+    std::vector<LocalGaussianResult> local_results(selected_atom_size);
     size_t atom_count{ 0 };
     if (!options.quiet_mode)
     {
@@ -197,17 +340,15 @@ void RunFixedOffsetLocalFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto & atom{ *atom_list[i] };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+        const auto local_view{ AtomLocalPotentialView::For(atom) };
         LocalPotentialSampleList sample_entries{ local_view.GetSamplingEntries(stage) };
         GaussianModel3D offset_model{ local_view.GetGaussianResult(stage).mdpde.GetModel() };
-        auto result{
+        local_results[i] =
             EstimateLocalGaussian(
                 sample_entries,
                 local_view.GetAlphaR(stage),
                 options,
-                offset_model)
-        };
-        analysis.ApplyAtomLocalGaussianResult(stage, atom, std::move(result));
+                offset_model);
 
         if (!options.quiet_mode)
         {
@@ -219,6 +360,12 @@ void RunFixedOffsetLocalFitting(
                 Logger::ProgressPercent(atom_count, selected_atom_size);
             }
         }
+    }
+
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        analysis.SetAtomLocalGaussianResult(
+            stage, *atom_list[i], std::move(local_results[i]));
     }
 }
 
@@ -371,7 +518,7 @@ void RunLocalAlphaTraining(
         sample_entries_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            const auto local_view{ AtomLocalPotentialView::For(*atom) };
             if (!local_view.HasEnoughSamplingEntriesInRange(
                     stage,
                     options.distance_min,
@@ -421,7 +568,7 @@ void RunGroupPotentialFitting(
         member_list.reserve(atom_list.size());
         for (const auto & atom : atom_list)
         {
-            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            const auto local_view{ AtomLocalPotentialView::For(*atom) };
             const auto & local_result{ local_view.GetGaussianResult(stage) };
             auto sample_entries{ local_view.GetSamplingEntries(stage) };
             member_list.emplace_back(GroupGaussianMemberInput{
@@ -462,7 +609,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,
-            model_object.GetAnalysisView().GetGroupPriorSpotSummary(FittingStage::Third));
+            BuildGroupPriorSpotSummary(model_object, FittingStage::Third));
     }
     if (options.result_csv_path.has_value())
     {

@@ -312,7 +312,7 @@ std::unique_ptr<ModelObject> BuildAtomicModelObject(
             model_response_max,
             error_sigma,
             generator);
-        analysis.EnsureAtomLocalPotential(atom_object).SetRawSamplingEntries(std::move(raw_sampling_entries));
+        analysis.SetAtomLocalRawSamplingEntries(atom_object, std::move(raw_sampling_entries));
     }
     return model_object;
 }

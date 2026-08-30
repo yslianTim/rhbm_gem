@@ -1,8 +1,10 @@
 #pragma once
 
-#include <cstddef>
+#include <array>
 #include <istream>
+#include <memory>
 #include <ostream>
+#include <string>
 
 namespace rhbm_gem {
 
@@ -17,21 +19,7 @@ class CCP4Format
         SIZE_LABEL  = 80
     };
 
-    enum AXIS
-    {
-        COLUMN  = 0,
-        ROW     = 1,
-        SECTION = 2
-    };
-
-    enum class MODE : unsigned int
-    {
-        SIGNED_INT8     =   0,
-        SIGNED_INT16    =   1,
-        SIGNED_FLOAT32  =   2,
-        COMPLEX_INT16   =   3,
-        COMPLEX_FLOAT32 =   4
-    };
+    static constexpr int kFloat32Mode = 2;
 
     struct CCP4Header
     {
@@ -61,7 +49,6 @@ class CCP4Format
                   "CCP4Header size mismatch: check HEAD::SIZE_HEADER");
 
     CCP4Header m_header;
-    std::unique_ptr<float[]> m_data_array;
 
 public:
     CCP4Format();
@@ -69,25 +56,16 @@ public:
     std::unique_ptr<MapObject> ReadMap(std::istream & stream, const std::string & source_name);
     void WriteMap(const MapObject & map_object, std::ostream & stream);
 
-    const CCP4Header & GetHeader() const { return m_header; }
-    
 private:
-    std::unique_ptr<float[]> TakeDataArray();
     std::array<int, 3> GetGridSize() const;
     std::array<float, 3> GetGridSpacing() const;
     std::array<float, 3> GetOrigin() const;
     void InitHeader();
     void LoadHeader(std::istream & stream);
     void SaveHeader(std::ostream & stream);
-    void PrintHeader() const;
-    void LoadDataArray(std::istream & stream);
-    void SaveDataArray(const float * data, size_t size, std::ostream & stream);
     void SetHeader(const std::array<int, 3> & grid_size,
                    const std::array<float, 3> & grid_spacing,
                    const std::array<float, 3> & origin);
-    size_t GetElementSize() const;
-    void ReorderedAxisRelatedParameters();
-    
 };
 
 } // namespace rhbm_gem

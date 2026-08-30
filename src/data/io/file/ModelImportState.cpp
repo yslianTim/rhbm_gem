@@ -47,22 +47,11 @@ void ModelImportState::AddBondObject(
 void ModelImportState::AddEntityTypeInEntityMap(
     const std::string& entity_id, Entity entity) {
     m_entity_type_map[entity_id] = entity;
-    m_entity_id_list_map[entity].emplace_back(entity_id);
 }
 
 void ModelImportState::AddChainIDInEntityMap(
     const std::string& entity_id, const std::string& chain_id) {
     m_chain_id_list_map[entity_id].emplace_back(chain_id);
-}
-
-void ModelImportState::AddMoleculesSizeInEntityMap(
-    const std::string& entity_id, int molecules_size) {
-    m_molecules_size_map[entity_id] = molecules_size;
-}
-
-void ModelImportState::AddSheetStrands(
-    const std::string& sheet_id, int strands_size) {
-    m_struct_sheet_strand_map[sheet_id] = strands_size;
 }
 
 void ModelImportState::AddSheetRange(
@@ -155,11 +144,10 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
             "Model " + std::to_string(preferred_model_number) + " not found. Fallback to model " + std::to_string(selected_model_number) + ".");
     }
 
-    auto atom_list{
-        model_number_list.empty()
-            ? std::vector<std::unique_ptr<AtomObject>>{}
-            : MoveAtomObjectList(selected_model_number)
-    };
+    std::vector<std::unique_ptr<AtomObject>> atom_list;
+    if (!model_number_list.empty()) {
+        atom_list = std::move(m_atom_object_list_map.at(selected_model_number));
+    }
 
     std::unordered_set<const AtomObject*> selected_atom_set;
     selected_atom_set.reserve(atom_list.size());
@@ -167,7 +155,7 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
         selected_atom_set.insert(atom.get());
     }
 
-    auto bond_list{MoveBondObjectList()};
+    auto bond_list{std::move(m_bond_object_list)};
     std::vector<std::unique_ptr<BondObject>> filtered_bond_list;
     filtered_bond_list.reserve(bond_list.size());
     for (auto& bond : bond_list) {
@@ -185,34 +173,17 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
     ModelObjectParts parts;
     parts.atom_list = std::move(atom_list);
     parts.bond_list = std::move(filtered_bond_list);
-    parts.chain_id_list_map = GetChainIDListMap();
-    parts.chemical_component_entry_map = std::move(GetChemicalComponentEntryMap());
-    parts.component_key_system = MoveComponentKeySystem();
-    parts.atom_key_system = MoveAtomKeySystem();
-    parts.bond_key_system = MoveBondKeySystem();
+    parts.chain_id_list_map = std::move(m_chain_id_list_map);
+    parts.chemical_component_entry_map = std::move(m_chemical_component_entry_map);
+    parts.component_key_system = std::move(m_component_key_system);
+    parts.atom_key_system = std::move(m_atom_key_system);
+    parts.bond_key_system = std::move(m_bond_key_system);
     auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(parts))) };
     model_object->SetPdbID(GetPdbID());
     model_object->SetEmdID(GetEmdID());
     model_object->SetResolution(GetResolution());
     model_object->SetResolutionMethod(GetResolutionMethod());
     return model_object;
-}
-
-std::vector<std::unique_ptr<AtomObject>> ModelImportState::MoveAtomObjectList(int model_number) {
-    auto iter{m_atom_object_list_map.find(model_number)};
-    if (iter == m_atom_object_list_map.end()) {
-        Logger::Log(LogLevel::Warning,
-                    "ModelImportState::MoveAtomObjectList() - Model number " + std::to_string(model_number) + " not found.");
-        return {};
-    }
-    return std::move(iter->second);
-}
-
-std::vector<std::unique_ptr<BondObject>> ModelImportState::MoveBondObjectList() {
-    if (m_bond_object_list.empty()) {
-        return {};
-    }
-    return std::move(m_bond_object_list);
 }
 
 const std::string& ModelImportState::GetPdbID() const {
@@ -248,16 +219,6 @@ const std::vector<Element>& ModelImportState::GetElementTypeList() const {
 const std::unordered_map<std::string, Entity>&
 ModelImportState::GetEntityTypeMap() const {
     return m_entity_type_map;
-}
-
-const std::unordered_map<std::string, int>&
-ModelImportState::GetMoleculesSizeMap() const {
-    return m_molecules_size_map;
-}
-
-const std::unordered_map<Entity, std::vector<std::string>>&
-ModelImportState::GetEntityIDListMap() const {
-    return m_entity_id_list_map;
 }
 
 const std::unordered_map<std::string, std::vector<std::string>>&
@@ -353,11 +314,6 @@ const ComponentBondEntry* ModelImportState::GetComponentBondEntryPtr(
         return nullptr;
     }
     return comp_entry_ptr->FindComponentBondEntry(bond_key);
-}
-
-std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>>&
-ModelImportState::GetChemicalComponentEntryMap() {
-    return m_chemical_component_entry_map;
 }
 
 bool ModelImportState::HasChemicalComponentEntry(ComponentKey comp_key) const {

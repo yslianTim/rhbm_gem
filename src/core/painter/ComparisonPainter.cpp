@@ -819,7 +819,7 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto count{ 0 };
     for (auto model_object : model_list)
     {
-        const ModelAnalysisView entry_view{ *model_object };
+        const auto entry_view{ model_object->GetAnalysisView() };
         double y_value{ 0.0 };
         double y_error{ 0.0 };
         double ref_y_value{ 0.0 };
@@ -874,7 +874,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     for (auto model_object : model_list)
     {
         model_count++;
-        const ModelAnalysisView entry_view{ *model_object };
+        const auto entry_view{ model_object->GetAnalysisView() };
         double x_value{ 0.0 };
         double y_value{ 0.0 };
         double x_error{ 0.0 };

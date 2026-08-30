@@ -5,7 +5,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -120,11 +119,8 @@ public:
     void ApplyBackboneSelection(bool is_exclusion);
     void ApplyComponentIDSelection(std::string component_id, bool is_exclusion);
     void ApplySimulationMetadata(double simulated_map_resolution);
-    void LocalPotentialInitialization();
-    void ClearTransientFitStates();
     ModelAnalysisEditor EditAnalysis();
     ModelAnalysisView GetAnalysisView() const;
-    void PrintSummary() const;
 
 private:
     friend class ModelDerivedState;
@@ -142,8 +138,6 @@ private:
     void BuildSelectedBondList();
     void FilterSelectionFromSymmetry(bool is_asymmetry);
 
-    // Persistence hydration.
-    void RestoreBondSelectionBulk(const std::set<std::pair<int, int>> & selected_serial_pairs);
 };
 
 } // namespace rhbm_gem

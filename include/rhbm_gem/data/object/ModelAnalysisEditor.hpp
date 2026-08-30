@@ -1,6 +1,5 @@
 #pragma once
 
-#include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 
@@ -14,14 +13,26 @@ class ModelAnalysisEditor
     ModelObject & m_model_object;
 
 public:
-    explicit ModelAnalysisEditor(ModelObject & model_object);
     void Clear();
     void ClearTransientFitStates();
+    void InitializeFromSelection();
     void InitializeLocalFittingSeedModels();
-    AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     void EnsureSelectedAtomLocalPotentials();
     void EnsureAtomGroupLocalPotentials(FittingStage stage, GroupKey group_key);
-    AtomLocalPotentialEditor GetAtomLocalPotentialEditor(const AtomObject & atom_object) const;
+    void SetAtomLocalRawSamplingEntries(
+        const AtomObject & atom_object,
+        LocalPotentialSampleList value);
+    void SetAtomLocalPeelingSamplingEntries(
+        const AtomObject & atom_object,
+        LocalPotentialSampleList value);
+    void SetAtomLocalGaussianResult(
+        FittingStage stage,
+        const AtomObject & atom_object,
+        LocalGaussianResult result);
+    void SetAtomLocalAlphaR(
+        FittingStage stage,
+        const AtomObject & atom_object,
+        double alpha_r);
     void RebuildAtomGroupsFromSelection();
     void InitializeLocalAlpha(FittingStage stage, double alpha_r);
     void SetAtomGroupAlphaR(FittingStage stage, GroupKey group_key, double alpha_r);
@@ -33,10 +44,6 @@ public:
         FittingStage stage,
         GroupKey group_key,
         const GroupGaussianResult & group_result);
-    void ApplyAtomLocalGaussianResult(
-        FittingStage stage,
-        const AtomObject & atom_object,
-        LocalGaussianResult result);
     void SetAtomLocalNeighborCountForPeeling(
         const AtomObject & atom_object,
         int neighbor_count);
@@ -45,7 +52,10 @@ public:
         LocalGaussianResult result,
         LocalPotentialSampleList peeling_sampling_entries);
     void SetAtomGroupAlphaG(FittingStage stage, GroupKey group_key, double alpha_g);
-    
+
+private:
+    explicit ModelAnalysisEditor(ModelObject & model_object);
+    friend class ModelObject;
 };
 
 } // namespace rhbm_gem

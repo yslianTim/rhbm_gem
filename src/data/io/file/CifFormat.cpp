@@ -840,21 +840,8 @@ void LoadEntityBlock(CifFormatState& state) {
 
             auto entity_id{token_list[index_map.at("id")]};
             auto entity_type{token_list[index_map.at("type")]};
-            std::string molecules_size_string{"-1"};
-            if (index_map.find("pdbx_number_of_molecules") != index_map.end() &&
-                index_map.at("pdbx_number_of_molecules") < token_list.size()) {
-                molecules_size_string = token_list[index_map.at("pdbx_number_of_molecules")];
-            }
-            int molecules_size{-1};
-            try {
-                molecules_size = std::stoi(molecules_size_string);
-            } catch (const std::exception&) {
-                Logger::Log(LogLevel::Error, "Invalid molecules size: " + molecules_size_string);
-            }
-
             state.data_block->AddEntityTypeInEntityMap(
                 entity_id, ChemicalDataHelper::GetEntityFromString(entity_type));
-            state.data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
         });
 
     ParseLoopBlock(
@@ -884,8 +871,6 @@ void LoadEntityBlock(CifFormatState& state) {
 
     std::string entity_id{GetFirstDataItemValue(state, "_entity.id").value_or("")};
     std::string entity_type{GetFirstDataItemValue(state, "_entity.type").value_or("")};
-    std::string molecules_size_raw{
-        GetFirstDataItemValue(state, "_entity.pdbx_number_of_molecules").value_or("")};
     std::string struct_asym_id{GetFirstDataItemValue(state, "_struct_asym.id").value_or("")};
     std::string struct_asym_entity_id{
         GetFirstDataItemValue(state, "_struct_asym.entity_id").value_or("")};
@@ -896,19 +881,8 @@ void LoadEntityBlock(CifFormatState& state) {
                 LogLevel::Warning,
                 "Key-value fallback cannot recover required _entity.id/_entity.type fields.");
         } else {
-            int molecules_size{-1};
-            if (!IsMmCifMissingValue(molecules_size_raw)) {
-                try {
-                    molecules_size = std::stoi(molecules_size_raw);
-                } catch (const std::exception&) {
-                    Logger::Log(
-                        LogLevel::Warning,
-                        "Invalid _entity.pdbx_number_of_molecules in key-value fallback: " + molecules_size_raw);
-                }
-            }
             state.data_block->AddEntityTypeInEntityMap(
                 entity_id, ChemicalDataHelper::GetEntityFromString(entity_type));
-            state.data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
         }
     }
 
@@ -1185,25 +1159,6 @@ void LoadStructureConnectionBlock(CifFormatState& state) {
 }
 
 void LoadStructureSheetBlock(CifFormatState& state) {
-    ParseLoopBlock(
-        state,
-        "_struct_sheet.",
-        [&state](const CifColumnIndexMap& index_map, const std::vector<std::string>& token_list) {
-            auto sheet_id_opt{GetTokenOptional(index_map, token_list, {"id"})};
-            auto strands_size_opt{GetTokenOptional(index_map, token_list, {"number_strands"})};
-            if (!sheet_id_opt.has_value() || !strands_size_opt.has_value())
-                return;
-            auto strands_size{
-                ParseIntOrDefault(
-                    *strands_size_opt,
-                    0,
-                    "_struct_sheet.number_strands",
-                    "LoadStructureSheetBlock()")};
-            if (strands_size <= 0)
-                return;
-            state.data_block->AddSheetStrands(*sheet_id_opt, strands_size);
-        });
-
     ParseLoopBlock(
         state,
         "_struct_sheet_range.",
@@ -1582,7 +1537,7 @@ void WriteAtomSiteBlock(
     for (const auto& atom_ptr : model_object.GetAtomList()) {
         const AtomObject* atom{atom_ptr.get()};
         if (!AtomLocalPotentialView::For(*atom).IsAvailable()) continue;
-        const auto model_entry{AtomLocalPotentialView::RequireFor(*atom)};
+        const auto model_entry{AtomLocalPotentialView::For(*atom)};
         auto gaus_estimate{
             model_entry.GetEstimateMDPDE(FittingStage::Third)
                 .GetDisplayParameter(model_par)

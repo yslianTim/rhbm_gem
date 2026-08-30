@@ -141,21 +141,14 @@ void RunPotentialSamplingWorkflow(
     ScopeTimer timer("MapSampler::RunPotentialSamplingWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     size_t atom_count{ 0 };
-    auto analysis{ model_object.EditAnalysis() };
-    for (auto * atom : atom_list)
-    {
-        analysis.EnsureAtomLocalPotential(*atom);
-    }
+    std::vector<LocalPotentialSampleList> raw_sampling_entries_list(atom_list.size());
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_count)
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        auto raw_sampling_entries{
-            SampleAtomMapValues(map_object, *atom_list[i], sampling_method)
-        };
-        analysis.GetAtomLocalPotentialEditor(*atom_list[i])
-            .SetRawSamplingEntries(std::move(raw_sampling_entries));
+        raw_sampling_entries_list[i] =
+            SampleAtomMapValues(map_object, *atom_list[i], sampling_method);
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -164,6 +157,13 @@ void RunPotentialSamplingWorkflow(
             atom_count++;
             Logger::ProgressPercent(atom_count, atom_list.size());
         }
+    }
+
+    auto analysis{ model_object.EditAnalysis() };
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        analysis.SetAtomLocalRawSamplingEntries(
+            *atom_list[i], std::move(raw_sampling_entries_list[i]));
     }
 }
 

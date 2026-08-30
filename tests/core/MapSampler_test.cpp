@@ -154,7 +154,7 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
     ASSERT_EQ(2u, model->GetSelectedAtomCount());
     for (const auto * atom : model->GetSelectedAtoms())
     {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
         EXPECT_FALSE(local_view.GetRawSamplingEntries(false).empty());
     }
 }
