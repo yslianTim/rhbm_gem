@@ -61,11 +61,15 @@ PreparedLocalGaussianDesign::PreparedLocalGaussianDesign(
     m_row_list.reserve(sample_entries.size());
     for (std::size_t sample_index = 0; sample_index < sample_entries.size(); sample_index++)
     {
-        const auto distance{
-            static_cast<double>(sample_entries.at(sample_index).point.distance)
-        };
-        if (distance < range_min || distance > range_max) continue;
-        m_row_list.emplace_back(Row{ sample_index, distance });
+        const auto distance{ sample_entries.at(sample_index).point.distance };
+        if (distance < static_cast<float>(range_min) || distance > static_cast<float>(range_max))
+        {
+            continue;
+        }
+        m_row_list.emplace_back(Row{
+            sample_index,
+            static_cast<double>(distance)
+        });
     }
 
     const auto row_count{ static_cast<Eigen::Index>(m_row_list.size()) };
@@ -144,26 +148,6 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
             RHBMExecutionOptions{ .thread_size = thread_size })
     };
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
-}
-
-LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & model)
-{
-    LocalPotentialSampleList adjusted_sampling_entries;
-    adjusted_sampling_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto response{
-            CalculateAdjustedResponse(
-                static_cast<double>(sample.response),
-                distance,
-                model)
-        };
-        adjusted_sampling_entries.emplace_back(LocalPotentialSample{ response, sample.point });
-    }
-    return adjusted_sampling_entries;
 }
 
 } // namespace rhbm_gem::core::detail

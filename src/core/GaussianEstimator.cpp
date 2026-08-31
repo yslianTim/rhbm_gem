@@ -48,9 +48,7 @@ struct GaussianModelParameterSamples
     std::vector<double> offset_list{};
 };
 
-std::string BuildGroupPriorSpotSummary(
-    const ModelObject & model_object,
-    FittingStage stage)
+std::string BuildGroupPriorSpotSummary(const ModelObject & model_object, FittingStage stage)
 {
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
@@ -121,9 +119,7 @@ std::string BuildGroupPriorSpotSummary(
     return summary.str();
 }
 
-std::string BuildLocalFittingResultCsv(
-    const ModelObject & model_object,
-    bool peeling_applied)
+std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool peeling_applied)
 {
     auto atom_list{ model_object.GetSelectedAtoms() };
     std::sort(
@@ -184,6 +180,17 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options
         .thread_size = options.thread_size
     };
     return training_options;
+}
+
+std::vector<double> CollectSampleResponses(const LocalPotentialSampleList & sample_entries)
+{
+    std::vector<double> response_list;
+    response_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        response_list.emplace_back(static_cast<double>(sample.response));
+    }
+    return response_list;
 }
 
 std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
@@ -442,12 +449,7 @@ LocalGaussianResult EstimateLocalGaussian(
         options.distance_min,
         options.distance_max
     };
-    std::vector<double> sample_response_list;
-    sample_response_list.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        sample_response_list.emplace_back(static_cast<double>(sample.response));
-    }
+    const auto sample_response_list{ CollectSampleResponses(sample_entries) };
     return design.Estimate(
         sample_response_list,
         alpha_r,
@@ -475,16 +477,15 @@ GroupGaussianResult EstimateGroupGaussian(
     member_offset_list.reserve(member_list.size());
     for (const auto & member : member_list)
     {
-        const auto sampling_entries{
-            detail::BuildSamplesForZeroOffsetGaussianFit(
-                member.sample_entries,
-                member.local_model)
+        const detail::PreparedLocalGaussianDesign design{
+            member.sample_entries,
+            options.distance_min,
+            options.distance_max
         };
         auto dataset{
-            rhbm_helper::BuildMemberDataset(
-                sampling_entries,
-                options.distance_min,
-                options.distance_max)
+            design.BuildDataset(
+                CollectSampleResponses(member.sample_entries),
+                member.local_model)
         };
         fit_result_list.emplace_back(
             rhbm_helper::EstimateBetaMDPDE(

@@ -41,8 +41,4 @@ public:
         const GaussianModel3D & offset_model) const;
 };
 
-LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & model);
-
 } // namespace rhbm_gem::core::detail
