@@ -19,30 +19,30 @@
 namespace rhbm_gem::core {
 namespace {
 
-float InterpolateMapValue(const MapObject & data_object, const std::array<float, 3> & position)
+double InterpolateMapValue(const MapObject & data_object, const std::array<double, 3> & position)
 {
     auto index{ data_object.GetIndexFromPosition(position) };
     auto origin{ data_object.GetOrigin() };
     auto grid_spacing{ data_object.GetGridSpacing() };
 
-    std::array<float, 3> local;
+    std::array<double, 3> local;
     for (size_t i = 0; i < 3; i++)
     {
         local.at(i) =
-            (position.at(i) - origin.at(i) - static_cast<float>(index.at(i)) * grid_spacing.at(i))
+            (position.at(i) - origin.at(i) - static_cast<double>(index.at(i)) * grid_spacing.at(i))
             / grid_spacing.at(i);
     }
 
-    auto cubic_interpolate = [](float p0, float p1, float p2, float p3, float t)
+    auto cubic_interpolate = [](double p0, double p1, double p2, double p3, double t)
     {
-        float a0{ p1 };
-        float a1{ 0.5f * (p2 - p0) };
-        float a2{ 0.5f * (-p3 + 4.0f * p2 - 5.0f * p1 + 2.0f * p0) };
-        float a3{ 0.5f * (p3 - 3.0f * p2 + 3.0f * p1 - p0) };
+        double a0{ p1 };
+        double a1{ 0.5 * (p2 - p0) };
+        double a2{ 0.5 * (-p3 + 4.0 * p2 - 5.0 * p1 + 2.0 * p0) };
+        double a3{ 0.5 * (p3 - 3.0 * p2 + 3.0 * p1 - p0) };
         return a3 * t * t * t + a2 * t * t + a1 * t + a0;
     };
 
-    std::array<std::array<std::array<float, 4>, 4>, 4> values;
+    std::array<std::array<std::array<double, 4>, 4>, 4> values;
     const auto grid_size{ data_object.GetGridSize() };
     for (int i = -1; i < 3; i++)
     {
@@ -61,7 +61,7 @@ float InterpolateMapValue(const MapObject & data_object, const std::array<float,
         }
     }
 
-    std::array<std::array<float, 4>, 4> temp_y;
+    std::array<std::array<double, 4>, 4> temp_y;
     for (size_t j = 0; j < 4; j++)
     {
         for (size_t k = 0; k < 4; k++)
@@ -71,7 +71,7 @@ float InterpolateMapValue(const MapObject & data_object, const std::array<float,
         }
     }
 
-    std::array<float, 4> temp_z;
+    std::array<double, 4> temp_z;
     for (size_t k = 0; k < 4; k++)
     {
         temp_z[k] = cubic_interpolate(
@@ -105,8 +105,8 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
     const GridSampler & sampler,
-    const std::array<float, 3> & position,
-    const std::array<float, 3> & direction)
+    const std::array<double, 3> & position,
+    const std::array<double, 3> & direction)
 {
     const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
     return BuildLocalPotentialSampleList(map_object, sample_point_list);
@@ -122,7 +122,7 @@ LocalPotentialSampleList SampleAtomMapValues(
         sphere_sampler::GenerateSamplingPointList(local_position, sampling_method)
     };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms() };
-    std::vector<std::array<float, 3>> reject_position_list;
+    std::vector<std::array<double, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_atom_list.size());
     for (const auto * neighbor_atom : neighbor_atom_list)
     {

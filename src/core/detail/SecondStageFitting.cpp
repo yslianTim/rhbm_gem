@@ -16,9 +16,7 @@ double CalculateSecondStageAdjustedResponse(
     std::size_t sample_index,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    auto response_value{
-        static_cast<double>(atom_context.raw_sampling_entries.at(sample_index).response)
-    };
+    auto response_value{ atom_context.raw_sampling_entries.at(sample_index).response };
     for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
     {
         response_value -= ResolveNeighborAtomModel(
@@ -50,7 +48,7 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamplesImpl(
     for (std::size_t i = 0; i < atom_context.raw_sampling_entries.size(); i++)
     {
         auto sample{ atom_context.raw_sampling_entries.at(i) };
-        sample.response = static_cast<float>(response_provider(i));
+        sample.response = response_provider(i);
         adjusted_sampling_entries.emplace_back(sample);
     }
     return adjusted_sampling_entries;
@@ -291,8 +289,7 @@ std::optional<ResidualSample> EvaluateResidualSample(
     const auto expected_response{
         GetFitModel(
             model_snapshot.selected,
-            sample_ref.atom_index).ResponseAtDistance(
-                static_cast<double>(sample.point.distance))
+            sample_ref.atom_index).ResponseAtDistance(sample.point.distance)
     };
     const auto residual{ adjusted_response - expected_response };
     if (!std::isfinite(adjusted_response) || !std::isfinite(residual)) return std::nullopt;

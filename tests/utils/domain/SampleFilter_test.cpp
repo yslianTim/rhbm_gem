@@ -13,16 +13,16 @@ namespace {
 SamplingPointList MakePointList()
 {
     return {
-        SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 1.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 0.0f, 1.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { -1.0f, 0.0f, 0.0f } }
+        SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 } },
+        SamplingPoint{ 1.0, { 1.0, 0.0, 0.0 } },
+        SamplingPoint{ 1.0, { 0.0, 1.0, 0.0 } },
+        SamplingPoint{ 1.0, { -1.0, 0.0, 0.0 } }
     };
 }
 
-std::vector<std::array<float, 3>> GetPositions(const SamplingPointList & point_list)
+std::vector<std::array<double, 3>> GetPositions(const SamplingPointList & point_list)
 {
-    std::vector<std::array<float, 3>> positions;
+    std::vector<std::array<double, 3>> positions;
     positions.reserve(point_list.size());
     for (const auto & point : point_list)
     {
@@ -31,9 +31,9 @@ std::vector<std::array<float, 3>> GetPositions(const SamplingPointList & point_l
     return positions;
 }
 
-std::vector<std::array<float, 3>> GetSelectedPositions(const SamplingPointList & point_list)
+std::vector<std::array<double, 3>> GetSelectedPositions(const SamplingPointList & point_list)
 {
-    std::vector<std::array<float, 3>> positions;
+    std::vector<std::array<double, 3>> positions;
     for (const auto & point : point_list)
     {
         if (point.is_selected)
@@ -58,21 +58,21 @@ bool AllSelected(const SamplingPointList & point_list)
 TEST(SampleFilterTest, BuildsMedianResponseSampleEntriesByRadius)
 {
     const LocalPotentialSampleList sample_entries{
-        LocalPotentialSample{ 100.0f, SamplingPoint{ 1.2f } },
-        LocalPotentialSample{ 2.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 1.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 3.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 10.0f, SamplingPoint{ 1.2f } },
-        LocalPotentialSample{ 11.0f, SamplingPoint{ 1.2f } }
+        LocalPotentialSample{ 100.0, SamplingPoint{ 1.2 } },
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 1.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 3.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 10.0, SamplingPoint{ 1.2 } },
+        LocalPotentialSample{ 11.0, SamplingPoint{ 1.2 } }
     };
 
     const auto actual{ sf::BuildMedianResponseSampleEntriesByRadius(sample_entries) };
 
     ASSERT_EQ(actual.size(), 2u);
-    EXPECT_FLOAT_EQ(actual.at(0).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(actual.at(0).response, 2.0f);
-    EXPECT_FLOAT_EQ(actual.at(1).point.distance, 1.2f);
-    EXPECT_FLOAT_EQ(actual.at(1).response, 11.0f);
+    EXPECT_DOUBLE_EQ(actual.at(0).point.distance, 1.0);
+    EXPECT_DOUBLE_EQ(actual.at(0).response, 2.0);
+    EXPECT_DOUBLE_EQ(actual.at(1).point.distance, 1.2);
+    EXPECT_DOUBLE_EQ(actual.at(1).response, 11.0);
 }
 
 TEST(SampleFilterTest, BuildsEmptyMedianResponseSampleEntriesByRadius)
@@ -91,7 +91,7 @@ TEST(SampleFilterTest, EmptyRejectPositionsSelectAllSamplingPoints)
 
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
+        { 0.0, 0.0, 0.0 },
         {});
 
     EXPECT_EQ(GetSelectedPositions(point_list), GetPositions(point_list));
@@ -101,22 +101,22 @@ TEST(SampleFilterTest, EmptyRejectPositionsSelectAllSamplingPoints)
 TEST(SampleFilterTest, RejectsPointsCloserToNearestNeighborThanReference)
 {
     SamplingPointList point_list{
-        SamplingPoint{ 0.05f, { 0.05f, 0.0f, 0.0f } },
-        SamplingPoint{ 0.15f, { 0.15f, 0.0f, 0.0f } },
-        SamplingPoint{ 0.25f, { 0.25f, 0.0f, 0.0f } }
+        SamplingPoint{ 0.05, { 0.05, 0.0, 0.0 } },
+        SamplingPoint{ 0.15, { 0.15, 0.0, 0.0 } },
+        SamplingPoint{ 0.25, { 0.25, 0.0, 0.0 } }
     };
 
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
+        { 0.0, 0.0, 0.0 },
         {
-            std::array<float, 3>{ 10.0f, 0.0f, 0.0f },
-            std::array<float, 3>{ 0.2f, 0.0f, 0.0f }
+            std::array<double, 3>{ 10.0, 0.0, 0.0 },
+            std::array<double, 3>{ 0.2, 0.0, 0.0 }
         },
         0.0);
 
-    const std::vector<std::array<float, 3>> expected_positions{
-        { 0.05f, 0.0f, 0.0f }
+    const std::vector<std::array<double, 3>> expected_positions{
+        { 0.05, 0.0, 0.0 }
     };
     EXPECT_EQ(point_list.size(), 3u);
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
@@ -127,18 +127,18 @@ TEST(SampleFilterTest, RejectsPointsCloserToNearestNeighborThanReference)
 TEST(SampleFilterTest, UsesThirtyDegreeDefaultRejectAngle)
 {
     SamplingPointList point_list{
-        SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 1.0f, 0.2f, 0.0f } },
-        SamplingPoint{ 1.0f, { 1.0f, 0.3f, 0.0f } }
+        SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 } },
+        SamplingPoint{ 1.0, { 1.0, 0.2, 0.0 } },
+        SamplingPoint{ 1.0, { 1.0, 0.3, 0.0 } }
     };
 
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 2.0f, 0.0f, 0.0f } });
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 2.0, 0.0, 0.0 } });
 
-    const std::vector<std::array<float, 3>> expected_positions{
-        { 0.0f, 0.0f, 0.0f }
+    const std::vector<std::array<double, 3>> expected_positions{
+        { 0.0, 0.0, 0.0 }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
     EXPECT_FALSE(point_list.at(1).is_selected);
@@ -150,14 +150,14 @@ TEST(SampleFilterTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
     auto point_list{ MakePointList() };
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 1.0, 0.0, 0.0 } },
         30.0);
 
-    const std::vector<std::array<float, 3>> expected_positions{
-        { 0.0f, 0.0f, 0.0f },
-        { 0.0f, 1.0f, 0.0f },
-        { -1.0f, 0.0f, 0.0f }
+    const std::vector<std::array<double, 3>> expected_positions{
+        { 0.0, 0.0, 0.0 },
+        { 0.0, 1.0, 0.0 },
+        { -1.0, 0.0, 0.0 }
     };
     EXPECT_EQ(point_list.size(), 4u);
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
@@ -169,14 +169,14 @@ TEST(SampleFilterTest, KeepsPerpendicularAndOppositeDirections)
     auto point_list{ MakePointList() };
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 1.0, 0.0, 0.0 } },
         89.0);
 
-    const std::vector<std::array<float, 3>> expected_positions{
-        { 0.0f, 0.0f, 0.0f },
-        { 0.0f, 1.0f, 0.0f },
-        { -1.0f, 0.0f, 0.0f }
+    const std::vector<std::array<double, 3>> expected_positions{
+        { 0.0, 0.0, 0.0 },
+        { 0.0, 1.0, 0.0 },
+        { -1.0, 0.0, 0.0 }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
 }
@@ -186,8 +186,8 @@ TEST(SampleFilterTest, IgnoresRejectPositionsAtReferencePosition)
     auto point_list{ MakePointList() };
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 0.0, 0.0, 0.0 } },
         45.0);
 
     EXPECT_EQ(GetSelectedPositions(point_list), GetPositions(point_list));
@@ -198,8 +198,8 @@ TEST(SampleFilterTest, IgnoresRejectPositionsAtReferencePositionWithZeroAngle)
     auto point_list{ MakePointList() };
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 0.0, 0.0, 0.0 } },
         0.0);
 
     EXPECT_EQ(GetSelectedPositions(point_list), GetPositions(point_list));
@@ -210,12 +210,12 @@ TEST(SampleFilterTest, KeepsOriginSamplingPointEvenWhenFilteringEnabled)
     auto point_list{ MakePointList() };
     sf::FilterSamplingPointList(
         point_list,
-        { 0.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
+        { 0.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 1.0, 0.0, 0.0 } },
         45.0);
 
     ASSERT_FALSE(point_list.empty());
-    EXPECT_EQ(point_list.front().position, (std::array<float, 3>{ 0.0f, 0.0f, 0.0f }));
+    EXPECT_EQ(point_list.front().position, (std::array<double, 3>{ 0.0, 0.0, 0.0 }));
     EXPECT_TRUE(point_list.front().is_selected);
 }
 
@@ -226,28 +226,28 @@ TEST(SampleFilterTest, RejectsInvalidAngles)
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
+            { 0.0, 0.0, 0.0 },
             {},
             -1.0),
         std::invalid_argument);
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
+            { 0.0, 0.0, 0.0 },
             {},
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
+            { 0.0, 0.0, 0.0 },
             {},
             181.0),
         std::invalid_argument);
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
+            { 0.0, 0.0, 0.0 },
             {},
             std::numeric_limits<double>::quiet_NaN()),
         std::invalid_argument);
@@ -259,11 +259,11 @@ TEST(SampleFilterTest, RejectsRejectPositionsWithNonFiniteValues)
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
-            { std::array<float, 3>{
-                1.0f,
-                0.0f,
-                std::numeric_limits<float>::quiet_NaN()
+            { 0.0, 0.0, 0.0 },
+            { std::array<double, 3>{
+                1.0,
+                0.0,
+                std::numeric_limits<double>::quiet_NaN()
             } },
             45.0),
         std::invalid_argument);
@@ -275,11 +275,11 @@ TEST(SampleFilterTest, RejectsRejectPositionsWithNonFiniteValuesAtZeroAngle)
     EXPECT_THROW(
         (void)sf::FilterSamplingPointList(
             point_list,
-            { 0.0f, 0.0f, 0.0f },
-            { std::array<float, 3>{
-                1.0f,
-                0.0f,
-                std::numeric_limits<float>::quiet_NaN()
+            { 0.0, 0.0, 0.0 },
+            { std::array<double, 3>{
+                1.0,
+                0.0,
+                std::numeric_limits<double>::quiet_NaN()
             } },
             0.0),
         std::invalid_argument);
@@ -288,20 +288,20 @@ TEST(SampleFilterTest, RejectsRejectPositionsWithNonFiniteValuesAtZeroAngle)
 TEST(SampleFilterTest, UsesReferencePositionForWorldSpaceSamplingPoints)
 {
     SamplingPointList point_list{
-        SamplingPoint{ 1.0f, { 10.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 11.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 10.0f, 1.0f, 0.0f } }
+        SamplingPoint{ 1.0, { 10.0, 0.0, 0.0 } },
+        SamplingPoint{ 1.0, { 11.0, 0.0, 0.0 } },
+        SamplingPoint{ 1.0, { 10.0, 1.0, 0.0 } }
     };
 
     sf::FilterSamplingPointList(
         point_list,
-        { 10.0f, 0.0f, 0.0f },
-        { std::array<float, 3>{ 11.0f, 0.0f, 0.0f } },
+        { 10.0, 0.0, 0.0 },
+        { std::array<double, 3>{ 11.0, 0.0, 0.0 } },
         30.0);
 
-    const std::vector<std::array<float, 3>> expected_positions{
-        { 10.0f, 0.0f, 0.0f },
-        { 10.0f, 1.0f, 0.0f }
+    const std::vector<std::array<double, 3>> expected_positions{
+        { 10.0, 0.0, 0.0 },
+        { 10.0, 1.0, 0.0 }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
 }

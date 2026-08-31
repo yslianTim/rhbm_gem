@@ -24,14 +24,14 @@ const ModelDerivedState & ModelDerivedState::Of(const ModelObject & model_object
     return Of(const_cast<ModelObject &>(model_object));
 }
 
-std::array<float, 3> ModelDerivedState::GetCenterOfMassPosition(ModelObject & model_object)
+std::array<double, 3> ModelDerivedState::GetCenterOfMassPosition(ModelObject & model_object)
 {
     if (m_center_of_mass_position.has_value())
     {
         return *m_center_of_mass_position;
     }
 
-    std::vector<float> pos_x, pos_y, pos_z;
+    std::vector<double> pos_x, pos_y, pos_z;
     pos_x.reserve(model_object.m_atom_list.size());
     pos_y.reserve(model_object.m_atom_list.size());
     pos_z.reserve(model_object.m_atom_list.size());
@@ -43,7 +43,7 @@ std::array<float, 3> ModelDerivedState::GetCenterOfMassPosition(ModelObject & mo
         pos_z.emplace_back(pos.at(2));
     }
 
-    m_center_of_mass_position = std::array<float, 3>{
+    m_center_of_mass_position = std::array<double, 3>{
         array_helper::ComputeMean(pos_x.data(), pos_x.size()),
         array_helper::ComputeMean(pos_y.data(), pos_y.size()),
         array_helper::ComputeMean(pos_z.data(), pos_z.size())

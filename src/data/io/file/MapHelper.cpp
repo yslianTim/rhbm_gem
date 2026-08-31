@@ -50,8 +50,8 @@ void RequireFloat32Mode(int mode)
 
 } // namespace
 
-std::unique_ptr<float[]> ReorderToCanonicalXYZ(
-    std::unique_ptr<float[]> raw_data,
+std::unique_ptr<double[]> ReorderToCanonicalXYZ(
+    std::unique_ptr<double[]> raw_data,
     const std::array<int, 3> & array_size,
     const std::array<int, 3> & axis_order)
 {
@@ -66,7 +66,7 @@ std::unique_ptr<float[]> ReorderToCanonicalXYZ(
         return raw_data;
     }
 
-    auto reordered_array{ std::make_unique<float[]>(voxel_count) };
+    auto reordered_array{ std::make_unique<double[]>(voxel_count) };
     const auto axis_to_index{ BuildAxisToIndex(axis_order) };
 
     std::array<size_t, 3> dimensions{
@@ -100,7 +100,7 @@ std::unique_ptr<float[]> ReorderToCanonicalXYZ(
     return reordered_array;
 }
 
-std::unique_ptr<float[]> ReadFloat32VoxelData(
+std::unique_ptr<double[]> ReadFloat32VoxelData(
     std::istream & stream,
     std::streamoff data_offset,
     const std::array<int, 3> & array_size,
@@ -115,13 +115,18 @@ std::unique_ptr<float[]> ReadFloat32VoxelData(
         throw std::runtime_error("Failed to seek to map voxel data.");
     }
 
-    auto raw_data{ std::make_unique<float[]>(voxel_count) };
+    auto float32_data{ std::make_unique<float[]>(voxel_count) };
     stream.read(
-        reinterpret_cast<char *>(raw_data.get()),
+        reinterpret_cast<char *>(float32_data.get()),
         static_cast<std::streamsize>(voxel_count * sizeof(float)));
     if (!stream)
     {
         throw std::runtime_error("Failed to read float32 map voxel data.");
+    }
+    auto raw_data{ std::make_unique<double[]>(voxel_count) };
+    for (size_t i = 0; i < voxel_count; ++i)
+    {
+        raw_data[i] = static_cast<double>(float32_data[i]);
     }
     return ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order);
 }
@@ -129,7 +134,7 @@ std::unique_ptr<float[]> ReadFloat32VoxelData(
 void WriteFloat32VoxelData(
     std::ostream & stream,
     std::streamoff data_offset,
-    const float * data,
+    const double * data,
     size_t data_size,
     const std::array<int, 3> & array_size,
     int mode)
@@ -150,8 +155,13 @@ void WriteFloat32VoxelData(
     {
         throw std::runtime_error("Failed to seek to map voxel data.");
     }
+    auto float32_data{ std::make_unique<float[]>(voxel_count) };
+    for (size_t i = 0; i < voxel_count; ++i)
+    {
+        float32_data[i] = static_cast<float>(data[i]);
+    }
     stream.write(
-        reinterpret_cast<const char *>(data),
+        reinterpret_cast<const char *>(float32_data.get()),
         static_cast<std::streamsize>(voxel_count * sizeof(float)));
     if (!stream)
     {

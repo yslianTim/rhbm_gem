@@ -24,9 +24,9 @@ SeriesPointList BuildLogQuadraticDatasetSeries(
     for (const auto & sample : sampling_entries)
     {
         const auto distance{ sample.point.distance };
-        const auto gaussian_response{ static_cast<double>(sample.response) };
-        if (distance < static_cast<float>(range_min)) continue;
-        if (distance > static_cast<float>(range_max)) continue;
+        const auto gaussian_response{ sample.response };
+        if (distance < range_min) continue;
+        if (distance > range_max) continue;
         if (gaussian_response <= 0.0) continue;
 
         auto basis_vector{ std::vector<double>{ 1.0, -0.5 * distance * distance } };

@@ -8,10 +8,10 @@
 namespace rhbm_gem::local_potential_series
 {
 
-std::tuple<float, float> ComputeDistanceRange(
+std::tuple<double, double> ComputeDistanceRange(
     const LocalPotentialSampleList & sampling_entries,
     double margin_rate = 0.0);
-std::tuple<float, float> ComputeResponseRange(
+std::tuple<double, double> ComputeResponseRange(
     const LocalPotentialSampleList & sampling_entries,
     double margin_rate = 0.0);
 SeriesPointList BuildBinnedDistanceResponseSeries(

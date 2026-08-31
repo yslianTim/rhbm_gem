@@ -115,7 +115,7 @@ Add or update tests for:
 - database round-trip for model structure, selection, and analysis
 - renamed persisted key semantics
 - missing database key behavior
-- schema v13 bootstrap and invalid or legacy schema rejection
+- schema v14 bootstrap and invalid or legacy schema rejection, including immutable v13 rejection
 - command-cache type mismatch behavior when command-local routing changes
 - command-level failure context when file or database loading fails
 

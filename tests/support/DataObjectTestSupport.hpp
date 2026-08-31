@@ -35,11 +35,11 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
-    atom_1->SetPosition(0.0f, 0.0f, 0.0f);
+    atom_1->SetPosition(0.0, 0.0, 0.0);
 
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(2);
-    atom_2->SetPosition(1.0f, 0.0f, 0.0f);
+    atom_2->SetPosition(1.0, 0.0, 0.0);
 
     auto * atom_1_ptr{ atom_1.get() };
     auto * atom_2_ptr{ atom_2.get() };
@@ -54,12 +54,12 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 inline rg::MapObject MakeMapObject()
 {
     std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
+    std::array<double, 3> grid_spacing{ 1.0, 1.0, 1.0 };
+    std::array<double, 3> origin{ 0.0, 0.0, 0.0 };
+    auto values{ std::make_unique<double[]>(8) };
     for (size_t i = 0; i < 8; ++i)
     {
-        values[i] = static_cast<float>(i + 1);
+        values[i] = static_cast<double>(i + 1);
     }
     return rg::MapObject{
         grid_size, grid_spacing, origin, std::move(values) };

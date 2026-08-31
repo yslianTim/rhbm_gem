@@ -566,8 +566,7 @@ void SaveChemicalComponentEntryList(
             statement_db.Bind<std::string>(4, component_entry->GetComponentName());
             statement_db.Bind<std::string>(5, component_entry->GetComponentType());
             statement_db.Bind<std::string>(6, component_entry->GetComponentFormula());
-            statement_db.Bind<double>(
-                7, static_cast<double>(component_entry->GetComponentMolecularWeight()));
+            statement_db.Bind<double>(7, component_entry->GetComponentMolecularWeight());
             statement_db.Bind<int>(8, static_cast<int>(component_entry->IsStandardMonomer()));
         });
     }
@@ -649,16 +648,16 @@ void SaveAtomObjectList(
             statement_db.Bind<std::string>(5, atom_object->GetAtomID());
             statement_db.Bind<std::string>(6, atom_object->GetChainID());
             statement_db.Bind<std::string>(7, atom_object->GetIndicator());
-            statement_db.Bind<double>(8, static_cast<double>(atom_object->GetOccupancy()));
-            statement_db.Bind<double>(9, static_cast<double>(atom_object->GetTemperature()));
+            statement_db.Bind<double>(8, atom_object->GetOccupancy());
+            statement_db.Bind<double>(9, atom_object->GetTemperature());
             statement_db.Bind<int>(10, static_cast<int>(atom_object->GetElement()));
             statement_db.Bind<int>(11, static_cast<int>(atom_object->GetStructure()));
             statement_db.Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
             statement_db.Bind<int>(
                 13, static_cast<int>(selected_atoms.contains(atom_object.get())));
-            statement_db.Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(0)));
-            statement_db.Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(1)));
-            statement_db.Bind<double>(16, static_cast<double>(atom_object->GetPosition().at(2)));
+            statement_db.Bind<double>(14, atom_object->GetPosition().at(0));
+            statement_db.Bind<double>(15, atom_object->GetPosition().at(1));
+            statement_db.Bind<double>(16, atom_object->GetPosition().at(2));
             statement_db.Bind<int>(17, static_cast<int>(atom_object->GetComponentKey()));
             statement_db.Bind<int>(18, static_cast<int>(atom_object->GetAtomKey()));
             statement_db.Bind<double>(19, atom_object->GetStandardQScore());
@@ -777,8 +776,7 @@ void LoadChemicalComponentEntryList(
         component_entry->SetComponentName(database.GetColumn<std::string>(2));
         component_entry->SetComponentType(database.GetColumn<std::string>(3));
         component_entry->SetComponentFormula(database.GetColumn<std::string>(4));
-        component_entry->SetComponentMolecularWeight(
-            static_cast<float>(database.GetColumn<double>(5)));
+        component_entry->SetComponentMolecularWeight(database.GetColumn<double>(5));
         component_entry->SetStandardMonomerFlag(static_cast<bool>(database.GetColumn<int>(6)));
         parts.chemical_component_entry_map[component_key] = std::move(component_entry);
         parts.component_key_system->RegisterComponent(component_id, component_key);
@@ -897,8 +895,8 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
         atom_object->SetAtomID(database.GetColumn<std::string>(3));
         atom_object->SetChainID(database.GetColumn<std::string>(4));
         atom_object->SetIndicator(database.GetColumn<std::string>(5));
-        atom_object->SetOccupancy(static_cast<float>(database.GetColumn<double>(6)));
-        atom_object->SetTemperature(static_cast<float>(database.GetColumn<double>(7)));
+        atom_object->SetOccupancy(database.GetColumn<double>(6));
+        atom_object->SetTemperature(database.GetColumn<double>(7));
         atom_object->SetElement(static_cast<Element>(database.GetColumn<int>(8)));
         atom_object->SetStructure(static_cast<Structure>(database.GetColumn<int>(9)));
         atom_object->SetSpecialAtomFlag(static_cast<bool>(database.GetColumn<int>(10)));
@@ -907,9 +905,9 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
             selected_atom_serial_ids.insert(atom_object->GetSerialID());
         }
         atom_object->SetPosition(
-            static_cast<float>(database.GetColumn<double>(12)),
-            static_cast<float>(database.GetColumn<double>(13)),
-            static_cast<float>(database.GetColumn<double>(14)));
+            database.GetColumn<double>(12),
+            database.GetColumn<double>(13),
+            database.GetColumn<double>(14));
         atom_object->SetComponentKey(database.GetColumn<ComponentKey>(15));
         atom_object->SetAtomKey(database.GetColumn<AtomKey>(16));
         atom_object->SetStandardQScore(database.GetColumn<double>(17));

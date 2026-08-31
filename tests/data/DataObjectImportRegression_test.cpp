@@ -87,8 +87,8 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
             [](rg::ModelObject & model)
             {
                 ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetOccupancy(), 1.0f);
-                EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetTemperature(), 0.0f);
+                EXPECT_DOUBLE_EQ(model.GetAtomList().front()->GetOccupancy(), 1.0);
+                EXPECT_DOUBLE_EQ(model.GetAtomList().front()->GetTemperature(), 0.0);
             } },
         { "DatabaseOrderKeepsEmdbIdentifier",
             command_test::TestDataPath("test_model_database_order.cif"),

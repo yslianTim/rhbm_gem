@@ -93,7 +93,7 @@ void RunAtomOutlierDumping(
 {
     for (const auto & model_object : model_object_list)
     {
-        std::vector<std::array<float, 3>> outlier_positions;
+        std::vector<std::array<double, 3>> outlier_positions;
         const std::string file_name{ "atom_outlier_list_" + model_object->GetPdbID() };
         const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
@@ -186,7 +186,7 @@ void RunMapValueDumping(
         return;
     }
 
-    const auto margin{ 3.0f };
+    const auto margin{ 3.0 };
 
     for (const auto & model_object : model_object_list)
     {
@@ -199,8 +199,8 @@ void RunMapValueDumping(
                 "No selected atoms found for key tag [" + key_tag + "]. Skipping map-value dump.");
             continue;
         }
-        std::array<float, 3> atom_range_min, atom_range_max;
-        std::vector<float> x_list, y_list, z_list;
+        std::array<double, 3> atom_range_min, atom_range_max;
+        std::vector<double> x_list, y_list, z_list;
         x_list.reserve(atom_size);
         y_list.reserve(atom_size);
         z_list.reserve(atom_size);
@@ -240,7 +240,7 @@ void RunMapValueDumping(
             if (grid_position.at(2) < atom_range_min.at(2)) continue;
             if (grid_position.at(2) > atom_range_max.at(2)) continue;
             const auto map_value{ map_object->GetMapValue(i) };
-            if (map_value <= 0.0f) continue;
+            if (map_value <= 0.0) continue;
             outfile << i << ',' << grid_position.at(0) << ',' << grid_position.at(1) << ','
                     << grid_position.at(2) << ',' << map_value << '\n';
             count++;

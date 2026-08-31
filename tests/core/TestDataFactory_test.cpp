@@ -30,8 +30,8 @@ void ExpectSamplingEntriesEquals(
     ASSERT_EQ(lhs.size(), rhs.size());
     for (size_t i = 0; i < lhs.size(); i++)
     {
-        EXPECT_FLOAT_EQ(lhs.at(i).point.distance, rhs.at(i).point.distance);
-        EXPECT_FLOAT_EQ(lhs.at(i).response, rhs.at(i).response);
+        EXPECT_DOUBLE_EQ(lhs.at(i).point.distance, rhs.at(i).point.distance);
+        EXPECT_DOUBLE_EQ(lhs.at(i).response, rhs.at(i).response);
         EXPECT_EQ(lhs.at(i).point.position, rhs.at(i).point.position);
     }
 }
@@ -137,8 +137,8 @@ TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
     ASSERT_EQ(input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(input.replica_sampling_entries.front().size(), 1u);
     const auto & sample{ input.replica_sampling_entries.front().front() };
-    EXPECT_GE(sample.point.distance, 0.0f);
-    EXPECT_LE(sample.point.distance, 1.0f);
+    EXPECT_GE(sample.point.distance, 0.0);
+    EXPECT_LE(sample.point.distance, 1.0);
 
     const auto expected_response{
         amplitude * ComputeExpectedGaussianResponseAtDistance3D(sample.point.distance, width) +

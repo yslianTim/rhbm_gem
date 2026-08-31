@@ -58,14 +58,14 @@ public:
 
 private:
     std::array<int, 3> GetGridSize() const;
-    std::array<float, 3> GetGridSpacing() const;
-    std::array<float, 3> GetOrigin() const;
+    std::array<double, 3> GetGridSpacing() const;
+    std::array<double, 3> GetOrigin() const;
     void InitHeader();
     void LoadHeader(std::istream & stream);
     void SaveHeader(std::ostream & stream);
     void SetHeader(const std::array<int, 3> & grid_size,
-                   const std::array<float, 3> & grid_spacing,
-                   const std::array<float, 3> & origin);
+                   const std::array<double, 3> & grid_spacing,
+                   const std::array<double, 3> & origin);
 };
 
 } // namespace rhbm_gem

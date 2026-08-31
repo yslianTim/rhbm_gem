@@ -65,7 +65,7 @@ using CifLoopRowHandler = std::function<void(
     const CifColumnIndexMap&,
     const std::vector<std::string>&)>;
 
-constexpr float kBondSearchingRadius{2.0f};
+constexpr double kBondSearchingRadius{2.0};
 
 bool IsMmCifMissingValue(const std::string& value) {
     return value.empty() || value == "." || value == "?";
@@ -114,28 +114,28 @@ std::optional<int> TryParseInt(const std::string& value) {
     }
 }
 
-std::optional<float> TryParseFloat(const std::string& value) {
+std::optional<double> TryParseDouble(const std::string& value) {
     if (IsMmCifMissingValue(value))
         return std::nullopt;
     try {
-        return std::stof(value);
+        return std::stod(value);
     } catch (const std::exception&) {
         return std::nullopt;
     }
 }
 
-float ParseFloatOrDefault(
+double ParseDoubleOrDefault(
     const std::string& value,
-    float default_value,
+    double default_value,
     const std::string& field_name,
     const std::string& log_context) {
-    auto parsed_value{TryParseFloat(value)};
+    auto parsed_value{TryParseDouble(value)};
     if (parsed_value.has_value())
         return *parsed_value;
     if (!IsMmCifMissingValue(value)) {
         Logger::Log(
             LogLevel::Warning,
-            log_context + " Invalid float in " + field_name + ": " + value + ", fallback = " + std::to_string(default_value));
+            log_context + " Invalid double in " + field_name + ": " + value + ", fallback = " + std::to_string(default_value));
     }
     return default_value;
 }
@@ -603,7 +603,7 @@ void BuildDefaultChemicalComponentEntry(CifFormatState& state, const std::string
     entry->SetComponentName("");
     entry->SetComponentType("");
     entry->SetComponentFormula("");
-    entry->SetComponentMolecularWeight(0.0f);
+    entry->SetComponentMolecularWeight(0.0);
     auto standard_flag{false};
     if (ChemicalDataHelper::GetResidueFromString(comp_id) != Residue::UNK)
         standard_flag = true;
@@ -710,11 +710,11 @@ void LoadChemicalComponentBlock(CifFormatState& state) {
             auto formula{token_list[index_map.at("formula")]};
             auto formula_weight_str{token_list[index_map.at("formula_weight")]};
             auto standard_flag_str{token_list[index_map.at("mon_nstd_flag")]};
-            auto formula_weight{0.0f};
+            auto formula_weight{0.0};
             try {
-                formula_weight = std::stof(formula_weight_str);
+                formula_weight = std::stod(formula_weight_str);
             } catch (const std::exception&) {
-                formula_weight = 0.0f;
+                formula_weight = 0.0;
             }
             auto entry{std::make_unique<ChemicalComponentEntry>()};
             entry->SetComponentId(comp_id);
@@ -1263,9 +1263,9 @@ void LoadAtomSiteBlock(CifFormatState& state) {
 
             if (IsMmCifMissingValue(indicator))
                 indicator = ".";
-            auto parsed_x{TryParseFloat(position_x_str.value_or("?"))};
-            auto parsed_y{TryParseFloat(position_y_str.value_or("?"))};
-            auto parsed_z{TryParseFloat(position_z_str.value_or("?"))};
+            auto parsed_x{TryParseDouble(position_x_str.value_or("?"))};
+            auto parsed_y{TryParseDouble(position_y_str.value_or("?"))};
+            auto parsed_z{TryParseDouble(position_z_str.value_or("?"))};
             if (!parsed_x.has_value() || !parsed_y.has_value() || !parsed_z.has_value()) {
                 Logger::Log(
                     LogLevel::Warning,
@@ -1275,10 +1275,10 @@ void LoadAtomSiteBlock(CifFormatState& state) {
             }
 
             auto occupancy{
-                ParseFloatOrDefault(occupancy_str.value_or("?"), 1.0f, "_atom_site.occupancy", context)};
+                ParseDoubleOrDefault(occupancy_str.value_or("?"), 1.0, "_atom_site.occupancy", context)};
             auto temperature{
-                ParseFloatOrDefault(
-                    temperature_str.value_or("?"), 0.0f, "_atom_site.B_iso_or_equiv", context)};
+                ParseDoubleOrDefault(
+                    temperature_str.value_or("?"), 0.0, "_atom_site.B_iso_or_equiv", context)};
             auto model_number_id{
                 ParseIntOrDefault(
                     model_number_str.value_or("1"),
@@ -1484,10 +1484,10 @@ void ConstructBondList(CifFormatState& state) {
 
 void WriteAtomSiteBlockEntry(
     const AtomObject* atom,
-    const std::array<float, 3>& position,
+    const std::array<double, 3>& position,
     const std::string& alt_id,
-    float occupancy,
-    float temperature,
+    double occupancy,
+    double temperature,
     int model_number,
     std::ostream& stream) {
     std::string group_pdb{atom->GetSpecialAtomFlag() ? "HETATM" : "ATOM"};
@@ -1548,7 +1548,7 @@ void WriteAtomSiteBlock(
             position,
             atom->GetIndicator(),
             atom->GetOccupancy(),
-            static_cast<float>(gaus_estimate),
+            gaus_estimate,
             model_number,
             stream);
     }

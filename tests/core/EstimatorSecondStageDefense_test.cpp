@@ -60,12 +60,12 @@ rt::FitOptions MakeSecondStageOptions()
 }
 
 double Distance(
-    const std::array<float, 3> & lhs,
-    const std::array<float, 3> & rhs)
+    const std::array<double, 3> & lhs,
+    const std::array<double, 3> & rhs)
 {
-    const auto dx{ static_cast<double>(lhs.at(0) - rhs.at(0)) };
-    const auto dy{ static_cast<double>(lhs.at(1) - rhs.at(1)) };
-    const auto dz{ static_cast<double>(lhs.at(2) - rhs.at(2)) };
+    const auto dx{ lhs.at(0) - rhs.at(0) };
+    const auto dy{ lhs.at(1) - rhs.at(1) };
+    const auto dz{ lhs.at(2) - rhs.at(2) };
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
@@ -105,7 +105,7 @@ std::unique_ptr<rg::AtomObject> MakeAtom(
     int serial_id,
     Spot spot,
     Element element,
-    const std::array<float, 3> & position)
+    const std::array<double, 3> & position)
 {
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(serial_id);
@@ -139,15 +139,15 @@ LocalPotentialSampleList BuildSamples(
     const std::vector<rg::AtomObject *> & atom_list,
     const std::vector<rg::GaussianModel3D> & truth_model_list)
 {
-    const std::array<std::array<float, 3>, 6> direction_list{
-        std::array<float, 3>{ 1.0F, 0.0F, 0.0F },
-        std::array<float, 3>{ -1.0F, 0.0F, 0.0F },
-        std::array<float, 3>{ 0.0F, 1.0F, 0.0F },
-        std::array<float, 3>{ 0.0F, -1.0F, 0.0F },
-        std::array<float, 3>{ 0.0F, 0.0F, 1.0F },
-        std::array<float, 3>{ 0.0F, 0.0F, -1.0F }
+    const std::array<std::array<double, 3>, 6> direction_list{
+        std::array<double, 3>{ 1.0, 0.0, 0.0 },
+        std::array<double, 3>{ -1.0, 0.0, 0.0 },
+        std::array<double, 3>{ 0.0, 1.0, 0.0 },
+        std::array<double, 3>{ 0.0, -1.0, 0.0 },
+        std::array<double, 3>{ 0.0, 0.0, 1.0 },
+        std::array<double, 3>{ 0.0, 0.0, -1.0 }
     };
-    const std::array<float, 4> radius_list{ 0.15F, 0.35F, 0.65F, 0.95F };
+    const std::array<double, 4> radius_list{ 0.15, 0.35, 0.65, 0.95 };
 
     LocalPotentialSampleList sample_list;
     const auto target_position{ target_atom.GetPosition() };
@@ -169,10 +169,7 @@ LocalPotentialSampleList BuildSamples(
                 response += truth_model_list.at(i).ResponseAtDistance(
                     Distance(point.position, atom_list.at(i)->GetPosition()));
             }
-            sample_list.emplace_back(LocalPotentialSample{
-                static_cast<float>(response),
-                point
-            });
+            sample_list.emplace_back(LocalPotentialSample{ response, point });
         }
     }
     return sample_list;
@@ -218,13 +215,11 @@ BuildJointOffsetEstimationFixture(
         };
         atom_context.group_id = group_iter->second;
         SamplingPoint point;
-        point.distance = 0.35F;
+        point.distance = 0.35;
         atom_context.raw_sampling_entries.emplace_back(LocalPotentialSample{
-            static_cast<float>(
-                model_list.at(atom_index).SignalAtDistance(point.distance) +
+            model_list.at(atom_index).SignalAtDistance(point.distance) +
                 target_offset_list.at(atom_index) *
-                    model_list.at(atom_index).OffsetBasisAtDistance(
-                        point.distance)),
+                    model_list.at(atom_index).OffsetBasisAtDistance(point.distance),
             point
         });
         atom_context.neighbor_atom_sample_offset_list = { 0, 0 };
@@ -259,12 +254,12 @@ JointPolishFixture BuildJointPolishFixture(
             "Joint polish fixture input sizes are inconsistent.");
     }
 
-    constexpr std::array<float, 5> distance_list{
-        0.0F,
-        0.15F,
-        0.30F,
-        0.45F,
-        0.60F
+    constexpr std::array<double, 5> distance_list{
+        0.0,
+        0.15,
+        0.30,
+        0.45,
+        0.60
     };
     JointPolishFixture fixture;
     fixture.context.selected_atom_list.resize(base_model_list.size());
@@ -282,9 +277,7 @@ JointPolishFixture BuildJointPolishFixture(
         {
             atom_context.raw_sampling_entries.emplace_back(
                 LocalPotentialSample{
-                    static_cast<float>(
-                        target_model_list.at(atom_index).ResponseAtDistance(
-                            distance)),
+                    target_model_list.at(atom_index).ResponseAtDistance(distance),
                     SamplingPoint{ distance }
                 });
             fixture.sample_ref_list.emplace_back(
@@ -346,15 +339,14 @@ LocalPotentialSampleList BuildSuspiciousGuardSamples(
             zero_offset_response_list_by_radius.at(radius_index))
         {
             SamplingPoint point;
-            point.distance = static_cast<float>(radius);
+            point.distance = radius;
             point.position = {
-                static_cast<float>(radius),
-                0.0F,
-                0.0F
+                radius,
+                0.0,
+                0.0
             };
             sample_list.emplace_back(LocalPotentialSample{
-                static_cast<float>(
-                    zero_offset_response + previous_offset_response),
+                zero_offset_response + previous_offset_response,
                 point
             });
         }
@@ -434,7 +426,7 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
 
     auto non_finite_sample_list{ sample_list };
     non_finite_sample_list.front().response =
-        std::numeric_limits<float>::quiet_NaN();
+        std::numeric_limits<double>::quiet_NaN();
     EXPECT_EQ(
         EvaluateSuspiciousPostRefitUpdateForTest(
             non_finite_sample_list,
@@ -778,7 +770,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
 }
 
 std::unique_ptr<rg::ModelObject> BuildDefenseModel(
-    const std::vector<std::array<float, 3>> & position_list,
+    const std::vector<std::array<double, 3>> & position_list,
     const std::vector<Spot> & spot_list,
     const std::vector<Element> & element_list,
     const std::vector<rg::GaussianModel3D> & truth_model_list,
@@ -814,14 +806,14 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
 std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
     const rg::GaussianModel3D & model_value)
 {
-    const std::vector<std::array<float, 3>> position_list{
-        { 0.0F, 0.0F, 0.0F },
-        { 0.9F, 0.0F, 0.0F },
-        { 0.45F, 0.0F, 0.0F },
-        { 0.60F, 0.0F, 0.0F },
-        { 0.75F, 0.0F, 0.0F },
-        { 4.50F, 0.0F, 0.0F },
-        { 10.0F, 0.0F, 0.0F }
+    const std::vector<std::array<double, 3>> position_list{
+        { 0.0, 0.0, 0.0 },
+        { 0.9, 0.0, 0.0 },
+        { 0.45, 0.0, 0.0 },
+        { 0.60, 0.0, 0.0 },
+        { 0.75, 0.0, 0.0 },
+        { 4.50, 0.0, 0.0 },
+        { 10.0, 0.0, 0.0 }
     };
     const std::vector<Spot> spot_list{
         Spot::C,
@@ -911,7 +903,7 @@ void ExpectUnselectedContributorPeeling(
             sample_index++)
         {
             const auto & raw_sample{ raw_entries.at(sample_index) };
-            auto expected_response{ static_cast<double>(raw_sample.response) };
+            auto expected_response{ raw_sample.response };
             for (const auto * neighbor : target_atom->FindNeighborAtoms(5.0))
             {
                 if (exclude_hydrogen &&
@@ -959,9 +951,9 @@ void ExpectUnselectedContributorPeeling(
                 expected_response -= contributor_model.ResponseAtDistance(
                     sample_distance);
             }
-            EXPECT_FLOAT_EQ(
+            EXPECT_DOUBLE_EQ(
                 peeling_entries.at(sample_index).response,
-                static_cast<float>(expected_response));
+                expected_response);
         }
     }
 }
@@ -971,8 +963,8 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
 {
     return BuildDefenseModel(
         {
-            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-            std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F }
+            std::array<double, 3>{ 0.0, 0.0, 0.0 },
+            std::array<double, 3>{ 1.0e-4, 0.0, 0.0 }
         },
         { Spot::C, Spot::O },
         { Element::CARBON, Element::OXYGEN },
@@ -987,8 +979,8 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
 {
     auto model{ BuildDefenseModel(
         {
-            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-            std::array<float, 3>{ 0.8F, 0.0F, 0.0F }
+            std::array<double, 3>{ 0.0, 0.0, 0.0 },
+            std::array<double, 3>{ 0.8, 0.0, 0.0 }
         },
         { Spot::C, Spot::O },
         { Element::CARBON, Element::OXYGEN },
@@ -1017,8 +1009,8 @@ std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
 {
     auto model{ BuildDefenseModel(
         {
-            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-            std::array<float, 3>{ 0.8F, 0.0F, 0.0F }
+            std::array<double, 3>{ 0.0, 0.0, 0.0 },
+            std::array<double, 3>{ 0.8, 0.0, 0.0 }
         },
         { Spot::C, Spot::C },
         { Element::CARBON, Element::CARBON },
@@ -1071,20 +1063,20 @@ void MakeAtomSamplesSuspicious(rg::ModelObject & model, std::size_t atom_index)
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.resize(256);
-    raw_sampling_entries.front().response = 0.0F;
-    raw_sampling_entries.front().point.distance = 0.0F;
+    raw_sampling_entries.front().response = 0.0;
+    raw_sampling_entries.front().point.distance = 0.0;
     raw_sampling_entries.front().point.position = target_position;
     for (std::size_t i = 1; i < raw_sampling_entries.size(); i++)
     {
         auto & sample{ raw_sampling_entries.at(i) };
         const auto response_scale{
-            0.5F + 0.5F * static_cast<float>(i) /
-                static_cast<float>(raw_sampling_entries.size())
+            0.5 + 0.5 * static_cast<double>(i) /
+                static_cast<double>(raw_sampling_entries.size())
         };
-        sample.response = std::numeric_limits<float>::max() * response_scale;
+        sample.response = std::numeric_limits<double>::max() * response_scale;
         sample.point.position = target_position;
-        sample.point.position.at(0) += 100.0F;
-        sample.point.distance = 100.0F;
+        sample.point.position.at(0) += 100.0;
+        sample.point.distance = 100.0;
     }
 
     auto analysis{ model.EditAnalysis() };
@@ -1097,10 +1089,10 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
     auto model{
         BuildDefenseModel(
             {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }
+                std::array<double, 3>{ 0.0, 0.0, 0.0 },
+                std::array<double, 3>{ 1.0e-4, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0001, 0.0, 0.0 }
             },
             { Spot::C, Spot::O, Spot::N, Spot::CA },
             { Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON },
@@ -1119,17 +1111,17 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
 std::unique_ptr<rg::ModelObject> BuildBoundaryComponentConflictDefenseModel(
     double intensity_scale = 1.0)
 {
-    std::vector<std::array<float, 3>> position_list;
+    std::vector<std::array<double, 3>> position_list;
     std::vector<Spot> spot_list;
     std::vector<Element> element_list;
     std::vector<rg::GaussianModel3D> truth_model_list;
     for (std::size_t i = 0; i < 13; i++)
     {
         const auto x_position{
-            i < 11 ? 0.45F * static_cast<float>(i) :
-                20.0F + 0.45F * static_cast<float>(i - 11)
+            i < 11 ? 0.45 * static_cast<double>(i) :
+                20.0 + 0.45 * static_cast<double>(i - 11)
         };
-        position_list.push_back({ x_position, 0.0F, 0.0F });
+        position_list.push_back({ x_position, 0.0, 0.0 });
         spot_list.push_back(i % 2 == 0 ? Spot::C : Spot::O);
         element_list.push_back(
             i % 2 == 0 ? Element::CARBON : Element::OXYGEN);
@@ -1158,8 +1150,8 @@ std::unique_ptr<rg::ModelObject> BuildBoundaryJointCorrectionDefenseModel(
 {
     return BuildDefenseModel(
         {
-            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-            std::array<float, 3>{ 3.4F, 0.0F, 0.0F }
+            std::array<double, 3>{ 0.0, 0.0, 0.0 },
+            std::array<double, 3>{ 3.4, 0.0, 0.0 }
         },
         { Spot::C, Spot::O },
         { Element::CARBON, Element::OXYGEN },
@@ -1191,7 +1183,7 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.front().response =
-        std::numeric_limits<float>::quiet_NaN();
+        std::numeric_limits<double>::quiet_NaN();
     auto analysis{ model->EditAnalysis() };
     analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
     return model;
@@ -1202,10 +1194,10 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
     auto model{
         BuildDefenseModel(
             {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }
+                std::array<double, 3>{ 0.0, 0.0, 0.0 },
+                std::array<double, 3>{ 1.0e-4, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0001, 0.0, 0.0 }
             },
             { Spot::C, Spot::O, Spot::N, Spot::CA },
             { Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON },
@@ -1237,9 +1229,9 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedEmptyJointOffsetDefenseModel()
     auto model{
         BuildDefenseModel(
             {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }
+                std::array<double, 3>{ 0.0, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0, 0.0, 0.0 },
+                std::array<double, 3>{ 10.0001, 0.0, 0.0 }
             },
             { Spot::C, Spot::N, Spot::CA },
             { Element::CARBON, Element::NITROGEN, Element::CARBON },
@@ -1261,11 +1253,11 @@ std::unique_ptr<rg::ModelObject> BuildPostRefitRollbackChainDefenseModel()
     auto model{
         BuildDefenseModel(
             {
-                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 2.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 4.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 6.0F, 0.0F, 0.0F },
-                std::array<float, 3>{ 8.0F, 0.0F, 0.0F }
+                std::array<double, 3>{ 0.0, 0.0, 0.0 },
+                std::array<double, 3>{ 2.0, 0.0, 0.0 },
+                std::array<double, 3>{ 4.0, 0.0, 0.0 },
+                std::array<double, 3>{ 6.0, 0.0, 0.0 },
+                std::array<double, 3>{ 8.0, 0.0, 0.0 }
             },
             { Spot::C, Spot::O, Spot::N, Spot::CA, Spot::C },
             {
@@ -1296,7 +1288,7 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
 {
     auto model{
         BuildDefenseModel(
-            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { std::array<double, 3>{ 0.0, 0.0, 0.0 } },
             { Spot::O },
             { Element::OXYGEN },
             { rg::GaussianModel3D{ 8.0, 0.5, -0.1 } },
@@ -1308,7 +1300,7 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
             .GetRawSamplingEntries(false)
     };
     raw_sampling_entries.front().response =
-        std::numeric_limits<float>::quiet_NaN();
+        std::numeric_limits<double>::quiet_NaN();
     auto analysis{ model->EditAnalysis() };
     analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
     return model;
@@ -1319,7 +1311,7 @@ std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
     auto model{
         BuildDefenseModel(
-            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { std::array<double, 3>{ 0.0, 0.0, 0.0 } },
             { Spot::O },
             { Element::OXYGEN },
             { initial_model },
@@ -1332,10 +1324,9 @@ std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
     };
     for (auto & sample : raw_sampling_entries)
     {
-        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto distance{ sample.point.distance };
         const auto outer_bias{ distance > 0.2 ? 12.0 : 8.0 };
-        sample.response = static_cast<float>(
-            initial_model.SignalAtDistance(distance) + outer_bias);
+        sample.response = initial_model.SignalAtDistance(distance) + outer_bias;
     }
     auto analysis{ model->EditAnalysis() };
     analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_sampling_entries));
@@ -1366,7 +1357,7 @@ double CalculateSelectedAtomResponseMeanSquaredError(
                     FittingStage::Second).ResponseAtDistance(
                     Distance(sample.point.position, fitted_atom->GetPosition()));
             }
-            const auto residual{ static_cast<double>(sample.response) - fitted_response };
+            const auto residual{ sample.response - fitted_response };
             squared_error_sum += residual * residual;
             sample_count++;
         }
@@ -1438,7 +1429,7 @@ void ExpectPeelingSamplingEntriesMatchFinalModels(
             const auto & peeling_sample{
                 peeling_sampling_entries.at(sample_index)
             };
-            auto expected_response{ static_cast<double>(raw_sample.response) };
+            auto expected_response{ raw_sample.response };
             for (const auto * neighbor_atom : selected_atoms)
             {
                 if (neighbor_atom == target_atom) continue;
@@ -1462,10 +1453,10 @@ void ExpectPeelingSamplingEntriesMatchFinalModels(
                     .ResponseAtDistance(sample_distance);
             }
 
-            EXPECT_FLOAT_EQ(
+            EXPECT_DOUBLE_EQ(
                 peeling_sample.response,
-                static_cast<float>(expected_response));
-            EXPECT_FLOAT_EQ(
+                expected_response);
+            EXPECT_DOUBLE_EQ(
                 peeling_sample.point.distance,
                 raw_sample.point.distance);
             EXPECT_EQ(
@@ -1904,8 +1895,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     atom_context.neighbor_atom_sample_offset_list.emplace_back(0);
     for (auto & sample : atom_context.raw_sampling_entries)
     {
-        sample.response += static_cast<float>(
-            target_model.ResponseAtDistance(unselected_distance));
+        sample.response += target_model.ResponseAtDistance(unselected_distance);
         atom_context.neighbor_atom_sample_list.emplace_back(
             trust_detail::NeighborAtomSample{
                 false,
@@ -2005,7 +1995,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     auto scaled_fixture{ fixture };
     for (auto & sample : scaled_fixture.context.at(0).raw_sampling_entries)
     {
-        sample.response *= static_cast<float>(intensity_scale);
+        sample.response *= intensity_scale;
     }
     const auto scale_model = [](const rg::GaussianModel3D & model)
     {
@@ -2562,7 +2552,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { 2.0 })
     };
     invalid_fixture.first.at(0).raw_sampling_entries.at(0).response =
-        std::numeric_limits<float>::infinity();
+        std::numeric_limits<double>::infinity();
     alg::WeightedRidgeSolver invalid_solver;
     const auto invalid_result{
         offset_detail::EstimateJointOffsets(
@@ -2973,14 +2963,13 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto & offset_model{ median_model_list.front() };
     const rg::GaussianModel3D truth_shape{ 6.0, 0.55, 0.0 };
     LocalPotentialSampleList sample_list;
-    for (const auto distance : std::array<float, 5>{
-        0.0F, 0.15F, 0.30F, 0.45F, 0.60F })
+    for (const auto distance : std::array<double, 5>{
+        0.0, 0.15, 0.30, 0.45, 0.60 })
     {
         sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(
-                truth_shape.SignalAtDistance(distance) +
+            truth_shape.SignalAtDistance(distance) +
                 offset_model.GetOffset() *
-                    offset_model.OffsetBasisAtDistance(distance)),
+                    offset_model.OffsetBasisAtDistance(distance),
             SamplingPoint{ distance }
         });
     }
@@ -3263,7 +3252,7 @@ TEST(
 
     auto non_finite_fixture{ fixture };
     non_finite_fixture.context.at(0).raw_sampling_entries.at(0).response =
-        std::numeric_limits<float>::infinity();
+        std::numeric_limits<double>::infinity();
     alg::WeightedRidgeSolver non_finite_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
@@ -4632,11 +4621,11 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
 
     const rg::GaussianModel3D previous_model{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D candidate_model{ 10.0, 0.60, 0.20 };
-    for (const auto distance : { 0.15F, 0.45F })
+    for (const auto distance : { 0.15, 0.45 })
     {
         context.at(0).raw_sampling_entries.emplace_back(
             LocalPotentialSample{
-                static_cast<float>(candidate_model.ResponseAtDistance(distance)),
+                candidate_model.ResponseAtDistance(distance),
                 SamplingPoint{ distance }
             });
     }
@@ -4651,7 +4640,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
     ASSERT_TRUE(baseline.sample_list.at(0).at(1).has_value());
     EXPECT_DOUBLE_EQ(
         baseline.sample_list.at(0).at(1)->adjusted_response,
-        static_cast<double>(context.at(0).raw_sampling_entries.at(1).response));
+        context.at(0).raw_sampling_entries.at(1).response);
     EXPECT_NEAR(
         baseline.sample_list.at(0).at(1)->residual,
         baseline.sample_list.at(0).at(1)->adjusted_response -
@@ -4699,11 +4688,11 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
     context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
 
     const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
-    for (const auto distance : { 0.15F, 0.45F })
+    for (const auto distance : { 0.15, 0.45 })
     {
         context.at(0).raw_sampling_entries.emplace_back(
             LocalPotentialSample{
-                static_cast<float>(model.ResponseAtDistance(distance)),
+                model.ResponseAtDistance(distance),
                 SamplingPoint{ distance }
             });
     }
@@ -5594,7 +5583,7 @@ TEST(
     RunSecondStageLocalFittingIncludesEffectiveUnselectedContributors)
 {
     const rg::GaussianModel3D seed_model{ 6.0, 0.55, 0.10 };
-    std::optional<float> include_hydrogen_response;
+    std::optional<double> include_hydrogen_response;
     for (const bool exclude_hydrogen : { false, true })
     {
         auto model{ BuildUnselectedContributorDefenseModel(seed_model) };
@@ -5949,7 +5938,7 @@ TEST(
 
     auto model{
         BuildDefenseModel(
-            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { std::array<double, 3>{ 0.0, 0.0, 0.0 } },
             { Spot::O },
             { Element::OXYGEN },
             { *truth_model },
@@ -5995,8 +5984,8 @@ TEST(
             std::move(result));
         LocalPotentialSampleList sentinel_peeling_sampling_entries{
             LocalPotentialSample{
-                static_cast<float>(100.0 + previous_model_list.size()),
-                SamplingPoint{ 0.5F, atom->GetPosition(), true }
+                100.0 + static_cast<double>(previous_model_list.size()),
+                SamplingPoint{ 0.5, atom->GetPosition(), true }
             }
         };
         analysis.SetAtomLocalPeelingSamplingEntries(
@@ -6032,7 +6021,7 @@ TEST(
                 .GetPeelingSamplingEntries(false)
         };
         ASSERT_EQ(peeling_sampling_entries.size(), 1U);
-        EXPECT_FLOAT_EQ(
+        EXPECT_DOUBLE_EQ(
             peeling_sampling_entries.front().response,
             previous_peeling_sampling_entries_list.at(i).front().response);
         EXPECT_NE(

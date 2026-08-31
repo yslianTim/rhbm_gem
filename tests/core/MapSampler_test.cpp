@@ -22,12 +22,12 @@ namespace {
 MapObject MakeMapObject()
 {
     std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
+    std::array<double, 3> grid_spacing{ 1.0, 1.0, 1.0 };
+    std::array<double, 3> origin{ 0.0, 0.0, 0.0 };
+    auto values{ std::make_unique<double[]>(8) };
     for (size_t i = 0; i < 8; ++i)
     {
-        values[i] = static_cast<float>(i + 1);
+        values[i] = static_cast<double>(i + 1);
     }
     return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
@@ -35,15 +35,15 @@ MapObject MakeMapObject()
 MapObject MakeWorkflowMapObject()
 {
     std::array<int, 3> grid_size{ 8, 8, 8 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ -3.0f, -3.0f, -3.0f };
+    std::array<double, 3> grid_spacing{ 1.0, 1.0, 1.0 };
+    std::array<double, 3> origin{ -3.0, -3.0, -3.0 };
     const size_t voxel_size{
         static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2))
     };
-    auto values{ std::make_unique<float[]>(voxel_size) };
+    auto values{ std::make_unique<double[]>(voxel_size) };
     for (size_t i = 0; i < voxel_size; ++i)
     {
-        values[i] = 1.0f;
+        values[i] = 1.0;
     }
     return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
@@ -55,11 +55,11 @@ std::unique_ptr<ModelObject> MakeLinearNeighborModel()
 
     auto center_atom{ std::make_unique<AtomObject>() };
     center_atom->SetSerialID(1);
-    center_atom->SetPosition(0.0f, 0.0f, 0.0f);
+    center_atom->SetPosition(0.0, 0.0, 0.0);
 
     auto neighbor_atom{ std::make_unique<AtomObject>() };
     neighbor_atom->SetSerialID(2);
-    neighbor_atom->SetPosition(1.0f, 0.0f, 0.0f);
+    neighbor_atom->SetPosition(1.0, 0.0, 0.0);
 
     atom_list.emplace_back(std::move(center_atom));
     atom_list.emplace_back(std::move(neighbor_atom));
@@ -86,22 +86,22 @@ TEST(MapSamplerTest, GridSamplerProducesMapSamples)
     auto map{ MakeMapObject() };
     GridSampler sampler;
     sampler.SetGridResolution(2);
-    sampler.SetWindowSize(1.0f);
-    sampler.SetReferenceUVector({ 1.0f, 0.0f, 0.0f });
+    sampler.SetWindowSize(1.0);
+    sampler.SetReferenceUVector({ 1.0, 0.0, 0.0 });
 
     const auto sampling_data{
         SampleMapValues(
             map,
             sampler,
-            { 0.5f, 0.5f, 0.5f },
-            { 0.0f, 0.0f, 1.0f })
+            { 0.5, 0.5, 0.5 },
+            { 0.0, 0.0, 1.0 })
     };
 
     ASSERT_EQ(4u, sampling_data.size());
-    EXPECT_NEAR(0.70710677f, sampling_data.front().point.distance, 1.0e-6f);
-    EXPECT_FLOAT_EQ(0.0f, sampling_data.front().point.position.at(0));
-    EXPECT_FLOAT_EQ(0.0f, sampling_data.front().point.position.at(1));
-    EXPECT_FLOAT_EQ(0.5f, sampling_data.front().point.position.at(2));
+    EXPECT_NEAR(0.70710677, sampling_data.front().point.distance, 1.0e-6);
+    EXPECT_DOUBLE_EQ(0.0, sampling_data.front().point.position.at(0));
+    EXPECT_DOUBLE_EQ(0.0, sampling_data.front().point.position.at(1));
+    EXPECT_DOUBLE_EQ(0.5, sampling_data.front().point.position.at(2));
 }
 
 TEST(MapSamplerTest, AtomSamplerUsesSamplingMethod)
@@ -163,7 +163,7 @@ TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };
     AtomObject detached_atom;
-    detached_atom.SetPosition(0.0f, 0.0f, 0.0f);
+    detached_atom.SetPosition(0.0, 0.0, 0.0);
 
     EXPECT_THROW(
         (void)SampleAtomMapValues(

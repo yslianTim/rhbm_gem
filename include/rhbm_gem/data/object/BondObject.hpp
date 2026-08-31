@@ -27,7 +27,7 @@ class BondObject
     AtomObject * m_atom_object_1;
     AtomObject * m_atom_object_2;
     ModelObject * m_owner_model;
-    std::array<float, 3> m_position, m_bond_vector, m_unit_vector;
+    std::array<double, 3> m_position, m_bond_vector, m_unit_vector;
 
 public:
     BondObject();
@@ -46,8 +46,8 @@ public:
     BondType GetBondType() const { return m_bond_type; }
     BondOrder GetBondOrder() const { return m_bond_order; }
     bool GetSpecialBondFlag() const { return m_is_special_bond; }
-    std::array<float, 3> GetPosition() const { return m_position; }
-    std::array<float, 3> GetBondVector() const { return m_bond_vector; }
+    std::array<double, 3> GetPosition() const { return m_position; }
+    std::array<double, 3> GetBondVector() const { return m_bond_vector; }
     AtomObject * GetAtomObject1() const { return m_atom_object_1; }
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
 

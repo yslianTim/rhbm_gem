@@ -32,7 +32,7 @@ class ChemicalComponentEntry
     std::string m_component_name;
     std::string m_component_type;
     std::string m_component_formula;
-    float m_component_molecular_weight;
+    double m_component_molecular_weight;
     bool m_standard_monomer_flag;
     std::map<AtomKey, ComponentAtomEntry> m_component_atom_entry_map;
     std::map<BondKey, ComponentBondEntry> m_component_bond_entry_map;
@@ -45,14 +45,14 @@ public:
     void SetComponentName(const std::string & name) { m_component_name = name; }
     void SetComponentType(const std::string & type) { m_component_type = type; }
     void SetComponentFormula(const std::string & formula) { m_component_formula = formula; }
-    void SetComponentMolecularWeight(float weight) { m_component_molecular_weight = weight; }
+    void SetComponentMolecularWeight(double weight) { m_component_molecular_weight = weight; }
     void SetStandardMonomerFlag(bool flag) { m_standard_monomer_flag = flag; }
 
     std::string GetComponentId() const { return m_component_id; }
     std::string GetComponentName() const { return m_component_name; }
     std::string GetComponentType() const { return m_component_type; }
     std::string GetComponentFormula() const { return m_component_formula; }
-    float GetComponentMolecularWeight() const { return m_component_molecular_weight; }
+    double GetComponentMolecularWeight() const { return m_component_molecular_weight; }
     bool IsStandardMonomer() const { return m_standard_monomer_flag; }
     const std::map<AtomKey, ComponentAtomEntry> & AtomEntries() const { return m_component_atom_entry_map; }
     const std::map<BondKey, ComponentBondEntry> & BondEntries() const { return m_component_bond_entry_map; }

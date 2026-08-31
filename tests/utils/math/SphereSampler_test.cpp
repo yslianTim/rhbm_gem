@@ -10,9 +10,9 @@
 
 namespace {
 
-float ComputeDistance(
-    const std::array<float, 3> & lhs,
-    const std::array<float, 3> & rhs)
+double ComputeDistance(
+    const std::array<double, 3> & lhs,
+    const std::array<double, 3> & rhs)
 {
     return rhbm_gem::array_helper::ComputeNorm(lhs, rhs);
 }
@@ -24,19 +24,19 @@ void ExpectSamplesEqual(
     ASSERT_EQ(lhs.size(), rhs.size());
     for (std::size_t i = 0; i < lhs.size(); ++i)
     {
-        EXPECT_FLOAT_EQ(lhs[i].distance, rhs[i].distance);
+        EXPECT_DOUBLE_EQ(lhs[i].distance, rhs[i].distance);
         EXPECT_EQ(lhs[i].position, rhs[i].position);
     }
 }
 
 std::size_t CountSamplesAtRadius(
     const SamplingPointList & samples,
-    float expected_radius)
+    double expected_radius)
 {
     std::size_t count{ 0 };
     for (const auto & sample : samples)
     {
-        if (std::abs(sample.distance - expected_radius) <= 1e-5f)
+        if (std::abs(sample.distance - expected_radius) <= 1e-5)
         {
             count++;
         }
@@ -47,13 +47,13 @@ std::size_t CountSamplesAtRadius(
 
 void ExpectAnalysisSampleDistances(
     const SamplingPointList & samples,
-    const std::array<float, 3> & center)
+    const std::array<double, 3> & center)
 {
     for (const auto & sample : samples)
     {
-        EXPECT_GE(sample.distance, 0.0f);
-        EXPECT_LE(sample.distance, 2.0f);
-        EXPECT_NEAR(sample.distance, ComputeDistance(center, sample.position), 1e-5f);
+        EXPECT_GE(sample.distance, 0.0);
+        EXPECT_LE(sample.distance, 2.0);
+        EXPECT_NEAR(sample.distance, ComputeDistance(center, sample.position), 1e-5);
     }
 }
 
@@ -61,7 +61,7 @@ void ExpectAnalysisSampleDistances(
 
 TEST(SphereSamplerTest, RadiusUniformProducesFixedAnalysisSamples)
 {
-    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const std::array<double, 3> center{ 1.0, 2.0, 3.0 };
     const auto samples{ rhbm_gem::sphere_sampler::GenerateRadiusUniformRandom(center) };
 
     ASSERT_EQ(10u, samples.size());
@@ -70,7 +70,7 @@ TEST(SphereSamplerTest, RadiusUniformProducesFixedAnalysisSamples)
 
 TEST(SphereSamplerTest, VolumeUniformProducesFixedAnalysisSamples)
 {
-    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const std::array<double, 3> center{ 1.0, 2.0, 3.0 };
     const auto samples{ rhbm_gem::sphere_sampler::GenerateVolumeUniformRandom(center) };
 
     ASSERT_EQ(10u, samples.size());
@@ -79,15 +79,15 @@ TEST(SphereSamplerTest, VolumeUniformProducesFixedAnalysisSamples)
 
 TEST(SphereSamplerTest, FibonacciProducesFixedDeterministicShells)
 {
-    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const std::array<double, 3> center{ 1.0, 2.0, 3.0 };
 
     const auto first_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
     const auto second_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
 
     ASSERT_EQ(200u, first_samples.size());
-    EXPECT_EQ(0u, CountSamplesAtRadius(first_samples, 0.0f));
-    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 0.05f));
-    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 1.95f));
+    EXPECT_EQ(0u, CountSamplesAtRadius(first_samples, 0.0));
+    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 0.05));
+    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 1.95));
     ExpectAnalysisSampleDistances(first_samples, center);
     ExpectSamplesEqual(first_samples, second_samples);
 }
@@ -96,14 +96,14 @@ TEST(SphereSamplerTest, DispatchThrowsForUnsupportedMethod)
 {
     EXPECT_THROW(
         rhbm_gem::sphere_sampler::GenerateSamplingPointList(
-            { 0.f, 0.f, 0.f },
+            { 0.0, 0.0, 0.0 },
             static_cast<SphereSamplingMethod>(99)),
         std::invalid_argument);
 }
 
 TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
 {
-    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const std::array<double, 3> center{ 1.0, 2.0, 3.0 };
     const auto samples{
         rhbm_gem::sphere_sampler::GenerateSamplingPointList(
             center,
@@ -111,6 +111,6 @@ TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
     };
 
     ASSERT_EQ(200u, samples.size());
-    EXPECT_EQ(10u, CountSamplesAtRadius(samples, 0.05f));
+    EXPECT_EQ(10u, CountSamplesAtRadius(samples, 0.05));
     ExpectAnalysisSampleDistances(samples, center);
 }

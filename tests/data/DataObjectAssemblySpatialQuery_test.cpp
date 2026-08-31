@@ -25,19 +25,19 @@ std::unique_ptr<rg::ModelObject> MakeSpatialQueryModel()
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
-    atom_1->SetPosition(0.0f, 0.0f, 0.0f);
+    atom_1->SetPosition(0.0, 0.0, 0.0);
 
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(2);
-    atom_2->SetPosition(1.0f, 0.0f, 0.0f);
+    atom_2->SetPosition(1.0, 0.0, 0.0);
 
     auto atom_3{ std::make_unique<rg::AtomObject>() };
     atom_3->SetSerialID(3);
-    atom_3->SetPosition(-1.0f, 0.0f, 0.0f);
+    atom_3->SetPosition(-1.0, 0.0, 0.0);
 
     auto atom_4{ std::make_unique<rg::AtomObject>() };
     atom_4->SetSerialID(4);
-    atom_4->SetPosition(3.0f, 0.0f, 0.0f);
+    atom_4->SetPosition(3.0, 0.0, 0.0);
 
     atom_list.emplace_back(std::move(atom_1));
     atom_list.emplace_back(std::move(atom_2));
@@ -64,7 +64,7 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyBuildsSerialIndexWithoutUsingMo
     rg::ModelObjectParts parts;
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(42);
-    atom->SetPosition(3.0f, 4.0f, 5.0f);
+    atom->SetPosition(3.0, 4.0, 5.0);
     auto * atom_ptr{ atom.get() };
 
     parts.atom_list.emplace_back(std::move(atom));
@@ -72,7 +72,7 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyBuildsSerialIndexWithoutUsingMo
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
     EXPECT_EQ(model.GetAtomList().front().get(), atom_ptr);
     ASSERT_NE(model.FindAtomPtr(42), nullptr);
-    EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
+    EXPECT_DOUBLE_EQ(model.GetCenterOfMassPosition().at(0), 3.0);
 }
 
 TEST(DataObjectAssemblySpatialQueryTest, AssemblyBuildsModelWithFreshIndicesAndDerivedCaches)
@@ -81,10 +81,10 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyBuildsModelWithFreshIndicesAndD
     parts.atom_list.reserve(2);
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(11);
-    atom_1->SetPosition(5.0f, 0.0f, 0.0f);
+    atom_1->SetPosition(5.0, 0.0, 0.0);
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(12);
-    atom_2->SetPosition(9.0f, 0.0f, 0.0f);
+    atom_2->SetPosition(9.0, 0.0, 0.0);
     parts.atom_list.emplace_back(std::move(atom_1));
     parts.atom_list.emplace_back(std::move(atom_2));
 
@@ -97,7 +97,7 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyBuildsModelWithFreshIndicesAndD
     EXPECT_NE(model->FindAtomPtr(12), nullptr);
     EXPECT_THROW(model->FindAtomPtr(1), std::out_of_range);
     EXPECT_EQ(model->GetSelectedAtomCount(), 1);
-    EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
+    EXPECT_DOUBLE_EQ(model->GetCenterOfMassPosition().at(0), 7.0);
     const auto x_range{ model->GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 5.0);
     EXPECT_DOUBLE_EQ(std::get<1>(x_range), 9.0);
@@ -110,10 +110,10 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyInitializesOwnersSelectionAndDe
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
-    atom_1->SetPosition(0.0f, 0.0f, 0.0f);
+    atom_1->SetPosition(0.0, 0.0, 0.0);
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(2);
-    atom_2->SetPosition(1.0f, 0.0f, 0.0f);
+    atom_2->SetPosition(1.0, 0.0, 0.0);
 
     auto * atom_1_ptr{ atom_1.get() };
     auto * atom_2_ptr{ atom_2.get() };
@@ -129,7 +129,7 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyInitializesOwnersSelectionAndDe
     ASSERT_EQ(model.GetSelectedBondCount(), 0);
     ASSERT_EQ(model.GetNumberOfBond(), 1);
     EXPECT_EQ(model.GetBondList().at(0).get(), bond_ptr);
-    EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 0.5f);
+    EXPECT_DOUBLE_EQ(model.GetCenterOfMassPosition().at(0), 0.5);
     const auto x_range{ model.GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 0.0);
     EXPECT_DOUBLE_EQ(std::get<1>(x_range), 1.0);
@@ -233,10 +233,10 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailab
     parts.atom_list.reserve(2);
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(41);
-    atom_1->SetPosition(0.0f, 0.0f, 0.0f);
+    atom_1->SetPosition(0.0, 0.0, 0.0);
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(42);
-    atom_2->SetPosition(1.0f, 0.0f, 0.0f);
+    atom_2->SetPosition(1.0, 0.0, 0.0);
     parts.atom_list.emplace_back(std::move(atom_1));
     parts.atom_list.emplace_back(std::move(atom_2));
 
@@ -352,7 +352,7 @@ TEST(DataObjectAssemblySpatialQueryTest, PublicNeighborQueryRefreshesAfterAtomCo
     const auto initial_neighbors{ model->FindNeighborAtoms(*atoms.at(0), 1.1) };
     EXPECT_EQ(CollectSerialIds(initial_neighbors), (std::vector<int>{ 2, 3 }));
 
-    atoms.at(3)->SetPosition(0.5f, 0.0f, 0.0f);
+    atoms.at(3)->SetPosition(0.5, 0.0, 0.0);
 
     const auto refreshed_neighbors{ model->FindNeighborAtoms(*atoms.at(0), 1.1) };
     EXPECT_EQ(CollectSerialIds(refreshed_neighbors), (std::vector<int>{ 4, 2, 3 }));

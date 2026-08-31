@@ -91,7 +91,7 @@ public:
     double GetReferenceHeight() const { return m_reference_height; }
     double GetReferenceOffset() const { return m_reference_offset; }
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap() const { return m_chain_id_list_map; }
-    std::array<float, 3> GetCenterOfMassPosition();
+    std::array<double, 3> GetCenterOfMassPosition();
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);

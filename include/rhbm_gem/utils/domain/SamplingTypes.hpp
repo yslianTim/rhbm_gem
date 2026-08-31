@@ -16,8 +16,8 @@ enum class SphereSamplingMethod
 
 struct SamplingPoint
 {
-    float distance{ 0.0f };
-    std::array<float, 3> position{ 0.0f, 0.0f, 0.0f };
+    double distance{ 0.0 };
+    std::array<double, 3> position{ 0.0, 0.0, 0.0 };
     bool is_selected{ true };
 };
 
@@ -25,7 +25,7 @@ using SamplingPointList = std::vector<SamplingPoint>;
 
 struct LocalPotentialSample
 {
-    float response{ 0.0f };
+    double response{ 0.0 };
     SamplingPoint point{};
 };
 

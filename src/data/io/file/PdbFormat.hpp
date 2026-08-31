@@ -102,9 +102,9 @@ class PdbFormat {
         char chain_id;
         int sequence_id;
         char code;
-        float position_x, position_y, position_z;
-        float occupancy;
-        float temperature;
+        double position_x, position_y, position_z;
+        double occupancy;
+        double temperature;
         char segment_id[5];
         char element[3];
         char charge[3];

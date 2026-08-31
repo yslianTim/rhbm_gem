@@ -174,12 +174,12 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
     double raw_sum{ 0.0 };
     for (const auto & sample : raw_sampling_entries)
     {
-        raw_sum += static_cast<double>(sample.response);
+        raw_sum += sample.response;
     }
     double peeling_sum{ 0.0 };
     for (const auto & sample : peeling_sampling_entries)
     {
-        peeling_sum += static_cast<double>(sample.response);
+        peeling_sum += sample.response;
     }
     if (!std::isfinite(raw_sum) || !std::isfinite(peeling_sum) || raw_sum == 0.0)
     {

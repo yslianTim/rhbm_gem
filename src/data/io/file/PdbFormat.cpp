@@ -64,11 +64,11 @@ void PdbFormat::ScanAtomEntry(char* line, bool is_special, int model_number) {
     std::sscanf(&line[static_cast<int>(ATOM::CHAIN_ID)], "%c", &atom->chain_id);
     std::sscanf(&line[static_cast<int>(ATOM::RESIDUE_ID)], "%d", &atom->sequence_id);
     std::sscanf(&line[static_cast<int>(ATOM::CODE)], "%c", &atom->code);
-    std::sscanf(&line[static_cast<int>(ATOM::POSITION_X)], "%8f", &atom->position_x);
-    std::sscanf(&line[static_cast<int>(ATOM::POSITION_Y)], "%8f", &atom->position_y);
-    std::sscanf(&line[static_cast<int>(ATOM::POSITION_Z)], "%8f", &atom->position_z);
-    std::sscanf(&line[static_cast<int>(ATOM::OCCUPANCY)], "%8f", &atom->occupancy);
-    std::sscanf(&line[static_cast<int>(ATOM::TEMPERATURE)], "%8f", &atom->temperature);
+    std::sscanf(&line[static_cast<int>(ATOM::POSITION_X)], "%8lf", &atom->position_x);
+    std::sscanf(&line[static_cast<int>(ATOM::POSITION_Y)], "%8lf", &atom->position_y);
+    std::sscanf(&line[static_cast<int>(ATOM::POSITION_Z)], "%8lf", &atom->position_z);
+    std::sscanf(&line[static_cast<int>(ATOM::OCCUPANCY)], "%8lf", &atom->occupancy);
+    std::sscanf(&line[static_cast<int>(ATOM::TEMPERATURE)], "%8lf", &atom->temperature);
     std::sscanf(&line[static_cast<int>(ATOM::SEGMENT_ID)], "%4c", &atom->segment_id[0]);
     std::sscanf(&line[static_cast<int>(ATOM::ELEMENT)], "%2c", &atom->element[0]);
     std::sscanf(&line[static_cast<int>(ATOM::CHARGE)], "%2c", &atom->charge[0]);
@@ -126,13 +126,12 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         const auto sequence_id{atom->GetSequenceID() < 0 ? 0 : atom->GetSequenceID()};
         const auto position{atom->GetPosition()};
         const auto occupancy{atom->GetOccupancy()};
-        float b_factor{atom->GetTemperature()};
+        double b_factor{atom->GetTemperature()};
         if (AtomLocalPotentialView::For(*atom).IsAvailable())
         {
-            b_factor = static_cast<float>(
-                AtomLocalPotentialView::For(*atom)
-                    .GetEstimateMDPDE(FittingStage::Third)
-                    .GetDisplayParameter(par));
+            b_factor = AtomLocalPotentialView::For(*atom)
+                .GetEstimateMDPDE(FittingStage::Third)
+                .GetDisplayParameter(par);
         }
 
         char line[128];

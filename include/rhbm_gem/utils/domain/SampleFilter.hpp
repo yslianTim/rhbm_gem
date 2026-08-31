@@ -9,8 +9,8 @@ namespace rhbm_gem::sample_filter {
 
 void FilterSamplingPointList(
     SamplingPointList & sample_point_list,
-    const std::array<float, 3> & local_position,
-    const std::vector<std::array<float, 3>> & reject_position_list,
+    const std::array<double, 3> & local_position,
+    const std::vector<std::array<double, 3>> & reject_position_list,
     double angle = 30.0);
 
 LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(

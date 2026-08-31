@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "io/file/MapHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
@@ -31,14 +32,14 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
 {
     const command_test::ScopedTempDir temp_dir{ "data_runtime_map_formats" };
     std::array<int, 3> grid_size{ 4, 4, 4 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 1.0f, 2.0f, 3.0f };
+    std::array<double, 3> grid_spacing{ 1.0, 1.0, 1.0 };
+    std::array<double, 3> origin{ 1.0, 2.0, 3.0 };
     const size_t voxel_size{
         static_cast<size_t>(grid_size[0] * grid_size[1] * grid_size[2]) };
-    auto values{ std::make_unique<float[]>(voxel_size) };
+    auto values{ std::make_unique<double[]>(voxel_size) };
     for (size_t i = 0; i < voxel_size; ++i)
     {
-        values[i] = static_cast<float>(i);
+        values[i] = static_cast<double>(i);
     }
     rg::MapObject map{ grid_size, grid_spacing, origin, std::move(values) };
 
@@ -57,19 +58,134 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
         ASSERT_NE(loaded_values, nullptr);
         for (size_t i = 0; i < voxel_size; ++i)
         {
-            EXPECT_FLOAT_EQ(loaded_values[i], static_cast<float>(i));
+            EXPECT_DOUBLE_EQ(loaded_values[i], static_cast<double>(i));
         }
     }
+}
+
+TEST(DataObjectFileIOTest, MapCodecQuantizesOnlyAtFloat32FileBoundary)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_runtime_map_float32_boundary" };
+    constexpr std::array<double, 4> source_values{
+        1.0000000000000002,
+        16777217.0,
+        -0.123456789012345,
+        3.141592653589793 };
+    auto values{ std::make_unique<double[]>(source_values.size()) };
+    for (std::size_t index = 0; index < source_values.size(); ++index)
+    {
+        values[index] = source_values[index];
+    }
+    rg::MapObject map{
+        { 2, 2, 1 },
+        { 0.5, 0.5, 1.0 },
+        { 0.0, 0.0, 0.0 },
+        std::move(values) };
+
+    for (const std::string & extension : { ".mrc", ".map", ".ccp4" })
+    {
+        SCOPED_TRACE(extension);
+        const auto path{ temp_dir.path() / ("quantized" + extension) };
+        rg::WriteMap(path, map);
+        const auto loaded_map{ rg::ReadMap(path) };
+        ASSERT_NE(loaded_map, nullptr);
+        ASSERT_EQ(loaded_map->GetMapValueArraySize(), source_values.size());
+        for (std::size_t index = 0; index < source_values.size(); ++index)
+        {
+            const auto expected{
+                static_cast<double>(static_cast<float>(source_values[index])) };
+            EXPECT_DOUBLE_EQ(loaded_map->GetMapValue(index), expected);
+        }
+        EXPECT_NE(loaded_map->GetMapValue(0), source_values[0]);
+        EXPECT_NE(loaded_map->GetMapValue(1), source_values[1]);
+    }
+}
+
+TEST(DataObjectFileIOTest, CifParsingRetainsDoublePrecisionDomainValues)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_runtime_cif_double_precision" };
+    const auto cif_path{ temp_dir.path() / "high_precision.cif" };
+    {
+        std::ofstream output{ cif_path };
+        output << R"(data_precision
+#
+loop_
+_database_2.database_id
+_database_2.database_code
+PDB 1DBL
+#
+loop_
+_entity.id
+_entity.type
+_entity.pdbx_number_of_molecules
+1 polymer 1
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+A 1
+#
+loop_
+_chem_comp.id
+_chem_comp.type
+_chem_comp.mon_nstd_flag
+_chem_comp.name
+_chem_comp.pdbx_synonyms
+_chem_comp.formula
+_chem_comp.formula_weight
+ALA 'L-peptide linking' y ALANINE ? 'C3 H7 N O2' 123.456789012345
+#
+loop_
+_atom_type.symbol
+C
+#
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_PDB_model_num
+ATOM 1 C CA . ALA A 1 1.0000000000000002 16777217.125 -0.123456789012345 0.123456789012345 12.3456789012345 1
+#
+)";
+    }
+
+    const auto model{ rg::ReadModel(cif_path) };
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->GetAtomList().size(), 1u);
+    const auto & atom{ *model->GetAtomList().front() };
+    EXPECT_DOUBLE_EQ(atom.GetPosition().at(0), 1.0000000000000002);
+    EXPECT_DOUBLE_EQ(atom.GetPosition().at(1), 16777217.125);
+    EXPECT_DOUBLE_EQ(atom.GetPosition().at(2), -0.123456789012345);
+    EXPECT_DOUBLE_EQ(atom.GetOccupancy(), 0.123456789012345);
+    EXPECT_DOUBLE_EQ(atom.GetTemperature(), 12.3456789012345);
+
+    const auto component_keys{ model->GetComponentKeyList() };
+    ASSERT_EQ(component_keys.size(), 1u);
+    const auto * component{
+        model->FindChemicalComponentEntry(component_keys.front()) };
+    ASSERT_NE(component, nullptr);
+    EXPECT_DOUBLE_EQ(
+        component->GetComponentMolecularWeight(), 123.456789012345);
 }
 
 TEST(DataObjectFileIOTest, MapAxisOrderCanonicalOrderReturnsOriginalBufferAndPreservesValues)
 {
     std::array<int, 3> array_size{ 2, 2, 2 };
     std::array<int, 3> axis_order{ 1, 2, 3 };
-    auto raw_data{ std::make_unique<float[]>(8) };
+    auto raw_data{ std::make_unique<double[]>(8) };
     for (size_t i = 0; i < 8; ++i)
     {
-        raw_data[i] = static_cast<float>(i + 1);
+        raw_data[i] = static_cast<double>(i + 1);
     }
     const auto * original_ptr{ raw_data.get() };
 
@@ -80,7 +196,7 @@ TEST(DataObjectFileIOTest, MapAxisOrderCanonicalOrderReturnsOriginalBufferAndPre
     EXPECT_EQ(reordered.get(), original_ptr);
     for (size_t i = 0; i < 8; ++i)
     {
-        EXPECT_FLOAT_EQ(reordered[i], static_cast<float>(i + 1));
+        EXPECT_DOUBLE_EQ(reordered[i], static_cast<double>(i + 1));
     }
 }
 
@@ -89,38 +205,38 @@ TEST(DataObjectFileIOTest, MapAxisOrderNonCanonicalOrderReordersToXYZ)
     std::array<int, 3> array_size{ 2, 3, 4 };
     std::array<int, 3> axis_order{ 3, 1, 2 };
     const size_t voxel_count{ 24 };
-    auto raw_data{ std::make_unique<float[]>(voxel_count) };
+    auto raw_data{ std::make_unique<double[]>(voxel_count) };
     for (size_t i = 0; i < voxel_count; ++i)
     {
-        raw_data[i] = static_cast<float>(i);
+        raw_data[i] = static_cast<double>(i);
     }
 
     auto reordered{
         rg::data_internal::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order) };
 
     ASSERT_NE(reordered, nullptr);
-    EXPECT_FLOAT_EQ(reordered[0], 0.0f);
-    EXPECT_FLOAT_EQ(reordered[1], 2.0f);
-    EXPECT_FLOAT_EQ(reordered[2], 4.0f);
-    EXPECT_FLOAT_EQ(reordered[3], 6.0f);
-    EXPECT_FLOAT_EQ(reordered[4], 8.0f);
-    EXPECT_FLOAT_EQ(reordered[5], 10.0f);
-    EXPECT_FLOAT_EQ(reordered[6], 12.0f);
-    EXPECT_FLOAT_EQ(reordered[12], 1.0f);
-    EXPECT_FLOAT_EQ(reordered[23], 23.0f);
+    EXPECT_DOUBLE_EQ(reordered[0], 0.0);
+    EXPECT_DOUBLE_EQ(reordered[1], 2.0);
+    EXPECT_DOUBLE_EQ(reordered[2], 4.0);
+    EXPECT_DOUBLE_EQ(reordered[3], 6.0);
+    EXPECT_DOUBLE_EQ(reordered[4], 8.0);
+    EXPECT_DOUBLE_EQ(reordered[5], 10.0);
+    EXPECT_DOUBLE_EQ(reordered[6], 12.0);
+    EXPECT_DOUBLE_EQ(reordered[12], 1.0);
+    EXPECT_DOUBLE_EQ(reordered[23], 23.0);
 }
 
 TEST(DataObjectFileIOTest, MapAxisOrderRejectsInvalidDimensionsAndAxisMappings)
 {
-    auto valid_data{ std::make_unique<float[]>(1) };
-    valid_data[0] = 1.0f;
+    auto valid_data{ std::make_unique<double[]>(1) };
+    valid_data[0] = 1.0;
     EXPECT_THROW(
         (void)rg::data_internal::ReorderToCanonicalXYZ(
             std::move(valid_data), std::array<int, 3>{ 0, 1, 1 }, std::array<int, 3>{ 1, 2, 3 }),
         std::runtime_error);
 
-    auto invalid_axis_data{ std::make_unique<float[]>(1) };
-    invalid_axis_data[0] = 1.0f;
+    auto invalid_axis_data{ std::make_unique<double[]>(1) };
+    invalid_axis_data[0] = 1.0;
     EXPECT_THROW(
         (void)rg::data_internal::ReorderToCanonicalXYZ(
             std::move(invalid_axis_data),

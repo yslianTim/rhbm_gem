@@ -653,7 +653,7 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
             const auto & sample{ atom_context.raw_sampling_entries.at(j) };
             const auto target_jacobian{ EvaluateCouplingGraphJacobian(
                 selected_model_invariants.at(i),
-                static_cast<double>(sample.point.distance)) };
+                sample.point.distance) };
             participant_list.clear();
             participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
             for (const auto & neighbor_atom_sample : atom_context.Neighbors(j))

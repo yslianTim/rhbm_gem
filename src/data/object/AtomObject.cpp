@@ -56,7 +56,7 @@ void AtomObject::SetAtomID(const std::string & value)
     m_spot = ChemicalDataHelper::GetSpotFromString(m_atom_id, false);
 }
 
-void AtomObject::SetPosition(float x, float y, float z)
+void AtomObject::SetPosition(double x, double y, double z)
 {
     m_position.at(0) = x;
     m_position.at(1) = y;
@@ -67,7 +67,7 @@ void AtomObject::SetPosition(float x, float y, float z)
     }
 }
 
-void AtomObject::SetPosition(const std::array<float, 3> & value)
+void AtomObject::SetPosition(const std::array<double, 3> & value)
 {
     m_position = value;
     if (m_owner_model != nullptr)
@@ -94,36 +94,36 @@ std::string AtomObject::GetInfo() const
 }
 
 void AtomObject::AddAlternatePosition(
-    const std::string & indicator, const std::array<float, 3> & value)
+    const std::string & indicator, const std::array<double, 3> & value)
 {
     m_alternate_position_map[indicator] = value;
 }
 
 void AtomObject::AddAlternateOccupancy(
-    const std::string & indicator, float value)
+    const std::string & indicator, double value)
 {
     m_alternate_occupancy_map[indicator] = value;
 }
 
 void AtomObject::AddAlternateTemperature(
-    const std::string & indicator, float value)
+    const std::string & indicator, double value)
 {
     m_alternate_temperature_map[indicator] = value;
 }
 
-const std::unordered_map<std::string, std::array<float, 3>> &
+const std::unordered_map<std::string, std::array<double, 3>> &
 AtomObject::GetAlternatePositions() const
 {
     return m_alternate_position_map;
 }
 
-const std::unordered_map<std::string, float> &
+const std::unordered_map<std::string, double> &
 AtomObject::GetAlternateOccupancies() const
 {
     return m_alternate_occupancy_map;
 }
 
-const std::unordered_map<std::string, float> &
+const std::unordered_map<std::string, double> &
 AtomObject::GetAlternateTemperatures() const
 {
     return m_alternate_temperature_map;

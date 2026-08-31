@@ -13,7 +13,9 @@ This document describes the current object boundaries after the analysis and per
 - derived indexes and spatial-query state;
 - atom-local and atom-group analysis data.
 
-`MapObject` owns a dense float32 voxel array plus grid dimensions, spacing, and origin. It is independent from `ModelObject`; commands coordinate the two roots when an operation needs both.
+`MapObject` owns a dense double-precision voxel array plus grid dimensions, spacing, and origin. It is independent from `ModelObject`; commands coordinate the two roots when an operation needs both.
+
+Runtime domain scalars use `double` consistently. This includes atom and bond positions, alternate coordinates, occupancy, temperature, chemical-component molecular weight, model-derived spatial state, map geometry and statistics, and sampling distance/position/response. Input codecs widen external values at their boundary before constructing or mutating runtime objects.
 
 Neither individual atoms, bonds, analysis entries, nor analysis facades are independent persistence roots.
 
@@ -103,11 +105,11 @@ The separation is deliberate: map reads and local calculations are parallel, whi
 `MapObject` stores:
 
 - `std::array<int, 3>` grid dimensions;
-- `std::array<float, 3>` spacing;
-- `std::array<float, 3>` origin;
-- a contiguous float32 voxel buffer.
+- `std::array<double, 3>` spacing;
+- `std::array<double, 3>` origin;
+- a contiguous `double` voxel buffer and double-precision statistics.
 
-The canonical in-memory voxel order is X, then Y, then Z. MRC and CCP4 codecs normalize file axis mappings before constructing the object. Their distinct header and origin rules remain in the codecs; common float32 voxel mechanics live in `MapHelper`.
+The canonical in-memory voxel order is X, then Y, then Z. MRC and CCP4 codecs normalize file axis mappings before constructing the object. Their required float32 headers and mode-2 payloads are external-format details: reads widen each voxel to `double` before axis normalization and construction, and writes narrow temporary values only inside the codec. Their distinct header and origin rules remain in the codecs; shared boundary mechanics live in `MapHelper`.
 
 ## 8. Persistence Boundary
 
@@ -130,7 +132,7 @@ Map persistence is file-only. See [DataObject I/O Architecture](dataobject-io-ar
 - Add invariant-preserving analysis mutations to `ModelAnalysisEditor`.
 - Keep one-off logs, summaries, and serializers in their command or estimator consumer.
 - Change SQLite row mapping in `ModelObjectStorage`; change lifecycle validation in `DataRepository`.
-- Change shared float32 voxel mechanics in `MapHelper`; keep MRC and CCP4 header semantics in their individual codecs.
+- Change shared MRC/CCP4 float32 boundary mechanics in `MapHelper`; keep their header semantics in the individual codecs and keep runtime map data as `double`.
 
 ## 10. Key Files
 

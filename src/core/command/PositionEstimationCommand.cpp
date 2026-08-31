@@ -31,18 +31,18 @@ namespace {
 
 struct VoxelNode
 {
-    std::array<float, 3> position;
-    float value;
+    std::array<double, 3> position;
+    double value;
 
-    VoxelNode(const std::array<float, 3> & position_in, float value_in) :
+    VoxelNode(const std::array<double, 3> & position_in, double value_in) :
         position{ position_in },
         value{ value_in }
     {
     }
 
-    const std::array<float, 3> & GetPosition() const { return position; }
-    float GetValue() const { return value; }
-    void SetPosition(const std::array<float, 3> & updated_position)
+    const std::array<double, 3> & GetPosition() const { return position; }
+    double GetValue() const { return value; }
+    void SetPosition(const std::array<double, 3> & updated_position)
     {
         position = updated_position;
     }
@@ -52,7 +52,7 @@ struct PositionEstimationState
 {
     std::vector<VoxelNode> selected_voxel_list;
     std::vector<VoxelNode> query_point_list;
-    std::vector<std::array<float, 3>> position_list;
+    std::vector<std::array<double, 3>> position_list;
     std::unique_ptr<::KDNode<VoxelNode>> kd_tree_root;
 };
 
@@ -108,19 +108,19 @@ bool BuildVoxelList(
 {
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     auto array_size{ map_object.GetMapValueArraySize() };
-    auto threshold{ map_object.GetMapValueMax() * static_cast<float>(request.threshold_ratio) };
+    auto threshold{ map_object.GetMapValueMax() * request.threshold_ratio };
 
-    const float * map_values{ map_object.GetMapValueArray() };
+    const double * map_values{ map_object.GetMapValueArray() };
     auto selected_count{
         static_cast<size_t>(std::count_if(map_values, map_values + array_size,
-            [threshold](float v) { return v > threshold; }))
+            [threshold](double v) { return v > threshold; }))
     };
     state.selected_voxel_list.reserve(selected_count);
 
     auto process_voxel = [&](size_t index, std::vector<VoxelNode> & list)
     {
         auto position{ map_object.GetGridPosition(index) };
-        float value{ map_object.GetMapValue(index) };
+        double value{ map_object.GetMapValue(index) };
         if (value <= threshold) return;
         list.emplace_back(position, value);
     };
@@ -174,7 +174,7 @@ void UpdatePointPosition(
     PositionEstimationState & state,
     size_t index,
     size_t knn_size,
-    float alpha)
+    double alpha)
 {
     static thread_local std::vector<VoxelNode *> knn_list;
     if (knn_list.capacity() < knn_size)
@@ -198,12 +198,12 @@ void UpdatePointPosition(
         return;
     }
 
-    float weight_sum{ 0.0f };
-    std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
+    double weight_sum{ 0.0 };
+    std::array<double, 3> point_position_update{ 0.0, 0.0, 0.0 };
     for (size_t j = 0; j < knn_count; j++)
     {
         //auto w{ std::exp(alpha * std::log(knn_list[j]->GetValue())) };
-        if (knn_list[j]->GetValue() <= 0.0f) continue;
+        if (knn_list[j]->GetValue() <= 0.0) continue;
         auto w{ std::pow(knn_list[j]->GetValue(), alpha) };
         auto & query_point_position{ knn_list[j]->GetPosition() };
         point_position_update[0] += w * query_point_position[0];
@@ -211,7 +211,7 @@ void UpdatePointPosition(
         point_position_update[2] += w * query_point_position[2];
         weight_sum += w;
     }
-    if (weight_sum == 0.0f)
+    if (weight_sum == 0.0)
     {
         Logger::Log(LogLevel::Warning,
             "Weight sum is non-positive for point index "
@@ -250,7 +250,7 @@ void RunMapValueConvergence(
 
     state.query_point_list = state.selected_voxel_list;
     auto iteration_size{ static_cast<std::size_t>(request.iteration_count) };
-    const auto alpha{ static_cast<float>(request.alpha) };
+    const auto alpha{ request.alpha };
     Logger::Log(LogLevel::Info, " /- Running map value convergence iteration...");
     for (size_t t = 1; t <= iteration_size; t++)
     {
@@ -276,7 +276,7 @@ void RunMapValueConvergence(
     }
 }
 
-void RunUniquePointList(PositionEstimationState & state, float tolerance)
+void RunUniquePointList(PositionEstimationState & state, double tolerance)
 {
     ScopeTimer timer("PositionEstimationCommand::RunUniquePointList");
     if (state.query_point_list.empty())
@@ -288,7 +288,7 @@ void RunUniquePointList(PositionEstimationState & state, float tolerance)
     state.position_list.reserve(state.query_point_list.size());
 
     auto point_size_origin{ state.query_point_list.size() };
-    auto inv_tolerance{ 1.0f / tolerance };
+    auto inv_tolerance{ 1.0 / tolerance };
     std::unordered_set<std::array<int64_t, 3>, QuantizedPointHash> unique_points;
     unique_points.reserve(state.query_point_list.size());
     for (const auto & point : state.query_point_list)
@@ -302,10 +302,10 @@ void RunUniquePointList(PositionEstimationState & state, float tolerance)
         auto result{ unique_points.insert(q) };
         if (result.second)
         {
-            state.position_list.emplace_back(std::array<float, 3>{
-                static_cast<float>(q[0]) * tolerance,
-                static_cast<float>(q[1]) * tolerance,
-                static_cast<float>(q[2]) * tolerance
+            state.position_list.emplace_back(std::array<double, 3>{
+                static_cast<double>(q[0]) * tolerance,
+                static_cast<double>(q[1]) * tolerance,
+                static_cast<double>(q[2]) * tolerance
             });
         }
     }
@@ -361,7 +361,7 @@ bool ExecutePreparedRequest(const PositionEstimationRequest & request)
     PositionEstimationState state;
     if (!BuildVoxelList(request, **map_object, state, request.job_count)) return false;
     RunMapValueConvergence(request, state, request.job_count);
-    RunUniquePointList(state, static_cast<float>(request.dedup_tolerance));
+    RunUniquePointList(state, request.dedup_tolerance);
     OutputPointList(request, state, request.output_dir);
     return true;
 }

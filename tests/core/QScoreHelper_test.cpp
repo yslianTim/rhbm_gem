@@ -20,17 +20,17 @@ namespace {
 
 struct AtomSpec
 {
-    std::array<float, 3> position;
+    std::array<double, 3> position;
     Element element{ Element::CARBON };
 };
 
 rhbm_gem::MapObject MakeMapObject(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin,
-    const std::vector<float> & values)
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin,
+    const std::vector<double> & values)
 {
-    auto map_values{ std::make_unique<float[]>(values.size()) };
+    auto map_values{ std::make_unique<double[]>(values.size()) };
     for (std::size_t i = 0; i < values.size(); ++i)
     {
         map_values[i] = values[i];
@@ -43,7 +43,7 @@ rhbm_gem::MapObject MakeMapObject(
     };
 }
 
-rhbm_gem::MapObject MakeMapObject(const std::vector<float> & values)
+rhbm_gem::MapObject MakeMapObject(const std::vector<double> & values)
 {
     return MakeMapObject(
         {
@@ -51,18 +51,18 @@ rhbm_gem::MapObject MakeMapObject(const std::vector<float> & values)
             1,
             1
         },
-        { 1.0f, 1.0f, 1.0f },
-        { 0.0f, 0.0f, 0.0f },
+        { 1.0, 1.0, 1.0 },
+        { 0.0, 0.0, 0.0 },
         values);
 }
 
 rhbm_gem::MapObject MakeMapObject(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin,
-    const std::function<float(const std::array<float, 3> &)> & value_at_position)
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin,
+    const std::function<double(const std::array<double, 3> &)> & value_at_position)
 {
-    std::vector<float> values;
+    std::vector<double> values;
     values.reserve(
         static_cast<std::size_t>(grid_size.at(0)) *
         static_cast<std::size_t>(grid_size.at(1)) *
@@ -75,9 +75,9 @@ rhbm_gem::MapObject MakeMapObject(
             {
                 values.emplace_back(
                     value_at_position({
-                        origin.at(0) + static_cast<float>(x) * grid_spacing.at(0),
-                        origin.at(1) + static_cast<float>(y) * grid_spacing.at(1),
-                        origin.at(2) + static_cast<float>(z) * grid_spacing.at(2)
+                        origin.at(0) + static_cast<double>(x) * grid_spacing.at(0),
+                        origin.at(1) + static_cast<double>(y) * grid_spacing.at(1),
+                        origin.at(2) + static_cast<double>(z) * grid_spacing.at(2)
                     }));
             }
         }
@@ -90,20 +90,16 @@ rhbm_gem::MapObject MakeGaussianMapObject()
     constexpr double sigma{ 0.6 };
     return MakeMapObject(
         { 61, 61, 61 },
-        { 0.1f, 0.1f, 0.1f },
-        { -3.0f, -3.0f, -3.0f },
-        [](const std::array<float, 3> & position)
+        { 0.1, 0.1, 0.1 },
+        { -3.0, -3.0, -3.0 },
+        [](const std::array<double, 3> & position)
         {
             const auto distance_square{
-                static_cast<double>(position.at(0)) *
-                    static_cast<double>(position.at(0)) +
-                static_cast<double>(position.at(1)) *
-                    static_cast<double>(position.at(1)) +
-                static_cast<double>(position.at(2)) *
-                    static_cast<double>(position.at(2))
+                position.at(0) * position.at(0) +
+                position.at(1) * position.at(1) +
+                position.at(2) * position.at(2)
             };
-            return static_cast<float>(
-                std::exp(-0.5 * distance_square / (sigma * sigma)));
+            return std::exp(-0.5 * distance_square / (sigma * sigma));
         });
 }
 
@@ -126,7 +122,7 @@ std::unique_ptr<rhbm_gem::ModelObject> MakeModelObject(
 std::unique_ptr<rhbm_gem::ModelObject> MakeCrowdedModelObject()
 {
     std::vector<AtomSpec> atom_specs{
-        { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        { { 0.0, 0.0, 0.0 }, Element::CARBON }
     };
     for (int x = -1; x <= 1; ++x)
     {
@@ -139,13 +135,13 @@ std::unique_ptr<rhbm_gem::ModelObject> MakeCrowdedModelObject()
                     continue;
                 }
                 const auto norm{
-                    std::sqrt(static_cast<float>(x * x + y * y + z * z))
+                    std::sqrt(static_cast<double>(x * x + y * y + z * z))
                 };
                 atom_specs.emplace_back(AtomSpec{
                     {
-                        static_cast<float>(x) / norm,
-                        static_cast<float>(y) / norm,
-                        static_cast<float>(z) / norm
+                        static_cast<double>(x) / norm,
+                        static_cast<double>(y) / norm,
+                        static_cast<double>(z) / norm
                     },
                     Element::CARBON
                 });
@@ -156,15 +152,14 @@ std::unique_ptr<rhbm_gem::ModelObject> MakeCrowdedModelObject()
 }
 
 double ComputeDistanceSquare(
-    const std::array<float, 3> & lhs,
-    const std::array<float, 3> & rhs)
+    const std::array<double, 3> & lhs,
+    const std::array<double, 3> & rhs)
 {
     double distance_square{ 0.0 };
     for (std::size_t axis = 0; axis < lhs.size(); ++axis)
     {
         const auto difference{
-            static_cast<double>(lhs.at(axis)) -
-                static_cast<double>(rhs.at(axis))
+            lhs.at(axis) - rhs.at(axis)
         };
         distance_square += difference * difference;
     }
@@ -178,7 +173,7 @@ void ExpectSamplingPointListsEqual(
     ASSERT_EQ(lhs.size(), rhs.size());
     for (std::size_t i = 0; i < lhs.size(); ++i)
     {
-        EXPECT_FLOAT_EQ(lhs.at(i).distance, rhs.at(i).distance);
+        EXPECT_DOUBLE_EQ(lhs.at(i).distance, rhs.at(i).distance);
         EXPECT_EQ(lhs.at(i).position, rhs.at(i).position);
         EXPECT_EQ(lhs.at(i).is_selected, rhs.at(i).is_selected);
     }
@@ -188,66 +183,66 @@ void ExpectSamplingPointListsEqual(
 
 TEST(QScoreHelperTest, ReturnsAmplitudeAndOffsetForTypicalMap)
 {
-    const auto map{ MakeMapObject({ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f }) };
+    const auto map{ MakeMapObject({ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 }) };
 
     const auto [height, offset]{
         rhbm_gem::core::GetReferenceGaussianParameters(map)
     };
 
-    constexpr float expected_standard_deviation{ 2.44948974f };
-    constexpr float expected_offset{ 4.5f - expected_standard_deviation };
-    constexpr float expected_height{ 8.0f - expected_offset };
-    EXPECT_NEAR(height, expected_height, 1.0e-5f);
-    EXPECT_NEAR(offset, expected_offset, 1.0e-5f);
+    constexpr double expected_standard_deviation{ 2.449489742783178 };
+    constexpr double expected_offset{ 4.5 - expected_standard_deviation };
+    constexpr double expected_height{ 8.0 - expected_offset };
+    EXPECT_NEAR(height, expected_height, 1.0e-5);
+    EXPECT_NEAR(offset, expected_offset, 1.0e-5);
 }
 
 TEST(QScoreHelperTest, CapsReferenceHighAtMeanPlusTenStandardDeviations)
 {
-    std::vector<float> values(121, 0.0f);
-    values.back() = 1.0f;
+    std::vector<double> values(121, 0.0);
+    values.back() = 1.0;
     const auto map{ MakeMapObject(values) };
 
     const auto [height, offset]{
         rhbm_gem::core::GetReferenceGaussianParameters(map)
     };
 
-    constexpr float expected_height{ 1.0f / 121.0f + 10.0f / 11.0f };
-    EXPECT_NEAR(height, expected_height, 1.0e-5f);
-    EXPECT_FLOAT_EQ(offset, 0.0f);
+    constexpr double expected_height{ 1.0 / 121.0 + 10.0 / 11.0 };
+    EXPECT_NEAR(height, expected_height, 1.0e-5);
+    EXPECT_DOUBLE_EQ(offset, 0.0);
     EXPECT_LT(height + offset, map.GetMapValueMax());
 }
 
 TEST(QScoreHelperTest, ClampsOffsetToObservedMinimum)
 {
-    const auto map{ MakeMapObject({ 0.0f, 0.0f, 0.0f, 10.0f }) };
+    const auto map{ MakeMapObject({ 0.0, 0.0, 0.0, 10.0 }) };
 
     const auto [height, offset]{
         rhbm_gem::core::GetReferenceGaussianParameters(map)
     };
 
-    EXPECT_FLOAT_EQ(height, 10.0f);
-    EXPECT_FLOAT_EQ(offset, 0.0f);
+    EXPECT_DOUBLE_EQ(height, 10.0);
+    EXPECT_DOUBLE_EQ(offset, 0.0);
 }
 
 TEST(QScoreHelperTest, ReturnsZeroAmplitudeForConstantMap)
 {
     const auto map{
-        MakeMapObject({ 3.5f, 3.5f, 3.5f, 3.5f, 3.5f, 3.5f, 3.5f, 3.5f })
+        MakeMapObject({ 3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5 })
     };
 
     const auto [height, offset]{
         rhbm_gem::core::GetReferenceGaussianParameters(map)
     };
 
-    EXPECT_FLOAT_EQ(height, 0.0f);
-    EXPECT_FLOAT_EQ(offset, 3.5f);
+    EXPECT_DOUBLE_EQ(height, 0.0);
+    EXPECT_DOUBLE_EQ(offset, 3.5);
 }
 
 TEST(QScoreHelperTest, ReturnsDeterministicSpiralPointsForIsolatedAtom)
 {
     const auto model{
         MakeModelObject({
-            { { 1.0f, 2.0f, 3.0f }, Element::CARBON }
+            { { 1.0, 2.0, 3.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -263,27 +258,27 @@ TEST(QScoreHelperTest, ReturnsDeterministicSpiralPointsForIsolatedAtom)
     ExpectSamplingPointListsEqual(first_points, second_points);
     for (const auto & point : first_points)
     {
-        EXPECT_FLOAT_EQ(point.distance, 1.0f);
+        EXPECT_DOUBLE_EQ(point.distance, 1.0);
         EXPECT_TRUE(point.is_selected);
         EXPECT_NEAR(
             ComputeDistanceSquare(point.position, atom.GetPositionRef()),
             1.0,
             1.0e-5);
     }
-    EXPECT_NEAR(first_points.front().position.at(0), 1.0f, 1.0e-6f);
-    EXPECT_NEAR(first_points.front().position.at(1), 2.0f, 1.0e-6f);
-    EXPECT_NEAR(first_points.front().position.at(2), 2.0f, 1.0e-6f);
-    EXPECT_NEAR(first_points.back().position.at(0), 1.0f, 1.0e-6f);
-    EXPECT_NEAR(first_points.back().position.at(1), 2.0f, 1.0e-6f);
-    EXPECT_NEAR(first_points.back().position.at(2), 4.0f, 1.0e-6f);
+    EXPECT_NEAR(first_points.front().position.at(0), 1.0, 1.0e-6);
+    EXPECT_NEAR(first_points.front().position.at(1), 2.0, 1.0e-6);
+    EXPECT_NEAR(first_points.front().position.at(2), 2.0, 1.0e-6);
+    EXPECT_NEAR(first_points.back().position.at(0), 1.0, 1.0e-6);
+    EXPECT_NEAR(first_points.back().position.at(1), 2.0, 1.0e-6);
+    EXPECT_NEAR(first_points.back().position.at(2), 4.0, 1.0e-6);
 }
 
 TEST(QScoreHelperTest, ReturnsAllAcceptedPointsFromFirstSuccessfulRetry)
 {
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON },
-            { { 0.0f, 0.0f, 0.5f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON },
+            { { 0.0, 0.0, 0.5 }, Element::CARBON }
         })
     };
     const auto & target_atom{ *model->GetAtomList().at(0) };
@@ -312,8 +307,8 @@ TEST(QScoreHelperTest, IgnoresHydrogenAtomsWhenFilteringRadialPoints)
 {
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON },
-            { { 0.0f, 0.0f, 0.5f }, Element::HYDROGEN }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON },
+            { { 0.0, 0.0, 0.5 }, Element::HYDROGEN }
         })
     };
     const auto & target_atom{ *model->GetAtomList().at(0) };
@@ -327,8 +322,8 @@ TEST(QScoreHelperTest, IgnoresHydrogenAtomsWhenFilteringRadialPoints)
     };
 
     ASSERT_EQ(points.size(), 2u);
-    EXPECT_NEAR(points.front().position.at(2), -1.0f, 1.0e-6f);
-    EXPECT_NEAR(points.back().position.at(2), 1.0f, 1.0e-6f);
+    EXPECT_NEAR(points.front().position.at(2), -1.0, 1.0e-6);
+    EXPECT_NEAR(points.back().position.at(2), 1.0, 1.0e-6);
 }
 
 TEST(QScoreHelperTest, ReturnsEmptyWhenCrowdingPreventsRequestedPointCount)
@@ -351,7 +346,7 @@ TEST(QScoreHelperTest, RejectsInvalidRadialPointArguments)
 {
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -394,25 +389,21 @@ TEST(QScoreHelperTest, CalculatesHighQScoreForMatchingGaussianWidth)
     const auto map{
         MakeMapObject(
             { 41, 41, 41 },
-            { 0.1f, 0.1f, 0.1f },
-            { -2.0f, -2.0f, -2.0f },
-            [](const std::array<float, 3> & position)
+            { 0.1, 0.1, 0.1 },
+            { -2.0, -2.0, -2.0 },
+            [](const std::array<double, 3> & position)
             {
                 const auto distance_square{
-                    static_cast<double>(position.at(0)) *
-                        static_cast<double>(position.at(0)) +
-                    static_cast<double>(position.at(1)) *
-                        static_cast<double>(position.at(1)) +
-                    static_cast<double>(position.at(2)) *
-                        static_cast<double>(position.at(2))
+                    position.at(0) * position.at(0) +
+                    position.at(1) * position.at(1) +
+                    position.at(2) * position.at(2)
                 };
-                return static_cast<float>(
-                    std::exp(-0.5 * distance_square / (sigma * sigma)));
+                return std::exp(-0.5 * distance_square / (sigma * sigma));
             })
     };
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -451,17 +442,17 @@ TEST(QScoreHelperTest, UsesCenterWeightMaximumShellAndAllAcceptedPoints)
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 1.0f, 1.0f, 1.0f },
-            { -2.0f, -2.0f, -2.0f },
-            [](const std::array<float, 3> & position)
+            { 1.0, 1.0, 1.0 },
+            { -2.0, -2.0, -2.0 },
+            [](const std::array<double, 3> & position)
             {
                 return position.at(2);
             })
     };
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON },
-            { { 0.0f, 0.0f, 0.5f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON },
+            { { 0.0, 0.0, 0.5 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -490,16 +481,16 @@ TEST(QScoreHelperTest, ReturnsZeroQScoreForConstantMap)
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 1.0f, 1.0f, 1.0f },
-            { -2.0f, -2.0f, -2.0f },
-            [](const std::array<float, 3> &)
+            { 1.0, 1.0, 1.0 },
+            { -2.0, -2.0, -2.0 },
+            [](const std::array<double, 3> &)
             {
-                return 3.5f;
+                return 3.5;
             })
     };
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -521,9 +512,9 @@ TEST(QScoreHelperTest, ReturnsZeroQScoreWhenEveryRadialShellIsEmpty)
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 0.5f, 0.5f, 0.5f },
-            { -1.0f, -1.0f, -1.0f },
-            [](const std::array<float, 3> & position)
+            { 0.5, 0.5, 0.5 },
+            { -1.0, -1.0, -1.0 },
+            [](const std::array<double, 3> & position)
             {
                 return position.at(2);
             })
@@ -548,21 +539,21 @@ TEST(QScoreHelperTest, RejectsSamplingPositionsOutsideMapBoundary)
     const auto map{
         MakeMapObject(
             { 3, 3, 3 },
-            { 1.0f, 1.0f, 1.0f },
-            { -1.0f, -1.0f, -1.0f },
-            [](const std::array<float, 3> & position)
+            { 1.0, 1.0, 1.0 },
+            { -1.0, -1.0, -1.0 },
+            [](const std::array<double, 3> & position)
             {
                 return position.at(2);
             })
     };
     const auto outside_center_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 2.0f }, Element::CARBON }
+            { { 0.0, 0.0, 2.0 }, Element::CARBON }
         })
     };
     const auto radial_outside_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 1.0f }, Element::CARBON }
+            { { 0.0, 0.0, 1.0 }, Element::CARBON }
         })
     };
 
@@ -593,21 +584,21 @@ TEST(QScoreHelperTest, RejectsInvalidQScoreArguments)
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 0.5f, 0.5f, 0.5f },
-            { -1.0f, -1.0f, -1.0f },
-            [](const std::array<float, 3> & position)
+            { 0.5, 0.5, 0.5 },
+            { -1.0, -1.0, -1.0 },
+            [](const std::array<double, 3> & position)
             {
                 return position.at(2);
             })
     };
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto other_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -645,7 +636,7 @@ TEST(QScoreHelperTest, CalculatesSingleAtomAverageWithMapQParameters)
     const auto map{ MakeGaussianMapObject() };
     const auto model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
@@ -677,9 +668,9 @@ TEST(QScoreHelperTest, AveragesAllNonHydrogenAtomsRegardlessOfSelection)
     const auto map{ MakeGaussianMapObject() };
     const auto model{
         MakeModelObject({
-            { { -0.5f, 0.0f, 0.0f }, Element::CARBON },
-            { { 0.8f, 0.0f, 0.0f }, Element::OXYGEN },
-            { { 100.0f, 0.0f, 0.0f }, Element::HYDROGEN }
+            { { -0.5, 0.0, 0.0 }, Element::CARBON },
+            { { 0.8, 0.0, 0.0 }, Element::OXYGEN },
+            { { 100.0, 0.0, 0.0 }, Element::HYDROGEN }
         })
     };
     model->SelectAllAtoms();
@@ -722,9 +713,9 @@ TEST(QScoreHelperTest, AverageOverloadUsesProvidedParametersAndReturnsEachNonHyd
     const auto map{ MakeGaussianMapObject() };
     const auto model{
         MakeModelObject({
-            { { -0.5f, 0.0f, 0.0f }, Element::CARBON },
-            { { 0.8f, 0.0f, 0.0f }, Element::OXYGEN },
-            { { 0.0f, 0.0f, 0.0f }, Element::HYDROGEN }
+            { { -0.5, 0.0, 0.0 }, Element::CARBON },
+            { { 0.8, 0.0, 0.0 }, Element::OXYGEN },
+            { { 0.0, 0.0, 0.0 }, Element::HYDROGEN }
         })
     };
     model->SelectAllAtoms(false);
@@ -762,7 +753,7 @@ TEST(QScoreHelperTest, ReturnsZeroAverageWithoutNonHydrogenAtoms)
     const rhbm_gem::ModelObject empty_model;
     const auto hydrogen_model{
         MakeModelObject({
-            { { 100.0f, 0.0f, 0.0f }, Element::HYDROGEN }
+            { { 100.0, 0.0, 0.0 }, Element::HYDROGEN }
         })
     };
     const auto [height, offset]{
@@ -799,21 +790,21 @@ TEST(QScoreHelperTest, PropagatesOutOfRangeFromNonHydrogenAtoms)
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 1.0f, 1.0f, 1.0f },
-            { -2.0f, -2.0f, -2.0f },
-            [](const std::array<float, 3> & position)
+            { 1.0, 1.0, 1.0 },
+            { -2.0, -2.0, -2.0 },
+            [](const std::array<double, 3> & position)
             {
                 return position.at(2);
             })
     };
     const auto outside_center_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 100.0f }, Element::CARBON }
+            { { 0.0, 0.0, 100.0 }, Element::CARBON }
         })
     };
     const auto radial_outside_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 1.0f }, Element::CARBON }
+            { { 0.0, 0.0, 1.0 }, Element::CARBON }
         })
     };
     const auto [height, offset]{
@@ -852,12 +843,12 @@ TEST(QScoreHelperTest, RejectsTargetAtomFromDifferentModel)
 {
     const auto target_model{
         MakeModelObject({
-            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 0.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto other_model{
         MakeModelObject({
-            { { 1.0f, 0.0f, 0.0f }, Element::CARBON }
+            { { 1.0, 0.0, 0.0 }, Element::CARBON }
         })
     };
     const auto & target_atom{ *target_model->GetAtomList().front() };

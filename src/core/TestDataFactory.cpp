@@ -116,13 +116,9 @@ std::vector<AtomicModelContribution> BuildAtomNeighborList(const Spot & spot)
     }
 }
 
-std::array<float, 3> ToArray3f(const Eigen::VectorXd & vector)
+std::array<double, 3> ToArray3d(const Eigen::VectorXd & vector)
 {
-    return {
-        static_cast<float>(vector(0)),
-        static_cast<float>(vector(1)),
-        static_cast<float>(vector(2))
-    };
+    return { vector(0), vector(1), vector(2) };
 }
 
 LocalPotentialSampleList GenerateRadialSamples(
@@ -141,8 +137,8 @@ LocalPotentialSampleList GenerateRadialSamples(
         const auto distance{ dist_distance(generator) };
         const auto response{ model.ResponseAtDistance(distance) };
         sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(response),
-            SamplingPoint{ static_cast<float>(distance) }
+            response,
+            SamplingPoint{ distance }
         });
     }
     return sample_list;
@@ -153,17 +149,17 @@ LocalPotentialSampleList GenerateAtomicModelSampleList(
     const AtomicModelContribution & local_atom,
     const std::vector<AtomicModelContribution> & atom_field)
 {
-    const auto local_position{ ToArray3f(local_atom.center) };
+    const auto local_position{ ToArray3d(local_atom.center) };
     auto sample_point_list{
         sphere_sampler::GenerateSamplingPointList(
             local_position,
             SphereSamplingMethod::FibonacciDeterministic)
     };
-    std::vector<std::array<float, 3>> reject_position_list;
+    std::vector<std::array<double, 3>> reject_position_list;
     reject_position_list.reserve(atom_field.size());
     for (const auto & atom : atom_field)
     {
-        reject_position_list.emplace_back(ToArray3f(atom.center));
+        reject_position_list.emplace_back(ToArray3d(atom.center));
     }
     sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
 
@@ -176,7 +172,7 @@ LocalPotentialSampleList GenerateAtomicModelSampleList(
             EvaluatePotentialModelResponse(model, point, atom_field)
         };
         sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(response),
+            response,
             sampling_point
         });
     }
@@ -198,7 +194,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     {
         if (dist_outlier(generator) < outlier_ratio)
         {
-            sampling_entry.response = static_cast<float>(outlier_response);
+            sampling_entry.response = outlier_response;
         }
     }
     return sampling_entries;
@@ -213,10 +209,9 @@ LocalPotentialSampleList ApplyLogQuadraticNoise(
     std::normal_distribution<> dist_error(0.0, error_sigma * model_response_max);
     for (auto & sampling_entry : sampling_entries)
     {
-        sampling_entry.response =
-            static_cast<float>(static_cast<double>(sampling_entry.response)
-            //    * std::exp(dist_error(generator)));
-            + dist_error(generator));
+        sampling_entry.response = sampling_entry.response
+            //    * std::exp(dist_error(generator));
+            + dist_error(generator);
     }
     return sampling_entries;
 }
@@ -278,7 +273,7 @@ std::unique_ptr<AtomObject> MakeAtomicModelAtom(int serial_id, const AtomicModel
     atom_object->SetAtomKey(static_cast<AtomKey>(atom.spot));
     atom_object->SetElement(atom.element);
     atom_object->SetSpot(atom.spot);
-    atom_object->SetPosition(ToArray3f(atom.center));
+    atom_object->SetPosition(ToArray3d(atom.center));
     return atom_object;
 }
 

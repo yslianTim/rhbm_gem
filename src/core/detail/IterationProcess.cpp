@@ -584,10 +584,9 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
                     continue;
                 }
                 const auto distance{
-                    static_cast<double>(
-                        array_helper::ComputeNorm<float>(
-                            sample.point.position,
-                            neighbor_atom->GetPositionRef()))
+                    array_helper::ComputeNorm(
+                        sample.point.position,
+                        neighbor_atom->GetPositionRef())
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
                 neighbor_atom_set.emplace(neighbor_atom);
@@ -2848,8 +2847,12 @@ static IterationProposalResult RunProposalIteration(
     }
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        if (block_activity.offset_fixed_atom_mask.at(atom_index) == 0 &&
-            block_activity.hard_failure_atom_mask.at(atom_index) == 0)
+        if (block_activity.hard_failure_atom_mask.at(atom_index) != 0)
+        {
+            iteration_state.at(atom_index) = previous_state.at(atom_index);
+            continue;
+        }
+        if (block_activity.offset_fixed_atom_mask.at(atom_index) == 0)
         {
             continue;
         }

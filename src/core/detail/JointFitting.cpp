@@ -352,18 +352,18 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            if (!std::isfinite(static_cast<double>(sample.response)))
+            if (!std::isfinite(sample.response))
             {
                 throw std::runtime_error("Joint offset sample response is not finite.");
             }
-            const auto target_distance{ static_cast<double>(sample.point.distance) };
+            const auto target_distance{ sample.point.distance };
             const auto target_signal{ target_model.SignalAtDistance(target_distance) };
             const auto target_basis{ target_model.OffsetBasisAtDistance(target_distance) };
             if (!std::isfinite(target_signal) || !std::isfinite(target_basis))
             {
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
-            auto residual{ static_cast<double>(sample.response) - target_signal };
+            auto residual{ sample.response - target_signal };
             Eigen::VectorXd group_basis{ Eigen::VectorXd::Zero(column_count) };
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
@@ -908,7 +908,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         const auto & sample{
             atom_context.raw_sampling_entries.at(sample_ref.sample_index)
         };
-        if (!std::isfinite(static_cast<double>(sample.response)))
+        if (!std::isfinite(sample.response))
         {
             return std::nullopt;
         }
@@ -991,7 +991,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             return true;
         };
 
-        if (!append_model(sample_ref.atom_index, static_cast<double>(sample.point.distance)))
+        if (!append_model(sample_ref.atom_index, sample.point.distance))
         {
             return std::nullopt;
         }
@@ -1010,7 +1010,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         }
 
         const auto residual{
-            static_cast<double>(sample.response) - predicted_response
+            sample.response - predicted_response
         };
         if (!std::isfinite(residual)) return std::nullopt;
         residual_list.emplace_back(residual);

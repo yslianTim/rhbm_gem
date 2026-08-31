@@ -1,6 +1,6 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v13 boundary.
+This document describes the current typed file I/O and Model-only SQLite v14 boundary.
 
 ## 1. Public Surface
 
@@ -39,6 +39,8 @@ PDB and CIF parsers build a `ModelImportState`. The state owns atoms, bonds, che
 
 Parser-only fields that were never consumed by the runtime are not collected. Import does not retain molecule-size counts, standalone entity-ID lists, or sheet-strand counts.
 
+CIF/MMCIF numeric domain fields are parsed directly as `double`. PDB parsing likewise uses double-precision temporary fields. Coordinates, occupancy, temperature, and molecular weight therefore enter the runtime without an intermediate float representation.
+
 ## 4. Map Codecs
 
 MRC and CCP4 keep separate headers and origin rules:
@@ -50,11 +52,11 @@ They intentionally do not share a base class or format traits. `MapHelper` conta
 
 - positive voxel-dimension validation and voxel counting;
 - validation that the file mode is float32 mode 2;
-- float32 voxel seek/read/write;
+- float32 voxel seek/read and temporary float32 write buffers;
 - file-axis to canonical XYZ voxel reordering;
 - corresponding three-axis header-field reordering.
 
-Any non-float32 mode is rejected before voxel allocation or decoding. The in-memory representation is always a contiguous float32 array in canonical XYZ order.
+Any non-float32 mode is rejected before voxel allocation or decoding. A read widens the mode-2 payload immediately and performs axis normalization on a contiguous `double` array. A write narrows the `MapObject` double buffer only while encoding the mode-2 payload. Header geometry remains float32 because it is part of the MRC/CCP4 external format.
 
 ## 5. Repository Runtime
 
@@ -71,15 +73,15 @@ There is no intermediate persistence forwarding class. `ModelObjectStorage` rema
 
 Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
 
-## 6. SQLite v13 Lifecycle
+## 6. SQLite v14 Lifecycle
 
 The accepted states are intentionally strict:
 
-1. An empty database with `PRAGMA user_version = 0` is initialized as v13.
-2. A database with `PRAGMA user_version = 13` is accepted only after structural validation.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v14.
+2. A database with `PRAGMA user_version = 14` is accepted only after structural validation.
 3. Every other version or pre-existing unexpected structure is rejected.
 
-There are no v2-v12 migrations and no overwrite-on-open fallback. Rejecting an old database does not change its version, tables, or rows.
+There are no migrations and no overwrite-on-open fallback. In particular, v13 is rejected without changing its version, tables, or rows.
 
 Validation checks:
 
@@ -89,7 +91,7 @@ Validation checks:
 - `NOT NULL is_selected` on atom and bond rows;
 - direct `key_tag` foreign keys from every child table to `model_object(key_tag)` with `ON DELETE CASCADE`.
 
-## 7. v13 Table Topology
+## 7. v14 Table Topology
 
 `model_object` is the direct root. There is no `object_catalog`, `map_list`, or legacy bond-analysis table.
 
@@ -126,13 +128,15 @@ The root stores model metadata but not `atom_size`; row counts are derived from 
 
 `model_atom` and `model_bond` store `is_selected` directly. Structure loading restores both selections before analysis hydration. Analysis rows never imply selection.
 
-Atom-local raw and peeling samples are stored as BLOBs. Each sample is exactly three float32 values:
+Atom-local raw and peeling samples are stored as BLOBs. Each sample is exactly three float64 values:
 
 1. distance;
 2. response;
-3. selection flag encoded as `0.0f` or `1.0f`.
+3. selection flag encoded as `0.0` or `1.0`.
 
-Sample count is derived from BLOB byte length, so there are no raw or peeling sampling-size columns and no legacy two-float decoder.
+Each value is an IEEE-754 64-bit `double`, so one sample occupies `3 * sizeof(double)` bytes. Loading rejects any BLOB whose byte length is not an exact multiple of that size. Sample count is derived from the validated BLOB byte length, so there are no raw or peeling sampling-size columns and no legacy float32 or two-value decoder.
+
+SQLite scalar fields are bound and read as `double` directly. Runtime values are not narrowed before persistence.
 
 Atom-group membership is derived from restored selection and atom classification. The group table stores no `member_size` column.
 

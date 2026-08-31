@@ -25,12 +25,12 @@ inline size_t CountVoxelCount(const std::array<int, 3> & array_size)
            static_cast<size_t>(array_size[2]);
 }
 
-std::unique_ptr<float[]> ReorderToCanonicalXYZ(
-    std::unique_ptr<float[]> raw_data,
+std::unique_ptr<double[]> ReorderToCanonicalXYZ(
+    std::unique_ptr<double[]> raw_data,
     const std::array<int, 3> & array_size,
     const std::array<int, 3> & axis_order);
 
-std::unique_ptr<float[]> ReadFloat32VoxelData(
+std::unique_ptr<double[]> ReadFloat32VoxelData(
     std::istream & stream,
     std::streamoff data_offset,
     const std::array<int, 3> & array_size,
@@ -40,7 +40,7 @@ std::unique_ptr<float[]> ReadFloat32VoxelData(
 void WriteFloat32VoxelData(
     std::ostream & stream,
     std::streamoff data_offset,
-    const float * data,
+    const double * data,
     size_t data_size,
     const std::array<int, 3> & array_size,
     int mode);

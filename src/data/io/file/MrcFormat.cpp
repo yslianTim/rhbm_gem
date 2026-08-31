@@ -136,7 +136,7 @@ std::array<int, 3> MrcFormat::GetGridSize() const
     };
 }
 
-std::array<float, 3> MrcFormat::GetGridSpacing() const
+std::array<double, 3> MrcFormat::GetGridSpacing() const
 {
     if (m_header.grid_size[0] == 0
         || m_header.grid_size[1] == 0
@@ -145,21 +145,21 @@ std::array<float, 3> MrcFormat::GetGridSpacing() const
         throw std::runtime_error("MRC grid size contains a zero dimension.");
     }
     return {
-        m_header.cell_dimension[0] / static_cast<float>(m_header.grid_size[0]),
-        m_header.cell_dimension[1] / static_cast<float>(m_header.grid_size[1]),
-        m_header.cell_dimension[2] / static_cast<float>(m_header.grid_size[2])
+        static_cast<double>(m_header.cell_dimension[0]) / static_cast<double>(m_header.grid_size[0]),
+        static_cast<double>(m_header.cell_dimension[1]) / static_cast<double>(m_header.grid_size[1]),
+        static_cast<double>(m_header.cell_dimension[2]) / static_cast<double>(m_header.grid_size[2])
     };
 }
 
-std::array<float, 3> MrcFormat::GetOrigin() const
+std::array<double, 3> MrcFormat::GetOrigin() const
 {
     return { m_header.origin[0], m_header.origin[1], m_header.origin[2] };
 }
 
 void MrcFormat::SetHeader(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin)
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin)
 {
     numeric_validation::RequireAllPositive(grid_size, "grid_size");
     numeric_validation::RequireAllFinitePositive(grid_spacing, "grid_spacing");
@@ -168,10 +168,10 @@ void MrcFormat::SetHeader(
     std::copy(grid_size.begin(), grid_size.end(), m_header.grid_size);
     for (size_t i = 0; i < grid_size.size(); ++i)
     {
-        m_header.cell_dimension[i] =
-            grid_spacing[i] * static_cast<float>(grid_size[i]);
+        m_header.cell_dimension[i] = static_cast<float>(
+            grid_spacing[i] * static_cast<double>(grid_size[i]));
+        m_header.origin[i] = static_cast<float>(origin[i]);
     }
-    std::copy(origin.begin(), origin.end(), m_header.origin);
 }
 
 } // namespace rhbm_gem

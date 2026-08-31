@@ -14,9 +14,9 @@ namespace rhbm_gem {
 MapObject::MapObject() :
     m_key_tag{ "" },
     m_voxel_size{ 1 },
-    m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
-    m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
-    m_grid_size{ 1, 1, 1 }, m_grid_spacing{ 1.0f, 1.0f, 1.0f }, m_origin{ 0.0f, 0.0f, 0.0f },
+    m_map_value_mean{ 0.0 }, m_map_value_min{ 0.0 },
+    m_map_value_max{ 0.0 }, m_map_value_sd{ 0.0 },
+    m_grid_size{ 1, 1, 1 }, m_grid_spacing{ 1.0, 1.0, 1.0 }, m_origin{ 0.0, 0.0, 0.0 },
     m_map_length{}, m_overflow{}, m_underflow{ m_origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ nullptr }
 {
@@ -24,44 +24,44 @@ MapObject::MapObject() :
 
 MapObject::MapObject(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin) :
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin) :
     m_key_tag{ "" },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
-    m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
-    m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
+    m_map_value_mean{ 0.0 }, m_map_value_min{ 0.0 },
+    m_map_value_max{ 0.0 }, m_map_value_sd{ 0.0 },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ std::make_unique<float[]>(m_voxel_size) }
+    m_map_value_array{ std::make_unique<double[]>(m_voxel_size) }
 {
     for (size_t i = 0; i < 3; i++)
     {
-        m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
-        m_overflow.at(i) = static_cast<float>(m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i));
-        m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
-        m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
+        m_map_length.at(i) = static_cast<double>(m_grid_size.at(i)) * m_grid_spacing.at(i);
+        m_overflow.at(i) = m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i);
+        m_upper_bound.at(i) = m_overflow.at(i) + 0.5 * m_grid_spacing.at(i);
+        m_lower_bound.at(i) = m_underflow.at(i) - 0.5 * m_grid_spacing.at(i);
     }
 }
 
 MapObject::MapObject(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin,
-    std::unique_ptr<float[]> map_value_array) :
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin,
+    std::unique_ptr<double[]> map_value_array) :
     m_key_tag{ "" },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
-    m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
-    m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
+    m_map_value_mean{ 0.0 }, m_map_value_min{ 0.0 },
+    m_map_value_max{ 0.0 }, m_map_value_sd{ 0.0 },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ std::move(map_value_array) }
 {
     for (size_t i = 0; i < 3; i++)
     {
-        m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
-        m_overflow.at(i) = static_cast<float>(m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i));
-        m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
-        m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
+        m_map_length.at(i) = static_cast<double>(m_grid_size.at(i)) * m_grid_spacing.at(i);
+        m_overflow.at(i) = m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i);
+        m_upper_bound.at(i) = m_overflow.at(i) + 0.5 * m_grid_spacing.at(i);
+        m_lower_bound.at(i) = m_underflow.at(i) - 0.5 * m_grid_spacing.at(i);
     }
     RecomputeStatistics();
 }
@@ -79,9 +79,9 @@ MapObject::MapObject(const MapObject & other) :
     m_grid_size{ other.m_grid_size }, m_grid_spacing{ other.m_grid_spacing }, m_origin{ other.m_origin },
     m_map_length{ other.m_map_length }, m_overflow{ other.m_overflow }, m_underflow{ other.m_underflow },
     m_upper_bound{ other.m_upper_bound }, m_lower_bound{ other.m_lower_bound },
-    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
+    m_map_value_array{ std::make_unique<double[]>(other.m_voxel_size) }
 {
-    std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
+    std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(double));
     RecomputeStatistics();
 }
 
@@ -93,9 +93,9 @@ void MapObject::RecomputeStatistics()
     CalculateMapValueSD();
 }
 
-void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
+void MapObject::SetMapValueArray(std::unique_ptr<double[]> map_value_array)
 {
-    if (m_map_value_array != nullptr && m_map_value_mean != 0.0f)
+    if (m_map_value_array != nullptr && m_map_value_mean != 0.0)
     {
         Logger::Log(LogLevel::Warning,
                     "MapObject::SetMapValueArray - "
@@ -108,7 +108,7 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
 
 void MapObject::ClearMapValueArray()
 {
-    std::fill_n(m_map_value_array.get(), m_voxel_size, 0.0f);
+    std::fill_n(m_map_value_array.get(), m_voxel_size, 0.0);
     RecomputeStatistics();
 }
 
@@ -143,16 +143,16 @@ std::array<int, 3> MapObject::GetGridIndex(size_t global_index) const
     return std::array{ x, y, z };
 }
 
-std::array<float, 3> MapObject::GetGridPosition(size_t global_index) const
+std::array<double, 3> MapObject::GetGridPosition(size_t global_index) const
 {
     auto grid_index{ GetGridIndex(global_index) };
-    auto x_pos{ static_cast<float>(grid_index[0]) * m_grid_spacing[0] + m_origin[0] };
-    auto y_pos{ static_cast<float>(grid_index[1]) * m_grid_spacing[1] + m_origin[1] };
-    auto z_pos{ static_cast<float>(grid_index[2]) * m_grid_spacing[2] + m_origin[2] };
+    auto x_pos{ static_cast<double>(grid_index[0]) * m_grid_spacing[0] + m_origin[0] };
+    auto y_pos{ static_cast<double>(grid_index[1]) * m_grid_spacing[1] + m_origin[1] };
+    auto z_pos{ static_cast<double>(grid_index[2]) * m_grid_spacing[2] + m_origin[2] };
     return std::array{ x_pos, y_pos, z_pos };
 }
 
-std::array<int, 3> MapObject::GetIndexFromPosition(const std::array<float, 3> & position) const
+std::array<int, 3> MapObject::GetIndexFromPosition(const std::array<double, 3> & position) const
 {
     try
     {
@@ -172,12 +172,12 @@ std::array<int, 3> MapObject::GetIndexFromPosition(const std::array<float, 3> & 
         static_cast<int>(std::floor(z))};
 }
 
-float MapObject::GetMapValue(size_t global_index) const
+double MapObject::GetMapValue(size_t global_index) const
 {
     return m_map_value_array[global_index];
 }
 
-float MapObject::GetMapValue(int index_x, int index_y, int index_z) const
+double MapObject::GetMapValue(int index_x, int index_y, int index_z) const
 {
     try
     {
@@ -186,7 +186,7 @@ float MapObject::GetMapValue(int index_x, int index_y, int index_z) const
     catch(const std::out_of_range & exception)
     {
         Logger::Log(LogLevel::Error, exception.what());
-        return 0.0f;
+        return 0.0;
     }
     return m_map_value_array[GetGlobalIndex(index_x, index_y, index_z)];
 }
@@ -203,7 +203,7 @@ void MapObject::CheckIndex(int index_x, int index_y, int index_z) const
     }
 }
 
-void MapObject::CheckPosition(const std::array<float, 3> & position) const
+void MapObject::CheckPosition(const std::array<double, 3> & position) const
 {
     if (position.at(0) > m_upper_bound.at(0) ||
         position.at(1) > m_upper_bound.at(1) ||
@@ -252,7 +252,7 @@ void MapObject::CalculateMapValueSD()
 
 void MapObject::MapValueArrayNormalization()
 {
-    if (m_map_value_sd == 0.0f)
+    if (m_map_value_sd == 0.0)
     {
         Logger::Log(LogLevel::Warning,
                     "MapObject::MapValueArrayNormalization - "

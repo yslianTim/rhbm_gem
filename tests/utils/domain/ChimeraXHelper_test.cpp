@@ -10,7 +10,7 @@
 TEST(ChimeraXHelperTest, WritePointsCmm)
 {
     using ChimeraXHelper::RGB;
-    std::vector<std::array<float,3>> pts{{{1.0f,2.0f,3.0f},{4.0f,5.0f,6.0f}}};
+    std::vector<std::array<double,3>> pts{{{1.0,2.0,3.0},{4.0,5.0,6.0}}};
     std::filesystem::path tmp = std::filesystem::temp_directory_path()/"chimera_test.cmm";
     ASSERT_TRUE(ChimeraXHelper::WriteCMMPoints(pts, tmp.string(), 2.0f, RGB{0.1f,0.2f,0.3f}, "test"));
     std::ifstream ifs(tmp);

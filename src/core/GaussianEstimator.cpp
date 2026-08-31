@@ -188,7 +188,7 @@ std::vector<double> CollectSampleResponses(const LocalPotentialSampleList & samp
     response_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
-        response_list.emplace_back(static_cast<double>(sample.response));
+        response_list.emplace_back(sample.response);
     }
     return response_list;
 }

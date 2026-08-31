@@ -39,12 +39,12 @@ bool HasDiagnosticForOption(
 MapObject MakeConstantMapObject()
 {
     std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
+    std::array<double, 3> grid_spacing{ 1.0, 1.0, 1.0 };
+    std::array<double, 3> origin{ 0.0, 0.0, 0.0 };
+    auto values{ std::make_unique<double[]>(8) };
     for (size_t i = 0; i < 8; ++i)
     {
-        values[i] = 1.0f;
+        values[i] = 1.0;
     }
     return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
@@ -524,7 +524,7 @@ TEST(CommandScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)
     bool has_non_zero_value{ false };
     for (size_t i = 0; i < loaded_map->GetMapValueArraySize(); i++)
     {
-        if (loaded_map->GetMapValue(i) != 0.0f)
+        if (loaded_map->GetMapValue(i) != 0.0)
         {
             has_non_zero_value = true;
             break;
@@ -640,8 +640,8 @@ TEST(CommandScenariosTest, MapSimulationExcludeHydrogenFiltersSimulationBounds)
 
     EXPECT_EQ(include_map->GetGridSize(), (std::array<int, 3>{ 5, 4, 4 }));
     EXPECT_EQ(exclude_map->GetGridSize(), (std::array<int, 3>{ 4, 4, 4 }));
-    EXPECT_EQ(include_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
-    EXPECT_EQ(exclude_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
+    EXPECT_EQ(include_map->GetOrigin(), (std::array<double, 3>{ -2.0, -2.0, -2.0 }));
+    EXPECT_EQ(exclude_map->GetOrigin(), (std::array<double, 3>{ -2.0, -2.0, -2.0 }));
 }
 
 TEST(CommandScenariosTest, MapSimulationOnlyBackboneFiltersSimulationBounds)
@@ -677,8 +677,8 @@ TEST(CommandScenariosTest, MapSimulationOnlyBackboneFiltersSimulationBounds)
 
     EXPECT_EQ(all_atom_map->GetGridSize(), (std::array<int, 3>{ 7, 4, 4 }));
     EXPECT_EQ(backbone_map->GetGridSize(), (std::array<int, 3>{ 4, 4, 4 }));
-    EXPECT_EQ(all_atom_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
-    EXPECT_EQ(backbone_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
+    EXPECT_EQ(all_atom_map->GetOrigin(), (std::array<double, 3>{ -2.0, -2.0, -2.0 }));
+    EXPECT_EQ(backbone_map->GetOrigin(), (std::array<double, 3>{ -2.0, -2.0, -2.0 }));
 }
 
 TEST(CommandScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)
@@ -708,7 +708,7 @@ TEST(CommandScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)
     auto loaded_map{ ReadMap(map_path) };
     ASSERT_NE(loaded_map, nullptr);
     EXPECT_EQ(loaded_map->GetGridSize(), (std::array<int, 3>{ 1, 1, 1 }));
-    EXPECT_EQ(loaded_map->GetOrigin(), (std::array<float, 3>{ 0.0f, 0.0f, 0.0f }));
+    EXPECT_EQ(loaded_map->GetOrigin(), (std::array<double, 3>{ 0.0, 0.0, 0.0 }));
     EXPECT_NE(loaded_map->GetMapValueArray(), nullptr);
 }
 

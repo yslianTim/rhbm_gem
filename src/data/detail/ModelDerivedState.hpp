@@ -18,7 +18,7 @@ class ModelDerivedState
 {
     std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
     std::mutex m_kd_tree_mutex;
-    std::optional<std::array<float, 3>> m_center_of_mass_position;
+    std::optional<std::array<double, 3>> m_center_of_mass_position;
     std::array<std::optional<std::tuple<double, double>>, 3> m_model_position_range;
 
 public:
@@ -28,7 +28,7 @@ public:
     static ModelDerivedState & Of(ModelObject & model_object);
     static const ModelDerivedState & Of(const ModelObject & model_object);
 
-    std::array<float, 3> GetCenterOfMassPosition(ModelObject & model_object);
+    std::array<double, 3> GetCenterOfMassPosition(ModelObject & model_object);
     std::tuple<double, double> GetModelPositionRange(ModelObject & model_object, int axis);
     std::vector<AtomObject *> FindAtomsInRange(
         ModelObject & model_object,

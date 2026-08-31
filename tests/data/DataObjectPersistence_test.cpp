@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include "support/CommandTestHelpers.hpp"
@@ -70,15 +71,15 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
     auto editor{ model->EditAnalysis() };
     editor.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{
-            6.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
+            6.0, SamplingPoint{ 0.1, { 0.0, 0.0, 0.0 }, true } },
         LocalPotentialSample{
-            4.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
+            4.0, SamplingPoint{ 0.2, { 0.0, 0.0, 0.0 }, false } }
     });
     editor.SetAtomLocalPeelingSamplingEntries(*atom, {
         LocalPotentialSample{
-            3.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
+            3.0, SamplingPoint{ 0.1, { 0.0, 0.0, 0.0 }, true } },
         LocalPotentialSample{
-            5.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
+            5.0, SamplingPoint{ 0.2, { 0.0, 0.0, 0.0 }, false } }
     });
     editor.SetAtomLocalNeighborCountForPeeling(*atom, 7);
     repository.SaveModel(*model, "model");
@@ -92,17 +93,149 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
     const auto selected_peeling_entries{ view.GetPeelingSamplingEntries(true) };
 
     ASSERT_EQ(raw_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(raw_entries.at(0).response, 6.0f);
-    EXPECT_FLOAT_EQ(raw_entries.at(1).response, 4.0f);
+    EXPECT_DOUBLE_EQ(raw_entries.at(0).response, 6.0);
+    EXPECT_DOUBLE_EQ(raw_entries.at(1).response, 4.0);
     EXPECT_TRUE(raw_entries.at(0).point.is_selected);
     EXPECT_FALSE(raw_entries.at(1).point.is_selected);
     ASSERT_EQ(peeling_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(peeling_entries.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(peeling_entries.at(1).response, 5.0f);
+    EXPECT_DOUBLE_EQ(peeling_entries.at(0).response, 3.0);
+    EXPECT_DOUBLE_EQ(peeling_entries.at(1).response, 5.0);
     EXPECT_TRUE(peeling_entries.at(0).point.is_selected);
     EXPECT_FALSE(peeling_entries.at(1).point.is_selected);
     ASSERT_EQ(selected_peeling_entries.size(), 1u);
     EXPECT_EQ(view.GetNeighborCountForPeeling(), 7);
+}
+
+TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarrowing)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_double_precision_roundtrip" };
+    const auto database_path{ temp_dir.path() / "double_precision.sqlite" };
+    constexpr ComponentKey component_key{ 30 };
+
+    rg::ModelObjectParts parts;
+    parts.component_key_system->RegisterComponent("DBL", component_key);
+    auto component{ std::make_unique<rg::ChemicalComponentEntry>() };
+    component->SetComponentId("DBL");
+    component->SetComponentName("DOUBLE PRECISION COMPONENT");
+    component->SetComponentType("non-polymer");
+    component->SetComponentFormula("C1");
+    component->SetComponentMolecularWeight(123.456789012345);
+    component->SetStandardMonomerFlag(false);
+    parts.chemical_component_entry_map.emplace(
+        component_key, std::move(component));
+
+    auto atom{ std::make_unique<rg::AtomObject>() };
+    atom->SetSerialID(1);
+    atom->SetComponentID("DBL");
+    atom->SetComponentKey(component_key);
+    atom->SetAtomID("C1");
+    atom->SetPosition(
+        1.0000000000000002,
+        16777217.125,
+        -0.123456789012345);
+    atom->SetOccupancy(0.123456789012345);
+    atom->SetTemperature(12.3456789012345);
+    parts.atom_list.emplace_back(std::move(atom));
+
+    auto model{ std::make_unique<rg::ModelObject>(
+        rg::AssembleModelObject(std::move(parts))) };
+    auto * stored_atom{ model->GetAtomList().front().get() };
+    const LocalPotentialSampleList raw_samples{
+        { 16777217.125,
+            SamplingPoint{ 1.0000000000000002, { 0.0, 0.0, 0.0 }, true } },
+        { -0.123456789012345,
+            SamplingPoint{ 0.3333333333333333, { 0.0, 0.0, 0.0 }, false } }
+    };
+    const LocalPotentialSampleList peeling_samples{
+        { 3.141592653589793,
+            SamplingPoint{ 0.987654321098765, { 0.0, 0.0, 0.0 }, true } }
+    };
+    auto editor{ model->EditAnalysis() };
+    editor.SetAtomLocalRawSamplingEntries(*stored_atom, raw_samples);
+    editor.SetAtomLocalPeelingSamplingEntries(*stored_atom, peeling_samples);
+
+    rg::DataRepository repository{ database_path };
+    repository.SaveModel(*model, "model");
+    const auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+    ASSERT_EQ(loaded_model->GetAtomList().size(), 1u);
+
+    const auto & loaded_atom{ *loaded_model->GetAtomList().front() };
+    EXPECT_DOUBLE_EQ(loaded_atom.GetPosition().at(0), 1.0000000000000002);
+    EXPECT_DOUBLE_EQ(loaded_atom.GetPosition().at(1), 16777217.125);
+    EXPECT_DOUBLE_EQ(loaded_atom.GetPosition().at(2), -0.123456789012345);
+    EXPECT_DOUBLE_EQ(loaded_atom.GetOccupancy(), 0.123456789012345);
+    EXPECT_DOUBLE_EQ(loaded_atom.GetTemperature(), 12.3456789012345);
+
+    const auto component_keys{ loaded_model->GetComponentKeyList() };
+    ASSERT_EQ(component_keys.size(), 1u);
+    const auto * loaded_component{
+        loaded_model->FindChemicalComponentEntry(component_keys.front()) };
+    ASSERT_NE(loaded_component, nullptr);
+    EXPECT_DOUBLE_EQ(
+        loaded_component->GetComponentMolecularWeight(),
+        123.456789012345);
+
+    const auto view{ rg::AtomLocalPotentialView::For(loaded_atom) };
+    const auto loaded_raw{ view.GetRawSamplingEntries(false) };
+    const auto loaded_peeling{ view.GetPeelingSamplingEntries(false) };
+    ASSERT_EQ(loaded_raw.size(), raw_samples.size());
+    ASSERT_EQ(loaded_peeling.size(), peeling_samples.size());
+    EXPECT_DOUBLE_EQ(loaded_raw.at(0).point.distance, 1.0000000000000002);
+    EXPECT_DOUBLE_EQ(loaded_raw.at(0).response, 16777217.125);
+    EXPECT_TRUE(loaded_raw.at(0).point.is_selected);
+    EXPECT_DOUBLE_EQ(loaded_raw.at(1).point.distance, 0.3333333333333333);
+    EXPECT_DOUBLE_EQ(loaded_raw.at(1).response, -0.123456789012345);
+    EXPECT_FALSE(loaded_raw.at(1).point.is_selected);
+    EXPECT_DOUBLE_EQ(
+        loaded_peeling.at(0).point.distance, 0.987654321098765);
+    EXPECT_DOUBLE_EQ(loaded_peeling.at(0).response, 3.141592653589793);
+
+    rg::SQLiteWrapper database{ database_path };
+    database.Prepare(
+        "SELECT length(raw_distance_and_map_value_list), "
+        "length(peeling_distance_and_map_value_list) "
+        "FROM model_atom_local_potential "
+        "WHERE key_tag = ? AND serial_id = ?;");
+    rg::SQLiteWrapper::StatementGuard guard(database);
+    database.Bind<std::string>(1, "model");
+    database.Bind<int>(2, 1);
+    ASSERT_EQ(database.StepNext(), rg::SQLiteWrapper::StepRow());
+    EXPECT_EQ(
+        database.GetColumn<int>(0),
+        static_cast<int>(raw_samples.size() * 3 * sizeof(double)));
+    EXPECT_EQ(
+        database.GetColumn<int>(1),
+        static_cast<int>(peeling_samples.size() * 3 * sizeof(double)));
+}
+
+TEST(DataObjectPersistenceTest, InvalidV14SamplingBlobLengthIsRejected)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_invalid_double_blob" };
+    const auto database_path{ temp_dir.path() / "invalid_double_blob.sqlite" };
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().front().get() };
+    model->EditAnalysis().SetAtomLocalRawSamplingEntries(
+        *atom,
+        { LocalPotentialSample{ 2.0, SamplingPoint{ 0.25 } } });
+
+    {
+        rg::DataRepository repository{ database_path };
+        repository.SaveModel(*model, "model");
+    }
+    data_test::ExecuteSql(
+        database_path,
+        "UPDATE model_atom_local_potential "
+        "SET raw_distance_and_map_value_list = X'000102' "
+        "WHERE key_tag = 'model' AND serial_id = 1;");
+
+    rg::DataRepository repository{ database_path };
+    EXPECT_THROW((void)repository.LoadModel("model"), std::runtime_error);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
+    EXPECT_EQ(
+        data_test::CountRows(
+            database_path, "model_atom_local_potential", "model"),
+        1);
 }
 
 TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
@@ -199,7 +332,7 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
     EXPECT_EQ(loaded_model->GetSelectedAtomCount(), original_selected_count);
 }
 
-TEST(DataObjectPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV13Schema)
+TEST(DataObjectPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV14Schema)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_key_collision" };
     const auto database_path{ temp_dir.path() / "collision.sqlite" };

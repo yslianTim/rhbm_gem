@@ -110,12 +110,12 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 }
 
 double Distance(
-    const std::array<float, 3> & lhs,
-    const std::array<float, 3> & rhs)
+    const std::array<double, 3> & lhs,
+    const std::array<double, 3> & rhs)
 {
-    const auto dx{ static_cast<double>(lhs.at(0) - rhs.at(0)) };
-    const auto dy{ static_cast<double>(lhs.at(1) - rhs.at(1)) };
-    const auto dz{ static_cast<double>(lhs.at(2) - rhs.at(2)) };
+    const auto dx{ lhs.at(0) - rhs.at(0) };
+    const auto dy{ lhs.at(1) - rhs.at(1) };
+    const auto dz{ lhs.at(2) - rhs.at(2) };
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
@@ -137,7 +137,7 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
                     FittingStage::Second).ResponseAtDistance(
                     Distance(sample.point.position, fitted_atom->GetPosition()));
             }
-            const auto residual{ static_cast<double>(sample.response) - fitted_response };
+            const auto residual{ sample.response - fitted_response };
             squared_error_sum += residual * residual;
             sample_count++;
         }
@@ -235,7 +235,7 @@ void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_o
                     FittingStage::Second).ResponseAtDistance(
                     Distance(sample.point.position, fitted_atom->GetPosition()));
             }
-            sample.response = static_cast<float>(response);
+            sample.response = response;
         }
         analysis.SetAtomLocalRawSamplingEntries(
             *atom, std::move(raw_sampling_entries));
@@ -280,20 +280,20 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
             .GetRawSamplingEntries(false)
     };
     target_raw_sampling_entries.resize(256);
-    target_raw_sampling_entries.front().response = 0.0F;
-    target_raw_sampling_entries.front().point.distance = 0.0F;
+    target_raw_sampling_entries.front().response = 0.0;
+    target_raw_sampling_entries.front().point.distance = 0.0;
     target_raw_sampling_entries.front().point.position = target_position;
     for (std::size_t i = 1; i < target_raw_sampling_entries.size(); i++)
     {
         auto & sample{ target_raw_sampling_entries.at(i) };
         const auto response_scale{
-            0.5F + 0.5F * static_cast<float>(i) /
-                static_cast<float>(target_raw_sampling_entries.size())
+            0.5 + 0.5 * static_cast<double>(i) /
+                static_cast<double>(target_raw_sampling_entries.size())
         };
-        sample.response = std::numeric_limits<float>::max() * response_scale;
+        sample.response = std::numeric_limits<double>::max() * response_scale;
         sample.point.position = target_position;
-        sample.point.position.at(0) += 100.0F;
-        sample.point.distance = 100.0F;
+        sample.point.position.at(0) += 100.0;
+        sample.point.distance = 100.0;
     }
     analysis.SetAtomLocalRawSamplingEntries(
         *target_atom, std::move(target_raw_sampling_entries));
@@ -319,11 +319,11 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
 TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
 {
     LocalPotentialSampleList samples{
-        { 0.6F, SamplingPoint{ 0.0F } },
-        { 0.8F, SamplingPoint{ 0.25F } },
-        { -1.0F, SamplingPoint{ 0.5F } },
-        { 0.7F, SamplingPoint{ 1.0F } },
-        { 0.9F, SamplingPoint{ 1.25F } }
+        { 0.6, SamplingPoint{ 0.0 } },
+        { 0.8, SamplingPoint{ 0.25 } },
+        { -1.0, SamplingPoint{ 0.5 } },
+        { 0.7, SamplingPoint{ 1.0 } },
+        { 0.9, SamplingPoint{ 1.25 } }
     };
     constexpr double range_min{ 0.25 };
     constexpr double range_max{ 1.0 };
@@ -334,13 +334,11 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
     for (std::size_t i = 0; i < samples.size(); i++)
     {
         const auto evaluation{
-            offset_model.EvaluateAtDistance(
-                static_cast<double>(samples.at(i).point.distance))
+            offset_model.EvaluateAtDistance(samples.at(i).point.distance)
         };
-        adjusted_samples.at(i).response = static_cast<float>(
-            static_cast<double>(samples.at(i).response) -
-            (evaluation.response - evaluation.signal));
-        response_list.emplace_back(static_cast<double>(samples.at(i).response));
+        adjusted_samples.at(i).response = samples.at(i).response -
+            (evaluation.response - evaluation.signal);
+        response_list.emplace_back(samples.at(i).response);
     }
 
     const auto legacy_dataset{
@@ -362,7 +360,7 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
     EXPECT_TRUE(prepared_dataset.y.isApprox(legacy_dataset.y, 0.0));
 
     std::fill(response_list.begin(), response_list.end(), -1.0);
-    for (auto & sample : adjusted_samples) sample.response = -1.0F;
+    for (auto & sample : adjusted_samples) sample.response = -1.0;
     const auto legacy_fallback{
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             adjusted_samples,

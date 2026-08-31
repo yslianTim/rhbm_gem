@@ -136,7 +136,7 @@ std::array<int, 3> CCP4Format::GetGridSize() const
     };
 }
 
-std::array<float, 3> CCP4Format::GetGridSpacing() const
+std::array<double, 3> CCP4Format::GetGridSpacing() const
 {
     if (m_header.grid_size[0] == 0
         || m_header.grid_size[1] == 0
@@ -145,26 +145,26 @@ std::array<float, 3> CCP4Format::GetGridSpacing() const
         throw std::runtime_error("CCP4 grid size contains a zero dimension.");
     }
     return {
-        m_header.map_length[0] / static_cast<float>(m_header.grid_size[0]),
-        m_header.map_length[1] / static_cast<float>(m_header.grid_size[1]),
-        m_header.map_length[2] / static_cast<float>(m_header.grid_size[2])
+        static_cast<double>(m_header.map_length[0]) / static_cast<double>(m_header.grid_size[0]),
+        static_cast<double>(m_header.map_length[1]) / static_cast<double>(m_header.grid_size[1]),
+        static_cast<double>(m_header.map_length[2]) / static_cast<double>(m_header.grid_size[2])
     };
 }
 
-std::array<float, 3> CCP4Format::GetOrigin() const
+std::array<double, 3> CCP4Format::GetOrigin() const
 {
     const auto grid_spacing{ GetGridSpacing() };
     return {
-        static_cast<float>(m_header.location_index[0]) * grid_spacing[0],
-        static_cast<float>(m_header.location_index[1]) * grid_spacing[1],
-        static_cast<float>(m_header.location_index[2]) * grid_spacing[2]
+        static_cast<double>(m_header.location_index[0]) * grid_spacing[0],
+        static_cast<double>(m_header.location_index[1]) * grid_spacing[1],
+        static_cast<double>(m_header.location_index[2]) * grid_spacing[2]
     };
 }
 
 void CCP4Format::SetHeader(
     const std::array<int, 3> & grid_size,
-    const std::array<float, 3> & grid_spacing,
-    const std::array<float, 3> & origin)
+    const std::array<double, 3> & grid_spacing,
+    const std::array<double, 3> & origin)
 {
     numeric_validation::RequireAllPositive(grid_size, "grid_size");
     numeric_validation::RequireAllFinitePositive(grid_spacing, "grid_spacing");
@@ -173,8 +173,8 @@ void CCP4Format::SetHeader(
     std::copy(grid_size.begin(), grid_size.end(), m_header.grid_size);
     for (size_t i = 0; i < grid_size.size(); ++i)
     {
-        m_header.map_length[i] =
-            grid_spacing[i] * static_cast<float>(grid_size[i]);
+        m_header.map_length[i] = static_cast<float>(
+            grid_spacing[i] * static_cast<double>(grid_size[i]));
         m_header.location_index[i] =
             static_cast<int>(std::lround(origin[i] / grid_spacing[i]));
     }

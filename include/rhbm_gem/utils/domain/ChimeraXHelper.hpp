@@ -15,7 +15,7 @@ namespace ChimeraXHelper
 struct RGB { float r = 0.2f, g = 0.6f, b = 1.0f; };
 
 inline bool WriteCMMPoints(
-    const std::vector<std::array<float,3>> & point_list,
+    const std::vector<std::array<double,3>> & point_list,
     const std::string & path,
     float radius = 1.0f,
     RGB color = {},
@@ -46,7 +46,7 @@ inline bool WriteCMMPoints(
 }
 
 inline bool WriteCMMPoints(
-    const std::vector<std::array<float,3>> & point_list,
+    const std::vector<std::array<double,3>> & point_list,
     const std::string & path,
     const std::vector<float> * radius_list,
     const std::vector<RGB> * color_list,

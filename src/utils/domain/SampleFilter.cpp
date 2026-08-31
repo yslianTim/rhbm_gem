@@ -11,9 +11,9 @@ namespace rhbm_gem::sample_filter {
 namespace {
 
 bool IsOwnedByNeighbor(
-    const std::array<float, 3> & sample_position,
-    const std::array<float, 3> & local_position,
-    const std::vector<std::array<float, 3>> & valid_neighbor_list)
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & local_position,
+    const std::vector<std::array<double, 3>> & valid_neighbor_list)
 {
     bool is_bad_point{ false };
     const auto to_local_distance{
@@ -30,9 +30,9 @@ bool IsOwnedByNeighbor(
 }
 
 bool IsInsideNeighborCone(
-    const std::array<float, 3> & sample_position,
-    const std::array<float, 3> & local_position,
-    const std::vector<std::array<float, 3>> & valid_neighbor_list,
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & local_position,
+    const std::vector<std::array<double, 3>> & valid_neighbor_list,
     double angle)
 {
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
@@ -57,8 +57,8 @@ bool IsInsideNeighborCone(
 
 void FilterSamplingPointList(
     SamplingPointList & sample_point_list,
-    const std::array<float, 3> & local_position,
-    const std::vector<std::array<float, 3>> & reject_position_list,
+    const std::array<double, 3> & local_position,
+    const std::vector<std::array<double, 3>> & reject_position_list,
     double angle)
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
@@ -73,7 +73,7 @@ void FilterSamplingPointList(
         return;
     }
 
-    std::vector<std::array<float, 3>> valid_neighbor_list;
+    std::vector<std::array<double, 3>> valid_neighbor_list;
     valid_neighbor_list.reserve(reject_position_list.size());
     for (const auto & reject_position : reject_position_list)
     {
@@ -96,11 +96,10 @@ void FilterSamplingPointList(
 LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
     const LocalPotentialSampleList & sample_entries)
 {
-    std::map<float, std::vector<double>> response_by_radius;
+    std::map<double, std::vector<double>> response_by_radius;
     for (const auto & sample : sample_entries)
     {
-        response_by_radius[sample.point.distance].emplace_back(
-            static_cast<double>(sample.response));
+        response_by_radius[sample.point.distance].emplace_back(sample.response);
     }
 
     LocalPotentialSampleList median_sample_entries;
@@ -109,7 +108,7 @@ LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
     {
         median_sample_entries.emplace_back(
             LocalPotentialSample{
-                static_cast<float>(array_helper::ComputeMedian(response_list)),
+                array_helper::ComputeMedian(response_list),
                 SamplingPoint{ radius }
             }
         );

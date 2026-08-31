@@ -51,12 +51,12 @@ struct Scenario
 };
 
 double Distance(
-    const std::array<float, 3> & lhs,
-    const std::array<float, 3> & rhs)
+    const std::array<double, 3> & lhs,
+    const std::array<double, 3> & rhs)
 {
-    const auto dx{ static_cast<double>(lhs.at(0) - rhs.at(0)) };
-    const auto dy{ static_cast<double>(lhs.at(1) - rhs.at(1)) };
-    const auto dz{ static_cast<double>(lhs.at(2) - rhs.at(2)) };
+    const auto dx{ lhs.at(0) - rhs.at(0) };
+    const auto dy{ lhs.at(1) - rhs.at(1) };
+    const auto dz{ lhs.at(2) - rhs.at(2) };
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
@@ -65,7 +65,7 @@ std::unique_ptr<rg::AtomObject> MakeAtom(
     Spot spot,
     Element element,
     ComponentKey component_key,
-    const std::array<float, 3> & position)
+    const std::array<double, 3> & position)
 {
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(serial_id);
@@ -96,12 +96,12 @@ LocalPotentialSampleList BuildSamples(
     double noise_sigma,
     std::mt19937 & generator)
 {
-    constexpr std::array<std::array<float, 3>, 6> directions{{
-        { 1.0F, 0.0F, 0.0F }, { -1.0F, 0.0F, 0.0F },
-        { 0.0F, 1.0F, 0.0F }, { 0.0F, -1.0F, 0.0F },
-        { 0.0F, 0.0F, 1.0F }, { 0.0F, 0.0F, -1.0F }
+    constexpr std::array<std::array<double, 3>, 6> directions{{
+        { 1.0, 0.0, 0.0 }, { -1.0, 0.0, 0.0 },
+        { 0.0, 1.0, 0.0 }, { 0.0, -1.0, 0.0 },
+        { 0.0, 0.0, 1.0 }, { 0.0, 0.0, -1.0 }
     }};
-    constexpr std::array<float, 4> radii{ 0.15F, 0.35F, 0.65F, 0.95F };
+    constexpr std::array<double, 4> radii{ 0.15, 0.35, 0.65, 0.95 };
     std::normal_distribution<double> noise{ 0.0, noise_sigma };
     LocalPotentialSampleList result;
     result.reserve(directions.size() * radii.size());
@@ -128,7 +128,7 @@ LocalPotentialSampleList BuildSamples(
             }
             const auto scale{ std::max(1.0, std::abs(response)) };
             result.emplace_back(LocalPotentialSample{
-                static_cast<float>(response + scale * noise(generator)), point });
+                response + scale * noise(generator), point });
         }
     }
     return result;
@@ -147,35 +147,35 @@ rg::GaussianModel3D PerturbModel(
     };
 }
 
-std::vector<std::array<float, 3>> BuildPositions(
+std::vector<std::array<double, 3>> BuildPositions(
     const Request & request,
     std::size_t atom_count)
 {
-    std::vector<std::array<float, 3>> positions;
+    std::vector<std::array<double, 3>> positions;
     positions.reserve(atom_count);
     if (request.topology == "near-collinear-pair")
     {
-        return {{ 0.0F, 0.0F, 0.0F },
-            { static_cast<float>(request.separation), 0.0F, 0.0F }};
+        return {{ 0.0, 0.0, 0.0 },
+            { request.separation, 0.0, 0.0 }};
     }
     if (request.topology == "dual-near-collinear")
     {
-        return {{ 0.0F, 0.0F, 0.0F },
-            { static_cast<float>(request.separation), 0.0F, 0.0F },
-            { 10.0F, 0.0F, 0.0F },
-            { 10.0F + static_cast<float>(request.separation), 0.0F, 0.0F }};
+        return {{ 0.0, 0.0, 0.0 },
+            { request.separation, 0.0, 0.0 },
+            { 10.0, 0.0, 0.0 },
+            { 10.0 + request.separation, 0.0, 0.0 }};
     }
     for (std::size_t index = 0; index < atom_count; index++)
     {
         const auto cluster{ index / 16 };
         const auto member{ index % 16 };
         const auto spacing{
-            request.topology == "boundary-conflict" ? 0.45F : 0.40F };
+            request.topology == "boundary-conflict" ? 0.45 : 0.40 };
         positions.push_back({
-            static_cast<float>(cluster) * 10.0F +
-                static_cast<float>(member) * spacing,
-            static_cast<float>(index % 3) * 0.05F,
-            0.0F });
+            static_cast<double>(cluster) * 10.0 +
+                static_cast<double>(member) * spacing,
+            static_cast<double>(index % 3) * 0.05,
+            0.0 });
     }
     return positions;
 }
@@ -359,20 +359,20 @@ Scenario BuildScenario(const Request & request)
             {
                 const auto target_position{ selected_atoms.at(index)->GetPosition() };
                 entries.resize(256, entries.back());
-                entries.front().response = 0.0F;
-                entries.front().point.distance = 0.0F;
+                entries.front().response = 0.0;
+                entries.front().point.distance = 0.0;
                 entries.front().point.position = target_position;
                 for (std::size_t sample_index = 1;
                     sample_index < entries.size(); sample_index++)
                 {
                     auto & sample{ entries.at(sample_index) };
                     const auto response_scale{
-                        0.5F + 0.5F * static_cast<float>(sample_index) /
-                            static_cast<float>(entries.size()) };
-                    sample.response = 1.0e4F * response_scale;
+                        0.5 + 0.5 * static_cast<double>(sample_index) /
+                            static_cast<double>(entries.size()) };
+                    sample.response = 1.0e4 * response_scale;
                     sample.point.position = target_position;
-                    sample.point.position.at(0) += 100.0F;
-                    sample.point.distance = 100.0F;
+                    sample.point.position.at(0) += 100.0;
+                    sample.point.distance = 100.0;
                 }
             }
             else if (request.topology != "unbalanced-shared-groups")

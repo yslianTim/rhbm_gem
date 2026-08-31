@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 13;
+constexpr int kCurrentSchemaVersion = 14;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -178,7 +178,7 @@ void ValidateColumns(
     if (columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v13 column mismatch for table: " + std::string(table_name));
+            "Schema v14 column mismatch for table: " + std::string(table_name));
     }
 
     auto column_iter{ columns.begin() };
@@ -187,7 +187,7 @@ void ValidateColumns(
         if (column_iter->name != expected_name)
         {
             throw std::runtime_error(
-                "Schema v13 column mismatch for table: " + std::string(table_name));
+                "Schema v14 column mismatch for table: " + std::string(table_name));
         }
         ++column_iter;
     }
@@ -210,7 +210,7 @@ void ValidatePrimaryKey(
     if (primary_key_columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v13 primary key mismatch for table: " + std::string(table_name));
+            "Schema v14 primary key mismatch for table: " + std::string(table_name));
     }
 
     auto primary_key_iter{ primary_key_columns.begin() };
@@ -219,7 +219,7 @@ void ValidatePrimaryKey(
         if (primary_key_iter->second != expected_name)
         {
             throw std::runtime_error(
-                "Schema v13 primary key mismatch for table: " + std::string(table_name));
+                "Schema v14 primary key mismatch for table: " + std::string(table_name));
         }
         ++primary_key_iter;
     }
@@ -237,7 +237,7 @@ void ValidateSelectionColumn(
         }
     }
     throw std::runtime_error(
-        "Schema v13 requires a NOT NULL is_selected column on table: "
+        "Schema v14 requires a NOT NULL is_selected column on table: "
         + std::string(table_name));
 }
 
@@ -256,7 +256,7 @@ void ValidateModelRootForeignKey(
         }
     }
     throw std::runtime_error(
-        "Schema v13 model root foreign key mismatch for table: "
+        "Schema v14 model root foreign key mismatch for table: "
         + std::string(table_name));
 }
 
@@ -265,7 +265,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
         != static_cast<int>(kModelTableNames.size()))
     {
-        throw std::runtime_error("Schema v13 contains an unexpected schema object.");
+        throw std::runtime_error("Schema v14 contains an unexpected schema object.");
     }
 
     const auto table_names{ QueryTableNames(database) };
@@ -275,7 +275,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             kModelTableNames.begin(),
             kModelTableNames.end()))
     {
-        throw std::runtime_error("Schema v13 contains an unexpected table set.");
+        throw std::runtime_error("Schema v14 contains an unexpected table set.");
     }
 
     ValidateColumns(database, "model_object", {
@@ -373,7 +373,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         rhbm_gem::model_storage::CreateTables(database);
         ValidateCurrentSchema(database);
-        database.Execute("PRAGMA user_version = 13;");
+        database.Execute("PRAGMA user_version = 14;");
         return;
     }
     if (user_version == kCurrentSchemaVersion)
@@ -382,7 +382,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v13.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v14.");
 }
 
 } // namespace

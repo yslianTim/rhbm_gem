@@ -764,7 +764,7 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(const Sampl
         m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
             baseline->adjusted_response - baseline->residual :
             m_candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(
-                static_cast<double>(sample.point.distance))
+                sample.point.distance)
     };
     const auto residual{ adjusted_response - expected_response };
     if (!std::isfinite(adjusted_response) || !std::isfinite(residual))
@@ -947,9 +947,9 @@ static double CalculateZeroOffsetResponse(
     const LocalPotentialSample & sample,
     const GaussianModel3D & model)
 {
-    const auto distance{ static_cast<double>(sample.point.distance) };
+    const auto distance{ sample.point.distance };
     const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
-    return static_cast<double>(sample.response) - model_offset;
+    return sample.response - model_offset;
 }
 
 static bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
@@ -974,10 +974,9 @@ static SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     if (calculate_residual_scale) residual_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
-        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto distance{ sample.point.distance };
         const auto response{ CalculateZeroOffsetResponse(sample, model) };
-        if (!std::isfinite(response) ||
-            std::abs(response) > static_cast<double>(std::numeric_limits<float>::max()))
+        if (!std::isfinite(response))
         {
             analysis.all_responses_finite = false;
             continue;
@@ -1652,7 +1651,7 @@ ObjectiveDomain BuildObjectiveDomain(
                     EvaluateResidualSample(context, sample_ref, model_snapshot)
                 };
                 const auto distance{
-                    static_cast<double>(raw_sampling_entries.at(sample_index).point.distance)
+                    raw_sampling_entries.at(sample_index).point.distance
                 };
                 const auto is_fit_range{ distance >= distance_min && distance <= distance_max };
                 domain.fit_sample_mask_by_atom.at(atom_index).at(sample_index) =
@@ -2375,9 +2374,8 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
             EvaluateTrustModelResponseDirection(
                 residual_baseline.model_snapshot.selected.at(sample_ref.atom_index),
                 candidate_snapshot.selected.at(sample_ref.atom_index),
-                static_cast<double>(
-                    atom_context.raw_sampling_entries.at(sample_ref.sample_index)
-                        .point.distance))
+                atom_context.raw_sampling_entries.at(sample_ref.sample_index)
+                    .point.distance)
         };
         if (!target_direction.has_value())
         {

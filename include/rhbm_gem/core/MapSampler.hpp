@@ -17,8 +17,8 @@ namespace core {
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
     const GridSampler & sampler,
-    const std::array<float, 3> & position,
-    const std::array<float, 3> & direction);
+    const std::array<double, 3> & position,
+    const std::array<double, 3> & direction);
 
 LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,

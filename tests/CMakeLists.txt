@@ -115,6 +115,7 @@ set(DATA_RUNTIME_TEST_SOURCES
     data/DataObjectFileIO_test.cpp
     data/DataObjectMapBehavior_test.cpp
     data/DataObjectModelAnalysis_test.cpp
+    data/DataObjectPrecisionContract_test.cpp
     data/DataObjectImportRegression_test.cpp
     data/RHBMTypes_test.cpp
     data/LocalPotentialSeries_test.cpp

@@ -142,7 +142,7 @@ bool RunAtomMapValueSampling(
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     GridSampler sampler;
     sampler.SetGridResolution(static_cast<unsigned int>(request.sampling_size));
-    sampler.SetWindowSize(static_cast<float>(request.window_size));
+    sampler.SetWindowSize(request.window_size);
     sampler.Print();
 
     auto context{ BuildModelAtomBondContext(model_object) };
@@ -168,13 +168,13 @@ bool RunAtomMapValueSampling(
     }
 
     auto target_atom_position{ atom_iter->second->GetPosition() };
-    std::array<float, 3> reference_u_vector{ 0.0f, 0.0f, 0.0f };
+    std::array<double, 3> reference_u_vector{ 0.0, 0.0, 0.0 };
     bool found_reference_bond{ false };
     for (const auto * bond : bond_iter->second)
     {
         const auto bond_vector{ bond->GetBondVector() };
-        const Eigen::Map<const Eigen::Vector3f> candidate_vector(bond_vector.data());
-        if (candidate_vector.norm() == 0.0f) continue;
+        const Eigen::Map<const Eigen::Vector3d> candidate_vector(bond_vector.data());
+        if (candidate_vector.norm() == 0.0) continue;
         reference_u_vector = bond_vector;
         found_reference_bond = true;
         break;
@@ -187,15 +187,15 @@ bool RunAtomMapValueSampling(
         return false;
     }
 
-    const Eigen::Map<const Eigen::Vector3f> eigen_u_vector(reference_u_vector.data());
-    Eigen::Vector3f u_vector{ eigen_u_vector.normalized() };
-    Eigen::Vector3f v_vector{ Eigen::Vector3f{0.0, 0.0, 1.0} };
-    Eigen::Vector3f n_vector{ u_vector.cross(v_vector) };
-    if (n_vector.norm() == 0.0f)
+    const Eigen::Map<const Eigen::Vector3d> eigen_u_vector(reference_u_vector.data());
+    Eigen::Vector3d u_vector{ eigen_u_vector.normalized() };
+    Eigen::Vector3d v_vector{ Eigen::Vector3d{0.0, 0.0, 1.0} };
+    Eigen::Vector3d n_vector{ u_vector.cross(v_vector) };
+    if (n_vector.norm() == 0.0)
     {
-        v_vector = Eigen::Vector3f{1.0, 0.0, 0.0};
+        v_vector = Eigen::Vector3d{1.0, 0.0, 0.0};
         n_vector = u_vector.cross(v_vector);
-        if (n_vector.norm() == 0.0f)
+        if (n_vector.norm() == 0.0)
         {
             Logger::Log(LogLevel::Error,
                 "Cannot construct a stable visualization axis for atom serial ID "
@@ -229,7 +229,7 @@ bool RunAtomMapValueSampling(
         }
         map_value_matrix(
             static_cast<Eigen::Index>(row),
-            static_cast<Eigen::Index>(col)) = static_cast<double>(sampling_data_list[index].response);
+            static_cast<Eigen::Index>(col)) = sampling_data_list[index].response;
     }
 
     auto x_min{ target_atom_position.at(0) - 0.5 * request.window_size };

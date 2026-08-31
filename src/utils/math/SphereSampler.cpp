@@ -47,14 +47,14 @@ std::vector<double> BuildFibonacciShellCenters()
     return shell_centers;
 }
 
-std::array<float, 3> GenerateRandomUnitDirection(
+std::array<double, 3> GenerateRandomUnitDirection(
     std::mt19937 & engine,
-    std::uniform_real_distribution<float> & dist_phi,
-    std::uniform_real_distribution<float> & dist_cos_theta)
+    std::uniform_real_distribution<double> & dist_phi,
+    std::uniform_real_distribution<double> & dist_cos_theta)
 {
-    const float phi{ dist_phi(engine) };
-    const float cos_theta{ dist_cos_theta(engine) };
-    const float sin_theta{ std::sqrt(1.0f - cos_theta * cos_theta) };
+    const double phi{ dist_phi(engine) };
+    const double cos_theta{ dist_cos_theta(engine) };
+    const double sin_theta{ std::sqrt(1.0 - cos_theta * cos_theta) };
 
     return {
         sin_theta * std::cos(phi),
@@ -64,9 +64,9 @@ std::array<float, 3> GenerateRandomUnitDirection(
 }
 
 SamplingPoint BuildSamplingPoint(
-    const std::array<float, 3> & center_position,
-    float radius,
-    const std::array<float, 3> & unit_vector)
+    const std::array<double, 3> & center_position,
+    double radius,
+    const std::array<double, 3> & unit_vector)
 {
     return SamplingPoint{
         radius,
@@ -80,26 +80,26 @@ SamplingPoint BuildSamplingPoint(
 
 } // namespace
 
-SamplingPointList GenerateVolumeUniformRandom(const std::array<float, 3> & center_position)
+SamplingPointList GenerateVolumeUniformRandom(const std::array<double, 3> & center_position)
 {
     SamplingPointList out;
     out.resize(kAnalysisSampleCount);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };
-    std::uniform_real_distribution<float> dist_unit(0.0f, 1.0f);
-    std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
-    std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
-    const float min_radius_cube{
-        static_cast<float>(kAnalysisDistanceMin * kAnalysisDistanceMin * kAnalysisDistanceMin)
+    std::uniform_real_distribution<double> dist_unit(0.0, 1.0);
+    std::uniform_real_distribution<double> dist_phi(0.0, Constants::two_pi);
+    std::uniform_real_distribution<double> dist_cos_theta(-1.0, 1.0);
+    const double min_radius_cube{
+        kAnalysisDistanceMin * kAnalysisDistanceMin * kAnalysisDistanceMin
     };
-    const float max_radius_cube{
-        static_cast<float>(kAnalysisDistanceMax * kAnalysisDistanceMax * kAnalysisDistanceMax)
+    const double max_radius_cube{
+        kAnalysisDistanceMax * kAnalysisDistanceMax * kAnalysisDistanceMax
     };
 
     for (unsigned int i = 0; i < kAnalysisSampleCount; i++)
     {
-        const float radius_unit{ dist_unit(engine) };
-        const float radius{
+        const double radius_unit{ dist_unit(engine) };
+        const double radius{
             std::cbrt(min_radius_cube + radius_unit * (max_radius_cube - min_radius_cube))
         };
 
@@ -111,7 +111,7 @@ SamplingPointList GenerateVolumeUniformRandom(const std::array<float, 3> & cente
     return out;
 }
 
-SamplingPointList GenerateFibonacciDeterministic(const std::array<float, 3> & center_position)
+SamplingPointList GenerateFibonacciDeterministic(const std::array<double, 3> & center_position)
 {
     const auto shell_radii{ BuildFibonacciShellCenters() };
     SamplingPointList out;
@@ -134,14 +134,10 @@ SamplingPointList GenerateFibonacciDeterministic(const std::array<float, 3> & ce
             const double x{ radial_xy * std::cos(theta) };
             const double y{ radial_xy * std::sin(theta) };
 
-            const std::array<float, 3> unit_vector{
-                static_cast<float>(x),
-                static_cast<float>(y),
-                static_cast<float>(z)
-            };
+            const std::array<double, 3> unit_vector{ x, y, z };
             out.emplace_back(BuildSamplingPoint(
                 center_position,
-                static_cast<float>(radius),
+                radius,
                 unit_vector));
         }
     }
@@ -149,21 +145,21 @@ SamplingPointList GenerateFibonacciDeterministic(const std::array<float, 3> & ce
     return out;
 }
 
-SamplingPointList GenerateRadiusUniformRandom(const std::array<float, 3> & center_position)
+SamplingPointList GenerateRadiusUniformRandom(const std::array<double, 3> & center_position)
 {
     SamplingPointList out;
     out.resize(kAnalysisSampleCount);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };
-    std::uniform_real_distribution<float> dist_radius(
-        static_cast<float>(kAnalysisDistanceMin), static_cast<float>(kAnalysisDistanceMax)
+    std::uniform_real_distribution<double> dist_radius(
+        kAnalysisDistanceMin, kAnalysisDistanceMax
     );
-    std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
-    std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
+    std::uniform_real_distribution<double> dist_phi(0.0, Constants::two_pi);
+    std::uniform_real_distribution<double> dist_cos_theta(-1.0, 1.0);
 
     for (unsigned int i = 0; i < kAnalysisSampleCount; i++)
     {
-        const float radius{ dist_radius(engine) };
+        const double radius{ dist_radius(engine) };
         out[i] = BuildSamplingPoint(
             center_position,
             radius,
@@ -173,7 +169,7 @@ SamplingPointList GenerateRadiusUniformRandom(const std::array<float, 3> & cente
 }
 
 SamplingPointList GenerateSamplingPointList(
-    const std::array<float, 3> & center_position,
+    const std::array<double, 3> & center_position,
     SphereSamplingMethod method)
 {
     switch (method)

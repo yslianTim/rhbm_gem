@@ -43,33 +43,33 @@ SeriesPointList BuildExpectedDatasetSeries(
 TEST(LocalPotentialSeriesTest, ComputesRangeAndBinningForDistanceMapSeries)
 {
     const LocalPotentialSampleList sampling_entries{
-        {2.0f, SamplingPoint{ 0.0f }},
-        {4.0f, SamplingPoint{ 0.2f }},
-        {8.0f, SamplingPoint{ 0.7f }},
-        {-1.0f, SamplingPoint{ 1.0f }},
+        {2.0, SamplingPoint{ 0.0 }},
+        {4.0, SamplingPoint{ 0.2 }},
+        {8.0, SamplingPoint{ 0.7 }},
+        {-1.0, SamplingPoint{ 1.0 }},
     };
 
     const auto distance_range{ lps::ComputeDistanceRange(sampling_entries, 0.0) };
     const auto map_value_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
     const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
-    EXPECT_FLOAT_EQ(std::get<0>(distance_range), 0.0f);
-    EXPECT_FLOAT_EQ(std::get<1>(distance_range), 1.0f);
-    EXPECT_FLOAT_EQ(std::get<0>(map_value_range), -1.0f);
-    EXPECT_FLOAT_EQ(std::get<1>(map_value_range), 8.0f);
+    EXPECT_DOUBLE_EQ(std::get<0>(distance_range), 0.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(distance_range), 1.0);
+    EXPECT_DOUBLE_EQ(std::get<0>(map_value_range), -1.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(map_value_range), 8.0);
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
+    EXPECT_DOUBLE_EQ(binned.at(0).response, 3.0);
+    EXPECT_DOUBLE_EQ(binned.at(1).response, 8.0);
 }
 
 TEST(LocalPotentialSeriesTest, FitDatasetSeriesKeepsFullBasisWithinFitRange)
 {
     const LocalPotentialSampleList sampling_entries{
-        {4.0f, SamplingPoint{ 0.1f }},
-        {-2.0f, SamplingPoint{ 0.2f }},
-        {9.0f, SamplingPoint{ 0.25f }},
-        {8.0f, SamplingPoint{ 0.3f }},
-        {16.0f, SamplingPoint{ 1.1f }},
+        {4.0, SamplingPoint{ 0.1 }},
+        {-2.0, SamplingPoint{ 0.2 }},
+        {9.0, SamplingPoint{ 0.25 }},
+        {8.0, SamplingPoint{ 0.3 }},
+        {16.0, SamplingPoint{ 1.1 }},
     };
 
     const auto transformed{ BuildExpectedDatasetSeries(sampling_entries, 0.1, 0.3) };
@@ -92,19 +92,19 @@ TEST(LocalPotentialSeriesTest, FitDatasetSeriesKeepsFullBasisWithinFitRange)
 TEST(LocalPotentialSeriesTest, BinningRespectsNonZeroMinimum)
 {
     const LocalPotentialSampleList sampling_entries{
-        {1.0f, SamplingPoint{ 0.20f }},
-        {4.0f, SamplingPoint{ 0.60f }},
-        {6.0f, SamplingPoint{ 0.90f }},
-        {8.0f, SamplingPoint{ 1.20f }},
+        {1.0, SamplingPoint{ 0.20 }},
+        {4.0, SamplingPoint{ 0.60 }},
+        {6.0, SamplingPoint{ 0.90 }},
+        {8.0, SamplingPoint{ 1.20 }},
     };
 
     const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.5, 1.5) };
 
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).GetBasisValue(0), 0.75f);
-    EXPECT_FLOAT_EQ(binned.at(1).GetBasisValue(0), 1.25f);
-    EXPECT_FLOAT_EQ(binned.at(0).response, 5.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
+    EXPECT_DOUBLE_EQ(binned.at(0).GetBasisValue(0), 0.75);
+    EXPECT_DOUBLE_EQ(binned.at(1).GetBasisValue(0), 1.25);
+    EXPECT_DOUBLE_EQ(binned.at(0).response, 5.0);
+    EXPECT_DOUBLE_EQ(binned.at(1).response, 8.0);
 }
 
 TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
@@ -116,9 +116,9 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        {2.0f, SamplingPoint{ 0.1f }},
-        {4.0f, SamplingPoint{ 0.4f }},
-        {6.0f, SamplingPoint{ 0.8f }},
+        {2.0, SamplingPoint{ 0.1 }},
+        {4.0, SamplingPoint{ 0.4 }},
+        {6.0, SamplingPoint{ 0.8 }},
     });
 
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
@@ -131,11 +131,11 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
             raw_sampling_entries, 2, 0.0, 1.0)
     };
 
-    EXPECT_FLOAT_EQ(std::get<0>(map_value_range), 2.0f);
-    EXPECT_FLOAT_EQ(std::get<1>(map_value_range), 6.0f);
+    EXPECT_DOUBLE_EQ(std::get<0>(map_value_range), 2.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(map_value_range), 6.0);
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).response, 6.0f);
+    EXPECT_DOUBLE_EQ(binned.at(0).response, 3.0);
+    EXPECT_DOUBLE_EQ(binned.at(1).response, 6.0);
 
     const auto fit_dataset_series{
         ls::BuildDatasetSeries(
@@ -150,12 +150,12 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 TEST(LocalPotentialSeriesTest, BinningReturnsZeroResponseForEmptyBins)
 {
     const LocalPotentialSampleList sampling_entries{
-        {2.0f, SamplingPoint{ 0.10f }},
+        {2.0, SamplingPoint{ 0.10 }},
     };
 
     const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).response, 2.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).response, 0.0f);
+    EXPECT_DOUBLE_EQ(binned.at(0).response, 2.0);
+    EXPECT_DOUBLE_EQ(binned.at(1).response, 0.0);
 }

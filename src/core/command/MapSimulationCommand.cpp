@@ -29,14 +29,14 @@ struct SimulationAtomPreparationResult
 {
     std::vector<AtomObject *> atom_list;
     std::unordered_map<int, double> atom_charge_map;
-    std::array<float, 3> range_min{
-        std::numeric_limits<float>::max(),
-        std::numeric_limits<float>::max(),
-        std::numeric_limits<float>::max() };
-    std::array<float, 3> range_max{
-        std::numeric_limits<float>::lowest(),
-        std::numeric_limits<float>::lowest(),
-        std::numeric_limits<float>::lowest() };
+    std::array<double, 3> range_min{
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max() };
+    std::array<double, 3> range_max{
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest(),
+        std::numeric_limits<double>::lowest() };
     bool has_atom{ false };
 };
 
@@ -61,13 +61,13 @@ void LogMapSummary(const MapObject & map_object)
         << std::setw(10) << map_object.GetOrigin().at(2) << " |\n";
     oss << " | Map Length(A)| ";
     oss << std::setw(10)
-        << static_cast<float>(map_object.GetGridSize().at(0)) * map_object.GetGridSpacing().at(0)
+        << static_cast<double>(map_object.GetGridSize().at(0)) * map_object.GetGridSpacing().at(0)
         << " | "
         << std::setw(10)
-        << static_cast<float>(map_object.GetGridSize().at(1)) * map_object.GetGridSpacing().at(1)
+        << static_cast<double>(map_object.GetGridSize().at(1)) * map_object.GetGridSpacing().at(1)
         << " | "
         << std::setw(10)
-        << static_cast<float>(map_object.GetGridSize().at(2)) * map_object.GetGridSpacing().at(2)
+        << static_cast<double>(map_object.GetGridSize().at(2)) * map_object.GetGridSpacing().at(2)
         << " |\n";
     oss << " |-----------------------------------------------------|\n";
     oss << " | Map value min  | " << std::setw(34) << map_object.GetMapValueMin() << " |\n";
@@ -131,8 +131,8 @@ SimulationAtomPreparationResult PrepareSimulationAtomList(
     {
         for (size_t i = 0; i < result.range_min.size(); ++i)
         {
-            result.range_min[i] -= static_cast<float>(request.cutoff_distance);
-            result.range_max[i] += static_cast<float>(request.cutoff_distance);
+            result.range_min[i] -= request.cutoff_distance;
+            result.range_max[i] += request.cutoff_distance;
         }
     }
 
@@ -148,12 +148,12 @@ std::unique_ptr<MapObject> CreateMapObject(
     const SimulationAtomPreparationResult & result)
 {
     ScopeTimer timer("MapSimulationCommand::CreateMapObject");
-    std::array<float, 3> grid_spacing{
-        static_cast<float>(request.grid_spacing),
-        static_cast<float>(request.grid_spacing),
-        static_cast<float>(request.grid_spacing)
+    std::array<double, 3> grid_spacing{
+        request.grid_spacing,
+        request.grid_spacing,
+        request.grid_spacing
     };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
+    std::array<double, 3> origin{ 0.0, 0.0, 0.0 };
     std::array<int, 3> grid_size{ 1, 1, 1 };
     if (result.has_atom)
     {
@@ -176,12 +176,12 @@ std::unique_ptr<MapObject> CreateMapObject(
 
 void CollectGridIndicesInRange(
     const MapObject & map_object,
-    const std::array<float, 3> & center,
-    float radius,
+    const std::array<double, 3> & center,
+    double radius,
     std::vector<size_t> & grid_index_list)
 {
     grid_index_list.clear();
-    if (radius < 0.0f) return;
+    if (radius < 0.0) return;
 
     const auto grid_size{ map_object.GetGridSize() };
     const auto grid_spacing{ map_object.GetGridSpacing() };
@@ -204,10 +204,10 @@ void CollectGridIndicesInRange(
         {
             for (int x = lower_bound[0]; x <= upper_bound[0]; x++)
             {
-                const std::array<float, 3> grid_position{
-                    origin[0] + static_cast<float>(x) * grid_spacing[0],
-                    origin[1] + static_cast<float>(y) * grid_spacing[1],
-                    origin[2] + static_cast<float>(z) * grid_spacing[2]
+                const std::array<double, 3> grid_position{
+                    origin[0] + static_cast<double>(x) * grid_spacing[0],
+                    origin[1] + static_cast<double>(y) * grid_spacing[1],
+                    origin[2] + static_cast<double>(z) * grid_spacing[2]
                 };
                 const auto dx{ grid_position[0] - center[0] };
                 const auto dy{ grid_position[1] - center[1] };
@@ -240,8 +240,8 @@ void PopulateMapValueArray(
     electric_potential->SetModelChoice(static_cast<int>(request.potential_model_choice));
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
-    auto map_value_array{ std::make_unique<float[]>(voxel_size) };
-    std::fill_n(map_value_array.get(), voxel_size, 0.0f);
+    auto map_value_array{ std::make_unique<double[]>(voxel_size) };
+    std::fill_n(map_value_array.get(), voxel_size, 0.0);
 
     auto atom_size{ atom_list.atom_list.size() };
     size_t atom_count{ 0 };
@@ -262,7 +262,7 @@ void PopulateMapValueArray(
         CollectGridIndicesInRange(
             *map_object,
             atom_position,
-            static_cast<float>(request.cutoff_distance),
+            request.cutoff_distance,
             in_range_grid_index_list);
 
         for (const auto grid_index : in_range_grid_index_list)
@@ -270,9 +270,8 @@ void PopulateMapValueArray(
             auto distance{
                 array_helper::ComputeNorm(atom_position, map_object->GetGridPosition(grid_index))
             };
-            map_value_array[grid_index] += static_cast<float>(
-                electric_potential->GetPotentialValue(element, distance, charge)
-            );
+            map_value_array[grid_index] +=
+                electric_potential->GetPotentialValue(element, distance, charge);
         }
 
 #ifdef USE_OPENMP

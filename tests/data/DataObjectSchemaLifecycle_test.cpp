@@ -46,7 +46,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 13);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
     for (const auto table_name : std::array<std::string_view, 10>{
              "model_object",
              "model_chain_map",
@@ -133,6 +133,11 @@ TEST(DataObjectSchemaLifecycleTest, VersionTwelveSchemaIsRejectedWithoutModifica
     ExpectVersionedDatabaseRejectedWithoutMutation(12);
 }
 
+TEST(DataObjectSchemaLifecycleTest, VersionThirteenSchemaIsRejectedWithoutModification)
+{
+    ExpectVersionedDatabaseRejectedWithoutMutation(13);
+}
+
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)
 {
     ExpectVersionedDatabaseRejectedWithoutMutation(99);
@@ -163,9 +168,9 @@ TEST(DataObjectSchemaLifecycleTest, MixedUnknownSchemaFailsFast)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_mixed_unknown" };
     const auto database_path{ temp_dir.path() / "mixed.sqlite" };
-    CreateVersionedMarkerDatabase(database_path, 13);
+    CreateVersionedMarkerDatabase(database_path, 14);
 
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 13);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
     EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
 }

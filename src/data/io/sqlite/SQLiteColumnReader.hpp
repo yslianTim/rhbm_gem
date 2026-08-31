@@ -1,6 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <cstring>
+#include <limits>
 #include <sqlite3.h>
 #include <string>
 #include <stdexcept>
@@ -8,6 +11,11 @@
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rhbm_gem {
+
+static_assert(sizeof(double) == 8, "SQLite sampling BLOB requires 64-bit double.");
+static_assert(
+    std::numeric_limits<double>::is_iec559,
+    "SQLite sampling BLOB requires IEEE-754 double.");
 
 template<typename T>
 struct SQLiteColumnReader
@@ -116,23 +124,27 @@ struct SQLiteColumnReader<LocalPotentialSampleList>
         {
             return {};
         }
-        if (blob_size % (3 * static_cast<int>(sizeof(float))) != 0)
+        if (blob_size % (3 * static_cast<int>(sizeof(double))) != 0)
         {
             throw std::runtime_error("Invalid local potential sample blob size.");
         }
-        int count{ blob_size / (3 * static_cast<int>(sizeof(float))) };
+        int count{ blob_size / (3 * static_cast<int>(sizeof(double))) };
         LocalPotentialSampleList result;
         result.reserve(static_cast<size_t>(count));
-        const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
+        const auto * blob_bytes{ static_cast<const std::byte *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
-            const int offset{ 3 * i };
+            std::array<double, 3> values{};
+            std::memcpy(
+                values.data(),
+                blob_bytes + static_cast<size_t>(i) * 3 * sizeof(double),
+                3 * sizeof(double));
             result.emplace_back(LocalPotentialSample{
-                blob_floats[offset + 1],
+                values[1],
                 SamplingPoint{
-                    blob_floats[offset],
-                    { 0.0f, 0.0f, 0.0f },
-                    blob_floats[offset + 2] != 0.0f
+                    values[0],
+                    { 0.0, 0.0, 0.0 },
+                    values[2] != 0.0
                 }
             });
         }

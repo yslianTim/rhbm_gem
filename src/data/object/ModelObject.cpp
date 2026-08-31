@@ -23,9 +23,9 @@ double ComputeDistanceSquare(
 {
     const auto & position_1{ atom_1.GetPositionRef() };
     const auto & position_2{ atom_2.GetPositionRef() };
-    const auto dx{ static_cast<double>(position_1.at(0)) - static_cast<double>(position_2.at(0)) };
-    const auto dy{ static_cast<double>(position_1.at(1)) - static_cast<double>(position_2.at(1)) };
-    const auto dz{ static_cast<double>(position_1.at(2)) - static_cast<double>(position_2.at(2)) };
+    const auto dx{ position_1.at(0) - position_2.at(0) };
+    const auto dy{ position_1.at(1) - position_2.at(1) };
+    const auto dz{ position_1.at(2) - position_2.at(2) };
     return dx * dx + dy * dy + dz * dz;
 }
 
@@ -394,7 +394,7 @@ std::string ModelObject::FindBondID(BondKey bond_key) const
     return m_bond_key_system->GetBondId(bond_key);
 }
 
-std::array<float, 3> ModelObject::GetCenterOfMassPosition()
+std::array<double, 3> ModelObject::GetCenterOfMassPosition()
 {
     return ModelDerivedState::Of(*this).GetCenterOfMassPosition(*this);
 }

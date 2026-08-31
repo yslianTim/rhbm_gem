@@ -8,7 +8,7 @@
 #include <sstream>
 #include <Eigen/Dense>
 
-using Eigen::Vector3f;
+using Eigen::Vector3d;
 
 GridSampler::GridSampler() :
     m_sampling_size{ 10 },
@@ -28,8 +28,8 @@ void GridSampler::Print() const
 }
 
 SamplingPointList GridSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & reference_position,
-    const std::array<float, 3> & plane_normal) const
+    const std::array<double, 3> & reference_position,
+    const std::array<double, 3> & plane_normal) const
 {
     rhbm_gem::numeric_validation::RequireFinitePositive(
         m_window_size,
@@ -39,21 +39,21 @@ SamplingPointList GridSampler::GenerateSamplingPoints(
         2u,
         "GridSampler sampling size");
 
-    const Eigen::Map<const Vector3f> eigen_reference_position(reference_position.data());
-    const Eigen::Map<const Vector3f> eigen_plane_normal(plane_normal.data());
-    const Eigen::Map<const Vector3f> eigen_u_vector(m_reference_u_vector.data());
+    const Eigen::Map<const Vector3d> eigen_reference_position(reference_position.data());
+    const Eigen::Map<const Vector3d> eigen_plane_normal(plane_normal.data());
+    const Eigen::Map<const Vector3d> eigen_u_vector(m_reference_u_vector.data());
 
-    const auto eps{ Eigen::NumTraits<float>::epsilon() };
+    const auto eps{ Eigen::NumTraits<double>::epsilon() };
     if (eigen_plane_normal.isZero(eps))
     {
         throw std::invalid_argument("GridSampler: plane normal cannot be zero.");
     }
-    Vector3f n_unit{ eigen_plane_normal.normalized() };
-    Vector3f u_proj{ eigen_u_vector - (eigen_u_vector.dot(n_unit)) * n_unit };
-    Vector3f u_unit{ u_proj.normalized() };
-    Vector3f v_unit{ n_unit.cross(u_unit) };
-    auto half_window_size{ m_window_size / 2.0f };
-    auto step_size{ m_window_size / static_cast<float>(m_sampling_size - 1) };
+    Vector3d n_unit{ eigen_plane_normal.normalized() };
+    Vector3d u_proj{ eigen_u_vector - (eigen_u_vector.dot(n_unit)) * n_unit };
+    Vector3d u_unit{ u_proj.normalized() };
+    Vector3d v_unit{ n_unit.cross(u_unit) };
+    auto half_window_size{ m_window_size / 2.0 };
+    auto step_size{ m_window_size / static_cast<double>(m_sampling_size - 1) };
 
     auto total_grid_size{ m_sampling_size * m_sampling_size };
     SamplingPointList output_list;
@@ -61,17 +61,17 @@ SamplingPointList GridSampler::GenerateSamplingPoints(
 
     for (unsigned int j = 0; j < m_sampling_size; j++)
     {
-        float v{ -half_window_size + step_size * static_cast<float>(j) };
+        double v{ -half_window_size + step_size * static_cast<double>(j) };
         for (unsigned int i = 0; i < m_sampling_size; i++)
         {
-            float u{ -half_window_size + step_size * static_cast<float>(i) };
-            Vector3f shift{ u * u_unit + v * v_unit };
-            Vector3f position{ eigen_reference_position + shift };
-            float radius{ shift.norm() };
+            double u{ -half_window_size + step_size * static_cast<double>(i) };
+            Vector3d shift{ u * u_unit + v * v_unit };
+            Vector3d position{ eigen_reference_position + shift };
+            double radius{ shift.norm() };
 
             output_list.emplace_back(SamplingPoint{
                 radius,
-                std::array<float, 3>{ position.x(), position.y(), position.z() }
+                std::array<double, 3>{ position.x(), position.y(), position.z() }
             });
         }
     }

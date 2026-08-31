@@ -108,8 +108,8 @@ int AlternateThreadCount(int thread_count)
 TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
 {
     const LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 2.0F, SamplingPoint{ 1.0F } },
-        LocalPotentialSample{ 4.0F, SamplingPoint{ 2.0F } }
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 4.0, SamplingPoint{ 2.0 } }
     };
 
     const auto dataset{
@@ -129,11 +129,11 @@ TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
 TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
 {
     const LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 2.0F, SamplingPoint{ 0.5F } },
-        LocalPotentialSample{ 3.0F, SamplingPoint{ 1.0F } },
-        LocalPotentialSample{ -1.0F, SamplingPoint{ 2.0F } },
-        LocalPotentialSample{ 5.0F, SamplingPoint{ 3.0F } },
-        LocalPotentialSample{ 7.0F, SamplingPoint{ 3.5F } }
+        LocalPotentialSample{ 2.0, SamplingPoint{ 0.5 } },
+        LocalPotentialSample{ 3.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ -1.0, SamplingPoint{ 2.0 } },
+        LocalPotentialSample{ 5.0, SamplingPoint{ 3.0 } },
+        LocalPotentialSample{ 7.0, SamplingPoint{ 3.5 } }
     };
 
     const auto dataset{
@@ -153,8 +153,8 @@ TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
 TEST(RHBMHelperTest, BuildMemberDatasetReturnsZeroFallbackWhenNoSampleIsValid)
 {
     const LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 2.0F, SamplingPoint{ 0.5F } },
-        LocalPotentialSample{ 0.0F, SamplingPoint{ 1.5F } }
+        LocalPotentialSample{ 2.0, SamplingPoint{ 0.5 } },
+        LocalPotentialSample{ 0.0, SamplingPoint{ 1.5 } }
     };
 
     const auto dataset{
@@ -172,7 +172,7 @@ TEST(RHBMHelperTest, BuildMemberDatasetReturnsZeroFallbackWhenNoSampleIsValid)
 TEST(RHBMHelperTest, BuildMemberDatasetRejectsInvalidRange)
 {
     const LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 2.0F, SamplingPoint{ 1.0F } }
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } }
     };
 
     EXPECT_THROW(
@@ -186,10 +186,10 @@ TEST(RHBMHelperTest, BuildMemberDatasetRejectsInvalidRange)
 TEST(RHBMHelperTest, BuildMemberDatasetRejectsNonFiniteValues)
 {
     const LocalPotentialSampleList distance_nan{
-        LocalPotentialSample{ 2.0F, SamplingPoint{ std::numeric_limits<float>::quiet_NaN() } }
+        LocalPotentialSample{ 2.0, SamplingPoint{ std::numeric_limits<double>::quiet_NaN() } }
     };
     const LocalPotentialSampleList response_nan{
-        LocalPotentialSample{ std::numeric_limits<float>::quiet_NaN(), SamplingPoint{ 1.0F } }
+        LocalPotentialSample{ std::numeric_limits<double>::quiet_NaN(), SamplingPoint{ 1.0 } }
     };
 
     EXPECT_THROW(

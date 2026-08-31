@@ -53,8 +53,8 @@ SeriesPointList BuildLocalDatasetSeries(
     };
     for (auto & sample : sampling_entries)
     {
-        auto distance{ static_cast<double>(sample.point.distance) };
-        sample.response -= static_cast<float>(offset * model_prior.OffsetBasisAtDistance(distance));
+        auto distance{ sample.point.distance };
+        sample.response -= offset * model_prior.OffsetBasisAtDistance(distance);
         if (std::isfinite(distance) && distance >= 0.0 && distance > range_max)
         {
             range_max = distance;
@@ -228,24 +228,24 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(
     auto data_array{
         BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries)
     };
-    std::vector<float> data_list;
+    std::vector<double> data_list;
     data_list.reserve(data_array.size());
     for (const auto & point : data_array)
     {
         switch (dimension_id)
         {
             case 0:
-                data_list.emplace_back(static_cast<float>(point.GetBasisValue(1)));
+                data_list.emplace_back(point.GetBasisValue(1));
                 break;
             case 1:
-                data_list.emplace_back(static_cast<float>(point.response));
+                data_list.emplace_back(point.response);
                 break;
             default:
                 throw std::runtime_error("Dimension id is invalid.");
         }
     }
 
-    auto data_range{ array_helper::ComputeScalingRangeTuple(data_list, 0.1f) };
+    auto data_range{ array_helper::ComputeScalingRangeTuple(data_list, 0.1) };
     double x_min{ std::get<0>(data_range) };
     double x_max{ std::get<1>(data_range) };
 
@@ -628,7 +628,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
         const auto atom_entry{ AtomLocalPotentialView::For(*atom) };
         graph->SetPoint(
             count,
-            static_cast<double>(distance),
+            distance,
             atom_entry.GetEstimateMDPDE(FittingStage::Third)
                 .GetDisplayParameter(par_id));
         count++;
@@ -645,7 +645,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomXYPositionTomograp
     }
     auto model_object{ m_model_object };
     auto com_pos{
-        com_center ? model_object->GetCenterOfMassPosition() : std::array<float, 3>{ 0.0, 0.0, 0.0 }
+        com_center ? model_object->GetCenterOfMassPosition() : std::array<double, 3>{ 0.0, 0.0, 0.0 }
     };
     auto graph{ root_helper::CreateGraphErrors() };
     auto z_pos{ model_object->GetModelPosition(2, normalized_z_pos) };

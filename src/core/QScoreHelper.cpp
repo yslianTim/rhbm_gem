@@ -29,7 +29,7 @@ constexpr double kMaximumRadiusTolerance{ 0.01 };
 using RadialPoint = std::array<double, 3>;
 
 std::vector<RadialPoint> GenerateSpiralSpherePoints(
-    const std::array<float, 3> & center,
+    const std::array<double, 3> & center,
     double radius,
     std::size_t point_count)
 {
@@ -56,15 +56,15 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
 
         const auto sin_phi{ std::sin(phi) };
         points.emplace_back(RadialPoint{
-            static_cast<double>(center.at(0)) + radius * sin_phi * std::cos(theta),
-            static_cast<double>(center.at(1)) + radius * sin_phi * std::sin(theta),
-            static_cast<double>(center.at(2)) + radius * std::cos(phi)
+            center.at(0) + radius * sin_phi * std::cos(theta),
+            center.at(1) + radius * sin_phi * std::sin(theta),
+            center.at(2) + radius * std::cos(phi)
         });
     }
     return points;
 }
 
-double InterpolateMapValueTrilinear(const MapObject & map, const std::array<float, 3> & position)
+double InterpolateMapValueTrilinear(const MapObject & map, const std::array<double, 3> & position)
 {
     const auto grid_size{ map.GetGridSize() };
     const auto grid_spacing{ map.GetGridSpacing() };
@@ -76,15 +76,14 @@ double InterpolateMapValueTrilinear(const MapObject & map, const std::array<floa
     for (std::size_t axis = 0; axis < position.size(); ++axis)
     {
         const auto lower_boundary{
-            static_cast<double>(origin.at(axis)) -
-                kMapBoundaryMarginRatio * static_cast<double>(grid_spacing.at(axis))
+            origin.at(axis) - kMapBoundaryMarginRatio * grid_spacing.at(axis)
         };
         const auto upper_boundary{
-            static_cast<double>(origin.at(axis)) +
+            origin.at(axis) +
                 (static_cast<double>(grid_size.at(axis)) - kMapBoundaryMarginRatio) *
-                    static_cast<double>(grid_spacing.at(axis))
+                    grid_spacing.at(axis)
         };
-        const auto coordinate{ static_cast<double>(position.at(axis)) };
+        const auto coordinate{ position.at(axis) };
         if (!std::isfinite(coordinate) ||
             coordinate < lower_boundary ||
             coordinate > upper_boundary)
@@ -95,8 +94,7 @@ double InterpolateMapValueTrilinear(const MapObject & map, const std::array<floa
 
         const auto grid_coordinate{
             std::clamp(
-                (coordinate - static_cast<double>(origin.at(axis))) /
-                    static_cast<double>(grid_spacing.at(axis)),
+                (coordinate - origin.at(axis)) / grid_spacing.at(axis),
                 0.0,
                 static_cast<double>(grid_size.at(axis) - 1))
         };
@@ -124,12 +122,10 @@ double InterpolateMapValueTrilinear(const MapObject & map, const std::array<floa
                 z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
             };
             const auto lower_value{
-                static_cast<double>(map.GetMapValue(
-                    lower_indices.at(0), y_index, z_index))
+                map.GetMapValue(lower_indices.at(0), y_index, z_index)
             };
             const auto upper_value{
-                static_cast<double>(map.GetMapValue(
-                    upper_indices.at(0), y_index, z_index))
+                map.GetMapValue(upper_indices.at(0), y_index, z_index)
             };
             x_interpolated_values.at(y_offset).at(z_offset) = interpolate(
                 lower_value,
@@ -208,7 +204,7 @@ std::tuple<double, double> GetReferenceGaussianParameters(const MapObject & map_
 {
     const auto reference_high{
         std::min(
-            map_object.GetMapValueMean() + 10.0f * map_object.GetMapValueSD(),
+            map_object.GetMapValueMean() + 10.0 * map_object.GetMapValueSD(),
             map_object.GetMapValueMax())
     };
     const auto offset{
@@ -216,7 +212,7 @@ std::tuple<double, double> GetReferenceGaussianParameters(const MapObject & map_
             map_object.GetMapValueMean() - map_object.GetMapValueSD(),
             map_object.GetMapValueMin())
     };
-    return std::make_tuple(static_cast<double>(reference_high - offset), static_cast<double>(offset));
+    return std::make_tuple(reference_high - offset, offset);
 }
 
 SamplingPointList GetRadialPointsForQScore(
@@ -276,7 +272,7 @@ SamplingPointList GetRadialPointsForQScore(
                 for (std::size_t axis = 0; axis < candidate_point.size(); ++axis)
                 {
                     const auto difference{
-                        candidate_point.at(axis) - static_cast<double>(neighbor_position.at(axis))
+                        candidate_point.at(axis) - neighbor_position.at(axis)
                     };
                     distance_square += difference * difference;
                 }
@@ -289,12 +285,8 @@ SamplingPointList GetRadialPointsForQScore(
             if (!is_rejected)
             {
                 accepted_points.emplace_back(SamplingPoint{
-                    static_cast<float>(radius),
-                    {
-                        static_cast<float>(candidate_point.at(0)),
-                        static_cast<float>(candidate_point.at(1)),
-                        static_cast<float>(candidate_point.at(2))
-                    },
+                    radius,
+                    candidate_point,
                     true
                 });
             }
@@ -363,7 +355,7 @@ double CalculateQScoreForAtom(
     reference_values.reserve(sampling_entries.size());
     for (const auto & sample : sampling_entries)
     {
-        const auto radius{ static_cast<double>(sample.point.distance) };
+        const auto radius{ sample.point.distance };
         const auto reference_value{
             height * std::exp(-0.5 * radius * radius / (sigma * sigma)) + offset
         };
