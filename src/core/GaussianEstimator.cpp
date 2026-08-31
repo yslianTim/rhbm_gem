@@ -1,6 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
-#include "core/detail/FittingModel.hpp"
+#include "core/detail/GaussianModelOperations.hpp"
+#include "core/detail/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -179,7 +180,9 @@ std::string BuildLocalFittingResultCsv(
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
-    training_options.execution_options = detail::MakeExecutionOptions(options.thread_size);
+    training_options.execution_options = RHBMExecutionOptions{
+        .thread_size = options.thread_size
+    };
     return training_options;
 }
 
@@ -434,11 +437,10 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     const GaussianModel3D & offset_model)
 {
-    const auto design_template{
-        detail::BuildLocalGaussianDesignTemplate(
-            sample_entries,
-            options.distance_min,
-            options.distance_max)
+    const detail::PreparedLocalGaussianDesign design{
+        sample_entries,
+        options.distance_min,
+        options.distance_max
     };
     std::vector<double> sample_response_list;
     sample_response_list.reserve(sample_entries.size());
@@ -446,8 +448,7 @@ LocalGaussianResult EstimateLocalGaussian(
     {
         sample_response_list.emplace_back(static_cast<double>(sample.response));
     }
-    return detail::EstimateLocalGaussianPrepared(
-        design_template,
+    return design.Estimate(
         sample_response_list,
         alpha_r,
         options.thread_size,
@@ -463,7 +464,9 @@ GroupGaussianResult EstimateGroupGaussian(
         options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
 
-    const auto execution_options{ detail::MakeExecutionOptions(options.thread_size) };
+    const RHBMExecutionOptions execution_options{
+        .thread_size = options.thread_size
+    };
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(member_list.size());
     std::vector<RHBMBetaEstimateResult> fit_result_list;

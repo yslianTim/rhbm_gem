@@ -1,5 +1,7 @@
 #include "core/detail/CouplingGraph.hpp"
 
+#include "core/detail/GaussianModelOperations.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <iomanip>

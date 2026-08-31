@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/FittingModel.hpp"
+#include "core/detail/SecondStageFitting.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
 

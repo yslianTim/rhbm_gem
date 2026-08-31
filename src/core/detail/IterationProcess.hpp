@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/GaussianModelOperations.hpp"
 
 #include <array>
 #include <cstddef>
@@ -98,7 +99,7 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const SuspiciousBlockActivity & quarantine_activity);
 
 TransformedChangeSummary SummarizeActiveDofChanges(
-    const std::vector<algorithm::ParameterChange> & change_list,
+    const std::vector<TransformedChange> & change_list,
     const ActiveCoordinatePopulation & population);
 
 TransformedChangeSummary SummarizeActiveDofChanges(

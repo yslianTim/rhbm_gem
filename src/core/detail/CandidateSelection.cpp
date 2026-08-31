@@ -1,5 +1,7 @@
 #include "core/detail/CandidateSelection.hpp"
 
+#include "core/detail/GaussianModelOperations.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <exception>
@@ -881,7 +883,7 @@ double BacktrackingWorkspace::GetMaximumTransformedChange() const
             detail::GetMaximumTransformedChange(
                 CalculateTransformedChange(
                     m_candidate_patch.mdpde_list.at(i).GetModel(),
-                    m_previous_model_list.at(i)).value_list));
+                    m_previous_model_list.at(i))));
     }
     return maximum_change;
 }
@@ -1906,7 +1908,8 @@ static bool TryCommitClusterCandidate(
             key)
     };
     const auto maximum_transformed_change{
-        GetMaximumTransformedChange(transformed_change_summary)
+        GetMaximumTransformedChange(
+            transformed_change_summary.maximum_list)
     };
     const auto domain_iter{ domain.cluster_by_key.find(key) };
     diagnostic.scale.reset();
@@ -2739,7 +2742,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     SummarizeTransformedChanges(
                         candidate_state_view,
                         residual_baseline.model_snapshot.selected,
-                        key))
+                        key).maximum_list)
             };
             if (maximum_change < kTransformedChangeTolerance)
             {
@@ -3284,7 +3287,7 @@ EvaluateBoundaryComponentCandidate(
                         SummarizeTransformedChanges(
                             candidate_overlay.GetState(),
                             candidate_overlay.GetBaseline().model_snapshot.selected,
-                            key));
+                            key).maximum_list);
             }
         }
         evaluation.objective_state_by_key.emplace(key, std::move(objective_state));

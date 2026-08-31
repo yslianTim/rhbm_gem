@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/FittingModel.hpp"
+#include "core/detail/SecondStageFitting.hpp"
 
 #include <cstddef>
 #include <functional>

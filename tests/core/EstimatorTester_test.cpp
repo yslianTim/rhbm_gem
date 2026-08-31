@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
-#include "core/detail/FittingModel.hpp"
+#include "core/detail/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
@@ -349,14 +349,13 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
             range_min,
             range_max)
     };
-    const auto design_template{
-        rt_detail::BuildLocalGaussianDesignTemplate(samples, range_min, range_max)
+    const rt_detail::PreparedLocalGaussianDesign design{
+        samples,
+        range_min,
+        range_max
     };
     const auto prepared_dataset{
-        rt_detail::BuildLocalGaussianPreparedDataset(
-            design_template,
-            response_list,
-            offset_model)
+        design.BuildDataset(response_list, offset_model)
     };
 
     EXPECT_TRUE(prepared_dataset.X.isApprox(legacy_dataset.X, 0.0));
@@ -371,10 +370,7 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
             range_max)
     };
     const auto prepared_fallback{
-        rt_detail::BuildLocalGaussianPreparedDataset(
-            design_template,
-            response_list,
-            offset_model)
+        design.BuildDataset(response_list, offset_model)
     };
     EXPECT_TRUE(prepared_fallback.X.isApprox(legacy_fallback.X, 0.0));
     EXPECT_TRUE(prepared_fallback.y.isApprox(legacy_fallback.y, 0.0));

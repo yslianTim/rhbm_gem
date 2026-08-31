@@ -14,7 +14,9 @@
 #include <utility>
 #include <vector>
 
-#include "core/detail/FittingModel.hpp"
+#include "core/detail/GaussianModelOperations.hpp"
+#include "core/detail/PreparedLocalGaussianFit.hpp"
+#include "core/detail/SecondStageFitting.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
 #include "core/detail/CandidateSelection.hpp"
@@ -1893,7 +1895,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     constexpr double unselected_distance{ 0.25 };
     fixture.context.unselected_atom_list.emplace_back(
         trust_detail::UnselectedAtomContributor{
-            2,
             0,
             fixture.state.at(0).mdpde.GetModel()
         });
@@ -2602,12 +2603,12 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
                     previous.GetOffset() * scale
                 })
         };
-        ASSERT_EQ(base_change.value_list.size(), scaled_change.value_list.size());
-        for (std::size_t i = 0; i < base_change.value_list.size(); i++)
+        ASSERT_EQ(base_change.size(), scaled_change.size());
+        for (std::size_t i = 0; i < base_change.size(); i++)
         {
             EXPECT_NEAR(
-                base_change.value_list.at(i),
-                scaled_change.value_list.at(i),
+                base_change.at(i),
+                scaled_change.at(i),
                 1.0e-12);
         }
     }
@@ -4671,12 +4672,16 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
         candidate_view
     };
     const residual_detail::SampleRef sample_ref{ 0, 1 };
+    const auto candidate_snapshot{
+        residual_detail::BuildSecondStageModelSnapshot(
+            context,
+            residual_detail::BuildFittedGaussianSnapshot(candidate_view))
+    };
     const auto direct{
         residual_detail::EvaluateResidualSample(
             context,
-            candidate_view,
             sample_ref,
-            baseline.model_snapshot)
+            candidate_snapshot)
     };
     const auto overlaid{ overlay(sample_ref) };
     ASSERT_TRUE(direct.has_value());
@@ -4813,23 +4818,23 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWid
 
     EXPECT_NEAR(
         0.0,
-        change.value_list.at(change_detail::kLogPeakHeightChangeIndex),
+        change.at(change_detail::kLogPeakHeightChangeIndex),
         1.0e-12);
     EXPECT_NEAR(
         std::log(2.0),
-        change.value_list.at(change_detail::kLogWidthChangeIndex),
+        change.at(change_detail::kLogWidthChangeIndex),
         1.0e-12);
     EXPECT_DOUBLE_EQ(
         0.0,
-        change.value_list.at(change_detail::kOffsetToPeakRatioChangeIndex));
+        change.at(change_detail::kOffsetToPeakRatioChangeIndex));
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximumTail)
 {
-    std::vector<alg::ParameterChange> change_list(
+    std::vector<change_detail::TransformedChange> change_list(
         1000,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
-    change_list.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) =
+        change_detail::TransformedChange{});
+    change_list.back().at(change_detail::kLogPeakHeightChangeIndex) =
         2.0e-3;
     std::vector<std::size_t> index_list(change_list.size());
     for (std::size_t i = 0; i < index_list.size(); i++)
@@ -4845,7 +4850,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximum
             index_list_by_parameter)
     };
     EXPECT_LT(
-        summary.percentile_stats.percentile_list.at(
+        summary.percentile_list.at(
             change_detail::kLogPeakHeightChangeIndex),
         1.0e-4);
     EXPECT_GT(
@@ -4859,12 +4864,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateKeepsAcceptedResidua
     const auto make_summary = [](double percentile, double maximum)
     {
         change_detail::TransformedChangeSummary summary;
-        summary.percentile_stats.percentile_list.assign(
-            change_detail::kTransformedChangeSize,
-            percentile);
-        summary.maximum_list.assign(
-            change_detail::kTransformedChangeSize,
-            maximum);
+        summary.percentile_list.fill(percentile);
+        summary.maximum_list.fill(maximum);
         summary.population_size_list.fill(100);
         return summary;
     };
@@ -4889,12 +4890,8 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesL
     const auto make_summary = [](double percentile, double maximum)
     {
         change_detail::TransformedChangeSummary summary;
-        summary.percentile_stats.percentile_list.assign(
-            change_detail::kTransformedChangeSize,
-            percentile);
-        summary.maximum_list.assign(
-            change_detail::kTransformedChangeSize,
-            maximum);
+        summary.percentile_list.fill(percentile);
+        summary.maximum_list.fill(maximum);
         summary.population_size_list.fill(100);
         return summary;
     };
@@ -4940,12 +4937,12 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlo
 {
     constexpr std::size_t atom_count{ 1000 };
     constexpr std::size_t fixed_atom_count{ 990 };
-    std::vector<alg::ParameterChange> change_list(
+    std::vector<change_detail::TransformedChange> change_list(
         atom_count,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+        change_detail::TransformedChange{});
     for (std::size_t i = fixed_atom_count; i < atom_count; i++)
     {
-        change_list.at(i).value_list.assign(3, 5.0e-4);
+        change_list.at(i).fill(5.0e-4);
     }
     std::vector<std::size_t> atom_index_list(atom_count);
     for (std::size_t i = 0; i < atom_count; i++) atom_index_list.at(i) = i;
@@ -5020,10 +5017,10 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSize
 {
     constexpr std::size_t large_group_size{ 100 };
     constexpr std::size_t atom_count{ large_group_size + 1 };
-    std::vector<alg::ParameterChange> change_list(
+    std::vector<change_detail::TransformedChange> change_list(
         atom_count,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
-    change_list.back().value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+        change_detail::TransformedChange{});
+    change_list.back().at(change_detail::kOffsetToPeakRatioChangeIndex) =
         5.0e-4;
     std::vector<std::size_t> atom_index_list(atom_count);
     std::iota(atom_index_list.begin(), atom_index_list.end(), 0);
@@ -5077,10 +5074,10 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
             activity,
             quarantine_activity)
     };
-    std::vector<alg::ParameterChange> change_list(
+    std::vector<change_detail::TransformedChange> change_list(
         3,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
-    change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+        change_detail::TransformedChange{});
+    change_list.at(1).at(change_detail::kOffsetToPeakRatioChangeIndex) =
         2.0e-3;
     const auto extreme{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
@@ -5088,7 +5085,7 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     EXPECT_DOUBLE_EQ(extreme.maximum_list.at(2), 2.0e-3);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(extreme));
 
-    change_list.at(1).value_list.at(change_detail::kOffsetToPeakRatioChangeIndex) =
+    change_list.at(1).at(change_detail::kOffsetToPeakRatioChangeIndex) =
         std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
@@ -5120,9 +5117,9 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
             activity,
             quarantine_activity)
     };
-    std::vector<alg::ParameterChange> change_list(
+    std::vector<change_detail::TransformedChange> change_list(
         2,
-        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+        change_detail::TransformedChange{});
     const auto change_audit{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
@@ -5163,11 +5160,11 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
         group_id_by_atom_index,
         nominal_activity,
         nominal_activity) };
-    std::vector<alg::ParameterChange> changes(
-        3, alg::ParameterChange{ std::vector<double>(3, 0.0) });
-    changes.at(0).value_list.assign(3, 2.0e-3);
-    changes.at(1).value_list.assign(3, 2.0e-3);
-    changes.at(2).value_list.assign(3, 5.0e-5);
+    std::vector<change_detail::TransformedChange> changes(
+        3, change_detail::TransformedChange{});
+    changes.at(0).fill(2.0e-3);
+    changes.at(1).fill(2.0e-3);
+    changes.at(2).fill(5.0e-5);
 
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_population = accepted_population;
@@ -5190,8 +5187,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     EXPECT_FALSE(certificate.OperatorPercentilePassed());
     EXPECT_FALSE(certificate.ProductionConverged());
 
-    changes.at(0).value_list.assign(3, 5.0e-5);
-    changes.at(1).value_list.assign(3, 5.0e-5);
+    changes.at(0).fill(5.0e-5);
+    changes.at(1).fill(5.0e-5);
     certificate.operator_nominal_residual =
         audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
     EXPECT_TRUE(certificate.ProductionConverged());
@@ -5217,8 +5214,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
         group_id_by_atom_index,
         activity,
         quarantine_activity) };
-    std::vector<alg::ParameterChange> changes(
-        2, alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    std::vector<change_detail::TransformedChange> changes(
+        2, change_detail::TransformedChange{});
 
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_population = population;
@@ -5239,8 +5236,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     const auto make_summary = [](double value, std::size_t population)
     {
         change_detail::TransformedChangeSummary summary;
-        summary.percentile_stats.percentile_list.assign(3, value);
-        summary.maximum_list.assign(3, value);
+        summary.percentile_list.fill(value);
+        summary.maximum_list.fill(value);
         summary.population_size_list.fill(population);
         return summary;
     };
@@ -5273,10 +5270,10 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
 {
     change_detail::TransformedChangeSummary summary;
-    summary.percentile_stats.percentile_list.assign(3, 0.0);
-    summary.maximum_list.assign(3, 0.0);
+    summary.percentile_list.fill(0.0);
+    summary.maximum_list.fill(0.0);
     summary.population_size_list.fill(1);
-    summary.percentile_stats.percentile_list.at(0) =
+    summary.percentile_list.at(0) =
         std::numeric_limits<double>::infinity();
 
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(summary));
