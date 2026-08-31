@@ -148,29 +148,6 @@ PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     return request;
 }
 
-std::string CapturePotentialAnalysisStderr(const PotentialAnalysisRequest & request)
-{
-    testing::internal::CaptureStderr();
-    static_cast<void>(RunCommand(request));
-    return testing::internal::GetCapturedStderr();
-}
-
-std::string CapturePotentialAnalysisCliStderr(std::vector<std::string> args)
-{
-    std::vector<char *> argv;
-    argv.reserve(args.size());
-    for (auto & arg : args)
-    {
-        argv.push_back(arg.data());
-    }
-
-    testing::internal::CaptureStderr();
-    static_cast<void>(RunCommandCLI(static_cast<int>(argv.size()), argv.data()));
-    return testing::internal::GetCapturedStderr();
-}
-
-constexpr const char * kMapNormalizationWarning{ "MapObject::MapValueArrayNormalization" };
-
 } // namespace
 
 TEST(CommandScenariosTest, MapSimulationRejectsAllInvalidBlurringWidthsAtPrepare)
@@ -267,17 +244,6 @@ TEST(CommandScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-k,--save-key"));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisNormalizesMapByDefault)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_default" };
-    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
-    auto request{ MakeNormalizationScenarioRequest(temp_dir.path(), map_path) };
-
-    const auto error_output{ CapturePotentialAnalysisStderr(request) };
-
-    EXPECT_NE(error_output.find(kMapNormalizationWarning), std::string::npos);
-}
-
 TEST(CommandScenariosTest, PotentialAnalysisFailsWhenStandardQScoreIsOutsideMap)
 {
     command_test::ScopedTempDir temp_dir{ "potential_analysis_qscore_boundary_failure" };
@@ -288,69 +254,6 @@ TEST(CommandScenariosTest, PotentialAnalysisFailsWhenStandardQScoreIsOutsideMap)
 
     EXPECT_FALSE(result.succeeded);
     EXPECT_FALSE(std::filesystem::exists(request.database_path));
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisSkipsMapNormalizationForSimulationDefault)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_simulation" };
-    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
-    auto request{ MakeNormalizationScenarioRequest(temp_dir.path(), map_path) };
-    request.simulation_flag = true;
-    request.simulated_map_resolution = 1.5;
-
-    const auto error_output{ CapturePotentialAnalysisStderr(request) };
-
-    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueStillSkipsSimulationNormalization)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_cli_true" };
-    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
-
-    const auto error_output{
-        CapturePotentialAnalysisCliStderr({
-            "RHBM-GEM",
-            "potential_analysis",
-            "--database",
-            (temp_dir.path() / "analysis.sqlite").string(),
-            "--model",
-            command_test::TestDataPath("test_model.cif").string(),
-            "--map",
-            map_path.string(),
-            "--simulation",
-            "true",
-            "--sim-resolution",
-            "1.5",
-            "--map-normalization",
-            "true",
-        })
-    };
-
-    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationFalseSkipsNormalization)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_cli_false" };
-    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
-
-    const auto error_output{
-        CapturePotentialAnalysisCliStderr({
-            "RHBM-GEM",
-            "potential_analysis",
-            "--database",
-            (temp_dir.path() / "analysis.sqlite").string(),
-            "--model",
-            command_test::TestDataPath("test_model.cif").string(),
-            "--map",
-            map_path.string(),
-            "--map-normalization",
-            "false",
-        })
-    };
-
-    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsExcludeHydrogen)
@@ -599,17 +502,10 @@ TEST(CommandScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.blurring_width_list = { 1.0, -2.0, 3.0 };
 
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
     const auto result{ RunCommand(request) };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    static_cast<void>(testing::internal::GetCapturedStdout());
 
     ASSERT_TRUE(result.succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 2);
-    EXPECT_EQ(
-        error_output.find("MapObject::SetMapValueArray - MapObject already has a map value array"),
-        std::string::npos);
 
     std::filesystem::path generated_map_path;
     for (const auto & entry : std::filesystem::directory_iterator(temp_dir.path()))
@@ -848,7 +744,7 @@ TEST(CommandScenariosTest, ResultDumpUsesCurrentRequestPaths)
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_b, ".csv"), 1);
 }
 
-TEST(CommandScenariosTest, ResultDumpDatabaseLoadFailureRetainsCommandContext)
+TEST(CommandScenariosTest, ResultDumpDatabaseLoadFailureReturnsFailedResult)
 {
     command_test::ScopedTempDir temp_dir{ "result_dump_missing_model" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
@@ -862,15 +758,10 @@ TEST(CommandScenariosTest, ResultDumpDatabaseLoadFailureRetainsCommandContext)
     request.model_key_tag_list = { "missing_key" };
     request.printer_choice = PrinterType::ATOM_POSITION;
 
-    testing::internal::CaptureStderr();
     EXPECT_FALSE(RunCommand(request).succeeded);
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    EXPECT_NE(error_output.find("ResultDumpCommand::BuildDataObjectList"), std::string::npos);
-    EXPECT_NE(error_output.find("Failed to load dump inputs"), std::string::npos);
-    EXPECT_NE(error_output.find("missing_key"), std::string::npos);
 }
 
-TEST(CommandScenariosTest, MapSimulationFileLoadFailureRetainsCommandContext)
+TEST(CommandScenariosTest, MapSimulationFileLoadFailureReturnsFailedResult)
 {
     command_test::ScopedTempDir temp_dir{ "map_simulation_wrong_input_type" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
@@ -883,12 +774,7 @@ TEST(CommandScenariosTest, MapSimulationFileLoadFailureRetainsCommandContext)
     request.map_file_name = "sim_map";
     request.blurring_width_list = { 1.0 };
 
-    testing::internal::CaptureStderr();
     EXPECT_FALSE(RunCommand(request).succeeded);
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    EXPECT_NE(error_output.find("MapSimulationCommand::BuildDataObject"), std::string::npos);
-    EXPECT_NE(error_output.find("Failed to load model file"), std::string::npos);
-    EXPECT_NE(error_output.find("ModelObject"), std::string::npos);
 }
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE

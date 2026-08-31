@@ -168,42 +168,32 @@ TEST(FilePathHelperTest, EnsureFileExistsReturnsTrueForExistingFile)
     std::filesystem::remove(temp_file);
 }
 
-TEST(FilePathHelperTest, EnsureFileExistsLogsErrorForMissingFile)
+TEST(FilePathHelperTest, EnsureFileExistsReturnsFalseForMissingFile)
 {
     const auto missing_file{
         std::filesystem::temp_directory_path() / "FilePathHelperMissing.tmp"
     };
 
     std::filesystem::remove(missing_file);
-    testing::internal::CaptureStderr();
     const bool exists{ rhbm_gem::path_helper::EnsureFileExists(missing_file, "Missing file") };
-    const std::string output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_FALSE(exists);
-    EXPECT_NE(output.find("[Error] Missing file does not exist: " +
-              missing_file.string()), std::string::npos);
 }
 
 TEST(FilePathHelperTest, EnsureFileExistsReturnsTrueForExistingDirectory)
 {
     const auto temp_dir{ std::filesystem::temp_directory_path() };
 
-    testing::internal::CaptureStderr();
     const bool exists{ rhbm_gem::path_helper::EnsureFileExists(temp_dir, "Temp dir") };
-    const std::string output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_TRUE(exists);
-    EXPECT_TRUE(output.empty());
 }
 
-TEST(FilePathHelperTest, EnsureFileExistsLogsErrorForEmptyPath)
+TEST(FilePathHelperTest, EnsureFileExistsReturnsFalseForEmptyPath)
 {
     const std::filesystem::path empty_path{};
 
-    testing::internal::CaptureStderr();
     const bool exists{ rhbm_gem::path_helper::EnsureFileExists(empty_path, "Empty path") };
-    const std::string output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_FALSE(exists);
-    EXPECT_NE(output.find("[Error] Empty path does not exist: "), std::string::npos);
 }

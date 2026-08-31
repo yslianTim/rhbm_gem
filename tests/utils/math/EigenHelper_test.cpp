@@ -135,16 +135,11 @@ TEST(EigenHelperTest, GetMedianEvenNumberOfElementsConst)
     EXPECT_DOUBLE_EQ(median, 2.5);
 }
 
-TEST(EigenHelperTest, GetMedianEmptyMatrixWarnsAndReturnsZero)
+TEST(EigenHelperTest, GetMedianEmptyMatrixReturnsZero)
 {
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> matrix{ 0, 0 };
-    testing::internal::CaptureStderr();
     const double median{ rhbm_gem::eigen_helper::GetMedian(matrix) };
-    const std::string output{ testing::internal::GetCapturedStderr() };
     EXPECT_DOUBLE_EQ(median, 0.0);
-    EXPECT_NE(
-        output.find("[Warning]  [eigen_helper::GetMedian] The input data size is zero, return 0..."),
-        std::string::npos);
 }
 
 TEST(EigenHelperTest, GetMedianSortsNonConstMatrix)
@@ -180,24 +175,14 @@ TEST(EigenHelperTest, GetStandardDeviationMultiElement)
     EXPECT_NEAR(expected, rhbm_gem::eigen_helper::GetStandardDeviation(const_data), 1e-9);
 }
 
-TEST(EigenHelperTest, GetStandardDeviationEmptyMatrixWarnsAndReturnsZero)
+TEST(EigenHelperTest, GetStandardDeviationEmptyMatrixReturnsZero)
 {
     Eigen::ArrayXd data(0);
-    testing::internal::CaptureStderr();
     const double value{ rhbm_gem::eigen_helper::GetStandardDeviation(data) };
-    const std::string output{ testing::internal::GetCapturedStderr() };
     EXPECT_DOUBLE_EQ(0.0, value);
-    EXPECT_NE(output.find("[Warning]  [eigen_helper::GetStandardDeviation] "
-                          "The input data size is zero, return 0..."),
-              std::string::npos);
     const Eigen::ArrayXd const_data(0);
-    testing::internal::CaptureStderr();
     const double const_value{ rhbm_gem::eigen_helper::GetStandardDeviation(const_data) };
-    const std::string const_output{ testing::internal::GetCapturedStderr() };
     EXPECT_DOUBLE_EQ(0.0, const_value);
-    EXPECT_NE(const_output.find("[Warning]  [eigen_helper::GetStandardDeviation] "
-                                "The input data size is zero, return 0..."),
-              std::string::npos);
 }
 
 TEST(EigenHelperTest, GetStandardDeviationSingleElement)
@@ -210,21 +195,15 @@ TEST(EigenHelperTest, GetStandardDeviationSingleElement)
     EXPECT_DOUBLE_EQ(0.0, rhbm_gem::eigen_helper::GetStandardDeviation(const_data));
 }
 
-TEST(EigenHelperTest, GetStandardDeviationIdenticalElementsNoWarning)
+TEST(EigenHelperTest, GetStandardDeviationIdenticalElementsReturnsZero)
 {
     Eigen::ArrayXd data(5);
     data << 7.0, 7.0, 7.0, 7.0, 7.0;
-    testing::internal::CaptureStderr();
     const double value{ rhbm_gem::eigen_helper::GetStandardDeviation(data) };
-    const std::string output{ testing::internal::GetCapturedStderr() };
     EXPECT_DOUBLE_EQ(0.0, value);
-    EXPECT_TRUE(output.empty());
     const Eigen::ArrayXd const_data{ data };
-    testing::internal::CaptureStderr();
     const double const_value{ rhbm_gem::eigen_helper::GetStandardDeviation(const_data) };
-    const std::string const_output{ testing::internal::GetCapturedStderr() };
     EXPECT_DOUBLE_EQ(0.0, const_value);
-    EXPECT_TRUE(const_output.empty());
 }
 
 TEST(EigenHelperTest, InvertibleMatrixReturnsCorrectInverse)

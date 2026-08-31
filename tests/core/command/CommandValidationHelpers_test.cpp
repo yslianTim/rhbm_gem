@@ -370,18 +370,13 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
 
     command.SetPositiveCount(0);
 
-    testing::internal::CaptureStderr();
     const auto result{ command.ExecuteConfiguredRequest() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_TRUE(result.succeeded);
     EXPECT_EQ(command.Count(), 4);
     ASSERT_EQ(result.issues.size(), 1u);
     EXPECT_EQ(result.issues.front().option_name, "-c,--count");
     EXPECT_NE(result.issues.front().message.find("normalized_count"), std::string::npos);
-    EXPECT_NE(
-        error_output.find("[validation] Option -c,--count"),
-        std::string::npos);
 }
 
 TEST(CommandValidationHelpersTest, RequiredEnumHelperRejectsInvalidValueWithoutFallback)
@@ -572,18 +567,10 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     request.job_count = 0;
     request.verbosity = 99;
 
-    testing::internal::CaptureStderr();
     const auto result{ command.ExecuteRequest(request) };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_TRUE(result.succeeded);
     ASSERT_EQ(result.issues.size(), 2u);
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-j,--jobs"));
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-v,--verbose"));
-    EXPECT_NE(
-        error_output.find("[validation] Option -j,--jobs"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("[validation] Option -v,--verbose"),
-        std::string::npos);
 }

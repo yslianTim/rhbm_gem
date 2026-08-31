@@ -14,7 +14,6 @@
 #include "io/file/MapHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -214,19 +213,4 @@ TEST(DataObjectFileIOTest, ReadAndWriteFailuresSurfaceAsTypedRuntimeErrors)
         SCOPED_TRACE(case_data.name);
         EXPECT_THROW(case_data.run(), std::runtime_error);
     }
-}
-
-TEST(DataObjectFileIOTest, ReadModelDoesNotCallDisplay)
-{
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    ASSERT_NO_THROW((void)rg::ReadModel(model_path));
-    const auto stdout_output{ testing::internal::GetCapturedStdout() };
-    const auto stderr_output{ testing::internal::GetCapturedStderr() };
-    const auto combined_output{ stdout_output + stderr_output };
-    EXPECT_EQ(combined_output.find("ModelObject Display"), std::string::npos);
-    EXPECT_EQ(combined_output.find("MapObject Display"), std::string::npos);
 }

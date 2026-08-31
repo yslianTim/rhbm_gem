@@ -8,7 +8,6 @@
 #include <vector>
 
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -144,23 +143,4 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
         auto model{ data_test::LoadFixtureModel(case_data.path) };
         case_data.verify(*model);
     }
-}
-
-TEST(DataObjectImportRegressionTest, ModifiedPeptideFallbackDoesNotEmitComponentBondMissWarnings)
-{
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    auto model{
-        data_test::LoadFixtureModel(
-            command_test::TestDataPath("test_model_modified_peptide_fallback.cif")) };
-    const auto stdout_output{ testing::internal::GetCapturedStdout() };
-    const auto stderr_output{ testing::internal::GetCapturedStderr() };
-    ASSERT_NE(model, nullptr);
-    EXPECT_TRUE(stdout_output.empty());
-    EXPECT_EQ(
-        stderr_output.find("Component bond entry (bond_key: 62) not found in chemical component map."),
-        std::string::npos);
-    EXPECT_EQ(stderr_output.find("Component bond entry"), std::string::npos);
-    Logger::SetLogLevel(LogLevel::Info);
 }

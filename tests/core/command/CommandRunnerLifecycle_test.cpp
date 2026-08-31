@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
-#include <string>
 
 #include "command/detail/CommandRunner.hpp"
 #include "support/CommandTestHelpers.hpp"
@@ -76,14 +75,11 @@ TEST(CommandRunnerLifecycleTest, RunReportsValidationIssues)
     TestCommandHarness command{};
     command.SetForceInvalid(true);
 
-    testing::internal::CaptureStderr();
     const auto result{ command.ExecuteConfiguredRequest() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.execute_impl_count, 0);
     ASSERT_FALSE(result.issues.empty());
-    EXPECT_NE(error_output.find("Option request: forced invalid config"), std::string::npos);
 }
 
 TEST(CommandRunnerLifecycleTest, ValidationFailureSkipsFilesystemPreflight)

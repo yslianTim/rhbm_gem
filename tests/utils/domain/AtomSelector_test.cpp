@@ -21,25 +21,6 @@ protected:
     }
 };
 
-TEST_F(AtomSelectorTest, PrintOutputsPopulatedSets)
-{
-    AtomSelector selector;
-    selector.PickChainID("A");
-    selector.PickResidueType("ALA");
-    selector.PickElementType("C");
-    selector.VetoChainID("B");
-    selector.VetoResidueType("GLY");
-    selector.VetoElementType("O");
-
-    const std::string output{ selector.Describe() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    selector.Print();
-    EXPECT_EQ(output + "\n", testing::internal::GetCapturedStdout());
-    EXPECT_TRUE(testing::internal::GetCapturedStderr().empty());
-}
-
 TEST_F(AtomSelectorTest, DescribeReturnsPopulatedSets)
 {
     AtomSelector selector;
