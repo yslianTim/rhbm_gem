@@ -95,17 +95,17 @@ Eigen::VectorXd JointOffsetParameterization::ExpandOffsets(const Eigen::VectorXd
 std::optional<std::vector<GaussianModel3D>>
 JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) const
 {
-    if (parameter.size() != seed_parameter.size() || !parameter.allFinite())
+    if (parameter.size() != m_seed_parameter.size() || !parameter.allFinite())
     {
         return std::nullopt;
     }
 
     std::vector<GaussianModel3D> model_list;
-    model_list.reserve(group_position_by_atom.size());
-    for (std::size_t atom_position = 0; atom_position < group_position_by_atom.size(); atom_position++)
+    model_list.reserve(m_group_position_by_atom.size());
+    for (std::size_t atom_position = 0; atom_position < m_group_position_by_atom.size(); atom_position++)
     {
         auto active_shape_coordinates{
-            base_shape_coordinate_by_atom.at(atom_position)
+            m_base_shape_coordinate_by_atom.at(atom_position)
         };
         if (HasShapeColumn(atom_position))
         {
@@ -123,11 +123,11 @@ JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) 
             DecodeTransformedCoordinates(shape_coordinates)
         };
         if (!shape_model.has_value()) return std::nullopt;
-        const auto group_position{ group_position_by_atom.at(atom_position) };
+        const auto group_position{ m_group_position_by_atom.at(atom_position) };
         const auto offset{
             HasOffsetColumn(atom_position) ?
                 parameter(OffsetColumn(atom_position)) :
-                base_offset_by_group.at(group_position)
+                m_base_offset_by_group.at(group_position)
         };
         const auto model{ shape_model->WithOffset(offset) };
         if (!EncodeTransformedCoordinates(model).has_value())
@@ -142,19 +142,19 @@ JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) 
 std::optional<std::vector<GaussianModel3D>>
 JointPolishParameterization::DecodeModels(const Eigen::VectorXd & direction, double damping) const
 {
-    if (direction.size() != seed_parameter.size() ||
+    if (direction.size() != m_seed_parameter.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
         return std::nullopt;
     }
-    const Eigen::VectorXd parameter{ seed_parameter + damping * direction };
+    const Eigen::VectorXd parameter{ m_seed_parameter + damping * direction };
     return DecodeParameter(parameter);
 }
 
 std::optional<std::vector<GaussianModel3D>>
 JointPolishParameterization::DecodeSeedModels() const
 {
-    return DecodeParameter(seed_parameter);
+    return DecodeParameter(m_seed_parameter);
 }
 
 JointFittingConditioning EvaluateJointFittingConditioning(
@@ -744,20 +744,20 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     if (!group_layout.has_value()) return std::nullopt;
 
     JointPolishParameterization parameterization;
-    parameterization.group_position_by_atom = std::move(group_layout->group_position_by_atom);
-    parameterization.shape_position_by_atom.resize(base_model_list.size());
-    parameterization.base_shape_coordinate_by_atom.reserve(base_model_list.size());
-    parameterization.offset_position_by_group.resize(group_layout->group_count);
-    parameterization.base_offset_by_group.resize(group_layout->group_count);
+    parameterization.m_group_position_by_atom = std::move(group_layout->group_position_by_atom);
+    parameterization.m_shape_position_by_atom.resize(base_model_list.size());
+    parameterization.m_base_shape_coordinate_by_atom.reserve(base_model_list.size());
+    parameterization.m_offset_position_by_group.resize(group_layout->group_count);
+    parameterization.m_base_offset_by_group.resize(group_layout->group_count);
     for (const auto is_shape_active : shape_active_mask)
     {
-        if (is_shape_active != 0) parameterization.shape_atom_count++;
+        if (is_shape_active != 0) parameterization.m_shape_atom_count++;
     }
     std::vector<int> offset_activity_by_group(group_layout->group_count, -1);
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
         const auto group_position{
-            parameterization.group_position_by_atom.at(atom_position)
+            parameterization.m_group_position_by_atom.at(atom_position)
         };
         const auto is_active{ offset_active_mask.at(atom_position) != 0 ? 1 : 0 };
         if (offset_activity_by_group.at(group_position) >= 0 &&
@@ -773,19 +773,20 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     {
         if (offset_activity_by_group.at(group_position) != 0)
         {
-            parameterization.offset_position_by_group.at(group_position) =
-                parameterization.offset_group_count++;
+            parameterization.m_offset_position_by_group.at(group_position) =
+                parameterization.m_offset_group_count++;
         }
         else
         {
-            parameterization.offset_position_by_group.at(group_position) =
+            parameterization.m_offset_position_by_group.at(group_position) =
                 group_layout->group_count;
         }
     }
-    parameterization.seed_parameter = Eigen::VectorXd::Zero(
+    parameterization.m_seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
-            parameterization.shape_atom_count * kJointPolishShapeParameterSize +
-                parameterization.offset_group_count));
+            parameterization.m_shape_atom_count *
+                JointPolishParameterization::kShapeParameterSize +
+                parameterization.m_offset_group_count));
     std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
     std::size_t shape_position{ 0 };
 
@@ -796,20 +797,20 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
         };
         if (!transformed.has_value()) return std::nullopt;
         const auto atom_group_position{
-            parameterization.group_position_by_atom.at(atom_position)
+            parameterization.m_group_position_by_atom.at(atom_position)
         };
-        parameterization.base_shape_coordinate_by_atom.emplace_back(
+        parameterization.m_base_shape_coordinate_by_atom.emplace_back(
             (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)),
             (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex)));
-        parameterization.shape_position_by_atom.at(atom_position) =
+        parameterization.m_shape_position_by_atom.at(atom_position) =
             shape_active_mask.at(atom_position) != 0 ?
-                shape_position++ : parameterization.shape_atom_count;
+                shape_position++ : parameterization.m_shape_atom_count;
         if (parameterization.HasShapeColumn(atom_position))
         {
-            parameterization.seed_parameter(
+            parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 0)) =
                 (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
-            parameterization.seed_parameter(
+            parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 1)) =
                 (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex));
         }
@@ -823,14 +824,15 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
         const auto median{ CalculateJointFittingGroupMedian(offset_list) };
-        parameterization.base_offset_by_group.at(current_group_position) = median;
-        if (parameterization.offset_position_by_group.at(current_group_position) <
-            parameterization.offset_group_count)
+        parameterization.m_base_offset_by_group.at(current_group_position) = median;
+        if (parameterization.m_offset_position_by_group.at(current_group_position) <
+            parameterization.m_offset_group_count)
         {
-            parameterization.seed_parameter(
+            parameterization.m_seed_parameter(
                 static_cast<Eigen::Index>(
-                    parameterization.shape_atom_count * kJointPolishShapeParameterSize +
-                    parameterization.offset_position_by_group.at(current_group_position))) = median;
+                    parameterization.m_shape_atom_count *
+                        JointPolishParameterization::kShapeParameterSize +
+                    parameterization.m_offset_position_by_group.at(current_group_position))) = median;
         }
     }
     return parameterization;
@@ -847,17 +849,13 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     algorithm::WeightedRidgeSolver & reusable_solver)
 {
     if (key.empty() || sample_ref_list.empty() ||
-        parameterization.group_position_by_atom.size() != key.size() ||
-        parameterization.shape_position_by_atom.size() != key.size() ||
-        parameterization.base_shape_coordinate_by_atom.size() != key.size() ||
-        parameterization.offset_position_by_group.size() !=
-            parameterization.base_offset_by_group.size() ||
+        parameterization.AtomCount() != key.size() ||
         seed_model_list.size() != key.size())
     {
         return std::nullopt;
     }
 
-    const auto column_count{ parameterization.seed_parameter.size() };
+    const auto column_count{ parameterization.ParameterCount() };
     std::unordered_map<std::size_t, std::size_t> local_position_by_atom_index;
     local_position_by_atom_index.reserve(key.size());
     std::unordered_map<std::size_t, Eigen::Index> offset_column_by_group_id;
@@ -870,7 +868,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         if (parameterization.HasShapeColumn(local_position))
         {
             for (std::size_t parameter_index = 0;
-                parameter_index < kJointPolishShapeParameterSize;
+                parameter_index < static_cast<std::size_t>(Eigen::Vector2d::SizeAtCompileTime);
                 parameter_index++)
             {
                 ridge_multiplier_by_column(
@@ -934,7 +932,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             if (parameterization.HasShapeColumn(local_position))
             {
                 for (std::size_t parameter_index = 0;
-                    parameter_index < kJointPolishShapeParameterSize;
+                    parameter_index < static_cast<std::size_t>(evaluation->shape_jacobian.size());
                     parameter_index++)
                 {
                     const auto column_index{
@@ -1287,7 +1285,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         result.status = BoundaryJointCorrectionStatus::InvalidSeed;
         return result;
     }
-    result.parameter_count = static_cast<std::size_t>(parameterization->seed_parameter.size());
+    result.parameter_count = static_cast<std::size_t>(parameterization->ParameterCount());
     const auto seed_model_list{ parameterization->DecodeSeedModels() };
     if (!seed_model_list.has_value())
     {

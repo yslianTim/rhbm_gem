@@ -115,46 +115,44 @@ JointOffsetSolveResult EstimateJointOffsets(
     algorithm::WeightedRidgeSolver & reusable_solver,
     bool log_debug_diagnostics);
 
-constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
-
-struct JointPolishParameterization
+class JointPolishParameterization
 {
-    std::vector<std::size_t> group_position_by_atom{};
-    std::vector<std::size_t> shape_position_by_atom{};
-    std::vector<std::size_t> offset_position_by_group{};
-    std::vector<Eigen::Vector2d> base_shape_coordinate_by_atom{};
-    std::vector<double> base_offset_by_group{};
-    std::size_t shape_atom_count{ 0 };
-    std::size_t offset_group_count{ 0 };
-    Eigen::VectorXd seed_parameter{};
-
-private:
-    std::optional<std::vector<GaussianModel3D>> DecodeParameter(const Eigen::VectorXd & parameter) const;
+    static constexpr std::size_t kShapeParameterSize{ 2 };
+    std::vector<std::size_t> m_group_position_by_atom{};
+    std::vector<std::size_t> m_shape_position_by_atom{};
+    std::vector<std::size_t> m_offset_position_by_group{};
+    std::vector<Eigen::Vector2d> m_base_shape_coordinate_by_atom{};
+    std::vector<double> m_base_offset_by_group{};
+    std::size_t m_shape_atom_count{ 0 };
+    std::size_t m_offset_group_count{ 0 };
+    Eigen::VectorXd m_seed_parameter{};
 
 public:
+    std::size_t AtomCount() const { return m_group_position_by_atom.size(); }
+    Eigen::Index ParameterCount() const { return m_seed_parameter.size(); }
+
     Eigen::Index ShapeColumn(std::size_t atom_position, std::size_t shape_parameter_index) const
     {
         return static_cast<Eigen::Index>(
-            shape_position_by_atom.at(atom_position) *
-                kJointPolishShapeParameterSize + shape_parameter_index);
+            m_shape_position_by_atom.at(atom_position) * kShapeParameterSize + shape_parameter_index);
     }
 
     bool HasShapeColumn(std::size_t atom_position) const
     {
-        return shape_position_by_atom.at(atom_position) < shape_atom_count;
+        return m_shape_position_by_atom.at(atom_position) < m_shape_atom_count;
     }
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
         return static_cast<Eigen::Index>(
-            shape_atom_count * kJointPolishShapeParameterSize +
-            offset_position_by_group.at(group_position_by_atom.at(atom_position)));
+            m_shape_atom_count * kShapeParameterSize +
+            m_offset_position_by_group.at(m_group_position_by_atom.at(atom_position)));
     }
 
     bool HasOffsetColumn(std::size_t atom_position) const
     {
-        return offset_position_by_group.at(group_position_by_atom.at(atom_position)) <
-            offset_group_count;
+        return m_offset_position_by_group.at(m_group_position_by_atom.at(atom_position)) <
+            m_offset_group_count;
     }
 
     std::optional<std::vector<GaussianModel3D>> DecodeModels(
@@ -162,6 +160,16 @@ public:
         double damping) const;
 
     std::optional<std::vector<GaussianModel3D>> DecodeSeedModels() const;
+
+private:
+    JointPolishParameterization() = default;
+    std::optional<std::vector<GaussianModel3D>> DecodeParameter(const Eigen::VectorXd & parameter) const;
+    friend std::optional<JointPolishParameterization>
+    BuildActiveSetJointPolishParameterization(
+        const std::vector<std::size_t> & group_id_by_atom_position,
+        const std::vector<GaussianModel3D> & base_model_list,
+        const std::vector<char> & shape_active_mask,
+        const std::vector<char> & offset_active_mask);
 };
 
 std::optional<JointPolishParameterization> BuildJointPolishParameterization(

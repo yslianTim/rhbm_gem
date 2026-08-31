@@ -3018,8 +3018,8 @@ TEST(EstimatorSecondStageDefenseTest,
     };
 
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->group_position_by_atom.size(), 3U);
-    EXPECT_EQ(parameterization->seed_parameter.size(), 8);
+    EXPECT_EQ(parameterization->AtomCount(), 3U);
+    EXPECT_EQ(parameterization->ParameterCount(), 8);
     EXPECT_EQ(parameterization->ShapeColumn(0, 0), 0);
     EXPECT_EQ(parameterization->ShapeColumn(1, 0), 2);
     EXPECT_EQ(parameterization->ShapeColumn(2, 0), 4);
@@ -3047,24 +3047,18 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     };
 
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->seed_parameter.size(), 12);
-    EXPECT_DOUBLE_EQ(
-        parameterization->seed_parameter(
-            parameterization->OffsetColumn(0)),
-        2.0);
-    EXPECT_DOUBLE_EQ(
-        parameterization->seed_parameter(
-            parameterization->OffsetColumn(1)),
-        5.0);
+    EXPECT_EQ(parameterization->ParameterCount(), 12);
 
     const auto seed_model_list{ parameterization->DecodeSeedModels() };
     const auto zero_direction{
-        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
     };
     const auto zero_model_list{
         parameterization->DecodeModels(zero_direction, 0.0)
     };
     ASSERT_TRUE(seed_model_list.has_value());
+    EXPECT_DOUBLE_EQ(seed_model_list->at(0).GetOffset(), 2.0);
+    EXPECT_DOUBLE_EQ(seed_model_list->at(1).GetOffset(), 5.0);
     ASSERT_TRUE(zero_model_list.has_value());
     ASSERT_EQ(seed_model_list->size(), zero_model_list->size());
     for (std::size_t atom_position = 0;
@@ -3078,7 +3072,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     }
 
     Eigen::VectorXd direction{
-        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
     };
     direction(parameterization->OffsetColumn(1)) = 2.0;
     direction(parameterization->OffsetColumn(0)) = -1.0;
@@ -3114,14 +3108,13 @@ TEST(
             { 1, 1, 1 })
     };
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->shape_atom_count, 2U);
     EXPECT_TRUE(parameterization->HasShapeColumn(0));
     EXPECT_FALSE(parameterization->HasShapeColumn(1));
     EXPECT_TRUE(parameterization->HasShapeColumn(2));
-    EXPECT_EQ(parameterization->seed_parameter.size(), 6);
+    EXPECT_EQ(parameterization->ParameterCount(), 6);
 
     Eigen::VectorXd direction{
-        Eigen::VectorXd::Zero(parameterization->seed_parameter.size())
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
     };
     direction(parameterization->ShapeColumn(0, 0)) = 0.2;
     direction(parameterization->ShapeColumn(2, 1)) = -0.1;
@@ -3157,10 +3150,10 @@ TEST(
     ASSERT_TRUE(fixed_offset_parameterization.has_value());
     EXPECT_TRUE(fixed_offset_parameterization->HasOffsetColumn(0));
     EXPECT_FALSE(fixed_offset_parameterization->HasOffsetColumn(2));
-    EXPECT_EQ(fixed_offset_parameterization->seed_parameter.size(), 5);
+    EXPECT_EQ(fixed_offset_parameterization->ParameterCount(), 5);
     const auto fixed_offset_models{
         fixed_offset_parameterization->DecodeModels(
-            Eigen::VectorXd::Zero(fixed_offset_parameterization->seed_parameter.size()),
+            Eigen::VectorXd::Zero(fixed_offset_parameterization->ParameterCount()),
             1.0)
     };
     ASSERT_TRUE(fixed_offset_models.has_value());
