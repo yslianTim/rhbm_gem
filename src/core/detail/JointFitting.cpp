@@ -716,18 +716,18 @@ JointOffsetSolveResult EstimateJointOffsets(
     return make_progress_result(JointOffsetSolveStatus::IrlsMaximumIterationsReached, offset);
 }
 
-std::optional<JointPolishParameterization> BuildJointPolishParameterization(
+std::optional<JointPolishParameterization> JointPolishParameterization::Build(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
-    return BuildActiveSetJointPolishParameterization(
+    return BuildActiveSet(
         group_id_by_atom_position,
         base_model_list,
         std::vector<char>(base_model_list.size(), 1),
         std::vector<char>(base_model_list.size(), 1));
 }
 
-std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
+std::optional<JointPolishParameterization> JointPolishParameterization::BuildActiveSet(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list,
     const std::vector<char> & shape_active_mask,
@@ -1100,7 +1100,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
         base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
-        BuildJointPolishParameterization(group_id_by_atom_position, base_model_list)
+        JointPolishParameterization::Build(group_id_by_atom_position, base_model_list)
     };
     if (!parameterization.has_value()) return std::nullopt;
 
@@ -1265,16 +1265,12 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
         endpoint_model_list.emplace_back(endpoint_state.GetModel(atom_index));
         shape_active_mask.emplace_back(
-            std::ranges::binary_search(
-                shape_active_atom_index_list,
-                atom_index) ? 1 : 0);
+            std::ranges::binary_search(shape_active_atom_index_list, atom_index) ? 1 : 0);
         offset_active_mask.emplace_back(
-            std::ranges::binary_search(
-                offset_active_atom_index_list,
-                atom_index) ? 1 : 0);
+            std::ranges::binary_search(offset_active_atom_index_list, atom_index) ? 1 : 0);
     }
     const auto parameterization{
-        BuildActiveSetJointPolishParameterization(
+        JointPolishParameterization::BuildActiveSet(
             group_id_by_atom_position,
             endpoint_model_list,
             shape_active_mask,

@@ -15,16 +15,6 @@
 
 namespace rhbm_gem::core::detail {
 
-struct JointFittingConditioning
-{
-    bool guard_required{ false };
-    double pivot_ratio{ 0.0 };
-};
-
-JointFittingConditioning EvaluateJointFittingConditioning(
-    const Eigen::SparseMatrix<double> & design_matrix,
-    double pivot_ratio_threshold);
-
 enum class JointOffsetSolveStatus
 {
     Converged,
@@ -35,6 +25,16 @@ enum class JointOffsetSolveStatus
     IrlsObjectiveDeteriorated,
     IrlsMaximumIterationsReached
 };
+
+struct JointFittingConditioning
+{
+    bool guard_required{ false };
+    double pivot_ratio{ 0.0 };
+};
+
+JointFittingConditioning EvaluateJointFittingConditioning(
+    const Eigen::SparseMatrix<double> & design_matrix,
+    double pivot_ratio_threshold);
 
 bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status);
 
@@ -128,6 +128,16 @@ class JointPolishParameterization
     Eigen::VectorXd m_seed_parameter{};
 
 public:
+    static std::optional<JointPolishParameterization> Build(
+        const std::vector<std::size_t> & group_id_by_atom_position,
+        const std::vector<GaussianModel3D> & base_model_list);
+
+    static std::optional<JointPolishParameterization> BuildActiveSet(
+        const std::vector<std::size_t> & group_id_by_atom_position,
+        const std::vector<GaussianModel3D> & base_model_list,
+        const std::vector<char> & shape_active_mask,
+        const std::vector<char> & offset_active_mask);
+
     std::size_t AtomCount() const { return m_group_position_by_atom.size(); }
     Eigen::Index ParameterCount() const { return m_seed_parameter.size(); }
 
@@ -164,23 +174,7 @@ public:
 private:
     JointPolishParameterization() = default;
     std::optional<std::vector<GaussianModel3D>> DecodeParameter(const Eigen::VectorXd & parameter) const;
-    friend std::optional<JointPolishParameterization>
-    BuildActiveSetJointPolishParameterization(
-        const std::vector<std::size_t> & group_id_by_atom_position,
-        const std::vector<GaussianModel3D> & base_model_list,
-        const std::vector<char> & shape_active_mask,
-        const std::vector<char> & offset_active_mask);
 };
-
-std::optional<JointPolishParameterization> BuildJointPolishParameterization(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & base_model_list);
-
-std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameterization(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & base_model_list,
-    const std::vector<char> & shape_active_mask,
-    const std::vector<char> & offset_active_mask);
 
 std::optional<FitStateProposal> BuildJointPolishProposal(
     const SecondStageContext & context,

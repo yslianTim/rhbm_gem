@@ -3012,7 +3012,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 8.0, 0.65, 3.0 }
     };
     const auto parameterization{
-        polish_detail::BuildJointPolishParameterization(
+        polish_detail::JointPolishParameterization::Build(
             std::vector<std::size_t>{ 20, 10, 20 },
             base_model_list)
     };
@@ -3041,7 +3041,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
         rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
     };
     const auto parameterization{
-        polish_detail::BuildJointPolishParameterization(
+        polish_detail::JointPolishParameterization::Build(
             std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
             base_model_list)
     };
@@ -3086,7 +3086,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     EXPECT_DOUBLE_EQ(candidate_model_list->at(3).GetOffset(), 1.5);
     EXPECT_DOUBLE_EQ(candidate_model_list->at(4).GetOffset(), 6.0);
     EXPECT_FALSE(
-        polish_detail::BuildJointPolishParameterization(
+        polish_detail::JointPolishParameterization::Build(
             std::vector<std::size_t>{ 20 },
             base_model_list).has_value());
 }
@@ -3101,7 +3101,7 @@ TEST(
         rg::GaussianModel3D{ 7.0, 0.60, 0.20 }
     };
     const auto parameterization{
-        polish_detail::BuildActiveSetJointPolishParameterization(
+        polish_detail::JointPolishParameterization::BuildActiveSet(
             { 10, 10, 20 },
             base_model_list,
             { 1, 0, 1 },
@@ -3141,7 +3141,7 @@ TEST(
         candidate_model_list->at(1).GetOffset());
 
     const auto fixed_offset_parameterization{
-        polish_detail::BuildActiveSetJointPolishParameterization(
+        polish_detail::JointPolishParameterization::BuildActiveSet(
             { 10, 10, 20 },
             base_model_list,
             { 1, 0, 1 },
@@ -3467,7 +3467,7 @@ TEST(
     EXPECT_DOUBLE_EQ(base_state_view.GetBaseModel(0).GetAmplitude(), 6.0);
     EXPECT_DOUBLE_EQ(base_state_view.GetModel(0).GetAmplitude(), 10.0);
     const auto patched_parameterization{
-        polish_detail::BuildJointPolishParameterization(
+        polish_detail::JointPolishParameterization::Build(
             group_id_list,
             std::vector<rg::GaussianModel3D>{
                 base_state_view.GetModel(0),
