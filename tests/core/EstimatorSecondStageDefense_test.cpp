@@ -3823,6 +3823,15 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
     const auto topology{
         builder.BuildTopology(MakeUniqueResidueKeys(7), options)
     };
+    ASSERT_EQ(topology.retained_edge_list.size(), edge_weight_list.size());
+    for (std::size_t edge_index = 0;
+        edge_index < topology.retained_edge_list.size();
+        edge_index++)
+    {
+        const auto & edge{ topology.retained_edge_list.at(edge_index) };
+        EXPECT_EQ(edge.left_atom_index, 2 * edge_index);
+        EXPECT_EQ(edge.right_atom_index, 2 * edge_index + 1);
+    }
     ASSERT_EQ(topology.summary.threshold_sensitivity_list.size(), threshold_list.size());
 
     const std::array<std::size_t, 6> retained_edge_count_list{ 3, 2, 2, 1, 1, 0 };
@@ -3866,7 +3875,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     topology.adjacency_list.at(1).push_back(0);
     topology.sample_dependency_list = {
         { { 0, 0 }, { 0, 1 } },
-        { { 1, 0 }, { 1, 2 } }
+        { { 1, 0 }, { 1, 2 } },
+        { { 0, 1 }, { 1, 2 } }
     };
 
     const auto partition{
@@ -3875,10 +3885,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     ASSERT_EQ(partition.sample_id_list_by_key.size(), 2U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
-    ASSERT_EQ(partition.boundary_sample_dependency_list.size(), 1U);
+    ASSERT_EQ(partition.boundary_sample_dependency_list.size(), 2U);
     EXPECT_EQ(
         partition.boundary_sample_dependency_list.front().sample_id,
-        (coupling_detail::SampleRef{ 1, 0 }));
+        (coupling_detail::SampleRef{ 0, 1 }));
     EXPECT_EQ(
         partition.boundary_sample_dependency_list.front().cluster_key_list,
         (std::vector<audit_detail::ClusterKey>{ { 0, 1 }, { 2 } }));
@@ -3886,14 +3896,17 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
         partition.boundary_sample_dependency_list.front()
             .contributor_atom_index_list,
         (std::vector<std::size_t>{ 1, 2 }));
+    EXPECT_EQ(
+        partition.boundary_sample_dependency_list.back().sample_id,
+        (coupling_detail::SampleRef{ 1, 0 }));
     auto contributor_changed_partition{ partition };
     contributor_changed_partition.boundary_sample_dependency_list.front()
         .contributor_atom_index_list = { 1 };
     EXPECT_NE(
         contributor_changed_partition.boundary_sample_dependency_list,
         partition.boundary_sample_dependency_list);
-    EXPECT_EQ(partition.sample_id_list_by_key.at({ 0, 1 }).size(), 2U);
-    EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 1U);
+    EXPECT_EQ(partition.sample_id_list_by_key.at({ 0, 1 }).size(), 3U);
+    EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 2U);
 
     const auto key_list{
         coupling_detail::BuildGraphClusterKeyList(partition)
@@ -3904,11 +3917,13 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
             partition,
             key_list)
     };
-    EXPECT_EQ(affected_sample_list.size(), 2U);
+    EXPECT_EQ(affected_sample_list.size(), 3U);
     EXPECT_EQ(affected_sample_list.at(0).atom_index, 0U);
     EXPECT_EQ(affected_sample_list.at(0).sample_index, 0U);
-    EXPECT_EQ(affected_sample_list.at(1).atom_index, 1U);
-    EXPECT_EQ(affected_sample_list.at(1).sample_index, 0U);
+    EXPECT_EQ(affected_sample_list.at(1).atom_index, 0U);
+    EXPECT_EQ(affected_sample_list.at(1).sample_index, 1U);
+    EXPECT_EQ(affected_sample_list.at(2).atom_index, 1U);
+    EXPECT_EQ(affected_sample_list.at(2).sample_index, 0U);
 
     const auto inactive_partition{
         coupling_detail::BuildGraphPartition(topology, { 2, 0 })
@@ -3998,6 +4013,62 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         std::vector<coupling_detail::BoundaryReconciliationComponent>{
             component_list.front()
         });
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryOffsetClosureRejectsOutOfRangeAtoms)
+{
+    const audit_detail::ClusterKey key_a{ 0 };
+    const audit_detail::ClusterKey key_b{ 1 };
+    coupling_detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key = {
+        { key_a, {} },
+        { key_b, {} }
+    };
+    partition.boundary_sample_dependency_list = {
+        { { 0, 0 }, { key_a, key_b }, { 0, 1 } }
+    };
+    coupling_detail::SecondStageContext context;
+    context.selected_atom_list.resize(1);
+
+    EXPECT_THROW(
+        coupling_detail::BuildBoundaryReconciliationComponents(
+            context,
+            partition,
+            { key_a, key_b }),
+        std::invalid_argument);
+
+    partition.boundary_sample_dependency_list.front()
+        .contributor_atom_index_list = { 0 };
+    EXPECT_THROW(
+        coupling_detail::BuildBoundaryReconciliationComponents(
+            context,
+            partition,
+            { key_a, key_b }),
+        std::invalid_argument);
+
+    const coupling_detail::BoundaryReconciliationComponent invalid_interface{
+        .key_list = { { 0, 1 } },
+        .affected_sample_ref_list = {},
+        .interface_atom_index_list = { 1 },
+        .shape_active_atom_index_list = {},
+        .offset_closure_atom_index_list = {},
+        .boundary_sample_count = 0
+    };
+    EXPECT_THROW(
+        coupling_detail::ExpandBoundaryReconciliationHalo(
+            context,
+            invalid_interface,
+            0),
+        std::invalid_argument);
+
+    auto invalid_component{ invalid_interface };
+    invalid_component.interface_atom_index_list = { 0 };
+    EXPECT_THROW(
+        coupling_detail::ExpandBoundaryReconciliationHalo(
+            context,
+            invalid_component,
+            0),
+        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByHop)

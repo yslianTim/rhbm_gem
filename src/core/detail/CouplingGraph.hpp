@@ -129,32 +129,35 @@ struct DependencyPolishComponent
         const DependencyPolishComponent &) = default;
 };
 
+struct GraphIndexPairHash
+{
+    std::size_t operator()(const std::pair<std::size_t, std::size_t> & pair) const noexcept
+    {
+        const auto left_hash{ std::hash<std::size_t>{}(pair.first) };
+        const auto right_hash{ std::hash<std::size_t>{}(pair.second) };
+        return left_hash ^ (right_hash + static_cast<std::size_t>(0x9e3779b9) +
+            (left_hash << 6) + (left_hash >> 2));
+    }
+};
+
 class CouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
-
-    struct AtomPairHash
-    {
-        std::size_t operator()(const AtomPair & pair) const noexcept
-        {
-            const auto left_hash{ std::hash<std::size_t>{}(pair.first) };
-            const auto right_hash{ std::hash<std::size_t>{}(pair.second) };
-            return left_hash ^ (right_hash + static_cast<std::size_t>(0x9e3779b9) +
-                (left_hash << 6) + (left_hash >> 2));
-        }
-    };
-
     std::size_t m_atom_count{ 0 };
     std::vector<Eigen::Matrix3d> m_self_gram_list{};
-    std::unordered_map<AtomPair, Eigen::Matrix3d, AtomPairHash>
-        m_pair_accumulator_by_pair{};
+    std::unordered_map<AtomPair, Eigen::Matrix3d, GraphIndexPairHash> m_pair_accumulator_by_pair{};
     std::vector<GraphSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
-    static void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list);
-    static void ValidateBuildOptions(const CouplingGraphOptions & options);
-    static double FrobeniusNorm(const Eigen::Matrix3d & matrix);
+public:
+    explicit CouplingGraphBuilder(std::size_t atom_count);
+    void AddSample(SampleRef sample_id, std::vector<GraphParticipant> & participant_list);
+    GraphTopology BuildTopology(
+        std::vector<ResidueKey> residue_key_by_atom_index,
+        const CouplingGraphOptions & options = {},
+        const GraphTopology * previous_topology = nullptr);
 
+private:
     std::vector<CouplingGraphSummary::ThresholdSensitivity> BuildThresholdSensitivity(
         const std::vector<GraphWeightedEdge> & weighted_edge_list,
         const std::vector<double> & minimum_weight_list) const;
@@ -164,22 +167,11 @@ class CouplingGraphBuilder
         const CouplingGraphOptions & options,
         const GraphTopology * previous_topology);
 
-public:
-    explicit CouplingGraphBuilder(std::size_t atom_count);
-    void AddSample(SampleRef sample_id, std::vector<GraphParticipant> & participant_list);
-
-private:
     GraphTopology BuildWeightedOrBinary(
         const CouplingGraphOptions & options,
         const GraphTopology * previous_topology);
 
     GraphTopology BuildBinary();
-
-public:
-    GraphTopology BuildTopology(
-        std::vector<ResidueKey> residue_key_by_atom_index,
-        const CouplingGraphOptions & options = {},
-        const GraphTopology * previous_topology = nullptr);
 };
 
 GraphTopology BuildSecondStageGraphTopology(

@@ -23,31 +23,43 @@ namespace {
 
 using ResiduePair = std::pair<std::size_t, std::size_t>;
 
-struct SizePairHash
-{
-    std::size_t operator()(
-        const std::pair<std::size_t, std::size_t> & pair) const noexcept
-    {
-        const auto left_hash{ std::hash<std::size_t>{}(pair.first) };
-        const auto right_hash{ std::hash<std::size_t>{}(pair.second) };
-        return left_hash ^ (right_hash + static_cast<std::size_t>(0x9e3779b9) +
-            (left_hash << 6) + (left_hash >> 2));
-    }
-};
-
 class DisjointSet
 {
     std::vector<std::size_t> m_parent_list{};
     std::vector<std::size_t> m_component_size_list{};
 
 public:
-    explicit DisjointSet(std::size_t item_count);
+    explicit DisjointSet(std::size_t item_count)
+        : m_parent_list(item_count), m_component_size_list(item_count, 1)
+    {
+        for (std::size_t i = 0; i < item_count; i++)
+        {
+            m_parent_list.at(i) = i;
+        }
+    }
 
-    std::size_t Find(std::size_t index);
+    std::size_t Find(std::size_t index)
+    {
+        if (m_parent_list.at(index) == index) return index;
+        m_parent_list.at(index) = Find(m_parent_list.at(index));
+        return m_parent_list.at(index);
+    }
 
-    void Merge(std::size_t left, std::size_t right);
+    void Merge(std::size_t left, std::size_t right)
+    {
+        auto left_root{ Find(left) };
+        auto right_root{ Find(right) };
+        if (left_root == right_root) return;
+        if (m_component_size_list.at(left_root) <
+            m_component_size_list.at(right_root))
+        {
+            std::swap(left_root, right_root);
+        }
+        m_parent_list.at(right_root) = left_root;
+        m_component_size_list.at(left_root) += m_component_size_list.at(right_root);
+    }
 
-    std::size_t ComponentSize(std::size_t index);
+    std::size_t ComponentSize(std::size_t index) { return m_component_size_list.at(Find(index)); }
 };
 
 struct DisjointSetComponentSummary
@@ -55,42 +67,6 @@ struct DisjointSetComponentSummary
     std::size_t component_count{ 0 };
     std::size_t maximum_component_size{ 0 };
 };
-
-DisjointSet::DisjointSet(std::size_t item_count)
-    : m_parent_list(item_count),
-      m_component_size_list(item_count, 1)
-{
-    for (std::size_t i = 0; i < item_count; i++)
-    {
-        m_parent_list.at(i) = i;
-    }
-}
-
-std::size_t DisjointSet::Find(std::size_t index)
-{
-    if (m_parent_list.at(index) == index) return index;
-    m_parent_list.at(index) = Find(m_parent_list.at(index));
-    return m_parent_list.at(index);
-}
-
-void DisjointSet::Merge(std::size_t left, std::size_t right)
-{
-    auto left_root{ Find(left) };
-    auto right_root{ Find(right) };
-    if (left_root == right_root) return;
-    if (m_component_size_list.at(left_root) <
-        m_component_size_list.at(right_root))
-    {
-        std::swap(left_root, right_root);
-    }
-    m_parent_list.at(right_root) = left_root;
-    m_component_size_list.at(left_root) += m_component_size_list.at(right_root);
-}
-
-std::size_t DisjointSet::ComponentSize(std::size_t index)
-{
-    return m_component_size_list.at(Find(index));
-}
 
 DisjointSetComponentSummary SummarizeDisjointSetComponents(
     DisjointSet & component_set,
@@ -150,8 +126,7 @@ void UpdateGraphComponentSummary(GraphTopology & topology)
         {
             if (neighbor_index >= atom_count)
             {
-                throw std::invalid_argument(
-                    "Local fitting coupling edge index is out of range.");
+                throw std::invalid_argument("Local fitting coupling edge index is out of range.");
             }
             if (atom_index >= neighbor_index) continue;
             component_set.Merge(atom_index, neighbor_index);
@@ -167,20 +142,15 @@ void UpdateGraphComponentSummary(GraphTopology & topology)
         static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
 }
 
-} // namespace
-
-void CouplingGraphBuilder::NormalizeParticipantList(
-    std::vector<GraphParticipant> & participant_list)
+void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list)
 {
     std::ranges::sort(participant_list, {}, &GraphParticipant::atom_index);
-
     std::size_t normalized_size{ 0 };
     for (std::size_t index = 0; index < participant_list.size(); index++)
     {
         auto & participant{ participant_list.at(index) };
         if (normalized_size == 0 ||
-            participant_list.at(normalized_size - 1).atom_index !=
-                participant.atom_index)
+            participant_list.at(normalized_size - 1).atom_index != participant.atom_index)
         {
             if (normalized_size != index)
             {
@@ -193,8 +163,7 @@ void CouplingGraphBuilder::NormalizeParticipantList(
         auto & accumulated_jacobian{
             participant_list.at(normalized_size - 1).jacobian
         };
-        if (!accumulated_jacobian.allFinite() ||
-            !participant.jacobian.allFinite())
+        if (!accumulated_jacobian.allFinite() || !participant.jacobian.allFinite())
         {
             accumulated_jacobian = Eigen::Vector3d::Constant(
                 std::numeric_limits<double>::quiet_NaN());
@@ -210,14 +179,12 @@ void CouplingGraphBuilder::NormalizeParticipantList(
     participant_list.resize(normalized_size);
 }
 
-void CouplingGraphBuilder::ValidateBuildOptions(
-    const CouplingGraphOptions & options)
+void ValidateBuildOptions(const CouplingGraphOptions & options)
 {
     if (!std::isfinite(options.minimum_weight) ||
         options.minimum_weight < 0.0 || options.minimum_weight > 1.0)
     {
-        throw std::invalid_argument(
-            "Local fitting coupling minimum weight must be in [0, 1].");
+        throw std::invalid_argument("Local fitting coupling minimum weight must be in [0, 1].");
     }
     if (options.retained_edge_minimum_weight.has_value() &&
         (!std::isfinite(*options.retained_edge_minimum_weight) ||
@@ -225,19 +192,16 @@ void CouplingGraphBuilder::ValidateBuildOptions(
          *options.retained_edge_minimum_weight > options.minimum_weight))
     {
         throw std::invalid_argument(
-            "Local fitting coupling retained-edge minimum weight must be in "
-            "[0, minimum weight].");
+            "Local fitting coupling retained-edge minimum weight must be in [0, minimum weight].");
     }
     if (options.maximum_residue_count == 0)
     {
         throw std::invalid_argument(
             "Local fitting coupling maximum residue count must be positive.");
     }
-    for (const auto minimum_weight :
-        options.sensitivity_minimum_weight_list)
+    for (const auto minimum_weight : options.sensitivity_minimum_weight_list)
     {
-        if (!std::isfinite(minimum_weight) ||
-            minimum_weight < 0.0 || minimum_weight > 1.0)
+        if (!std::isfinite(minimum_weight) || minimum_weight < 0.0 || minimum_weight > 1.0)
         {
             throw std::invalid_argument(
                 "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
@@ -245,7 +209,7 @@ void CouplingGraphBuilder::ValidateBuildOptions(
     }
 }
 
-double CouplingGraphBuilder::FrobeniusNorm(const Eigen::Matrix3d & matrix)
+double FrobeniusNorm(const Eigen::Matrix3d & matrix)
 {
     double norm{ 0.0 };
     for (Eigen::Index row = 0; row < matrix.rows(); row++)
@@ -257,6 +221,51 @@ double CouplingGraphBuilder::FrobeniusNorm(const Eigen::Matrix3d & matrix)
     }
     return norm;
 }
+
+void SortGraphWeightedEdges(std::vector<GraphWeightedEdge> & weighted_edge_list)
+{
+    std::ranges::sort(
+        weighted_edge_list,
+        {},
+        [](const GraphWeightedEdge & edge)
+        {
+            return std::pair{ edge.left_atom_index, edge.right_atom_index };
+        });
+}
+
+std::vector<std::size_t> BuildOffsetClosureAtomIndexList(
+    const SecondStageContext & context,
+    const std::vector<std::size_t> & component_atom_index_list,
+    const std::vector<std::size_t> & active_atom_index_list,
+    const char * active_atom_error_message,
+    const char * component_atom_error_message)
+{
+    std::set<std::size_t> touched_group_id_set;
+    for (const auto atom_index : active_atom_index_list)
+    {
+        if (atom_index >= context.size())
+        {
+            throw std::invalid_argument(active_atom_error_message);
+        }
+        touched_group_id_set.emplace(context.at(atom_index).group_id);
+    }
+
+    std::vector<std::size_t> offset_closure_atom_index_list;
+    for (const auto atom_index : component_atom_index_list)
+    {
+        if (atom_index >= context.size())
+        {
+            throw std::invalid_argument(component_atom_error_message);
+        }
+        if (touched_group_id_set.contains(context.at(atom_index).group_id))
+        {
+            offset_closure_atom_index_list.emplace_back(atom_index);
+        }
+    }
+    return offset_closure_atom_index_list;
+}
+
+} // namespace
 
 std::vector<CouplingGraphSummary::ThresholdSensitivity>
 CouplingGraphBuilder::BuildThresholdSensitivity(
@@ -293,23 +302,18 @@ CouplingGraphBuilder::BuildThresholdSensitivity(
         });
 
     std::vector<double> threshold_list;
-    std::vector<std::size_t> bucket_index_by_original_index(
-        minimum_weight_list.size());
+    std::vector<std::size_t> bucket_index_by_original_index(minimum_weight_list.size());
     for (const auto & entry : threshold_entry_list)
     {
         if (threshold_list.empty() || threshold_list.back() != entry.minimum_weight)
         {
             threshold_list.emplace_back(entry.minimum_weight);
         }
-        bucket_index_by_original_index.at(entry.original_index) =
-            threshold_list.size() - 1;
+        bucket_index_by_original_index.at(entry.original_index) = threshold_list.size() - 1;
     }
 
-    std::vector<std::vector<std::size_t>> edge_index_list_by_bucket(
-        threshold_list.size());
-    for (std::size_t edge_index = 0;
-        edge_index < weighted_edge_list.size();
-        edge_index++)
+    std::vector<std::vector<std::size_t>> edge_index_list_by_bucket(threshold_list.size());
+    for (std::size_t edge_index = 0; edge_index < weighted_edge_list.size(); edge_index++)
     {
         const auto bucket_iter{ std::lower_bound(
             threshold_list.begin(),
@@ -333,16 +337,12 @@ CouplingGraphBuilder::BuildThresholdSensitivity(
     std::vector<ThresholdSnapshot> snapshot_list(threshold_list.size());
     DisjointSet component_set{ m_atom_count };
     std::size_t retained_edge_count{ 0 };
-    for (std::size_t bucket_index = 0;
-        bucket_index < threshold_list.size();
-        bucket_index++)
+    for (std::size_t bucket_index = 0; bucket_index < threshold_list.size(); bucket_index++)
     {
         for (const auto edge_index : edge_index_list_by_bucket.at(bucket_index))
         {
             const auto & weighted_edge{ weighted_edge_list.at(edge_index) };
-            component_set.Merge(
-                weighted_edge.left_atom_index,
-                weighted_edge.right_atom_index);
+            component_set.Merge(weighted_edge.left_atom_index, weighted_edge.right_atom_index);
         }
         retained_edge_count += edge_index_list_by_bucket.at(bucket_index).size();
         snapshot_list.at(bucket_index) = ThresholdSnapshot{
@@ -351,9 +351,7 @@ CouplingGraphBuilder::BuildThresholdSensitivity(
         };
     }
 
-    for (std::size_t original_index = 0;
-        original_index < minimum_weight_list.size();
-        original_index++)
+    for (std::size_t original_index = 0; original_index < minimum_weight_list.size(); original_index++)
     {
         const auto & snapshot{
             snapshot_list.at(bucket_index_by_original_index.at(original_index))
@@ -378,14 +376,13 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
     const CouplingGraphOptions & options,
     const GraphTopology * previous_topology)
 {
-    if (previous_topology != nullptr &&
-        previous_topology->adjacency_list.size() != m_atom_count)
+    if (previous_topology != nullptr && previous_topology->adjacency_list.size() != m_atom_count)
     {
         throw std::invalid_argument(
             "Previous local fitting coupling topology has an inconsistent atom count.");
     }
 
-    std::unordered_set<AtomPair, AtomPairHash> previous_edge_set;
+    std::unordered_set<AtomPair, GraphIndexPairHash> previous_edge_set;
     const bool use_previous_edge_set{
         previous_topology != nullptr &&
         options.retained_edge_minimum_weight.has_value()
@@ -393,9 +390,15 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
     if (use_previous_edge_set)
     {
         std::size_t previous_edge_count{ 0 };
-        for (const auto & neighbor_list : previous_topology->adjacency_list)
+        for (std::size_t atom_index = 0;
+            atom_index < previous_topology->adjacency_list.size();
+            atom_index++)
         {
-            previous_edge_count += neighbor_list.size();
+            for (const auto neighbor_index :
+                previous_topology->adjacency_list.at(atom_index))
+            {
+                if (atom_index < neighbor_index) previous_edge_count++;
+            }
         }
         previous_edge_set.reserve(previous_edge_count);
         for (std::size_t atom_index = 0;
@@ -405,6 +408,7 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
             for (const auto neighbor_index :
                 previous_topology->adjacency_list.at(atom_index))
             {
+                if (atom_index >= neighbor_index) continue;
                 previous_edge_set.emplace(atom_index, neighbor_index);
             }
         }
@@ -433,17 +437,12 @@ GraphTopology CouplingGraphBuilder::BuildFromWeights(
         if (weight < minimum_weight) continue;
 
         topology.retained_edge_list.emplace_back(weighted_edge);
-        topology.summary.retained_edge_count++;
     }
-    topology.summary.cut_edge_count =
-        topology.summary.candidate_edge_count -
-        topology.summary.retained_edge_count;
-    topology.summary.weight_median =
-        array_helper::ComputePercentile(weight_list, 0.5);
-    topology.summary.weight_percentile_95 =
-        array_helper::ComputePercentile(weight_list, 0.95);
-    topology.summary.weight_maximum =
-        weight_list.empty() ? 0.0 : std::ranges::max(weight_list);
+    topology.summary.retained_edge_count = topology.retained_edge_list.size();
+    topology.summary.cut_edge_count = topology.summary.candidate_edge_count - topology.summary.retained_edge_count;
+    topology.summary.weight_median = array_helper::ComputePercentile(weight_list, 0.5);
+    topology.summary.weight_percentile_95 = array_helper::ComputePercentile(weight_list, 0.95);
+    topology.summary.weight_maximum = weight_list.empty() ? 0.0 : std::ranges::max(weight_list);
     return topology;
 }
 
@@ -460,9 +459,8 @@ void CouplingGraphBuilder::AddSample(
 {
     NormalizeParticipantList(participant_list);
 
-    for (std::size_t i = 0; i < participant_list.size(); i++)
+    for (const auto & participant : participant_list)
     {
-        const auto & participant{ participant_list.at(i) };
         if (participant.atom_index >= m_atom_count)
         {
             throw std::invalid_argument(
@@ -542,34 +540,21 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
         {
             return BuildBinary();
         }
-        double weight{ 0.0 };
         if (left_scale == 0.0 || right_scale == 0.0)
         {
             weighted_edge_list.emplace_back(
-                GraphWeightedEdge{ pair.first, pair.second, weight });
+                GraphWeightedEdge{ pair.first, pair.second, 0.0 });
             continue;
         }
-        const auto denominator{
-            left_scale * right_scale
-        };
+        const auto denominator{ left_scale * right_scale };
         if (!std::isfinite(denominator)) return BuildBinary();
         const auto raw_weight{ FrobeniusNorm(cross_gram) / denominator };
         if (!std::isfinite(raw_weight)) return BuildBinary();
-        weight = std::clamp(raw_weight, 0.0, 1.0);
+        const auto weight{ std::clamp(raw_weight, 0.0, 1.0) };
         weighted_edge_list.emplace_back(
             GraphWeightedEdge{ pair.first, pair.second, weight });
     }
-    std::sort(
-        weighted_edge_list.begin(),
-        weighted_edge_list.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            if (lhs.left_atom_index != rhs.left_atom_index)
-            {
-                return lhs.left_atom_index < rhs.left_atom_index;
-            }
-            return lhs.right_atom_index < rhs.right_atom_index;
-        });
+    SortGraphWeightedEdges(weighted_edge_list);
     auto topology{ BuildFromWeights(weighted_edge_list, options, previous_topology) };
     topology.summary.uses_weighted_graph = true;
     topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
@@ -590,17 +575,7 @@ GraphTopology CouplingGraphBuilder::BuildBinary()
             1.0
         });
     }
-    std::sort(
-        weighted_edge_list.begin(),
-        weighted_edge_list.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            if (lhs.left_atom_index != rhs.left_atom_index)
-            {
-                return lhs.left_atom_index < rhs.left_atom_index;
-            }
-            return lhs.right_atom_index < rhs.right_atom_index;
-        });
+    SortGraphWeightedEdges(weighted_edge_list);
     CouplingGraphOptions options;
     options.minimum_weight = 0.0;
     return BuildFromWeights(weighted_edge_list, options, nullptr);
@@ -619,8 +594,7 @@ GraphTopology CouplingGraphBuilder::BuildTopology(
     }
 
     auto topology{ BuildWeightedOrBinary(options, previous_topology) };
-    topology.residue_key_by_atom_index =
-        std::move(residue_key_by_atom_index);
+    topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
     topology.summary.configured_minimum_weight = options.minimum_weight;
     return ApplyGraphResidueCutoff(
         std::move(topology),
@@ -682,15 +656,11 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
             participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
             for (const auto & neighbor_atom_sample : atom_context.Neighbors(j))
             {
-                const auto neighbor_jacobian{ neighbor_atom_sample.is_selected ?
-                    EvaluateCouplingGraphJacobian(
-                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) :
-                    EvaluateCouplingGraphJacobian(
-                        unselected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) };
                 if (neighbor_atom_sample.is_selected)
                 {
+                    const auto neighbor_jacobian{ EvaluateCouplingGraphJacobian(
+                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
+                        neighbor_atom_sample.distance) };
                     participant_list.emplace_back(
                         GraphParticipant{
                             neighbor_atom_sample.atom_index,
@@ -702,6 +672,9 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
                     context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
                 };
                 if (!selected_group_id.has_value()) continue;
+                const auto neighbor_jacobian{ EvaluateCouplingGraphJacobian(
+                    unselected_model_invariants.at(neighbor_atom_sample.atom_index),
+                    neighbor_atom_sample.distance) };
                 for (const auto selected_index :
                     context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
@@ -834,9 +807,7 @@ void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
     }
 }
 
-GraphTopology ApplyGraphResidueCutoff(
-    GraphTopology topology,
-    std::size_t maximum_residue_count)
+GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count)
 {
     const auto atom_count{ topology.adjacency_list.size() };
     const auto & residue_key_by_atom_index{ topology.residue_key_by_atom_index };
@@ -869,8 +840,7 @@ GraphTopology ApplyGraphResidueCutoff(
         residue_index_by_atom_index.emplace_back(residue_index_by_key.at(residue_key));
     }
 
-    std::unordered_map<ResiduePair, double, SizePairHash>
-        maximum_weight_by_residue_pair;
+    std::unordered_map<ResiduePair, double, GraphIndexPairHash> maximum_weight_by_residue_pair;
     std::size_t maximum_residue_pair_count{ 0 };
     if (residue_index_by_key.size() > 1)
     {
@@ -974,15 +944,12 @@ GraphTopology ApplyGraphResidueCutoff(
     }
     for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
     {
-        topology.adjacency_list.at(atom_index).reserve(
-            adjacency_degree_list.at(atom_index));
+        topology.adjacency_list.at(atom_index).reserve(adjacency_degree_list.at(atom_index));
     }
     for (const auto * edge : connected_edge_list)
     {
-        topology.adjacency_list.at(edge->left_atom_index).emplace_back(
-            edge->right_atom_index);
-        topology.adjacency_list.at(edge->right_atom_index).emplace_back(
-            edge->left_atom_index);
+        topology.adjacency_list.at(edge->left_atom_index).emplace_back(edge->right_atom_index);
+        topology.adjacency_list.at(edge->right_atom_index).emplace_back(edge->left_atom_index);
     }
 
     const auto residue_component_summary{
@@ -1074,13 +1041,6 @@ CouplingGraphPartition BuildGraphPartition(
     }
 
     std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
-    struct BoundaryRoots
-    {
-        SampleRef sample_id{};
-        std::vector<std::size_t> root_list{};
-        std::vector<std::size_t> contributor_atom_index_list{};
-    };
-    std::vector<BoundaryRoots> boundary_root_list_by_sample;
     CouplingGraphPartition partition;
     for (const auto & dependency : topology.sample_dependency_list)
     {
@@ -1106,11 +1066,17 @@ CouplingGraphPartition BuildGraphPartition(
         root_list.erase(std::ranges::unique(root_list).begin(), root_list.end());
         if (root_list.size() > 1)
         {
-            boundary_root_list_by_sample.emplace_back(BoundaryRoots{
+            CouplingGraphPartition::BoundarySampleDependency boundary_dependency{
                 dependency.sample_id,
-                root_list,
-                active_contributor_atom_index_list
-            });
+                {},
+                std::move(active_contributor_atom_index_list)
+            };
+            boundary_dependency.cluster_key_list.reserve(root_list.size());
+            for (const auto root : root_list)
+            {
+                boundary_dependency.cluster_key_list.emplace_back(key_by_root.at(root));
+            }
+            partition.boundary_sample_dependency_list.emplace_back(std::move(boundary_dependency));
         }
         for (const auto root : root_list)
         {
@@ -1118,19 +1084,6 @@ CouplingGraphPartition BuildGraphPartition(
         }
     }
 
-    partition.boundary_sample_dependency_list.reserve(boundary_root_list_by_sample.size());
-    for (auto & boundary_roots : boundary_root_list_by_sample)
-    {
-        CouplingGraphPartition::BoundarySampleDependency boundary_dependency;
-        boundary_dependency.sample_id = boundary_roots.sample_id;
-        boundary_dependency.cluster_key_list.reserve(boundary_roots.root_list.size());
-        for (const auto root : boundary_roots.root_list)
-        {
-            boundary_dependency.cluster_key_list.emplace_back(key_by_root.at(root));
-        }
-        boundary_dependency.contributor_atom_index_list = std::move(boundary_roots.contributor_atom_index_list);
-        partition.boundary_sample_dependency_list.emplace_back(std::move(boundary_dependency));
-    }
     std::ranges::sort(
         partition.boundary_sample_dependency_list,
         {},
@@ -1198,7 +1151,6 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
     }
 
     DisjointSet component_set{ sorted_accepted_key_list.size() };
-    std::vector<char> participates_in_boundary_component(sorted_accepted_key_list.size(), 0);
     for (const auto & dependency : partition.boundary_sample_dependency_list)
     {
         std::vector<std::size_t> accepted_position_list;
@@ -1212,10 +1164,8 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         }
         if (accepted_position_list.size() < 2) continue;
         const auto first_position{ accepted_position_list.front() };
-        participates_in_boundary_component.at(first_position) = 1;
         for (std::size_t i = 1; i < accepted_position_list.size(); i++)
         {
-            participates_in_boundary_component.at(accepted_position_list.at(i)) = 1;
             component_set.Merge(first_position, accepted_position_list.at(i));
         }
     }
@@ -1223,16 +1173,14 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
     std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
     for (std::size_t position = 0; position < sorted_accepted_key_list.size(); position++)
     {
-        if (participates_in_boundary_component.at(position) == 0) continue;
+        if (component_set.ComponentSize(position) < 2) continue;
         key_list_by_root[component_set.Find(position)].emplace_back(sorted_accepted_key_list.at(position));
     }
 
     std::vector<BoundaryReconciliationComponent> component_list;
     component_list.reserve(key_list_by_root.size());
-    for (auto & [root, key_list] : key_list_by_root)
+    for (auto & key_list : key_list_by_root | std::views::values)
     {
-        static_cast<void>(root);
-        if (key_list.size() < 2) continue;
         std::size_t boundary_sample_count{ 0 };
         std::vector<std::size_t> interface_atom_index_list;
         std::vector<std::size_t> component_atom_index_list;
@@ -1268,29 +1216,14 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         interface_atom_index_list.erase(
             std::ranges::unique(interface_atom_index_list).begin(),
             interface_atom_index_list.end());
-        std::set<std::size_t> touched_group_id_set;
-        for (const auto atom_index : interface_atom_index_list)
-        {
-            if (atom_index >= context.size())
-            {
-                throw std::invalid_argument(
-                    "Boundary reconciliation interface atom is out of range.");
-            }
-            touched_group_id_set.emplace(context.at(atom_index).group_id);
-        }
-        std::vector<std::size_t> offset_closure_atom_index_list;
-        for (const auto atom_index : component_atom_index_list)
-        {
-            if (atom_index >= context.size())
-            {
-                throw std::invalid_argument(
-                    "Boundary reconciliation component atom is out of range.");
-            }
-            if (touched_group_id_set.contains(context.at(atom_index).group_id))
-            {
-                offset_closure_atom_index_list.emplace_back(atom_index);
-            }
-        }
+        auto offset_closure_atom_index_list{
+            BuildOffsetClosureAtomIndexList(
+                context,
+                component_atom_index_list,
+                interface_atom_index_list,
+                "Boundary reconciliation interface atom is out of range.",
+                "Boundary reconciliation component atom is out of range.")
+        };
         component_list.emplace_back(BoundaryReconciliationComponent{
             key_list,
             BuildGraphAffectedSampleUnion(partition, key_list),
@@ -1344,28 +1277,22 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
         {
             if (sample_ref.atom_index >= context.size())
             {
-                throw std::invalid_argument(
-                    "Boundary halo sample owner is out of range.");
+                throw std::invalid_argument("Boundary halo sample owner is out of range.");
             }
             const auto & atom_context{ context.at(sample_ref.atom_index) };
             if (sample_ref.sample_index >= atom_context.raw_sampling_entries.size())
             {
-                throw std::invalid_argument(
-                    "Boundary halo sample index is out of range.");
+                throw std::invalid_argument("Boundary halo sample index is out of range.");
             }
             std::vector<std::size_t> direct_participant_list;
-            if (std::ranges::binary_search(
-                    component_atom_index_list,
-                    sample_ref.atom_index))
+            if (std::ranges::binary_search(component_atom_index_list, sample_ref.atom_index))
             {
                 direct_participant_list.emplace_back(sample_ref.atom_index);
             }
             for (const auto & neighbor : atom_context.Neighbors(sample_ref.sample_index))
             {
                 if (!neighbor.is_selected ||
-                    !std::ranges::binary_search(
-                        component_atom_index_list,
-                        neighbor.atom_index))
+                    !std::ranges::binary_search(component_atom_index_list, neighbor.atom_index))
                 {
                     continue;
                 }
@@ -1380,9 +1307,7 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
                     direct_participant_list,
                     [&](const auto atom_index)
                     {
-                        return std::ranges::binary_search(
-                            shape_active_atom_index_list,
-                            atom_index);
+                        return std::ranges::binary_search(shape_active_atom_index_list, atom_index);
                     })
             };
             if (!touches_active_shape) continue;
@@ -1399,33 +1324,16 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
         if (shape_active_atom_index_list.size() == previous_size) break;
     }
 
-    std::set<std::size_t> touched_group_id_set;
-    for (const auto atom_index : shape_active_atom_index_list)
-    {
-        if (atom_index >= context.size())
-        {
-            throw std::invalid_argument(
-                "Boundary halo shape-active atom is out of range.");
-        }
-        touched_group_id_set.emplace(context.at(atom_index).group_id);
-    }
-    std::vector<std::size_t> offset_closure_atom_index_list;
-    for (const auto atom_index : component_atom_index_list)
-    {
-        if (atom_index >= context.size())
-        {
-            throw std::invalid_argument(
-                "Boundary halo component atom is out of range.");
-        }
-        if (touched_group_id_set.contains(context.at(atom_index).group_id))
-        {
-            offset_closure_atom_index_list.emplace_back(atom_index);
-        }
-    }
-    component.shape_active_atom_index_list =
-        std::move(shape_active_atom_index_list);
-    component.offset_closure_atom_index_list =
-        std::move(offset_closure_atom_index_list);
+    auto offset_closure_atom_index_list{
+        BuildOffsetClosureAtomIndexList(
+            context,
+            component_atom_index_list,
+            shape_active_atom_index_list,
+            "Boundary halo shape-active atom is out of range.",
+            "Boundary halo component atom is out of range.")
+    };
+    component.shape_active_atom_index_list = std::move(shape_active_atom_index_list);
+    component.offset_closure_atom_index_list = std::move(offset_closure_atom_index_list);
     return component;
 }
 
@@ -1438,8 +1346,7 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
     if (key_list.empty()) return {};
     if (owner_key_by_atom_index.size() != topology.adjacency_list.size())
     {
-        throw std::invalid_argument(
-            "Dependency polish owner mapping has an inconsistent atom count.");
+        throw std::invalid_argument("Dependency polish owner mapping has an inconsistent atom count.");
     }
 
     const auto inactive_position{ key_list.size() };
@@ -1452,8 +1359,7 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
         {
             if (atom_index >= key_position_by_atom_index.size())
             {
-                throw std::invalid_argument(
-                    "Dependency polish cluster atom is out of range.");
+                throw std::invalid_argument("Dependency polish cluster atom is out of range.");
             }
             key_position_by_atom_index.at(atom_index) = key_position;
         }
@@ -1467,12 +1373,10 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
         {
             if (atom_index >= key_position_by_atom_index.size())
             {
-                throw std::invalid_argument(
-                    "Dependency polish sample contributor is out of range.");
+                throw std::invalid_argument("Dependency polish sample contributor is out of range.");
             }
             const auto key_position{ key_position_by_atom_index.at(atom_index) };
-            if (key_position == inactive_position ||
-                owner_key_by_atom_index.at(atom_index).empty())
+            if (key_position == inactive_position || owner_key_by_atom_index.at(atom_index).empty())
             {
                 continue;
             }
@@ -1493,14 +1397,12 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
     std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
     for (std::size_t key_position = 0; key_position < key_list.size(); key_position++)
     {
-        key_list_by_root[component_set.Find(key_position)].emplace_back(
-            key_list.at(key_position));
+        key_list_by_root[component_set.Find(key_position)].emplace_back(key_list.at(key_position));
     }
 
     std::vector<DependencyPolishComponent> component_list;
-    for (auto & [root, component_key_list] : key_list_by_root)
+    for (auto & component_key_list : key_list_by_root | std::views::values)
     {
-        static_cast<void>(root);
         std::vector<std::size_t> atom_index_list;
         for (const auto & key : component_key_list)
         {
