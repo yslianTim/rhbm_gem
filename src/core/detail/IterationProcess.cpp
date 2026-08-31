@@ -716,7 +716,7 @@ static SecondStageInitialStateBuildResult BuildInitialFitState(
             return build_result;
         }
 
-        unselected_atom_contributor.initial_seed = selection->model;
+        unselected_atom_contributor.initial_seed = selection->model.GetModel();
         build_result.unselected_selection_record_list.emplace_back(
             UnselectedSecondStageSeedSelectionRecord{
                 unselected_atom_contributor.atom_serial_id,
@@ -1012,8 +1012,7 @@ static bool HasAcceptedMaterialTargetChange(
             previous_state.at(atom_index).mdpde.GetModel()) };
         if (target.kind == QuarantineTargetKind::ShapeAtom)
         {
-            if (std::max(change.value_list.at(0), change.value_list.at(1)) >=
-                kTransformedChangeTolerance)
+            if (std::max(change.value_list.at(0), change.value_list.at(1)) >= kTransformedChangeTolerance)
             {
                 return true;
             }
@@ -1022,8 +1021,7 @@ static bool HasAcceptedMaterialTargetChange(
         {
             if (change.value_list.at(2) >= kTransformedChangeTolerance) return true;
         }
-        else if (IsTransformedChangeMaterial(
-                change, kTransformedChangeTolerance))
+        else if (IsTransformedChangeMaterial(change, kTransformedChangeTolerance))
         {
             return true;
         }

@@ -1,10 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -25,11 +24,16 @@ constexpr std::size_t kLogPeakHeightChangeIndex{ 0 };
 constexpr std::size_t kLogWidthChangeIndex{ 1 };
 constexpr std::size_t kOffsetToPeakRatioChangeIndex{ 2 };
 constexpr std::size_t kTransformedChangeSize{ 3 };
+constexpr double kTransformedChangeTolerance{ 1.0e-4 };
+
+using ClusterKey = std::vector<std::size_t>;
+using FitState = std::vector<LocalGaussianResult>;
+using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
+using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
+using TransformedChangeIndexListByParameter = std::array<std::vector<std::size_t>, kTransformedChangeSize>;
 
 std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model);
-
 std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3d & coordinates);
-
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model);
 
 GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
@@ -47,13 +51,12 @@ std::vector<double> BuildGroupMedianOffsetList(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & model_list);
 
-bool TryBuildSharedOffsetDampedModelList(
+std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
     const std::vector<double> & previous_shared_offset_list,
     const std::vector<double> & raw_shared_offset_list,
-    double damping,
-    std::vector<GaussianModel3D> & candidate_model_list);
+    double damping);
 
 struct SharedOffsetResponse
 {
@@ -74,14 +77,9 @@ struct TransformedModelInvariants
 
 std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const GaussianModel3D & model);
 
-std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
-    const TransformedModelInvariants & invariants,
-    double distance);
-
 std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const TransformedModelInvariants & invariants,
     double distance);
-
 
 struct LocalGaussianDesignTemplate
 {
@@ -114,15 +112,10 @@ LocalGaussianResult EstimateLocalGaussianPrepared(
     int thread_size,
     const GaussianModel3D & offset_model);
 
-
-using ClusterKey = std::vector<std::size_t>;
-using ResidueKey = std::pair<std::string, int>;
-
 struct SampleRef
 {
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
-
     friend auto operator<=>(const SampleRef &, const SampleRef &) = default;
 };
 
@@ -137,7 +130,7 @@ struct UnselectedAtomContributor
 {
     int atom_serial_id{ 0 };
     std::optional<std::size_t> selected_group_id{};
-    GaussianModel3DWithUncertainty initial_seed{};
+    GaussianModel3D initial_seed{};
 };
 
 struct AtomContext
@@ -177,21 +170,13 @@ struct SecondStageContext
     auto end() const { return selected_atom_list.end(); }
 };
 
-
-using FitState = std::vector<LocalGaussianResult>;
-
 struct FitStatePatch
 {
     ClusterKey atom_index_list{};
     std::vector<GaussianModel3DWithUncertainty> mdpde_list{};
 
-    static FitStatePatch FromState(
-        const FitState & state,
-        ClusterKey atom_index_list);
-
-    const GaussianModel3DWithUncertainty * Find(
-        std::size_t atom_index) const;
-
+    static FitStatePatch FromState(const FitState & state, ClusterKey atom_index_list);
+    const GaussianModel3DWithUncertainty * Find(std::size_t atom_index) const;
     void ApplyTo(FitState & state) const;
 };
 
@@ -244,21 +229,9 @@ public:
 };
 
 const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index);
-
 const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index);
-
-using PolishProvenance = std::vector<char>;
-
-
-using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
-using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
-
-const GaussianModel3D & GetFitModel(
-    const FittedGaussianSnapshot & state,
-    std::size_t atom_index);
-
+const GaussianModel3D & GetFitModel(const FittedGaussianSnapshot & state, std::size_t atom_index);
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state);
-
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state);
 
 struct SecondStageModelSnapshot
@@ -295,10 +268,7 @@ struct ResidualBaseline
         return sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index);
     }
 
-    const FittedGaussianSnapshot & GetState() const
-    {
-        return model_snapshot.selected;
-    }
+    const FittedGaussianSnapshot & GetState() const { return model_snapshot.selected; }
 };
 
 SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
@@ -321,7 +291,6 @@ std::optional<ResidualSample> EvaluateResidualSample(
 
 std::optional<ResidualSample> EvaluateResidualSample(
     const SecondStageContext & context,
-    const FittedGaussianSnapshot & state,
     const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot);
 
@@ -330,19 +299,11 @@ struct SnapshotResidualEvaluator
     const SecondStageContext & context;
     const SecondStageModelSnapshot & model_snapshot;
 
-    std::optional<ResidualSample> operator()(
-        const SampleRef & sample_ref) const;
-
+    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
     const FittedGaussianSnapshot & GetState() const { return model_snapshot.selected; }
 };
 
 ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const FitState & state);
-
-
-constexpr double kTransformedChangeTolerance{ 1.0e-4 };
-
-using TransformedChangeIndexListByParameter =
-    std::array<std::vector<std::size_t>, kTransformedChangeSize>;
 
 struct TransformedChangeSummary
 {
@@ -381,10 +342,7 @@ TransformedChangeSummary SummarizeTransformedChangesByParameter(
     const TransformedChangeIndexListByParameter & index_list_by_parameter);
 
 double GetMaximumTransformedChange(const TransformedChangeSummary & summary);
-
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
-
-
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
 
 std::optional<double> CalculateModelTrustRegionStepNorm(

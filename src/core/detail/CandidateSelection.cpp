@@ -751,7 +751,7 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(const Sampl
             }
             else
             {
-                candidate_model = &unselected_atom_contributor.initial_seed.GetModel();
+                candidate_model = &unselected_atom_contributor.initial_seed;
             }
         }
         adjusted_response +=
@@ -834,14 +834,15 @@ PolishProvenance BacktrackingWorkspace::BuildCandidatePolishProvenance(
 
 bool BacktrackingWorkspace::BuildCandidate(double factor)
 {
-    std::vector<GaussianModel3D> candidate_model_list;
-    if (!TryBuildSharedOffsetDampedModelList(
+    const auto candidate_model_list{
+        BuildSharedOffsetDampedModelList(
             m_previous_model_list,
             m_endpoint_model_list,
             m_previous_shared_offset_list,
             m_endpoint_shared_offset_list,
-            factor,
-            candidate_model_list))
+            factor)
+    };
+    if (!candidate_model_list.has_value())
     {
         return false;
     }
@@ -853,7 +854,7 @@ bool BacktrackingWorkspace::BuildCandidate(double factor)
         };
         m_candidate_patch.mdpde_list.at(i) =
             GaussianModel3DWithUncertainty{
-                candidate_model_list.at(i),
+                candidate_model_list->at(i),
                 endpoint_uncertainty
             };
     }
@@ -1646,7 +1647,7 @@ ObjectiveDomain BuildObjectiveDomain(
             {
                 const SampleRef sample_ref{ atom_index, sample_index };
                 const auto residual_sample{
-                    EvaluateResidualSample(context, model_snapshot.selected, sample_ref, model_snapshot)
+                    EvaluateResidualSample(context, sample_ref, model_snapshot)
                 };
                 const auto distance{
                     static_cast<double>(raw_sampling_entries.at(sample_index).point.distance)
@@ -2038,37 +2039,39 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
         BuildGroupMedianOffsetList(group_id_by_atom_position, raw_model_list)
     };
 
-    std::vector<GaussianModel3D> seed_model_list;
-    if (!TryBuildSharedOffsetDampedModelList(
+    const auto seed_model_list{
+        BuildSharedOffsetDampedModelList(
             previous_model_list,
             raw_model_list,
             previous_shared_offset_list,
             raw_shared_offset_list,
-            0.0,
-            seed_model_list))
+            0.0)
+    };
+    if (!seed_model_list.has_value())
     {
         return std::nullopt;
     }
     const auto seed_step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, seed_model_list)
+        CalculateModelTrustRegionStepNorm(previous_model_list, *seed_model_list)
     };
     if (!seed_step_norm.has_value())
     {
         return std::nullopt;
     }
-    std::vector<GaussianModel3D> candidate_model_list;
-    if (!TryBuildSharedOffsetDampedModelList(
+    const auto candidate_model_list{
+        BuildSharedOffsetDampedModelList(
             previous_model_list,
             raw_model_list,
             previous_shared_offset_list,
             raw_shared_offset_list,
-            factor,
-            candidate_model_list))
+            factor)
+    };
+    if (!candidate_model_list.has_value())
     {
         return std::nullopt;
     }
     const auto step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, candidate_model_list)
+        CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list)
     };
     if (!step_norm.has_value())
     {
@@ -2085,7 +2088,7 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
         const auto atom_index{ key.at(atom_position) };
         proposal.patch.mdpde_list.emplace_back(
             GaussianModel3DWithUncertainty{
-                candidate_model_list.at(atom_position),
+                candidate_model_list->at(atom_position),
                 operator_proposal_state.at(atom_index).mdpde
                     .GetStandardDeviationModel()
             });

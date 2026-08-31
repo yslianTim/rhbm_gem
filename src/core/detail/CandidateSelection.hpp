@@ -18,6 +18,8 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
+using PolishProvenance = std::vector<char>;
+
 struct TrustRegionOptions
 {
     double initial_radius{ 1.0 };

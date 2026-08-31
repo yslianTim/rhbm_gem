@@ -193,7 +193,6 @@ std::optional<ResidualSample> SnapshotResidualEvaluator::operator()(
 {
     return EvaluateResidualSample(
         context,
-        model_snapshot.selected,
         sample_ref,
         model_snapshot);
 }
@@ -236,11 +235,14 @@ std::optional<ResidualSample> EvaluateResidualSample(
 
 std::optional<ResidualSample> EvaluateResidualSample(
     const SecondStageContext & context,
-    const FittedGaussianSnapshot & state,
     const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    return EvaluateResidualSampleImpl(context, state, sample_ref, model_snapshot);
+    return EvaluateResidualSampleImpl(
+        context,
+        model_snapshot.selected,
+        sample_ref,
+        model_snapshot);
 }
 
 TransformedChangeSummary SummarizeTransformedChanges(
@@ -393,14 +395,13 @@ std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3
         offset = std::copysign(std::exp(log_abs_offset), offset_to_peak_ratio);
     }
 
-    const GaussianModel3D model{ amplitude, width, offset };
     if (!std::isfinite(amplitude) || amplitude <= 0.0 ||
         !std::isfinite(width) || width <= 0.0 ||
         !std::isfinite(offset))
     {
         return std::nullopt;
     }
-    return model;
+    return GaussianModel3D{ amplitude, width, offset };
 }
 
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
@@ -529,23 +530,22 @@ std::vector<double> BuildGroupMedianOffsetList(
     return offset_list;
 }
 
-bool TryBuildSharedOffsetDampedModelList(
+std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
     const std::vector<double> & previous_shared_offset_list,
     const std::vector<double> & raw_shared_offset_list,
-    double damping,
-    std::vector<GaussianModel3D> & candidate_model_list)
+    double damping)
 {
-    candidate_model_list.clear();
     if (raw_model_list.size() != previous_model_list.size() ||
         previous_shared_offset_list.size() != previous_model_list.size() ||
         raw_shared_offset_list.size() != previous_model_list.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
-        return false;
+        return std::nullopt;
     }
 
+    std::vector<GaussianModel3D> candidate_model_list;
     candidate_model_list.reserve(previous_model_list.size());
     for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
@@ -557,8 +557,7 @@ bool TryBuildSharedOffsetDampedModelList(
         };
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value())
         {
-            candidate_model_list.clear();
-            return false;
+            return std::nullopt;
         }
 
         Eigen::Vector3d shape_coordinates{
@@ -575,8 +574,7 @@ bool TryBuildSharedOffsetDampedModelList(
         const auto shape_model{ DecodeTransformedCoordinates(shape_coordinates) };
         if (!shape_model.has_value())
         {
-            candidate_model_list.clear();
-            return false;
+            return std::nullopt;
         }
 
         const auto previous_shared_offset{ previous_shared_offset_list.at(atom_position) };
@@ -586,12 +584,11 @@ bool TryBuildSharedOffsetDampedModelList(
         };
         if (!IsValidSecondStageGaussianModel(candidate_model))
         {
-            candidate_model_list.clear();
-            return false;
+            return std::nullopt;
         }
         candidate_model_list.emplace_back(candidate_model);
     }
-    return true;
+    return candidate_model_list;
 }
 
 static std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(
@@ -655,18 +652,13 @@ std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const 
     return TransformedModelInvariants{ model, peak_height };
 }
 
-std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
-    const TransformedModelInvariants & invariants,
-    double distance)
-{
-    return EvaluateValidSharedOffsetResponse(invariants.model, distance);
-}
-
 std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const TransformedModelInvariants & invariants,
     double distance)
 {
-    const auto shared_offset_evaluation{ EvaluateSharedOffsetResponse(invariants, distance) };
+    const auto shared_offset_evaluation{
+        EvaluateValidSharedOffsetResponse(invariants.model, distance)
+    };
     if (!shared_offset_evaluation.has_value()) return std::nullopt;
 
     const auto & model{ invariants.model };
@@ -689,10 +681,10 @@ std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
 
 RHBMExecutionOptions MakeExecutionOptions(int thread_size)
 {
-    RHBMExecutionOptions execution_options;
-    execution_options.quiet_mode = false;
-    execution_options.thread_size = thread_size;
-    return execution_options;
+    return RHBMExecutionOptions{
+        .quiet_mode = false,
+        .thread_size = thread_size
+    };
 }
 
 static float CalculateAdjustedResponse(
@@ -907,12 +899,12 @@ static FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
                 *median_model_by_group.at(*unselected_atom_contributor.selected_group_id));
             continue;
         }
-        if (!IsValidSecondStageGaussianModel(unselected_atom_contributor.initial_seed.GetModel()))
+        if (!IsValidSecondStageGaussianModel(unselected_atom_contributor.initial_seed))
         {
             throw std::logic_error(
                 "Second-stage unselected contributor seed is unavailable.");
         }
-        snapshot.emplace_back(unselected_atom_contributor.initial_seed.GetModel());
+        snapshot.emplace_back(unselected_atom_contributor.initial_seed);
     }
     return snapshot;
 }
@@ -1010,7 +1002,6 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
             baseline.sample_list.at(i).emplace_back(
                 EvaluateResidualSample(
                     context,
-                    baseline.model_snapshot.selected,
                     SampleRef{ i, j },
                     baseline.model_snapshot));
         }

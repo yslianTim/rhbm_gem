@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -13,6 +14,8 @@
 #include <Eigen/Dense>
 
 namespace rhbm_gem::core::detail {
+
+using ResidueKey = std::pair<std::string, int>;
 
 struct GraphWeightedEdge
 {
