@@ -880,7 +880,7 @@ double BacktrackingWorkspace::GetMaximumTransformedChange() const
     {
         maximum_change = std::max(
             maximum_change,
-            detail::GetMaximumTransformedChange(
+            std::ranges::max(
                 CalculateTransformedChange(
                     m_candidate_patch.mdpde_list.at(i).GetModel(),
                     m_previous_model_list.at(i))));
@@ -1906,10 +1906,7 @@ static bool TryCommitClusterCandidate(
             candidate_overlay.GetBaseline().model_snapshot.selected,
             key)
     };
-    const auto maximum_transformed_change{
-        GetMaximumTransformedChange(
-            transformed_change_summary.maximum_list)
-    };
+    const auto maximum_transformed_change{ std::ranges::max(transformed_change_summary.maximum_list) };
     const auto domain_iter{ domain.cluster_by_key.find(key) };
     diagnostic.scale.reset();
     if (domain_iter != domain.cluster_by_key.end())
@@ -2736,7 +2733,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.diagnostic.trust_region_step_norm = proposal.step_norm;
             const FitStateView candidate_state_view{ previous_state, proposal.patch };
             const auto maximum_change{
-                GetMaximumTransformedChange(
+                std::ranges::max(
                     SummarizeTransformedChanges(
                         candidate_state_view,
                         residual_baseline.model_snapshot.selected,
@@ -3281,7 +3278,7 @@ EvaluateBoundaryComponentCandidate(
             {
                 objective_state.best_objective = diagnostic.candidate_objective;
                 objective_state.best_maximum_transformed_change =
-                    GetMaximumTransformedChange(
+                    std::ranges::max(
                         SummarizeTransformedChanges(
                             candidate_overlay.GetState(),
                             candidate_overlay.GetBaseline().model_snapshot.selected,

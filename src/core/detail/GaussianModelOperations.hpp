@@ -18,14 +18,10 @@ constexpr std::size_t kTransformedChangeSize{ 3 };
 constexpr double kTransformedChangeTolerance{ 1.0e-4 };
 
 using TransformedChange = std::array<double, kTransformedChangeSize>;
-using TransformedChangeIndexListByParameter =
-    std::array<std::vector<std::size_t>, kTransformedChangeSize>;
+using TransformedChangeIndexListByParameter = std::array<std::vector<std::size_t>, kTransformedChangeSize>;
 
-std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(
-    const GaussianModel3D & model);
-
-std::optional<GaussianModel3D> DecodeTransformedCoordinates(
-    const Eigen::Vector3d & coordinates);
+std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model);
+std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3d & coordinates);
 
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model);
 
@@ -68,8 +64,7 @@ struct TransformedModelInvariants
     double peak_height{ 0.0 };
 };
 
-std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(
-    const GaussianModel3D & model);
+std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const GaussianModel3D & model);
 
 std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const TransformedModelInvariants & invariants,
@@ -86,22 +81,14 @@ TransformedChange CalculateTransformedChange(
     const GaussianModel3D & current,
     const GaussianModel3D & previous);
 
-double GetMaximumTransformedChange(const TransformedChange & change);
-
-bool IsTransformedChangeMaterial(
-    const TransformedChange & change,
-    double minimum_change);
-
-TransformedChangeSummary SummarizeTransformedChanges(
-    const std::vector<TransformedChange> & change_list);
+bool IsTransformedChangeMaterial(const TransformedChange & change, double minimum_change);
+TransformedChangeSummary SummarizeTransformedChanges(const std::vector<TransformedChange> & change_list);
 
 TransformedChangeSummary SummarizeTransformedChangesByParameter(
     const std::vector<TransformedChange> & change_list,
     const TransformedChangeIndexListByParameter & index_list_by_parameter);
 
-bool IsTransformedPercentileConverged(
-    const TransformedChangeSummary & summary);
-
+bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
 
 std::optional<double> CalculateModelTrustRegionStepNorm(

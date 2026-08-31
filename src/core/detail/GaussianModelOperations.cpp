@@ -74,23 +74,6 @@ TransformedChange MakeInfiniteTransformedChange()
     return change;
 }
 
-double CalculateScaledTransformedStepNorm(
-    const Eigen::Vector3d & previous_estimation,
-    const Eigen::Vector3d & candidate_estimation)
-{
-    double step_norm{ 0.0 };
-    for (std::size_t parameter_index = 0; parameter_index < kTransformedChangeSize; parameter_index++)
-    {
-        const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
-        step_norm = std::max(
-            step_norm,
-            std::abs(
-                candidate_estimation(eigen_index) -
-                previous_estimation(eigen_index)) / kTrustRegionParameterScale.at(parameter_index));
-    }
-    return step_norm;
-}
-
 } // namespace
 
 std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model)
@@ -153,8 +136,7 @@ std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3
     {
         const auto log_abs_offset{
             std::log(std::abs(offset_to_peak_ratio)) +
-            log_peak_height + log_width -
-            0.5 * std::log(4.0 / Constants::two_pi)
+            log_peak_height + log_width - 0.5 * std::log(4.0 / Constants::two_pi)
         };
         offset = std::copysign(std::exp(log_abs_offset), offset_to_peak_ratio);
     }
@@ -205,8 +187,8 @@ std::optional<GaussianModel3D> BuildGaussianParameterMedian(const std::vector<Ga
         array_helper::ComputeMedian(width_list),
         array_helper::ComputeMedian(offset_list)
     };
-    return IsValidSecondStageGaussianModel(median_model) ?
-        std::optional<GaussianModel3D>{ median_model } : std::nullopt;
+    if (!IsValidSecondStageGaussianModel(median_model)) return std::nullopt;
+    return median_model;
 }
 
 std::vector<GaussianModel3D> BuildGroupMedianModelList(
@@ -224,9 +206,9 @@ std::vector<GaussianModel3D> BuildGroupMedianModelList(
     auto group_median_model_list{ model_list };
     std::vector<GaussianModel3D> group_model_list;
     group_model_list.reserve(model_list.size());
-    for (const auto & [group_id, atom_position_list] : atom_position_list_by_group)
+    for (const auto & entry : atom_position_list_by_group)
     {
-        static_cast<void>(group_id);
+        const auto & atom_position_list{ entry.second };
         group_model_list.clear();
         for (const auto atom_position : atom_position_list)
         {
@@ -263,9 +245,9 @@ std::vector<double> BuildGroupMedianOffsetList(
 
     std::vector<double> valid_offset_list;
     valid_offset_list.reserve(model_list.size());
-    for (const auto & [group_id, atom_position_list] : atom_position_list_by_group)
+    for (const auto & entry : atom_position_list_by_group)
     {
-        static_cast<void>(group_id);
+        const auto & atom_position_list{ entry.second };
         valid_offset_list.clear();
         for (const auto atom_position : atom_position_list)
         {
@@ -401,8 +383,7 @@ TransformedChange CalculateTransformedChange(
     {
         const auto eigen_index{ static_cast<Eigen::Index>(i) };
         const auto value{
-            std::abs(
-                (*current_coordinates)(eigen_index) - (*previous_coordinates)(eigen_index))
+            std::abs((*current_coordinates)(eigen_index) - (*previous_coordinates)(eigen_index))
         };
         if (!std::isfinite(value))
         {
@@ -411,11 +392,6 @@ TransformedChange CalculateTransformedChange(
         change.at(i) = value;
     }
     return change;
-}
-
-double GetMaximumTransformedChange(const TransformedChange & change)
-{
-    return std::ranges::max(change);
 }
 
 bool IsTransformedChangeMaterial(const TransformedChange & change, double minimum_change)
@@ -484,10 +460,7 @@ bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
     for (const auto value : summary.percentile_list)
     {
-        if (!std::isfinite(value) || value >= kTransformedChangeTolerance)
-        {
-            return false;
-        }
+        if (!std::isfinite(value) || value >= kTransformedChangeTolerance) return false;
     }
     return true;
 }
@@ -515,9 +488,15 @@ std::optional<double> CalculateModelTrustRegionStepNorm(
             EncodeTransformedCoordinates(candidate_model_list.at(atom_position))
         };
         if (!previous.has_value() || !candidate.has_value()) return std::nullopt;
-        step_norm = std::max(
-            step_norm,
-            CalculateScaledTransformedStepNorm(*previous, *candidate));
+        for (std::size_t parameter_index = 0; parameter_index < kTransformedChangeSize; parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            step_norm = std::max(
+                step_norm,
+                std::abs(
+                    (*candidate)(eigen_index) -
+                    (*previous)(eigen_index)) / kTrustRegionParameterScale.at(parameter_index));
+        }
     }
     return std::isfinite(step_norm) ? std::optional<double>{ step_norm } : std::nullopt;
 }

@@ -511,9 +511,7 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
     {
         atom_index_map.emplace(context.at(i).atom, i);
     }
-    for (std::size_t atom_index = 0;
-        atom_index < context.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
@@ -3362,8 +3360,7 @@ static IterationResult RunIteration(
         selection.polish_progress,
         iteration_suspicious_atom_count,
         std::nullopt,
-        GetMaximumTransformedChange(
-            operator_proposal_change_summary.maximum_list)
+        std::ranges::max(operator_proposal_change_summary.maximum_list)
     };
 
     if (selection.accepted_key_list.empty())
@@ -3488,11 +3485,8 @@ static IterationResult RunIteration(
     }
 
     result.progress.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.progress.accepted_maximum_transformed_change =
-        GetMaximumTransformedChange(
-            transformed_change_summary.maximum_list);
-    result.transformed_change_percentile =
-        accepted_active_dof_change_summary.percentile_list;
+    result.progress.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
+    result.transformed_change_percentile = accepted_active_dof_change_summary.percentile_list;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     certificate.blockers = ConvergenceOrthogonalBlockers{
         objective_domain_changed,
@@ -3520,7 +3514,7 @@ static IterationResult RunIteration(
             result.diagnostics,
             raw_iteration_result.block_activity,
             raw_iteration_result.local_refit_status_by_atom,
-            GetMaximumTransformedChange(
+            std::ranges::max(
                 accepted_raw_change_summary.maximum_list) == 0.0,
             assembled_uses_polish,
             has_quarantine_transition,
@@ -4566,9 +4560,7 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
             topology_reference_state,
             active_index_list)
     };
-    const auto maximum_transformed_drift{
-        GetMaximumTransformedChange(drift_summary.maximum_list)
-    };
+    const auto maximum_transformed_drift{ std::ranges::max(drift_summary.maximum_list) };
     if (maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)
     {
         return AdaptiveTopologyRebuildDecision{
