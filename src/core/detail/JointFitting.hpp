@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <map>
 #include <optional>
-#include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -39,33 +38,10 @@ enum class JointOffsetSolveStatus
 
 bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status);
 
-class ReusableWeightedRidgeSolver
-{
-    algorithm::WeightedRidgeSolver m_solver{};
-    Eigen::Index m_row_count{ -1 };
-    Eigen::Index m_column_count{ -1 };
-    std::vector<std::pair<Eigen::Index, Eigen::Index>> m_pattern{};
-
-public:
-    bool Solve(
-        const algorithm::WeightedRidgeSystem & system,
-        const Eigen::VectorXd & weight,
-        Eigen::VectorXd & parameter);
-
-    std::size_t GetSymbolicAnalysisCount() const
-    {
-        return m_solver.GetSymbolicAnalysisCount();
-    }
-
-private:
-    static std::vector<std::pair<Eigen::Index, Eigen::Index>> BuildPattern(
-        const Eigen::SparseMatrix<double> & matrix);
-};
-
 struct ClusterSolverWorkspace
 {
-    ReusableWeightedRidgeSolver joint_offset{};
-    ReusableWeightedRidgeSolver joint_polish{};
+    algorithm::WeightedRidgeSolver joint_offset{};
+    algorithm::WeightedRidgeSolver joint_polish{};
 };
 
 using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
@@ -83,7 +59,7 @@ struct BoundaryJointCorrectionWorkspaceKey
 };
 
 using BoundaryJointCorrectionWorkspaceMap =
-    std::map<BoundaryJointCorrectionWorkspaceKey, ReusableWeightedRidgeSolver>;
+    std::map<BoundaryJointCorrectionWorkspaceKey, algorithm::WeightedRidgeSolver>;
 
 struct ClusterHealth
 {
@@ -107,7 +83,6 @@ struct ClusterHealth
 using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
-
 
 struct JointOffsetParameterization
 {
@@ -137,9 +112,8 @@ JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
-    ReusableWeightedRidgeSolver & reusable_solver,
+    algorithm::WeightedRidgeSolver & reusable_solver,
     bool log_debug_diagnostics);
-
 
 constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
 
@@ -200,22 +174,13 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     const std::vector<char> & shape_active_mask,
     const std::vector<char> & offset_active_mask);
 
-std::optional<Eigen::VectorXd> BuildJointPolishDirection(
-    const SecondStageContext & context,
-    const FitStateView & base_state,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & sample_ref_list,
-    const std::vector<double> & ridge_multiplier_list,
-    const JointPolishParameterization & parameterization,
-    ReusableWeightedRidgeSolver & reusable_solver);
-
 std::optional<FitStateProposal> BuildJointPolishProposal(
     const SecondStageContext & context,
     const FitStateView & base_state,
     const ClusterKey & key,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
-    ReusableWeightedRidgeSolver & reusable_solver,
+    algorithm::WeightedRidgeSolver & reusable_solver,
     double trust_region_radius);
 
 enum class BoundaryJointCorrectionStatus
@@ -247,7 +212,6 @@ struct BoundaryJointCorrectionResult
 
 BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const SecondStageContext & context,
-    const FitState & previous_state,
     const FitStateView & endpoint_state,
     const std::vector<std::size_t> & shape_active_atom_index_list,
     const std::vector<std::size_t> & offset_active_atom_index_list,
@@ -255,6 +219,6 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
-    ReusableWeightedRidgeSolver & reusable_solver);
+    algorithm::WeightedRidgeSolver & reusable_solver);
 
 } // namespace rhbm_gem::core::detail

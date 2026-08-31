@@ -3511,7 +3511,6 @@ static bool TryBoundaryJointCorrection(
     auto correction_result{
         BuildBoundaryJointCorrection(
             inputs.context,
-            inputs.previous_state,
             endpoint_state_view,
             shape_active_atom_index_list,
             offset_active_atom_index_list,
@@ -4616,7 +4615,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     const auto correction_result{
                         BuildBoundaryJointCorrection(
                             context,
-                            base_state,
                             endpoint_state_view,
                             shape_active_index_list,
                             offset_active_index_list,

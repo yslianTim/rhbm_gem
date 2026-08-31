@@ -105,7 +105,7 @@ Each outer attempt performs the following sequence:
 2. Partition the complete selected-atom coupling topology and reconcile the per-cluster
    objective and trust-region states.
 3. Jointly estimate one shared offset per represented group within each cluster
-   using robust IRLS and the fixed `kJointOffsetRidgeRatio`. Preserve the finite,
+   using robust IRLS and the shared `kJointFittingRidgeRatio`. Preserve the finite,
    undamped endpoint as the offset part of the fixed-point operator. A hard
    joint solve marks the cluster endpoint unavailable.
 4. Build component-wise group-median models from the post-solve snapshot. For

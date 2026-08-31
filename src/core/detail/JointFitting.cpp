@@ -20,21 +20,16 @@ namespace rhbm_gem::core::detail {
 namespace {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kJointOffsetRobustLossCutoffMultiplier{ 1.345 };
-constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
-constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
+constexpr double kJointFittingRobustLossCutoffMultiplier{ 1.345 };
+constexpr double kJointFittingResidualScaleMin{ 1.0e-12 };
+constexpr double kJointFittingRidgeRatio{ 1.0e-3 };
+constexpr double kJointFittingConditioningRidgeMultiplier{ 10.0 };
+constexpr double kJointFittingConditioningPivotRatioThreshold{ 1.0e-8 };
 constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
-constexpr double kJointOffsetConditioningRidgeMultiplier{ 10.0 };
-constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 
-constexpr double kJointPolishResidualScaleMin{ 1.0e-12 };
-constexpr double kJointPolishRobustLossCutoffMultiplier{ 1.345 };
-constexpr double kJointPolishRidgeRatio{ 1.0e-3 };
-constexpr double kJointPolishConditioningRidgeMultiplier{ 10.0 };
-constexpr double kJointPolishConditioningPivotRatioThreshold{ 1.0e-8 };
 constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
 struct JointFittingGroupLayout
@@ -47,8 +42,7 @@ std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
     const std::vector<std::size_t> & group_id_by_atom_position,
     std::size_t atom_count)
 {
-    if (group_id_by_atom_position.empty() ||
-        group_id_by_atom_position.size() != atom_count)
+    if (group_id_by_atom_position.empty() || group_id_by_atom_position.size() != atom_count)
     {
         return std::nullopt;
     }
@@ -68,77 +62,29 @@ std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
     layout.group_position_by_atom.reserve(atom_count);
     for (const auto group_id : group_id_by_atom_position)
     {
-        layout.group_position_by_atom.emplace_back(
-            group_position_by_id.at(group_id));
+        layout.group_position_by_atom.emplace_back(group_position_by_id.at(group_id));
     }
     layout.group_count = group_position_by_id.size();
     return layout;
 }
 
-std::optional<double> CalculateJointFittingGroupMedian(
-    std::vector<double> & value_list)
+double CalculateJointFittingGroupMedian(std::vector<double> & value_list)
 {
-    if (value_list.empty()) return std::nullopt;
-
     std::ranges::sort(value_list);
     const auto middle{ value_list.size() / 2 };
-    const auto median{
-        value_list.size() % 2 == 0 ?
-            0.5 * value_list.at(middle - 1) + 0.5 * value_list.at(middle) :
-            value_list.at(middle)
-    };
-    return std::isfinite(median) ?
-        std::optional<double>{ median } : std::nullopt;
+    return value_list.size() % 2 == 0 ?
+        0.5 * value_list.at(middle - 1) + 0.5 * value_list.at(middle) :
+        value_list.at(middle);
 }
 
 } // namespace
 
-bool ReusableWeightedRidgeSolver::Solve(
-    const algorithm::WeightedRidgeSystem & system,
-    const Eigen::VectorXd & weight,
-    Eigen::VectorXd & parameter)
-{
-    const auto pattern{ BuildPattern(system.design_matrix) };
-    if (m_row_count != system.design_matrix.rows() ||
-        m_column_count != system.design_matrix.cols() ||
-        m_pattern != pattern)
-    {
-        if (!m_solver.AnalyzePattern(system)) return false;
-        m_row_count = system.design_matrix.rows();
-        m_column_count = system.design_matrix.cols();
-        m_pattern = pattern;
-    }
-    return m_solver.SolveNumeric(system, weight, parameter);
-}
-
-std::vector<std::pair<Eigen::Index, Eigen::Index>>
-ReusableWeightedRidgeSolver::BuildPattern(
-    const Eigen::SparseMatrix<double> & matrix)
-{
-    std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern;
-    pattern.reserve(static_cast<std::size_t>(matrix.nonZeros()));
-    for (Eigen::Index outer = 0; outer < matrix.outerSize(); outer++)
-    {
-        for (Eigen::SparseMatrix<double>::InnerIterator iter(matrix, outer);
-            iter;
-            ++iter)
-        {
-            pattern.emplace_back(iter.row(), iter.col());
-        }
-    }
-    return pattern;
-}
-
-Eigen::VectorXd JointOffsetParameterization::ExpandOffsets(
-    const Eigen::VectorXd & group_offset) const
+Eigen::VectorXd JointOffsetParameterization::ExpandOffsets(const Eigen::VectorXd & group_offset) const
 {
     Eigen::VectorXd atom_offset{
-        Eigen::VectorXd::Zero(
-            static_cast<Eigen::Index>(group_position_by_atom.size()))
+        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_atom.size()))
     };
-    for (std::size_t atom_position = 0;
-        atom_position < group_position_by_atom.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < group_position_by_atom.size(); atom_position++)
     {
         atom_offset(static_cast<Eigen::Index>(atom_position)) =
             group_offset(OffsetColumn(atom_position));
@@ -147,8 +93,7 @@ Eigen::VectorXd JointOffsetParameterization::ExpandOffsets(
 }
 
 std::optional<std::vector<GaussianModel3D>>
-JointPolishParameterization::DecodeParameter(
-    const Eigen::VectorXd & parameter) const
+JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) const
 {
     if (parameter.size() != seed_parameter.size() || !parameter.allFinite())
     {
@@ -157,9 +102,7 @@ JointPolishParameterization::DecodeParameter(
 
     std::vector<GaussianModel3D> model_list;
     model_list.reserve(group_position_by_atom.size());
-    for (std::size_t atom_position = 0;
-        atom_position < group_position_by_atom.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < group_position_by_atom.size(); atom_position++)
     {
         auto active_shape_coordinates{
             base_shape_coordinate_by_atom.at(atom_position)
@@ -197,9 +140,7 @@ JointPolishParameterization::DecodeParameter(
 }
 
 std::optional<std::vector<GaussianModel3D>>
-JointPolishParameterization::DecodeModels(
-    const Eigen::VectorXd & direction,
-    double damping) const
+JointPolishParameterization::DecodeModels(const Eigen::VectorXd & direction, double damping) const
 {
     if (direction.size() != seed_parameter.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
@@ -363,8 +304,7 @@ std::optional<JointOffsetParameterization> BuildJointOffsetParameterization(
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
         const auto median{ CalculateJointFittingGroupMedian(offset_list) };
-        if (!median.has_value()) return std::nullopt;
-        parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = *median;
+        parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = median;
     }
     return parameterization;
 }
@@ -557,10 +497,10 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
 
         ridge_multiplier_by_group(left_column) = std::max(
             ridge_multiplier_by_group(left_column),
-            kJointOffsetConditioningRidgeMultiplier);
+            kJointFittingConditioningRidgeMultiplier);
         ridge_multiplier_by_group(right_column) = std::max(
             ridge_multiplier_by_group(right_column),
-            kJointOffsetConditioningRidgeMultiplier);
+            kJointFittingConditioningRidgeMultiplier);
     }
 
     const auto row_count{ static_cast<Eigen::Index>(response_list.size()) };
@@ -575,12 +515,12 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const auto conditioning{
         EvaluateJointFittingConditioning(
             system.design_matrix,
-            kJointOffsetConditioningPivotRatioThreshold)
+            kJointFittingConditioningPivotRatioThreshold)
     };
     if (conditioning.guard_required)
     {
         ridge_multiplier_by_group.array() = ridge_multiplier_by_group.array().max(
-            kJointOffsetConditioningRidgeMultiplier);
+            kJointFittingConditioningRidgeMultiplier);
         if (log_debug_diagnostics)
         {
             std::ostringstream message;
@@ -591,7 +531,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 << ", normalized LDLT pivot ratio = "
                 << conditioning.pivot_ratio
                 << ", proactive ridge multiplier = "
-                << kJointOffsetConditioningRidgeMultiplier << ".";
+                << kJointFittingConditioningRidgeMultiplier << ".";
             Logger::Log(LogLevel::Debug, message.str());
         }
     }
@@ -602,7 +542,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         system.ridge_diagonal(column_index) =
             CalculateJointFittingRidgeDiagonal(
                 group_column_square_sum(column_index),
-                kJointOffsetRidgeRatio,
+                kJointFittingRidgeRatio,
                 ridge_multiplier_by_group(column_index));
     }
     return system;
@@ -652,7 +592,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
-    ReusableWeightedRidgeSolver & reusable_solver,
+    algorithm::WeightedRidgeSolver & reusable_solver,
     bool log_debug_diagnostics)
 {
     Eigen::VectorXd previous_offset{
@@ -730,14 +670,14 @@ JointOffsetSolveResult EstimateJointOffsets(
         const auto residual_scale{
             std::max(
                 array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
-                kJointOffsetResidualScaleMin)
+                kJointFittingResidualScaleMin)
         };
         for (Eigen::Index i = 0; i < residual.size(); i++)
         {
             weight(i) = algorithm::CalculateCauchyWeight(
                 residual(i),
                 residual_scale,
-                kJointOffsetRobustLossCutoffMultiplier);
+                kJointFittingRobustLossCutoffMultiplier);
         }
 
         Eigen::VectorXd updated_offset;
@@ -883,40 +823,39 @@ std::optional<JointPolishParameterization> BuildActiveSetJointPolishParameteriza
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
         const auto median{ CalculateJointFittingGroupMedian(offset_list) };
-        if (!median.has_value()) return std::nullopt;
-        parameterization.base_offset_by_group.at(current_group_position) = *median;
+        parameterization.base_offset_by_group.at(current_group_position) = median;
         if (parameterization.offset_position_by_group.at(current_group_position) <
             parameterization.offset_group_count)
         {
             parameterization.seed_parameter(
                 static_cast<Eigen::Index>(
                     parameterization.shape_atom_count * kJointPolishShapeParameterSize +
-                    parameterization.offset_position_by_group.at(current_group_position))) = *median;
+                    parameterization.offset_position_by_group.at(current_group_position))) = median;
         }
     }
     return parameterization;
 }
 
-std::optional<Eigen::VectorXd> BuildJointPolishDirection(
+static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const SecondStageContext & context,
     const FitStateView & base_state,
     const ClusterKey & key,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const JointPolishParameterization & parameterization,
-    ReusableWeightedRidgeSolver & reusable_solver)
+    const std::vector<GaussianModel3D> & seed_model_list,
+    algorithm::WeightedRidgeSolver & reusable_solver)
 {
     if (key.empty() || sample_ref_list.empty() ||
         parameterization.group_position_by_atom.size() != key.size() ||
         parameterization.shape_position_by_atom.size() != key.size() ||
         parameterization.base_shape_coordinate_by_atom.size() != key.size() ||
         parameterization.offset_position_by_group.size() !=
-            parameterization.base_offset_by_group.size())
+            parameterization.base_offset_by_group.size() ||
+        seed_model_list.size() != key.size())
     {
         return std::nullopt;
     }
-    const auto seed_model_list{ parameterization.DecodeSeedModels() };
-    if (!seed_model_list.has_value()) return std::nullopt;
 
     const auto column_count{ parameterization.seed_parameter.size() };
     std::unordered_map<std::size_t, std::size_t> local_position_by_atom_index;
@@ -954,7 +893,7 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
-        selected_snapshot.at(key.at(local_position)) = seed_model_list->at(local_position);
+        selected_snapshot.at(key.at(local_position)) = seed_model_list.at(local_position);
     }
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(context, std::move(selected_snapshot))
@@ -983,7 +922,7 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             };
             const auto & model{
                 local_position_iter != local_position_by_atom_index.end() ?
-                    seed_model_list->at(local_position_iter->second) :
+                    seed_model_list.at(local_position_iter->second) :
                     base_state.GetModel(atom_index)
             };
             const auto evaluation{ EvaluateSharedOffsetResponse(model, distance) };
@@ -1102,25 +1041,25 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const auto conditioning{
         EvaluateJointFittingConditioning(
             system.design_matrix,
-            kJointPolishConditioningPivotRatioThreshold)
+            kJointFittingConditioningPivotRatioThreshold)
     };
     if (conditioning.guard_required)
     {
-        ridge_multiplier_by_column.array() = ridge_multiplier_by_column.array().max(kJointPolishConditioningRidgeMultiplier);
+        ridge_multiplier_by_column.array() = ridge_multiplier_by_column.array().max(kJointFittingConditioningRidgeMultiplier);
     }
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
         system.ridge_diagonal(column_index) =
             CalculateJointFittingRidgeDiagonal(
                 column_square_sum(column_index),
-                kJointPolishRidgeRatio,
+                kJointFittingRidgeRatio,
                 ridge_multiplier_by_column(column_index));
     }
 
     const auto residual_scale{
         std::max(
             array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
-            kJointPolishResidualScaleMin)
+            kJointFittingResidualScaleMin)
     };
     if (!std::isfinite(residual_scale)) return std::nullopt;
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };
@@ -1129,7 +1068,7 @@ std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         weight(row_index) = algorithm::CalculateCauchyWeight(
             system.response(row_index),
             residual_scale,
-            kJointPolishRobustLossCutoffMultiplier);
+            kJointFittingRobustLossCutoffMultiplier);
     }
 
     Eigen::VectorXd direction;
@@ -1147,7 +1086,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
     const ClusterKey & key,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
-    ReusableWeightedRidgeSolver & reusable_solver,
+    algorithm::WeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
 {
     std::vector<std::size_t> group_id_by_atom_position;
@@ -1185,6 +1124,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
             sample_ref_list,
             ridge_multiplier_list,
             *parameterization,
+            *seed_model_list,
             reusable_solver)
     };
     if (!direction.has_value()) return std::nullopt;
@@ -1274,7 +1214,6 @@ const char * GetBoundaryJointCorrectionStatusText(
 
 BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const SecondStageContext & context,
-    const FitState & previous_state,
     const FitStateView & endpoint_state,
     const std::vector<std::size_t> & shape_active_atom_index_list,
     const std::vector<std::size_t> & offset_active_atom_index_list,
@@ -1282,13 +1221,12 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
-    ReusableWeightedRidgeSolver & reusable_solver)
+    algorithm::WeightedRidgeSolver & reusable_solver)
 {
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
         offset_closure_atom_index_list.empty() ||
         sample_ref_list.empty() ||
-        previous_state.size() != context.size() ||
         endpoint_state.size() != context.size() ||
         ridge_multiplier_list.size() != context.size() ||
         trust_region_list.empty() ||
@@ -1364,6 +1302,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             sample_ref_list,
             ridge_multiplier_list,
             *parameterization,
+            *seed_model_list,
             reusable_solver)
     };
     if (!direction.has_value())
@@ -1373,7 +1312,6 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     }
 
     double damping{ 1.0 };
-    bool found_trust_region_candidate{ false };
     while (damping >= std::numeric_limits<double>::epsilon())
     {
         const auto candidate_model_list{
@@ -1400,7 +1338,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             for (const auto atom_index : trust_region.key)
             {
                 if (atom_index >= context.size()) return result;
-                previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
+                previous_model_list.emplace_back(endpoint_state.GetBaseModel(atom_index));
                 const auto closure_iter{
                     std::ranges::lower_bound(
                         offset_closure_atom_index_list,
@@ -1443,7 +1381,6 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             damping *= 0.5;
             continue;
         }
-        found_trust_region_candidate = true;
         bool has_material_change{ false };
         for (std::size_t position = 0; position < candidate_model_list->size(); position++)
         {
@@ -1483,9 +1420,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         result.maximum_normalized_trust_step = maximum_normalized_trust_step;
         return result;
     }
-    result.status = found_trust_region_candidate ?
-        BoundaryJointCorrectionStatus::NoMaterialChange :
-        BoundaryJointCorrectionStatus::TrustRegionUnavailable;
+    result.status = BoundaryJointCorrectionStatus::TrustRegionUnavailable;
     return result;
 }
 

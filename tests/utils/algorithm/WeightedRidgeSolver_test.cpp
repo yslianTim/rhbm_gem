@@ -58,6 +58,22 @@ alg::WeightedRidgeSystem MakeTwoParameterSystem(
     return system;
 }
 
+alg::WeightedRidgeSystem MakeSparsePatternSystem(
+    Eigen::Index row_count,
+    Eigen::Index column_count,
+    Eigen::Index entry_row,
+    Eigen::Index entry_column)
+{
+    alg::WeightedRidgeSystem system;
+    system.design_matrix.resize(row_count, column_count);
+    system.design_matrix.insert(entry_row, entry_column) = 1.0;
+    system.response = Eigen::VectorXd::Zero(row_count);
+    system.response(entry_row) = 1.0;
+    system.previous_parameter = Eigen::VectorXd::Zero(column_count);
+    system.ridge_diagonal = Eigen::VectorXd::Constant(column_count, 0.1);
+    return system;
+}
+
 } // namespace
 
 TEST(WeightedRidgeSolverTest, SolvesSingleParameterLeastSquares)
@@ -123,6 +139,61 @@ TEST(WeightedRidgeSolverTest, ReusesSymbolicAnalysisAcrossNumericSystems)
     EXPECT_EQ(reused_solver.GetSymbolicAnalysisCount(), 1U);
     EXPECT_TRUE(reused_first.isApprox(fresh_first, 1.0e-12));
     EXPECT_TRUE(reused_second.isApprox(fresh_second, 1.0e-12));
+}
+
+TEST(WeightedRidgeSolverTest, SolveAnalyzesAndReusesMatchingPattern)
+{
+    const auto first_system{
+        MakeSingleParameterSystem({ 1.0, 1.0 }, { 0.0, 10.0 }, 0.1)
+    };
+    const auto second_system{
+        MakeSingleParameterSystem({ 2.0, 3.0 }, { 4.0, 9.0 }, 0.2)
+    };
+    const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(2) };
+    alg::WeightedRidgeSolver solver;
+    Eigen::VectorXd first_parameter;
+    Eigen::VectorXd second_parameter;
+
+    ASSERT_TRUE(solver.Solve(first_system, weight, first_parameter));
+    ASSERT_TRUE(solver.Solve(second_system, weight, second_parameter));
+
+    EXPECT_EQ(solver.GetSymbolicAnalysisCount(), 1U);
+    EXPECT_TRUE(first_parameter.allFinite());
+    EXPECT_TRUE(second_parameter.allFinite());
+}
+
+TEST(WeightedRidgeSolverTest, SolveReanalyzesChangedDimensionsAndPattern)
+{
+    const auto initial_system{ MakeSparsePatternSystem(1, 1, 0, 0) };
+    const auto changed_row_count_system{ MakeSparsePatternSystem(2, 1, 0, 0) };
+    const auto changed_column_count_system{ MakeSparsePatternSystem(2, 2, 0, 0) };
+    const auto changed_entry_system{ MakeSparsePatternSystem(2, 2, 1, 1) };
+    alg::WeightedRidgeSolver solver;
+    Eigen::VectorXd parameter;
+
+    ASSERT_TRUE(solver.Solve(
+        initial_system,
+        Eigen::VectorXd::Ones(initial_system.response.size()),
+        parameter));
+    EXPECT_EQ(solver.GetSymbolicAnalysisCount(), 1U);
+
+    ASSERT_TRUE(solver.Solve(
+        changed_row_count_system,
+        Eigen::VectorXd::Ones(changed_row_count_system.response.size()),
+        parameter));
+    EXPECT_EQ(solver.GetSymbolicAnalysisCount(), 2U);
+
+    ASSERT_TRUE(solver.Solve(
+        changed_column_count_system,
+        Eigen::VectorXd::Ones(changed_column_count_system.response.size()),
+        parameter));
+    EXPECT_EQ(solver.GetSymbolicAnalysisCount(), 3U);
+
+    ASSERT_TRUE(solver.Solve(
+        changed_entry_system,
+        Eigen::VectorXd::Ones(changed_entry_system.response.size()),
+        parameter));
+    EXPECT_EQ(solver.GetSymbolicAnalysisCount(), 4U);
 }
 
 TEST(WeightedRidgeSolverTest, LargerRidgeKeepsSolutionCloserToPreviousParameter)

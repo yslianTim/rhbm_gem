@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <utility>
+#include <vector>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -29,6 +30,26 @@ class WeightedRidgeSolver
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_solver;
     bool m_analysis_success{ false };
     std::size_t m_symbolic_analysis_count{ 0 };
+    Eigen::Index m_row_count{ -1 };
+    Eigen::Index m_column_count{ -1 };
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> m_pattern{};
+
+    static std::vector<std::pair<Eigen::Index, Eigen::Index>> BuildPattern(
+        const Eigen::SparseMatrix<double> & matrix)
+    {
+        std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern;
+        pattern.reserve(static_cast<std::size_t>(matrix.nonZeros()));
+        for (Eigen::Index outer = 0; outer < matrix.outerSize(); outer++)
+        {
+            for (Eigen::SparseMatrix<double>::InnerIterator iter(matrix, outer);
+                 iter;
+                 ++iter)
+            {
+                pattern.emplace_back(iter.row(), iter.col());
+            }
+        }
+        return pattern;
+    }
 
     static NormalEquation BuildNormalEquation(
         const WeightedRidgeSystem & system,
@@ -64,6 +85,24 @@ class WeightedRidgeSolver
         return { std::move(normal_matrix), std::move(right_hand_side) };
     }
 
+    bool AnalyzePatternAndCache(
+        const WeightedRidgeSystem & system,
+        std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern)
+    {
+        const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
+        auto equation{ BuildNormalEquation(system, weight) };
+        m_solver.analyzePattern(equation.normal_matrix);
+        m_analysis_success = m_solver.info() == Eigen::Success;
+        m_symbolic_analysis_count++;
+        if (m_analysis_success)
+        {
+            m_row_count = system.design_matrix.rows();
+            m_column_count = system.design_matrix.cols();
+            m_pattern = std::move(pattern);
+        }
+        return m_analysis_success;
+    }
+
 public:
     WeightedRidgeSolver() = default;
 
@@ -74,12 +113,7 @@ public:
 
     bool AnalyzePattern(const WeightedRidgeSystem & system)
     {
-        const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
-        auto equation{ BuildNormalEquation(system, weight) };
-        m_solver.analyzePattern(equation.normal_matrix);
-        m_analysis_success = m_solver.info() == Eigen::Success;
-        m_symbolic_analysis_count++;
-        return m_analysis_success;
+        return AnalyzePatternAndCache(system, BuildPattern(system.design_matrix));
     }
 
     bool SolveNumeric(
@@ -101,6 +135,14 @@ public:
         const Eigen::VectorXd & weight,
         Eigen::VectorXd & parameter)
     {
+        auto pattern{ BuildPattern(system.design_matrix) };
+        if (!m_analysis_success ||
+            m_row_count != system.design_matrix.rows() ||
+            m_column_count != system.design_matrix.cols() ||
+            m_pattern != pattern)
+        {
+            if (!AnalyzePatternAndCache(system, std::move(pattern))) return false;
+        }
         return SolveNumeric(system, weight, parameter);
     }
 

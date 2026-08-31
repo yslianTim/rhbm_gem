@@ -2478,7 +2478,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
             },
             { 2.0, 2.0 })
     };
-    offset_detail::ReusableWeightedRidgeSolver solver;
+    alg::WeightedRidgeSolver solver;
     const auto result{
         offset_detail::EstimateJointOffsets(
             fixture.first,
@@ -2508,7 +2508,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsIndependentGroups
             },
             { 1.0, 3.0 })
     };
-    offset_detail::ReusableWeightedRidgeSolver solver;
+    alg::WeightedRidgeSolver solver;
     const auto result{
         offset_detail::EstimateJointOffsets(
             fixture.first,
@@ -2538,7 +2538,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
     };
     empty_fixture.first.at(0).raw_sampling_entries.clear();
     empty_fixture.first.at(0).neighbor_atom_sample_offset_list.clear();
-    offset_detail::ReusableWeightedRidgeSolver empty_solver;
+    alg::WeightedRidgeSolver empty_solver;
     const auto empty_result{
         offset_detail::EstimateJointOffsets(
             empty_fixture.first,
@@ -2562,7 +2562,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
     };
     invalid_fixture.first.at(0).raw_sampling_entries.at(0).response =
         std::numeric_limits<float>::infinity();
-    offset_detail::ReusableWeightedRidgeSolver invalid_solver;
+    alg::WeightedRidgeSolver invalid_solver;
     const auto invalid_result{
         offset_detail::EstimateJointOffsets(
             invalid_fixture.first,
@@ -3194,11 +3194,10 @@ TEST(
         fixture.state,
         endpoint_patch
     };
-    polish_detail::ReusableWeightedRidgeSolver solver;
+    alg::WeightedRidgeSolver solver;
     const auto result{
         polish_detail::BuildBoundaryJointCorrection(
             fixture.context,
-            fixture.state,
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
@@ -3236,11 +3235,10 @@ TEST(
         fixture.state.at(1).mdpde
             .GetStandardDeviationModel().GetAmplitude());
 
-    polish_detail::ReusableWeightedRidgeSolver invalid_solver;
+    alg::WeightedRidgeSolver invalid_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
             fixture.context,
-            fixture.state,
             endpoint_state,
             {},
             {},
@@ -3251,11 +3249,10 @@ TEST(
             invalid_solver).status,
         polish_detail::BoundaryJointCorrectionStatus::InvalidInput);
 
-    polish_detail::ReusableWeightedRidgeSolver unavailable_solver;
+    alg::WeightedRidgeSolver unavailable_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
             fixture.context,
-            fixture.state,
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
@@ -3272,11 +3269,10 @@ TEST(
     auto non_finite_fixture{ fixture };
     non_finite_fixture.context.at(0).raw_sampling_entries.at(0).response =
         std::numeric_limits<float>::infinity();
-    polish_detail::ReusableWeightedRidgeSolver non_finite_solver;
+    alg::WeightedRidgeSolver non_finite_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
             non_finite_fixture.context,
-            non_finite_fixture.state,
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
@@ -3305,11 +3301,10 @@ TEST(
         stationary_fixture.state,
         endpoint_patch
     };
-    polish_detail::ReusableWeightedRidgeSolver stationary_solver;
+    alg::WeightedRidgeSolver stationary_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
             stationary_fixture.context,
-            stationary_fixture.state,
             stationary_endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
@@ -3326,7 +3321,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    JointPolishDirectionAndProposalShareGroupOffset)
+    JointPolishProposalSharesGroupOffset)
 {
     const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
@@ -3343,30 +3338,9 @@ TEST(
             base_model_list,
             target_model_list)
     };
-    const auto parameterization{
-        polish_detail::BuildJointPolishParameterization(
-            group_id_list,
-            base_model_list)
-    };
-    ASSERT_TRUE(parameterization.has_value());
-    polish_detail::ReusableWeightedRidgeSolver direction_solver;
     const polish_detail::FitStatePatch base_patch;
     const polish_detail::FitStateView base_state_view{ fixture.state, base_patch };
-    const auto direction{
-        polish_detail::BuildJointPolishDirection(
-            fixture.context,
-            base_state_view,
-            polish_detail::ClusterKey{ 0, 1 },
-            fixture.sample_ref_list,
-            { 1.0, 1.0 },
-            *parameterization,
-            direction_solver)
-    };
-    ASSERT_TRUE(direction.has_value());
-    EXPECT_TRUE(direction->allFinite());
-    EXPECT_GT(direction->norm(), 1.0e-8);
-
-    polish_detail::ReusableWeightedRidgeSolver proposal_solver;
+    alg::WeightedRidgeSolver proposal_solver;
     const auto proposal{
         polish_detail::BuildJointPolishProposal(
             fixture.context,
@@ -3445,7 +3419,7 @@ TEST(
         unchanged_fixture.state,
         unchanged_patch
     };
-    polish_detail::ReusableWeightedRidgeSolver unchanged_solver;
+    alg::WeightedRidgeSolver unchanged_solver;
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             unchanged_fixture.context,
@@ -3456,7 +3430,7 @@ TEST(
             unchanged_solver,
             4.0).has_value());
 
-    polish_detail::ReusableWeightedRidgeSolver trust_region_solver;
+    alg::WeightedRidgeSolver trust_region_solver;
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             fixture.context,
@@ -3511,7 +3485,7 @@ TEST(
     ASSERT_TRUE(patched_seed.has_value());
     EXPECT_DOUBLE_EQ(patched_seed->at(0).GetAmplitude(), 10.0);
 
-    polish_detail::ReusableWeightedRidgeSolver solver;
+    alg::WeightedRidgeSolver solver;
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             fixture.context,
