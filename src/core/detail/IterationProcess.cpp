@@ -1,6 +1,6 @@
 #include "core/detail/IterationProcess.hpp"
-
 #include "core/detail/CandidateSelection.hpp"
+#include "data/detail/AtomClassifier.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,8 +32,6 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
-#include "data/detail/AtomClassifier.hpp"
-
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
@@ -47,6 +45,27 @@ constexpr double kNeighborAtomSearchRange{
     2.0 * kNeighborContributionDistanceMax
 };
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
+constexpr std::size_t kMaximumIterations{ 100 };
+constexpr std::size_t kAuditPatience{ 3 };
+constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
+constexpr double kConvergencePercentile{ 0.99 };
+constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
+    SecondStageSeedSource::GroupPosterior,
+    SecondStageSeedSource::GroupPrior,
+    SecondStageSeedSource::GroupMedian,
+    SecondStageSeedSource::GlobalMedian
+};
+constexpr std::array<std::string_view, 6> kProgressHeaderList{
+    "Try/Acc",
+    "Atom A/Q",
+    "Cluster A/R",
+    "Polish E/A/R/S",
+    "Suspicious",
+    "dMax A/G"
+};
+
+using ProgressColumnWidths = std::array<std::size_t, 6>;
+using GraphEdgeSet = std::set<std::pair<std::size_t, std::size_t>>;
 
 namespace iteration_internal {
 
@@ -167,10 +186,6 @@ private:
     std::size_t m_atom_count{ 0 };
 };
 
-constexpr std::size_t kMaximumIterations{ 100 };
-constexpr std::size_t kAuditPatience{ 3 };
-constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
-
 struct IterationDiagnostics
 {
     std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
@@ -212,8 +227,6 @@ struct IterationProgress
     std::optional<double> accepted_maximum_transformed_change{};
     double operator_maximum_transformed_change{ 0.0 };
 };
-
-using ProgressColumnWidths = std::array<std::size_t, 6>;
 
 struct IterationResult
 {
@@ -273,222 +286,6 @@ SelectValidSecondStageSeedCandidate(
     return SecondStageSeedSelection{ source, *candidate };
 }
 
-} // namespace
-
-std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
-{
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupPosterior,
-                candidates.group_posterior) })
-    {
-        return selected;
-    }
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupPrior,
-                candidates.group_prior) })
-    {
-        return selected;
-    }
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupMedian,
-                candidates.group_median) })
-    {
-        return selected;
-    }
-    return SelectValidSecondStageSeedCandidate(
-        SecondStageSeedSource::GlobalMedian,
-        candidates.global_median);
-}
-
-AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
-    const FitState & accepted_state,
-    const FitState & topology_reference_state,
-    const std::vector<std::size_t> & active_index_list,
-    std::size_t accepted_iterations_since_rebuild)
-{
-    const auto drift_summary{
-        SummarizeTransformedChanges(
-            accepted_state,
-            topology_reference_state,
-            active_index_list)
-    };
-    const auto maximum_transformed_drift{
-        GetMaximumTransformedChange(drift_summary)
-    };
-    if (maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)
-    {
-        return AdaptiveTopologyRebuildDecision{
-            AdaptiveTopologyRebuildTrigger::Drift,
-            maximum_transformed_drift
-        };
-    }
-    if (accepted_iterations_since_rebuild >= kAdaptiveTopologyRebuildAcceptedIterationInterval)
-    {
-        return AdaptiveTopologyRebuildDecision{
-            AdaptiveTopologyRebuildTrigger::Interval,
-            maximum_transformed_drift
-        };
-    }
-    return AdaptiveTopologyRebuildDecision{
-        AdaptiveTopologyRebuildTrigger::None,
-        maximum_transformed_drift
-    };
-}
-
-bool ConvergenceOrthogonalBlockers::Clear() const
-{
-    return !objective_domain_changed && !quarantine_transition &&
-        !suspicious_offset_fallback && !rejected_cluster;
-}
-
-bool ConvergenceCertificate::AcceptedPercentilePassed() const
-{
-    return IsTransformedPercentileConverged(accepted_active_movement);
-}
-
-bool ConvergenceCertificate::OperatorPercentilePassed() const
-{
-    return IsTransformedPercentileConverged(operator_nominal_residual);
-}
-
-bool ConvergenceCertificate::OperatorComplete() const
-{
-    return std::ranges::all_of(
-        operator_unavailable_count,
-        [](std::size_t count) { return count == 0; });
-}
-
-bool ConvergenceCertificate::InvariantsClear() const
-{
-    return !MixedSharedGroup();
-}
-
-bool ConvergenceCertificate::MixedSharedGroup() const
-{
-    return accepted_active_population.mixed_offset_group_count != 0 ||
-        solver_qualification.mixed_offset_group_count != 0;
-}
-
-bool ConvergenceCertificate::StrictOperatorPassed() const
-{
-    return solver_qualification.solver_qualified && OperatorComplete() &&
-        InvariantsClear() && OperatorPercentilePassed();
-}
-
-bool ConvergenceCertificate::ProductionConverged() const
-{
-    return StrictOperatorPassed() && AcceptedPercentilePassed() &&
-        blockers.Clear();
-}
-
-FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
-    bool operator_complete,
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & fixed_point_residual)
-{
-    if (!operator_complete)
-    {
-        return FixedPointResidualInterpretation::Restricted;
-    }
-    const auto accepted_small{
-        IsTransformedPercentileConverged(accepted_change)
-    };
-    const auto residual_small{
-        IsTransformedPercentileConverged(fixed_point_residual)
-    };
-    const auto tail_clean = [](const TransformedChangeSummary & summary)
-    {
-        return std::ranges::all_of(
-            summary.maximum_list,
-            [](double value)
-            {
-                return std::isfinite(value) &&
-                    value < kLegacyMaximumTransformedChangeTolerance;
-            });
-    };
-    if (accepted_small && residual_small && !qualification_passed)
-    {
-        return FixedPointResidualInterpretation::UnqualifiedSmall;
-    }
-    if (accepted_small && !residual_small)
-    {
-        return FixedPointResidualInterpretation::StepLimited;
-    }
-    if (!accepted_small && residual_small)
-    {
-        return FixedPointResidualInterpretation::PostprocessedMovement;
-    }
-    if (accepted_small && residual_small &&
-        (!tail_clean(accepted_change) || !tail_clean(fixed_point_residual)))
-    {
-        return FixedPointResidualInterpretation::BulkFixedPointWithTail;
-    }
-    if (accepted_small && residual_small)
-    {
-        return FixedPointResidualInterpretation::FixedPointConverged;
-    }
-    return FixedPointResidualInterpretation::Progressing;
-}
-
-std::string_view GetFixedPointResidualInterpretationText(
-    FixedPointResidualInterpretation interpretation)
-{
-    switch (interpretation)
-    {
-    case FixedPointResidualInterpretation::Restricted:
-        return "restricted";
-    case FixedPointResidualInterpretation::UnqualifiedSmall:
-        return "unqualified-small";
-    case FixedPointResidualInterpretation::StepLimited:
-        return "step-limited";
-    case FixedPointResidualInterpretation::PostprocessedMovement:
-        return "postprocessed-movement";
-    case FixedPointResidualInterpretation::BulkFixedPointWithTail:
-        return "bulk-fixed-point-with-tail";
-    case FixedPointResidualInterpretation::FixedPointConverged:
-        return "fixed-point-converged";
-    case FixedPointResidualInterpretation::Progressing:
-        return "progressing";
-    }
-    throw std::invalid_argument("Unknown fixed-point residual interpretation.");
-}
-
-SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom)
-{
-    const auto atom_count{ assessment_by_atom.size() };
-    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
-        block_activity.offset_fixed_atom_mask.size() != atom_count ||
-        block_activity.hard_failure_atom_mask.size() != atom_count)
-    {
-        throw std::invalid_argument(
-            "Suspicious failure activity and assessment sizes are inconsistent.");
-    }
-    SuspiciousUpdateMask result(atom_count, 0);
-    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-    {
-        const auto has_fixed_endpoint{
-            block_activity.shape_fixed_atom_mask.at(atom_index) != 0 ||
-            block_activity.offset_fixed_atom_mask.at(atom_index) != 0
-        };
-        result.at(atom_index) =
-            block_activity.hard_failure_atom_mask.at(atom_index) != 0 ||
-            (has_fixed_endpoint &&
-                assessment_by_atom[atom_index].reason !=
-                    SuspiciousGaussianReason::None) ? 1 : 0;
-    }
-    return result;
-}
-
-namespace {
-
-constexpr double kConvergencePercentile{ 0.99 };
-
 struct OffsetGroupEntry
 {
     ClusterKey cluster_key{};
@@ -537,151 +334,6 @@ static std::vector<OffsetGroupEntry> BuildOffsetGroupEntries(
         }
     }
     return result;
-}
-
-} // namespace
-
-ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
-    const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
-    const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity)
-{
-    ValidateActiveCoordinateInputs(
-        group_id_by_atom_index.size(),
-        group_id_by_atom_index,
-        block_activity,
-        quarantine_activity);
-
-    ActiveCoordinatePopulation result;
-    for (const auto atom_index : atom_index_list)
-    {
-        if (block_activity.HasActiveShape(atom_index))
-        {
-            result.active_atom_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
-                .emplace_back(atom_index);
-            result.active_atom_index_list_by_parameter.at(kLogWidthChangeIndex)
-                .emplace_back(atom_index);
-        }
-        if (block_activity.HasActiveOffset(atom_index))
-        {
-            result.active_atom_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
-                .emplace_back(atom_index);
-        }
-    }
-
-    const auto offset_group_list{
-        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index)
-    };
-    result.total_offset_group_count = offset_group_list.size();
-    for (const auto & group : offset_group_list)
-    {
-        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return block_activity.HasActiveOffset(atom_index);
-            })) };
-        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return !quarantine_activity.HasActiveOffset(atom_index);
-            })) };
-        if (active_count == 0)
-        {
-            if (quarantine_count != 0) result.quarantined_offset_group_count++;
-            else result.fixed_offset_group_count++;
-            continue;
-        }
-
-        const auto is_mixed{ active_count != group.atom_index_list.size() };
-        if (is_mixed) result.mixed_offset_group_count++;
-        result.active_offset_group_atom_index_list.emplace_back(group.atom_index_list);
-        result.mixed_offset_group_mask.emplace_back(is_mixed ? 1 : 0);
-    }
-    return result;
-}
-
-TransformedChangeSummary SummarizeActiveDofChanges(
-    const std::vector<algorithm::ParameterChange> & change_list,
-    const ActiveCoordinatePopulation & population)
-{
-    auto result{ SummarizeTransformedChangesByParameter(
-        change_list,
-        population.active_atom_index_list_by_parameter) };
-
-    if (population.active_offset_group_atom_index_list.size() !=
-        population.mixed_offset_group_mask.size())
-    {
-        throw std::invalid_argument(
-            "Active-coordinate shared-offset population is inconsistent.");
-    }
-
-    std::vector<double> offset_group_change_list;
-    offset_group_change_list.reserve(
-        population.active_offset_group_atom_index_list.size());
-    for (std::size_t group_position = 0;
-        group_position < population.active_offset_group_atom_index_list.size();
-        group_position++)
-    {
-        double maximum_change{ 0.0 };
-        bool is_finite{ population.mixed_offset_group_mask.at(group_position) == 0 };
-        for (const auto atom_index :
-            population.active_offset_group_atom_index_list.at(group_position))
-        {
-            if (atom_index >= change_list.size() ||
-                change_list.at(atom_index).value_list.size() != kTransformedChangeSize)
-            {
-                throw std::invalid_argument(
-                    "Active-coordinate shared-offset change input is inconsistent.");
-            }
-            const auto value{
-                change_list.at(atom_index).value_list.at(kOffsetToPeakRatioChangeIndex)
-            };
-            if (!std::isfinite(value))
-            {
-                is_finite = false;
-                break;
-            }
-            maximum_change = std::max(maximum_change, std::abs(value));
-        }
-        offset_group_change_list.emplace_back(
-            is_finite ? maximum_change : std::numeric_limits<double>::infinity());
-    }
-
-    result.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
-        offset_group_change_list.size();
-    result.percentile_stats.percentile_list.at(
-        kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
-            offset_group_change_list,
-            kConvergencePercentile);
-    result.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
-        offset_group_change_list.empty() ? 0.0 :
-            *std::ranges::max_element(offset_group_change_list);
-    return result;
-}
-
-TransformedChangeSummary SummarizeActiveDofChanges(
-    const FitState & current_state,
-    const FitState & previous_state,
-    const ActiveCoordinatePopulation & population)
-{
-    if (current_state.size() != previous_state.size())
-    {
-        throw std::invalid_argument(
-            "Active-coordinate transformed state sizes are inconsistent.");
-    }
-    std::vector<algorithm::ParameterChange> change_list;
-    change_list.reserve(current_state.size());
-    for (std::size_t atom_index = 0; atom_index < current_state.size(); atom_index++)
-    {
-        change_list.emplace_back(CalculateTransformedChange(
-            GetFitModel(current_state, atom_index),
-            GetFitModel(previous_state, atom_index)));
-    }
-    return SummarizeActiveDofChanges(change_list, population);
 }
 
 static ConvergenceCertificate SummarizeFixedPointOperator(
@@ -815,135 +467,6 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
     return result;
 }
 
-SolverQualificationAudit EvaluateSolverQualificationAudit(
-    const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
-    const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
-    const ClusterHealthMap & health_by_key)
-{
-    const auto atom_count{ group_id_by_atom_index.size() };
-    ValidateActiveCoordinateInputs(
-        atom_count,
-        group_id_by_atom_index,
-        block_activity,
-        quarantine_activity);
-    if (local_refit_status_by_atom.size() != atom_count)
-    {
-        throw std::invalid_argument(
-            "Convergence audit qualification inputs are inconsistent.");
-    }
-
-    SolverQualificationAudit result;
-    result.production_qualified = std::ranges::all_of(
-        health_by_key | std::views::values,
-        &ClusterHealth::production_convergence_qualified);
-    for (const auto & health : health_by_key | std::views::values)
-    {
-        result.joint_offset_status_count.at(
-            static_cast<std::size_t>(health.joint_offset_status))++;
-    }
-    for (const auto atom_index : atom_index_list)
-    {
-        if (!block_activity.HasActiveShape(atom_index))
-        {
-            if (!quarantine_activity.HasActiveShape(atom_index))
-            {
-                result.quarantined_shape_count++;
-            }
-            else
-            {
-                result.fixed_shape_count++;
-            }
-            continue;
-        }
-
-        result.active_shape_count++;
-        const auto & status{ local_refit_status_by_atom[atom_index] };
-        if (status.has_value() && IsLocalRefitStatusSolverQualified(*status))
-        {
-            result.qualified_shape_count++;
-        }
-        else if (status.has_value())
-        {
-            result.soft_unqualified_shape_count++;
-            result.solver_qualified = false;
-        }
-        else
-        {
-            result.hard_failure_shape_count++;
-            result.solver_qualified = false;
-        }
-    }
-
-    for (const auto & group :
-        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index))
-    {
-        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return block_activity.HasActiveOffset(atom_index);
-            })) };
-        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return !quarantine_activity.HasActiveOffset(atom_index);
-            })) };
-        if (active_count == 0)
-        {
-            if (quarantine_count != 0) result.quarantined_offset_group_count++;
-            else result.fixed_offset_group_count++;
-            continue;
-        }
-        if (active_count != group.atom_index_list.size())
-        {
-            result.mixed_offset_group_count++;
-            result.solver_qualified = false;
-            continue;
-        }
-
-        result.active_offset_group_count++;
-        const auto health_iter{ health_by_key.find(group.cluster_key) };
-        if (health_iter == health_by_key.end())
-        {
-            result.hard_failure_offset_group_count++;
-            result.solver_qualified = false;
-            continue;
-        }
-        if (health_iter->second.joint_offset_status ==
-            JointOffsetSolveStatus::Converged)
-        {
-            result.qualified_offset_group_count++;
-        }
-        else if (IsJointOffsetSolveHardFailure(
-                health_iter->second.joint_offset_status))
-        {
-            result.hard_failure_offset_group_count++;
-            result.solver_qualified = false;
-        }
-        else
-        {
-            result.soft_unqualified_offset_group_count++;
-            result.solver_qualified = false;
-        }
-    }
-
-    result.restricted_active_set = result.fixed_shape_count != 0 ||
-        result.quarantined_shape_count != 0 ||
-        result.fixed_offset_group_count != 0 ||
-        result.quarantined_offset_group_count != 0 ||
-        result.mixed_offset_group_count != 0;
-    result.all_fixed = result.active_shape_count == 0 &&
-        result.active_offset_group_count == 0 &&
-        result.mixed_offset_group_count == 0;
-    return result;
-}
-
-namespace {
 
 static SecondStageContext BuildSecondStageContext(
     const ModelObject & model_object,
@@ -1227,13 +750,7 @@ static void LogSecondStageSeedSelections(
 {
     if (quiet_mode || selection_record_list.empty()) return;
 
-    constexpr std::array<SecondStageSeedSource, 4> source_list{
-        SecondStageSeedSource::GroupPosterior,
-        SecondStageSeedSource::GroupPrior,
-        SecondStageSeedSource::GroupMedian,
-        SecondStageSeedSource::GlobalMedian
-    };
-    std::array<std::size_t, source_list.size()> source_count{};
+    std::array<std::size_t, kSecondStageSeedSourceList.size()> source_count{};
     for (const auto & record : selection_record_list)
     {
         source_count.at(static_cast<std::size_t>(record.source))++;
@@ -1242,10 +759,10 @@ static void LogSecondStageSeedSelections(
     std::ostringstream summary;
     summary << "Selected second-stage initial seeds = "
         << selection_record_list.size() << ", sources = ";
-    for (std::size_t i = 0; i < source_list.size(); i++)
+    for (std::size_t i = 0; i < kSecondStageSeedSourceList.size(); i++)
     {
         if (i != 0) summary << ", ";
-        summary << GetSecondStageSeedSourceText(source_list.at(i))
+        summary << GetSecondStageSeedSourceText(kSecondStageSeedSourceList.at(i))
             << ":" << source_count.at(i);
     }
     summary << ".";
@@ -1325,104 +842,6 @@ static void AppendQuarantineSummary(
         << unresolved_target_count;
 }
 
-} // namespace
-
-bool HasPendingQuarantineLifecycle(
-    const QuarantineFailureStateMap & state_by_target)
-{
-    return std::ranges::any_of(
-        state_by_target | std::views::values,
-        [](const auto & state)
-        {
-            return !state.quarantined || !state.probation_exhausted;
-        });
-}
-
-QuarantineStateTransition UpdateQuarantineFailureState(
-    const std::vector<QuarantineFailureObservation> & observation_list,
-    const std::vector<QuarantineTarget> & successful_probation_target_list,
-    std::size_t accepted_iteration_count,
-    QuarantineFailureStateMap & state_by_target)
-{
-    QuarantineStateTransition transition;
-    const std::set<QuarantineTarget> successful_target_set{
-        successful_probation_target_list.begin(),
-        successful_probation_target_list.end()
-    };
-    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
-    {
-        auto & [target, state]{ *iter };
-        if (!state.probation_active)
-        {
-            ++iter;
-            continue;
-        }
-        if (successful_target_set.contains(target))
-        {
-            transition.released_target_list.emplace_back(target);
-            iter = state_by_target.erase(iter);
-            continue;
-        }
-        state.probation_active = false;
-        state.probation_count++;
-        state.probation_exhausted =
-            state.probation_count >= kQuarantineMaximumProbationCount;
-        state.next_probation_iteration =
-            accepted_iteration_count + kQuarantineProbationCooldown;
-        transition.failed_probation_target_list.emplace_back(target);
-        ++iter;
-    }
-
-    std::map<QuarantineTarget, QuarantineFailureReason> observation_by_target;
-    for (const auto & observation : observation_list)
-    {
-        observation_by_target.try_emplace(observation.target, observation.reason);
-    }
-    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
-    {
-        if (!iter->second.quarantined && !observation_by_target.contains(iter->first))
-        {
-            iter = state_by_target.erase(iter);
-            continue;
-        }
-        ++iter;
-    }
-
-    for (const auto & [target, reason] : observation_by_target)
-    {
-        auto [iter, inserted]{
-            state_by_target.try_emplace(
-                target,
-                QuarantineFailureState{
-                    reason,
-                    0,
-                    0,
-                    0,
-                    false,
-                    false,
-                    false
-                })
-        };
-        auto & state{ iter->second };
-        if (state.quarantined) continue;
-        if (!inserted && state.reason != reason)
-        {
-            state.reason = reason;
-            state.stable_iteration_count = 0;
-        }
-        state.stable_iteration_count++;
-        if (state.stable_iteration_count >= kPersistentQuarantineFailureIterationLimit)
-        {
-            state.quarantined = true;
-            state.next_probation_iteration =
-                accepted_iteration_count + kQuarantineProbationCooldown;
-            transition.entered_target_list.emplace_back(target);
-        }
-    }
-    return transition;
-}
-
-namespace {
 
 static void ApplyQuarantineFallbackTargets(
     const std::vector<QuarantineTarget> & target_list,
@@ -2430,16 +1849,6 @@ static std::string FormatProgressMaximum(double value)
     stream << std::scientific << std::setprecision(2) << value;
     return stream.str();
 }
-
-constexpr std::array<std::string_view, 6> kProgressHeaderList
-{
-    "Try/Acc",
-    "Atom A/Q",
-    "Cluster A/R",
-    "Polish E/A/R/S",
-    "Suspicious",
-    "dMax A/G"
-};
 
 template<typename CellList>
 std::string FormatProgressRow(
@@ -3449,8 +2858,6 @@ static IterationProposalResult RunProposalIteration(
         std::move(health_by_key)
     };
 }
-
-using GraphEdgeSet = std::set<std::pair<std::size_t, std::size_t>>;
 
 static GraphEdgeSet BuildGraphEdgeSet(const GraphTopology & topology)
 {
@@ -5064,6 +4471,582 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 }
 
 } // namespace
+
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
+{
+    if (const auto selected{
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupPosterior,
+                candidates.group_posterior) })
+    {
+        return selected;
+    }
+    if (const auto selected{
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupPrior,
+                candidates.group_prior) })
+    {
+        return selected;
+    }
+    if (const auto selected{
+            SelectValidSecondStageSeedCandidate(
+                SecondStageSeedSource::GroupMedian,
+                candidates.group_median) })
+    {
+        return selected;
+    }
+    return SelectValidSecondStageSeedCandidate(
+        SecondStageSeedSource::GlobalMedian,
+        candidates.global_median);
+}
+
+AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
+    const FitState & accepted_state,
+    const FitState & topology_reference_state,
+    const std::vector<std::size_t> & active_index_list,
+    std::size_t accepted_iterations_since_rebuild)
+{
+    const auto drift_summary{
+        SummarizeTransformedChanges(
+            accepted_state,
+            topology_reference_state,
+            active_index_list)
+    };
+    const auto maximum_transformed_drift{
+        GetMaximumTransformedChange(drift_summary)
+    };
+    if (maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)
+    {
+        return AdaptiveTopologyRebuildDecision{
+            AdaptiveTopologyRebuildTrigger::Drift,
+            maximum_transformed_drift
+        };
+    }
+    if (accepted_iterations_since_rebuild >= kAdaptiveTopologyRebuildAcceptedIterationInterval)
+    {
+        return AdaptiveTopologyRebuildDecision{
+            AdaptiveTopologyRebuildTrigger::Interval,
+            maximum_transformed_drift
+        };
+    }
+    return AdaptiveTopologyRebuildDecision{
+        AdaptiveTopologyRebuildTrigger::None,
+        maximum_transformed_drift
+    };
+}
+
+bool ConvergenceOrthogonalBlockers::Clear() const
+{
+    return !objective_domain_changed && !quarantine_transition &&
+        !suspicious_offset_fallback && !rejected_cluster;
+}
+
+bool ConvergenceCertificate::AcceptedPercentilePassed() const
+{
+    return IsTransformedPercentileConverged(accepted_active_movement);
+}
+
+bool ConvergenceCertificate::OperatorPercentilePassed() const
+{
+    return IsTransformedPercentileConverged(operator_nominal_residual);
+}
+
+bool ConvergenceCertificate::OperatorComplete() const
+{
+    return std::ranges::all_of(
+        operator_unavailable_count,
+        [](std::size_t count) { return count == 0; });
+}
+
+bool ConvergenceCertificate::InvariantsClear() const
+{
+    return !MixedSharedGroup();
+}
+
+bool ConvergenceCertificate::MixedSharedGroup() const
+{
+    return accepted_active_population.mixed_offset_group_count != 0 ||
+        solver_qualification.mixed_offset_group_count != 0;
+}
+
+bool ConvergenceCertificate::StrictOperatorPassed() const
+{
+    return solver_qualification.solver_qualified && OperatorComplete() &&
+        InvariantsClear() && OperatorPercentilePassed();
+}
+
+bool ConvergenceCertificate::ProductionConverged() const
+{
+    return StrictOperatorPassed() && AcceptedPercentilePassed() &&
+        blockers.Clear();
+}
+
+FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
+    bool operator_complete,
+    bool qualification_passed,
+    const TransformedChangeSummary & accepted_change,
+    const TransformedChangeSummary & fixed_point_residual)
+{
+    if (!operator_complete)
+    {
+        return FixedPointResidualInterpretation::Restricted;
+    }
+    const auto accepted_small{
+        IsTransformedPercentileConverged(accepted_change)
+    };
+    const auto residual_small{
+        IsTransformedPercentileConverged(fixed_point_residual)
+    };
+    const auto tail_clean = [](const TransformedChangeSummary & summary)
+    {
+        return std::ranges::all_of(
+            summary.maximum_list,
+            [](double value)
+            {
+                return std::isfinite(value) &&
+                    value < kLegacyMaximumTransformedChangeTolerance;
+            });
+    };
+    if (accepted_small && residual_small && !qualification_passed)
+    {
+        return FixedPointResidualInterpretation::UnqualifiedSmall;
+    }
+    if (accepted_small && !residual_small)
+    {
+        return FixedPointResidualInterpretation::StepLimited;
+    }
+    if (!accepted_small && residual_small)
+    {
+        return FixedPointResidualInterpretation::PostprocessedMovement;
+    }
+    if (accepted_small && residual_small &&
+        (!tail_clean(accepted_change) || !tail_clean(fixed_point_residual)))
+    {
+        return FixedPointResidualInterpretation::BulkFixedPointWithTail;
+    }
+    if (accepted_small && residual_small)
+    {
+        return FixedPointResidualInterpretation::FixedPointConverged;
+    }
+    return FixedPointResidualInterpretation::Progressing;
+}
+
+std::string_view GetFixedPointResidualInterpretationText(
+    FixedPointResidualInterpretation interpretation)
+{
+    switch (interpretation)
+    {
+    case FixedPointResidualInterpretation::Restricted:
+        return "restricted";
+    case FixedPointResidualInterpretation::UnqualifiedSmall:
+        return "unqualified-small";
+    case FixedPointResidualInterpretation::StepLimited:
+        return "step-limited";
+    case FixedPointResidualInterpretation::PostprocessedMovement:
+        return "postprocessed-movement";
+    case FixedPointResidualInterpretation::BulkFixedPointWithTail:
+        return "bulk-fixed-point-with-tail";
+    case FixedPointResidualInterpretation::FixedPointConverged:
+        return "fixed-point-converged";
+    case FixedPointResidualInterpretation::Progressing:
+        return "progressing";
+    }
+    throw std::invalid_argument("Unknown fixed-point residual interpretation.");
+}
+
+SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
+    const SuspiciousBlockActivity & block_activity,
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom)
+{
+    const auto atom_count{ assessment_by_atom.size() };
+    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
+        block_activity.offset_fixed_atom_mask.size() != atom_count ||
+        block_activity.hard_failure_atom_mask.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Suspicious failure activity and assessment sizes are inconsistent.");
+    }
+    SuspiciousUpdateMask result(atom_count, 0);
+    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
+    {
+        const auto has_fixed_endpoint{
+            block_activity.shape_fixed_atom_mask.at(atom_index) != 0 ||
+            block_activity.offset_fixed_atom_mask.at(atom_index) != 0
+        };
+        result.at(atom_index) =
+            block_activity.hard_failure_atom_mask.at(atom_index) != 0 ||
+            (has_fixed_endpoint &&
+                assessment_by_atom[atom_index].reason !=
+                    SuspiciousGaussianReason::None) ? 1 : 0;
+    }
+    return result;
+}
+
+ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
+    const std::vector<std::size_t> & atom_index_list,
+    const std::vector<ClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & group_id_by_atom_index,
+    const SuspiciousBlockActivity & block_activity,
+    const SuspiciousBlockActivity & quarantine_activity)
+{
+    ValidateActiveCoordinateInputs(
+        group_id_by_atom_index.size(),
+        group_id_by_atom_index,
+        block_activity,
+        quarantine_activity);
+
+    ActiveCoordinatePopulation result;
+    for (const auto atom_index : atom_index_list)
+    {
+        if (block_activity.HasActiveShape(atom_index))
+        {
+            result.active_atom_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
+                .emplace_back(atom_index);
+            result.active_atom_index_list_by_parameter.at(kLogWidthChangeIndex)
+                .emplace_back(atom_index);
+        }
+        if (block_activity.HasActiveOffset(atom_index))
+        {
+            result.active_atom_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
+                .emplace_back(atom_index);
+        }
+    }
+
+    const auto offset_group_list{
+        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index)
+    };
+    result.total_offset_group_count = offset_group_list.size();
+    for (const auto & group : offset_group_list)
+    {
+        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return block_activity.HasActiveOffset(atom_index);
+            })) };
+        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return !quarantine_activity.HasActiveOffset(atom_index);
+            })) };
+        if (active_count == 0)
+        {
+            if (quarantine_count != 0) result.quarantined_offset_group_count++;
+            else result.fixed_offset_group_count++;
+            continue;
+        }
+
+        const auto is_mixed{ active_count != group.atom_index_list.size() };
+        if (is_mixed) result.mixed_offset_group_count++;
+        result.active_offset_group_atom_index_list.emplace_back(group.atom_index_list);
+        result.mixed_offset_group_mask.emplace_back(is_mixed ? 1 : 0);
+    }
+    return result;
+}
+
+TransformedChangeSummary SummarizeActiveDofChanges(
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const ActiveCoordinatePopulation & population)
+{
+    auto result{ SummarizeTransformedChangesByParameter(
+        change_list,
+        population.active_atom_index_list_by_parameter) };
+
+    if (population.active_offset_group_atom_index_list.size() !=
+        population.mixed_offset_group_mask.size())
+    {
+        throw std::invalid_argument(
+            "Active-coordinate shared-offset population is inconsistent.");
+    }
+
+    std::vector<double> offset_group_change_list;
+    offset_group_change_list.reserve(
+        population.active_offset_group_atom_index_list.size());
+    for (std::size_t group_position = 0;
+        group_position < population.active_offset_group_atom_index_list.size();
+        group_position++)
+    {
+        double maximum_change{ 0.0 };
+        bool is_finite{ population.mixed_offset_group_mask.at(group_position) == 0 };
+        for (const auto atom_index :
+            population.active_offset_group_atom_index_list.at(group_position))
+        {
+            if (atom_index >= change_list.size() ||
+                change_list.at(atom_index).value_list.size() != kTransformedChangeSize)
+            {
+                throw std::invalid_argument(
+                    "Active-coordinate shared-offset change input is inconsistent.");
+            }
+            const auto value{
+                change_list.at(atom_index).value_list.at(kOffsetToPeakRatioChangeIndex)
+            };
+            if (!std::isfinite(value))
+            {
+                is_finite = false;
+                break;
+            }
+            maximum_change = std::max(maximum_change, std::abs(value));
+        }
+        offset_group_change_list.emplace_back(
+            is_finite ? maximum_change : std::numeric_limits<double>::infinity());
+    }
+
+    result.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
+        offset_group_change_list.size();
+    result.percentile_stats.percentile_list.at(
+        kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
+            offset_group_change_list,
+            kConvergencePercentile);
+    result.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
+        offset_group_change_list.empty() ? 0.0 :
+            *std::ranges::max_element(offset_group_change_list);
+    return result;
+}
+
+TransformedChangeSummary SummarizeActiveDofChanges(
+    const FitState & current_state,
+    const FitState & previous_state,
+    const ActiveCoordinatePopulation & population)
+{
+    if (current_state.size() != previous_state.size())
+    {
+        throw std::invalid_argument(
+            "Active-coordinate transformed state sizes are inconsistent.");
+    }
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(current_state.size());
+    for (std::size_t atom_index = 0; atom_index < current_state.size(); atom_index++)
+    {
+        change_list.emplace_back(CalculateTransformedChange(
+            GetFitModel(current_state, atom_index),
+            GetFitModel(previous_state, atom_index)));
+    }
+    return SummarizeActiveDofChanges(change_list, population);
+}
+
+SolverQualificationAudit EvaluateSolverQualificationAudit(
+    const std::vector<std::size_t> & atom_index_list,
+    const std::vector<ClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & group_id_by_atom_index,
+    const SuspiciousBlockActivity & block_activity,
+    const SuspiciousBlockActivity & quarantine_activity,
+    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
+    const ClusterHealthMap & health_by_key)
+{
+    const auto atom_count{ group_id_by_atom_index.size() };
+    ValidateActiveCoordinateInputs(
+        atom_count,
+        group_id_by_atom_index,
+        block_activity,
+        quarantine_activity);
+    if (local_refit_status_by_atom.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Convergence audit qualification inputs are inconsistent.");
+    }
+
+    SolverQualificationAudit result;
+    result.production_qualified = std::ranges::all_of(
+        health_by_key | std::views::values,
+        &ClusterHealth::production_convergence_qualified);
+    for (const auto & health : health_by_key | std::views::values)
+    {
+        result.joint_offset_status_count.at(
+            static_cast<std::size_t>(health.joint_offset_status))++;
+    }
+    for (const auto atom_index : atom_index_list)
+    {
+        if (!block_activity.HasActiveShape(atom_index))
+        {
+            if (!quarantine_activity.HasActiveShape(atom_index))
+            {
+                result.quarantined_shape_count++;
+            }
+            else
+            {
+                result.fixed_shape_count++;
+            }
+            continue;
+        }
+
+        result.active_shape_count++;
+        const auto & status{ local_refit_status_by_atom[atom_index] };
+        if (status.has_value() && IsLocalRefitStatusSolverQualified(*status))
+        {
+            result.qualified_shape_count++;
+        }
+        else if (status.has_value())
+        {
+            result.soft_unqualified_shape_count++;
+            result.solver_qualified = false;
+        }
+        else
+        {
+            result.hard_failure_shape_count++;
+            result.solver_qualified = false;
+        }
+    }
+
+    for (const auto & group :
+        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index))
+    {
+        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return block_activity.HasActiveOffset(atom_index);
+            })) };
+        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
+            group.atom_index_list,
+            [&](const auto atom_index)
+            {
+                return !quarantine_activity.HasActiveOffset(atom_index);
+            })) };
+        if (active_count == 0)
+        {
+            if (quarantine_count != 0) result.quarantined_offset_group_count++;
+            else result.fixed_offset_group_count++;
+            continue;
+        }
+        if (active_count != group.atom_index_list.size())
+        {
+            result.mixed_offset_group_count++;
+            result.solver_qualified = false;
+            continue;
+        }
+
+        result.active_offset_group_count++;
+        const auto health_iter{ health_by_key.find(group.cluster_key) };
+        if (health_iter == health_by_key.end())
+        {
+            result.hard_failure_offset_group_count++;
+            result.solver_qualified = false;
+            continue;
+        }
+        if (health_iter->second.joint_offset_status ==
+            JointOffsetSolveStatus::Converged)
+        {
+            result.qualified_offset_group_count++;
+        }
+        else if (IsJointOffsetSolveHardFailure(
+                health_iter->second.joint_offset_status))
+        {
+            result.hard_failure_offset_group_count++;
+            result.solver_qualified = false;
+        }
+        else
+        {
+            result.soft_unqualified_offset_group_count++;
+            result.solver_qualified = false;
+        }
+    }
+
+    result.restricted_active_set = result.fixed_shape_count != 0 ||
+        result.quarantined_shape_count != 0 ||
+        result.fixed_offset_group_count != 0 ||
+        result.quarantined_offset_group_count != 0 ||
+        result.mixed_offset_group_count != 0;
+    result.all_fixed = result.active_shape_count == 0 &&
+        result.active_offset_group_count == 0 &&
+        result.mixed_offset_group_count == 0;
+    return result;
+}
+
+bool HasPendingQuarantineLifecycle(
+    const QuarantineFailureStateMap & state_by_target)
+{
+    return std::ranges::any_of(
+        state_by_target | std::views::values,
+        [](const auto & state)
+        {
+            return !state.quarantined || !state.probation_exhausted;
+        });
+}
+
+QuarantineStateTransition UpdateQuarantineFailureState(
+    const std::vector<QuarantineFailureObservation> & observation_list,
+    const std::vector<QuarantineTarget> & successful_probation_target_list,
+    std::size_t accepted_iteration_count,
+    QuarantineFailureStateMap & state_by_target)
+{
+    QuarantineStateTransition transition;
+    const std::set<QuarantineTarget> successful_target_set{
+        successful_probation_target_list.begin(),
+        successful_probation_target_list.end()
+    };
+    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
+    {
+        auto & [target, state]{ *iter };
+        if (!state.probation_active)
+        {
+            ++iter;
+            continue;
+        }
+        if (successful_target_set.contains(target))
+        {
+            transition.released_target_list.emplace_back(target);
+            iter = state_by_target.erase(iter);
+            continue;
+        }
+        state.probation_active = false;
+        state.probation_count++;
+        state.probation_exhausted =
+            state.probation_count >= kQuarantineMaximumProbationCount;
+        state.next_probation_iteration =
+            accepted_iteration_count + kQuarantineProbationCooldown;
+        transition.failed_probation_target_list.emplace_back(target);
+        ++iter;
+    }
+
+    std::map<QuarantineTarget, QuarantineFailureReason> observation_by_target;
+    for (const auto & observation : observation_list)
+    {
+        observation_by_target.try_emplace(observation.target, observation.reason);
+    }
+    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
+    {
+        if (!iter->second.quarantined && !observation_by_target.contains(iter->first))
+        {
+            iter = state_by_target.erase(iter);
+            continue;
+        }
+        ++iter;
+    }
+
+    for (const auto & [target, reason] : observation_by_target)
+    {
+        auto [iter, inserted]{
+            state_by_target.try_emplace(
+                target,
+                QuarantineFailureState{
+                    reason,
+                    0,
+                    0,
+                    0,
+                    false,
+                    false,
+                    false
+                })
+        };
+        auto & state{ iter->second };
+        if (state.quarantined) continue;
+        if (!inserted && state.reason != reason)
+        {
+            state.reason = reason;
+            state.stable_iteration_count = 0;
+        }
+        state.stable_iteration_count++;
+        if (state.stable_iteration_count >= kPersistentQuarantineFailureIterationLimit)
+        {
+            state.quarantined = true;
+            state.next_probation_iteration =
+                accepted_iteration_count + kQuarantineProbationCooldown;
+            transition.entered_target_list.emplace_back(target);
+        }
+    }
+    return transition;
+}
 
 } // namespace rhbm_gem::core::detail
 

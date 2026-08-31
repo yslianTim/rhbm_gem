@@ -21,6 +21,8 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
+using ResiduePair = std::pair<std::size_t, std::size_t>;
+
 struct SizePairHash
 {
     std::size_t operator()(
@@ -53,12 +55,6 @@ struct DisjointSetComponentSummary
     std::size_t component_count{ 0 };
     std::size_t maximum_component_size{ 0 };
 };
-
-DisjointSetComponentSummary SummarizeDisjointSetComponents(
-    DisjointSet & component_set,
-    std::size_t item_count);
-
-void UpdateGraphComponentSummary(GraphTopology & topology);
 
 DisjointSet::DisjointSet(std::size_t item_count)
     : m_parent_list(item_count),
@@ -94,6 +90,81 @@ void DisjointSet::Merge(std::size_t left, std::size_t right)
 std::size_t DisjointSet::ComponentSize(std::size_t index)
 {
     return m_component_size_list.at(Find(index));
+}
+
+DisjointSetComponentSummary SummarizeDisjointSetComponents(
+    DisjointSet & component_set,
+    std::size_t item_count)
+{
+    DisjointSetComponentSummary summary;
+    for (std::size_t item_index = 0; item_index < item_count; item_index++)
+    {
+        if (component_set.Find(item_index) != item_index) continue;
+        summary.component_count++;
+        summary.maximum_component_size = std::max(
+            summary.maximum_component_size,
+            component_set.ComponentSize(item_index));
+    }
+    return summary;
+}
+
+Eigen::Vector3d EvaluateCouplingGraphJacobian(
+    const std::optional<TransformedModelInvariants> & invariants,
+    double distance)
+{
+    static const Eigen::Vector3d invalid_jacobian{
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
+    };
+    if (!invariants.has_value()) return invalid_jacobian;
+    return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
+}
+
+void UpdateGraphComponentSummary(GraphTopology & topology)
+{
+    const auto atom_count{ topology.adjacency_list.size() };
+    DisjointSet component_set{ atom_count };
+    if (!topology.residue_key_by_atom_index.empty())
+    {
+        if (topology.residue_key_by_atom_index.size() != atom_count)
+        {
+            throw std::invalid_argument(
+                "Local fitting coupling residue key count must match atom count.");
+        }
+        std::map<ResidueKey, std::size_t> first_atom_index_by_residue_key;
+        for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
+        {
+            const auto [iter, inserted]{
+                first_atom_index_by_residue_key.emplace(
+                    topology.residue_key_by_atom_index.at(atom_index),
+                    atom_index)
+            };
+            if (!inserted)
+            {
+                component_set.Merge(iter->second, atom_index);
+            }
+        }
+    }
+    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
+    {
+        for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
+        {
+            if (neighbor_index >= atom_count)
+            {
+                throw std::invalid_argument(
+                    "Local fitting coupling edge index is out of range.");
+            }
+            if (atom_index >= neighbor_index) continue;
+            component_set.Merge(atom_index, neighbor_index);
+        }
+    }
+
+    const auto component_summary{
+        SummarizeDisjointSetComponents(component_set, atom_count)
+    };
+    topology.summary.component_count = component_summary.component_count;
+    topology.summary.maximum_component_size = component_summary.maximum_component_size;
+    topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
+        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
 }
 
 } // namespace
@@ -556,37 +627,6 @@ GraphTopology CouplingGraphBuilder::BuildTopology(
         options.maximum_residue_count);
 }
 
-namespace {
-
-DisjointSetComponentSummary SummarizeDisjointSetComponents(
-    DisjointSet & component_set,
-    std::size_t item_count)
-{
-    DisjointSetComponentSummary summary;
-    for (std::size_t item_index = 0; item_index < item_count; item_index++)
-    {
-        if (component_set.Find(item_index) != item_index) continue;
-        summary.component_count++;
-        summary.maximum_component_size = std::max(
-            summary.maximum_component_size,
-            component_set.ComponentSize(item_index));
-    }
-    return summary;
-}
-
-Eigen::Vector3d EvaluateCouplingGraphJacobian(
-    const std::optional<TransformedModelInvariants> & invariants,
-    double distance)
-{
-    static const Eigen::Vector3d invalid_jacobian{
-        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
-    };
-    if (!invariants.has_value()) return invalid_jacobian;
-    return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
-}
-
-} // namespace
-
 static GraphTopology BuildSecondStageGraphTopologyImpl(
     const SecondStageContext & context,
     const FitState & state,
@@ -829,7 +869,6 @@ GraphTopology ApplyGraphResidueCutoff(
         residue_index_by_atom_index.emplace_back(residue_index_by_key.at(residue_key));
     }
 
-    using ResiduePair = std::pair<std::size_t, std::size_t>;
     std::unordered_map<ResiduePair, double, SizePairHash>
         maximum_weight_by_residue_pair;
     std::size_t maximum_residue_pair_count{ 0 };
@@ -960,58 +999,6 @@ GraphTopology ApplyGraphResidueCutoff(
     UpdateGraphComponentSummary(topology);
     return topology;
 }
-
-namespace {
-
-void UpdateGraphComponentSummary(GraphTopology & topology)
-{
-    const auto atom_count{ topology.adjacency_list.size() };
-    DisjointSet component_set{ atom_count };
-    if (!topology.residue_key_by_atom_index.empty())
-    {
-        if (topology.residue_key_by_atom_index.size() != atom_count)
-        {
-            throw std::invalid_argument(
-                "Local fitting coupling residue key count must match atom count.");
-        }
-        std::map<ResidueKey, std::size_t> first_atom_index_by_residue_key;
-        for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-        {
-            const auto [iter, inserted]{
-                first_atom_index_by_residue_key.emplace(
-                    topology.residue_key_by_atom_index.at(atom_index),
-                    atom_index)
-            };
-            if (!inserted)
-            {
-                component_set.Merge(iter->second, atom_index);
-            }
-        }
-    }
-    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-    {
-        for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
-        {
-            if (neighbor_index >= atom_count)
-            {
-                throw std::invalid_argument(
-                    "Local fitting coupling edge index is out of range.");
-            }
-            if (atom_index >= neighbor_index) continue;
-            component_set.Merge(atom_index, neighbor_index);
-        }
-    }
-
-    const auto component_summary{
-        SummarizeDisjointSetComponents(component_set, atom_count)
-    };
-    topology.summary.component_count = component_summary.component_count;
-    topology.summary.maximum_component_size = component_summary.maximum_component_size;
-    topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
-        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
-}
-
-} // namespace
 
 CouplingGraphPartition BuildGraphPartition(
     const GraphTopology & topology,

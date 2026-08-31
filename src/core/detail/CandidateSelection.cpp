@@ -47,6 +47,9 @@ constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
+using PartitionEntry = std::pair<const ClusterKey, std::vector<SampleRef>>;
+using CandidateWork = std::pair<const PartitionEntry *, ClusterSolverWorkspace *>;
+
 enum class SuspiciousProfileAnalysisMode
 {
     Candidate,
@@ -89,6 +92,216 @@ struct IndividualCandidateSelection
     std::size_t rescue_invalid_proposal_exclusion_count{ 0 };
     std::size_t rescue_objective_unavailable_exclusion_count{ 0 };
 };
+
+template<typename ResidualEvaluator>
+std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
+    const std::vector<SampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain,
+    const ResidualEvaluator & residual_evaluator)
+{
+    if (domain.active_atom_count == 0) return std::nullopt;
+    ObjectiveBreakdown contribution;
+    for (const auto & sample_ref : sample_ref_list)
+    {
+        const auto & owner_key{
+            domain.owner_key_by_atom_index.at(sample_ref.atom_index)
+        };
+        if (owner_key.empty()) continue;
+        const auto owner_iter{ domain.cluster_by_key.find(owner_key) };
+        if (owner_iter == domain.cluster_by_key.end() ||
+            !owner_iter->second.scale.has_value())
+        {
+            return std::nullopt;
+        }
+        const auto residual_sample{ residual_evaluator(sample_ref) };
+        if (!residual_sample.has_value()) return std::nullopt;
+        const auto is_fit_range{
+            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
+        };
+        const auto sample_count{
+            is_fit_range ? owner_iter->second.fit_sample_ref_list.size() :
+                owner_iter->second.tail_sample_ref_list.size()
+        };
+        if (sample_count == 0) return std::nullopt;
+        const auto scale{
+            is_fit_range ? owner_iter->second.scale->fit : owner_iter->second.scale->tail
+        };
+        const auto loss{
+            algorithm::CalculateCauchyLoss(
+                residual_sample->residual / scale,
+                kObjectiveRobustLossCutoffMultiplier)
+        };
+        const auto coefficient{
+            CalculateClusterAtomWeight(owner_key.size(), domain.active_atom_count) /
+            static_cast<double>(sample_count)
+        };
+        if (is_fit_range)
+        {
+            contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
+        }
+        else
+        {
+            contribution.tail_validation_loss += coefficient * loss;
+        }
+    }
+    if (!std::isfinite(contribution.fit_range_residual_objective) ||
+        !std::isfinite(contribution.tail_validation_loss))
+    {
+        return std::nullopt;
+    }
+    return contribution;
+}
+
+template<typename State>
+std::optional<double> EvaluateOffsetPlausibilityPenalty(
+    const State & state,
+    const ClusterKey & changed_key,
+    const ObjectiveDomain & domain)
+{
+    if (domain.active_atom_count == 0) return std::nullopt;
+    double penalty{ 0.0 };
+    for (const auto atom_index : changed_key)
+    {
+        const auto owner_iter{
+            domain.cluster_by_key.find(domain.owner_key_by_atom_index.at(atom_index))
+        };
+        if (owner_iter == domain.cluster_by_key.end() || !owner_iter->second.scale.has_value())
+        {
+            return std::nullopt;
+        }
+        const auto & model{ GetFitModel(state, atom_index) };
+        if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
+        const auto peak_signal{ model.SignalAtDistance(0.0) };
+        const auto offset_peak{ model.GetOffset() * model.OffsetBasisAtDistance(0.0) };
+        if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
+        {
+            return std::nullopt;
+        }
+        const auto offset_ratio{
+            std::abs(offset_peak) /
+            std::max({
+                std::abs(peak_signal),
+                owner_iter->second.scale->fit,
+                kObjectiveResidualScaleMin
+            })
+        };
+        const auto offset_excess{ std::max(0.0, offset_ratio - kOffsetPeakRatioMax) };
+        penalty +=
+            kOffsetPlausibilityPenaltyWeight * offset_excess * offset_excess /
+            static_cast<double>(domain.active_atom_count);
+    }
+    return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
+}
+
+template<typename Evaluator>
+std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
+    const Evaluator & evaluator,
+    const ClusterKey & changed_key,
+    const std::vector<SampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain)
+{
+    const auto residual_contribution{
+        EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
+    };
+    if (!residual_contribution.has_value()) return std::nullopt;
+    const auto offset_penalty{
+        EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), changed_key, domain)
+    };
+    if (!offset_penalty.has_value()) return std::nullopt;
+    return BuildObjectiveBreakdown(
+        residual_contribution->fit_range_residual_objective,
+        residual_contribution->tail_validation_loss,
+        *offset_penalty);
+}
+
+template<typename Evaluator>
+std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
+    const ObjectiveDomain & domain,
+    const Evaluator & evaluator)
+{
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
+    double offset_plausibility_penalty{ 0.0 };
+    for (const auto & [key, cluster_domain] : domain.cluster_by_key)
+    {
+        const auto fit_contribution{
+            EvaluateResidualObjectiveContribution(
+                cluster_domain.fit_sample_ref_list,
+                domain,
+                evaluator)
+        };
+        if (!fit_contribution.has_value()) return std::nullopt;
+        const auto tail_contribution{
+            EvaluateResidualObjectiveContribution(
+                cluster_domain.tail_sample_ref_list,
+                domain,
+                evaluator)
+        };
+        if (!tail_contribution.has_value()) return std::nullopt;
+        const auto offset_contribution{
+            EvaluateOffsetPlausibilityPenalty(
+                evaluator.GetState(),
+                key,
+                domain)
+        };
+        if (!offset_contribution.has_value()) return std::nullopt;
+        fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
+        fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
+        tail_validation_loss += fit_contribution->tail_validation_loss;
+        tail_validation_loss += tail_contribution->tail_validation_loss;
+        offset_plausibility_penalty += *offset_contribution;
+    }
+    return BuildObjectiveBreakdown(
+        fit_range_residual_objective,
+        tail_validation_loss,
+        offset_plausibility_penalty);
+}
+
+template<typename Evaluator>
+ObjectiveByKey BuildObjectiveByKeyImpl(
+    const CouplingGraphPartition & partition,
+    const ObjectiveDomain & domain,
+    const Evaluator & evaluator)
+{
+    ObjectiveByKey objective_by_key;
+    for (const auto & [key, sample_ref_list] :
+        partition.sample_id_list_by_key)
+    {
+        objective_by_key.emplace(
+            key,
+            EvaluateObjectiveContribution(
+                evaluator,
+                key,
+                sample_ref_list,
+                domain));
+    }
+    return objective_by_key;
+}
+
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+std::optional<double> EvaluateTrustModelResponseDirection(
+    const GaussianModel3D & previous_model,
+    const GaussianModel3D & candidate_model,
+    double distance)
+{
+    const auto previous_coordinates{ EncodeTransformedCoordinates(previous_model) };
+    const auto candidate_coordinates{ EncodeTransformedCoordinates(candidate_model) };
+    if (!previous_coordinates.has_value() || !candidate_coordinates.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto direction{ *candidate_coordinates - *previous_coordinates };
+    if (!direction.allFinite()) return std::nullopt;
+    if (direction.isZero()) return 0.0;
+    const auto invariants{ BuildTransformedModelInvariants(previous_model) };
+    if (!invariants.has_value()) return std::nullopt;
+    const auto jacobian{ EvaluateTransformedJacobian(*invariants, distance) };
+    if (!jacobian.has_value()) return std::nullopt;
+    const auto response_direction{ jacobian->dot(direction) };
+    return std::isfinite(response_direction) ?
+        std::optional<double>{ response_direction } : std::nullopt;
+}
+#endif
 
 } // namespace
 
@@ -1485,195 +1698,6 @@ ObjectiveDomain BuildObjectiveDomain(
     return domain;
 }
 
-namespace {
-
-template<typename ResidualEvaluator>
-std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
-    const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain,
-    const ResidualEvaluator & residual_evaluator)
-{
-    if (domain.active_atom_count == 0) return std::nullopt;
-    ObjectiveBreakdown contribution;
-    for (const auto & sample_ref : sample_ref_list)
-    {
-        const auto & owner_key{
-            domain.owner_key_by_atom_index.at(sample_ref.atom_index)
-        };
-        if (owner_key.empty()) continue;
-        const auto owner_iter{ domain.cluster_by_key.find(owner_key) };
-        if (owner_iter == domain.cluster_by_key.end() ||
-            !owner_iter->second.scale.has_value())
-        {
-            return std::nullopt;
-        }
-        const auto residual_sample{ residual_evaluator(sample_ref) };
-        if (!residual_sample.has_value()) return std::nullopt;
-        const auto is_fit_range{
-            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
-        };
-        const auto sample_count{
-            is_fit_range ? owner_iter->second.fit_sample_ref_list.size() :
-                owner_iter->second.tail_sample_ref_list.size()
-        };
-        if (sample_count == 0) return std::nullopt;
-        const auto scale{
-            is_fit_range ? owner_iter->second.scale->fit : owner_iter->second.scale->tail
-        };
-        const auto loss{
-            algorithm::CalculateCauchyLoss(
-                residual_sample->residual / scale,
-                kObjectiveRobustLossCutoffMultiplier)
-        };
-        const auto coefficient{
-            CalculateClusterAtomWeight(owner_key.size(), domain.active_atom_count) /
-            static_cast<double>(sample_count)
-        };
-        if (is_fit_range)
-        {
-            contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
-        }
-        else
-        {
-            contribution.tail_validation_loss += coefficient * loss;
-        }
-    }
-    if (!std::isfinite(contribution.fit_range_residual_objective) ||
-        !std::isfinite(contribution.tail_validation_loss))
-    {
-        return std::nullopt;
-    }
-    return contribution;
-}
-
-template<typename State>
-std::optional<double> EvaluateOffsetPlausibilityPenalty(
-    const State & state,
-    const ClusterKey & changed_key,
-    const ObjectiveDomain & domain)
-{
-    if (domain.active_atom_count == 0) return std::nullopt;
-    double penalty{ 0.0 };
-    for (const auto atom_index : changed_key)
-    {
-        const auto owner_iter{
-            domain.cluster_by_key.find(domain.owner_key_by_atom_index.at(atom_index))
-        };
-        if (owner_iter == domain.cluster_by_key.end() || !owner_iter->second.scale.has_value())
-        {
-            return std::nullopt;
-        }
-        const auto & model{ GetFitModel(state, atom_index) };
-        if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
-        const auto peak_signal{ model.SignalAtDistance(0.0) };
-        const auto offset_peak{ model.GetOffset() * model.OffsetBasisAtDistance(0.0) };
-        if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
-        {
-            return std::nullopt;
-        }
-        const auto offset_ratio{
-            std::abs(offset_peak) /
-            std::max({
-                std::abs(peak_signal),
-                owner_iter->second.scale->fit,
-                kObjectiveResidualScaleMin
-            })
-        };
-        const auto offset_excess{ std::max(0.0, offset_ratio - kOffsetPeakRatioMax) };
-        penalty +=
-            kOffsetPlausibilityPenaltyWeight * offset_excess * offset_excess /
-            static_cast<double>(domain.active_atom_count);
-    }
-    return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
-}
-
-template<typename Evaluator>
-std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const Evaluator & evaluator,
-    const ClusterKey & changed_key,
-    const std::vector<SampleRef> & sample_ref_list,
-    const ObjectiveDomain & domain)
-{
-    const auto residual_contribution{
-        EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
-    };
-    if (!residual_contribution.has_value()) return std::nullopt;
-    const auto offset_penalty{
-        EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), changed_key, domain)
-    };
-    if (!offset_penalty.has_value()) return std::nullopt;
-    return BuildObjectiveBreakdown(
-        residual_contribution->fit_range_residual_objective,
-        residual_contribution->tail_validation_loss,
-        *offset_penalty);
-}
-
-template<typename Evaluator>
-std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
-    const ObjectiveDomain & domain,
-    const Evaluator & evaluator)
-{
-    double fit_range_residual_objective{ 0.0 };
-    double tail_validation_loss{ 0.0 };
-    double offset_plausibility_penalty{ 0.0 };
-    for (const auto & [key, cluster_domain] : domain.cluster_by_key)
-    {
-        const auto fit_contribution{
-            EvaluateResidualObjectiveContribution(
-                cluster_domain.fit_sample_ref_list,
-                domain,
-                evaluator)
-        };
-        if (!fit_contribution.has_value()) return std::nullopt;
-        const auto tail_contribution{
-            EvaluateResidualObjectiveContribution(
-                cluster_domain.tail_sample_ref_list,
-                domain,
-                evaluator)
-        };
-        if (!tail_contribution.has_value()) return std::nullopt;
-        const auto offset_contribution{
-            EvaluateOffsetPlausibilityPenalty(
-                evaluator.GetState(),
-                key,
-                domain)
-        };
-        if (!offset_contribution.has_value()) return std::nullopt;
-        fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
-        fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
-        tail_validation_loss += fit_contribution->tail_validation_loss;
-        tail_validation_loss += tail_contribution->tail_validation_loss;
-        offset_plausibility_penalty += *offset_contribution;
-    }
-    return BuildObjectiveBreakdown(
-        fit_range_residual_objective,
-        tail_validation_loss,
-        offset_plausibility_penalty);
-}
-
-template<typename Evaluator>
-ObjectiveByKey BuildObjectiveByKeyImpl(
-    const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain,
-    const Evaluator & evaluator)
-{
-    ObjectiveByKey objective_by_key;
-    for (const auto & [key, sample_ref_list] :
-        partition.sample_id_list_by_key)
-    {
-        objective_by_key.emplace(
-            key,
-            EvaluateObjectiveContribution(
-                evaluator,
-                key,
-                sample_ref_list,
-                domain));
-    }
-    return objective_by_key;
-}
-
-} // namespace
-
 std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const ResidualBaseline & evaluator)
@@ -2216,33 +2240,6 @@ TrustRegionRadiusAction DetermineTrustModelShadowAction(
     }
     return TrustRegionRadiusAction::Keep;
 }
-
-namespace {
-
-std::optional<double> EvaluateTrustModelResponseDirection(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    double distance)
-{
-    const auto previous_coordinates{ EncodeTransformedCoordinates(previous_model) };
-    const auto candidate_coordinates{ EncodeTransformedCoordinates(candidate_model) };
-    if (!previous_coordinates.has_value() || !candidate_coordinates.has_value())
-    {
-        return std::nullopt;
-    }
-    const auto direction{ *candidate_coordinates - *previous_coordinates };
-    if (!direction.allFinite()) return std::nullopt;
-    if (direction.isZero()) return 0.0;
-    const auto invariants{ BuildTransformedModelInvariants(previous_model) };
-    if (!invariants.has_value()) return std::nullopt;
-    const auto jacobian{ EvaluateTransformedJacobian(*invariants, distance) };
-    if (!jacobian.has_value()) return std::nullopt;
-    const auto response_direction{ jacobian->dot(direction) };
-    return std::isfinite(response_direction) ?
-        std::optional<double>{ response_direction } : std::nullopt;
-}
-
-} // namespace
 
 TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     const SecondStageContext & context,
@@ -3038,8 +3035,6 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
     auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
     const auto & previous_state{ inputs.previous_state };
     const auto & previous_polish_provenance{ inputs.previous_polish_provenance };
-    using PartitionEntry = std::pair<const ClusterKey, std::vector<SampleRef>>;
-    using CandidateWork = std::pair<const PartitionEntry *, ClusterSolverWorkspace *>;
     std::vector<CandidateWork> candidate_work_list;
     candidate_work_list.reserve(partition.sample_id_list_by_key.size());
     for (const auto & entry : partition.sample_id_list_by_key)
