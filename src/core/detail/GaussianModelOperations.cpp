@@ -19,8 +19,15 @@ constexpr TransformedChange kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 
 using AtomPositionListByGroup = std::unordered_map<std::size_t, std::vector<std::size_t>>;
 
-AtomPositionListByGroup BuildAtomPositionListByGroup(const std::vector<std::size_t> & group_id_by_atom_position)
+AtomPositionListByGroup BuildAtomPositionListByGroup(
+    const std::vector<std::size_t> & group_id_by_atom_position,
+    std::size_t model_count)
 {
+    if (group_id_by_atom_position.size() != model_count)
+    {
+        throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
+    }
+
     AtomPositionListByGroup atom_position_list_by_group;
     atom_position_list_by_group.reserve(group_id_by_atom_position.size());
     for (std::size_t atom_position = 0; atom_position < group_id_by_atom_position.size(); atom_position++)
@@ -56,12 +63,11 @@ std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(const Gaus
         log_width_derivative -= model.GetOffset() * center_offset_basis_scale / width * std::exp(exponent);
     }
 
-    const Eigen::Vector2d shape_jacobian{ evaluation.signal, log_width_derivative };
-    if (!shape_jacobian.allFinite()) return std::nullopt;
+    if (!std::isfinite(log_width_derivative)) return std::nullopt;
 
     return SharedOffsetResponse{
         evaluation.response,
-        shape_jacobian,
+        Eigen::Vector2d{ evaluation.signal, log_width_derivative },
         evaluation.offset_basis
     };
 }
@@ -120,13 +126,8 @@ std::vector<GaussianModel3D> BuildGroupMedianModelList(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    if (group_id_by_atom_position.size() != model_list.size())
-    {
-        throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
-    }
-
     const auto atom_position_list_by_group{
-        BuildAtomPositionListByGroup(group_id_by_atom_position)
+        BuildAtomPositionListByGroup(group_id_by_atom_position, model_list.size())
     };
     auto group_median_model_list{ model_list };
     std::vector<GaussianModel3D> group_model_list;
@@ -153,13 +154,8 @@ std::vector<double> BuildGroupMedianOffsetList(
     const std::vector<std::size_t> & group_id_by_atom_position,
     const std::vector<GaussianModel3D> & model_list)
 {
-    if (group_id_by_atom_position.size() != model_list.size())
-    {
-        throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
-    }
-
     const auto atom_position_list_by_group{
-        BuildAtomPositionListByGroup(group_id_by_atom_position)
+        BuildAtomPositionListByGroup(group_id_by_atom_position, model_list.size())
     };
     std::vector<double> offset_list;
     offset_list.reserve(model_list.size());
@@ -221,20 +217,18 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value()) return std::nullopt;
 
         GaussianModel3D::TransformedCoordinates shape_coordinates{
-            (*previous_coordinates)(static_cast<Eigen::Index>(
-                GaussianModel3D::LogPeakHeightCoordinateIndex())) +
-                damping * (
-                    (*raw_coordinates)(static_cast<Eigen::Index>(
-                        GaussianModel3D::LogPeakHeightCoordinateIndex())) -
-                    (*previous_coordinates)(static_cast<Eigen::Index>(
-                        GaussianModel3D::LogPeakHeightCoordinateIndex()))),
-            (*previous_coordinates)(static_cast<Eigen::Index>(
-                GaussianModel3D::LogWidthCoordinateIndex())) +
-                damping * (
-                    (*raw_coordinates)(static_cast<Eigen::Index>(
-                        GaussianModel3D::LogWidthCoordinateIndex())) -
-                    (*previous_coordinates)(static_cast<Eigen::Index>(
-                        GaussianModel3D::LogWidthCoordinateIndex()))),
+            std::lerp(
+                (*previous_coordinates)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogPeakHeightCoordinateIndex())),
+                (*raw_coordinates)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogPeakHeightCoordinateIndex())),
+                damping),
+            std::lerp(
+                (*previous_coordinates)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogWidthCoordinateIndex())),
+                (*raw_coordinates)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogWidthCoordinateIndex())),
+                damping),
             0.0
         };
         const auto shape_model{
@@ -242,11 +236,12 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
         };
         if (!shape_model.has_value()) return std::nullopt;
 
-        const auto previous_shared_offset{ previous_shared_offset_list.at(atom_position) };
-        const auto raw_shared_offset{ raw_shared_offset_list.at(atom_position) };
         const auto candidate_model{
             shape_model->WithOffset(
-                previous_shared_offset + damping * (raw_shared_offset - previous_shared_offset))
+                std::lerp(
+                    previous_shared_offset_list.at(atom_position),
+                    raw_shared_offset_list.at(atom_position),
+                    damping))
         };
         if (!IsValidSecondStageGaussianModel(candidate_model)) return std::nullopt;
         candidate_model_list.emplace_back(candidate_model);
@@ -256,7 +251,7 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
 
 std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(const GaussianModel3D & model, double distance)
 {
-    if (!model.ToTransformedCoordinates().has_value()) return std::nullopt;
+    if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
     return EvaluateValidSharedOffsetResponse(model, distance);
 }
 
@@ -266,8 +261,7 @@ std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const 
     if (!transformed.has_value()) return std::nullopt;
 
     const auto peak_height{
-        std::exp((*transformed)(static_cast<Eigen::Index>(
-            GaussianModel3D::LogPeakHeightCoordinateIndex())))
+        std::exp((*transformed)(static_cast<Eigen::Index>(GaussianModel3D::LogPeakHeightCoordinateIndex())))
     };
     if (!std::isfinite(peak_height)) return std::nullopt;
 
@@ -420,22 +414,17 @@ std::optional<double> CalculateModelTrustRegionStepNorm(
     double step_norm{ 0.0 };
     for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
-        const auto previous{
-            previous_model_list.at(atom_position).ToTransformedCoordinates()
+        const auto change{
+            CalculateTransformedChange(
+                candidate_model_list.at(atom_position),
+                previous_model_list.at(atom_position))
         };
-        const auto candidate{
-            candidate_model_list.at(atom_position).ToTransformedCoordinates()
-        };
-        if (!previous.has_value() || !candidate.has_value()) return std::nullopt;
         for (std::size_t parameter_index = 0;
             parameter_index < kTrustRegionParameterScale.size(); parameter_index++)
         {
-            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
             step_norm = std::max(
                 step_norm,
-                std::abs(
-                    (*candidate)(eigen_index) -
-                    (*previous)(eigen_index)) / kTrustRegionParameterScale.at(parameter_index));
+                change.at(parameter_index) / kTrustRegionParameterScale.at(parameter_index));
         }
     }
     return std::isfinite(step_norm) ? std::optional<double>{ step_norm } : std::nullopt;
