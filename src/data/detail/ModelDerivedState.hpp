@@ -7,7 +7,7 @@
 #include <tuple>
 #include <vector>
 
-#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 
 namespace rhbm_gem {
 

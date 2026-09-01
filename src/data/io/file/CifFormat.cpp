@@ -10,7 +10,7 @@
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
-#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 
 #include <algorithm>
 #include <array>

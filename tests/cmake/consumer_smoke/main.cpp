@@ -11,6 +11,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <array>

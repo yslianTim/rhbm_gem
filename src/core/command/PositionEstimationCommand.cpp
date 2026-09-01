@@ -1,7 +1,7 @@
 #include "detail/CommandRunner.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>

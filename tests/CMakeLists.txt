@@ -129,6 +129,7 @@ set(DATA_SCHEMA_TEST_SOURCES
 
 set(UTILS_ALGORITHM_TEST_SOURCES
     utils/algorithm/ConvergenceAlgorithm_test.cpp
+    utils/algorithm/KDTreeAlgorithm_test.cpp
     utils/algorithm/RobustLoss_test.cpp
     utils/algorithm/ScaleReferenceTracker_test.cpp
     utils/algorithm/WeightedRidgeSolver_test.cpp
@@ -141,7 +142,6 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/ElectricPotential_test.cpp
     utils/math/GaussianModel3D_test.cpp
     utils/math/NumericValidation_test.cpp
-    utils/math/KDTreeAlgorithm_test.cpp
     utils/math/GridSampler_test.cpp
     utils/math/SphereSampler_test.cpp
 )
