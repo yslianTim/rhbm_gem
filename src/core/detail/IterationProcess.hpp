@@ -8,7 +8,6 @@
 #include <map>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -20,6 +19,13 @@ enum class SecondStageSeedSource
     GroupPrior,
     GroupMedian,
     GlobalMedian
+};
+
+constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
+    SecondStageSeedSource::GroupPosterior,
+    SecondStageSeedSource::GroupPrior,
+    SecondStageSeedSource::GroupMedian,
+    SecondStageSeedSource::GlobalMedian
 };
 
 struct SecondStageSeedCandidates
@@ -37,6 +43,46 @@ struct SecondStageSeedSelection
 };
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates);
+
+enum class SecondStageInitializationFailure
+{
+    None,
+    SelectedSeedUnavailable,
+    UnselectedSeedUnavailable
+};
+
+enum class SecondStageStopReason
+{
+    None,
+    Quarantine,
+    Converged,
+    AuditPatience,
+    AllRejectedBacktrackingExhausted,
+    AllRejectedAtMaximumIterations,
+    MaximumIterations
+};
+
+constexpr std::size_t kMaximumIterations{ 100 };
+
+struct IterationResult
+{
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
+    std::vector<BoundaryComponentReconciliationDiagnostic>
+        boundary_reconciliation_diagnostic_list{};
+    TrustRegionRadiusUpdate trust_region_update{};
+    std::size_t attempt_number{ 0 };
+    std::size_t accepted_iteration_count{ 0 };
+    std::size_t active_atom_count{ 0 };
+    std::size_t quarantine_atom_count{ 0 };
+    PolishProgress polish_progress{};
+    std::size_t suspicious_atom_count{ 0 };
+    std::optional<double> accepted_maximum_transformed_change{};
+    double operator_maximum_transformed_change{ 0.0 };
+    SecondStageStopReason stop_reason{ SecondStageStopReason::None };
+    bool objective_domain_changed{ false };
+    TransformedChange transformed_change_percentile{};
+};
 
 constexpr double kAdaptiveTopologyRebuildDriftThreshold{ 0.10 };
 constexpr std::size_t kAdaptiveTopologyRebuildAcceptedIterationInterval{ 3 };
@@ -60,11 +106,7 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-std::string_view GetFixedPointResidualInterpretationText(
-    bool operator_complete,
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & fixed_point_residual);
+constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
 
 struct ActiveCoordinatePopulation
 {
@@ -143,6 +185,21 @@ struct ConvergenceCertificate
     bool InvariantsClear() const;
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;
+};
+
+enum class FinalPolishCertificationPolicy
+{
+    RequireResidualNonRegression,
+    RequireStrictFixedPoint
+};
+
+enum class FinalPolishResidualSafetyStatus
+{
+    NotEvaluated,
+    AbsolutePassed,
+    RelativePassed,
+    Failed,
+    Error
 };
 
 SolverQualificationAudit EvaluateSolverQualificationAudit(

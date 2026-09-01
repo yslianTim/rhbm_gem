@@ -25,6 +25,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/CouplingGraph.cpp
     core/detail/JointFitting.cpp
     core/detail/CandidateSelection.cpp
+    core/detail/Diagnosis.cpp
     core/detail/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp

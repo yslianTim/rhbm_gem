@@ -20,6 +20,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
