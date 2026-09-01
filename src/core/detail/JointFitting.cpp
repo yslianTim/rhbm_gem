@@ -69,6 +69,25 @@ std::optional<JointFittingGroupLayout> BuildJointFittingGroupLayout(
     return layout;
 }
 
+bool HasMaterialJointFittingChange(
+    const std::vector<GaussianModel3D> & candidate_model_list,
+    const std::vector<GaussianModel3D> & reference_model_list)
+{
+    for (std::size_t position = 0; position < candidate_model_list.size(); position++)
+    {
+        const auto change{
+            CalculateTransformedChange(
+                candidate_model_list.at(position),
+                reference_model_list.at(position))
+        };
+        if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 double CalculateJointFittingGroupMedian(std::vector<double> & value_list)
 {
     std::ranges::sort(value_list);
@@ -332,8 +351,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     std::vector<double> response_list;
     Eigen::VectorXd group_column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> group_column_cross_sum_map;
-    std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
-    group_row_basis_entries.reserve(static_cast<std::size_t>(column_count));
+    std::map<Eigen::Index, double> group_basis_by_column;
     for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
     {
         const auto active_index{ active_index_list.at(atom_position) };
@@ -357,10 +375,10 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
             auto residual{ sample.response - target_signal };
-            Eigen::VectorXd group_basis{ Eigen::VectorXd::Zero(column_count) };
+            group_basis_by_column.clear();
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                group_basis(target_offset_column) += target_basis;
+                group_basis_by_column[target_offset_column] += target_basis;
             }
 
             for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
@@ -422,50 +440,45 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 residual -= signal;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
-                    group_basis(neighbor_offset_column) += basis;
+                    group_basis_by_column[neighbor_offset_column] += basis;
                 }
             }
             if (!std::isfinite(residual))
             {
                 throw std::runtime_error("Joint offset residual is not finite.");
             }
-            if (!group_basis.allFinite())
+            for (auto basis_iter = group_basis_by_column.begin();
+                basis_iter != group_basis_by_column.end();)
             {
-                throw std::runtime_error("Joint offset group basis is invalid.");
-            }
-            group_row_basis_entries.clear();
-            for (Eigen::Index column_index = 0; column_index < group_basis.size(); column_index++)
-            {
-                const auto basis{ group_basis(column_index) };
-                if (std::abs(basis) <= std::numeric_limits<double>::epsilon())
+                if (!std::isfinite(basis_iter->second))
                 {
+                    throw std::runtime_error("Joint offset group basis is invalid.");
+                }
+                if (std::abs(basis_iter->second) <= std::numeric_limits<double>::epsilon())
+                {
+                    basis_iter = group_basis_by_column.erase(basis_iter);
                     continue;
                 }
-                group_row_basis_entries.emplace_back(column_index, basis);
+                ++basis_iter;
             }
-            if (group_row_basis_entries.empty()) continue;
+            if (group_basis_by_column.empty()) continue;
 
-            const auto row_index{
-                static_cast<Eigen::Index>(response_list.size())
-            };
+            const auto row_index{ static_cast<Eigen::Index>(response_list.size()) };
             response_list.emplace_back(residual);
-            for (const auto & [column_index, basis] : group_row_basis_entries)
+            for (const auto & [column_index, basis] : group_basis_by_column)
             {
                 triplet_list.emplace_back(row_index, column_index, basis);
                 group_column_square_sum(column_index) += basis * basis;
             }
-            for (std::size_t i = 0; i < group_row_basis_entries.size(); i++)
+            for (auto left_iter = group_basis_by_column.begin();
+                left_iter != group_basis_by_column.end();
+                ++left_iter)
             {
-                const auto [left_column, left_basis]{
-                    group_row_basis_entries.at(i)
-                };
-                for (std::size_t j = i + 1; j < group_row_basis_entries.size(); j++)
+                auto right_iter{ left_iter };
+                for (++right_iter; right_iter != group_basis_by_column.end(); ++right_iter)
                 {
-                    const auto [right_column, right_basis]{
-                        group_row_basis_entries.at(j)
-                    };
-                    const auto column_pair{ std::minmax(left_column, right_column) };
-                    group_column_cross_sum_map[column_pair] += left_basis * right_basis;
+                    group_column_cross_sum_map[
+                        { left_iter->first, right_iter->first }] += left_iter->second * right_iter->second;
                 }
             }
         }
@@ -740,13 +753,20 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
 
     JointPolishParameterization parameterization;
     parameterization.m_group_position_by_atom = std::move(group_layout->group_position_by_atom);
-    parameterization.m_shape_position_by_atom.resize(base_model_list.size());
+    parameterization.m_shape_column_by_atom.assign(
+        base_model_list.size(),
+        JointPolishParameterization::kInactiveColumn);
     parameterization.m_base_shape_coordinate_by_atom.reserve(base_model_list.size());
-    parameterization.m_offset_position_by_group.resize(group_layout->group_count);
+    parameterization.m_offset_column_by_group.assign(
+        group_layout->group_count,
+        JointPolishParameterization::kInactiveColumn);
     parameterization.m_base_offset_by_group.resize(group_layout->group_count);
-    for (const auto is_shape_active : shape_active_mask)
+    Eigen::Index next_column{ 0 };
+    for (std::size_t atom_position = 0; atom_position < shape_active_mask.size(); atom_position++)
     {
-        if (is_shape_active != 0) parameterization.m_shape_atom_count++;
+        if (shape_active_mask.at(atom_position) == 0) continue;
+        parameterization.m_shape_column_by_atom.at(atom_position) = next_column;
+        next_column += JointPolishParameterization::kShapeParameterSize;
     }
     std::vector<int> offset_activity_by_group(group_layout->group_count, -1);
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
@@ -766,24 +786,13 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
         group_position < offset_activity_by_group.size();
         group_position++)
     {
-        if (offset_activity_by_group.at(group_position) != 0)
+        if (offset_activity_by_group.at(group_position) == 1)
         {
-            parameterization.m_offset_position_by_group.at(group_position) =
-                parameterization.m_offset_group_count++;
-        }
-        else
-        {
-            parameterization.m_offset_position_by_group.at(group_position) =
-                group_layout->group_count;
+            parameterization.m_offset_column_by_group.at(group_position) = next_column++;
         }
     }
-    parameterization.m_seed_parameter = Eigen::VectorXd::Zero(
-        static_cast<Eigen::Index>(
-            parameterization.m_shape_atom_count *
-                JointPolishParameterization::kShapeParameterSize +
-                parameterization.m_offset_group_count));
+    parameterization.m_seed_parameter = Eigen::VectorXd::Zero(next_column);
     std::vector<std::vector<double>> offset_list_by_group(group_layout->group_count);
-    std::size_t shape_position{ 0 };
 
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
@@ -794,24 +803,19 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
         const auto atom_group_position{
             parameterization.m_group_position_by_atom.at(atom_position)
         };
-        parameterization.m_base_shape_coordinate_by_atom.emplace_back(
-            (*transformed)(static_cast<Eigen::Index>(
-                GaussianModel3D::LogPeakHeightCoordinateIndex())),
-            (*transformed)(static_cast<Eigen::Index>(
-                GaussianModel3D::LogWidthCoordinateIndex())));
-        parameterization.m_shape_position_by_atom.at(atom_position) =
-            shape_active_mask.at(atom_position) != 0 ?
-                shape_position++ : parameterization.m_shape_atom_count;
+        const Eigen::Vector2d base_shape_coordinate{
+            (*transformed)(static_cast<Eigen::Index>(GaussianModel3D::LogPeakHeightCoordinateIndex())),
+            (*transformed)(static_cast<Eigen::Index>(GaussianModel3D::LogWidthCoordinateIndex()))
+        };
+        parameterization.m_base_shape_coordinate_by_atom.emplace_back(base_shape_coordinate);
         if (parameterization.HasShapeColumn(atom_position))
         {
             parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 0)) =
-                (*transformed)(static_cast<Eigen::Index>(
-                    GaussianModel3D::LogPeakHeightCoordinateIndex()));
+                base_shape_coordinate(0);
             parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 1)) =
-                (*transformed)(static_cast<Eigen::Index>(
-                    GaussianModel3D::LogWidthCoordinateIndex()));
+                base_shape_coordinate(1);
         }
         offset_list_by_group.at(atom_group_position).emplace_back(
             base_model_list.at(atom_position).GetOffset());
@@ -824,14 +828,12 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
         const auto median{ CalculateJointFittingGroupMedian(offset_list) };
         parameterization.m_base_offset_by_group.at(current_group_position) = median;
-        if (parameterization.m_offset_position_by_group.at(current_group_position) <
-            parameterization.m_offset_group_count)
+        const auto offset_column{
+            parameterization.m_offset_column_by_group.at(current_group_position)
+        };
+        if (offset_column != JointPolishParameterization::kInactiveColumn)
         {
-            parameterization.m_seed_parameter(
-                static_cast<Eigen::Index>(
-                    parameterization.m_shape_atom_count *
-                        JointPolishParameterization::kShapeParameterSize +
-                    parameterization.m_offset_position_by_group.at(current_group_position))) = median;
+            parameterization.m_seed_parameter(offset_column) = median;
         }
     }
     return parameterization;
@@ -892,8 +894,10 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     {
         selected_snapshot.at(key.at(local_position)) = seed_model_list.at(local_position);
     }
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, std::move(selected_snapshot))
+    const auto unselected_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            std::move(selected_snapshot)).unselected
     };
 
     std::vector<Eigen::Triplet<double>> triplet_list;
@@ -967,7 +971,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 context.unselected_atom_list.at(contributor_index)
             };
             const auto & model{
-                GetFitModel(model_snapshot.unselected, contributor_index)
+                GetFitModel(unselected_snapshot, contributor_index)
             };
             const auto evaluation{ EvaluateSharedOffsetResponse(model, distance) };
             if (!evaluation.has_value()) return false;
@@ -1142,21 +1146,9 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
-                bool has_material_change{ false };
-                for (std::size_t atom_position = 0; atom_position < candidate_model_list->size(); atom_position++)
-                {
-                    const auto change{
-                        CalculateTransformedChange(
-                            candidate_model_list->at(atom_position),
-                            seed_model_list->at(atom_position))
-                    };
-                    if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
-                    {
-                        has_material_change = true;
-                        break;
-                    }
-                }
-                if (!has_material_change)
+                if (!HasMaterialJointFittingChange(
+                        *candidate_model_list,
+                        *seed_model_list))
                 {
                     return std::nullopt;
                 }
@@ -1304,6 +1296,26 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         return result;
     }
 
+    std::vector<std::vector<GaussianModel3D>> previous_model_list_by_trust_region;
+    previous_model_list_by_trust_region.reserve(trust_region_list.size());
+    for (const auto & trust_region : trust_region_list)
+    {
+        if (!std::isfinite(trust_region.radius) ||
+            trust_region.radius <= 0.0 || trust_region.key.empty())
+        {
+            return result;
+        }
+        auto & previous_model_list{
+            previous_model_list_by_trust_region.emplace_back()
+        };
+        previous_model_list.reserve(trust_region.key.size());
+        for (const auto atom_index : trust_region.key)
+        {
+            if (atom_index >= context.size()) return result;
+            previous_model_list.emplace_back(endpoint_state.GetBaseModel(atom_index));
+        }
+    }
+
     double damping{ 1.0 };
     while (damping >= std::numeric_limits<double>::epsilon())
     {
@@ -1317,21 +1329,18 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         }
         double maximum_normalized_trust_step{ 0.0 };
         bool trust_region_accepted{ true };
-        for (const auto & trust_region : trust_region_list)
+        for (std::size_t trust_region_position = 0;
+            trust_region_position < trust_region_list.size();
+            trust_region_position++)
         {
-            if (!std::isfinite(trust_region.radius) ||
-                trust_region.radius <= 0.0 || trust_region.key.empty())
-            {
-                return result;
-            }
-            std::vector<GaussianModel3D> previous_model_list;
+            const auto & trust_region{ trust_region_list.at(trust_region_position) };
+            const auto & previous_model_list{
+                previous_model_list_by_trust_region.at(trust_region_position)
+            };
             std::vector<GaussianModel3D> candidate_cluster_model_list;
-            previous_model_list.reserve(trust_region.key.size());
             candidate_cluster_model_list.reserve(trust_region.key.size());
             for (const auto atom_index : trust_region.key)
             {
-                if (atom_index >= context.size()) return result;
-                previous_model_list.emplace_back(endpoint_state.GetBaseModel(atom_index));
                 const auto closure_iter{
                     std::ranges::lower_bound(
                         offset_closure_atom_index_list,
@@ -1374,21 +1383,9 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             damping *= 0.5;
             continue;
         }
-        bool has_material_change{ false };
-        for (std::size_t position = 0; position < candidate_model_list->size(); position++)
-        {
-            const auto change{
-                CalculateTransformedChange(
-                    candidate_model_list->at(position),
-                    endpoint_model_list.at(position))
-            };
-            if (IsTransformedChangeMaterial(change, kJointPolishTransformedChangeTolerance))
-            {
-                has_material_change = true;
-                break;
-            }
-        }
-        if (!has_material_change)
+        if (!HasMaterialJointFittingChange(
+                *candidate_model_list,
+                endpoint_model_list))
         {
             result.status = BoundaryJointCorrectionStatus::NoMaterialChange;
             return result;

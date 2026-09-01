@@ -117,14 +117,13 @@ JointOffsetSolveResult EstimateJointOffsets(
 
 class JointPolishParameterization
 {
-    static constexpr std::size_t kShapeParameterSize{ 2 };
+    static constexpr Eigen::Index kShapeParameterSize{ 2 };
+    static constexpr Eigen::Index kInactiveColumn{ -1 };
     std::vector<std::size_t> m_group_position_by_atom{};
-    std::vector<std::size_t> m_shape_position_by_atom{};
-    std::vector<std::size_t> m_offset_position_by_group{};
+    std::vector<Eigen::Index> m_shape_column_by_atom{};
+    std::vector<Eigen::Index> m_offset_column_by_group{};
     std::vector<Eigen::Vector2d> m_base_shape_coordinate_by_atom{};
     std::vector<double> m_base_offset_by_group{};
-    std::size_t m_shape_atom_count{ 0 };
-    std::size_t m_offset_group_count{ 0 };
     Eigen::VectorXd m_seed_parameter{};
 
 public:
@@ -143,26 +142,23 @@ public:
 
     Eigen::Index ShapeColumn(std::size_t atom_position, std::size_t shape_parameter_index) const
     {
-        return static_cast<Eigen::Index>(
-            m_shape_position_by_atom.at(atom_position) * kShapeParameterSize + shape_parameter_index);
+        return m_shape_column_by_atom.at(atom_position) +
+            static_cast<Eigen::Index>(shape_parameter_index);
     }
 
     bool HasShapeColumn(std::size_t atom_position) const
     {
-        return m_shape_position_by_atom.at(atom_position) < m_shape_atom_count;
+        return m_shape_column_by_atom.at(atom_position) != kInactiveColumn;
     }
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
-        return static_cast<Eigen::Index>(
-            m_shape_atom_count * kShapeParameterSize +
-            m_offset_position_by_group.at(m_group_position_by_atom.at(atom_position)));
+        return m_offset_column_by_group.at(m_group_position_by_atom.at(atom_position));
     }
 
     bool HasOffsetColumn(std::size_t atom_position) const
     {
-        return m_offset_position_by_group.at(m_group_position_by_atom.at(atom_position)) <
-            m_offset_group_count;
+        return OffsetColumn(atom_position) != kInactiveColumn;
     }
 
     std::optional<std::vector<GaussianModel3D>> DecodeModels(
