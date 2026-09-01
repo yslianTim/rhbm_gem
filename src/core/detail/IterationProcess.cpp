@@ -49,6 +49,13 @@ constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMa
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
 constexpr double kConvergencePercentile{ 0.99 };
+
+enum class AllRejectedResolution
+{
+    MaximumIterations,
+    BacktrackingExhausted
+};
+
 constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
     SecondStageSeedSource::GroupPosterior,
     SecondStageSeedSource::GroupPrior,

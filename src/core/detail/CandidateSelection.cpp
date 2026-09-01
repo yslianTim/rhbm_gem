@@ -80,8 +80,6 @@ struct ClusterCandidateResult
     std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
     TrustModelCandidateFunnel trust_model_candidate_funnel{};
 #endif
-    std::vector<std::pair<std::size_t, SuspiciousUpdateMode>>
-        terminal_guard_block_list{};
 };
 
 struct IndividualCandidateSelection
@@ -89,7 +87,6 @@ struct IndividualCandidateSelection
     CandidateSelection selection{};
     std::map<ClusterKey, PolishProgress> polish_progress_by_key{};
     std::map<ClusterKey, FitStatePatch> candidate_patch_by_key{};
-    std::size_t rescue_suspicious_exclusion_count{ 0 };
     std::size_t rescue_hard_failure_exclusion_count{ 0 };
     std::size_t rescue_invalid_proposal_exclusion_count{ 0 };
     std::size_t rescue_objective_unavailable_exclusion_count{ 0 };
@@ -491,8 +488,7 @@ PerformanceCounters::~PerformanceCounters()
         << m_boundary_rescue_accepted_count << "/"
         << m_boundary_rescue_fallback_count << "/"
         << m_boundary_rescue_rejected_count << "\n"
-        << " - boundary_rescue_exclusions_suspicious/hard/invalid/no-objective = "
-        << m_boundary_rescue_suspicious_exclusion_count << "/"
+        << " - boundary_rescue_exclusions_hard/invalid/no-objective = "
         << m_boundary_rescue_hard_failure_exclusion_count << "/"
         << m_boundary_rescue_invalid_proposal_exclusion_count << "/"
         << m_boundary_rescue_objective_unavailable_exclusion_count << "\n"
@@ -609,12 +605,10 @@ void PerformanceCounters::RecordBoundaryRescue(bool accepted, bool used_fallback
 }
 
 void PerformanceCounters::RecordBoundaryRescueExclusions(
-    std::size_t suspicious_count,
     std::size_t hard_failure_count,
     std::size_t invalid_proposal_count,
     std::size_t objective_unavailable_count)
 {
-    m_boundary_rescue_suspicious_exclusion_count += suspicious_count;
     m_boundary_rescue_hard_failure_exclusion_count += hard_failure_count;
     m_boundary_rescue_invalid_proposal_exclusion_count += invalid_proposal_count;
     m_boundary_rescue_objective_unavailable_exclusion_count += objective_unavailable_count;
@@ -917,32 +911,6 @@ bool SuspiciousBlockActivity::HasActiveOffset(std::size_t atom_index) const
         hard_failure_atom_mask.at(atom_index) == 0;
 }
 
-static bool HasSuspiciousCenterSignFlip(
-    double previous_innermost_response,
-    double candidate_innermost_response,
-    double previous_residual_scale)
-{
-    if (!std::isfinite(previous_innermost_response) ||
-        !std::isfinite(candidate_innermost_response) ||
-        !std::isfinite(previous_residual_scale) ||
-        previous_residual_scale < 0.0)
-    {
-        return false;
-    }
-    const auto noise_threshold{
-        std::max(
-            kSuspiciousProfileNoiseScaleMultiplier * previous_residual_scale,
-            kSuspiciousProfileScaleMin)
-    };
-    const auto negative_threshold{
-        std::max(
-            kSuspiciousProfileInnermostSignFlipRatio * previous_innermost_response,
-            noise_threshold)
-    };
-    return previous_innermost_response > noise_threshold &&
-        candidate_innermost_response < -negative_threshold;
-}
-
 static double CalculateZeroOffsetResponse(
     const LocalPotentialSample & sample,
     const GaussianModel3D & model)
@@ -1053,127 +1021,15 @@ static bool HasUsableSuspiciousProfileBaseline(
     return true;
 }
 
-static bool HasSuspiciousOffsetMagnitude(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    double previous_profile_max_abs_response)
-{
-    const auto previous_offset_response{
-        previous_model.GetOffset() * previous_model.OffsetBasisAtDistance(0.0)
-    };
-    const auto candidate_offset_response{
-        candidate_model.GetOffset() * candidate_model.OffsetBasisAtDistance(0.0)
-    };
-    if (!std::isfinite(previous_offset_response) || !std::isfinite(candidate_offset_response))
-    {
-        return true;
-    }
-    const auto reference_scale{
-        std::max({
-            std::abs(previous_model.SignalAtDistance(0.0)),
-            std::abs(previous_offset_response),
-            previous_profile_max_abs_response,
-            kSuspiciousProfileScaleMin
-        })
-    };
-    return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
-}
-
-static bool HasSuspiciousRadialRebound(
-    const ZeroOffsetProfileDiagnostics & previous_profile,
-    const ZeroOffsetProfileDiagnostics & candidate_profile)
-{
-    if (candidate_profile.radius_response_median_list.size() < kSuspiciousProfileMinimumRadiusCount)
-    {
-        return false;
-    }
-    const auto reference_innermost_scale{
-        std::abs(previous_profile.innermost_response)
-    };
-    const auto noise_threshold{
-        std::max(
-            kSuspiciousProfileNoiseScaleMultiplier * previous_profile.robust_residual_scale,
-            kSuspiciousProfileScaleMin)
-    };
-    const auto rebound_magnitude_threshold{
-        std::max(
-            kSuspiciousProfileReboundReferenceRatio * reference_innermost_scale,
-            noise_threshold)
-    };
-    const auto upward_excursion_threshold{
-        std::max(
-            kSuspiciousProfileUpwardExcursionReferenceRatio * reference_innermost_scale,
-            noise_threshold)
-    };
-    const auto candidate_innermost_scale{
-        std::max(
-            std::abs(candidate_profile.innermost_response),
-            kSuspiciousProfileScaleMin)
-    };
-    int upward_excursion_count{ 0 };
-    auto previous_abs_response{ std::abs(candidate_profile.radius_response_median_list.front()) };
-    for (std::size_t i = 1; i < candidate_profile.radius_response_median_list.size(); i++)
-    {
-        const auto current_abs_response{
-            std::abs(candidate_profile.radius_response_median_list.at(i))
-        };
-        if (current_abs_response > kSuspiciousProfileReboundCenterRatio * candidate_innermost_scale &&
-            current_abs_response > rebound_magnitude_threshold)
-        {
-            return true;
-        }
-        if (current_abs_response > previous_abs_response + upward_excursion_threshold)
-        {
-            upward_excursion_count++;
-        }
-        previous_abs_response = current_abs_response;
-    }
-    return upward_excursion_count > kSuspiciousProfileMaximumUpwardExcursions;
-}
-
-static bool HasSuspiciousWidthGrowth(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile)
-{
-    if (!std::isfinite(candidate_model.GetWidth()) || candidate_model.GetWidth() <= 0.0) return true;
-    if (candidate_model.GetWidth() > kSuspiciousWidthGrowthLimit * previous_model.GetWidth()) return true;
-    if (!previous_profile.has_value()) return false;
-    const auto distance_range{ previous_profile->distance_range };
-    return distance_range > 0.0 && candidate_model.GetWidth() > kSuspiciousWidthRangeLimitRatio * distance_range;
-}
-
-static bool HasSuspiciousAmplitudeOffsetCompensation(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    const std::optional<ZeroOffsetProfileDiagnostics> & previous_profile)
-{
-    const auto signal_delta{
-        candidate_model.SignalAtDistance(0.0) - previous_model.SignalAtDistance(0.0)
-    };
-    const auto offset_delta_response{
-        candidate_model.GetOffset() * candidate_model.OffsetBasisAtDistance(0.0) -
-            previous_model.GetOffset() * previous_model.OffsetBasisAtDistance(0.0)
-    };
-    const auto reference_scale{
-        std::max({
-            previous_profile.has_value() ? std::abs(previous_profile->innermost_response) : 0.0,
-            std::abs(previous_model.SignalAtDistance(0.0)),
-            kSuspiciousProfileScaleMin
-        })
-    };
-    return signal_delta * offset_delta_response < 0.0 &&
-        std::abs(signal_delta) > kSuspiciousCompensationResponseRatio * reference_scale &&
-        std::abs(offset_delta_response) > kSuspiciousCompensationResponseRatio * reference_scale;
-}
-
 static double CalculateNormalizedRatioMargin(double observed, double limit)
 {
-    if (!std::isfinite(observed) || !std::isfinite(limit) || limit <= 0.0)
+    if (std::isfinite(observed) && std::isfinite(limit) && limit > 0.0)
     {
-        return std::numeric_limits<double>::infinity();
+        return observed / limit - 1.0;
     }
-    return observed / limit - 1.0;
+    return observed > limit ?
+        std::numeric_limits<double>::infinity() :
+        -std::numeric_limits<double>::infinity();
 }
 
 static double CalculateOffsetMagnitudeMargin(
@@ -1187,6 +1043,11 @@ static double CalculateOffsetMagnitudeMargin(
     const auto candidate_offset_response{
         candidate_model.GetOffset() * candidate_model.OffsetBasisAtDistance(0.0)
     };
+    if (!std::isfinite(previous_offset_response) ||
+        !std::isfinite(candidate_offset_response))
+    {
+        return std::numeric_limits<double>::infinity();
+    }
     const auto reference_scale{
         std::max({
             std::abs(previous_model.SignalAtDistance(0.0)),
@@ -1319,7 +1180,7 @@ static double CalculateAmplitudeOffsetCompensationMargin(
         candidate_model.GetOffset() * candidate_model.OffsetBasisAtDistance(0.0) -
             previous_model.GetOffset() * previous_model.OffsetBasisAtDistance(0.0)
     };
-    if (signal_delta * offset_delta_response >= 0.0) return -1.0;
+    if (!(signal_delta * offset_delta_response < 0.0)) return -1.0;
     const auto reference_scale{
         std::max({
             previous_profile.has_value() ? std::abs(previous_profile->innermost_response) : 0.0,
@@ -1363,16 +1224,13 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
         assessment.normalized_margin = std::numeric_limits<double>::infinity();
         return assessment;
     }
-    assessment.normalized_margin = CalculateOffsetMagnitudeMargin(
-        previous_model,
-        candidate_model,
-        previous_analysis.profile.has_value() ?
-            previous_analysis.profile->max_abs_response : 0.0);
-    if (HasSuspiciousOffsetMagnitude(
+    const auto offset_margin{ CalculateOffsetMagnitudeMargin(
             previous_model,
             candidate_model,
             previous_analysis.profile.has_value() ?
-                previous_analysis.profile->max_abs_response : 0.0))
+                previous_analysis.profile->max_abs_response : 0.0) };
+    assessment.normalized_margin = offset_margin;
+    if (offset_margin > 0.0)
     {
         assessment.reason = SuspiciousGaussianReason::OffsetMagnitude;
         return assessment;
@@ -1399,10 +1257,7 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
         assessment.normalized_margin = std::max(
             assessment.normalized_margin,
             sign_flip_margin);
-        if (HasSuspiciousCenterSignFlip(
-                previous_analysis.profile->innermost_response,
-                candidate_analysis.profile->innermost_response,
-                previous_analysis.profile->robust_residual_scale))
+        if (sign_flip_margin > 0.0)
         {
             assessment.reason = SuspiciousGaussianReason::CenterSignFlip;
             assessment.normalized_margin = sign_flip_margin;
@@ -1416,9 +1271,7 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
         assessment.normalized_margin = std::max(
             assessment.normalized_margin,
             rebound_margin);
-        if (HasSuspiciousRadialRebound(
-                *previous_analysis.profile,
-                *candidate_analysis.profile))
+        if (rebound_margin > 0.0)
         {
             assessment.reason = SuspiciousGaussianReason::RadialRebound;
             assessment.normalized_margin = rebound_margin;
@@ -1433,7 +1286,7 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
         CalculateWidthGrowthMargin(previous_model, candidate_model, previous_analysis.profile)
     };
     assessment.normalized_margin = std::max(assessment.normalized_margin, width_margin);
-    if (HasSuspiciousWidthGrowth(previous_model, candidate_model, previous_analysis.profile))
+    if (width_margin > 0.0)
     {
         assessment.reason = SuspiciousGaussianReason::WidthGrowth;
         assessment.normalized_margin = width_margin;
@@ -1448,7 +1301,7 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
     assessment.normalized_margin = std::max(
         assessment.normalized_margin,
         compensation_margin);
-    if (HasSuspiciousAmplitudeOffsetCompensation(previous_model, candidate_model, previous_analysis.profile))
+    if (compensation_margin > 0.0)
     {
         assessment.reason = SuspiciousGaussianReason::AmplitudeOffsetCompensation;
         assessment.normalized_margin = compensation_margin;
@@ -2869,7 +2722,6 @@ static ClusterCandidateResult SelectClusterCandidate(
                         retained_offset);
                 search_block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
             }
-            result.terminal_guard_block_list.emplace_back(atom_index, mode);
             terminal_diagnostic_list.emplace_back(*last_guard_failure);
             continue;
         }
@@ -2894,7 +2746,6 @@ static ClusterCandidateResult SelectClusterCandidate(
     result.diagnostic.terminal_diagnostic_list =
         std::move(terminal_diagnostic_list);
 
-    const PolishProvenance non_polished_endpoint_provenance(key.size(), 0);
     auto base_patch{ std::move(*accepted_patch) };
     const FitStateView base_state_view{ previous_state, base_patch };
     for (std::size_t position = 0; position < key.size(); position++)
@@ -2905,8 +2756,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     previous_state.at(key.at(position)).mdpde.GetModel()),
                 kTransformedChangeTolerance))
         {
-            result.polish_provenance.at(position) =
-                non_polished_endpoint_provenance.at(position);
+            result.polish_provenance.at(position) = 0;
         }
     }
     result.radius_action = DetermineAcceptedTrustRegionRadiusAction(
@@ -3098,8 +2948,18 @@ static IndividualCandidateSelection SelectIndividualClusterCandidates(
     {
         auto & result{ result_list.at(position) };
         const auto & key{ candidate_work_list.at(position).first->first };
-        for (const auto & [atom_index, mode] : result.terminal_guard_block_list)
+        for (const auto & terminal_diagnostic :
+            result.diagnostic.terminal_diagnostic_list)
         {
+            if (terminal_diagnostic.reason !=
+                    StabilizationTerminalReason::GuardInfeasible ||
+                !terminal_diagnostic.guard_atom_index.has_value() ||
+                !terminal_diagnostic.guard_mode.has_value())
+            {
+                continue;
+            }
+            const auto atom_index{ *terminal_diagnostic.guard_atom_index };
+            const auto mode{ *terminal_diagnostic.guard_mode };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
                 const auto group_id{ inputs.context.at(atom_index).group_id };
@@ -3388,20 +3248,6 @@ static std::vector<std::size_t> BuildBoundaryOffsetActiveAtomIndexList(
     return active_index_list;
 }
 
-static bool IsBoundaryJointCorrectionEligible(
-    const CandidateSelectionInputs & inputs,
-    const BoundaryReconciliationComponent & component,
-    const ObjectiveBreakdown * previous_audit_objective)
-{
-    if (previous_audit_objective == nullptr ||
-        component.offset_closure_atom_index_list.empty())
-    {
-        return false;
-    }
-    return !BuildBoundaryShapeActiveAtomIndexList(inputs, component).empty() ||
-        !BuildBoundaryOffsetActiveAtomIndexList(inputs, component).empty();
-}
-
 static std::size_t CountSuspiciousPolishAtoms(
     const SecondStageContext & context,
     const FitOptions & options,
@@ -3471,18 +3317,24 @@ static bool TryBoundaryJointCorrection(
     CandidateSelection & selection,
     BoundaryComponentReconciliationDiagnostic & diagnostic)
 {
-    const FitStateView endpoint_state_view{
-        inputs.previous_state,
-        endpoint_patch
-    };
     const auto shape_active_atom_index_list{
         BuildBoundaryShapeActiveAtomIndexList(inputs, component)
     };
     const auto offset_active_atom_index_list{
         BuildBoundaryOffsetActiveAtomIndexList(inputs, component)
     };
+    if (component.offset_closure_atom_index_list.empty() ||
+        (shape_active_atom_index_list.empty() &&
+            offset_active_atom_index_list.empty()))
+    {
+        return false;
+    }
     diagnostic.shape_active_atom_count = shape_active_atom_index_list.size();
     diagnostic.offset_active_atom_count = offset_active_atom_index_list.size();
+    const FitStateView endpoint_state_view{
+        inputs.previous_state,
+        endpoint_patch
+    };
     std::vector<BoundaryJointTrustRegion> trust_region_list;
     trust_region_list.reserve(component.key_list.size());
     for (const auto & key : component.key_list)
@@ -3666,7 +3518,7 @@ static void ReconcileBoundaryComponent(
     if (endpoint_evaluation.has_value())
     {
         diagnostic.endpoint_component_objective = endpoint_evaluation->audit_objective->GetTotalObjective();
-        if (IsBoundaryJointCorrectionEligible(inputs, component, previous_audit_objective) &&
+        if (previous_audit_objective != nullptr &&
             TryBoundaryJointCorrection(
                 inputs,
                 component,
@@ -3689,7 +3541,7 @@ static void ReconcileBoundaryComponent(
         return;
     }
 
-    if (IsBoundaryJointCorrectionEligible(inputs, component, previous_audit_objective) &&
+    if (previous_audit_objective != nullptr &&
         TryBoundaryJointCorrection(
             inputs,
             component,
@@ -3902,11 +3754,7 @@ static bool TryRescueBoundaryComponent(
     {
         diagnostic.endpoint_component_objective =
             endpoint_evaluation->audit_objective->GetTotalObjective();
-        if (!IsBoundaryJointCorrectionEligible(
-                inputs,
-                component,
-                &previous_audit_objective) ||
-            !TryBoundaryJointCorrection(
+        if (!TryBoundaryJointCorrection(
                 inputs,
                 component,
                 previous_audit_objective,
@@ -3928,11 +3776,7 @@ static bool TryRescueBoundaryComponent(
                 endpoint_evaluation->maximum_local_deterioration;
         }
     }
-    else if (IsBoundaryJointCorrectionEligible(
-            inputs,
-            component,
-            &previous_audit_objective) &&
-        TryBoundaryJointCorrection(
+    else if (!TryBoundaryJointCorrection(
             inputs,
             component,
             previous_audit_objective,
@@ -3941,9 +3785,6 @@ static bool TryRescueBoundaryComponent(
             working_objective_state,
             selection,
             diagnostic))
-    {
-    }
-    else
     {
         BacktrackingWorkspace backtracking_workspace{
             inputs.context,
@@ -4209,12 +4050,22 @@ static void MarkBoundaryDiagnosticRejected(
     iter->exhausted = exhausted;
 }
 
-static void SalvageFinalSelectionAudit(
+static void AuditAndSalvageFinalSelection(
     const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown & previous_audit_objective,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection)
 {
+    selection.final_audit_objective = EvaluateFinalSelectionAudit(
+        inputs,
+        &previous_audit_objective,
+        selection);
+    if (selection.final_audit_objective.has_value() ||
+        selection.accepted_key_list.empty())
+    {
+        return;
+    }
+
     auto unit_list{
         BuildCandidateReconciliationUnits(inputs, previous_audit_objective, selection)
     };
@@ -4329,7 +4180,6 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
         SelectIndividualClusterCandidates(inputs, working_objective_state)
     };
     inputs.performance_counters.RecordBoundaryRescueExclusions(
-        individual_selection.rescue_suspicious_exclusion_count,
         individual_selection.rescue_hard_failure_exclusion_count,
         individual_selection.rescue_invalid_proposal_exclusion_count,
         individual_selection.rescue_objective_unavailable_exclusion_count);
@@ -4370,19 +4220,11 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
         }
         else
         {
-            selection.final_audit_objective = EvaluateFinalSelectionAudit(
+            AuditAndSalvageFinalSelection(
                 inputs,
-                &*previous_audit_objective,
+                *previous_audit_objective,
+                working_objective_state,
                 selection);
-            if (!selection.final_audit_objective.has_value() &&
-                !selection.accepted_key_list.empty())
-            {
-                SalvageFinalSelectionAudit(
-                    inputs,
-                    *previous_audit_objective,
-                    working_objective_state,
-                    selection);
-            }
         }
         const auto backtracked_component_count{
             std::ranges::count_if(
@@ -4409,29 +4251,19 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - boundary_reconciliation_start).count());
     }
-    const auto rescued_any{
-        previous_audit_objective.has_value() &&
+    if (previous_audit_objective.has_value() &&
         RescueRejectedBoundaryClusters(
             inputs,
             *previous_audit_objective,
             individual_selection.candidate_patch_by_key,
             working_objective_state,
-            selection)
-    };
-    if (rescued_any)
+            selection))
     {
-        selection.final_audit_objective = EvaluateFinalSelectionAudit(
+        AuditAndSalvageFinalSelection(
             inputs,
-            &*previous_audit_objective,
+            *previous_audit_objective,
+            working_objective_state,
             selection);
-        if (!selection.final_audit_objective.has_value() && !selection.accepted_key_list.empty())
-        {
-            SalvageFinalSelectionAudit(
-                inputs,
-                *previous_audit_objective,
-                working_objective_state,
-                selection);
-        }
     }
     if (previous_audit_objective.has_value() &&
         selection.final_audit_objective.has_value())
@@ -4582,7 +4414,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 FitStatePatch endpoint_patch{
                     FitStatePatch::FromState(base_state, component.atom_index_list)
                 };
-                bool accepted_round{ false };
+                auto endpoint_objective{ *base_objective };
                 for (std::size_t round = 0;
                     round < options.second_stage_dependency_polish_max_iterations;
                     round++)
@@ -4665,23 +4497,10 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         suspicious_atom_count;
                     if (suspicious_atom_count != 0) break;
 
-                    const CandidateEvaluationOverlay endpoint_overlay{
-                        context,
-                        base_baseline,
-                        endpoint_state_view
-                    };
                     const CandidateEvaluationOverlay candidate_overlay{
                         context,
                         base_baseline,
                         candidate_state_view
-                    };
-                    const auto endpoint_objective{
-                        EvaluateObjectiveDelta(
-                            endpoint_overlay,
-                            component.affected_sample_ref_list,
-                            objective_domain,
-                            *base_objective,
-                            performance_counters)
                     };
                     const auto candidate_objective{
                         EvaluateObjectiveDelta(
@@ -4691,11 +4510,10 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             *base_objective,
                             performance_counters)
                     };
-                    if (!endpoint_objective.has_value() ||
-                        !candidate_objective.has_value() ||
+                    if (!candidate_objective.has_value() ||
                         !IsBetterAuditObjective(
                             candidate_objective->GetTotalObjective(),
-                            endpoint_objective->GetTotalObjective(),
+                            endpoint_objective.GetTotalObjective(),
                             kObjectiveStrictTolerance))
                     {
                         break;
@@ -4752,12 +4570,12 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     if (!member_guard_passed) break;
 
                     endpoint_patch = *correction_result.patch;
+                    endpoint_objective = *candidate_objective;
                     diagnostic.objective_after =
                         candidate_objective->GetTotalObjective();
-                    accepted_round = true;
                 }
 
-                if (accepted_round && diagnostic.objective_after.has_value() &&
+                if (diagnostic.objective_after.has_value() &&
                     IsBetterAuditObjective(
                         *diagnostic.objective_after,
                         *diagnostic.objective_before,
@@ -4782,15 +4600,11 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         }
     }
 
-    const auto build_assembled_state = [&]()
+    auto assembled_state{ base_state };
+    for (const auto & accepted_patch : accepted_patch_list)
     {
-        auto state{ base_state };
-        for (const auto & accepted_patch : accepted_patch_list)
-        {
-            accepted_patch.patch.ApplyTo(state);
-        }
-        return state;
-    };
+        accepted_patch.patch.ApplyTo(assembled_state);
+    }
     const auto evaluate_global_audit = [&](const FitState & state)
     {
         performance_counters.RecordFullStateMaterialization();
@@ -4799,7 +4613,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         return EvaluateAuditObjective(objective_domain, evaluator);
     };
 
-    auto assembled_state{ build_assembled_state() };
     auto assembled_objective{
         accepted_patch_list.empty() ?
             base_objective : evaluate_global_audit(assembled_state)

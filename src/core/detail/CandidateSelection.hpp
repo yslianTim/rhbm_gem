@@ -108,12 +108,6 @@ struct TrustModelShadowDiagnostic
 };
 #endif
 
-enum class AllRejectedResolution
-{
-    MaximumIterations,
-    BacktrackingExhausted
-};
-
 class TrustRegionStateSet
 {
     TrustRegionOptions m_options{};
@@ -131,7 +125,6 @@ public:
         const std::vector<ClusterKey> & exhausted_key_list);
 
 };
-
 
 enum class SuspiciousGaussianReason
 {
@@ -231,7 +224,6 @@ class PerformanceCounters
     std::size_t m_boundary_rescue_accepted_count{ 0 };
     std::size_t m_boundary_rescue_fallback_count{ 0 };
     std::size_t m_boundary_rescue_rejected_count{ 0 };
-    std::size_t m_boundary_rescue_suspicious_exclusion_count{ 0 };
     std::size_t m_boundary_rescue_hard_failure_exclusion_count{ 0 };
     std::size_t m_boundary_rescue_invalid_proposal_exclusion_count{ 0 };
     std::size_t m_boundary_rescue_objective_unavailable_exclusion_count{ 0 };
@@ -274,7 +266,6 @@ public:
     void RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds);
     void RecordBoundaryRescue(bool accepted, bool used_fallback);
     void RecordBoundaryRescueExclusions(
-        std::size_t suspicious_count,
         std::size_t hard_failure_count,
         std::size_t invalid_proposal_count,
         std::size_t objective_unavailable_count);
