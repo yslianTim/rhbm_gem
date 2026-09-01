@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
-#include <ranges>
 #include <stdexcept>
 #include <utility>
 
@@ -43,13 +42,10 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamplesImpl(
     const AtomContext & atom_context,
     ResponseProvider response_provider)
 {
-    LocalPotentialSampleList adjusted_sampling_entries;
-    adjusted_sampling_entries.reserve(atom_context.raw_sampling_entries.size());
-    for (std::size_t i = 0; i < atom_context.raw_sampling_entries.size(); i++)
+    auto adjusted_sampling_entries{ atom_context.raw_sampling_entries };
+    for (std::size_t i = 0; i < adjusted_sampling_entries.size(); i++)
     {
-        auto sample{ atom_context.raw_sampling_entries.at(i) };
-        sample.response = response_provider(i);
-        adjusted_sampling_entries.emplace_back(sample);
+        adjusted_sampling_entries.at(i).response = response_provider(i);
     }
     return adjusted_sampling_entries;
 }
@@ -75,29 +71,18 @@ FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
     const SecondStageContext & context,
     const FittedGaussianSnapshot & selected_snapshot)
 {
-    if (selected_snapshot.size() != context.size())
-    {
-        throw std::invalid_argument(
-            "Second-stage selected contributor snapshot size is inconsistent.");
-    }
-
-    std::vector<std::optional<GaussianModel3D>> median_model_by_group(
-        context.selected_atom_index_list_by_group.size());
+    std::vector<std::optional<GaussianModel3D>> median_model_by_group;
+    median_model_by_group.reserve(context.selected_atom_index_list_by_group.size());
     std::vector<GaussianModel3D> model_list;
-    for (std::size_t group_id = 0;
-        group_id < context.selected_atom_index_list_by_group.size();
-        group_id++)
+    for (const auto & atom_index_list : context.selected_atom_index_list_by_group)
     {
-        const auto & atom_index_list{
-            context.selected_atom_index_list_by_group.at(group_id)
-        };
         model_list.clear();
         model_list.reserve(atom_index_list.size());
         for (const auto atom_index : atom_index_list)
         {
             model_list.emplace_back(GetFitModel(selected_snapshot, atom_index));
         }
-        median_model_by_group.at(group_id) = BuildGaussianParameterMedian(model_list);
+        median_model_by_group.emplace_back(BuildGaussianParameterMedian(model_list));
     }
 
     FittedGaussianSnapshot snapshot;
@@ -200,6 +185,10 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     FittedGaussianSnapshot selected_snapshot)
 {
+    if (selected_snapshot.size() != context.size())
+    {
+        throw std::invalid_argument("Second-stage selected contributor snapshot size is inconsistent.");
+    }
     auto unselected_snapshot{
         BuildUnselectedAtomContributorSnapshot(context, selected_snapshot)
     };
@@ -213,10 +202,6 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     const FitState & state)
 {
-    if (context.size() != state.size())
-    {
-        throw std::invalid_argument("Local fitting context and state sizes are inconsistent.");
-    }
     return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshot(state));
 }
 
@@ -264,10 +249,7 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
         atom_context,
         [&](std::size_t sample_index)
         {
-            return CalculateSecondStageAdjustedResponse(
-                atom_context,
-                sample_index,
-                model_snapshot);
+            return CalculateSecondStageAdjustedResponse(atom_context, sample_index, model_snapshot);
         });
 }
 
@@ -300,8 +282,7 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
 {
     ResidualBaseline baseline{
         BuildSecondStageModelSnapshot(context, state),
-        std::vector<std::vector<std::optional<ResidualSample>>>(
-            context.size())
+        std::vector<std::vector<std::optional<ResidualSample>>>(context.size())
     };
     for (std::size_t i = 0; i < context.size(); i++)
     {

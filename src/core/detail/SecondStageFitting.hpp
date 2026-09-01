@@ -67,8 +67,6 @@ struct SecondStageContext
     std::size_t size() const { return selected_atom_list.size(); }
     AtomContext & at(std::size_t index) { return selected_atom_list.at(index); }
     const AtomContext & at(std::size_t index) const { return selected_atom_list.at(index); }
-    auto begin() { return selected_atom_list.begin(); }
-    auto end() { return selected_atom_list.end(); }
     auto begin() const { return selected_atom_list.begin(); }
     auto end() const { return selected_atom_list.end(); }
 };
