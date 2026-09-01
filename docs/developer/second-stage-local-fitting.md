@@ -208,7 +208,8 @@ fail convergence.
 
 Production convergence requires accepted active-DOF p99 and complete nominal-
 DOF fixed-point residual p99 below `1e-4`, with solver qualification and all
-certificate invariants and orthogonal blockers clear. Maximum transformed
+orthogonal blockers clear. Mixed shared-offset activity is folded into solver
+qualification. Maximum transformed
 change remains a tail diagnostic and topology-drift metric, but is not a
 convergence predicate.
 
@@ -486,8 +487,7 @@ For `quarantine`, `audit-patience`, `all-rejected-*`, and
 `maximum-iterations`, objective acceptance is also provisional. The candidate
 is applied immediately when it passes the same strict operator certificate.
 Otherwise, both base and candidate must have solver-qualified, complete,
-invariant-clear, finite nominal operator evidence, and each candidate residual
-p99 must satisfy
+finite nominal operator evidence, and each candidate residual p99 must satisfy
 
 ```text
 candidate_p99 <= max(base_p99, 1e-4)
@@ -586,12 +586,12 @@ earliest state that improves the best objective beyond the strict tolerance.
 One internal `ConvergenceCertificate` is the sole source of convergence truth.
 `ProductionConverged()` requires solver qualification, accepted active-DOF p99
 below `1e-4`, a complete nominal-DOF operator, nominal fixed-point residual p99
-below `1e-4`, clear invariants, and clear orthogonal blockers. Fixed and
+below `1e-4`, and clear orthogonal blockers. Fixed and
 quarantined coordinates are excluded only from the accepted population; they
 remain in the nominal operator population. An empty accepted population passes
 its percentile check vacuously, but an all-fixed state still needs qualified,
 complete, sufficiently small nominal operator evidence. Mixed shared-offset
-activity is an invariant violation, and an unavailable endpoint makes the
+activity fails solver qualification, and an unavailable endpoint makes the
 operator incomplete instead of substituting the previous state as a zero
 residual. `StrictOperatorPassed()` reuses the same certificate for converged
 final-polish certification without the accepted-movement or orthogonal-blocker
@@ -601,8 +601,8 @@ The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
 - accepted active-DOF p99 and complete nominal-DOF fixed-point residual p99 are
-  both below `1e-4`, every solver is qualified, certificate invariants are
-  clear, all clusters are accepted, and no orthogonal blocker is present;
+  both below `1e-4`, every active coordinate is solver-qualified, all clusters
+  are accepted, and no orthogonal blocker is present;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
 - an all-rejected attempt terminates after applying its per-cluster radius
@@ -745,14 +745,11 @@ warnings report cumulative quarantine
 entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
 
-The current convergence trace is schema 9. It serializes only the production
-certificate and the active/nominal populations, accepted/operator p99 and
-maximum, operator tail/unavailable counts, qualification, blockers, residual
-classification, and search-path statistics required to explain that
-certificate. Maximum and tail remain diagnostic and never form a separate
-policy decision. Historical comparator, exposure, accepted-only persistence,
-active-member comparison, and rho fields are absent. Schema 8 is supported
-only by the frozen compatibility fixture used by the analyzer test.
+The current convergence trace is schema 10. It serializes only try/accepted
+iteration and atom/quarantine counts, active and nominal populations,
+accepted/operator p99 and maximum, the six-bit production certificate, and
+the four orthogonal blockers. The current analyzer accepts only schema 10;
+frozen schema-9 baselines remain historical data.
 
 Adaptive rebuild diagnostics use a distinct
 `Adaptive local-fitting topology rebuild` record so the one-time initial

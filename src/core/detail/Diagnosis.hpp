@@ -5,11 +5,11 @@
 #include <array>
 #include <cstddef>
 #include <span>
-#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
 
+using ProgressColumnWidths = std::array<std::size_t, 6>;
 struct SecondStageSeedSelectionRecord
 {
     SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
@@ -24,11 +24,8 @@ struct UnselectedSecondStageSeedSelectionRecord
     GaussianModel3D selected_model{};
 };
 
-using ProgressColumnWidths = std::array<std::size_t, 6>;
-
 bool IsDebugLogLevelEnabled();
 void FinishProgressLine(bool quiet_mode);
-
 void LogSecondStageStart(bool quiet_mode);
 void LogSecondStageInitializationFailure(
     bool quiet_mode,
@@ -59,9 +56,7 @@ void LogAcceptedCandidateSearchDiagnostics(
     const IterationResult & iteration_result);
 
 ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count);
-void LogProgressHeader(
-    bool quiet_mode,
-    const ProgressColumnWidths & column_widths);
+void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths);
 void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
@@ -74,14 +69,7 @@ void LogUnrestrictedOperatorAssessments(
 void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     const IterationResult & iteration_result,
-    const ConvergenceCertificate & certificate,
-    const ActiveCoordinatePopulation & active_population,
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
-    const FitState & assembled_state,
-    const FitState & operator_proposal_state,
-    const std::vector<std::size_t> & active_index_list,
-    bool assembled_uses_polish);
+    const ConvergenceCertificate & certificate);
 
 void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
@@ -137,11 +125,5 @@ void LogSecondStageSummary(
     const PolishProvenance & latest_polish_provenance,
     SecondStageStopReason stop_reason,
     bool final_uses_best_audit);
-
-std::string_view GetFixedPointResidualInterpretationText(
-    bool operator_complete,
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & fixed_point_residual);
 
 } // namespace rhbm_gem::core::detail

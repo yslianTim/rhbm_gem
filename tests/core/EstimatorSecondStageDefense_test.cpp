@@ -4835,59 +4835,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateKeepsAcceptedResidua
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_movement = small;
     certificate.operator_nominal_residual = large;
-    certificate.solver_qualification.solver_qualified = true;
+    certificate.solver_qualified = true;
     EXPECT_FALSE(certificate.ProductionConverged());
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            certificate.OperatorComplete(),
-            certificate.solver_qualification.solver_qualified,
-            certificate.accepted_active_movement,
-            certificate.operator_nominal_residual),
-        "step-limited");
-}
-
-TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesLimitedSteps)
-{
-    const auto make_summary = [](double percentile, double maximum)
-    {
-        change_detail::TransformedChangeSummary summary;
-        summary.percentile_list.fill(percentile);
-        summary.maximum_list.fill(maximum);
-        summary.population_size_list.fill(100);
-        return summary;
-    };
-    const auto small{ make_summary(5.0e-5, 5.0e-4) };
-    const auto large{ make_summary(2.0e-4, 2.0e-3) };
-    const auto sparse_tail{ make_summary(5.0e-5, 2.0e-3) };
-
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            false, true, small, small),
-        "restricted");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, false, small, small),
-        "unqualified-small");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, true, small, large),
-        "step-limited");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, true, large, small),
-        "postprocessed-movement");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, true, small, sparse_tail),
-        "bulk-fixed-point-with-tail");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, true, small, small),
-        "fixed-point-converged");
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            true, true, large, large),
-        "progressing");
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlockDilution)
@@ -4927,18 +4876,12 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlo
         group_id_by_atom_index.begin(),
         group_id_by_atom_index.end(),
         0);
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(atom_count, 0),
-        audit_detail::SuspiciousUpdateMask(atom_count, 0),
-        audit_detail::SuspiciousUpdateMask(atom_count, 0)
-    };
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
-            block_activity,
-            quarantine_activity)
+            block_activity)
     };
     const auto dual_shadow{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
@@ -4998,18 +4941,12 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSize
         audit_detail::SuspiciousUpdateMask(atom_count, 0),
         audit_detail::SuspiciousUpdateMask(atom_count, 0)
     };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(atom_count, 0),
-        audit_detail::SuspiciousUpdateMask(atom_count, 0),
-        audit_detail::SuspiciousUpdateMask(atom_count, 0)
-    };
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
-            activity,
-            quarantine_activity)
+            activity)
     };
     const auto audit{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
@@ -5031,18 +4968,12 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
         audit_detail::SuspiciousUpdateMask(3, 0),
         audit_detail::SuspiciousUpdateMask(3, 0)
     };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(3, 0),
-        audit_detail::SuspiciousUpdateMask(3, 0),
-        audit_detail::SuspiciousUpdateMask(3, 0)
-    };
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             std::vector<audit_detail::ClusterKey>{ atom_index_list },
             group_id_by_atom_index,
-            activity,
-            quarantine_activity)
+            activity)
     };
     std::vector<change_detail::TransformedChange> change_list(
         3,
@@ -5079,19 +5010,13 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
         audit_detail::SuspiciousUpdateMask{ 0, 1 },
         audit_detail::SuspiciousUpdateMask(2, 0)
     };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(2, 0),
-        audit_detail::SuspiciousUpdateMask(2, 0),
-        audit_detail::SuspiciousUpdateMask(2, 0)
-    };
     const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
             cluster_key_list,
             group_id_by_atom_index,
-            activity,
-            quarantine_activity)
+            activity)
     };
     std::vector<change_detail::TransformedChange> change_list(
         2,
@@ -5099,9 +5024,18 @@ TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
     const auto change_audit{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_EQ(population.mixed_offset_group_count, 1U);
+    EXPECT_EQ(std::ranges::count(population.mixed_offset_group_mask, 1), 1);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
         change_audit));
+    const std::vector<std::optional<rg::RHBMEstimationStatus>>
+        local_refit_status_by_atom(2);
+    EXPECT_FALSE(audit_detail::AreActiveCoordinatesSolverQualified(
+        atom_index_list,
+        cluster_key_list,
+        group_id_by_atom_index,
+        activity,
+        local_refit_status_by_atom,
+        {}));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAndNominalPopulations)
@@ -5114,11 +5048,6 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
         audit_detail::SuspiciousUpdateMask{ 1, 1, 0 },
         audit_detail::SuspiciousUpdateMask(3, 0)
     };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask{ 0, 1, 0 },
-        audit_detail::SuspiciousUpdateMask{ 0, 1, 0 },
-        audit_detail::SuspiciousUpdateMask(3, 0)
-    };
     audit_detail::SuspiciousBlockActivity nominal_activity{
         audit_detail::SuspiciousUpdateMask(3, 0),
         audit_detail::SuspiciousUpdateMask(3, 0),
@@ -5128,13 +5057,11 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
         atom_index_list,
         cluster_key_list,
         group_id_by_atom_index,
-        activity,
-        quarantine_activity) };
+        activity) };
     const auto nominal_population{ audit_detail::BuildActiveCoordinatePopulation(
         atom_index_list,
         cluster_key_list,
         group_id_by_atom_index,
-        nominal_activity,
         nominal_activity) };
     std::vector<change_detail::TransformedChange> changes(
         3, change_detail::TransformedChange{});
@@ -5147,10 +5074,7 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
         audit_detail::SummarizeActiveDofChanges(changes, accepted_population);
     certificate.operator_nominal_residual =
         audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
-    certificate.solver_qualification.solver_qualified = true;
-    certificate.solver_qualification.restricted_active_set = true;
-    certificate.solver_qualification.fixed_shape_count = 1;
-    certificate.solver_qualification.quarantined_shape_count = 1;
+    certificate.solver_qualified = true;
 
     EXPECT_EQ(
         certificate.accepted_active_movement.population_size_list.at(
@@ -5168,9 +5092,10 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
         certificate.operator_nominal_residual.population_size_list.at(
             rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
         3U);
-    EXPECT_TRUE(certificate.solver_qualification.restricted_active_set);
-    EXPECT_TRUE(certificate.AcceptedPercentilePassed());
-    EXPECT_FALSE(certificate.OperatorPercentilePassed());
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(
+        certificate.accepted_active_movement));
+    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
+        certificate.operator_nominal_residual));
     EXPECT_FALSE(certificate.ProductionConverged());
 
     changes.at(0).fill(5.0e-5);
@@ -5189,17 +5114,14 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
         audit_detail::SuspiciousUpdateMask{ 0, 1 },
         audit_detail::SuspiciousUpdateMask(2, 0)
     };
-    audit_detail::SuspiciousBlockActivity quarantine_activity{
-        audit_detail::SuspiciousUpdateMask(2, 0),
-        audit_detail::SuspiciousUpdateMask(2, 0),
-        audit_detail::SuspiciousUpdateMask(2, 0)
+    const std::vector<audit_detail::ClusterKey> cluster_key_list{
+        atom_index_list
     };
     const auto population{ audit_detail::BuildActiveCoordinatePopulation(
         atom_index_list,
-        std::vector<audit_detail::ClusterKey>{ atom_index_list },
+        cluster_key_list,
         group_id_by_atom_index,
-        activity,
-        quarantine_activity) };
+        activity) };
     std::vector<change_detail::TransformedChange> changes(
         2, change_detail::TransformedChange{});
 
@@ -5207,10 +5129,24 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
     certificate.accepted_active_movement =
         audit_detail::SummarizeActiveDofChanges(changes, population);
     certificate.operator_nominal_residual = certificate.accepted_active_movement;
-    certificate.solver_qualification.solver_qualified = true;
-    certificate.solver_qualification.mixed_offset_group_count = 1;
+    const std::vector<std::optional<rg::RHBMEstimationStatus>>
+        local_refit_status_by_atom(2, rg::RHBMEstimationStatus::SUCCESS);
+    audit_detail::ClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        atom_index_list,
+        audit_detail::ClusterHealth{
+            audit_detail::JointOffsetSolveStatus::Converged
+        });
+    certificate.solver_qualified =
+        audit_detail::AreActiveCoordinatesSolverQualified(
+            atom_index_list,
+            cluster_key_list,
+            group_id_by_atom_index,
+            activity,
+            local_refit_status_by_atom,
+            health_by_key);
 
-    EXPECT_FALSE(certificate.InvariantsClear());
+    EXPECT_FALSE(certificate.solver_qualified);
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
 }
@@ -5229,27 +5165,16 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_movement = make_summary(0.0, 0);
     certificate.operator_nominal_residual = make_summary(5.0e-5, 4);
-    certificate.solver_qualification.solver_qualified = true;
-    certificate.solver_qualification.restricted_active_set = true;
-    certificate.solver_qualification.all_fixed = true;
+    certificate.solver_qualified = true;
 
-    EXPECT_TRUE(certificate.solver_qualification.all_fixed);
-    EXPECT_TRUE(certificate.AcceptedPercentilePassed());
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(
+        certificate.accepted_active_movement));
     EXPECT_TRUE(certificate.StrictOperatorPassed());
     EXPECT_TRUE(certificate.ProductionConverged());
 
-    certificate.operator_unavailable_count.at(
-        rg::GaussianModel3D::LogPeakHeightCoordinateIndex()) = 1;
-    EXPECT_FALSE(certificate.OperatorComplete());
+    certificate.operator_complete = false;
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
-    EXPECT_EQ(
-        audit_detail::GetFixedPointResidualInterpretationText(
-            certificate.OperatorComplete(),
-            certificate.solver_qualification.solver_qualified,
-            certificate.accepted_active_movement,
-            certificate.operator_nominal_residual),
-        "restricted");
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
@@ -5355,7 +5280,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     {
         return audit_detail::UpdateQuarantineFailureState(
             {
-                audit_detail::QuarantineFailureObservation{
+                {
                     target,
                     audit_detail::StabilizationTerminalFailure{
                         audit_detail::StabilizationTerminalReason::GuardInfeasible,
@@ -5370,7 +5295,9 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
 
     EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 1)
         .entered_target_list.empty());
-    EXPECT_TRUE(audit_detail::HasPendingQuarantineLifecycle(state_by_target));
+    EXPECT_NE(
+        state_by_target.at(target).lifecycle,
+        audit_detail::QuarantineLifecycle::Exhausted);
     EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 2)
         .entered_target_list.empty());
     EXPECT_TRUE(observe(
@@ -5431,7 +5358,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         const auto failed{
             audit_detail::UpdateQuarantineFailureState(
                 {
-                    audit_detail::QuarantineFailureObservation{
+                    {
                         target,
                         audit_detail::StabilizationTerminalFailure{
                             audit_detail::StabilizationTerminalReason::GuardInfeasible,
@@ -5449,7 +5376,6 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     EXPECT_EQ(
         state_by_target.at(target).lifecycle,
         audit_detail::QuarantineLifecycle::Exhausted);
-    EXPECT_FALSE(audit_detail::HasPendingQuarantineLifecycle(state_by_target));
 }
 
 TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)

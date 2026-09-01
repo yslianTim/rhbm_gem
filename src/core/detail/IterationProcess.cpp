@@ -128,7 +128,6 @@ struct QuarantineState
         const PolishProvenance & previous_polish_provenance,
         PolishProvenance & assembled_polish_provenance,
         std::size_t accepted_iteration_count);
-    void NotifyTopologyChanged() { force_probation = true; }
     std::size_t AtomCount() const;
     std::size_t TargetCount() const
     {
@@ -139,8 +138,6 @@ struct QuarantineState
                 return entry.second.lifecycle != QuarantineLifecycle::Tracking;
             }));
     }
-    bool HasFailures() const { return TargetCount() != 0; }
-
 private:
     std::size_t m_atom_count{ 0 };
 };
@@ -165,21 +162,11 @@ struct IterationState
     std::size_t audit_patience_count{ 0 };
 };
 
-enum class OperatorEndpointStatus : char
-{
-    NotRequested,
-    Available,
-    OffsetSolverFailure,
-    InvalidOffset,
-    ShapeRefitFailure
-};
-
 struct FixedPointOperatorEvidence
 {
     FitState state{};
-    std::vector<OperatorEndpointStatus> shape_status_by_atom{};
-    std::vector<OperatorEndpointStatus> offset_status_by_atom{};
-    bool shadow_shape_refit_performed{ false };
+    std::vector<char> shape_available_atom_mask{};
+    std::vector<char> offset_available_atom_mask{};
 };
 
 struct IterationProposalResult
@@ -206,19 +193,13 @@ struct OffsetGroupEntry
     ClusterKey atom_index_list{};
 };
 
-static void ValidateActiveCoordinateInputs(
+static void ValidateBlockActivitySize(
     std::size_t atom_count,
-    const std::vector<std::size_t> & group_id_by_atom_index,
-    const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity)
+    const SuspiciousBlockActivity & block_activity)
 {
-    if (group_id_by_atom_index.size() != atom_count ||
-        block_activity.shape_fixed_atom_mask.size() != atom_count ||
+    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
         block_activity.offset_fixed_atom_mask.size() != atom_count ||
-        block_activity.hard_failure_atom_mask.size() != atom_count ||
-        quarantine_activity.shape_fixed_atom_mask.size() != atom_count ||
-        quarantine_activity.offset_fixed_atom_mask.size() != atom_count ||
-        quarantine_activity.hard_failure_atom_mask.size() != atom_count)
+        block_activity.hard_failure_atom_mask.size() != atom_count)
     {
         throw std::invalid_argument("Active-coordinate convergence inputs are inconsistent.");
     }
@@ -265,9 +246,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         atom_index_list,
         cluster_key_list,
         group_id_by_atom_index,
-        nominal_activity,
         nominal_activity) };
-    result.operator_shadow_shape_refit_performed = evidence.shadow_shape_refit_performed;
 
     std::vector<TransformedChange> change_list;
     change_list.reserve(previous_state.size());
@@ -277,93 +256,25 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         auto change{ CalculateTransformedChange(
             GetFitModel(evidence.state, atom_index),
             GetFitModel(previous_state, atom_index)) };
-        if (evidence.shape_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available)
+        if (evidence.shape_available_atom_mask.at(atom_index) == 0)
         {
             change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()) = std::numeric_limits<double>::infinity();
             change.at(GaussianModel3D::LogWidthCoordinateIndex()) = std::numeric_limits<double>::infinity();
         }
-        if (evidence.offset_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available)
+        if (evidence.offset_available_atom_mask.at(atom_index) == 0)
         {
             change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = std::numeric_limits<double>::infinity();
         }
         change_list.emplace_back(std::move(change));
     }
     result.operator_nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
-
-    for (const auto atom_index : atom_index_list)
-    {
-        const auto shape_available{
-            evidence.shape_status_by_atom.at(atom_index) == OperatorEndpointStatus::Available
-        };
-        for (const auto coordinate : std::array<std::size_t, 2>{
-                GaussianModel3D::LogPeakHeightCoordinateIndex(),
-                GaussianModel3D::LogWidthCoordinateIndex() })
+    result.operator_complete = std::ranges::all_of(
+        atom_index_list,
+        [&](const auto atom_index)
         {
-            if (!shape_available)
-            {
-                result.operator_unavailable_count.at(coordinate)++;
-            }
-            else if (std::abs(change_list.at(atom_index).at(coordinate)) >= kLegacyMaximumTransformedChangeTolerance)
-            {
-                result.operator_tail_count.at(coordinate)++;
-            }
-        }
-        if (!shape_available)
-        {
-            const auto status{ evidence.shape_status_by_atom.at(atom_index) };
-            if (status == OperatorEndpointStatus::OffsetSolverFailure)
-            {
-                result.operator_unavailable_reason_count.at(0)++;
-            }
-            else if (status == OperatorEndpointStatus::InvalidOffset)
-            {
-                result.operator_unavailable_reason_count.at(1)++;
-            }
-            else
-            {
-                result.operator_unavailable_reason_count.at(2)++;
-            }
-        }
-    }
-    for (const auto & group :
-        operator_nominal_population.active_offset_group_atom_index_list)
-    {
-        bool available{ true };
-        double maximum_change{ 0.0 };
-        for (const auto atom_index : group)
-        {
-            available = available &&
-                evidence.offset_status_by_atom.at(atom_index) == OperatorEndpointStatus::Available;
-            maximum_change = std::max(
-                maximum_change,
-                std::abs(change_list.at(atom_index).at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())));
-        }
-        if (!available)
-        {
-            result.operator_unavailable_count.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())++;
-            const auto failed_atom{ *std::ranges::find_if(
-                group,
-                [&](std::size_t atom_index)
-                {
-                    return evidence.offset_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available;
-                }) };
-            const auto status{
-                evidence.offset_status_by_atom.at(failed_atom)
-            };
-            if (status == OperatorEndpointStatus::OffsetSolverFailure)
-            {
-                result.operator_unavailable_reason_count.at(0)++;
-            }
-            else
-            {
-                result.operator_unavailable_reason_count.at(1)++;
-            }
-        }
-        else if (maximum_change >= kLegacyMaximumTransformedChangeTolerance)
-        {
-            result.operator_tail_count.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())++;
-        }
-    }
+            return evidence.shape_available_atom_mask.at(atom_index) != 0 &&
+                evidence.offset_available_atom_mask.at(atom_index) != 0;
+        });
     return result;
 }
 
@@ -834,8 +745,8 @@ static bool HasAcceptedMaterialTargetChange(
     return false;
 }
 
-static bool DoesFailureObservationAffectTarget(
-    const QuarantineFailureObservation & observation,
+static bool DoesFailureAffectTarget(
+    const QuarantineTarget & failure_target,
     const QuarantineTarget & target)
 {
     const auto overlaps{
@@ -844,7 +755,7 @@ static bool DoesFailureObservationAffectTarget(
             [&](const auto atom_index)
             {
                 return std::ranges::binary_search(
-                    observation.target.atom_index_list,
+                    failure_target.atom_index_list,
                     atom_index);
             })
     };
@@ -852,9 +763,9 @@ static bool DoesFailureObservationAffectTarget(
     if (target.kind == QuarantineTargetKind::HardFailureCluster) return true;
     if (target.kind == QuarantineTargetKind::OffsetGroup)
     {
-        return observation.target.kind != QuarantineTargetKind::ShapeAtom;
+        return failure_target.kind != QuarantineTargetKind::ShapeAtom;
     }
-    return observation.target.kind != QuarantineTargetKind::OffsetGroup;
+    return failure_target.kind != QuarantineTargetKind::OffsetGroup;
 }
 
 static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
@@ -907,14 +818,13 @@ bool QuarantineState::UpdateAfterIteration(
     PolishProvenance & assembled_polish_provenance,
     std::size_t accepted_iteration_count)
 {
-    std::vector<QuarantineFailureObservation> observation_list;
+    QuarantineFailureReasonMap failure_reason_by_target;
     for (const auto & [key, health] : health_by_key)
     {
         if (!IsJointOffsetSolveHardFailure(health.joint_offset_status)) continue;
-        observation_list.emplace_back(QuarantineFailureObservation{
+        failure_reason_by_target.try_emplace(
             QuarantineTarget{ QuarantineTargetKind::HardFailureCluster, key },
-            health.joint_offset_status
-        });
+            health.joint_offset_status);
     }
     const auto append_terminal_observations = [&](const auto & diagnostic_list)
     {
@@ -946,33 +856,30 @@ bool QuarantineState::UpdateAfterIteration(
                                 group_atom_index_list.emplace_back(member_index);
                             }
                         }
-                        observation_list.emplace_back(QuarantineFailureObservation{
+                        failure_reason_by_target.try_emplace(
                             QuarantineTarget{
                                 QuarantineTargetKind::OffsetGroup,
                                 std::move(group_atom_index_list)
                             },
-                            failure
-                        });
+                            failure);
                     }
                     else
                     {
-                        observation_list.emplace_back(QuarantineFailureObservation{
+                        failure_reason_by_target.try_emplace(
                             QuarantineTarget{
                                 QuarantineTargetKind::ShapeAtom,
                                 { atom_index }
                             },
-                            failure
-                        });
+                            failure);
                     }
                     continue;
                 }
-                observation_list.emplace_back(QuarantineFailureObservation{
+                failure_reason_by_target.try_emplace(
                     QuarantineTarget{
                         QuarantineTargetKind::HardFailureCluster,
                         diagnostic.key
                     },
-                    failure
-                });
+                    failure);
             }
         }
     };
@@ -984,10 +891,10 @@ bool QuarantineState::UpdateAfterIteration(
     {
         const auto has_affecting_observation{
             std::ranges::any_of(
-                observation_list,
-                [&](const auto & observation)
+                failure_reason_by_target,
+                [&](const auto & failure)
                 {
-                    return DoesFailureObservationAffectTarget(observation, target);
+                    return DoesFailureAffectTarget(failure.first, target);
                 })
         };
         const auto accepted_material_proposal{
@@ -1009,7 +916,7 @@ bool QuarantineState::UpdateAfterIteration(
     }
     auto transition{
         UpdateQuarantineFailureState(
-            observation_list,
+            failure_reason_by_target,
             successful_probation_target_list,
             accepted_iteration_count,
             state_by_target)
@@ -1134,7 +1041,6 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
 static std::vector<std::optional<GaussianModel3DWithUncertainty>>
 RunUnrestrictedShapeRefits(
     const SecondStageContext & context,
-    const std::vector<ClusterKey> & cluster_key_list,
     const FitState & operator_offset_state,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const FitOptions & options)
@@ -1150,25 +1056,19 @@ RunUnrestrictedShapeRefits(
     const auto adjusted_response_cache{
         BuildSecondStageAdjustedResponseCache(context, operator_model_bundle)
     };
-    std::vector<std::size_t> atom_index_list;
-    for (const auto & key : cluster_key_list)
-    {
-        atom_index_list.insert(atom_index_list.end(), key.begin(), key.end());
-    }
     std::vector<std::optional<GaussianModel3DWithUncertainty>> result(
         context.size());
     int refit_thread_size{ options.thread_size };
 #ifdef USE_OPENMP
     const bool parallel_refits{
         !IsDebugLogLevelEnabled() &&
-        options.thread_size > 1 && atom_index_list.size() > 1
+        options.thread_size > 1 && context.size() > 1
     };
     if (parallel_refits) refit_thread_size = 1;
 #pragma omp parallel for schedule(dynamic) if(parallel_refits) num_threads(options.thread_size)
 #endif
-    for (std::size_t position = 0; position < atom_index_list.size(); position++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        const auto atom_index{ atom_index_list.at(position) };
         try
         {
             const auto candidate{
@@ -1254,10 +1154,8 @@ static IterationProposalResult RunProposalIteration(
 
     FixedPointOperatorEvidence fixed_point_operator;
     fixed_point_operator.state = previous_state;
-    fixed_point_operator.shape_status_by_atom.assign(
-        context.size(), OperatorEndpointStatus::NotRequested);
-    fixed_point_operator.offset_status_by_atom.assign(
-        context.size(), OperatorEndpointStatus::NotRequested);
+    fixed_point_operator.shape_available_atom_mask.assign(context.size(), 0);
+    fixed_point_operator.offset_available_atom_mask.assign(context.size(), 0);
     for (std::size_t cluster_position = 0;
         cluster_position < cluster_key_list.size(); cluster_position++)
     {
@@ -1270,8 +1168,6 @@ static IterationProposalResult RunProposalIteration(
             const auto atom_index{ key.at(position) };
             if (IsJointOffsetSolveHardFailure(offset_result.status))
             {
-                fixed_point_operator.offset_status_by_atom.at(atom_index) =
-                    OperatorEndpointStatus::OffsetSolverFailure;
                 continue;
             }
             const auto proposed_offset{
@@ -1283,14 +1179,11 @@ static IterationProposalResult RunProposalIteration(
             };
             if (!IsValidSecondStageGaussianModel(operator_model))
             {
-                fixed_point_operator.offset_status_by_atom.at(atom_index) =
-                    OperatorEndpointStatus::InvalidOffset;
                 continue;
             }
             auto & operator_result{ fixed_point_operator.state.at(atom_index) };
             SetLocalResultOffset(operator_result, proposed_offset);
-            fixed_point_operator.offset_status_by_atom.at(atom_index) =
-                OperatorEndpointStatus::Available;
+            fixed_point_operator.offset_available_atom_mask.at(atom_index) = 1;
         }
     }
 
@@ -1329,14 +1222,6 @@ static IterationProposalResult RunProposalIteration(
         if (IsJointOffsetSolveHardFailure(offset_result.status))
         {
             health.all_local_refits_solver_qualified = false;
-            health.production_convergence_qualified =
-                std::ranges::none_of(
-                    key,
-                    [&](const auto atom_index)
-                    {
-                        return quarantine_activity.HasActiveShape(atom_index) ||
-                            quarantine_activity.HasActiveOffset(atom_index);
-                    });
             for (const auto atom_index : key)
             {
                 block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
@@ -1426,7 +1311,6 @@ static IterationProposalResult RunProposalIteration(
             if (!accepted)
             {
                 health.all_local_refits_solver_qualified = false;
-                health.production_convergence_qualified = false;
             }
         }
     }
@@ -1437,8 +1321,7 @@ static IterationProposalResult RunProposalIteration(
     {
         for (const auto atom_index : key)
         {
-            if (fixed_point_operator.offset_status_by_atom.at(atom_index) !=
-                OperatorEndpointStatus::Available)
+            if (fixed_point_operator.offset_available_atom_mask.at(atom_index) == 0)
             {
                 operator_offsets_complete = false;
                 operator_offsets_match_proposal = false;
@@ -1463,21 +1346,13 @@ static IterationProposalResult RunProposalIteration(
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, refit_model_bundle)
     };
-    std::vector<std::size_t> refit_atom_index_list;
-    for (const auto & key : cluster_key_list)
-    {
-        for (const auto atom_index : key)
-        {
-            refit_atom_index_list.emplace_back(atom_index);
-        }
-    }
-    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(refit_atom_index_list.size());
-    std::vector<std::exception_ptr> refit_exception_list(refit_atom_index_list.size());
+    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(context.size());
+    std::vector<std::exception_ptr> refit_exception_list(context.size());
 #ifdef USE_OPENMP
     const bool parallel_refits{
         !is_debug_logging_enabled &&
         options.thread_size > 1 &&
-        refit_atom_index_list.size() > 1
+        context.size() > 1
     };
 #else
     const bool parallel_refits{ false };
@@ -1487,12 +1362,11 @@ static IterationProposalResult RunProposalIteration(
     {
         refit_options.thread_size = 1;
     }
-    const auto run_refit = [&](std::size_t refit_position)
+    const auto run_refit = [&](std::size_t atom_index)
     {
-        const auto atom_index{ refit_atom_index_list.at(refit_position) };
         try
         {
-            refit_result_list.at(refit_position) =
+            refit_result_list.at(atom_index) =
                 FitAtomWithJointOffsetFallback(
                     context.at(atom_index),
                     previous_state.at(atom_index),
@@ -1502,7 +1376,7 @@ static IterationProposalResult RunProposalIteration(
         }
         catch (...)
         {
-            refit_exception_list.at(refit_position) = std::current_exception();
+            refit_exception_list.at(atom_index) = std::current_exception();
         }
     };
 #ifdef USE_OPENMP
@@ -1510,17 +1384,17 @@ static IterationProposalResult RunProposalIteration(
     {
         eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
-        for (std::size_t refit_position = 0; refit_position < refit_atom_index_list.size(); refit_position++)
+        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
         {
-            run_refit(refit_position);
+            run_refit(atom_index);
         }
     }
     else
 #endif
     {
-        for (std::size_t refit_position = 0; refit_position < refit_atom_index_list.size(); refit_position++)
+        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
         {
-            run_refit(refit_position);
+            run_refit(atom_index);
         }
     }
     for (const auto & exception : refit_exception_list)
@@ -1528,26 +1402,15 @@ static IterationProposalResult RunProposalIteration(
         if (exception) std::rethrow_exception(exception);
     }
 
-    std::size_t refit_position{ 0 };
     for (const auto & key : cluster_key_list)
     {
         auto & health{ health_by_key.at(key) };
         for (const auto atom_index : key)
         {
-            auto refit_result{ std::move(refit_result_list.at(refit_position++)) };
+            auto refit_result{ std::move(refit_result_list.at(atom_index)) };
             if (!refit_result.has_value())
             {
-                if (operator_offsets_complete && operator_offsets_match_proposal)
-                {
-                    fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                        OperatorEndpointStatus::ShapeRefitFailure;
-                }
                 health.all_local_refits_solver_qualified = false;
-                if (quarantine_activity.HasActiveShape(atom_index) ||
-                    quarantine_activity.HasActiveOffset(atom_index))
-                {
-                    health.production_convergence_qualified = false;
-                }
                 block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
                 const auto failed_group_id{ group_id_by_atom_index.at(atom_index) };
                 for (std::size_t group_atom_index = 0;
@@ -1571,13 +1434,7 @@ static IterationProposalResult RunProposalIteration(
                 {
                     fixed_point_operator.state.at(atom_index).mdpde =
                         *refit_result->unrestricted_mdpde;
-                    fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                        OperatorEndpointStatus::Available;
-                }
-                else
-                {
-                    fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                        OperatorEndpointStatus::ShapeRefitFailure;
+                    fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
                 }
             }
             local_refit_status_by_atom.at(atom_index) =
@@ -1590,10 +1447,6 @@ static IterationProposalResult RunProposalIteration(
             if (!shape_solver_qualified)
             {
                 health.all_local_refits_solver_qualified = false;
-                if (quarantine_activity.HasActiveShape(atom_index))
-                {
-                    health.production_convergence_qualified = false;
-                }
             }
             if (!refit_result->unrestricted_mdpde.has_value())
             {
@@ -1603,54 +1456,22 @@ static IterationProposalResult RunProposalIteration(
             iteration_state.at(atom_index) = std::move(refit_result->result);
         }
     }
-    if (!operator_offsets_complete)
+    if (operator_offsets_complete && !operator_offsets_match_proposal)
     {
-        const auto unavailable_reason{
-            std::ranges::any_of(
-                fixed_point_operator.offset_status_by_atom,
-                [](OperatorEndpointStatus status)
-                {
-                    return status == OperatorEndpointStatus::OffsetSolverFailure;
-                }) ?
-                OperatorEndpointStatus::OffsetSolverFailure :
-                OperatorEndpointStatus::InvalidOffset
-        };
-        for (const auto & key : cluster_key_list)
-        {
-            for (const auto atom_index : key)
-            {
-                fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                    unavailable_reason;
-            }
-        }
-    }
-    else if (!operator_offsets_match_proposal)
-    {
-        fixed_point_operator.shadow_shape_refit_performed = true;
         const auto unrestricted_shape_list{
             RunUnrestrictedShapeRefits(
                 context,
-                cluster_key_list,
                 fixed_point_operator.state,
                 group_id_by_atom_index,
                 options)
         };
-        for (const auto & key : cluster_key_list)
+        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
         {
-            for (const auto atom_index : key)
+            if (unrestricted_shape_list.at(atom_index).has_value())
             {
-                if (unrestricted_shape_list.at(atom_index).has_value())
-                {
-                    fixed_point_operator.state.at(atom_index).mdpde =
-                        *unrestricted_shape_list.at(atom_index);
-                    fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                        OperatorEndpointStatus::Available;
-                }
-                else
-                {
-                    fixed_point_operator.shape_status_by_atom.at(atom_index) =
-                        OperatorEndpointStatus::ShapeRefitFailure;
-                }
+                fixed_point_operator.state.at(atom_index).mdpde =
+                    *unrestricted_shape_list.at(atom_index);
+                fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
             }
         }
     }
@@ -1959,12 +1780,9 @@ static IterationResult RunIteration(
         }
     }
     const auto joint_offset_ridge_multiplier_list{
-        iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(
-            ridge_atom_mask)
+        iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
     };
-    const auto iteration_phase_start{
-        std::chrono::steady_clock::now()
-    };
+    const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto raw_iteration_result{
         RunProposalIteration(
             context,
@@ -2086,8 +1904,7 @@ static IterationResult RunIteration(
             active_index_list,
             cluster_key_list,
             group_id_by_atom_index,
-            raw_iteration_result.block_activity,
-            quarantine_activity)
+            raw_iteration_result.block_activity)
     };
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
@@ -2107,12 +1924,11 @@ static IterationResult RunIteration(
         assembled_state,
         previous_state,
         active_population);
-    certificate.solver_qualification = EvaluateSolverQualificationAudit(
+    certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
         iteration_state.active_index_list,
         cluster_key_list,
         group_id_by_atom_index,
         raw_iteration_result.block_activity,
-        quarantine_activity,
         raw_iteration_result.local_refit_status_by_atom,
         raw_iteration_result.health_by_key);
     iteration_state.accepted_iteration_count++;
@@ -2127,7 +1943,7 @@ static IterationResult RunIteration(
         performance_counters);
     if (result.objective_domain_changed)
     {
-        iteration_state.quarantine_state.NotifyTopologyChanged();
+        iteration_state.quarantine_state.force_probation = true;
     }
     bool improved_best_audit{ false };
     if (!result.objective_domain_changed)
@@ -2168,8 +1984,12 @@ static IterationResult RunIteration(
             })
     };
     const auto has_pending_quarantine_lifecycle{
-        HasPendingQuarantineLifecycle(
-            iteration_state.quarantine_state.state_by_target)
+        std::ranges::any_of(
+            iteration_state.quarantine_state.state_by_target | std::views::values,
+            [](const auto & state)
+            {
+                return state.lifecycle != QuarantineLifecycle::Exhausted;
+            })
     };
     if (result.objective_domain_changed || improved_best_audit ||
         changed_rejected_trust_radius || has_pending_quarantine_lifecycle ||
@@ -2203,14 +2023,7 @@ static IterationResult RunIteration(
     LogConvergenceSafeguardAudit(
         options.quiet_mode,
         result,
-        certificate,
-        active_population,
-        raw_iteration_result.block_activity,
-        raw_iteration_result.local_refit_status_by_atom,
-        assembled_state,
-        operator_proposal_state,
-        iteration_state.active_index_list,
-        assembled_uses_polish);
+        certificate);
 
     iteration_state.previous_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);
@@ -2246,12 +2059,6 @@ struct FinalPolishResidualSafetyResult
     };
     std::optional<ConvergenceCertificate> base{};
     std::optional<ConvergenceCertificate> candidate{};
-
-    bool Passed() const
-    {
-        return status == FinalPolishResidualSafetyStatus::AbsolutePassed ||
-            status == FinalPolishResidualSafetyStatus::RelativePassed;
-    }
 };
 
 static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
@@ -2306,12 +2113,11 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
             iteration_state.active_index_list,
             cluster_key_list,
             group_id_by_atom_index) };
-        certificate.solver_qualification = EvaluateSolverQualificationAudit(
+        certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
             iteration_state.active_index_list,
             cluster_key_list,
             group_id_by_atom_index,
             proposal_result.block_activity,
-            final_block_activity,
             proposal_result.local_refit_status_by_atom,
             proposal_result.health_by_key);
         return certificate;
@@ -2332,9 +2138,7 @@ static bool HasComparableFinalPolishOperatorEvidence(
     const auto & percentile_list{
         certificate.operator_nominal_residual.percentile_list
     };
-    return certificate.solver_qualification.solver_qualified &&
-        certificate.OperatorComplete() &&
-        certificate.InvariantsClear() &&
+    return certificate.solver_qualified && certificate.operator_complete &&
         std::ranges::all_of(
             percentile_list,
             [](double value) { return std::isfinite(value); });
@@ -2467,7 +2271,8 @@ static void FinalizeSecondStageState(
     const auto polish_applied{
         polish_result.accepted &&
         polish_result.objective.has_value() &&
-        residual_safety.Passed()
+        (residual_safety.status == FinalPolishResidualSafetyStatus::AbsolutePassed ||
+            residual_safety.status == FinalPolishResidualSafetyStatus::RelativePassed)
     };
     LogFinalDependencyPolish(
         options.quiet_mode,
@@ -2580,40 +2385,108 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
     LogProgressHeader(options.quiet_mode, progress_column_widths);
 
     const auto audit_comparison_objective_domain{ iteration_state.objective_domain };
-    std::size_t last_attempt_number{ 0 };
-    const auto log_audit_terminal = [&](
-        SecondStageStopReason reason,
-        bool use_best_audit_state)
+    IterationResult terminal_result;
+    if (context.size() == 0)
     {
-        const auto & finalized_state{
-            use_best_audit_state && iteration_state.best_audit_state.has_value() ?
-                iteration_state.best_audit_state->state :
-                iteration_state.previous_state
-        };
-        LogSecondStageAuditTerminal(
-            options.quiet_mode,
-            context,
-            reason,
-            last_attempt_number,
-            iteration_state.accepted_iteration_count,
-            finalized_state,
-            audit_comparison_objective_domain);
-    };
+        terminal_result.attempt_number = 1;
+        terminal_result.accepted_iteration_count =
+            iteration_state.accepted_iteration_count;
+        terminal_result.stop_reason = SecondStageStopReason::Quarantine;
+    }
+    else
+    {
+        for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
+        {
+            terminal_result = RunIteration(
+                context,
+                graph_topology,
+                options,
+                iter + 1,
+                iteration_state,
+                performance_counters);
+            if (terminal_result.objective_domain_changed)
+            {
+                LogObjectiveDomain(
+                    iteration_state.objective_domain,
+                    options.quiet_mode,
+                    true);
+            }
+            LogAcceptedCandidateSearchDiagnostics(
+                options.quiet_mode,
+                terminal_result);
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+            LogTrustModelShadowDiagnostics(
+                options.quiet_mode,
+                terminal_result);
+#endif
+            LogRejectedClusterDiagnostics(
+                options.quiet_mode,
+                terminal_result.rejected_cluster_diagnostic_list);
+            LogIterationProgress(
+                options.quiet_mode,
+                progress_column_widths,
+                terminal_result);
 
-    if (iteration_state.active_index_list.empty())
-    {
-        last_attempt_number = 1;
-        FinalizeSecondStageState(
-            model_object,
-            context,
-            options,
-            graph_topology,
-            iteration_state,
-            false,
+            if (terminal_result.stop_reason ==
+                    SecondStageStopReason::AllRejectedBacktrackingExhausted ||
+                terminal_result.stop_reason ==
+                    SecondStageStopReason::AllRejectedAtMaximumIterations)
+            {
+                LogAllRejectedResolution(
+                    options.quiet_mode,
+                    terminal_result);
+                break;
+            }
+            if (terminal_result.stop_reason == SecondStageStopReason::Converged ||
+                terminal_result.stop_reason == SecondStageStopReason::AuditPatience)
+            {
+                break;
+            }
+            if (iter + 1 == kMaximumIterations)
+            {
+                terminal_result.stop_reason =
+                    SecondStageStopReason::MaximumIterations;
+                break;
+            }
+        }
+    }
+
+    const auto converged{
+        terminal_result.stop_reason == SecondStageStopReason::Converged
+    };
+    const auto use_best_audit_state{
+        !converged &&
+        terminal_result.stop_reason != SecondStageStopReason::Quarantine &&
+        iteration_state.best_audit_state.has_value()
+    };
+    FinalizeSecondStageState(
+        model_object,
+        context,
+        options,
+        graph_topology,
+        iteration_state,
+        use_best_audit_state,
+        converged ?
+            FinalPolishCertificationPolicy::RequireStrictFixedPoint :
             FinalPolishCertificationPolicy::RequireResidualNonRegression,
-            performance_counters);
-        log_audit_terminal(SecondStageStopReason::Quarantine, false);
-        if (iteration_state.quarantine_state.HasFailures())
+        performance_counters);
+    const auto & finalized_state{
+        use_best_audit_state ?
+            iteration_state.best_audit_state->state :
+            iteration_state.previous_state
+    };
+    LogSecondStageAuditTerminal(
+        options.quiet_mode,
+        context,
+        terminal_result.stop_reason,
+        terminal_result.attempt_number,
+        iteration_state.accepted_iteration_count,
+        finalized_state,
+        audit_comparison_objective_domain);
+
+    if (terminal_result.stop_reason == SecondStageStopReason::Quarantine)
+    {
+        if (iteration_state.quarantine_state.TargetCount() != 0)
         {
             LogQuarantineFallback(
                 options.quiet_mode,
@@ -2622,153 +2495,51 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 iteration_state.quarantine_state.released_target_count,
                 iteration_state.quarantine_state.failed_probation_count,
                 iteration_state.quarantine_state.TargetCount(),
-                iteration_state.previous_state);
+                finalized_state);
         }
         LogNoSelectedAtoms(options.quiet_mode);
-        LogSecondStageSummary(
-            options.quiet_mode,
-            iteration_state.accepted_iteration_count,
-            iteration_state.best_audit_state,
-            iteration_state.previous_polish_provenance,
-            SecondStageStopReason::Quarantine,
-            false);
-        return true;
     }
-
-    SecondStageStopReason final_stop_reason{ SecondStageStopReason::None };
-    for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
+    else if (converged)
     {
-        last_attempt_number = iter + 1;
-        auto iteration_result{
-            RunIteration(
-                context,
-                graph_topology,
-                options,
-                iter + 1,
-                iteration_state,
-                performance_counters)
-        };
-        if (iteration_result.objective_domain_changed)
+        if (iteration_state.quarantine_state.TargetCount() != 0)
         {
-            LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
-        }
-        LogAcceptedCandidateSearchDiagnostics(
-            options.quiet_mode,
-            iteration_result);
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-        LogTrustModelShadowDiagnostics(
-            options.quiet_mode,
-            iteration_result);
-#endif
-        LogRejectedClusterDiagnostics(
-            options.quiet_mode,
-            iteration_result.rejected_cluster_diagnostic_list);
-        LogIterationProgress(
-            options.quiet_mode,
-            progress_column_widths,
-            iteration_result);
-
-        if (iteration_result.stop_reason ==
-                SecondStageStopReason::AllRejectedBacktrackingExhausted ||
-            iteration_result.stop_reason ==
-                SecondStageStopReason::AllRejectedAtMaximumIterations)
-        {
-            LogAllRejectedResolution(
-                options.quiet_mode,
-                iteration_result);
-            final_stop_reason = iteration_result.stop_reason;
-            break;
-        }
-
-        if (iteration_result.stop_reason == SecondStageStopReason::Converged)
-        {
-            FinalizeSecondStageState(
-                model_object,
-                context,
-                options,
-                graph_topology,
-                iteration_state,
-                false,
-                FinalPolishCertificationPolicy::RequireStrictFixedPoint,
-                performance_counters);
-            log_audit_terminal(SecondStageStopReason::Converged, false);
-            if (iteration_state.quarantine_state.HasFailures())
-            {
-                LogQuarantineFallback(
-                    options.quiet_mode,
-                    iteration_state.accepted_iteration_count,
-                    iteration_state.quarantine_state.entered_target_count,
-                    iteration_state.quarantine_state.released_target_count,
-                    iteration_state.quarantine_state.failed_probation_count,
-                    iteration_state.quarantine_state.TargetCount(),
-                    iteration_state.previous_state);
-            }
-            else
-            {
-                LogConverged(
-                    options.quiet_mode,
-                    iteration_result,
-                    iteration_state.previous_state);
-            }
-            LogSecondStageSummary(
+            LogQuarantineFallback(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
-                iteration_state.best_audit_state,
-                iteration_state.previous_polish_provenance,
-                SecondStageStopReason::Converged,
-                false);
-            return true;
-        }
-
-        if (iteration_result.stop_reason == SecondStageStopReason::AuditPatience)
-        {
-            final_stop_reason = iteration_result.stop_reason;
-            break;
-        }
-
-        if (iter + 1 == kMaximumIterations)
-        {
-            final_stop_reason = SecondStageStopReason::MaximumIterations;
-            break;
-        }
-    }
-
-    if (final_stop_reason != SecondStageStopReason::None)
-    {
-        const auto * audit_state{
-            iteration_state.best_audit_state.has_value() ? &*iteration_state.best_audit_state : nullptr
-        };
-        FinalizeSecondStageState(
-            model_object,
-            context,
-            options,
-            graph_topology,
-            iteration_state,
-            audit_state != nullptr,
-            FinalPolishCertificationPolicy::RequireResidualNonRegression,
-            performance_counters);
-        log_audit_terminal(final_stop_reason, audit_state != nullptr);
-        if (final_stop_reason == SecondStageStopReason::MaximumIterations)
-        {
-            LogMaximumIterations(
-                options.quiet_mode,
                 iteration_state.quarantine_state.entered_target_count,
                 iteration_state.quarantine_state.released_target_count,
                 iteration_state.quarantine_state.failed_probation_count,
                 iteration_state.quarantine_state.TargetCount(),
-                iteration_state.best_audit_state,
-                iteration_state.previous_state);
+                finalized_state);
         }
-        LogSecondStageSummary(
-            options.quiet_mode,
-            iteration_state.accepted_iteration_count,
-            iteration_state.best_audit_state,
-            iteration_state.previous_polish_provenance,
-            final_stop_reason,
-            audit_state != nullptr);
-        return true;
+        else
+        {
+            LogConverged(
+                options.quiet_mode,
+                terminal_result,
+                finalized_state);
+        }
     }
-    return false;
+    else if (terminal_result.stop_reason ==
+        SecondStageStopReason::MaximumIterations)
+    {
+        LogMaximumIterations(
+            options.quiet_mode,
+            iteration_state.quarantine_state.entered_target_count,
+            iteration_state.quarantine_state.released_target_count,
+            iteration_state.quarantine_state.failed_probation_count,
+            iteration_state.quarantine_state.TargetCount(),
+            iteration_state.best_audit_state,
+            iteration_state.previous_state);
+    }
+    LogSecondStageSummary(
+        options.quiet_mode,
+        iteration_state.accepted_iteration_count,
+        iteration_state.best_audit_state,
+        iteration_state.previous_polish_provenance,
+        terminal_result.stop_reason,
+        use_best_audit_state);
+    return true;
 }
 
 } // namespace
@@ -2832,37 +2603,16 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     };
 }
 
-bool ConvergenceCertificate::AcceptedPercentilePassed() const
-{
-    return IsTransformedPercentileConverged(accepted_active_movement);
-}
-
-bool ConvergenceCertificate::OperatorPercentilePassed() const
-{
-    return IsTransformedPercentileConverged(operator_nominal_residual);
-}
-
-bool ConvergenceCertificate::OperatorComplete() const
-{
-    return std::ranges::all_of(
-        operator_unavailable_count,
-        [](std::size_t count) { return count == 0; });
-}
-
-bool ConvergenceCertificate::InvariantsClear() const
-{
-    return solver_qualification.mixed_offset_group_count == 0;
-}
-
 bool ConvergenceCertificate::StrictOperatorPassed() const
 {
-    return solver_qualification.solver_qualified && OperatorComplete() &&
-        InvariantsClear() && OperatorPercentilePassed();
+    return solver_qualified && operator_complete &&
+        IsTransformedPercentileConverged(operator_nominal_residual);
 }
 
 bool ConvergenceCertificate::ProductionConverged() const
 {
-    return StrictOperatorPassed() && AcceptedPercentilePassed() &&
+    return StrictOperatorPassed() &&
+        IsTransformedPercentileConverged(accepted_active_movement) &&
         !objective_domain_changed && !quarantine_transition &&
         !suspicious_offset_fallback && !rejected_cluster;
 }
@@ -2899,14 +2649,9 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
-    const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity)
+    const SuspiciousBlockActivity & block_activity)
 {
-    ValidateActiveCoordinateInputs(
-        group_id_by_atom_index.size(),
-        group_id_by_atom_index,
-        block_activity,
-        quarantine_activity);
+    ValidateBlockActivitySize(group_id_by_atom_index.size(), block_activity);
 
     ActiveCoordinatePopulation result;
     for (const auto atom_index : atom_index_list)
@@ -2931,7 +2676,6 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const auto offset_group_list{
         BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index)
     };
-    result.total_offset_group_count = offset_group_list.size();
     for (const auto & group : offset_group_list)
     {
         const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
@@ -2940,21 +2684,12 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
             {
                 return block_activity.HasActiveOffset(atom_index);
             })) };
-        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return !quarantine_activity.HasActiveOffset(atom_index);
-            })) };
         if (active_count == 0)
         {
-            if (quarantine_count != 0) result.quarantined_offset_group_count++;
-            else result.fixed_offset_group_count++;
             continue;
         }
 
         const auto is_mixed{ active_count != group.atom_index_list.size() };
-        if (is_mixed) result.mixed_offset_group_count++;
         result.active_offset_group_atom_index_list.emplace_back(group.atom_index_list);
         result.mixed_offset_group_mask.emplace_back(is_mixed ? 1 : 0);
     }
@@ -3044,66 +2779,29 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     return SummarizeActiveDofChanges(change_list, population);
 }
 
-SolverQualificationAudit EvaluateSolverQualificationAudit(
+bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key)
 {
     const auto atom_count{ group_id_by_atom_index.size() };
-    ValidateActiveCoordinateInputs(
-        atom_count,
-        group_id_by_atom_index,
-        block_activity,
-        quarantine_activity);
+    ValidateBlockActivitySize(atom_count, block_activity);
     if (local_refit_status_by_atom.size() != atom_count)
     {
         throw std::invalid_argument(
             "Convergence audit qualification inputs are inconsistent.");
     }
 
-    SolverQualificationAudit result;
-    result.production_qualified = std::ranges::all_of(
-        health_by_key | std::views::values,
-        &ClusterHealth::production_convergence_qualified);
-    for (const auto & health : health_by_key | std::views::values)
-    {
-        result.joint_offset_status_count.at(
-            static_cast<std::size_t>(health.joint_offset_status))++;
-    }
     for (const auto atom_index : atom_index_list)
     {
-        if (!block_activity.HasActiveShape(atom_index))
-        {
-            if (!quarantine_activity.HasActiveShape(atom_index))
-            {
-                result.quarantined_shape_count++;
-            }
-            else
-            {
-                result.fixed_shape_count++;
-            }
-            continue;
-        }
-
-        result.active_shape_count++;
+        if (!block_activity.HasActiveShape(atom_index)) continue;
         const auto & status{ local_refit_status_by_atom[atom_index] };
-        if (status.has_value() && IsLocalRefitStatusSolverQualified(*status))
+        if (!status.has_value() || !IsLocalRefitStatusSolverQualified(*status))
         {
-            result.qualified_shape_count++;
-        }
-        else if (status.has_value())
-        {
-            result.soft_unqualified_shape_count++;
-            result.solver_qualified = false;
-        }
-        else
-        {
-            result.hard_failure_shape_count++;
-            result.solver_qualified = false;
+            return false;
         }
     }
 
@@ -3116,75 +2814,25 @@ SolverQualificationAudit EvaluateSolverQualificationAudit(
             {
                 return block_activity.HasActiveOffset(atom_index);
             })) };
-        const auto quarantine_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return !quarantine_activity.HasActiveOffset(atom_index);
-            })) };
-        if (active_count == 0)
-        {
-            if (quarantine_count != 0) result.quarantined_offset_group_count++;
-            else result.fixed_offset_group_count++;
-            continue;
-        }
+        if (active_count == 0) continue;
         if (active_count != group.atom_index_list.size())
         {
-            result.mixed_offset_group_count++;
-            result.solver_qualified = false;
-            continue;
+            return false;
         }
 
-        result.active_offset_group_count++;
         const auto health_iter{ health_by_key.find(group.cluster_key) };
-        if (health_iter == health_by_key.end())
+        if (health_iter == health_by_key.end() ||
+            health_iter->second.joint_offset_status !=
+                JointOffsetSolveStatus::Converged)
         {
-            result.hard_failure_offset_group_count++;
-            result.solver_qualified = false;
-            continue;
-        }
-        if (health_iter->second.joint_offset_status ==
-            JointOffsetSolveStatus::Converged)
-        {
-            result.qualified_offset_group_count++;
-        }
-        else if (IsJointOffsetSolveHardFailure(
-                health_iter->second.joint_offset_status))
-        {
-            result.hard_failure_offset_group_count++;
-            result.solver_qualified = false;
-        }
-        else
-        {
-            result.soft_unqualified_offset_group_count++;
-            result.solver_qualified = false;
+            return false;
         }
     }
-
-    result.restricted_active_set = result.fixed_shape_count != 0 ||
-        result.quarantined_shape_count != 0 ||
-        result.fixed_offset_group_count != 0 ||
-        result.quarantined_offset_group_count != 0 ||
-        result.mixed_offset_group_count != 0;
-    result.all_fixed = result.active_shape_count == 0 &&
-        result.active_offset_group_count == 0 &&
-        result.mixed_offset_group_count == 0;
-    return result;
-}
-
-bool HasPendingQuarantineLifecycle(
-    const QuarantineFailureStateMap & state_by_target)
-{
-    return std::ranges::any_of(
-        state_by_target | std::views::values,
-        [](const auto & state)
-        {
-            return state.lifecycle != QuarantineLifecycle::Exhausted;
-        });
+    return true;
 }
 
 QuarantineStateTransition UpdateQuarantineFailureState(
-    const std::vector<QuarantineFailureObservation> & observation_list,
+    const QuarantineFailureReasonMap & failure_reason_by_target,
     const std::vector<QuarantineTarget> & successful_probation_target_list,
     std::size_t accepted_iteration_count,
     QuarantineFailureStateMap & state_by_target)
@@ -3219,15 +2867,10 @@ QuarantineStateTransition UpdateQuarantineFailureState(
         ++iter;
     }
 
-    std::map<QuarantineTarget, QuarantineFailureReason> observation_by_target;
-    for (const auto & observation : observation_list)
-    {
-        observation_by_target.try_emplace(observation.target, observation.reason);
-    }
     for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
     {
         if (iter->second.lifecycle == QuarantineLifecycle::Tracking &&
-            !observation_by_target.contains(iter->first))
+            !failure_reason_by_target.contains(iter->first))
         {
             iter = state_by_target.erase(iter);
             continue;
@@ -3235,7 +2878,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
         ++iter;
     }
 
-    for (const auto & [target, reason] : observation_by_target)
+    for (const auto & [target, reason] : failure_reason_by_target)
     {
         auto [iter, inserted]{
             state_by_target.try_emplace(

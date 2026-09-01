@@ -42,7 +42,7 @@ def case_summary(
     stop_reason: str = "converged",
 ) -> dict[str, object]:
     return {
-        "schema_version": 12,
+        "schema_version": 13,
         "status": "complete",
         "case": {
             "case_id": case_id,
@@ -94,10 +94,10 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         aggregate = ANALYZER.analyze([summary])
         baseline = RUNNER.build_compact_baseline(
             b'{"schema_version":1}', [summary], aggregate)
-        self.assertEqual(baseline["schema_version"], 2)
-        self.assertEqual(baseline["schema_contract"]["trajectory"], 9)
+        self.assertEqual(baseline["schema_version"], 3)
+        self.assertEqual(baseline["schema_contract"]["trajectory"], 10)
         self.assertEqual(baseline["schema_contract"]["terminal"], 2)
-        self.assertEqual(baseline["schema_contract"]["case_summary"], 12)
+        self.assertEqual(baseline["schema_contract"]["case_summary"], 13)
         self.assertEqual(baseline["schema_contract"]["aggregate"], 8)
         self.assertEqual(baseline["schema_contract"]["comparison"], 4)
         self.assertNotIn("comparator_set", baseline["schema_contract"])
@@ -152,7 +152,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertTrue(comparison["blocking_gate"]["passed"])
 
     def test_timing_is_excluded_from_semantic_digest(self) -> None:
-        value = [{"try": "1", "certificate": "1/1/1/1/1/1/1"}]
+        value = [{"try": "1", "certificate": "1/1/1/1/1/1"}]
         self.assertEqual(
             RUNNER.semantic_digest(value), RUNNER.semantic_digest(value))
         before = case_summary("a", elapsed_seconds=10.0)

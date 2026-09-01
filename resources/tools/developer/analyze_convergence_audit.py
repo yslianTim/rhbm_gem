@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import json
 from pathlib import Path
 import re
@@ -17,9 +16,7 @@ TERMINAL_ATOM_MARKER = "Second-stage audit terminal atom:"
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)(?:\[[^]]+\])?=(?P<value>[^,]+)"
 )
-CURRENT_SCHEMA = "9"
-COMPATIBILITY_SCHEMA = "8"
-CERTIFICATE_DEFINITION = "1"
+CURRENT_SCHEMA = "10"
 PRODUCTION_FIELDS = (
     "try",
     "acc",
@@ -30,36 +27,13 @@ PRODUCTION_FIELDS = (
     "accepted-active-max",
     "operator-nominal-residual-p99",
     "operator-nominal-residual-max",
-    "operator-nominal-unavailable",
-    "operator-nominal-unavailable-reasons",
-    "operator-nominal-tail",
-    "residual-state",
-    "qualification",
-    "unified-search",
-    "path",
-    "limiters",
-    "fixed",
     "blockers",
-    "accepted-equals-operator",
 )
 CURRENT_REQUIRED_FIELDS = {
     "schema",
-    "certificate-definition",
     "atoms",
     "quarantine",
-    "operator-shadow-refit",
-    "joint-status",
-    "local-status",
-    "offset-groups",
-    "ratios",
-    "certificate-blockers",
     *PRODUCTION_FIELDS,
-}
-FORBIDDEN_CURRENT_FIELDS = {
-    "comparator-set",
-    "stop-candidates",
-    "exposures",
-    "production-maximum-predicates",
 }
 
 
@@ -80,11 +54,11 @@ def _integers(value: str) -> list[int]:
 
 def _validate_certificate(record: dict[str, str]) -> None:
     certificate = _integers(record["certificate"])
-    if len(certificate) != 7:
-        raise ValueError("Certificate vector must contain seven values")
+    if len(certificate) != 6:
+        raise ValueError("Certificate vector must contain six values")
     if any(value not in (0, 1) for value in certificate):
         raise ValueError("Certificate vector must contain boolean values")
-    if certificate[6] != int(all(certificate[:6])):
+    if certificate[5] != int(all(certificate[:5])):
         raise ValueError("Serialized production decision is not the conjunction")
 
 
@@ -93,28 +67,18 @@ def parse_record(line: str) -> dict[str, str] | None:
     if fields is None:
         return None
     schema = fields.get("schema")
-    if schema not in (CURRENT_SCHEMA, COMPATIBILITY_SCHEMA):
+    if schema != CURRENT_SCHEMA:
         return None
     missing = CURRENT_REQUIRED_FIELDS - fields.keys()
     if missing:
         raise ValueError(
             "Convergence audit record is missing: " + ", ".join(sorted(missing)))
-    if fields["certificate-definition"] != CERTIFICATE_DEFINITION:
-        raise ValueError("Unsupported convergence certificate definition")
-    if schema == CURRENT_SCHEMA:
-        forbidden = FORBIDDEN_CURRENT_FIELDS & fields.keys()
-        historical = {name for name in fields if name.startswith("historical-")}
-        if forbidden or historical:
-            names = ", ".join(sorted(forbidden | historical))
-            raise ValueError("Current convergence record contains retired fields: " + names)
-    elif fields.get("comparator-set") != "1":
-        raise ValueError("Schema-8 compatibility record has an unknown comparator set")
     _validate_certificate(fields)
     return fields
 
 
 def normalize_record(record: dict[str, str]) -> dict[str, str]:
-    if record.get("schema") not in (CURRENT_SCHEMA, COMPATIBILITY_SCHEMA):
+    if record.get("schema") != CURRENT_SCHEMA:
         raise ValueError("Unsupported convergence audit schema")
     return {
         "source-schema": record["schema"],
@@ -154,12 +118,10 @@ def analyze_records(records: Iterable[dict[str, str]]) -> dict[str, Any]:
     rows = list(records)
     normalized = [normalize_record(record) for record in rows]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "record_count": len(rows),
         "production_convergence_count": sum(
-            _integers(record["certificate"])[6] for record in rows),
-        "residual_state_counts": dict(sorted(Counter(
-            record["residual-state"] for record in rows).items())),
+            _integers(record["certificate"])[5] for record in rows),
         "records": normalized,
     }
 

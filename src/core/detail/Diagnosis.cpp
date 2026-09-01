@@ -1082,44 +1082,6 @@ void LogIterationProgress(
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
 
-std::string_view GetFixedPointResidualInterpretationText(
-    bool operator_complete,
-    bool qualification_passed,
-    const TransformedChangeSummary & accepted_change,
-    const TransformedChangeSummary & fixed_point_residual)
-{
-    if (!operator_complete) return "restricted";
-    const auto accepted_small{
-        IsTransformedPercentileConverged(accepted_change)
-    };
-    const auto residual_small{
-        IsTransformedPercentileConverged(fixed_point_residual)
-    };
-    const auto tail_clean = [](const TransformedChangeSummary & summary)
-    {
-        return std::ranges::all_of(
-            summary.maximum_list,
-            [](double value)
-            {
-                return std::isfinite(value) &&
-                    value < kLegacyMaximumTransformedChangeTolerance;
-            });
-    };
-    if (accepted_small && residual_small && !qualification_passed)
-    {
-        return "unqualified-small";
-    }
-    if (accepted_small && !residual_small) return "step-limited";
-    if (!accepted_small && residual_small) return "postprocessed-movement";
-    if (accepted_small && residual_small &&
-        (!tail_clean(accepted_change) || !tail_clean(fixed_point_residual)))
-    {
-        return "bulk-fixed-point-with-tail";
-    }
-    if (accepted_small && residual_small) return "fixed-point-converged";
-    return "progressing";
-}
-
 void LogUnrestrictedOperatorAssessments(
     bool quiet_mode,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
@@ -1158,157 +1120,34 @@ void LogUnrestrictedOperatorAssessments(
 void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     const IterationResult & iteration_result,
-    const ConvergenceCertificate & certificate,
-    const ActiveCoordinatePopulation & active_population,
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
-    const FitState & assembled_state,
-    const FitState & operator_proposal_state,
-    const std::vector<std::size_t> & active_index_list,
-    bool assembled_uses_polish)
+    const ConvergenceCertificate & certificate)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
-    const auto accepted_raw_change_summary{
-        SummarizeTransformedChanges(
-            assembled_state,
-            operator_proposal_state,
-            active_index_list)
-    };
-    const auto accepted_equals_operator{
-        std::ranges::max(accepted_raw_change_summary.maximum_list) == 0.0
-    };
-    const auto & solver_qualification{ certificate.solver_qualification };
     const auto & accepted_production_change{
         certificate.accepted_active_movement
     };
-    const auto orthogonal_blockers_clear{
+    const auto accepted_percentile_passed{
+        IsTransformedPercentileConverged(accepted_production_change)
+    };
+    const auto operator_percentile_passed{
+        IsTransformedPercentileConverged(
+            certificate.operator_nominal_residual)
+    };
+    const auto blockers_clear{
         !certificate.objective_domain_changed &&
         !certificate.quarantine_transition &&
         !certificate.suspicious_offset_fallback &&
         !certificate.rejected_cluster
     };
-    const auto accepted_limited_count{ static_cast<std::size_t>(
-        std::ranges::count_if(
-            iteration_result.accepted_cluster_diagnostic_list,
-            [](const auto & diagnostic)
-            {
-                return diagnostic.attempt.accepted_factor.has_value() &&
-                    *diagnostic.attempt.accepted_factor < 1.0;
-            })) };
-    const auto sum_trial_diagnostic = [&](const auto projection)
-    {
-        std::size_t count{ 0 };
-        for (const auto & diagnostic :
-            iteration_result.accepted_cluster_diagnostic_list)
-        {
-            count += projection(diagnostic.attempt);
-        }
-        for (const auto & diagnostic :
-            iteration_result.rejected_cluster_diagnostic_list)
-        {
-            count += projection(diagnostic.attempt);
-        }
-        return count;
-    };
-    const auto trial_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic) { return diagnostic.trial_count; }) };
-    const auto invalid_trial_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic) { return diagnostic.invalid_trial_count; }) };
-    const auto trust_skipped_trial_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic)
-        {
-            return diagnostic.trust_skipped_trial_count;
-        }) };
-    const auto guard_rejected_trial_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic)
-        {
-            return diagnostic.guard_rejected_trial_count;
-        }) };
-    const auto objective_rejected_trial_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic)
-        {
-            return diagnostic.objective_rejected_trial_count;
-        }) };
-    const auto terminal_count{ sum_trial_diagnostic(
-        [](const auto & diagnostic)
-        {
-            return diagnostic.terminal_diagnostic_list.size();
-        }) };
-    const auto boundary_backtracked_count{ static_cast<std::size_t>(
-        std::ranges::count_if(
-            iteration_result.boundary_reconciliation_diagnostic_list,
-            [](const auto & diagnostic)
-            {
-                return diagnostic.accepted_source ==
-                    BoundaryComponentAcceptedSource::Backtracking;
-            })) };
-    const auto accepted_boundary_count{ static_cast<std::size_t>(
-        std::ranges::count_if(
-            iteration_result.boundary_reconciliation_diagnostic_list,
-            [](const auto & diagnostic)
-            {
-                return diagnostic.accepted_source !=
-                    BoundaryComponentAcceptedSource::None;
-            })) };
-    const auto rescued_boundary_count{ static_cast<std::size_t>(
-        std::ranges::count_if(
-            iteration_result.boundary_reconciliation_diagnostic_list,
-            [](const auto & diagnostic)
-            {
-                return diagnostic.accepted_source !=
-                        BoundaryComponentAcceptedSource::None &&
-                    diagnostic.is_rescue_attempt;
-            })) };
-    const auto shape_fixed_count{ static_cast<std::size_t>(
-        std::ranges::count(block_activity.shape_fixed_atom_mask, 1)) };
-    const auto offset_fixed_count{ static_cast<std::size_t>(
-        std::ranges::count(block_activity.offset_fixed_atom_mask, 1)) };
-    const auto hard_fixed_count{ static_cast<std::size_t>(
-        std::ranges::count(block_activity.hard_failure_atom_mask, 1)) };
-    std::array<std::size_t, 5> local_refit_status_count{};
-    std::size_t unavailable_local_refit_status_count{ 0 };
-    for (const auto status : local_refit_status_by_atom)
-    {
-        if (!status.has_value())
-        {
-            unavailable_local_refit_status_count++;
-            continue;
-        }
-        switch (*status)
-        {
-        case RHBMEstimationStatus::SUCCESS:
-            local_refit_status_count.at(0)++;
-            break;
-        case RHBMEstimationStatus::MAX_ITERATIONS_REACHED:
-            local_refit_status_count.at(1)++;
-            break;
-        case RHBMEstimationStatus::SINGLE_MEMBER:
-            local_refit_status_count.at(2)++;
-            break;
-        case RHBMEstimationStatus::INSUFFICIENT_DATA:
-            local_refit_status_count.at(3)++;
-            break;
-        case RHBMEstimationStatus::NUMERICAL_FALLBACK:
-            local_refit_status_count.at(4)++;
-            break;
-        }
-    }
-
     const auto selected_atom_count{
         iteration_result.active_atom_count +
             iteration_result.quarantine_atom_count
     };
-    const auto ratio = [selected_atom_count](std::size_t count)
-    {
-        return selected_atom_count == 0 ? 0.0 :
-            static_cast<double>(count) /
-                static_cast<double>(selected_atom_count);
-    };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
-        << "Convergence safeguard audit: schema=9"
-        << ", certificate-definition=1, try="
+        << "Convergence safeguard audit: schema=10"
+        << ", try="
         << iteration_result.attempt_number
         << ", acc=" << iteration_result.accepted_iteration_count
         << ", atoms=" << selected_atom_count
@@ -1320,13 +1159,12 @@ void LogConvergenceSafeguardAudit(
         message,
         certificate.operator_nominal_residual.population_size_list);
     message
-        << ", certificate[solver/accepted-p99/operator-complete/operator-p99/invariants/orthogonal/production]="
-        << solver_qualification.solver_qualified << "/"
-        << certificate.AcceptedPercentilePassed() << "/"
-        << certificate.OperatorComplete() << "/"
-        << certificate.OperatorPercentilePassed() << "/"
-        << certificate.InvariantsClear() << "/"
-        << orthogonal_blockers_clear << "/"
+        << ", certificate[solver/accepted-p99/operator-complete/operator-p99/blockers/production]="
+        << certificate.solver_qualified << "/"
+        << accepted_percentile_passed << "/"
+        << certificate.operator_complete << "/"
+        << operator_percentile_passed << "/"
+        << blockers_clear << "/"
         << certificate.ProductionConverged()
         << ", accepted-active-p99=";
     AppendAuditValues(message, accepted_production_change.percentile_list);
@@ -1340,106 +1178,12 @@ void LogConvergenceSafeguardAudit(
     AppendAuditValues(
         message,
         certificate.operator_nominal_residual.maximum_list);
-    message << ", operator-nominal-unavailable[height/width/offset]=";
-    AppendAuditPopulation(message, certificate.operator_unavailable_count);
     message
-        << ", operator-nominal-unavailable-reasons[offset-solver/invalid-offset/shape-refit]=";
-    AppendAuditPopulation(
-        message,
-        certificate.operator_unavailable_reason_count);
-    message << ", operator-nominal-tail[height/width/offset]=";
-    AppendAuditPopulation(message, certificate.operator_tail_count);
-    message
-        << ", residual-state=" << GetFixedPointResidualInterpretationText(
-            certificate.OperatorComplete(),
-            solver_qualification.solver_qualified,
-            accepted_production_change,
-            certificate.operator_nominal_residual)
-        << ", operator-shadow-refit="
-        << certificate.operator_shadow_shape_refit_performed
-        << ", accepted-equals-operator=" << accepted_equals_operator
-        << ", unified-search[trials/invalid/trust-skipped/guard-rejected/objective-rejected/accepted-limited/terminal]="
-        << trial_count << "/"
-        << invalid_trial_count << "/"
-        << trust_skipped_trial_count << "/"
-        << guard_rejected_trial_count << "/"
-        << objective_rejected_trial_count << "/"
-        << accepted_limited_count << "/"
-        << terminal_count
-        << ", path[limited/polish/boundary/rescue]="
-        << accepted_limited_count << "/"
-        << assembled_uses_polish << "/"
-        << accepted_boundary_count << "/"
-        << rescued_boundary_count
-        << ", joint-status[converged/system-build/empty/initial-solve/irls-solve/objective-deteriorated/max-iter]="
-        << solver_qualification.joint_offset_status_count.at(0) << "/"
-        << solver_qualification.joint_offset_status_count.at(1) << "/"
-        << solver_qualification.joint_offset_status_count.at(2) << "/"
-        << solver_qualification.joint_offset_status_count.at(3) << "/"
-        << solver_qualification.joint_offset_status_count.at(4) << "/"
-        << solver_qualification.joint_offset_status_count.at(5) << "/"
-        << solver_qualification.joint_offset_status_count.at(6)
-        << ", qualification[production/solver/restricted/all-fixed/active-shape/solver-shape/soft-shape/hard-shape/fixed-shape/quarantine-shape/active-offset/solver-offset/soft-offset/hard-offset/fixed-offset/quarantine-offset/mixed-offset]="
-        << solver_qualification.production_qualified << "/"
-        << solver_qualification.solver_qualified << "/"
-        << solver_qualification.restricted_active_set << "/"
-        << solver_qualification.all_fixed << "/"
-        << solver_qualification.active_shape_count << "/"
-        << solver_qualification.qualified_shape_count << "/"
-        << solver_qualification.soft_unqualified_shape_count << "/"
-        << solver_qualification.hard_failure_shape_count << "/"
-        << solver_qualification.fixed_shape_count << "/"
-        << solver_qualification.quarantined_shape_count << "/"
-        << solver_qualification.active_offset_group_count << "/"
-        << solver_qualification.qualified_offset_group_count << "/"
-        << solver_qualification.soft_unqualified_offset_group_count << "/"
-        << solver_qualification.hard_failure_offset_group_count << "/"
-        << solver_qualification.fixed_offset_group_count << "/"
-        << solver_qualification.quarantined_offset_group_count << "/"
-        << solver_qualification.mixed_offset_group_count
-        << ", local-status[success/max-iter/single/insufficient/numerical/unavailable]="
-        << local_refit_status_count.at(0) << "/"
-        << local_refit_status_count.at(1) << "/"
-        << local_refit_status_count.at(2) << "/"
-        << local_refit_status_count.at(3) << "/"
-        << local_refit_status_count.at(4) << "/"
-        << unavailable_local_refit_status_count
-        << ", offset-groups[total/active/fixed/quarantine/mixed]="
-        << active_population.total_offset_group_count << "/"
-        << solver_qualification.active_offset_group_count << "/"
-        << active_population.fixed_offset_group_count << "/"
-        << active_population.quarantined_offset_group_count << "/"
-        << active_population.mixed_offset_group_count
-        << ", ratios[shape-active/offset-active/quarantine]="
-        << ratio(active_population.active_atom_index_list_by_parameter.at(
-            GaussianModel3D::LogPeakHeightCoordinateIndex()).size()) << "/"
-        << ratio(active_population.active_atom_index_list_by_parameter.at(
-            GaussianModel3D::OffsetToPeakRatioCoordinateIndex()).size()) << "/"
-        << ratio(iteration_result.quarantine_atom_count)
-        << ", certificate-blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
+        << ", blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
         << certificate.objective_domain_changed << "/"
         << certificate.quarantine_transition << "/"
         << certificate.suspicious_offset_fallback << "/"
-        << certificate.rejected_cluster
-        << ", limiters[guard/fixed/quarantine/trust/objective/reject/polish/boundary/rescue]="
-        << guard_rejected_trial_count << "/"
-        << shape_fixed_count + offset_fixed_count + hard_fixed_count << "/"
-        << iteration_result.quarantine_atom_count << "/"
-        << trust_skipped_trial_count << "/"
-        << objective_rejected_trial_count + boundary_backtracked_count << "/"
-        << iteration_result.rejected_cluster_diagnostic_list.size() << "/"
-        << assembled_uses_polish << "/"
-        << accepted_boundary_count << "/"
-        << rescued_boundary_count
-        << ", fixed[shape/offset/hard]="
-        << shape_fixed_count << "/"
-        << offset_fixed_count << "/"
-        << hard_fixed_count
-        << ", blockers[suspicious/rejected/quarantine-transition/domain-change]="
-        << iteration_result.suspicious_atom_count << "/"
-        << iteration_result.rejected_cluster_diagnostic_list.size() << "/"
-        << certificate.quarantine_transition << "/"
-        << certificate.objective_domain_changed << ".";
+        << certificate.rejected_cluster << ".";
     Logger::FinishProgressLine();
     Logger::Log(LogLevel::Debug, message.str());
 }
@@ -1539,9 +1283,9 @@ void LogFinalDependencyPolish(
         const ConvergenceCertificate & certificate)
     {
         message << ", " << prefix << "-solver-qualified="
-            << (certificate.solver_qualification.solver_qualified ? "yes" : "no")
+            << (certificate.solver_qualified ? "yes" : "no")
             << ", " << prefix << "-operator-complete="
-            << (certificate.OperatorComplete() ? "yes" : "no")
+            << (certificate.operator_complete ? "yes" : "no")
             << ", " << prefix << "-residual-p99=";
         AppendAuditValues(
             message,

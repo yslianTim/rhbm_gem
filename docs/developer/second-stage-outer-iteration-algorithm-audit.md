@@ -81,20 +81,19 @@ solver qualified
 && accepted active-DOF p99 < 1e-4
 && complete nominal-DOF operator
 && nominal fixed-point residual p99 < 1e-4
-&& invariants clear
 && orthogonal blockers clear
 ```
 
 The percentile predicate is coordinate-wise: the p99 for each of log peak,
 log width, and shared offset must pass independently. Solver qualification
-requires full, undamped, non-fallback active endpoints. Invariants include
-complete shared-group activity and finite evidence. Orthogonal blockers cover
+requires full, undamped, non-fallback active endpoints and rejects mixed
+shared-group activity. Operator completeness and non-finite residuals fail
+closed. Orthogonal blockers cover
 objective-domain changes, quarantine transitions, suspicious offset fallback,
 and rejected clusters.
 
-Maximum values and sparse-tail counts remain diagnostic measurements. The
-historical `1e-3` maximum threshold is not part of
-`ProductionConverged()` and does not define a separate production policy.
+Maximum values remain diagnostic measurements and do not define a separate
+production policy.
 
 ## Failure mode and safeguard coverage
 
@@ -115,13 +114,13 @@ is empirical evidence, not a mathematical redundancy proof.
 Final dependency polish is objective-accepted provisionally. On a `converged`
 path, a changed polished state is persisted only when a new certificate built
 at that state passes `StrictOperatorPassed()`: solver qualification, complete
-nominal operator evidence, residual p99, and invariants must all pass. Failure,
+nominal operator evidence, and residual p99 must all pass. Failure,
 incomplete evidence, or evaluation error retains the already converged base
 state.
 
 Non-convergence stop reasons use a residual non-regression policy. A strict
 candidate is always safe to apply. Otherwise, both the selected base state and
-polished candidate must have solver-qualified, complete, invariant-clear,
+polished candidate must have solver-qualified, complete,
 finite nominal operator evidence, and every candidate coordinate must satisfy
 `candidate_p99 <= max(base_p99, 1e-4)`. This comparison is coordinate-wise for
 log peak, log width, and shared offset. If the base is not comparable, only a
@@ -132,12 +131,16 @@ change the original stop reason.
 
 ## Current diagnostic contract
 
-The current Debug trajectory is schema 9 and serializes the production
-certificate plus the measurements needed to explain it: active and nominal
-populations, certificate bits, p99 and maximum values, unavailable and tail
-counts, qualification, invariants, blockers, residual classification, and
-candidate-path statistics. It has no historical policy vector, exposure flag,
-accepted-only persistence record, or `production-maximum` decision.
+The current Debug trajectory is schema 10 and serializes the production
+certificate plus its active and nominal populations, p99 and maximum values,
+operator completeness, and four orthogonal blockers. Earlier trajectory
+schemas are not accepted by the current analyzer; frozen schema-9 baselines
+remain historical data.
+
+The schema-10 structural simplification has been checked with the normal
+build, estimator tests, corpus tooling contract test, smoke case, and runner
+determinism test. The paired 600-case corpus has not been rerun, so the
+schema-9 results below do not recertify schema 10.
 
 Frozen-IRLS predicted-reduction and rho instrumentation is not part of a
 normal or routine audit build. It is available only through the developer-only

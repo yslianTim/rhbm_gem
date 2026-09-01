@@ -106,25 +106,18 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
-
 struct ActiveCoordinatePopulation
 {
     TransformedChangeIndexListByParameter active_atom_index_list_by_parameter{};
     std::vector<ClusterKey> active_offset_group_atom_index_list{};
     std::vector<char> mixed_offset_group_mask{};
-    std::size_t total_offset_group_count{ 0 };
-    std::size_t fixed_offset_group_count{ 0 };
-    std::size_t quarantined_offset_group_count{ 0 };
-    std::size_t mixed_offset_group_count{ 0 };
 };
 
 ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
-    const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity);
+    const SuspiciousBlockActivity & block_activity);
 
 TransformedChangeSummary SummarizeActiveDofChanges(
     const std::vector<TransformedChange> & change_list,
@@ -139,50 +132,17 @@ SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom);
 
-struct SolverQualificationAudit
-{
-    bool production_qualified{ false };
-    bool solver_qualified{ true };
-    bool restricted_active_set{ false };
-    bool all_fixed{ false };
-    std::size_t active_shape_count{ 0 };
-    std::size_t qualified_shape_count{ 0 };
-    std::size_t soft_unqualified_shape_count{ 0 };
-    std::size_t hard_failure_shape_count{ 0 };
-    std::size_t fixed_shape_count{ 0 };
-    std::size_t quarantined_shape_count{ 0 };
-    std::size_t active_offset_group_count{ 0 };
-    std::size_t qualified_offset_group_count{ 0 };
-    std::size_t soft_unqualified_offset_group_count{ 0 };
-    std::size_t hard_failure_offset_group_count{ 0 };
-    std::size_t fixed_offset_group_count{ 0 };
-    std::size_t quarantined_offset_group_count{ 0 };
-    std::size_t mixed_offset_group_count{ 0 };
-    std::array<std::size_t, 7> joint_offset_status_count{};
-};
-
 struct ConvergenceCertificate
 {
     TransformedChangeSummary accepted_active_movement{};
     TransformedChangeSummary operator_nominal_residual{};
-    SolverQualificationAudit solver_qualification{};
-    std::array<
-        std::size_t,
-        GaussianModel3D::TransformedCoordinateSize()> operator_unavailable_count{};
-    std::array<std::size_t, 3> operator_unavailable_reason_count{};
-    std::array<
-        std::size_t,
-        GaussianModel3D::TransformedCoordinateSize()> operator_tail_count{};
-    bool operator_shadow_shape_refit_performed{ false };
+    bool solver_qualified{ true };
+    bool operator_complete{ true };
     bool objective_domain_changed{ false };
     bool quarantine_transition{ false };
     bool suspicious_offset_fallback{ false };
     bool rejected_cluster{ false };
 
-    bool AcceptedPercentilePassed() const;
-    bool OperatorPercentilePassed() const;
-    bool OperatorComplete() const;
-    bool InvariantsClear() const;
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;
 };
@@ -202,12 +162,11 @@ enum class FinalPolishResidualSafetyStatus
     Error
 };
 
-SolverQualificationAudit EvaluateSolverQualificationAudit(
+bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
-    const SuspiciousBlockActivity & quarantine_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
 
@@ -243,11 +202,7 @@ struct StabilizationTerminalFailure
 using QuarantineFailureReason =
     std::variant<JointOffsetSolveStatus, StabilizationTerminalFailure>;
 
-struct QuarantineFailureObservation
-{
-    QuarantineTarget target{};
-    QuarantineFailureReason reason{};
-};
+using QuarantineFailureReasonMap = std::map<QuarantineTarget, QuarantineFailureReason>;
 
 enum class QuarantineLifecycle
 {
@@ -268,9 +223,6 @@ struct QuarantineFailureState
 
 using QuarantineFailureStateMap = std::map<QuarantineTarget, QuarantineFailureState>;
 
-bool HasPendingQuarantineLifecycle(
-    const QuarantineFailureStateMap & state_by_target);
-
 struct QuarantineStateTransition
 {
     std::vector<QuarantineTarget> entered_target_list{};
@@ -279,7 +231,7 @@ struct QuarantineStateTransition
 };
 
 QuarantineStateTransition UpdateQuarantineFailureState(
-    const std::vector<QuarantineFailureObservation> & observation_list,
+    const QuarantineFailureReasonMap & failure_reason_by_target,
     const std::vector<QuarantineTarget> & successful_probation_target_list,
     std::size_t accepted_iteration_count,
     QuarantineFailureStateMap & state_by_target);

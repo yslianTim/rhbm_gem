@@ -22,7 +22,7 @@ CONVERGENCE_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 12
+CASE_SUMMARY_SCHEMA_VERSION = 13
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -292,7 +292,7 @@ def run_case(
     expected_reference = (
         str(reference_directory) if reference_directory is not None else None)
     required_artifacts = (
-        "run.log", "scenario-truth.json", "trajectory-schema-9.json",
+        "run.log", "scenario-truth.json", "trajectory-schema-10.json",
         "terminal-schema-2.json", "case-summary.json")
     if summary_path.is_file() and all(
         (case_directory / name).is_file() for name in required_artifacts
@@ -368,9 +368,8 @@ def run_case(
             trajectory_digest and
             baseline_summary.get("terminal_state_sha256") == terminal_digest)
     write_json(case_directory / "scenario-truth.json", scenario_truth)
-    write_json(case_directory / "trajectory-schema-9.json", {
-        "schema_version": 9,
-        "certificate_definition": 1,
+    write_json(case_directory / "trajectory-schema-10.json", {
+        "schema_version": 10,
         "records": trajectory,
     })
     write_json(case_directory / "terminal-schema-2.json", {
@@ -379,7 +378,6 @@ def run_case(
     })
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
-        "certificate_definition": 1,
         "status": "complete",
         "case": case,
         "thread_count": thread_count,
@@ -420,21 +418,21 @@ def build_compact_baseline(
         for row in complete
     ]
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "case_identity_sha256": semantic_digest(case_identity),
         "frozen_truth_sha256": semantic_digest(truth_identity),
         "schema_contract": {
-            "certificate_definition": 1,
-            "trajectory": 9,
+            "trajectory": 10,
             "terminal": 2,
             "case_summary": CASE_SUMMARY_SCHEMA_VERSION,
             "aggregate": CORPUS_ANALYZER.SCHEMA_VERSION,
             "comparison": CORPUS_ANALYZER.COMPARISON_SCHEMA_VERSION,
         },
         "production_definition": (
-            "solver-qualified && accepted-active-p99 && operator-complete && "
-            "operator-nominal-p99 && invariants-clear && orthogonal-clear"),
+            "solver-qualified (including shared-group consistency) && "
+            "accepted-active-p99 && operator-complete && "
+            "operator-nominal-p99 && orthogonal-clear"),
         "case_count": aggregate["case_count"],
         "failed_case_count": aggregate.get("failed_case_count", 0),
         "production_convergence_count": aggregate[
