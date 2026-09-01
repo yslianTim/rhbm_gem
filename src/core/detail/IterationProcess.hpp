@@ -150,9 +150,13 @@ struct ConvergenceCertificate
     ActiveCoordinatePopulation operator_nominal_population{};
     TransformedChangeSummary operator_nominal_residual{};
     SolverQualificationAudit solver_qualification{};
-    std::array<std::size_t, kTransformedChangeSize> operator_unavailable_count{};
+    std::array<
+        std::size_t,
+        GaussianModel3D::TransformedCoordinateSize()> operator_unavailable_count{};
     std::array<std::size_t, 3> operator_unavailable_reason_count{};
-    std::array<std::size_t, kTransformedChangeSize> operator_tail_count{};
+    std::array<
+        std::size_t,
+        GaussianModel3D::TransformedCoordinateSize()> operator_tail_count{};
     bool operator_shadow_shape_refit_performed{ false };
     ConvergenceOrthogonalBlockers blockers{};
 

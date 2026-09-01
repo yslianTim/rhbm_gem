@@ -31,7 +31,6 @@ constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-
 constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
 struct JointFittingGroupLayout
@@ -97,10 +96,7 @@ Eigen::VectorXd JointOffsetParameterization::ExpandOffsets(const Eigen::VectorXd
 std::optional<std::vector<GaussianModel3D>>
 JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) const
 {
-    if (parameter.size() != m_seed_parameter.size() || !parameter.allFinite())
-    {
-        return std::nullopt;
-    }
+    if (parameter.size() != m_seed_parameter.size() || !parameter.allFinite()) return std::nullopt;
 
     std::vector<GaussianModel3D> model_list;
     model_list.reserve(m_group_position_by_atom.size());
@@ -116,13 +112,13 @@ JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) 
             active_shape_coordinates(1) =
                 parameter(ShapeColumn(atom_position, 1));
         }
-        const Eigen::Vector3d shape_coordinates{
+        const GaussianModel3D::TransformedCoordinates shape_coordinates{
             active_shape_coordinates(0),
             active_shape_coordinates(1),
             0.0
         };
         const auto shape_model{
-            DecodeTransformedCoordinates(shape_coordinates)
+            GaussianModel3D::FromTransformedCoordinates(shape_coordinates)
         };
         if (!shape_model.has_value()) return std::nullopt;
         const auto group_position{ m_group_position_by_atom.at(atom_position) };
@@ -132,10 +128,7 @@ JointPolishParameterization::DecodeParameter(const Eigen::VectorXd & parameter) 
                 m_base_offset_by_group.at(group_position)
         };
         const auto model{ shape_model->WithOffset(offset) };
-        if (!EncodeTransformedCoordinates(model).has_value())
-        {
-            return std::nullopt;
-        }
+        if (!model.ToTransformedCoordinates().has_value()) return std::nullopt;
         model_list.emplace_back(model);
     }
     return model_list;
@@ -795,15 +788,17 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
     for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
         const auto transformed{
-            EncodeTransformedCoordinates(base_model_list.at(atom_position))
+            base_model_list.at(atom_position).ToTransformedCoordinates()
         };
         if (!transformed.has_value()) return std::nullopt;
         const auto atom_group_position{
             parameterization.m_group_position_by_atom.at(atom_position)
         };
         parameterization.m_base_shape_coordinate_by_atom.emplace_back(
-            (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)),
-            (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex)));
+            (*transformed)(static_cast<Eigen::Index>(
+                GaussianModel3D::LogPeakHeightCoordinateIndex())),
+            (*transformed)(static_cast<Eigen::Index>(
+                GaussianModel3D::LogWidthCoordinateIndex())));
         parameterization.m_shape_position_by_atom.at(atom_position) =
             shape_active_mask.at(atom_position) != 0 ?
                 shape_position++ : parameterization.m_shape_atom_count;
@@ -811,10 +806,12 @@ std::optional<JointPolishParameterization> JointPolishParameterization::BuildAct
         {
             parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 0)) =
-                (*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex));
+                (*transformed)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogPeakHeightCoordinateIndex()));
             parameterization.m_seed_parameter(
                 parameterization.ShapeColumn(atom_position, 1)) =
-                (*transformed)(static_cast<Eigen::Index>(kLogWidthChangeIndex));
+                (*transformed)(static_cast<Eigen::Index>(
+                    GaussianModel3D::LogWidthCoordinateIndex()));
         }
         offset_list_by_group.at(atom_group_position).emplace_back(
             base_model_list.at(atom_position).GetOffset());

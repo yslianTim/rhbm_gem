@@ -286,8 +286,8 @@ std::optional<double> EvaluateTrustModelResponseDirection(
     const GaussianModel3D & candidate_model,
     double distance)
 {
-    const auto previous_coordinates{ EncodeTransformedCoordinates(previous_model) };
-    const auto candidate_coordinates{ EncodeTransformedCoordinates(candidate_model) };
+    const auto previous_coordinates{ previous_model.ToTransformedCoordinates() };
+    const auto candidate_coordinates{ candidate_model.ToTransformedCoordinates() };
     if (!previous_coordinates.has_value() || !candidate_coordinates.has_value())
     {
         return std::nullopt;
@@ -2986,10 +2986,11 @@ static ClusterCandidateResult SelectClusterCandidate(
                 for (std::size_t position = 0; position < key.size(); position++)
                 {
                     const auto base_coordinates{
-                        EncodeTransformedCoordinates(base_state_view.GetModel(key.at(position)))
+                        base_state_view.GetModel(key.at(position)).ToTransformedCoordinates()
                     };
                     const auto candidate_coordinates{
-                        EncodeTransformedCoordinates(polished_candidate->patch.mdpde_list.at(position).GetModel())
+                        polished_candidate->patch.mdpde_list.at(position)
+                            .GetModel().ToTransformedCoordinates()
                     };
                     if ((base_coordinates->array() != candidate_coordinates->array()).any())
                     {

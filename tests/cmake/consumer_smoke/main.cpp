@@ -43,6 +43,13 @@ int main()
         &rhbm_gem::core::RunPotentialFittingWorkflow
     };
     const rhbm_gem::GaussianModel3D estimate{ 4.0, 2.0 };
+    const auto transformed_estimate{ estimate.ToTransformedCoordinates() };
+    const auto transformed_round_trip{
+        transformed_estimate.has_value() ?
+            rhbm_gem::GaussianModel3D::FromTransformedCoordinates(
+                *transformed_estimate) :
+            std::nullopt
+    };
     const std::array<int, 3> compile_only_sizes{
         static_cast<int>(sizeof(rhbm_gem::AtomObject)),
         static_cast<int>(sizeof(rhbm_gem::BondObject)),
@@ -55,5 +62,6 @@ int main()
             && default_database_path.filename() == "database.sqlite"
             && fit_options.thread_size == 1
             && workflow_entry != nullptr
-            && estimate.Intensity() > 0.0 ? 0 : 1;
+            && estimate.Intensity() > 0.0
+            && transformed_round_trip.has_value() ? 0 : 1;
 }

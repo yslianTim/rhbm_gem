@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string_view>
 
 #include <Eigen/Dense>
@@ -24,8 +25,14 @@ class GaussianModel3D
     static constexpr int kAmplitudeIndex{ 0 };
     static constexpr int kWidthIndex{ 1 };
     static constexpr int kOffsetIndex{ 2 };
+    static constexpr int kTransformedCoordinateSize{ 3 };
+    static constexpr int kLogPeakHeightCoordinateIndex{ 0 };
+    static constexpr int kLogWidthCoordinateIndex{ 1 };
+    static constexpr int kOffsetToPeakRatioCoordinateIndex{ 2 };
 
 public:
+    using TransformedCoordinates = Eigen::Vector3d;
+
     GaussianModel3D() = default;
     GaussianModel3D(double amplitude, double width, double offset = 0.0);
 
@@ -33,6 +40,13 @@ public:
     static constexpr int AmplitudeIndex() { return kAmplitudeIndex; }
     static constexpr int WidthIndex() { return kWidthIndex; }
     static constexpr int OffsetIndex() { return kOffsetIndex; }
+    static constexpr int TransformedCoordinateSize() { return kTransformedCoordinateSize; }
+    static constexpr int LogPeakHeightCoordinateIndex() { return kLogPeakHeightCoordinateIndex; }
+    static constexpr int LogWidthCoordinateIndex() { return kLogWidthCoordinateIndex; }
+    static constexpr int OffsetToPeakRatioCoordinateIndex()
+    {
+        return kOffsetToPeakRatioCoordinateIndex;
+    }
 
     static void RequireParameterVector(
         const Eigen::VectorXd & parameters,
@@ -40,6 +54,8 @@ public:
 
     static GaussianModel3D FromVector(const Eigen::VectorXd & parameters);
     static GaussianModel3D FromVectorPrefix(const Eigen::VectorXd & parameters);
+    static std::optional<GaussianModel3D> FromTransformedCoordinates(
+        const TransformedCoordinates & coordinates);
 
     static void RequireFiniteModel(
         const GaussianModel3D & model,
@@ -57,6 +73,7 @@ public:
     double GetOffset() const { return m_offset; }
     double GetHeight() const;
     Eigen::VectorXd ToVector() const;
+    std::optional<TransformedCoordinates> ToTransformedCoordinates() const;
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
     double Intensity() const;

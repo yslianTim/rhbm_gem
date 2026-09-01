@@ -1931,15 +1931,15 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     ASSERT_TRUE(previous_objective.has_value());
 
     const auto previous_coordinates{
-        trust_detail::EncodeTransformedCoordinates(previous_model)
+        previous_model.ToTransformedCoordinates()
     };
     const auto target_coordinates{
-        trust_detail::EncodeTransformedCoordinates(target_model)
+        target_model.ToTransformedCoordinates()
     };
     ASSERT_TRUE(previous_coordinates.has_value());
     ASSERT_TRUE(target_coordinates.has_value());
     const auto candidate_model{
-        trust_detail::DecodeTransformedCoordinates(
+        rg::GaussianModel3D::FromTransformedCoordinates(
             *previous_coordinates + 0.05 *
                 (*target_coordinates - *previous_coordinates))
     };
@@ -2192,7 +2192,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     EXPECT_FALSE(nonfinite_prediction.rho.has_value());
 
     const auto opposite_model{
-        trust_detail::DecodeTransformedCoordinates(
+        rg::GaussianModel3D::FromTransformedCoordinates(
             *previous_coordinates - 0.05 *
                 (*target_coordinates - *previous_coordinates))
     };
@@ -2612,19 +2612,20 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
     auto small_drift_state{ reference_state };
     auto large_drift_state{ reference_state };
     const auto reference_coordinates{
-        change_detail::EncodeTransformedCoordinates(
-            reference_state.at(0).mdpde.GetModel())
+        reference_state.at(0).mdpde.GetModel().ToTransformedCoordinates()
     };
     ASSERT_TRUE(reference_coordinates.has_value());
     auto small_coordinates{ *reference_coordinates };
     auto large_coordinates{ *reference_coordinates };
-    small_coordinates(change_detail::kLogWidthChangeIndex) += 0.099;
-    large_coordinates(change_detail::kLogWidthChangeIndex) += 0.101;
+    small_coordinates(static_cast<Eigen::Index>(
+        rg::GaussianModel3D::LogWidthCoordinateIndex())) += 0.099;
+    large_coordinates(static_cast<Eigen::Index>(
+        rg::GaussianModel3D::LogWidthCoordinateIndex())) += 0.101;
     const auto small_model{
-        change_detail::DecodeTransformedCoordinates(small_coordinates)
+        rg::GaussianModel3D::FromTransformedCoordinates(small_coordinates)
     };
     const auto large_model{
-        change_detail::DecodeTransformedCoordinates(large_coordinates)
+        rg::GaussianModel3D::FromTransformedCoordinates(large_coordinates)
     };
     ASSERT_TRUE(small_model.has_value());
     ASSERT_TRUE(large_model.has_value());
@@ -2721,9 +2722,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
     };
     for (const auto & model : model_list)
     {
-        const auto transformed{
-            change_detail::EncodeTransformedCoordinates(model)
-        };
+        const auto transformed{ model.ToTransformedCoordinates() };
         ASSERT_TRUE(transformed.has_value());
         const auto invariants{
             polish_detail::BuildTransformedModelInvariants(model)
@@ -2748,10 +2747,10 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
                 lower(parameter_index) -= step;
                 upper(parameter_index) += step;
                 const auto lower_model{
-                    change_detail::DecodeTransformedCoordinates(lower)
+                    rg::GaussianModel3D::FromTransformedCoordinates(lower)
                 };
                 const auto upper_model{
-                    change_detail::DecodeTransformedCoordinates(upper)
+                    rg::GaussianModel3D::FromTransformedCoordinates(upper)
                 };
                 ASSERT_TRUE(lower_model.has_value());
                 ASSERT_TRUE(upper_model.has_value());
@@ -2868,23 +2867,20 @@ TEST(EstimatorSecondStageDefenseTest,
             atom_position++)
         {
             const auto previous_coordinates{
-                change_detail::EncodeTransformedCoordinates(
-                    previous_model_list.at(atom_position))
+                previous_model_list.at(atom_position).ToTransformedCoordinates()
             };
             const auto raw_coordinates{
-                change_detail::EncodeTransformedCoordinates(
-                    raw_model_list.at(atom_position))
+                raw_model_list.at(atom_position).ToTransformedCoordinates()
             };
             const auto candidate_coordinates{
-                change_detail::EncodeTransformedCoordinates(
-                    candidate_model_list->at(atom_position))
+                candidate_model_list->at(atom_position).ToTransformedCoordinates()
             };
             ASSERT_TRUE(previous_coordinates.has_value());
             ASSERT_TRUE(raw_coordinates.has_value());
             ASSERT_TRUE(candidate_coordinates.has_value());
-            for (const auto parameter_index : std::array<std::size_t, 2>{
-                change_detail::kLogPeakHeightChangeIndex,
-                change_detail::kLogWidthChangeIndex })
+            for (const auto parameter_index : std::array<int, 2>{
+                rg::GaussianModel3D::LogPeakHeightCoordinateIndex(),
+                rg::GaussianModel3D::LogWidthCoordinateIndex() })
             {
                 const auto eigen_index{
                     static_cast<Eigen::Index>(parameter_index)
@@ -3496,9 +3492,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
     };
     for (const auto & model : model_list)
     {
-        const auto transformed{
-            change_detail::EncodeTransformedCoordinates(model)
-        };
+        const auto transformed{ model.ToTransformedCoordinates() };
         ASSERT_TRUE(transformed.has_value());
         for (const auto distance : distance_list)
         {
@@ -3521,14 +3515,14 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
                 lower(parameter_index) -= step;
                 upper(parameter_index) += step;
                 lower(static_cast<Eigen::Index>(
-                    change_detail::kOffsetToPeakRatioChangeIndex)) = 0.0;
+                    rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex())) = 0.0;
                 upper(static_cast<Eigen::Index>(
-                    change_detail::kOffsetToPeakRatioChangeIndex)) = 0.0;
+                    rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex())) = 0.0;
                 const auto lower_shape{
-                    change_detail::DecodeTransformedCoordinates(lower)
+                    rg::GaussianModel3D::FromTransformedCoordinates(lower)
                 };
                 const auto upper_shape{
-                    change_detail::DecodeTransformedCoordinates(upper)
+                    rg::GaussianModel3D::FromTransformedCoordinates(upper)
                 };
                 ASSERT_TRUE(lower_shape.has_value());
                 ASSERT_TRUE(upper_shape.has_value());
@@ -4426,21 +4420,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
     EXPECT_FALSE(overflow_topology.summary.uses_weighted_graph);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TransformedCoordinatesRoundTrip)
-{
-    const rg::GaussianModel3D model{ 8.5, 0.65, -0.12 };
-    const auto encoded{
-        change_detail::EncodeTransformedCoordinates(model)
-    };
-    ASSERT_TRUE(encoded.has_value());
-
-    const auto decoded{
-        change_detail::DecodeTransformedCoordinates(*encoded)
-    };
-    ASSERT_TRUE(decoded.has_value());
-    ExpectGaussianModelsNear(model, *decoded, 1.0e-12);
-}
-
 TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvariant)
 {
     const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
@@ -4450,15 +4429,11 @@ TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvarian
     const auto damp = [&](const rg::GaussianModel3D & lhs,
                           const rg::GaussianModel3D & rhs)
     {
-        const auto lhs_coordinates{
-            change_detail::EncodeTransformedCoordinates(lhs)
-        };
-        const auto rhs_coordinates{
-            change_detail::EncodeTransformedCoordinates(rhs)
-        };
+        const auto lhs_coordinates{ lhs.ToTransformedCoordinates() };
+        const auto rhs_coordinates{ rhs.ToTransformedCoordinates() };
         EXPECT_TRUE(lhs_coordinates.has_value());
         EXPECT_TRUE(rhs_coordinates.has_value());
-        return change_detail::DecodeTransformedCoordinates(
+        return rg::GaussianModel3D::FromTransformedCoordinates(
             *lhs_coordinates + damping * (*rhs_coordinates - *lhs_coordinates));
     };
 
@@ -4746,12 +4721,8 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
 {
     const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D endpoint{ 12.0, 0.75, 0.40 };
-    const auto previous_coordinates{
-        change_detail::EncodeTransformedCoordinates(previous)
-    };
-    const auto endpoint_coordinates{
-        change_detail::EncodeTransformedCoordinates(endpoint)
-    };
+    const auto previous_coordinates{ previous.ToTransformedCoordinates() };
+    const auto endpoint_coordinates{ endpoint.ToTransformedCoordinates() };
     ASSERT_TRUE(previous_coordinates.has_value());
     ASSERT_TRUE(endpoint_coordinates.has_value());
 
@@ -4761,7 +4732,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
     for (const auto factor : { 0.5, 0.25, 0.125 })
     {
         const auto candidate{
-            change_detail::DecodeTransformedCoordinates(
+            rg::GaussianModel3D::FromTransformedCoordinates(
                 *previous_coordinates +
                 factor * (*endpoint_coordinates - *previous_coordinates))
         };
@@ -4777,18 +4748,16 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
 TEST(EstimatorSecondStageDefenseTest, TransformedExtrapolationKeepsPositiveShape)
 {
     const auto left{
-        change_detail::EncodeTransformedCoordinates(
-            rg::GaussianModel3D{ 8.0, 0.50, -0.10 })
+        rg::GaussianModel3D{ 8.0, 0.50, -0.10 }.ToTransformedCoordinates()
     };
     const auto right{
-        change_detail::EncodeTransformedCoordinates(
-            rg::GaussianModel3D{ 9.0, 0.60, -0.15 })
+        rg::GaussianModel3D{ 9.0, 0.60, -0.15 }.ToTransformedCoordinates()
     };
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
 
     const auto extrapolated{
-        change_detail::DecodeTransformedCoordinates(
+        rg::GaussianModel3D::FromTransformedCoordinates(
             2.0 * *right - *left)
     };
     ASSERT_TRUE(extrapolated.has_value());
@@ -4807,15 +4776,15 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWid
 
     EXPECT_NEAR(
         0.0,
-        change.at(change_detail::kLogPeakHeightChangeIndex),
+        change.at(rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
         1.0e-12);
     EXPECT_NEAR(
         std::log(2.0),
-        change.at(change_detail::kLogWidthChangeIndex),
+        change.at(rg::GaussianModel3D::LogWidthCoordinateIndex()),
         1.0e-12);
     EXPECT_DOUBLE_EQ(
         0.0,
-        change.at(change_detail::kOffsetToPeakRatioChangeIndex));
+        change.at(rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()));
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximumTail)
@@ -4823,7 +4792,8 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximum
     std::vector<change_detail::TransformedChange> change_list(
         1000,
         change_detail::TransformedChange{});
-    change_list.back().at(change_detail::kLogPeakHeightChangeIndex) =
+    change_list.back().at(
+        rg::GaussianModel3D::LogPeakHeightCoordinateIndex()) =
         2.0e-3;
     std::vector<std::size_t> index_list(change_list.size());
     for (std::size_t i = 0; i < index_list.size(); i++)
@@ -4840,10 +4810,11 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximum
     };
     EXPECT_LT(
         summary.percentile_list.at(
-            change_detail::kLogPeakHeightChangeIndex),
+            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
         1.0e-4);
     EXPECT_GT(
-        summary.maximum_list.at(change_detail::kLogPeakHeightChangeIndex),
+        summary.maximum_list.at(
+            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
         1.0e-3);
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(summary));
 }
@@ -4976,9 +4947,18 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlo
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(dual_shadow));
-    EXPECT_EQ(dual_shadow.population_size_list.at(0), 10U);
-    EXPECT_EQ(dual_shadow.population_size_list.at(1), 10U);
-    EXPECT_EQ(dual_shadow.population_size_list.at(2), 10U);
+    EXPECT_EQ(
+        dual_shadow.population_size_list.at(
+            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
+        10U);
+    EXPECT_EQ(
+        dual_shadow.population_size_list.at(
+            rg::GaussianModel3D::LogWidthCoordinateIndex()),
+        10U);
+    EXPECT_EQ(
+        dual_shadow.population_size_list.at(
+            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
+        10U);
 
     std::vector<audit_detail::SuspiciousGaussianAssessment> assessment_by_atom(
         atom_count);
@@ -5009,7 +4989,8 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSize
     std::vector<change_detail::TransformedChange> change_list(
         atom_count,
         change_detail::TransformedChange{});
-    change_list.back().at(change_detail::kOffsetToPeakRatioChangeIndex) =
+    change_list.back().at(
+        rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
         5.0e-4;
     std::vector<std::size_t> atom_index_list(atom_count);
     std::iota(atom_index_list.begin(), atom_index_list.end(), 0);
@@ -5037,7 +5018,10 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationRemovesGroupSize
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
 
-    EXPECT_EQ(audit.population_size_list.at(2), 2U);
+    EXPECT_EQ(
+        audit.population_size_list.at(
+            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
+        2U);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit));
 }
 
@@ -5066,20 +5050,26 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     std::vector<change_detail::TransformedChange> change_list(
         3,
         change_detail::TransformedChange{});
-    change_list.at(1).at(change_detail::kOffsetToPeakRatioChangeIndex) =
+    change_list.at(1).at(
+        rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
         2.0e-3;
     const auto extreme{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_DOUBLE_EQ(extreme.maximum_list.at(2), 2.0e-3);
+    EXPECT_DOUBLE_EQ(
+        extreme.maximum_list.at(
+            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
+        2.0e-3);
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(extreme));
 
-    change_list.at(1).at(change_detail::kOffsetToPeakRatioChangeIndex) =
+    change_list.at(1).at(
+        rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
         std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite{
         audit_detail::SummarizeActiveDofChanges(change_list, population)
     };
-    EXPECT_TRUE(std::isinf(nonfinite.maximum_list.at(2)));
+    EXPECT_TRUE(std::isinf(nonfinite.maximum_list.at(
+        rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex())));
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(nonfinite));
 }
 
@@ -5167,10 +5157,22 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     certificate.solver_qualification.fixed_shape_count = 1;
     certificate.solver_qualification.quarantined_shape_count = 1;
 
-    EXPECT_EQ(certificate.accepted_active_movement.population_size_list.at(0), 1U);
-    EXPECT_EQ(certificate.accepted_active_movement.population_size_list.at(2), 1U);
-    EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(0), 3U);
-    EXPECT_EQ(certificate.operator_nominal_residual.population_size_list.at(2), 3U);
+    EXPECT_EQ(
+        certificate.accepted_active_movement.population_size_list.at(
+            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
+        1U);
+    EXPECT_EQ(
+        certificate.accepted_active_movement.population_size_list.at(
+            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
+        1U);
+    EXPECT_EQ(
+        certificate.operator_nominal_residual.population_size_list.at(
+            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
+        3U);
+    EXPECT_EQ(
+        certificate.operator_nominal_residual.population_size_list.at(
+            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
+        3U);
     EXPECT_TRUE(certificate.solver_qualification.restricted_active_set);
     EXPECT_TRUE(certificate.AcceptedPercentilePassed());
     EXPECT_FALSE(certificate.OperatorPercentilePassed());
@@ -5243,7 +5245,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     EXPECT_TRUE(certificate.StrictOperatorPassed());
     EXPECT_TRUE(certificate.ProductionConverged());
 
-    certificate.operator_unavailable_count.at(0) = 1;
+    certificate.operator_unavailable_count.at(
+        rg::GaussianModel3D::LogPeakHeightCoordinateIndex()) = 1;
     EXPECT_FALSE(certificate.OperatorComplete());
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
@@ -5262,7 +5265,8 @@ TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
     summary.percentile_list.fill(0.0);
     summary.maximum_list.fill(0.0);
     summary.population_size_list.fill(1);
-    summary.percentile_list.at(0) =
+    summary.percentile_list.at(
+        rg::GaussianModel3D::LogPeakHeightCoordinateIndex()) =
         std::numeric_limits<double>::infinity();
 
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(summary));
@@ -5924,14 +5928,12 @@ TEST(
     RunSecondStageLocalFittingDampsOffsetStepIntoInitialTrustRadius)
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
-    auto truth_coordinates{
-        change_detail::EncodeTransformedCoordinates(initial_model)
-    };
+    auto truth_coordinates{ initial_model.ToTransformedCoordinates() };
     ASSERT_TRUE(truth_coordinates.has_value());
     (*truth_coordinates)(static_cast<Eigen::Index>(
-        change_detail::kOffsetToPeakRatioChangeIndex)) = 1.25;
+        rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex())) = 1.25;
     const auto truth_model{
-        change_detail::DecodeTransformedCoordinates(
+        rg::GaussianModel3D::FromTransformedCoordinates(
             *truth_coordinates)
     };
     ASSERT_TRUE(truth_model.has_value());

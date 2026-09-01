@@ -42,6 +42,25 @@ TEST(GaussianModel3DTest, RoundTripsThroughCanonicalVector)
     EXPECT_DOUBLE_EQ(round_trip.GetOffset(), model.GetOffset());
 }
 
+TEST(GaussianModel3DTest, RoundTripsThroughTransformedCoordinates)
+{
+    const rg::GaussianModel3D model{ 8.5, 0.65, -0.12 };
+
+    const auto coordinates{ model.ToTransformedCoordinates() };
+    ASSERT_TRUE(coordinates.has_value());
+    ASSERT_EQ(
+        coordinates->size(),
+        rg::GaussianModel3D::TransformedCoordinateSize());
+
+    const auto round_trip{
+        rg::GaussianModel3D::FromTransformedCoordinates(*coordinates)
+    };
+    ASSERT_TRUE(round_trip.has_value());
+    EXPECT_NEAR(round_trip->GetAmplitude(), model.GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(round_trip->GetWidth(), model.GetWidth(), 1.0e-12);
+    EXPECT_NEAR(round_trip->GetOffset(), model.GetOffset(), 1.0e-12);
+}
+
 TEST(GaussianModel3DTest, DefaultsToZeroOffset)
 {
     const rg::GaussianModel3D model{};

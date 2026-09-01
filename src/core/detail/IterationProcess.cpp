@@ -42,13 +42,11 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
-constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr double kNeighborAtomSearchRange{
-    2.0 * kNeighborContributionDistanceMax
-};
-constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr std::size_t kMaximumIterations{ 100 };
 constexpr std::size_t kAuditPatience{ 3 };
+constexpr double kNeighborContributionDistanceMax{ 2.5 };
+constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
+constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
 constexpr double kConvergencePercentile{ 0.99 };
 constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
@@ -310,8 +308,7 @@ static void ValidateActiveCoordinateInputs(
         quarantine_activity.offset_fixed_atom_mask.size() != atom_count ||
         quarantine_activity.hard_failure_atom_mask.size() != atom_count)
     {
-        throw std::invalid_argument(
-            "Active-coordinate convergence inputs are inconsistent.");
+        throw std::invalid_argument("Active-coordinate convergence inputs are inconsistent.");
     }
 }
 
@@ -325,8 +322,7 @@ static std::vector<OffsetGroupEntry> BuildOffsetGroupEntries(
         std::map<std::size_t, ClusterKey> atom_index_list_by_group;
         for (const auto atom_index : cluster_key)
         {
-            atom_index_list_by_group[group_id_by_atom_index.at(atom_index)]
-                .emplace_back(atom_index);
+            atom_index_list_by_group[group_id_by_atom_index.at(atom_index)].emplace_back(atom_index);
         }
         for (auto & [group_id, atom_index_list] : atom_index_list_by_group)
         {
@@ -373,16 +369,12 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         if (evidence.shape_status_by_atom.at(atom_index) !=
             OperatorEndpointStatus::Available)
         {
-            change.at(kLogPeakHeightChangeIndex) =
-                std::numeric_limits<double>::infinity();
-            change.at(kLogWidthChangeIndex) =
-                std::numeric_limits<double>::infinity();
+            change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()) = std::numeric_limits<double>::infinity();
+            change.at(GaussianModel3D::LogWidthCoordinateIndex()) = std::numeric_limits<double>::infinity();
         }
-        if (evidence.offset_status_by_atom.at(atom_index) !=
-            OperatorEndpointStatus::Available)
+        if (evidence.offset_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available)
         {
-            change.at(kOffsetToPeakRatioChangeIndex) =
-                std::numeric_limits<double>::infinity();
+            change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = std::numeric_limits<double>::infinity();
         }
         change_list.emplace_back(std::move(change));
     }
@@ -392,18 +384,17 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
     for (const auto atom_index : atom_index_list)
     {
         const auto shape_available{
-            evidence.shape_status_by_atom.at(atom_index) ==
-            OperatorEndpointStatus::Available
+            evidence.shape_status_by_atom.at(atom_index) == OperatorEndpointStatus::Available
         };
-        for (const auto coordinate : {
-                kLogPeakHeightChangeIndex, kLogWidthChangeIndex })
+        for (const auto coordinate : std::array<std::size_t, 2>{
+                GaussianModel3D::LogPeakHeightCoordinateIndex(),
+                GaussianModel3D::LogWidthCoordinateIndex() })
         {
             if (!shape_available)
             {
                 result.operator_unavailable_count.at(coordinate)++;
             }
-            else if (std::abs(change_list.at(atom_index).at(coordinate)) >=
-                kLegacyMaximumTransformedChangeTolerance)
+            else if (std::abs(change_list.at(atom_index).at(coordinate)) >= kLegacyMaximumTransformedChangeTolerance)
             {
                 result.operator_tail_count.at(coordinate)++;
             }
@@ -433,23 +424,19 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         for (const auto atom_index : group)
         {
             available = available &&
-                evidence.offset_status_by_atom.at(atom_index) ==
-                    OperatorEndpointStatus::Available;
+                evidence.offset_status_by_atom.at(atom_index) == OperatorEndpointStatus::Available;
             maximum_change = std::max(
                 maximum_change,
-                std::abs(change_list.at(atom_index).at(
-                    kOffsetToPeakRatioChangeIndex)));
+                std::abs(change_list.at(atom_index).at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())));
         }
         if (!available)
         {
-            result.operator_unavailable_count.at(
-                kOffsetToPeakRatioChangeIndex)++;
+            result.operator_unavailable_count.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())++;
             const auto failed_atom{ *std::ranges::find_if(
                 group,
                 [&](std::size_t atom_index)
                 {
-                    return evidence.offset_status_by_atom.at(atom_index) !=
-                        OperatorEndpointStatus::Available;
+                    return evidence.offset_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available;
                 }) };
             const auto status{
                 evidence.offset_status_by_atom.at(failed_atom)
@@ -465,15 +452,13 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         }
         else if (maximum_change >= kLegacyMaximumTransformedChangeTolerance)
         {
-            result.operator_tail_count.at(kOffsetToPeakRatioChangeIndex)++;
+            result.operator_tail_count.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())++;
         }
     }
     return result;
 }
 
-
-static std::optional<GaussianModel3DWithUncertainty>
-BuildValidGaussianParameterMedian(
+static std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list)
 {
     const auto median_model{ BuildGaussianParameterMedian(model_list) };
@@ -499,8 +484,7 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         context.selected_atom_list.emplace_back(AtomContext{ atom });
     }
     state.resize(context.size());
-    std::vector<std::optional<GaussianModel3DWithUncertainty>>
-        group_prior_list(context.size());
+    std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(context.size());
 
     std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
     selected_group_id_by_key.reserve(context.size());
@@ -517,42 +501,31 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         const auto * atom{ atom_context.atom };
         const auto group_key{ data_internal::GetGroupKey(atom) };
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        atom_context.raw_sampling_entries =
-            local_view.GetRawSamplingEntries(false);
-        state.at(atom_index) =
-            local_view.GetGaussianResult(FittingStage::Second);
+        atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
+        state.at(atom_index) = local_view.GetGaussianResult(FittingStage::Second);
         group_prior_list.at(atom_index) =
-            analysis_view.FindAtomGroupPriorWithUncertainty(
-                FittingStage::Second,
-                *atom);
-        atom_context.alpha_r =
-            local_view.GetAlphaR(FittingStage::Second);
+            analysis_view.FindAtomGroupPriorWithUncertainty(FittingStage::Second, *atom);
+        atom_context.alpha_r = local_view.GetAlphaR(FittingStage::Second);
         atom_context.refit_design = PreparedLocalGaussianDesign{
             atom_context.raw_sampling_entries,
             options.distance_min,
             options.distance_max
         };
         auto [group_iter, inserted]{
-            selected_group_id_by_key.emplace(
-                group_key,
-                context.selected_atom_index_list_by_group.size())
+            selected_group_id_by_key.emplace(group_key, context.selected_atom_index_list_by_group.size())
         };
         if (inserted)
         {
             context.selected_atom_index_list_by_group.emplace_back();
         }
         atom_context.group_id = group_iter->second;
-        context.selected_atom_index_list_by_group.at(
-            atom_context.group_id).emplace_back(atom_index);
+        context.selected_atom_index_list_by_group.at(atom_context.group_id).emplace_back(atom_index);
     }
 
-    std::unordered_map<const AtomObject *, std::size_t>
-        unselected_atom_index_map;
+    std::unordered_map<const AtomObject *, std::size_t> unselected_atom_index_map;
     std::vector<int> unselected_atom_serial_id_list;
     build_result.neighbor_count_list.reserve(context.size());
-    for (std::size_t atom_index = 0;
-        atom_index < context.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
@@ -561,12 +534,10 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         };
         std::unordered_set<const AtomObject *> neighbor_atom_set;
 
-        atom_context.neighbor_atom_sample_offset_list.reserve(
-            atom_context.raw_sampling_entries.size() + 1);
+        atom_context.neighbor_atom_sample_offset_list.reserve(atom_context.raw_sampling_entries.size() + 1);
         atom_context.neighbor_atom_sample_offset_list.emplace_back(0);
         atom_context.neighbor_atom_sample_list.reserve(
-            atom_context.raw_sampling_entries.size() *
-            neighbor_atom_list.size());
+            atom_context.raw_sampling_entries.size() * neighbor_atom_list.size());
         for (std::size_t sample_index = 0;
             sample_index < atom_context.raw_sampling_entries.size();
             sample_index++)
@@ -576,15 +547,12 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             };
             for (auto * neighbor_atom : neighbor_atom_list)
             {
-                if (options.exclude_hydrogen &&
-                    neighbor_atom->GetElement() == Element::HYDROGEN)
+                if (options.exclude_hydrogen && neighbor_atom->GetElement() == Element::HYDROGEN)
                 {
                     continue;
                 }
                 const auto distance{
-                    array_helper::ComputeNorm(
-                        sample.point.position,
-                        neighbor_atom->GetPositionRef())
+                    array_helper::ComputeNorm(sample.point.position, neighbor_atom->GetPositionRef())
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
                 neighbor_atom_set.emplace(neighbor_atom);
@@ -642,12 +610,10 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             atom_context.neighbor_atom_sample_offset_list.emplace_back(
                 atom_context.neighbor_atom_sample_list.size());
         }
-        build_result.neighbor_count_list.emplace_back(
-            static_cast<int>(neighbor_atom_set.size()));
+        build_result.neighbor_count_list.emplace_back(static_cast<int>(neighbor_atom_set.size()));
     }
 
-    std::vector<std::vector<GaussianModel3D>> models_by_group(
-        context.selected_atom_index_list_by_group.size());
+    std::vector<std::vector<GaussianModel3D>> models_by_group(context.selected_atom_index_list_by_group.size());
     std::vector<GaussianModel3D> global_models;
     global_models.reserve(context.size());
 
@@ -1051,7 +1017,9 @@ static bool HasAcceptedMaterialTargetChange(
             previous_state.at(atom_index).mdpde.GetModel()) };
         if (target.kind == QuarantineTargetKind::ShapeAtom)
         {
-            if (std::max(change.at(0), change.at(1)) >=
+            if (std::max(
+                change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()),
+                change.at(GaussianModel3D::LogWidthCoordinateIndex())) >=
                 kTransformedChangeTolerance)
             {
                 return true;
@@ -1059,7 +1027,10 @@ static bool HasAcceptedMaterialTargetChange(
         }
         else if (target.kind == QuarantineTargetKind::OffsetGroup)
         {
-            if (change.at(2) >= kTransformedChangeTolerance) return true;
+            if (change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) >= kTransformedChangeTolerance)
+            {
+                return true;
+            }
         }
         else if (IsTransformedChangeMaterial(change, kTransformedChangeTolerance))
         {
@@ -1967,9 +1938,7 @@ static void LogIterationProgress(
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
 
-static void AppendAuditValues(
-    std::ostringstream & message,
-    const TransformedChange & value_list)
+static void AppendAuditValues(std::ostringstream & message, const TransformedChange & value_list)
 {
     for (std::size_t i = 0; i < value_list.size(); i++)
     {
@@ -1980,7 +1949,9 @@ static void AppendAuditValues(
 
 static void AppendAuditPopulation(
     std::ostringstream & message,
-    const std::array<std::size_t, kTransformedChangeSize> & population_size_list)
+    const std::array<
+        std::size_t,
+        GaussianModel3D::TransformedCoordinateSize()> & population_size_list)
 {
     for (std::size_t i = 0; i < population_size_list.size(); i++)
     {
@@ -2007,7 +1978,6 @@ static void LogConvergenceSafeguardAudit(
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
     const auto & solver_qualification{ certificate.solver_qualification };
-
     const auto accepted_limited_count{ static_cast<std::size_t>(std::ranges::count_if(
         diagnostics.accepted_cluster_diagnostic_list,
         [](const auto & diagnostic)
@@ -2124,15 +2094,11 @@ static void LogConvergenceSafeguardAudit(
         << certificate.blockers.Clear() << "/"
         << certificate.ProductionConverged()
         << ", accepted-active-p99=";
-    AppendAuditValues(
-        message,
-        accepted_production_change.percentile_list);
+    AppendAuditValues(message, accepted_production_change.percentile_list);
     message << ", accepted-active-max=";
     AppendAuditValues(message, accepted_production_change.maximum_list);
     message << ", operator-nominal-residual-p99=";
-    AppendAuditValues(
-        message,
-        certificate.operator_nominal_residual.percentile_list);
+    AppendAuditValues(message, certificate.operator_nominal_residual.percentile_list);
     message << ", operator-nominal-residual-max=";
     AppendAuditValues(message, certificate.operator_nominal_residual.maximum_list);
     message << ", operator-nominal-unavailable[height/width/offset]=";
@@ -2205,9 +2171,9 @@ static void LogConvergenceSafeguardAudit(
         << active_population.mixed_offset_group_count
         << ", ratios[shape-active/offset-active/quarantine]="
         << ratio(active_population.active_atom_index_list_by_parameter.at(
-            kLogPeakHeightChangeIndex).size()) << "/"
+            GaussianModel3D::LogPeakHeightCoordinateIndex()).size()) << "/"
         << ratio(active_population.active_atom_index_list_by_parameter.at(
-            kOffsetToPeakRatioChangeIndex).size()) << "/"
+            GaussianModel3D::OffsetToPeakRatioCoordinateIndex()).size()) << "/"
         << ratio(progress.quarantine_atom_count)
         << ", certificate-blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
         << certificate.blockers.objective_domain_changed << "/"
@@ -3835,7 +3801,7 @@ static bool IsFinalPolishResidualNonWorsening(
     const auto & candidate_percentile_list{
         candidate_certificate.operator_nominal_residual.percentile_list
     };
-    for (std::size_t index = 0; index < kTransformedChangeSize; index++)
+    for (std::size_t index = 0; index < base_percentile_list.size(); index++)
     {
         if (candidate_percentile_list.at(index) >
             std::max(base_percentile_list.at(index), kTransformedChangeTolerance))
@@ -4172,11 +4138,14 @@ void LogConverged(
     message
         << "Converged after " << iteration_state.accepted_iteration_count
         << " iterations with percentile log-peak-height change = "
-        << transformed_change_percentile.at(kLogPeakHeightChangeIndex)
+        << transformed_change_percentile.at(
+            GaussianModel3D::LogPeakHeightCoordinateIndex())
         << ", percentile log-width change = "
-        << transformed_change_percentile.at(kLogWidthChangeIndex)
+        << transformed_change_percentile.at(
+            GaussianModel3D::LogWidthCoordinateIndex())
         << ", and percentile offset-to-peak-ratio change = "
-        << transformed_change_percentile.at(kOffsetToPeakRatioChangeIndex);
+        << transformed_change_percentile.at(
+            GaussianModel3D::OffsetToPeakRatioCoordinateIndex());
     AppendOffsetSummary(message, iteration_state.previous_state);
     message << ".";
     Logger::Log(LogLevel::Info, message.str());
@@ -4746,14 +4715,17 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     {
         if (block_activity.HasActiveShape(atom_index))
         {
-            result.active_atom_index_list_by_parameter.at(kLogPeakHeightChangeIndex)
+            result.active_atom_index_list_by_parameter.at(
+                GaussianModel3D::LogPeakHeightCoordinateIndex())
                 .emplace_back(atom_index);
-            result.active_atom_index_list_by_parameter.at(kLogWidthChangeIndex)
+            result.active_atom_index_list_by_parameter.at(
+                GaussianModel3D::LogWidthCoordinateIndex())
                 .emplace_back(atom_index);
         }
         if (block_activity.HasActiveOffset(atom_index))
         {
-            result.active_atom_index_list_by_parameter.at(kOffsetToPeakRatioChangeIndex)
+            result.active_atom_index_list_by_parameter.at(
+                GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
                 .emplace_back(atom_index);
         }
     }
@@ -4825,7 +4797,7 @@ TransformedChangeSummary SummarizeActiveDofChanges(
             }
             const auto value{
                 change_list.at(atom_index).at(
-                    kOffsetToPeakRatioChangeIndex)
+                    GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
             };
             if (!std::isfinite(value))
             {
@@ -4838,13 +4810,16 @@ TransformedChangeSummary SummarizeActiveDofChanges(
             is_finite ? maximum_change : std::numeric_limits<double>::infinity());
     }
 
-    result.population_size_list.at(kOffsetToPeakRatioChangeIndex) =
+    result.population_size_list.at(
+        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
         offset_group_change_list.size();
     result.percentile_list.at(
-        kOffsetToPeakRatioChangeIndex) = array_helper::ComputePercentile(
+        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
+        array_helper::ComputePercentile(
             offset_group_change_list,
             kConvergencePercentile);
-    result.maximum_list.at(kOffsetToPeakRatioChangeIndex) =
+    result.maximum_list.at(
+        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
         offset_group_change_list.empty() ? 0.0 :
             *std::ranges::max_element(offset_group_change_list);
     return result;

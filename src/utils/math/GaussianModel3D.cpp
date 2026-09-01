@@ -5,6 +5,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -62,6 +63,44 @@ GaussianModel3D GaussianModel3D::FromVectorPrefix(const Eigen::VectorXd & parame
     };
 }
 
+std::optional<GaussianModel3D> GaussianModel3D::FromTransformedCoordinates(
+    const TransformedCoordinates & coordinates)
+{
+    if (!coordinates.allFinite()) return std::nullopt;
+
+    const auto log_peak_height{
+        coordinates(static_cast<Eigen::Index>(kLogPeakHeightCoordinateIndex))
+    };
+    const auto log_width{
+        coordinates(static_cast<Eigen::Index>(kLogWidthCoordinateIndex))
+    };
+    const auto offset_to_peak_ratio{
+        coordinates(static_cast<Eigen::Index>(kOffsetToPeakRatioCoordinateIndex))
+    };
+    const auto log_amplitude{
+        log_peak_height + 1.5 * std::log(Constants::two_pi) + 3.0 * log_width
+    };
+    const auto amplitude{ std::exp(log_amplitude) };
+    const auto width{ std::exp(log_width) };
+    double offset{ 0.0 };
+    if (offset_to_peak_ratio != 0.0)
+    {
+        const auto log_abs_offset{
+            std::log(std::abs(offset_to_peak_ratio)) +
+            log_peak_height + log_width - 0.5 * std::log(4.0 / Constants::two_pi)
+        };
+        offset = std::copysign(std::exp(log_abs_offset), offset_to_peak_ratio);
+    }
+
+    if (!std::isfinite(amplitude) || amplitude <= 0.0 ||
+        !std::isfinite(width) || width <= 0.0 ||
+        !std::isfinite(offset))
+    {
+        return std::nullopt;
+    }
+    return GaussianModel3D{ amplitude, width, offset };
+}
+
 void GaussianModel3D::RequireFiniteModel(
     const GaussianModel3D & model,
     std::string_view value_name)
@@ -104,6 +143,46 @@ Eigen::VectorXd GaussianModel3D::ToVector() const
     parameters(kWidthIndex) = m_width;
     parameters(kOffsetIndex) = m_offset;
     return parameters;
+}
+
+std::optional<GaussianModel3D::TransformedCoordinates>
+GaussianModel3D::ToTransformedCoordinates() const
+{
+    if (!std::isfinite(m_amplitude) || m_amplitude <= 0.0 ||
+        !std::isfinite(m_width) || m_width <= 0.0 ||
+        !std::isfinite(m_offset))
+    {
+        return std::nullopt;
+    }
+
+    const auto log_width{ std::log(m_width) };
+    const auto log_peak_height{
+        std::log(m_amplitude) - 1.5 * std::log(Constants::two_pi) - 3.0 * log_width
+    };
+    double offset_to_peak_ratio{ 0.0 };
+    if (m_offset != 0.0)
+    {
+        const auto log_abs_offset_to_peak_ratio{
+            std::log(std::abs(m_offset)) +
+            0.5 * std::log(4.0 / Constants::two_pi) - log_width - log_peak_height
+        };
+        if (log_abs_offset_to_peak_ratio > std::log(std::numeric_limits<double>::max()))
+        {
+            return std::nullopt;
+        }
+        offset_to_peak_ratio = std::copysign(
+            std::exp(log_abs_offset_to_peak_ratio),
+            m_offset);
+    }
+
+    if (!std::isfinite(log_peak_height) ||
+        !std::isfinite(log_width) ||
+        !std::isfinite(offset_to_peak_ratio))
+    {
+        return std::nullopt;
+    }
+
+    return TransformedCoordinates{ log_peak_height, log_width, offset_to_peak_ratio };
 }
 
 double GaussianModel3D::GetModelParameter(int par_id) const

@@ -11,17 +11,14 @@
 
 namespace rhbm_gem::core::detail {
 
-constexpr std::size_t kLogPeakHeightChangeIndex{ 0 };
-constexpr std::size_t kLogWidthChangeIndex{ 1 };
-constexpr std::size_t kOffsetToPeakRatioChangeIndex{ 2 };
-constexpr std::size_t kTransformedChangeSize{ 3 };
 constexpr double kTransformedChangeTolerance{ 1.0e-4 };
 
-using TransformedChange = std::array<double, kTransformedChangeSize>;
-using TransformedChangeIndexListByParameter = std::array<std::vector<std::size_t>, kTransformedChangeSize>;
-
-std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model);
-std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3d & coordinates);
+using TransformedChange =
+    std::array<double, GaussianModel3D::TransformedCoordinateSize()>;
+using TransformedChangeIndexListByParameter =
+    std::array<
+        std::vector<std::size_t>,
+        GaussianModel3D::TransformedCoordinateSize()>;
 
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model);
 
@@ -74,7 +71,9 @@ struct TransformedChangeSummary
 {
     TransformedChange percentile_list{};
     TransformedChange maximum_list{};
-    std::array<std::size_t, kTransformedChangeSize> population_size_list{};
+    std::array<
+        std::size_t,
+        GaussianModel3D::TransformedCoordinateSize()> population_size_list{};
 };
 
 TransformedChange CalculateTransformedChange(

@@ -1,7 +1,6 @@
 #include "core/detail/GaussianModelOperations.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -15,8 +14,8 @@ namespace rhbm_gem::core::detail {
 namespace {
 
 constexpr double kTransformedChangePercentile{ 0.99 };
-constexpr std::array<double, kTransformedChangeSize> kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
+constexpr TransformedChange kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 
 using AtomPositionListByGroup = std::unordered_map<std::size_t, std::vector<std::size_t>>;
 
@@ -76,83 +75,9 @@ TransformedChange MakeInfiniteTransformedChange()
 
 } // namespace
 
-std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(const GaussianModel3D & model)
-{
-    const auto amplitude{ model.GetAmplitude() };
-    const auto width{ model.GetWidth() };
-    const auto offset{ model.GetOffset() };
-    if (!std::isfinite(amplitude) || amplitude <= 0.0 ||
-        !std::isfinite(width) || width <= 0.0 ||
-        !std::isfinite(offset))
-    {
-        return std::nullopt;
-    }
-
-    const auto log_width{ std::log(width) };
-    const auto log_peak_height{
-        std::log(amplitude) - 1.5 * std::log(Constants::two_pi) - 3.0 * log_width
-    };
-    double offset_to_peak_ratio{ 0.0 };
-    if (offset != 0.0)
-    {
-        const auto log_abs_offset_to_peak_ratio{
-            std::log(std::abs(offset)) +
-            0.5 * std::log(4.0 / Constants::two_pi) - log_width - log_peak_height
-        };
-        if (log_abs_offset_to_peak_ratio > std::log(std::numeric_limits<double>::max())) return std::nullopt;
-        offset_to_peak_ratio = std::copysign(std::exp(log_abs_offset_to_peak_ratio), offset);
-    }
-
-    if (!std::isfinite(log_peak_height) ||
-        !std::isfinite(log_width) ||
-        !std::isfinite(offset_to_peak_ratio))
-    {
-        return std::nullopt;
-    }
-
-    return Eigen::Vector3d{ log_peak_height, log_width, offset_to_peak_ratio };
-}
-
-std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3d & coordinates)
-{
-    if (!coordinates.allFinite()) return std::nullopt;
-
-    const auto log_peak_height{
-        coordinates(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex))
-    };
-    const auto log_width{
-        coordinates(static_cast<Eigen::Index>(kLogWidthChangeIndex))
-    };
-    const auto offset_to_peak_ratio{
-        coordinates(static_cast<Eigen::Index>(kOffsetToPeakRatioChangeIndex))
-    };
-    const auto log_amplitude{
-        log_peak_height + 1.5 * std::log(Constants::two_pi) + 3.0 * log_width
-    };
-    const auto amplitude{ std::exp(log_amplitude) };
-    const auto width{ std::exp(log_width) };
-    double offset{ 0.0 };
-    if (offset_to_peak_ratio != 0.0)
-    {
-        const auto log_abs_offset{
-            std::log(std::abs(offset_to_peak_ratio)) +
-            log_peak_height + log_width - 0.5 * std::log(4.0 / Constants::two_pi)
-        };
-        offset = std::copysign(std::exp(log_abs_offset), offset_to_peak_ratio);
-    }
-
-    if (!std::isfinite(amplitude) || amplitude <= 0.0 ||
-        !std::isfinite(width) || width <= 0.0 ||
-        !std::isfinite(offset))
-    {
-        return std::nullopt;
-    }
-    return GaussianModel3D{ amplitude, width, offset };
-}
-
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
 {
-    return EncodeTransformedCoordinates(model).has_value();
+    return model.ToTransformedCoordinates().has_value();
 }
 
 GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
@@ -288,25 +213,33 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
     for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
         const auto previous_coordinates{
-            EncodeTransformedCoordinates(previous_model_list.at(atom_position))
+            previous_model_list.at(atom_position).ToTransformedCoordinates()
         };
         const auto raw_coordinates{
-            EncodeTransformedCoordinates(raw_model_list.at(atom_position))
+            raw_model_list.at(atom_position).ToTransformedCoordinates()
         };
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value()) return std::nullopt;
 
-        Eigen::Vector3d shape_coordinates{
-            (*previous_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) +
+        GaussianModel3D::TransformedCoordinates shape_coordinates{
+            (*previous_coordinates)(static_cast<Eigen::Index>(
+                GaussianModel3D::LogPeakHeightCoordinateIndex())) +
                 damping * (
-                    (*raw_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) -
-                    (*previous_coordinates)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex))),
-            (*previous_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex)) +
+                    (*raw_coordinates)(static_cast<Eigen::Index>(
+                        GaussianModel3D::LogPeakHeightCoordinateIndex())) -
+                    (*previous_coordinates)(static_cast<Eigen::Index>(
+                        GaussianModel3D::LogPeakHeightCoordinateIndex()))),
+            (*previous_coordinates)(static_cast<Eigen::Index>(
+                GaussianModel3D::LogWidthCoordinateIndex())) +
                 damping * (
-                    (*raw_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex)) -
-                    (*previous_coordinates)(static_cast<Eigen::Index>(kLogWidthChangeIndex))),
+                    (*raw_coordinates)(static_cast<Eigen::Index>(
+                        GaussianModel3D::LogWidthCoordinateIndex())) -
+                    (*previous_coordinates)(static_cast<Eigen::Index>(
+                        GaussianModel3D::LogWidthCoordinateIndex()))),
             0.0
         };
-        const auto shape_model{ DecodeTransformedCoordinates(shape_coordinates) };
+        const auto shape_model{
+            GaussianModel3D::FromTransformedCoordinates(shape_coordinates)
+        };
         if (!shape_model.has_value()) return std::nullopt;
 
         const auto previous_shared_offset{ previous_shared_offset_list.at(atom_position) };
@@ -323,17 +256,18 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
 
 std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(const GaussianModel3D & model, double distance)
 {
-    if (!EncodeTransformedCoordinates(model).has_value()) return std::nullopt;
+    if (!model.ToTransformedCoordinates().has_value()) return std::nullopt;
     return EvaluateValidSharedOffsetResponse(model, distance);
 }
 
 std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const GaussianModel3D & model)
 {
-    const auto transformed{ EncodeTransformedCoordinates(model) };
+    const auto transformed{ model.ToTransformedCoordinates() };
     if (!transformed.has_value()) return std::nullopt;
 
     const auto peak_height{
-        std::exp((*transformed)(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)))
+        std::exp((*transformed)(static_cast<Eigen::Index>(
+            GaussianModel3D::LogPeakHeightCoordinateIndex())))
     };
     if (!std::isfinite(peak_height)) return std::nullopt;
 
@@ -353,13 +287,16 @@ std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const auto width{ model.GetWidth() };
     const double center_offset_basis_scale{ std::sqrt(2.0 / M_PI) };
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
-    jacobian(static_cast<Eigen::Index>(kLogPeakHeightChangeIndex)) =
+    jacobian(static_cast<Eigen::Index>(
+        GaussianModel3D::LogPeakHeightCoordinateIndex())) =
         shared_offset_evaluation->shape_jacobian(0) +
         model.GetOffset() * shared_offset_evaluation->offset_jacobian;
-    jacobian(static_cast<Eigen::Index>(kLogWidthChangeIndex)) =
+    jacobian(static_cast<Eigen::Index>(
+        GaussianModel3D::LogWidthCoordinateIndex())) =
         shared_offset_evaluation->shape_jacobian(1) +
         model.GetOffset() * shared_offset_evaluation->offset_jacobian;
-    jacobian(static_cast<Eigen::Index>(kOffsetToPeakRatioChangeIndex)) =
+    jacobian(static_cast<Eigen::Index>(
+        GaussianModel3D::OffsetToPeakRatioCoordinateIndex())) =
         invariants.peak_height * width *
         shared_offset_evaluation->offset_jacobian / center_offset_basis_scale;
     if (!jacobian.allFinite()) return std::nullopt;
@@ -371,15 +308,15 @@ TransformedChange CalculateTransformedChange(
     const GaussianModel3D & current,
     const GaussianModel3D & previous)
 {
-    const auto current_coordinates{ EncodeTransformedCoordinates(current) };
-    const auto previous_coordinates{ EncodeTransformedCoordinates(previous) };
+    const auto current_coordinates{ current.ToTransformedCoordinates() };
+    const auto previous_coordinates{ previous.ToTransformedCoordinates() };
     if (!current_coordinates.has_value() || !previous_coordinates.has_value())
     {
         return MakeInfiniteTransformedChange();
     }
 
     TransformedChange change{};
-    for (std::size_t i = 0; i < kTransformedChangeSize; i++)
+    for (std::size_t i = 0; i < change.size(); i++)
     {
         const auto eigen_index{ static_cast<Eigen::Index>(i) };
         const auto value{
@@ -411,7 +348,8 @@ TransformedChangeSummary SummarizeTransformedChanges(const std::vector<Transform
 {
     TransformedChangeSummary summary;
     summary.population_size_list.fill(change_list.size());
-    for (std::size_t parameter_index = 0; parameter_index < kTransformedChangeSize; parameter_index++)
+    for (std::size_t parameter_index = 0;
+        parameter_index < summary.percentile_list.size(); parameter_index++)
     {
         std::vector<double> parameter_change_list;
         parameter_change_list.reserve(change_list.size());
@@ -432,7 +370,8 @@ TransformedChangeSummary SummarizeTransformedChangesByParameter(
     const TransformedChangeIndexListByParameter & index_list_by_parameter)
 {
     TransformedChangeSummary summary;
-    for (std::size_t parameter_index = 0; parameter_index < kTransformedChangeSize; parameter_index++)
+    for (std::size_t parameter_index = 0;
+        parameter_index < index_list_by_parameter.size(); parameter_index++)
     {
         const auto & index_list{
             index_list_by_parameter.at(parameter_index)
@@ -482,13 +421,14 @@ std::optional<double> CalculateModelTrustRegionStepNorm(
     for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
         const auto previous{
-            EncodeTransformedCoordinates(previous_model_list.at(atom_position))
+            previous_model_list.at(atom_position).ToTransformedCoordinates()
         };
         const auto candidate{
-            EncodeTransformedCoordinates(candidate_model_list.at(atom_position))
+            candidate_model_list.at(atom_position).ToTransformedCoordinates()
         };
         if (!previous.has_value() || !candidate.has_value()) return std::nullopt;
-        for (std::size_t parameter_index = 0; parameter_index < kTransformedChangeSize; parameter_index++)
+        for (std::size_t parameter_index = 0;
+            parameter_index < kTrustRegionParameterScale.size(); parameter_index++)
         {
             const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
             step_norm = std::max(
