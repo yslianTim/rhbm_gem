@@ -1769,7 +1769,7 @@ static void LogAcceptedCandidateSearchDiagnostics(
             message << "-";
         }
         message
-            << "/" << (diagnostic.accepted ? "yes" : "no")
+            << "/" << (diagnostic.accepted_source != BoundaryComponentAcceptedSource::None ? "yes" : "no")
             << "/" << (diagnostic.exhausted ? "yes" : "no")
             << ", accepted_source=" << accepted_source_text()
             << ", objectives previous/endpoint/final=";
@@ -2024,17 +2024,23 @@ static void LogConvergenceSafeguardAudit(
         diagnostics.boundary_reconciliation_diagnostic_list,
         [](const auto & diagnostic)
         {
-            return diagnostic.accepted &&
-                diagnostic.accepted_source == BoundaryComponentAcceptedSource::Backtracking;
+            return diagnostic.accepted_source ==
+                BoundaryComponentAcceptedSource::Backtracking;
         })) };
     const auto accepted_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
         diagnostics.boundary_reconciliation_diagnostic_list,
-        &BoundaryComponentReconciliationDiagnostic::accepted)) };
+        [](const auto & diagnostic)
+        {
+            return diagnostic.accepted_source !=
+                BoundaryComponentAcceptedSource::None;
+        })) };
     const auto rescued_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
         diagnostics.boundary_reconciliation_diagnostic_list,
         [](const auto & diagnostic)
         {
-            return diagnostic.accepted && diagnostic.is_rescue_attempt;
+            return diagnostic.accepted_source !=
+                    BoundaryComponentAcceptedSource::None &&
+                diagnostic.is_rescue_attempt;
         })) };
     const auto shape_fixed_count{ static_cast<std::size_t>(
         std::ranges::count(block_activity.shape_fixed_atom_mask, 1)) };
@@ -2264,9 +2270,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     catch (const std::exception &)
     {
         failed_shape_assessment = SuspiciousGaussianAssessment{
-            SuspiciousGaussianReason::InvalidModel,
-            SuspiciousUpdateMode::PostRefit,
-            std::numeric_limits<double>::infinity()
+            .reason = SuspiciousGaussianReason::InvalidModel,
+            .normalized_margin = std::numeric_limits<double>::infinity()
         };
     }
 
@@ -2721,9 +2726,8 @@ static IterationProposalResult RunProposalIteration(
                     }
                 }
                 assessment_by_atom.at(atom_index) = SuspiciousGaussianAssessment{
-                    SuspiciousGaussianReason::InvalidModel,
-                    SuspiciousUpdateMode::PostRefit,
-                    std::numeric_limits<double>::infinity()
+                    .reason = SuspiciousGaussianReason::InvalidModel,
+                    .normalized_margin = std::numeric_limits<double>::infinity()
                 };
                 continue;
             }
@@ -3539,7 +3543,7 @@ static void LogFinalDependencyPolish(
         << diagnostic.component_count << "/"
         << diagnostic.attempted_component_count << "/"
         << diagnostic.accepted_component_count << "/"
-        << diagnostic.fallback_component_count
+        << diagnostic.component_count - diagnostic.accepted_component_count
         << ", atoms/parameters/rounds="
         << diagnostic.atom_count << "/"
         << diagnostic.parameter_count << "/"
@@ -3632,7 +3636,7 @@ static void LogFinalDependencyPolish(
         component_message
             << ", accepted/fallback="
             << (component.accepted ? "yes" : "no") << "/"
-            << (component.fallback ? "yes" : "no")
+            << (!component.accepted ? "yes" : "no")
             << ", elapsed_ms=" << std::fixed << std::setprecision(3)
             << component.elapsed_milliseconds << ".";
         Logger::Log(LogLevel::Debug, component_message.str());

@@ -164,7 +164,6 @@ enum class SuspiciousUpdateMode
 struct SuspiciousGaussianAssessment
 {
     SuspiciousGaussianReason reason{ SuspiciousGaussianReason::None };
-    SuspiciousUpdateMode mode{ SuspiciousUpdateMode::PostRefit };
     double normalized_margin{ -std::numeric_limits<double>::infinity() };
 
     bool IsSuspicious() const { return reason != SuspiciousGaussianReason::None; }
@@ -589,7 +588,6 @@ struct BoundaryComponentReconciliationDiagnostic
     std::optional<double> component_improvement{};
     std::optional<double> global_improvement{};
     bool is_rescue_attempt{ false };
-    bool accepted{ false };
     bool exhausted{ false };
 };
 
@@ -638,7 +636,6 @@ struct FinalDependencyPolishDiagnostic
     std::size_t component_count{ 0 };
     std::size_t attempted_component_count{ 0 };
     std::size_t accepted_component_count{ 0 };
-    std::size_t fallback_component_count{ 0 };
     std::size_t atom_count{ 0 };
     std::size_t parameter_count{ 0 };
     std::size_t round_count{ 0 };
@@ -658,7 +655,6 @@ struct FinalDependencyPolishDiagnostic
         std::optional<double> objective_after{};
         double elapsed_milliseconds{ 0.0 };
         bool accepted{ false };
-        bool fallback{ true };
     };
     std::vector<Component> component_list{};
 };
