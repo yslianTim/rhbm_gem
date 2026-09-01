@@ -20,15 +20,6 @@ namespace rhbm_gem::core::detail {
 
 using PolishProvenance = std::vector<char>;
 
-struct TrustRegionOptions
-{
-    double initial_radius{ 1.0 };
-    double minimum_radius{ 0.0625 };
-    double maximum_radius{ 4.0 };
-    double shrink_factor{ 0.5 };
-    double growth_factor{ 2.0 };
-};
-
 struct TrustRegionRadiusUpdate
 {
     std::vector<ClusterKey> changed_key_list{};
@@ -110,11 +101,9 @@ struct TrustModelShadowDiagnostic
 
 class TrustRegionStateSet
 {
-    TrustRegionOptions m_options{};
     std::map<ClusterKey, double> m_radius_by_key{};
 
 public:
-    explicit TrustRegionStateSet(TrustRegionOptions options = {});
     void Reconcile(const std::vector<ClusterKey> & key_list);
     double GetRadius(const ClusterKey & key) const;
     void ResetToMinimum(const std::vector<ClusterKey> & key_list);
@@ -151,19 +140,13 @@ struct SuspiciousBlockActivity
     bool HasActiveOffset(std::size_t atom_index) const;
 };
 
-struct ZeroOffsetProfileDiagnostics
-{
-    double distance_range{ 0.0 };
-    double innermost_response{ 0.0 };
-    double max_abs_response{ 0.0 };
-    double robust_residual_scale{ 0.0 };
-    std::vector<double> radius_response_median_list{};
-};
-
 struct SuspiciousProfileAnalysis
 {
     bool all_responses_finite{ true };
-    std::optional<ZeroOffsetProfileDiagnostics> profile{};
+    double distance_range{ 0.0 };
+    double max_abs_response{ 0.0 };
+    double robust_residual_scale{ 0.0 };
+    std::vector<double> radius_response_median_list{};
 };
 
 struct SuspiciousUpdateBaseline
@@ -544,7 +527,6 @@ public:
 
 private:
     bool BuildCandidate(double factor);
-    bool HasMaterialChange(std::size_t atom_position) const;
     double GetMaximumTransformedChange() const;
 
 };
