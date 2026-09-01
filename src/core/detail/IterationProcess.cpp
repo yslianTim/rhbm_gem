@@ -50,10 +50,14 @@ constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kLegacyMaximumTransformedChangeTolerance{ 1.0e-3 };
 constexpr double kConvergencePercentile{ 0.99 };
 
-enum class AllRejectedResolution
+enum class SecondStageStopReason
 {
-    MaximumIterations,
-    BacktrackingExhausted
+    None,
+    Converged,
+    AuditPatience,
+    AllRejectedBacktrackingExhausted,
+    AllRejectedAtMaximumIterations,
+    MaximumIterations
 };
 
 constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
@@ -147,18 +151,13 @@ struct SecondStageInitializationResult
     } failure{ Failure::None };
 };
 
-struct QuarantineSummary
-{
-    std::size_t entered_target_count{ 0 };
-    std::size_t released_target_count{ 0 };
-    std::size_t failed_probation_count{ 0 };
-};
-
 struct QuarantineState
 {
     QuarantineFailureStateMap state_by_target{};
     std::vector<QuarantineTarget> probation_target_list{};
-    QuarantineSummary summary{};
+    std::size_t entered_target_count{ 0 };
+    std::size_t released_target_count{ 0 };
+    std::size_t failed_probation_count{ 0 };
     bool force_probation{ false };
     QuarantineState() = default;
 
@@ -169,7 +168,7 @@ struct QuarantineState
 
     SuspiciousBlockActivity BeginIteration(std::size_t accepted_iteration_count);
     SuspiciousBlockActivity BuildFinalActivity() const;
-    QuarantineStateTransition UpdateAfterIteration(
+    bool UpdateAfterIteration(
         const SecondStageContext & context,
         std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
         std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
@@ -187,20 +186,15 @@ struct QuarantineState
     {
         return static_cast<std::size_t>(std::ranges::count_if(
             state_by_target,
-            [](const auto & entry) { return entry.second.quarantined; }));
+            [](const auto & entry)
+            {
+                return entry.second.lifecycle != QuarantineLifecycle::Tracking;
+            }));
     }
     bool HasFailures() const { return TargetCount() != 0; }
 
 private:
     std::size_t m_atom_count{ 0 };
-};
-
-struct IterationDiagnostics
-{
-    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
-    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
-    TrustRegionRadiusUpdate trust_region_update{};
 };
 
 struct IterationState
@@ -223,28 +217,22 @@ struct IterationState
     std::size_t audit_patience_count{ 0 };
 };
 
-struct IterationProgress
+struct IterationResult
 {
+    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
+    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
+    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
+    TrustRegionRadiusUpdate trust_region_update{};
     std::size_t attempt_number{ 0 };
     std::size_t accepted_iteration_count{ 0 };
     std::size_t active_atom_count{ 0 };
     std::size_t quarantine_atom_count{ 0 };
-    std::size_t accepted_cluster_count{ 0 };
-    std::size_t rejected_cluster_count{ 0 };
     PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     std::optional<double> accepted_maximum_transformed_change{};
     double operator_maximum_transformed_change{ 0.0 };
-};
-
-struct IterationResult
-{
-    IterationDiagnostics diagnostics{};
-    IterationProgress progress{};
-    std::optional<AllRejectedResolution> all_rejected_resolution{};
+    SecondStageStopReason stop_reason{ SecondStageStopReason::None };
     bool objective_domain_changed{ false };
-    bool converged{ false };
-    bool audit_patience_exhausted{ false };
     TransformedChange transformed_change_percentile{};
 };
 
@@ -282,18 +270,6 @@ struct LocalAtomRefitResult
     SuspiciousGaussianAssessment assessment{};
     std::optional<RHBMEstimationStatus> attempted_refit_status{};
 };
-
-static std::optional<SecondStageSeedSelection>
-SelectValidSecondStageSeedCandidate(
-    SecondStageSeedSource source,
-    const std::optional<GaussianModel3DWithUncertainty> & candidate)
-{
-    if (!candidate.has_value() || !IsValidSecondStageGaussianModel(candidate->GetModel()))
-    {
-        return std::nullopt;
-    }
-    return SecondStageSeedSelection{ source, *candidate };
-}
 
 struct OffsetGroupEntry
 {
@@ -356,14 +332,13 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         SuspiciousUpdateMask(previous_state.size(), 0)
     };
     ConvergenceCertificate result;
-    result.operator_nominal_population = BuildActiveCoordinatePopulation(
+    const auto operator_nominal_population{ BuildActiveCoordinatePopulation(
         atom_index_list,
         cluster_key_list,
         group_id_by_atom_index,
         nominal_activity,
-        nominal_activity);
-    result.operator_shadow_shape_refit_performed =
-        evidence.shadow_shape_refit_performed;
+        nominal_activity) };
+    result.operator_shadow_shape_refit_performed = evidence.shadow_shape_refit_performed;
 
     std::vector<TransformedChange> change_list;
     change_list.reserve(previous_state.size());
@@ -373,8 +348,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         auto change{ CalculateTransformedChange(
             GetFitModel(evidence.state, atom_index),
             GetFitModel(previous_state, atom_index)) };
-        if (evidence.shape_status_by_atom.at(atom_index) !=
-            OperatorEndpointStatus::Available)
+        if (evidence.shape_status_by_atom.at(atom_index) != OperatorEndpointStatus::Available)
         {
             change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()) = std::numeric_limits<double>::infinity();
             change.at(GaussianModel3D::LogWidthCoordinateIndex()) = std::numeric_limits<double>::infinity();
@@ -385,8 +359,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         }
         change_list.emplace_back(std::move(change));
     }
-    result.operator_nominal_residual = SummarizeActiveDofChanges(
-        change_list, result.operator_nominal_population);
+    result.operator_nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
 
     for (const auto atom_index : atom_index_list)
     {
@@ -424,7 +397,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         }
     }
     for (const auto & group :
-        result.operator_nominal_population.active_offset_group_atom_index_list)
+        operator_nominal_population.active_offset_group_atom_index_list)
     {
         bool available{ true };
         double maximum_change{ 0.0 };
@@ -842,18 +815,14 @@ static void LogUnselectedSecondStageSeedSelections(
     }
 }
 
-static void AppendQuarantineSummary(
-    std::ostream & stream,
-    const QuarantineSummary & summary,
-    std::size_t unresolved_target_count)
+static void AppendQuarantineSummary(std::ostream & stream, const QuarantineState & state)
 {
     stream << "; quarantine entered/released/probation-failed/unresolved = "
-        << summary.entered_target_count << "/"
-        << summary.released_target_count << "/"
-        << summary.failed_probation_count << "/"
-        << unresolved_target_count;
+        << state.entered_target_count << "/"
+        << state.released_target_count << "/"
+        << state.failed_probation_count << "/"
+        << state.TargetCount();
 }
-
 
 static void ApplyQuarantineFallbackTargets(
     const std::vector<QuarantineTarget> & target_list,
@@ -908,9 +877,8 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(
     std::vector<QuarantineTarget> due_target_list;
     for (auto & [target, state] : state_by_target)
     {
-        if (!state.quarantined) continue;
+        if (state.lifecycle != QuarantineLifecycle::Quarantined) continue;
         const auto probation_due{
-            !state.probation_exhausted &&
             (force_probation || accepted_iteration_count >= state.next_probation_iteration)
         };
         if (probation_due)
@@ -937,7 +905,7 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(
                 })
         };
         if (overlaps_selected) continue;
-        state_by_target.at(target).probation_active = true;
+        state_by_target.at(target).lifecycle = QuarantineLifecycle::Probation;
         probation_target_list.emplace_back(target);
         selected_probation_atom_index_set.insert(
             target.atom_index_list.begin(),
@@ -945,7 +913,11 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(
     }
     for (auto & [target, state] : state_by_target)
     {
-        if (!state.quarantined || state.probation_active) continue;
+        if (state.lifecycle == QuarantineLifecycle::Tracking ||
+            state.lifecycle == QuarantineLifecycle::Probation)
+        {
+            continue;
+        }
         const auto shadowed_by_broader_probation{
             std::ranges::any_of(
                 probation_target_list,
@@ -992,7 +964,7 @@ SuspiciousBlockActivity QuarantineState::BuildFinalActivity() const
     };
     for (const auto & [target, state] : state_by_target)
     {
-        if (!state.quarantined) continue;
+        if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
         for (const auto atom_index : target.atom_index_list)
         {
             if (target.kind != QuarantineTargetKind::OffsetGroup)
@@ -1107,7 +1079,7 @@ static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
     return true;
 }
 
-QuarantineStateTransition QuarantineState::UpdateAfterIteration(
+bool QuarantineState::UpdateAfterIteration(
     const SecondStageContext & context,
     std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
     std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
@@ -1240,10 +1212,12 @@ QuarantineStateTransition QuarantineState::UpdateAfterIteration(
         previous_polish_provenance,
         assembled_state,
         assembled_polish_provenance);
-    summary.entered_target_count += transition.entered_target_list.size();
-    summary.released_target_count += transition.released_target_list.size();
-    summary.failed_probation_count += transition.failed_probation_target_list.size();
-    return transition;
+    entered_target_count += transition.entered_target_list.size();
+    released_target_count += transition.released_target_list.size();
+    failed_probation_count += transition.failed_probation_target_list.size();
+    return !transition.entered_target_list.empty() ||
+        !transition.released_target_list.empty() ||
+        !transition.failed_probation_target_list.empty();
 }
 
 std::size_t QuarantineState::AtomCount() const
@@ -1251,7 +1225,7 @@ std::size_t QuarantineState::AtomCount() const
     std::set<std::size_t> atom_index_set;
     for (const auto & [target, state] : state_by_target)
     {
-        if (!state.quarantined) continue;
+        if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
         atom_index_set.insert(
             target.atom_index_list.begin(),
             target.atom_index_list.end());
@@ -1261,11 +1235,12 @@ std::size_t QuarantineState::AtomCount() const
 
 static void AppendObjectiveBreakdown(
     std::ostringstream & stream,
-    const std::optional<ObjectiveBreakdown> & breakdown)
+    const std::optional<ObjectiveBreakdown> & breakdown,
+    std::string_view unavailable_text = "unavailable")
 {
     if (!breakdown.has_value())
     {
-        stream << "unavailable";
+        stream << unavailable_text;
         return;
     }
     stream
@@ -1374,8 +1349,7 @@ static void AppendTrustModelOptionalValue(
 
 static void LogTrustModelShadowDiagnostics(
     bool quiet_mode,
-    const IterationDiagnostics & diagnostics,
-    const IterationProgress & progress)
+    const IterationResult & iteration_result)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
     const auto log_records = [&](const auto & diagnostic_list, std::string_view disposition)
@@ -1386,8 +1360,8 @@ static void LogTrustModelShadowDiagnostics(
             std::ostringstream funnel_message;
             funnel_message
                 << "Trust-model funnel: schema=1"
-                << ", try=" << progress.attempt_number
-                << ", acc=" << progress.accepted_iteration_count
+                << ", try=" << iteration_result.attempt_number
+                << ", acc=" << iteration_result.accepted_iteration_count
                 << ", atoms=" << cluster_diagnostic.key.size()
                 << ", key-first=" << cluster_diagnostic.key.front()
                 << ", key-last=" << cluster_diagnostic.key.back()
@@ -1408,8 +1382,8 @@ static void LogTrustModelShadowDiagnostics(
                 std::ostringstream message;
                 message << std::scientific << std::setprecision(17)
                     << "Trust-model shadow: schema=2"
-                    << ", try=" << progress.attempt_number
-                    << ", acc=" << progress.accepted_iteration_count
+                    << ", try=" << iteration_result.attempt_number
+                    << ", acc=" << iteration_result.accepted_iteration_count
                     << ", atoms=" << cluster_diagnostic.key.size()
                     << ", key-first=" << cluster_diagnostic.key.front()
                     << ", key-last=" << cluster_diagnostic.key.back()
@@ -1469,8 +1443,8 @@ static void LogTrustModelShadowDiagnostics(
         }
     };
     Logger::FinishProgressLine();
-    log_records(diagnostics.accepted_cluster_diagnostic_list, "accepted");
-    log_records(diagnostics.rejected_cluster_diagnostic_list, "rejected");
+    log_records(iteration_result.accepted_cluster_diagnostic_list, "accepted");
+    log_records(iteration_result.rejected_cluster_diagnostic_list, "rejected");
 }
 #endif
 
@@ -1602,23 +1576,30 @@ static void LogRejectedClusterDiagnostics(
     }
 }
 
-static std::string_view GetAllRejectedResolutionText(
-    AllRejectedResolution resolution)
+static std::string_view GetSecondStageStopReasonText(
+    SecondStageStopReason reason)
 {
-    switch (resolution)
+    switch (reason)
     {
-    case AllRejectedResolution::MaximumIterations:
-        return "maximum-iterations";
-    case AllRejectedResolution::BacktrackingExhausted:
+    case SecondStageStopReason::None:
+        return "";
+    case SecondStageStopReason::Converged:
+        return "converged";
+    case SecondStageStopReason::AuditPatience:
+        return "audit-patience";
+    case SecondStageStopReason::AllRejectedBacktrackingExhausted:
         return "all-rejected-backtracking-exhausted";
+    case SecondStageStopReason::AllRejectedAtMaximumIterations:
+    case SecondStageStopReason::MaximumIterations:
+        return "maximum-iterations";
     }
-    return "all-rejected-backtracking-exhausted";
+    return "";
 }
 
 static void LogAllRejectedResolution(
     bool quiet_mode,
     const TrustRegionRadiusUpdate & trust_region_update,
-    AllRejectedResolution resolution)
+    SecondStageStopReason reason)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -1629,7 +1610,7 @@ static void LogAllRejectedResolution(
     std::ostringstream message;
     message
         << "All-rejected local fitting resolution: outcome = "
-        << GetAllRejectedResolutionText(resolution)
+        << GetSecondStageStopReasonText(reason)
         << ", radius-changed/radius-saturated = "
         << trust_region_update.changed_key_list.size() << "/"
         << trust_region_update.saturated_key_list.size() << ".";
@@ -1638,7 +1619,7 @@ static void LogAllRejectedResolution(
 
 static void LogAcceptedCandidateSearchDiagnostics(
     bool quiet_mode,
-    const IterationDiagnostics & diagnostics)
+    const IterationResult & iteration_result)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -1646,19 +1627,20 @@ static void LogAcceptedCandidateSearchDiagnostics(
     }
     const auto has_local_search{
         std::any_of(
-            diagnostics.accepted_cluster_diagnostic_list.begin(),
-            diagnostics.accepted_cluster_diagnostic_list.end(),
+            iteration_result.accepted_cluster_diagnostic_list.begin(),
+            iteration_result.accepted_cluster_diagnostic_list.end(),
             [](const ClusterCandidateDiagnostic & diagnostic)
             {
                 return diagnostic.attempt.trial_count > 1;
             })
     };
     const auto has_boundary_reconciliation_diagnostic{
-        !diagnostics.boundary_reconciliation_diagnostic_list.empty()
+        !iteration_result.boundary_reconciliation_diagnostic_list.empty()
     };
     if (!has_local_search && !has_boundary_reconciliation_diagnostic) return;
     Logger::FinishProgressLine();
-    for (const auto & cluster_diagnostic : diagnostics.accepted_cluster_diagnostic_list)
+    for (const auto & cluster_diagnostic :
+        iteration_result.accepted_cluster_diagnostic_list)
     {
         const auto & diagnostic{ cluster_diagnostic.attempt };
         if (cluster_diagnostic.boundary_rescued)
@@ -1708,7 +1690,8 @@ static void LogAcceptedCandidateSearchDiagnostics(
         message << ".";
         Logger::Log(LogLevel::Debug, message.str());
     }
-    for (const auto & diagnostic : diagnostics.boundary_reconciliation_diagnostic_list)
+    for (const auto & diagnostic :
+        iteration_result.boundary_reconciliation_diagnostic_list)
     {
         const auto accepted_source_text = [&]() -> std::string_view
         {
@@ -1921,26 +1904,26 @@ static void LogProgressHeader(
 static void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
-    const IterationProgress & progress)
+    const IterationResult & iteration_result)
 {
     if (quiet_mode) return;
 
     const std::array<std::string, 6> cell_list{
-        std::to_string(progress.attempt_number) + "/" +
-            std::to_string(progress.accepted_iteration_count),
-        std::to_string(progress.active_atom_count) + "/" +
-            std::to_string(progress.quarantine_atom_count),
-        std::to_string(progress.accepted_cluster_count) + "/" +
-            std::to_string(progress.rejected_cluster_count),
-        std::to_string(progress.polish_progress.eligible_count) + "/" +
-            std::to_string(progress.polish_progress.accepted_count) + "/" +
-            std::to_string(progress.polish_progress.rejected_count) + "/" +
-        std::to_string(progress.polish_progress.skipped_count),
-        std::to_string(progress.suspicious_atom_count),
-        (progress.accepted_maximum_transformed_change.has_value() ?
-            FormatProgressMaximum(*progress.accepted_maximum_transformed_change) :
+        std::to_string(iteration_result.attempt_number) + "/" +
+            std::to_string(iteration_result.accepted_iteration_count),
+        std::to_string(iteration_result.active_atom_count) + "/" +
+            std::to_string(iteration_result.quarantine_atom_count),
+        std::to_string(iteration_result.accepted_cluster_diagnostic_list.size()) + "/" +
+            std::to_string(iteration_result.rejected_cluster_diagnostic_list.size()),
+        std::to_string(iteration_result.polish_progress.eligible_count) + "/" +
+            std::to_string(iteration_result.polish_progress.accepted_count) + "/" +
+            std::to_string(iteration_result.polish_progress.rejected_count) + "/" +
+        std::to_string(iteration_result.polish_progress.skipped_count),
+        std::to_string(iteration_result.suspicious_atom_count),
+        (iteration_result.accepted_maximum_transformed_change.has_value() ?
+            FormatProgressMaximum(*iteration_result.accepted_maximum_transformed_change) :
             std::string{ "-" }) + "/" +
-            FormatProgressMaximum(progress.operator_maximum_transformed_change)
+            FormatProgressMaximum(iteration_result.operator_maximum_transformed_change)
     };
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
@@ -1969,24 +1952,28 @@ static void AppendAuditPopulation(
 
 static void LogConvergenceSafeguardAudit(
     bool quiet_mode,
-    std::size_t attempt_number,
-    const IterationProgress & progress,
+    const IterationResult & iteration_result,
     const ConvergenceCertificate & certificate,
-    const TransformedChangeSummary & accepted_production_change,
     const ActiveCoordinatePopulation & active_population,
-    const IterationDiagnostics & diagnostics,
     const SuspiciousBlockActivity & block_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     bool accepted_equals_operator,
-    bool assembled_uses_polish,
-    bool has_quarantine_transition,
-    bool objective_domain_changed)
+    bool assembled_uses_polish)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
     const auto & solver_qualification{ certificate.solver_qualification };
+    const auto & accepted_production_change{
+        certificate.accepted_active_movement
+    };
+    const auto orthogonal_blockers_clear{
+        !certificate.objective_domain_changed &&
+        !certificate.quarantine_transition &&
+        !certificate.suspicious_offset_fallback &&
+        !certificate.rejected_cluster
+    };
     const auto accepted_limited_count{ static_cast<std::size_t>(std::ranges::count_if(
-        diagnostics.accepted_cluster_diagnostic_list,
+        iteration_result.accepted_cluster_diagnostic_list,
         [](const auto & diagnostic)
         {
             return diagnostic.attempt.accepted_factor.has_value() &&
@@ -1995,11 +1982,13 @@ static void LogConvergenceSafeguardAudit(
     const auto sum_trial_diagnostic = [&](const auto projection)
     {
         std::size_t count{ 0 };
-        for (const auto & diagnostic : diagnostics.accepted_cluster_diagnostic_list)
+        for (const auto & diagnostic :
+            iteration_result.accepted_cluster_diagnostic_list)
         {
             count += projection(diagnostic.attempt);
         }
-        for (const auto & diagnostic : diagnostics.rejected_cluster_diagnostic_list)
+        for (const auto & diagnostic :
+            iteration_result.rejected_cluster_diagnostic_list)
         {
             count += projection(diagnostic.attempt);
         }
@@ -2021,21 +2010,21 @@ static void LogConvergenceSafeguardAudit(
             return diagnostic.terminal_diagnostic_list.size();
         }) };
     const auto boundary_backtracked_count{ static_cast<std::size_t>(std::ranges::count_if(
-        diagnostics.boundary_reconciliation_diagnostic_list,
+        iteration_result.boundary_reconciliation_diagnostic_list,
         [](const auto & diagnostic)
         {
             return diagnostic.accepted_source ==
                 BoundaryComponentAcceptedSource::Backtracking;
         })) };
     const auto accepted_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
-        diagnostics.boundary_reconciliation_diagnostic_list,
+        iteration_result.boundary_reconciliation_diagnostic_list,
         [](const auto & diagnostic)
         {
             return diagnostic.accepted_source !=
                 BoundaryComponentAcceptedSource::None;
         })) };
     const auto rescued_boundary_count{ static_cast<std::size_t>(std::ranges::count_if(
-        diagnostics.boundary_reconciliation_diagnostic_list,
+        iteration_result.boundary_reconciliation_diagnostic_list,
         [](const auto & diagnostic)
         {
             return diagnostic.accepted_source !=
@@ -2078,7 +2067,7 @@ static void LogConvergenceSafeguardAudit(
     }
 
     const auto selected_atom_count{
-        progress.active_atom_count + progress.quarantine_atom_count
+        iteration_result.active_atom_count + iteration_result.quarantine_atom_count
     };
     const auto ratio = [selected_atom_count](std::size_t count)
     {
@@ -2088,10 +2077,10 @@ static void LogConvergenceSafeguardAudit(
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
         << "Convergence safeguard audit: schema=9"
-        << ", certificate-definition=1, try=" << attempt_number
-        << ", acc=" << progress.accepted_iteration_count
-        << ", atoms=" << progress.active_atom_count + progress.quarantine_atom_count
-        << ", quarantine=" << progress.quarantine_atom_count
+        << ", certificate-definition=1, try=" << iteration_result.attempt_number
+        << ", acc=" << iteration_result.accepted_iteration_count
+        << ", atoms=" << selected_atom_count
+        << ", quarantine=" << iteration_result.quarantine_atom_count
         << ", accepted-active-population=";
     AppendAuditPopulation(message, accepted_production_change.population_size_list);
     message << ", operator-nominal-population=";
@@ -2104,7 +2093,7 @@ static void LogConvergenceSafeguardAudit(
         << certificate.OperatorComplete() << "/"
         << certificate.OperatorPercentilePassed() << "/"
         << certificate.InvariantsClear() << "/"
-        << certificate.blockers.Clear() << "/"
+        << orthogonal_blockers_clear << "/"
         << certificate.ProductionConverged()
         << ", accepted-active-p99=";
     AppendAuditValues(message, accepted_production_change.percentile_list);
@@ -2122,11 +2111,10 @@ static void LogConvergenceSafeguardAudit(
     AppendAuditPopulation(message, certificate.operator_tail_count);
     message
         << ", residual-state=" << GetFixedPointResidualInterpretationText(
-            EvaluateFixedPointResidualInterpretation(
-                certificate.OperatorComplete(),
-                solver_qualification.solver_qualified,
-                accepted_production_change,
-                certificate.operator_nominal_residual))
+            certificate.OperatorComplete(),
+            solver_qualification.solver_qualified,
+            accepted_production_change,
+            certificate.operator_nominal_residual)
         << ", operator-shadow-refit="
         << certificate.operator_shadow_shape_refit_performed
         << ", accepted-equals-operator=" << accepted_equals_operator
@@ -2187,29 +2175,29 @@ static void LogConvergenceSafeguardAudit(
             GaussianModel3D::LogPeakHeightCoordinateIndex()).size()) << "/"
         << ratio(active_population.active_atom_index_list_by_parameter.at(
             GaussianModel3D::OffsetToPeakRatioCoordinateIndex()).size()) << "/"
-        << ratio(progress.quarantine_atom_count)
+        << ratio(iteration_result.quarantine_atom_count)
         << ", certificate-blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
-        << certificate.blockers.objective_domain_changed << "/"
-        << certificate.blockers.quarantine_transition << "/"
-        << certificate.blockers.suspicious_offset_fallback << "/"
-        << certificate.blockers.rejected_cluster
+        << certificate.objective_domain_changed << "/"
+        << certificate.quarantine_transition << "/"
+        << certificate.suspicious_offset_fallback << "/"
+        << certificate.rejected_cluster
         << ", limiters[guard/fixed/quarantine/trust/objective/reject/polish/boundary/rescue]="
         << guard_rejected_trial_count << "/"
         << shape_fixed_count + offset_fixed_count + hard_fixed_count << "/"
-        << progress.quarantine_atom_count << "/"
+        << iteration_result.quarantine_atom_count << "/"
         << trust_skipped_trial_count << "/"
         << objective_rejected_trial_count + boundary_backtracked_count << "/"
-        << progress.rejected_cluster_count << "/"
+        << iteration_result.rejected_cluster_diagnostic_list.size() << "/"
         << assembled_uses_polish << "/"
         << accepted_boundary_count << "/"
         << rescued_boundary_count
         << ", fixed[shape/offset/hard]="
         << shape_fixed_count << "/" << offset_fixed_count << "/" << hard_fixed_count
         << ", blockers[suspicious/rejected/quarantine-transition/domain-change]="
-        << progress.suspicious_atom_count << "/"
-        << progress.rejected_cluster_count << "/"
-        << has_quarantine_transition << "/"
-        << objective_domain_changed << ".";
+        << iteration_result.suspicious_atom_count << "/"
+        << iteration_result.rejected_cluster_diagnostic_list.size() << "/"
+        << certificate.quarantine_transition << "/"
+        << certificate.objective_domain_changed << ".";
     Logger::FinishProgressLine();
     Logger::Log(LogLevel::Debug, message.str());
 }
@@ -3284,14 +3272,14 @@ static IterationResult RunIteration(
 
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
-    auto trust_region_update{
+    IterationResult result;
+    result.trust_region_update =
         iteration_state.trust_region_state.ApplyRadiusUpdates(
             selection.grow_trust_region_key_list,
             selection.shrink_trust_region_key_list,
             selection.rejected_key_list,
-            selection.exhausted_key_list)
-    };
-    const auto quarantine_transition{
+            selection.exhausted_key_list);
+    const auto has_quarantine_transition{
         iteration_state.quarantine_state.UpdateAfterIteration(
             context,
             selection.accepted_cluster_diagnostic_list,
@@ -3305,46 +3293,32 @@ static IterationResult RunIteration(
             assembled_polish_provenance,
             iteration_state.accepted_iteration_count + 1)
     };
-    const auto has_quarantine_transition{
-        !quarantine_transition.entered_target_list.empty() ||
-        !quarantine_transition.released_target_list.empty() ||
-        !quarantine_transition.failed_probation_target_list.empty()
-    };
     if (has_quarantine_transition) selection.final_audit_objective.reset();
     const auto assembled_uses_polish{
         iteration_internal::UsesPolish(assembled_polish_provenance)
     };
-    bool objective_domain_changed{ false };
-
-    IterationResult result;
-    result.objective_domain_changed = objective_domain_changed;
-    if (!selection.accepted_key_list.empty())
-    {
-        result.diagnostics.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
-    }
-    result.diagnostics.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
-    result.diagnostics.boundary_reconciliation_diagnostic_list = selection.boundary_reconciliation_diagnostic_list;
-    result.diagnostics.trust_region_update = std::move(trust_region_update);
+    result.accepted_cluster_diagnostic_list =
+        std::move(selection.accepted_cluster_diagnostic_list);
+    result.rejected_cluster_diagnostic_list =
+        std::move(selection.rejected_cluster_diagnostic_list);
+    result.boundary_reconciliation_diagnostic_list =
+        std::move(selection.boundary_reconciliation_diagnostic_list);
     iteration_state.rollback_atom_mask =
         raw_iteration_result.block_activity.BuildCombinedFixedAtomMask();
-    result.progress = IterationProgress{
-        attempt_number,
-        iteration_state.accepted_iteration_count,
-        context.size() - iteration_state.quarantine_state.AtomCount(),
-        iteration_state.quarantine_state.AtomCount(),
-        selection.accepted_key_list.size(),
-        selection.rejected_key_list.size(),
-        selection.polish_progress,
-        iteration_suspicious_atom_count,
-        std::nullopt,
-        std::ranges::max(operator_proposal_change_summary.maximum_list)
-    };
+    result.attempt_number = attempt_number;
+    result.accepted_iteration_count = iteration_state.accepted_iteration_count;
+    result.quarantine_atom_count = iteration_state.quarantine_state.AtomCount();
+    result.active_atom_count = context.size() - result.quarantine_atom_count;
+    result.polish_progress = selection.polish_progress;
+    result.suspicious_atom_count = iteration_suspicious_atom_count;
+    result.operator_maximum_transformed_change =
+        std::ranges::max(operator_proposal_change_summary.maximum_list);
 
     if (selection.accepted_key_list.empty())
     {
-        result.all_rejected_resolution = attempt_number >= kMaximumIterations ?
-            AllRejectedResolution::MaximumIterations :
-            AllRejectedResolution::BacktrackingExhausted;
+        result.stop_reason = attempt_number >= kMaximumIterations ?
+            SecondStageStopReason::AllRejectedAtMaximumIterations :
+            SecondStageStopReason::AllRejectedBacktrackingExhausted;
         return result;
     }
 
@@ -3368,12 +3342,6 @@ static IterationResult RunIteration(
             previous_state,
             iteration_state.active_index_list)
     };
-    const auto accepted_active_dof_change_summary{
-        SummarizeActiveDofChanges(
-            assembled_state,
-            previous_state,
-            active_population)
-    };
     auto certificate{
         SummarizeFixedPointOperator(
             raw_iteration_result.fixed_point_operator,
@@ -3382,9 +3350,10 @@ static IterationResult RunIteration(
             cluster_key_list,
             group_id_by_atom_index)
     };
-    certificate.accepted_active_population = active_population;
-    certificate.accepted_active_movement =
-        accepted_active_dof_change_summary;
+    certificate.accepted_active_movement = SummarizeActiveDofChanges(
+        assembled_state,
+        previous_state,
+        active_population);
     certificate.solver_qualification = EvaluateSolverQualificationAudit(
         iteration_state.active_index_list,
         cluster_key_list,
@@ -3395,21 +3364,20 @@ static IterationResult RunIteration(
         raw_iteration_result.health_by_key);
     iteration_state.accepted_iteration_count++;
     iteration_state.accepted_iterations_since_topology_rebuild++;
-    if (TryRebuildAdaptiveTopology(
-            context,
-            options,
-            assembled_state,
-            assembled_uses_polish,
-            graph_topology,
-            iteration_state,
-            performance_counters))
+    result.objective_domain_changed = TryRebuildAdaptiveTopology(
+        context,
+        options,
+        assembled_state,
+        assembled_uses_polish,
+        graph_topology,
+        iteration_state,
+        performance_counters);
+    if (result.objective_domain_changed)
     {
-        objective_domain_changed = true;
         iteration_state.quarantine_state.NotifyTopologyChanged();
     }
-    result.objective_domain_changed = objective_domain_changed;
     bool improved_best_audit{ false };
-    if (!objective_domain_changed)
+    if (!result.objective_domain_changed)
     {
         auto candidate_audit_objective{ selection.final_audit_objective };
         if (!candidate_audit_objective.has_value())
@@ -3437,20 +3405,20 @@ static IterationResult RunIteration(
     }
     const auto changed_rejected_trust_radius{
         std::ranges::any_of(
-            result.diagnostics.rejected_cluster_diagnostic_list,
+            result.rejected_cluster_diagnostic_list,
             [&](const auto & diagnostic)
             {
                 return std::ranges::find(
-                    result.diagnostics.trust_region_update.changed_key_list,
+                    result.trust_region_update.changed_key_list,
                     diagnostic.key) !=
-                    result.diagnostics.trust_region_update.changed_key_list.end();
+                    result.trust_region_update.changed_key_list.end();
             })
     };
     const auto has_pending_quarantine_lifecycle{
         HasPendingQuarantineLifecycle(
             iteration_state.quarantine_state.state_by_target)
     };
-    if (objective_domain_changed || improved_best_audit ||
+    if (result.objective_domain_changed || improved_best_audit ||
         changed_rejected_trust_radius || has_pending_quarantine_lifecycle ||
         has_quarantine_transition)
     {
@@ -3461,17 +3429,23 @@ static IterationResult RunIteration(
         iteration_state.audit_patience_count++;
     }
 
-    result.progress.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.progress.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
-    result.transformed_change_percentile = accepted_active_dof_change_summary.percentile_list;
-    result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
-    certificate.blockers = ConvergenceOrthogonalBlockers{
-        objective_domain_changed,
-        has_quarantine_transition,
-        has_suspicious_offset_fallback,
-        !selection.rejected_key_list.empty()
-    };
-    result.converged = certificate.ProductionConverged();
+    result.accepted_iteration_count = iteration_state.accepted_iteration_count;
+    result.accepted_maximum_transformed_change =
+        std::ranges::max(transformed_change_summary.maximum_list);
+    result.transformed_change_percentile =
+        certificate.accepted_active_movement.percentile_list;
+    certificate.objective_domain_changed = result.objective_domain_changed;
+    certificate.quarantine_transition = has_quarantine_transition;
+    certificate.suspicious_offset_fallback = has_suspicious_offset_fallback;
+    certificate.rejected_cluster = !selection.rejected_key_list.empty();
+    if (certificate.ProductionConverged())
+    {
+        result.stop_reason = SecondStageStopReason::Converged;
+    }
+    else if (iteration_state.audit_patience_count >= kAuditPatience)
+    {
+        result.stop_reason = SecondStageStopReason::AuditPatience;
+    }
 
     if (!options.quiet_mode && Logger::GetLogLevel() >= LogLevel::Debug)
     {
@@ -3483,19 +3457,14 @@ static IterationResult RunIteration(
         };
         LogConvergenceSafeguardAudit(
             options.quiet_mode,
-            attempt_number,
-            result.progress,
+            result,
             certificate,
-            accepted_active_dof_change_summary,
             active_population,
-            result.diagnostics,
             raw_iteration_result.block_activity,
             raw_iteration_result.local_refit_status_by_atom,
             std::ranges::max(
                 accepted_raw_change_summary.maximum_list) == 0.0,
-            assembled_uses_polish,
-            has_quarantine_transition,
-            objective_domain_changed);
+            assembled_uses_polish);
     }
 
     iteration_state.previous_state = std::move(assembled_state);
@@ -3757,12 +3726,6 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
             iteration_state.active_index_list,
             cluster_key_list,
             group_id_by_atom_index) };
-        certificate.accepted_active_population = BuildActiveCoordinatePopulation(
-            iteration_state.active_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            proposal_result.block_activity,
-            final_block_activity);
         certificate.solver_qualification = EvaluateSolverQualificationAudit(
             iteration_state.active_index_list,
             cluster_key_list,
@@ -3978,48 +3941,6 @@ static void FinalizeSecondStageState(
     ApplyFitState(model_object, context, final_state);
 }
 
-struct TerminalAuditOutcome
-{
-    FitState finalized_state{};
-    std::optional<ObjectiveBreakdown> objective{};
-    std::array<std::size_t, 3> comparison_domain_size{};
-};
-
-static TerminalAuditOutcome BuildTerminalAuditOutcome(
-    const SecondStageContext & context,
-    const FitState & finalized_state,
-    const ObjectiveDomain & comparison_objective_domain)
-{
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, finalized_state)
-    };
-    return TerminalAuditOutcome{
-        finalized_state,
-        EvaluateAuditObjective(
-            comparison_objective_domain,
-            SnapshotResidualEvaluator{ context, model_snapshot }),
-        std::array{
-            comparison_objective_domain.active_atom_count,
-            comparison_objective_domain.fit_sample_count,
-            comparison_objective_domain.tail_sample_count }
-    };
-}
-
-static void AppendAuditObjective(
-    std::ostringstream & message,
-    const std::optional<ObjectiveBreakdown> & objective)
-{
-    if (!objective.has_value())
-    {
-        message << "-/-/-/-";
-        return;
-    }
-    message << objective->fit_range_residual_objective << "/"
-        << objective->GetTailValidationPenalty() << "/"
-        << objective->offset_plausibility_penalty << "/"
-        << objective->GetTotalObjective();
-}
-
 static void LogAuditAtomState(
     std::string_view marker,
     const SecondStageContext & context,
@@ -4046,23 +3967,32 @@ static void LogSecondStageAuditTerminal(
     std::string_view reason,
     std::size_t attempt_number,
     std::size_t accepted_iteration_count,
-    const TerminalAuditOutcome & outcome)
+    const FitState & finalized_state,
+    const ObjectiveDomain & comparison_objective_domain)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, finalized_state)
+    };
+    const auto objective{
+        EvaluateAuditObjective(
+            comparison_objective_domain,
+            SnapshotResidualEvaluator{ context, model_snapshot })
+    };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)
         << "Second-stage audit terminal: schema=2"
         << ", reason=" << reason
         << ", try=" << attempt_number
         << ", acc=" << accepted_iteration_count
-        << ", fixed-domain=" << outcome.comparison_domain_size.at(0)
-        << "/" << outcome.comparison_domain_size.at(1)
-        << "/" << outcome.comparison_domain_size.at(2)
+        << ", fixed-domain=" << comparison_objective_domain.active_atom_count
+        << "/" << comparison_objective_domain.fit_sample_count
+        << "/" << comparison_objective_domain.tail_sample_count
         << ", objective=";
-    AppendAuditObjective(message, outcome.objective);
+    AppendObjectiveBreakdown(message, objective, "-/-/-/-");
     Logger::Log(LogLevel::Debug, message.str());
     LogAuditAtomState(
-        "Second-stage audit terminal atom:", context, outcome.finalized_state);
+        "Second-stage audit terminal atom:", context, finalized_state);
 }
 
 void AppendOffsetSummary(std::ostringstream & stream, const FitState & state)
@@ -4130,8 +4060,7 @@ void LogQuarantineFallback(
         << " accepted iterations with last validated states retained";
     AppendQuarantineSummary(
         warning_message,
-        iteration_state.quarantine_state.summary,
-        iteration_state.quarantine_state.TargetCount());
+        iteration_state.quarantine_state);
     AppendOffsetSummary(warning_message, iteration_state.previous_state);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -4171,8 +4100,7 @@ void LogMaximumIterations(bool quiet_mode, const IterationState & iteration_stat
     warning_message << "Reached maximum iteration size";
     AppendQuarantineSummary(
         warning_message,
-        iteration_state.quarantine_state.summary,
-        iteration_state.quarantine_state.TargetCount());
+        iteration_state.quarantine_state);
     const auto * audit_state{
         iteration_state.best_audit_state.has_value() ? &*iteration_state.best_audit_state : nullptr
     };
@@ -4336,47 +4264,45 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             reason,
             last_attempt_number,
             iteration_state.accepted_iteration_count,
-            BuildTerminalAuditOutcome(
-                context,
-                finalized_state,
-                audit_comparison_objective_domain));
+            finalized_state,
+            audit_comparison_objective_domain);
     };
 
-    std::string_view final_stop_reason;
-    bool maximum_iterations_reached{ false };
+    if (iteration_state.active_index_list.empty())
+    {
+        last_attempt_number = 1;
+        FinalizeSecondStageState(
+            model_object,
+            context,
+            options,
+            graph_topology,
+            iteration_state,
+            false,
+            FinalPolishCertificationPolicy::RequireResidualNonRegression,
+            performance_counters);
+        log_audit_terminal("quarantine", false);
+        if (iteration_state.quarantine_state.HasFailures())
+        {
+            LogQuarantineFallback(options.quiet_mode, iteration_state);
+        }
+        if (!options.quiet_mode)
+        {
+            Logger::FinishProgressLine();
+            Logger::Log(LogLevel::Info,
+                "Skip 2nd-stage local atom fitting because no atoms are selected.");
+        }
+        LogSecondStageSummary(
+            options.quiet_mode,
+            iteration_state,
+            "quarantine",
+            false);
+        return true;
+    }
+
+    SecondStageStopReason final_stop_reason{ SecondStageStopReason::None };
     for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
     {
         last_attempt_number = iter + 1;
-        if (iteration_state.active_index_list.empty())
-        {
-            FinalizeSecondStageState(
-                model_object,
-                context,
-                options,
-                graph_topology,
-                iteration_state,
-                false,
-                FinalPolishCertificationPolicy::RequireResidualNonRegression,
-                performance_counters);
-            log_audit_terminal("quarantine", false);
-            if (iteration_state.quarantine_state.HasFailures())
-            {
-                LogQuarantineFallback(options.quiet_mode, iteration_state);
-            }
-            if (!options.quiet_mode)
-            {
-                Logger::FinishProgressLine();
-                Logger::Log(LogLevel::Info,
-                    "Skip 2nd-stage local atom fitting because no atoms are selected.");
-            }
-            LogSecondStageSummary(
-                options.quiet_mode,
-                iteration_state,
-                    "quarantine",
-                false);
-            return true;
-        }
-
         auto iteration_result{
             RunIteration(
                 context,
@@ -4392,39 +4318,34 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         }
         LogAcceptedCandidateSearchDiagnostics(
             options.quiet_mode,
-            iteration_result.diagnostics);
+            iteration_result);
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
         LogTrustModelShadowDiagnostics(
             options.quiet_mode,
-            iteration_result.diagnostics,
-            iteration_result.progress);
+            iteration_result);
 #endif
-        if (iteration_result.all_rejected_resolution.has_value())
-        {
-            LogRejectedClusterDiagnostics(
-                options.quiet_mode,
-                iteration_result.diagnostics.rejected_cluster_diagnostic_list);
-            LogIterationProgress(
-                options.quiet_mode,
-                progress_column_widths,
-                iteration_result.progress);
-            LogAllRejectedResolution(
-                options.quiet_mode,
-                iteration_result.diagnostics.trust_region_update,
-                *iteration_result.all_rejected_resolution);
-            final_stop_reason = GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution);
-            break;
-        }
-
         LogRejectedClusterDiagnostics(
             options.quiet_mode,
-            iteration_result.diagnostics.rejected_cluster_diagnostic_list);
+            iteration_result.rejected_cluster_diagnostic_list);
         LogIterationProgress(
             options.quiet_mode,
             progress_column_widths,
-            iteration_result.progress);
+            iteration_result);
 
-        if (iteration_result.converged)
+        if (iteration_result.stop_reason ==
+                SecondStageStopReason::AllRejectedBacktrackingExhausted ||
+            iteration_result.stop_reason ==
+                SecondStageStopReason::AllRejectedAtMaximumIterations)
+        {
+            LogAllRejectedResolution(
+                options.quiet_mode,
+                iteration_result.trust_region_update,
+                iteration_result.stop_reason);
+            final_stop_reason = iteration_result.stop_reason;
+            break;
+        }
+
+        if (iteration_result.stop_reason == SecondStageStopReason::Converged)
         {
             FinalizeSecondStageState(
                 model_object,
@@ -4455,21 +4376,20 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             return true;
         }
 
-        if (iteration_result.audit_patience_exhausted)
+        if (iteration_result.stop_reason == SecondStageStopReason::AuditPatience)
         {
-            final_stop_reason = "audit-patience";
+            final_stop_reason = iteration_result.stop_reason;
             break;
         }
 
         if (iter + 1 == kMaximumIterations)
         {
-            final_stop_reason = "maximum-iterations";
-            maximum_iterations_reached = true;
+            final_stop_reason = SecondStageStopReason::MaximumIterations;
             break;
         }
     }
 
-    if (!final_stop_reason.empty())
+    if (final_stop_reason != SecondStageStopReason::None)
     {
         const auto * audit_state{
             iteration_state.best_audit_state.has_value() ? &*iteration_state.best_audit_state : nullptr
@@ -4483,15 +4403,18 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
             audit_state != nullptr,
             FinalPolishCertificationPolicy::RequireResidualNonRegression,
             performance_counters);
-        log_audit_terminal(final_stop_reason, audit_state != nullptr);
-        if (maximum_iterations_reached)
+        const auto final_stop_reason_text{
+            GetSecondStageStopReasonText(final_stop_reason)
+        };
+        log_audit_terminal(final_stop_reason_text, audit_state != nullptr);
+        if (final_stop_reason == SecondStageStopReason::MaximumIterations)
         {
             LogMaximumIterations(options.quiet_mode, iteration_state);
         }
         LogSecondStageSummary(
             options.quiet_mode,
             iteration_state,
-            final_stop_reason,
+            final_stop_reason_text,
             audit_state != nullptr);
         return true;
     }
@@ -4502,30 +4425,28 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
 {
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupPosterior,
-                candidates.group_posterior) })
+    const std::array<
+        const std::optional<GaussianModel3DWithUncertainty> *,
+        kSecondStageSeedSourceList.size()> candidate_list{
+        &candidates.group_posterior,
+        &candidates.group_prior,
+        &candidates.group_median,
+        &candidates.global_median
+    };
+    for (std::size_t index = 0; index < candidate_list.size(); index++)
     {
-        return selected;
+        const auto & candidate{ *candidate_list.at(index) };
+        if (!candidate.has_value() ||
+            !IsValidSecondStageGaussianModel(candidate->GetModel()))
+        {
+            continue;
+        }
+        return SecondStageSeedSelection{
+            kSecondStageSeedSourceList.at(index),
+            *candidate
+        };
     }
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupPrior,
-                candidates.group_prior) })
-    {
-        return selected;
-    }
-    if (const auto selected{
-            SelectValidSecondStageSeedCandidate(
-                SecondStageSeedSource::GroupMedian,
-                candidates.group_median) })
-    {
-        return selected;
-    }
-    return SelectValidSecondStageSeedCandidate(
-        SecondStageSeedSource::GlobalMedian,
-        candidates.global_median);
+    return std::nullopt;
 }
 
 AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
@@ -4561,12 +4482,6 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     };
 }
 
-bool ConvergenceOrthogonalBlockers::Clear() const
-{
-    return !objective_domain_changed && !quarantine_transition &&
-        !suspicious_offset_fallback && !rejected_cluster;
-}
-
 bool ConvergenceCertificate::AcceptedPercentilePassed() const
 {
     return IsTransformedPercentileConverged(accepted_active_movement);
@@ -4586,13 +4501,7 @@ bool ConvergenceCertificate::OperatorComplete() const
 
 bool ConvergenceCertificate::InvariantsClear() const
 {
-    return !MixedSharedGroup();
-}
-
-bool ConvergenceCertificate::MixedSharedGroup() const
-{
-    return accepted_active_population.mixed_offset_group_count != 0 ||
-        solver_qualification.mixed_offset_group_count != 0;
+    return solver_qualification.mixed_offset_group_count == 0;
 }
 
 bool ConvergenceCertificate::StrictOperatorPassed() const
@@ -4604,10 +4513,11 @@ bool ConvergenceCertificate::StrictOperatorPassed() const
 bool ConvergenceCertificate::ProductionConverged() const
 {
     return StrictOperatorPassed() && AcceptedPercentilePassed() &&
-        blockers.Clear();
+        !objective_domain_changed && !quarantine_transition &&
+        !suspicious_offset_fallback && !rejected_cluster;
 }
 
-FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
+std::string_view GetFixedPointResidualInterpretationText(
     bool operator_complete,
     bool qualification_passed,
     const TransformedChangeSummary & accepted_change,
@@ -4615,7 +4525,7 @@ FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
 {
     if (!operator_complete)
     {
-        return FixedPointResidualInterpretation::Restricted;
+        return "restricted";
     }
     const auto accepted_small{
         IsTransformedPercentileConverged(accepted_change)
@@ -4635,49 +4545,26 @@ FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
     };
     if (accepted_small && residual_small && !qualification_passed)
     {
-        return FixedPointResidualInterpretation::UnqualifiedSmall;
+        return "unqualified-small";
     }
     if (accepted_small && !residual_small)
     {
-        return FixedPointResidualInterpretation::StepLimited;
+        return "step-limited";
     }
     if (!accepted_small && residual_small)
     {
-        return FixedPointResidualInterpretation::PostprocessedMovement;
+        return "postprocessed-movement";
     }
     if (accepted_small && residual_small &&
         (!tail_clean(accepted_change) || !tail_clean(fixed_point_residual)))
     {
-        return FixedPointResidualInterpretation::BulkFixedPointWithTail;
+        return "bulk-fixed-point-with-tail";
     }
     if (accepted_small && residual_small)
     {
-        return FixedPointResidualInterpretation::FixedPointConverged;
-    }
-    return FixedPointResidualInterpretation::Progressing;
-}
-
-std::string_view GetFixedPointResidualInterpretationText(
-    FixedPointResidualInterpretation interpretation)
-{
-    switch (interpretation)
-    {
-    case FixedPointResidualInterpretation::Restricted:
-        return "restricted";
-    case FixedPointResidualInterpretation::UnqualifiedSmall:
-        return "unqualified-small";
-    case FixedPointResidualInterpretation::StepLimited:
-        return "step-limited";
-    case FixedPointResidualInterpretation::PostprocessedMovement:
-        return "postprocessed-movement";
-    case FixedPointResidualInterpretation::BulkFixedPointWithTail:
-        return "bulk-fixed-point-with-tail";
-    case FixedPointResidualInterpretation::FixedPointConverged:
         return "fixed-point-converged";
-    case FixedPointResidualInterpretation::Progressing:
-        return "progressing";
     }
-    throw std::invalid_argument("Unknown fixed-point residual interpretation.");
+    return "progressing";
 }
 
 SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
@@ -4992,7 +4879,7 @@ bool HasPendingQuarantineLifecycle(
         state_by_target | std::views::values,
         [](const auto & state)
         {
-            return !state.quarantined || !state.probation_exhausted;
+            return state.lifecycle != QuarantineLifecycle::Exhausted;
         });
 }
 
@@ -5010,7 +4897,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
     for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
     {
         auto & [target, state]{ *iter };
-        if (!state.probation_active)
+        if (state.lifecycle != QuarantineLifecycle::Probation)
         {
             ++iter;
             continue;
@@ -5021,10 +4908,11 @@ QuarantineStateTransition UpdateQuarantineFailureState(
             iter = state_by_target.erase(iter);
             continue;
         }
-        state.probation_active = false;
         state.probation_count++;
-        state.probation_exhausted =
-            state.probation_count >= kQuarantineMaximumProbationCount;
+        state.lifecycle =
+            state.probation_count >= kQuarantineMaximumProbationCount ?
+                QuarantineLifecycle::Exhausted :
+                QuarantineLifecycle::Quarantined;
         state.next_probation_iteration =
             accepted_iteration_count + kQuarantineProbationCooldown;
         transition.failed_probation_target_list.emplace_back(target);
@@ -5038,7 +4926,8 @@ QuarantineStateTransition UpdateQuarantineFailureState(
     }
     for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
     {
-        if (!iter->second.quarantined && !observation_by_target.contains(iter->first))
+        if (iter->second.lifecycle == QuarantineLifecycle::Tracking &&
+            !observation_by_target.contains(iter->first))
         {
             iter = state_by_target.erase(iter);
             continue;
@@ -5056,13 +4945,11 @@ QuarantineStateTransition UpdateQuarantineFailureState(
                     0,
                     0,
                     0,
-                    false,
-                    false,
-                    false
+                    QuarantineLifecycle::Tracking
                 })
         };
         auto & state{ iter->second };
-        if (state.quarantined) continue;
+        if (state.lifecycle != QuarantineLifecycle::Tracking) continue;
         if (!inserted && state.reason != reason)
         {
             state.reason = reason;
@@ -5071,7 +4958,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
         state.stable_iteration_count++;
         if (state.stable_iteration_count >= kPersistentQuarantineFailureIterationLimit)
         {
-            state.quarantined = true;
+            state.lifecycle = QuarantineLifecycle::Quarantined;
             state.next_probation_iteration =
                 accepted_iteration_count + kQuarantineProbationCooldown;
             transition.entered_target_list.emplace_back(target);

@@ -60,25 +60,11 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
-enum class FixedPointResidualInterpretation
-{
-    Restricted,
-    UnqualifiedSmall,
-    StepLimited,
-    PostprocessedMovement,
-    BulkFixedPointWithTail,
-    FixedPointConverged,
-    Progressing
-};
-
-FixedPointResidualInterpretation EvaluateFixedPointResidualInterpretation(
+std::string_view GetFixedPointResidualInterpretationText(
     bool operator_complete,
     bool qualification_passed,
     const TransformedChangeSummary & accepted_change,
     const TransformedChangeSummary & fixed_point_residual);
-
-std::string_view GetFixedPointResidualInterpretationText(
-    FixedPointResidualInterpretation interpretation);
 
 struct ActiveCoordinatePopulation
 {
@@ -133,21 +119,9 @@ struct SolverQualificationAudit
     std::array<std::size_t, 7> joint_offset_status_count{};
 };
 
-struct ConvergenceOrthogonalBlockers
-{
-    bool objective_domain_changed{ false };
-    bool quarantine_transition{ false };
-    bool suspicious_offset_fallback{ false };
-    bool rejected_cluster{ false };
-
-    bool Clear() const;
-};
-
 struct ConvergenceCertificate
 {
-    ActiveCoordinatePopulation accepted_active_population{};
     TransformedChangeSummary accepted_active_movement{};
-    ActiveCoordinatePopulation operator_nominal_population{};
     TransformedChangeSummary operator_nominal_residual{};
     SolverQualificationAudit solver_qualification{};
     std::array<
@@ -158,13 +132,15 @@ struct ConvergenceCertificate
         std::size_t,
         GaussianModel3D::TransformedCoordinateSize()> operator_tail_count{};
     bool operator_shadow_shape_refit_performed{ false };
-    ConvergenceOrthogonalBlockers blockers{};
+    bool objective_domain_changed{ false };
+    bool quarantine_transition{ false };
+    bool suspicious_offset_fallback{ false };
+    bool rejected_cluster{ false };
 
     bool AcceptedPercentilePassed() const;
     bool OperatorPercentilePassed() const;
     bool OperatorComplete() const;
     bool InvariantsClear() const;
-    bool MixedSharedGroup() const;
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;
 };
@@ -216,15 +192,21 @@ struct QuarantineFailureObservation
     QuarantineFailureReason reason{};
 };
 
+enum class QuarantineLifecycle
+{
+    Tracking,
+    Quarantined,
+    Probation,
+    Exhausted
+};
+
 struct QuarantineFailureState
 {
     QuarantineFailureReason reason{};
     std::size_t stable_iteration_count{ 0 };
     std::size_t probation_count{ 0 };
     std::size_t next_probation_iteration{ 0 };
-    bool quarantined{ false };
-    bool probation_active{ false };
-    bool probation_exhausted{ false };
+    QuarantineLifecycle lifecycle{ QuarantineLifecycle::Tracking };
 };
 
 using QuarantineFailureStateMap = std::map<QuarantineTarget, QuarantineFailureState>;

@@ -4837,12 +4837,12 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateKeepsAcceptedResidua
     certificate.solver_qualification.solver_qualified = true;
     EXPECT_FALSE(certificate.ProductionConverged());
     EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
+        audit_detail::GetFixedPointResidualInterpretationText(
             certificate.OperatorComplete(),
             certificate.solver_qualification.solver_qualified,
             certificate.accepted_active_movement,
             certificate.operator_nominal_residual),
-        audit_detail::FixedPointResidualInterpretation::StepLimited);
+        "step-limited");
 }
 
 TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesLimitedSteps)
@@ -4860,37 +4860,33 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointResidualInterpretationSeparatesL
     const auto sparse_tail{ make_summary(5.0e-5, 2.0e-3) };
 
     EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
+        audit_detail::GetFixedPointResidualInterpretationText(
             false, true, small, small),
-        audit_detail::FixedPointResidualInterpretation::Restricted);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, false, small, small),
-        audit_detail::FixedPointResidualInterpretation::UnqualifiedSmall);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, true, small, large),
-        audit_detail::FixedPointResidualInterpretation::StepLimited);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, true, large, small),
-        audit_detail::FixedPointResidualInterpretation::PostprocessedMovement);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, true, small, sparse_tail),
-        audit_detail::FixedPointResidualInterpretation::BulkFixedPointWithTail);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, true, small, small),
-        audit_detail::FixedPointResidualInterpretation::FixedPointConverged);
-    EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
-            true, true, large, large),
-        audit_detail::FixedPointResidualInterpretation::Progressing);
+        "restricted");
     EXPECT_EQ(
         audit_detail::GetFixedPointResidualInterpretationText(
-            audit_detail::FixedPointResidualInterpretation::StepLimited),
+            true, false, small, small),
+        "unqualified-small");
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            true, true, small, large),
         "step-limited");
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            true, true, large, small),
+        "postprocessed-movement");
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            true, true, small, sparse_tail),
+        "bulk-fixed-point-with-tail");
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            true, true, small, small),
+        "fixed-point-converged");
+    EXPECT_EQ(
+        audit_detail::GetFixedPointResidualInterpretationText(
+            true, true, large, large),
+        "progressing");
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationExcludesFixedBlockDilution)
@@ -5146,10 +5142,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     changes.at(2).fill(5.0e-5);
 
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_population = accepted_population;
     certificate.accepted_active_movement =
         audit_detail::SummarizeActiveDofChanges(changes, accepted_population);
-    certificate.operator_nominal_population = nominal_population;
     certificate.operator_nominal_residual =
         audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
     certificate.solver_qualification.solver_qualified = true;
@@ -5209,14 +5203,12 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
         2, change_detail::TransformedChange{});
 
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_population = population;
     certificate.accepted_active_movement =
         audit_detail::SummarizeActiveDofChanges(changes, population);
     certificate.operator_nominal_residual = certificate.accepted_active_movement;
     certificate.solver_qualification.solver_qualified = true;
     certificate.solver_qualification.mixed_offset_group_count = 1;
 
-    EXPECT_TRUE(certificate.MixedSharedGroup());
     EXPECT_FALSE(certificate.InvariantsClear());
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
@@ -5251,12 +5243,12 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
     EXPECT_EQ(
-        audit_detail::EvaluateFixedPointResidualInterpretation(
+        audit_detail::GetFixedPointResidualInterpretationText(
             certificate.OperatorComplete(),
             certificate.solver_qualification.solver_qualified,
             certificate.accepted_active_movement,
             certificate.operator_nominal_residual),
-        audit_detail::FixedPointResidualInterpretation::Restricted);
+        "restricted");
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonFiniteChangeFailsPercentilePredicate)
@@ -5398,12 +5390,15 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
             7)
     };
     ASSERT_EQ(entered.entered_target_list, (std::vector{ target }));
-    ASSERT_TRUE(state_by_target.at(target).quarantined);
+    ASSERT_EQ(
+        state_by_target.at(target).lifecycle,
+        audit_detail::QuarantineLifecycle::Quarantined);
     EXPECT_EQ(
         state_by_target.at(target).next_probation_iteration,
         7U + audit_detail::kQuarantineProbationCooldown);
 
-    state_by_target.at(target).probation_active = true;
+    state_by_target.at(target).lifecycle =
+        audit_detail::QuarantineLifecycle::Probation;
     const auto released{
         audit_detail::UpdateQuarantineFailureState(
             {},
@@ -5424,15 +5419,14 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
             audit_detail::kPersistentQuarantineFailureIterationLimit,
             0,
             0,
-            true,
-            false,
-            false
+            audit_detail::QuarantineLifecycle::Quarantined
         });
     for (std::size_t probation = 1;
         probation <= audit_detail::kQuarantineMaximumProbationCount;
         probation++)
     {
-        state_by_target.at(target).probation_active = true;
+        state_by_target.at(target).lifecycle =
+            audit_detail::QuarantineLifecycle::Probation;
         const auto failed{
             audit_detail::UpdateQuarantineFailureState(
                 {
@@ -5451,7 +5445,9 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         EXPECT_EQ(failed.failed_probation_target_list, (std::vector{ target }));
         EXPECT_EQ(state_by_target.at(target).probation_count, probation);
     }
-    EXPECT_TRUE(state_by_target.at(target).probation_exhausted);
+    EXPECT_EQ(
+        state_by_target.at(target).lifecycle,
+        audit_detail::QuarantineLifecycle::Exhausted);
     EXPECT_FALSE(audit_detail::HasPendingQuarantineLifecycle(state_by_target));
 }
 
