@@ -3,7 +3,26 @@
 include(CMakeFindDependencyMacro)
 
 if("@RHBM_GEM_DEP_PROVIDER@" STREQUAL "SYSTEM")
-    find_dependency(Eigen3 REQUIRED)
+    find_dependency(Eigen3 @RHBM_GEM_EIGEN3_VERSION_RANGE@ CONFIG REQUIRED)
+    if(NOT TARGET Eigen3::Eigen)
+        set(RHBM_GEM_FOUND FALSE)
+        set(RHBM_GEM_NOT_FOUND_MESSAGE
+            "Eigen3 was found but did not export the Eigen3::Eigen target.")
+        return()
+    endif()
+    if(NOT DEFINED Eigen3_VERSION OR "${Eigen3_VERSION}" STREQUAL "")
+        set(RHBM_GEM_FOUND FALSE)
+        set(RHBM_GEM_NOT_FOUND_MESSAGE
+            "Eigen3 did not report a version; RHBM-GEM requires @RHBM_GEM_EIGEN3_VERSION_RANGE@.")
+        return()
+    endif()
+    if("${Eigen3_VERSION}" VERSION_LESS "@RHBM_GEM_EIGEN3_MIN_VERSION@"
+       OR NOT "${Eigen3_VERSION}" VERSION_LESS "@RHBM_GEM_EIGEN3_MAX_EXCLUSIVE_VERSION@")
+        set(RHBM_GEM_FOUND FALSE)
+        set(RHBM_GEM_NOT_FOUND_MESSAGE
+            "Eigen3 ${Eigen3_VERSION} is outside the supported range @RHBM_GEM_EIGEN3_VERSION_RANGE@.")
+        return()
+    endif()
     find_dependency(CLI11 REQUIRED)
     find_dependency(SQLite3 REQUIRED)
     find_dependency(Boost REQUIRED)

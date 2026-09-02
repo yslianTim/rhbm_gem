@@ -107,7 +107,12 @@ target_include_directories(rhbm_gem PRIVATE
 )
 
 target_link_libraries(rhbm_gem PUBLIC rhbm_gem_dependencies)
-target_link_libraries(rhbm_gem PRIVATE CompilerFlags)
+target_link_libraries(rhbm_gem PRIVATE "$<BUILD_INTERFACE:CompilerFlags>")
+if(RHBM_GEM_ENABLE_UMAP)
+    target_link_libraries(rhbm_gem PRIVATE
+        "$<BUILD_INTERFACE:libscran::umappp>"
+    )
+endif()
 
 if(WIN32 AND BUILD_SHARED_LIBS)
     set_target_properties(rhbm_gem PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)

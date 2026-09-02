@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.24)
 project(RHBM_GEM_consumer_smoke LANGUAGES CXX)
 
 find_package(RHBM_GEM CONFIG REQUIRED)

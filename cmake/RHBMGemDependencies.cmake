@@ -1,5 +1,11 @@
-set(RHBM_GEM_EIGEN3_URL "https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz")
-set(RHBM_GEM_EIGEN3_URL_HASH "SHA256=e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec")
+set(RHBM_GEM_EIGEN3_MIN_VERSION "5.0.0")
+set(RHBM_GEM_EIGEN3_MAX_EXCLUSIVE_VERSION "6.0.0")
+set(RHBM_GEM_EIGEN3_VERSION_RANGE
+    "${RHBM_GEM_EIGEN3_MIN_VERSION}...<${RHBM_GEM_EIGEN3_MAX_EXCLUSIVE_VERSION}")
+set(RHBM_GEM_EIGEN3_FETCH_VERSION "5.0.0")
+set(RHBM_GEM_EIGEN3_URL
+    "https://gitlab.com/libeigen/eigen/-/archive/${RHBM_GEM_EIGEN3_FETCH_VERSION}/eigen-${RHBM_GEM_EIGEN3_FETCH_VERSION}.tar.gz")
+set(RHBM_GEM_EIGEN3_URL_HASH "SHA256=315c881e19e17542a7d428c5aa37d113c89b9500d350c433797b730cd449c056")
 
 set(RHBM_GEM_CLI11_URL "https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.5.0.tar.gz")
 set(RHBM_GEM_CLI11_URL_HASH "SHA256=17e02b4cddc2fa348e5dbdbb582c59a3486fa2b2433e70a0c3bacb871334fd55")
@@ -17,19 +23,76 @@ set(RHBM_GEM_BOOST_URL "https://archives.boost.io/release/1.90.0/source/boost_1_
 set(RHBM_GEM_BOOST_URL_HASH "SHA256=49551aff3b22cbc5c5a9ed3dbc92f0e23ea50a0f7325b0d198b705e8ee3fc305")
 set(RHBM_GEM_BOOST_FALLBACK_VERSION "1.90.0")
 
+set(RHBM_GEM_UMAPPP_VERSION "3.3.2")
+set(RHBM_GEM_UMAPPP_URL "https://github.com/libscran/umappp/archive/refs/tags/v3.3.2.tar.gz")
+set(RHBM_GEM_UMAPPP_URL_HASH "SHA256=43504eda3994f13d613d2597ca7a2ce9d0f0b1774e2aea3427f54d9fb4726e88")
+
+set(RHBM_GEM_AARAND_URL "https://github.com/LTLA/aarand/archive/refs/tags/v1.1.0.tar.gz")
+set(RHBM_GEM_AARAND_URL_HASH "SHA256=af0bc29e38a02a23a95e0ab988f42510c73fbeb89c6f22162fa6a98f1b863dbe")
+set(RHBM_GEM_IRLBA_URL "https://github.com/libscran/irlba/archive/refs/tags/v3.1.0.tar.gz")
+set(RHBM_GEM_IRLBA_URL_HASH "SHA256=2648a1be541963a5d3856ef932fc329ebdb61af1a386e3c548518c32bc1ab302")
+set(RHBM_GEM_SUBPAR_URL "https://github.com/LTLA/subpar/archive/refs/tags/v0.5.0.tar.gz")
+set(RHBM_GEM_SUBPAR_URL_HASH "SHA256=e86fc2af25625653cfaa0eca583f935ae3c5d1104868ff55df508472972cf8ac")
+set(RHBM_GEM_SANISIZER_URL "https://github.com/LTLA/sanisizer/archive/refs/tags/v0.2.0.tar.gz")
+set(RHBM_GEM_SANISIZER_URL_HASH "SHA256=2b5b5edd304d0c1453615cf490a5b5c16e451c10560876448cf24ed4ba6d0328")
+set(RHBM_GEM_KNNCOLLE_URL "https://github.com/knncolle/knncolle/archive/refs/tags/v3.1.0.tar.gz")
+set(RHBM_GEM_KNNCOLLE_URL_HASH "SHA256=4bd997de930fc34ac45c6c407ef874c97e1c1750235abb4d6c5e25eab7d28a26")
+
 if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
     include(FetchContent)
 endif()
 
-function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
+function(rhbm_gem_declare_content dep_name dep_url dep_hash)
     FetchContent_Declare(${dep_name}
         URL "${dep_url}"
         URL_HASH "${dep_hash}"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
+endfunction()
+
+function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
+    rhbm_gem_declare_content(${dep_name} "${dep_url}" "${dep_hash}")
     FetchContent_MakeAvailable(${dep_name})
     FetchContent_GetProperties(${dep_name})
     set(${out_source_dir} "${${dep_name}_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+function(rhbm_gem_validate_eigen3_dependency)
+    if(NOT TARGET Eigen3::Eigen)
+        message(FATAL_ERROR
+            "Eigen3 was found but did not export the Eigen3::Eigen target.")
+    endif()
+    if(NOT DEFINED Eigen3_VERSION OR "${Eigen3_VERSION}" STREQUAL "")
+        message(FATAL_ERROR
+            "Eigen3 did not report a version; RHBM-GEM requires "
+            "${RHBM_GEM_EIGEN3_VERSION_RANGE}.")
+    endif()
+    if("${Eigen3_VERSION}" VERSION_LESS "${RHBM_GEM_EIGEN3_MIN_VERSION}")
+        message(FATAL_ERROR
+            "Eigen3 ${Eigen3_VERSION} is below the supported range "
+            "${RHBM_GEM_EIGEN3_VERSION_RANGE}.")
+    endif()
+    if(NOT "${Eigen3_VERSION}" VERSION_LESS "${RHBM_GEM_EIGEN3_MAX_EXCLUSIVE_VERSION}")
+        message(FATAL_ERROR
+            "Eigen3 ${Eigen3_VERSION} is outside the supported range "
+            "${RHBM_GEM_EIGEN3_VERSION_RANGE}.")
+    endif()
+endfunction()
+
+function(rhbm_gem_prepare_eigen3_compat_redirect)
+    file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/Eigen3Config.cmake" [=[
+if(NOT TARGET Eigen3::Eigen)
+    set(Eigen3_FOUND FALSE)
+    set(Eigen3_NOT_FOUND_MESSAGE
+        "The RHBM-GEM Eigen3 compatibility redirect requires an existing Eigen3::Eigen target.")
+endif()
+]=])
+    write_basic_package_version_file(
+        "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/Eigen3ConfigVersion.cmake"
+        VERSION "${Eigen3_VERSION}"
+        COMPATIBILITY SameMajorVersion
+        ARCH_INDEPENDENT
+    )
 endfunction()
 
 function(rhbm_gem_prepare_openmp_for_appleclang)
@@ -98,7 +161,8 @@ set(RHBM_GEM_OPENMP_ROOT "")
 
 if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     message(STATUS "Dependency provider: SYSTEM")
-    find_package(Eigen3 REQUIRED)
+    find_package(Eigen3 ${RHBM_GEM_EIGEN3_VERSION_RANGE} CONFIG REQUIRED)
+    rhbm_gem_validate_eigen3_dependency()
     find_package(CLI11 REQUIRED)
     find_package(SQLite3 REQUIRED)
     if(POLICY CMP0167)
@@ -124,15 +188,36 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         CLI11::CLI11
         ${_rhbm_gem_sqlite_target}
     )
+
+    if(RHBM_GEM_ENABLE_UMAP)
+        rhbm_gem_prepare_eigen3_compat_redirect()
+        message(STATUS "Using system umappp package")
+        find_package(libscran_umappp CONFIG REQUIRED)
+    endif()
 else()
     message(STATUS "Dependency provider: FETCH")
 
-    rhbm_gem_populate_content(
-        rhbm_gem_eigen3
-        "${RHBM_GEM_EIGEN3_URL}"
-        "${RHBM_GEM_EIGEN3_URL_HASH}"
-        RHBM_GEM_EIGEN3_SOURCE_DIR
-    )
+    if(RHBM_GEM_ENABLE_UMAP)
+        # Let umappp populate Eigen inside its excluded subtree. This preserves
+        # upstream's export ordering without adding Eigen's package rules to
+        # the parent installation.
+        if(NOT DEFINED CMAKE_EXPORT_PACKAGE_REGISTRY)
+            set(CMAKE_EXPORT_PACKAGE_REGISTRY OFF)
+        endif()
+        set(EIGEN_BUILD_CMAKE_PACKAGE ON CACHE BOOL
+            "Build the Eigen CMake package required by umappp dependencies" FORCE)
+        rhbm_gem_declare_content(
+            eigen "${RHBM_GEM_EIGEN3_URL}" "${RHBM_GEM_EIGEN3_URL_HASH}")
+    else()
+        set(EIGEN_BUILD_CMAKE_PACKAGE OFF CACHE BOOL
+            "Build the Eigen CMake package required by umappp dependencies" FORCE)
+        rhbm_gem_populate_content(
+            eigen
+            "${RHBM_GEM_EIGEN3_URL}"
+            "${RHBM_GEM_EIGEN3_URL_HASH}"
+            RHBM_GEM_EIGEN3_SOURCE_DIR
+        )
+    endif()
 
     rhbm_gem_populate_content(
         rhbm_gem_cli11
@@ -166,6 +251,39 @@ else()
             "does not contain the expected boost/ headers.")
     endif()
 
+    if(RHBM_GEM_ENABLE_UMAP)
+        # umappp's upstream FetchContent declarations use moving branches for
+        # most transitive dependencies. Declare the supported releases first
+        # so CMake's first-declaration-wins rule keeps this build reproducible.
+        rhbm_gem_declare_content(
+            aarand "${RHBM_GEM_AARAND_URL}" "${RHBM_GEM_AARAND_URL_HASH}")
+        rhbm_gem_declare_content(
+            irlba "${RHBM_GEM_IRLBA_URL}" "${RHBM_GEM_IRLBA_URL_HASH}")
+        rhbm_gem_declare_content(
+            subpar "${RHBM_GEM_SUBPAR_URL}" "${RHBM_GEM_SUBPAR_URL_HASH}")
+        rhbm_gem_declare_content(
+            sanisizer "${RHBM_GEM_SANISIZER_URL}" "${RHBM_GEM_SANISIZER_URL_HASH}")
+        rhbm_gem_declare_content(
+            knncolle "${RHBM_GEM_KNNCOLLE_URL}" "${RHBM_GEM_KNNCOLLE_URL_HASH}")
+
+        message(STATUS "Fetching umappp (v${RHBM_GEM_UMAPPP_VERSION}) via FetchContent")
+        FetchContent_Populate(umappp
+            URL "${RHBM_GEM_UMAPPP_URL}"
+            URL_HASH "${RHBM_GEM_UMAPPP_URL_HASH}"
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+            SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/umappp-src"
+            BINARY_DIR "${FETCHCONTENT_BASE_DIR}/umappp-build"
+        )
+        add_subdirectory(
+            "${umappp_SOURCE_DIR}"
+            "${umappp_BINARY_DIR}"
+            EXCLUDE_FROM_ALL
+        )
+
+        FetchContent_GetProperties(eigen)
+        set(RHBM_GEM_EIGEN3_SOURCE_DIR "${eigen_SOURCE_DIR}")
+    endif()
+
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}")
     set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include")
     set(RHBM_GEM_BOOST_INCLUDE_DIR "${RHBM_GEM_BOOST_SOURCE_DIR}")
@@ -177,6 +295,16 @@ else()
         "$<BUILD_INTERFACE:${RHBM_GEM_BOOST_INCLUDE_DIR}>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
+endif()
+
+if(RHBM_GEM_ENABLE_UMAP)
+    if(NOT TARGET libscran::umappp)
+        message(FATAL_ERROR
+            "UMAP support is enabled, but the libscran::umappp target is unavailable.")
+    endif()
+    message(STATUS "UMAP support enabled through libscran::umappp")
+else()
+    message(STATUS "UMAP support disabled by RHBM_GEM_ENABLE_UMAP=OFF")
 endif()
 
 rhbm_gem_link_boost_dependency(rhbm_gem_dependencies)

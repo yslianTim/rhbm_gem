@@ -12,7 +12,7 @@ If you need coverage, build-matrix validation, or advanced CMake settings, use [
 
 ## Environment Setup
 
-RHBM-GEM uses CMake + C++20 with GNU extensions enabled by default. Choose your platform first, then install any optional dependencies you need.
+RHBM-GEM requires CMake 3.24 or newer and uses C++20 with GNU extensions enabled by default. Choose your platform first, then install any optional dependencies you need.
 
 | If you need... | Prepare... |
 | --- | --- |
@@ -22,9 +22,10 @@ RHBM-GEM uses CMake + C++20 with GNU extensions enabled by default. Choose your 
 
 Some dependencies are provider-dependent or optional:
 
-- Core C++ dependencies (`Eigen3`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`.
+- Core C++ dependencies (`Eigen3` `>=5.0.0,<6.0.0`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`; FETCH mode pins Eigen3 5.0.0.
 - `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
 - `GTest` is required only when `BUILD_TESTING=ON`.
+- Native UMAP build support is enabled only with `RHBM_GEM_ENABLE_UMAP=ON`; the `FETCH` provider supplies its pinned packages, while `SYSTEM` requires umappp 3.3.2 and its package dependencies under `CMAKE_PREFIX_PATH`.
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
 - Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
@@ -137,7 +138,7 @@ Notes:
 
 1. Install the required tools:
    - Visual Studio 2022 (or Build Tools) with the `Desktop development with C++` workload
-   - CMake 3.18 or newer
+   - CMake 3.24 or newer
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
@@ -467,7 +468,7 @@ Compatibility note:
 
 ## Troubleshooting
 
-1. Missing `Eigen3`, `SQLite3`, `pybind11`, `CLI11`, or `Boost`
+1. Missing `Eigen3`, `SQLite3`, `pybind11`, `CLI11`, `Boost`, or `libscran_umappp`
    Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
 2. Missing `GTest` during configure
    If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).

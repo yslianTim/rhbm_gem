@@ -12,9 +12,10 @@ This guide is for maintainers preparing source or binary releases.
 
 1. Release builds define `EIGEN_MPL2_ONLY` to constrain Eigen header usage to MPL-2.0-only subsets.
 2. ROOT remains optional, but Boost support is required in all release builds (via system Boost or bundled FETCH fallback headers).
-3. If binaries are distributed, include [`LICENSE`](/LICENSE) and [`THIRD_PARTY_NOTICES.md`](/THIRD_PARTY_NOTICES.md) in the package.
-4. If `FETCH` dependencies are redistributed, include the applicable upstream third-party license texts and notices with the package.
-5. If large `.sqlite` datasets are distributed, verify their source-data license terms separately.
+3. Native UMAP support remains optional and build-only; fetched umappp targets and headers are excluded from the installed RHBM-GEM package.
+4. If binaries are distributed, include [`LICENSE`](/LICENSE) and [`THIRD_PARTY_NOTICES.md`](/THIRD_PARTY_NOTICES.md) in the package.
+5. If `FETCH` dependencies are redistributed, include the applicable upstream third-party license texts and notices with the package.
+6. If large `.sqlite` datasets are distributed, verify their source-data license terms separately.
 
 ## Compliance Checklist
 
@@ -25,4 +26,5 @@ This guide is for maintainers preparing source or binary releases.
 5. Validate build variants used for release:
    - `RHBM_GEM_DEP_PROVIDER=FETCH`
    - `RHBM_GEM_DEP_PROVIDER=SYSTEM`
+   - `RHBM_GEM_ENABLE_UMAP=ON` with each dependency provider when UMAP support is included
    - `CMAKE_DISABLE_FIND_PACKAGE_ROOT=TRUE`
