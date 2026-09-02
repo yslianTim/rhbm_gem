@@ -27,15 +27,20 @@ set(RHBM_GEM_UMAPPP_VERSION "3.3.2")
 set(RHBM_GEM_UMAPPP_URL "https://github.com/libscran/umappp/archive/refs/tags/v3.3.2.tar.gz")
 set(RHBM_GEM_UMAPPP_URL_HASH "SHA256=43504eda3994f13d613d2597ca7a2ce9d0f0b1774e2aea3427f54d9fb4726e88")
 
-set(RHBM_GEM_AARAND_URL "https://github.com/LTLA/aarand/archive/refs/tags/v1.1.0.tar.gz")
+set(RHBM_GEM_AARAND_VERSION "1.1.0")
+set(RHBM_GEM_AARAND_URL "https://github.com/LTLA/aarand/archive/refs/tags/v${RHBM_GEM_AARAND_VERSION}.tar.gz")
 set(RHBM_GEM_AARAND_URL_HASH "SHA256=af0bc29e38a02a23a95e0ab988f42510c73fbeb89c6f22162fa6a98f1b863dbe")
-set(RHBM_GEM_IRLBA_URL "https://github.com/libscran/irlba/archive/refs/tags/v3.1.0.tar.gz")
+set(RHBM_GEM_IRLBA_VERSION "3.1.0")
+set(RHBM_GEM_IRLBA_URL "https://github.com/libscran/irlba/archive/refs/tags/v${RHBM_GEM_IRLBA_VERSION}.tar.gz")
 set(RHBM_GEM_IRLBA_URL_HASH "SHA256=2648a1be541963a5d3856ef932fc329ebdb61af1a386e3c548518c32bc1ab302")
-set(RHBM_GEM_SUBPAR_URL "https://github.com/LTLA/subpar/archive/refs/tags/v0.5.0.tar.gz")
+set(RHBM_GEM_SUBPAR_VERSION "0.5.0")
+set(RHBM_GEM_SUBPAR_URL "https://github.com/LTLA/subpar/archive/refs/tags/v${RHBM_GEM_SUBPAR_VERSION}.tar.gz")
 set(RHBM_GEM_SUBPAR_URL_HASH "SHA256=e86fc2af25625653cfaa0eca583f935ae3c5d1104868ff55df508472972cf8ac")
-set(RHBM_GEM_SANISIZER_URL "https://github.com/LTLA/sanisizer/archive/refs/tags/v0.2.0.tar.gz")
+set(RHBM_GEM_SANISIZER_VERSION "0.2.0")
+set(RHBM_GEM_SANISIZER_URL "https://github.com/LTLA/sanisizer/archive/refs/tags/v${RHBM_GEM_SANISIZER_VERSION}.tar.gz")
 set(RHBM_GEM_SANISIZER_URL_HASH "SHA256=2b5b5edd304d0c1453615cf490a5b5c16e451c10560876448cf24ed4ba6d0328")
-set(RHBM_GEM_KNNCOLLE_URL "https://github.com/knncolle/knncolle/archive/refs/tags/v3.1.0.tar.gz")
+set(RHBM_GEM_KNNCOLLE_VERSION "3.1.0")
+set(RHBM_GEM_KNNCOLLE_URL "https://github.com/knncolle/knncolle/archive/refs/tags/v${RHBM_GEM_KNNCOLLE_VERSION}.tar.gz")
 set(RHBM_GEM_KNNCOLLE_URL_HASH "SHA256=4bd997de930fc34ac45c6c407ef874c97e1c1750235abb4d6c5e25eab7d28a26")
 
 if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
@@ -55,6 +60,142 @@ function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
     FetchContent_MakeAvailable(${dep_name})
     FetchContent_GetProperties(${dep_name})
     set(${out_source_dir} "${${dep_name}_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+function(rhbm_gem_populate_declared_content dep_name out_source_dir out_binary_dir)
+    FetchContent_GetProperties(${dep_name})
+    if(NOT ${dep_name}_POPULATED)
+        # CMake 3.24 cannot pass EXCLUDE_FROM_ALL to FetchContent_Declare.
+        # Populate explicitly so the caller can add the source with that flag.
+        if(POLICY CMP0169)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
+        FetchContent_Populate(${dep_name})
+    endif()
+    FetchContent_GetProperties(${dep_name})
+    set(${out_source_dir} "${${dep_name}_SOURCE_DIR}" PARENT_SCOPE)
+    set(${out_binary_dir} "${${dep_name}_BINARY_DIR}" PARENT_SCOPE)
+endfunction()
+
+function(rhbm_gem_mark_target_includes_system target_name)
+    if(NOT TARGET ${target_name})
+        return()
+    endif()
+    get_target_property(_rhbm_gem_include_dirs
+        ${target_name} INTERFACE_INCLUDE_DIRECTORIES)
+    if(_rhbm_gem_include_dirs)
+        set_property(TARGET ${target_name}
+            APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+            "${_rhbm_gem_include_dirs}")
+    endif()
+endfunction()
+
+function(rhbm_gem_write_package_redirect package_name target_name package_version)
+    file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/${package_name}Config.cmake"
+        "if(NOT TARGET ${target_name})\n"
+        "    set(${package_name}_FOUND FALSE)\n"
+        "    set(${package_name}_NOT_FOUND_MESSAGE\n"
+        "        \"The RHBM-GEM UMAP fallback requires the ${target_name} target.\")\n"
+        "endif()\n")
+    write_basic_package_version_file(
+        "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/${package_name}ConfigVersion.cmake"
+        VERSION "${package_version}"
+        COMPATIBILITY SameMajorVersion
+        ARCH_INDEPENDENT
+    )
+endfunction()
+
+function(rhbm_gem_resolve_system_umap_dependency
+    content_name package_name target_name package_version dep_url dep_hash)
+    set(_rhbm_gem_fetch_extern_option "${ARGV6}")
+
+    if(TARGET ${target_name})
+        rhbm_gem_write_package_redirect(
+            "${package_name}" "${target_name}" "${package_version}")
+        message(STATUS "Reusing system UMAP dependency: ${package_name}")
+        return()
+    endif()
+
+    find_package(${package_name} ${package_version} CONFIG QUIET)
+    if(TARGET ${target_name})
+        message(STATUS "Using system UMAP dependency: ${package_name}")
+        return()
+    endif()
+
+    message(STATUS
+        "System UMAP dependency ${package_name} is unavailable; "
+        "using pinned v${package_version} FetchContent fallback")
+    rhbm_gem_declare_content(${content_name} "${dep_url}" "${dep_hash}")
+    rhbm_gem_populate_declared_content(
+        ${content_name}
+        _rhbm_gem_source_dir
+        _rhbm_gem_binary_dir
+    )
+    if(_rhbm_gem_fetch_extern_option)
+        set(${_rhbm_gem_fetch_extern_option} OFF)
+    endif()
+    add_subdirectory(
+        "${_rhbm_gem_source_dir}"
+        "${_rhbm_gem_binary_dir}"
+        EXCLUDE_FROM_ALL
+    )
+    if(NOT TARGET ${target_name})
+        message(FATAL_ERROR
+            "Fetched ${content_name} did not create the expected ${target_name} target.")
+    endif()
+    rhbm_gem_write_package_redirect(
+        "${package_name}" "${target_name}" "${package_version}")
+    rhbm_gem_mark_target_includes_system(${content_name})
+endfunction()
+
+function(rhbm_gem_resolve_system_umap_stack)
+    include(FetchContent)
+
+    rhbm_gem_resolve_system_umap_dependency(
+        aarand ltla_aarand ltla::aarand "${RHBM_GEM_AARAND_VERSION}"
+        "${RHBM_GEM_AARAND_URL}" "${RHBM_GEM_AARAND_URL_HASH}")
+    rhbm_gem_resolve_system_umap_dependency(
+        sanisizer ltla_sanisizer ltla::sanisizer "${RHBM_GEM_SANISIZER_VERSION}"
+        "${RHBM_GEM_SANISIZER_URL}" "${RHBM_GEM_SANISIZER_URL_HASH}")
+    rhbm_gem_resolve_system_umap_dependency(
+        subpar ltla_subpar ltla::subpar "${RHBM_GEM_SUBPAR_VERSION}"
+        "${RHBM_GEM_SUBPAR_URL}" "${RHBM_GEM_SUBPAR_URL_HASH}"
+        SUBPAR_FETCH_EXTERN)
+    rhbm_gem_resolve_system_umap_dependency(
+        knncolle knncolle_knncolle knncolle::knncolle "${RHBM_GEM_KNNCOLLE_VERSION}"
+        "${RHBM_GEM_KNNCOLLE_URL}" "${RHBM_GEM_KNNCOLLE_URL_HASH}"
+        KNNCOLLE_FETCH_EXTERN)
+    rhbm_gem_resolve_system_umap_dependency(
+        irlba ltla_irlba ltla::irlba "${RHBM_GEM_IRLBA_VERSION}"
+        "${RHBM_GEM_IRLBA_URL}" "${RHBM_GEM_IRLBA_URL_HASH}"
+        IRLBA_FETCH_EXTERN)
+
+    # Resolve umappp only after its dependencies. Some upstream package
+    # configs make nested REQUIRED calls, so an earlier QUIET probe cannot
+    # safely recover from an incomplete system stack.
+    find_package(libscran_umappp CONFIG QUIET)
+    if(TARGET libscran::umappp)
+        message(STATUS "Using system UMAP dependency: libscran_umappp")
+        return()
+    endif()
+
+    message(STATUS
+        "System UMAP dependency libscran_umappp is unavailable; "
+        "using pinned v${RHBM_GEM_UMAPPP_VERSION} FetchContent fallback")
+    rhbm_gem_declare_content(
+        umappp "${RHBM_GEM_UMAPPP_URL}" "${RHBM_GEM_UMAPPP_URL_HASH}")
+    rhbm_gem_populate_declared_content(
+        umappp
+        _rhbm_gem_umappp_source_dir
+        _rhbm_gem_umappp_binary_dir
+    )
+    set(UMAPPP_FETCH_EXTERN OFF)
+    add_subdirectory(
+        "${_rhbm_gem_umappp_source_dir}"
+        "${_rhbm_gem_umappp_binary_dir}"
+        EXCLUDE_FROM_ALL
+    )
+    rhbm_gem_mark_target_includes_system(umappp)
 endfunction()
 
 function(rhbm_gem_validate_eigen3_dependency)
@@ -164,6 +305,10 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     find_package(Eigen3 ${RHBM_GEM_EIGEN3_VERSION_RANGE} CONFIG REQUIRED)
     rhbm_gem_validate_eigen3_dependency()
     find_package(CLI11 REQUIRED)
+    if(NOT TARGET CLI11::CLI11)
+        message(FATAL_ERROR
+            "System CLI11 is required when RHBM_GEM_DEP_PROVIDER=SYSTEM.")
+    endif()
     find_package(SQLite3 REQUIRED)
     if(POLICY CMP0167)
         cmake_policy(PUSH)
@@ -172,6 +317,12 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         cmake_policy(POP)
     else()
         find_package(Boost REQUIRED)
+    endif()
+    if(NOT TARGET Boost::headers
+       AND NOT TARGET Boost::boost
+       AND NOT Boost_INCLUDE_DIRS)
+        message(FATAL_ERROR
+            "System Boost is required when RHBM_GEM_DEP_PROVIDER=SYSTEM.")
     endif()
 
     if(TARGET SQLite3::SQLite3)
@@ -189,10 +340,35 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         ${_rhbm_gem_sqlite_target}
     )
 
+    # Resolve every optional build-surface package before the UMAP-only
+    # fallback so a missing core dependency never starts a download.
+    if(BUILD_PYTHON_BINDINGS)
+        set(PYBIND11_FINDPYTHON ON)
+        find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+        if(NOT TARGET Python::Interpreter OR NOT TARGET Python::Module)
+            message(FATAL_ERROR
+                "Python interpreter and development module are required "
+                "when BUILD_PYTHON_BINDINGS=ON.")
+        endif()
+        find_package(pybind11 CONFIG REQUIRED)
+        if(NOT TARGET pybind11::module)
+            message(FATAL_ERROR
+                "System pybind11 is required when RHBM_GEM_DEP_PROVIDER=SYSTEM.")
+        endif()
+    endif()
+
+    if(BUILD_TESTING)
+        find_package(GTest REQUIRED)
+        if(NOT TARGET GTest::gtest)
+            message(FATAL_ERROR
+                "System GoogleTest is required when RHBM_GEM_DEP_PROVIDER=SYSTEM.")
+        endif()
+    endif()
+
     if(RHBM_GEM_ENABLE_UMAP)
         rhbm_gem_prepare_eigen3_compat_redirect()
-        message(STATUS "Using system umappp package")
-        find_package(libscran_umappp CONFIG REQUIRED)
+        message(STATUS "Resolving system-preferred UMAP dependency stack")
+        rhbm_gem_resolve_system_umap_stack()
     endif()
 else()
     message(STATUS "Dependency provider: FETCH")
@@ -267,16 +443,16 @@ else()
             knncolle "${RHBM_GEM_KNNCOLLE_URL}" "${RHBM_GEM_KNNCOLLE_URL_HASH}")
 
         message(STATUS "Fetching umappp (v${RHBM_GEM_UMAPPP_VERSION}) via FetchContent")
-        FetchContent_Populate(umappp
-            URL "${RHBM_GEM_UMAPPP_URL}"
-            URL_HASH "${RHBM_GEM_UMAPPP_URL_HASH}"
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-            SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/umappp-src"
-            BINARY_DIR "${FETCHCONTENT_BASE_DIR}/umappp-build"
+        rhbm_gem_declare_content(
+            umappp "${RHBM_GEM_UMAPPP_URL}" "${RHBM_GEM_UMAPPP_URL_HASH}")
+        rhbm_gem_populate_declared_content(
+            umappp
+            _rhbm_gem_umappp_source_dir
+            _rhbm_gem_umappp_binary_dir
         )
         add_subdirectory(
-            "${umappp_SOURCE_DIR}"
-            "${umappp_BINARY_DIR}"
+            "${_rhbm_gem_umappp_source_dir}"
+            "${_rhbm_gem_umappp_binary_dir}"
             EXCLUDE_FROM_ALL
         )
 
@@ -285,18 +461,8 @@ else()
         # instantiated by the command implementation.
         foreach(_rhbm_gem_umap_target IN ITEMS
             umappp aarand irlba subpar sanisizer knncolle)
-            get_target_property(
-                _rhbm_gem_umap_include_dirs
-                ${_rhbm_gem_umap_target}
-                INTERFACE_INCLUDE_DIRECTORIES)
-            if(_rhbm_gem_umap_include_dirs)
-                set_property(
-                    TARGET ${_rhbm_gem_umap_target}
-                    APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
-                    "${_rhbm_gem_umap_include_dirs}")
-            endif()
+            rhbm_gem_mark_target_includes_system(${_rhbm_gem_umap_target})
         endforeach()
-        unset(_rhbm_gem_umap_include_dirs)
         unset(_rhbm_gem_umap_target)
 
         FetchContent_GetProperties(eigen)
@@ -385,11 +551,8 @@ endif()
 
 if(BUILD_PYTHON_BINDINGS)
     set(PYBIND11_FINDPYTHON ON)
-    find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
-
-    if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
-        find_package(pybind11 CONFIG REQUIRED)
-    else()
+    if(NOT RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
+        find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
         set(PYBIND11_TEST OFF CACHE BOOL "Disable pybind11 tests" FORCE)
         FetchContent_Declare(rhbm_gem_pybind11
             URL "${RHBM_GEM_PYBIND11_URL}"
@@ -406,9 +569,7 @@ if(BUILD_TESTING)
     set(INSTALL_GTEST OFF CACHE BOOL "Disable GoogleTest install targets" FORCE)
     set(INSTALL_GMOCK OFF CACHE BOOL "Disable GoogleMock install targets" FORCE)
 
-    if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
-        find_package(GTest REQUIRED)
-    else()
+    if(NOT RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         if(MSVC)
             set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         endif()

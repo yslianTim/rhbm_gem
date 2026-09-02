@@ -11,13 +11,13 @@ All executable runtime targets from a build tree (CLI and C++ test executables) 
 
 This project requires CMake 3.24 or newer and uses C++20 with GNU extensions enabled by default. A single dependency-provider switch controls third-party resolution:
 
-- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3 `>=5.0.0,<6.0.0`, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled.
+- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: strictly require system packages for Eigen3 `>=5.0.0,<6.0.0`, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled. UMAP is the only dependency group with the system-preferred fallback described below.
 - `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3 5.0.0, CLI11, SQLite3, and Boost; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
 
-The stable `umap_embedding` command is optional and disabled by default. Set `RHBM_GEM_ENABLE_UMAP=ON` to compile the command and attach the header-only `libscran::umappp` target to the internal build interface of `rhbm_gem`:
+The stable `umap_embedding` command is enabled by default. Set `RHBM_GEM_ENABLE_UMAP=OFF` to omit the command and avoid resolving its dependencies. When enabled, the build attaches the header-only `libscran::umappp` target to the internal build interface of `rhbm_gem`:
 
 - With the `FETCH` provider, CMake downloads pinned releases of umappp 3.3.2, aarand 1.1.0, irlba 3.1.0, subpar 0.5.0, sanisizer 0.2.0, and knncolle 3.1.0. These build-only dependencies are excluded from the RHBM-GEM installation.
-- With the `SYSTEM` provider, install umappp 3.3.2 and its package dependencies (`ltla_aarand`, `ltla_irlba`, Eigen3 `>=5.0.0,<6.0.0`, `ltla_subpar`, `ltla_sanisizer`, and `knncolle_knncolle`) under a prefix visible through `CMAKE_PREFIX_PATH`. RHBM-GEM first resolves the real Eigen3 package, then creates a build-tree-only package redirect using its actual version so the Eigen3 5.0.0 requests embedded in umappp 3.3.2 and irlba 3.1.0 reuse the existing `Eigen3::Eigen` target. No patched umappp or irlba package is required. Eigen3 6.x is outside the supported range. Upstream umappp 3.3.2 does not install its generated `ConfigVersion.cmake`, so this project follows its documented unversioned `find_package(libscran_umappp CONFIG REQUIRED)` call.
+- With the `SYSTEM` provider, CMake first resolves and validates the real system Eigen3 package, then resolves the UMAP stack in dependency order while preferring each installed package. This ordering avoids unrecoverable nested `REQUIRED` lookups in an incomplete upstream package stack. If umappp or one of its package dependencies (`ltla_aarand`, `ltla_irlba`, `ltla_subpar`, `ltla_sanisizer`, and `knncolle_knncolle`) is unavailable, only the missing UMAP components are fetched at the pinned versions above; a complete installation causes no UMAP download. A build-tree-only package redirect lets fetched targets satisfy later package lookups. The fallback never downloads Eigen, CLI11, SQLite3, Boost, pybind11, or GTest; a qualifying system Eigen3 remains mandatory and is reused by umappp and irlba. Network access is required when a missing UMAP component is not already cached. No patched umappp or irlba package is required. Eigen3 6.x is outside the supported range. Upstream umappp 3.3.2 does not install its generated `ConfigVersion.cmake`, so its system lookup is unversioned and the documented system version remains v3.3.2.
 - UMAP remains an internal dependency: installed consumers of `RHBM_GEM::rhbm_gem` do not need umappp. UMAP-enabled installations export the `RHBM_GEM_ENABLE_UMAP` compile definition so their public `UmapEmbeddingRequest` type matches the linked library.
 
 To force fetched dependency sources:
@@ -207,7 +207,7 @@ Beginner / common:
 | `RHBM_GEM_DEP_PROVIDER` | `SYSTEM` | Dependency provider mode: `SYSTEM` or `FETCH`. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `/src/python/`. |
-| `RHBM_GEM_ENABLE_UMAP` | `OFF` | Resolve umappp and compile the stable `umap_embedding` command. |
+| `RHBM_GEM_ENABLE_UMAP` | `ON` | Resolve umappp and compile the stable `umap_embedding` command. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
@@ -232,13 +232,17 @@ Notes:
 1. `RHBM_GEM_DEP_PROVIDER=FETCH` is recommended when system dependencies are unavailable.
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 3. `FETCH` mode requires network access unless archives are already cached.
+4. A fresh non-preset configure defaults to `SYSTEM + UMAP ON`. Core dependencies, including Eigen3, must be installed; the build prefers the installed UMAP stack and fetches only missing UMAP components at fixed versions. The Debug and Release presets explicitly use `FETCH + UMAP ON` instead.
+5. Changing the source default does not overwrite an existing CMake cache. A manually configured build cached with UMAP `OFF` must be reconfigured with `-DRHBM_GEM_ENABLE_UMAP=ON` or recreated; the standard presets explicitly apply `ON`.
+6. Set `RHBM_GEM_ENABLE_UMAP=OFF` to skip both the UMAP system probe and its network fallback.
 
 ## CMake Preset Workflow
 
 The project provides Debug and Release configure/build presets.
 The presets require CMake 3.24 or newer and the Ninja generator. They use
-separate build directories, disable tests and Python bindings, and build the
-CLI target with the shared project feature settings:
+separate build directories, explicitly select `FETCH + UMAP ON`, disable tests
+and Python bindings, and build the CLI target. The first configure downloads
+the pinned dependencies unless they are already cached:
 
 | Preset | Build type | Executable |
 | --- | --- | --- |
@@ -304,11 +308,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=FETCH
 # Force system dependencies
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM
 
-# Enable the UMAP embedding command with pinned fetched dependencies
-cmake -S . -B build-umap \
+# Disable the default UMAP embedding command and its dependency stack
+cmake -S . -B build-no-umap \
   -DCMAKE_BUILD_TYPE=Release \
-  -DRHBM_GEM_DEP_PROVIDER=FETCH \
-  -DRHBM_GEM_ENABLE_UMAP=ON
+  -DRHBM_GEM_ENABLE_UMAP=OFF
 
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF

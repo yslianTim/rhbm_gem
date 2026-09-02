@@ -20,7 +20,7 @@ For the full documentation map, start at [`docs/README.md`](/docs/README.md).
 - Change the repository and follow project conventions.
 - Extend commands, data I/O, or other internal components.
 - Validate build configurations and prepare releases.
-- Enable the optional `umap_embedding` command with `RHBM_GEM_ENABLE_UMAP=ON`.
+- Use the default-enabled `umap_embedding` command. In `SYSTEM` mode, installed UMAP packages are preferred and only missing UMAP components are fetched at fixed versions; disable it with `RHBM_GEM_ENABLE_UMAP=OFF` to avoid UMAP resolution and downloads.
 - Start with [`docs/developer/README.md`](/docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md).
 
 ## Examples

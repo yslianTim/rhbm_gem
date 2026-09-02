@@ -18,7 +18,7 @@ option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(RHBM_GEM_ENABLE_UMAP
-    "Enable the umap_embedding command through umappp" OFF)
+    "Enable the umap_embedding command through umappp" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
 option(RHBM_GEM_ENABLE_FOLD_168_REGRESSION

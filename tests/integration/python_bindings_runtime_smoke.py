@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTAL_FEATURE_ENABLED = (
     os.environ.get("RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE", "OFF").upper() == "ON"
 )
-UMAP_ENABLED = os.environ.get("RHBM_GEM_ENABLE_UMAP", "OFF").upper() == "ON"
+UMAP_ENABLED = os.environ.get("RHBM_GEM_ENABLE_UMAP", "ON").upper() == "ON"
 
 EXPECTED_COMMON_FIELDS = {
     "job_count",

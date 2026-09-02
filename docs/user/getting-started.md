@@ -25,7 +25,7 @@ Some dependencies are provider-dependent or optional:
 - Core C++ dependencies (`Eigen3` `>=5.0.0,<6.0.0`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`; FETCH mode pins Eigen3 5.0.0.
 - `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
 - `GTest` is required only when `BUILD_TESTING=ON`.
-- The `umap_embedding` command is enabled only with `RHBM_GEM_ENABLE_UMAP=ON`; the `FETCH` provider supplies its pinned packages, while `SYSTEM` requires umappp 3.3.2 and its package dependencies under `CMAKE_PREFIX_PATH`. See the [`umap_embedding` command guide](/docs/user/command/umap_embedding.md).
+- The `umap_embedding` command is enabled by default. The `FETCH` provider supplies its pinned packages. The `SYSTEM` provider prefers installed umappp 3.3.2 packages and fetches only missing UMAP components at fixed versions; system Eigen3 remains required. Set `RHBM_GEM_ENABLE_UMAP=OFF` to omit the command and avoid all UMAP lookup and download activity. See the [`umap_embedding` command guide](/docs/user/command/umap_embedding.md).
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
 - Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
@@ -177,7 +177,7 @@ Notes:
 
 Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
 
-The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`Boost`/`GTest` packages during onboarding.
+The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`Boost`/`GTest` or umappp packages during onboarding; the default-enabled UMAP stack is downloaded at configure time.
 Runtime executables from any build directory are placed under `<build-dir>/bin/`.
 
 ### macOS and Linux: user-local install
@@ -468,8 +468,8 @@ Compatibility note:
 
 ## Troubleshooting
 
-1. Missing `Eigen3`, `SQLite3`, `pybind11`, `CLI11`, `Boost`, or `libscran_umappp`
-   Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
+1. Missing `Eigen3`, `SQLite3`, `pybind11`, `CLI11`, or `Boost`
+   In `SYSTEM` mode these core dependencies never fall back to downloads, so install the reported package first. UMAP is the exception: when enabled, missing umappp, LTLA, or knncolle packages use fixed-version FetchContent fallback. That fallback requires network access unless its archives are already cached. Set `-DRHBM_GEM_ENABLE_UMAP=OFF` to avoid both UMAP package lookup and download.
 2. Missing `GTest` during configure
    If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).
 3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`

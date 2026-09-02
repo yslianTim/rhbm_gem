@@ -14,6 +14,7 @@
         "BUILD_TESTING": "OFF",
         "BUILD_PYTHON_BINDINGS": "OFF",
         "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
         "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
         "RHBM_GEM_OPENMP_MODE": "AUTO",
         "RHBM_GEM_ROOT_MODE": "AUTO",
@@ -23,7 +24,7 @@
     {
       "name": "debug",
       "displayName": "Debug",
-      "description": "Debug CLI build without tests or Python bindings",
+      "description": "Debug CLI with UMAP and pinned dependencies fetched on first configure",
       "inherits": "common",
       "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
@@ -33,7 +34,7 @@
     {
       "name": "release",
       "displayName": "Release",
-      "description": "Optimized CLI build without debug information",
+      "description": "Optimized CLI with UMAP and pinned dependencies fetched on first configure",
       "inherits": "common",
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {

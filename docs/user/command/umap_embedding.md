@@ -1,19 +1,18 @@
 # `umap_embedding`
 
-`umap_embedding` converts one `local_fitting_result_*.csv` file into a two-dimensional UMAP embedding. The command is stable, but is available only in builds configured with `RHBM_GEM_ENABLE_UMAP=ON`.
+`umap_embedding` converts one `local_fitting_result_*.csv` file into a two-dimensional UMAP embedding. The stable command is enabled by default and is omitted only when the project is configured with `RHBM_GEM_ENABLE_UMAP=OFF`.
 
-## Enable the Command
+## Build Configuration
 
-The simplest self-contained configuration uses the pinned FETCH dependencies:
+The simplest self-contained configuration uses the pinned FETCH dependencies. No UMAP option is needed because it defaults to `ON`:
 
 ```bash
 cmake -S . -B build-umap \
-  -DRHBM_GEM_DEP_PROVIDER=FETCH \
-  -DRHBM_GEM_ENABLE_UMAP=ON
+  -DRHBM_GEM_DEP_PROVIDER=FETCH
 cmake --build build-umap --target rhbm_gem_cli
 ```
 
-SYSTEM builds require umappp 3.3.2 and its package dependencies as described in the [build and configuration guide](/docs/developer/build-and-configuration.md#dependency-strategy).
+SYSTEM builds prefer an installed umappp 3.3.2 stack and fetch only missing UMAP components at fixed versions; Eigen3 and the other core dependencies must still be installed. A configure needs network access if a missing UMAP archive is not cached. See the [build and configuration guide](/docs/developer/build-and-configuration.md#dependency-strategy), or set `RHBM_GEM_ENABLE_UMAP=OFF` to build without the command, UMAP lookup, or fallback downloads.
 
 ## Input Contract
 
