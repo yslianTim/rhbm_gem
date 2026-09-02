@@ -25,8 +25,6 @@ namespace rhbm_gem::core {
 namespace {
 
 constexpr std::size_t kIdentifierColumnCount{ 3 };
-constexpr std::size_t kFeatureCount{ 11 };
-constexpr std::size_t kInputColumnCount{ kIdentifierColumnCount + kFeatureCount };
 constexpr std::size_t kOutputDimensionCount{ 2 };
 constexpr std::string_view kInputHeader{
     "serial id,residue,spot,neighbor count,peeling ratio,"
@@ -34,19 +32,37 @@ constexpr std::string_view kInputHeader{
     "width 1st,width 2nd,width 3rd,"
     "offset 1st,offset 2nd,offset 3rd"
 };
-constexpr std::array<std::string_view, kFeatureCount> kFeatureNames{
-    "neighbor count",
-    "peeling ratio",
-    "amplitude 1st",
-    "amplitude 2nd",
-    "amplitude 3rd",
-    "width 1st",
-    "width 2nd",
-    "width 3rd",
-    "offset 1st",
-    "offset 2nd",
-    "offset 3rd",
+
+struct UmapFeatureDefinition
+{
+    std::string_view name;
+    bool include_in_umap;
 };
+
+// Keep these entries in CSV column order. Toggle include_in_umap to choose the
+// features that are standardized and passed to UMAP, then rebuild the project.
+constexpr std::array<UmapFeatureDefinition, 11> kFeatureDefinitions{
+    UmapFeatureDefinition{ "neighbor count", true },
+    UmapFeatureDefinition{ "peeling ratio", true },
+    UmapFeatureDefinition{ "amplitude 1st", true },
+    UmapFeatureDefinition{ "amplitude 2nd", true },
+    UmapFeatureDefinition{ "amplitude 3rd", true },
+    UmapFeatureDefinition{ "width 1st", true },
+    UmapFeatureDefinition{ "width 2nd", true },
+    UmapFeatureDefinition{ "width 3rd", true },
+    UmapFeatureDefinition{ "offset 1st", false },
+    UmapFeatureDefinition{ "offset 2nd", true },
+    UmapFeatureDefinition{ "offset 3rd", true },
+};
+constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
+constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
+    kFeatureDefinitions.begin(),
+    kFeatureDefinitions.end(),
+    [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; })) };
+constexpr std::size_t kInputColumnCount{ kIdentifierColumnCount + kInputFeatureCount };
+static_assert(
+    kSelectedFeatureCount > 0,
+    "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
 struct PreparedUmapInput
 {
@@ -147,10 +163,10 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::vector<std::array<double, kFeatureCount>> raw_features;
+    std::vector<std::array<double, kInputFeatureCount>> raw_features;
     std::vector<std::string> original_rows;
-    std::array<long double, kFeatureCount> means{};
-    std::array<long double, kFeatureCount> sum_squared_differences{};
+    std::array<long double, kInputFeatureCount> means{};
+    std::array<long double, kInputFeatureCount> sum_squared_differences{};
 
     std::string row;
     std::size_t line_number{ 1 };
@@ -174,13 +190,15 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
             return std::nullopt;
         }
 
-        std::array<double, kFeatureCount> feature_row{};
-        for (std::size_t feature = 0; feature < kFeatureCount; ++feature)
+        std::array<double, kInputFeatureCount> feature_row{};
+        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
             const auto text{ fields[kIdentifierColumnCount + feature] };
             if (!ParseFiniteDouble(text, feature_row[feature]))
             {
-                error_message = FormatRowLocation(line_number, kFeatureNames[feature])
+                error_message = FormatRowLocation(
+                    line_number,
+                    kFeatureDefinitions[feature].name)
                     + ": expected a finite numeric value, received '"
                     + std::string(text) + "'.";
                 return std::nullopt;
@@ -190,8 +208,9 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         original_rows.push_back(row);
         raw_features.push_back(feature_row);
         const long double count{ static_cast<long double>(raw_features.size()) };
-        for (std::size_t feature = 0; feature < kFeatureCount; ++feature)
+        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
+            if (!kFeatureDefinitions[feature].include_in_umap) continue;
             const long double value{ static_cast<long double>(feature_row[feature]) };
             const long double delta{ value - means[feature] };
             means[feature] += delta / count;
@@ -217,37 +236,42 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::array<long double, kFeatureCount> standard_deviations{};
+    std::array<long double, kInputFeatureCount> standard_deviations{};
     std::vector<std::string_view> constant_features;
-    for (std::size_t feature = 0; feature < kFeatureCount; ++feature)
+    for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
     {
+        if (!kFeatureDefinitions[feature].include_in_umap) continue;
         const long double variance{
             sum_squared_differences[feature]
                 / static_cast<long double>(raw_features.size())
         };
         if (!std::isfinite(means[feature]) || !std::isfinite(variance) || variance < 0)
         {
-            error_message = "column '" + std::string(kFeatureNames[feature])
+            error_message = "column '" + std::string(kFeatureDefinitions[feature].name)
                 + "' could not be standardized to finite values.";
             return std::nullopt;
         }
         standard_deviations[feature] = std::sqrt(variance);
         if (standard_deviations[feature] == 0)
         {
-            constant_features.push_back(kFeatureNames[feature]);
+            constant_features.push_back(kFeatureDefinitions[feature].name);
         }
     }
-    if (constant_features.size() == kFeatureCount)
+    if (constant_features.size() == kSelectedFeatureCount)
     {
-        error_message = "All 11 UMAP feature columns are constant; no embedding can be created.";
+        error_message = "All " + std::to_string(kSelectedFeatureCount)
+            + " selected UMAP feature columns are constant; no embedding can be created.";
         return std::nullopt;
     }
 
-    std::vector<double> standardized_features(raw_features.size() * kFeatureCount);
+    std::vector<double> standardized_features(
+        raw_features.size() * kSelectedFeatureCount);
     for (std::size_t observation = 0; observation < raw_features.size(); ++observation)
     {
-        for (std::size_t feature = 0; feature < kFeatureCount; ++feature)
+        std::size_t selected_feature{ 0 };
+        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
+            if (!kFeatureDefinitions[feature].include_in_umap) continue;
             double standardized_value{ 0 };
             if (standard_deviations[feature] != 0)
             {
@@ -259,11 +283,15 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
             }
             if (!std::isfinite(standardized_value))
             {
-                error_message = FormatRowLocation(observation + 2, kFeatureNames[feature])
+                error_message = FormatRowLocation(
+                    observation + 2,
+                    kFeatureDefinitions[feature].name)
                     + ": Z-score is not finite.";
                 return std::nullopt;
             }
-            standardized_features[observation * kFeatureCount + feature] = standardized_value;
+            standardized_features[
+                observation * kSelectedFeatureCount + selected_feature] = standardized_value;
+            ++selected_feature;
         }
     }
 
@@ -373,7 +401,7 @@ bool ExecutePreparedRequest(
         options.num_threads_optimize = 1;
 
         auto status{ umappp::initialize(
-            static_cast<int>(kFeatureCount),
+            static_cast<int>(kSelectedFeatureCount),
             static_cast<int>(prepared.original_rows.size()),
             prepared.standardized_features.data(),
             neighbor_builder,

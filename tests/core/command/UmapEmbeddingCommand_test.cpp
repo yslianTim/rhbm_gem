@@ -337,7 +337,10 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantFeaturesWithoutWritingOutput)
     const auto result{ RunCommand(MakeRequest(input_path, output_dir)) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasIssue(result, "-i,--input", "All 11 UMAP feature columns are constant"));
+    EXPECT_TRUE(HasIssue(
+        result,
+        "-i,--input",
+        "All 11 selected UMAP feature columns are constant"));
     EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_constant.csv"));
 }
 
