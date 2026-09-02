@@ -5,12 +5,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -51,6 +53,61 @@ struct GaussianModelParameterSamples
 };
 
 using GaussianParameterGetter = double (GaussianModel3D::*)() const;
+
+constexpr bool IsSignalPeelingRadius(double radius)
+{
+    return radius >= 0.0 && radius < 1.0;
+}
+
+constexpr bool IsTailPeelingRadius(double radius)
+{
+    return radius >= 1.0 && radius <= 2.0;
+}
+
+static_assert(IsSignalPeelingRadius(0.0) && !IsTailPeelingRadius(0.0));
+static_assert(!IsSignalPeelingRadius(1.0) && IsTailPeelingRadius(1.0));
+static_assert(!IsSignalPeelingRadius(2.0) && IsTailPeelingRadius(2.0));
+
+using PeelingRadiusPredicate = bool (*)(double);
+
+std::optional<double> ComputePeelingRatio(
+    const LocalPotentialSampleList & raw_sampling_entries,
+    const LocalPotentialSampleList & peeling_sampling_entries,
+    bool peeling_applied,
+    PeelingRadiusPredicate includes_radius)
+{
+    if (!peeling_applied) return std::nullopt;
+
+    double raw_sum{ 0.0 };
+    std::size_t raw_sample_count{ 0 };
+    for (const auto & sample : raw_sampling_entries)
+    {
+        if (!includes_radius(sample.point.distance)) continue;
+        raw_sum += sample.response;
+        ++raw_sample_count;
+    }
+
+    double peeling_sum{ 0.0 };
+    std::size_t peeling_sample_count{ 0 };
+    for (const auto & sample : peeling_sampling_entries)
+    {
+        if (!includes_radius(sample.point.distance)) continue;
+        peeling_sum += sample.response;
+        ++peeling_sample_count;
+    }
+
+    if (raw_sample_count == 0
+        || peeling_sample_count == 0
+        || !std::isfinite(raw_sum)
+        || !std::isfinite(peeling_sum)
+        || raw_sum == 0.0)
+    {
+        return std::nullopt;
+    }
+
+    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
+    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
+}
 
 int ComputeLocalParameterRank(
     const AtomObject & atom,
@@ -162,7 +219,8 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
     std::ostringstream table;
     table << std::fixed << std::setprecision(2);
     table
-        << "serial id,residue,spot,neighbor count,peeling ratio,"
+        << "serial id,residue,spot,neighbor count,"
+        << "signal peeling ratio,tail peeling ratio,"
         << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         << "width 1st,width 2nd,width 3rd,"
         << "offset 1st,offset 2nd,offset 3rd,"
@@ -216,10 +274,30 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
             << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
             << atom->GetAtomID() << ','
             << local_view.GetNeighborCountForPeeling() << ',';
-        const auto peeling_ratio{ local_view.GetLocalFittingPeelingRatio(peeling_applied) };
-        if (peeling_ratio.has_value())
+        const auto raw_sampling_entries{ local_view.GetRawSamplingEntries(false) };
+        const auto peeling_sampling_entries{ local_view.GetPeelingSamplingEntries(false) };
+        const auto signal_peeling_ratio{ ComputePeelingRatio(
+            raw_sampling_entries,
+            peeling_sampling_entries,
+            peeling_applied,
+            IsSignalPeelingRadius) };
+        const auto tail_peeling_ratio{ ComputePeelingRatio(
+            raw_sampling_entries,
+            peeling_sampling_entries,
+            peeling_applied,
+            IsTailPeelingRadius) };
+        if (signal_peeling_ratio.has_value())
         {
-            table << *peeling_ratio;
+            table << *signal_peeling_ratio;
+        }
+        else
+        {
+            table << "nan";
+        }
+        table << ',';
+        if (tail_peeling_ratio.has_value())
+        {
+            table << *tail_peeling_ratio;
         }
         else
         {
