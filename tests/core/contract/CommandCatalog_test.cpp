@@ -170,6 +170,9 @@ std::vector<std::string> BuildExpectedCommandNames()
         "map_simulation",
         "rhbm_test",
     };
+#ifdef RHBM_GEM_ENABLE_UMAP
+    expected.emplace_back("umap_embedding");
+#endif
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     expected.emplace_back("map_visualization");
     expected.emplace_back("position_estimation");
@@ -230,6 +233,18 @@ TEST(CommandCatalogTest, ExperimentalCommandVisibilityFollowsFeatureGuard)
             std::find(command_names.begin(), command_names.end(), experimental_name),
             command_names.end());
     }
+#endif
+}
+
+TEST(CommandCatalogTest, UmapCommandVisibilityFollowsFeatureGuard)
+{
+    const auto command_names{ BuildCommandNames() };
+    const auto match{ std::find(
+        command_names.begin(), command_names.end(), "umap_embedding") };
+#ifdef RHBM_GEM_ENABLE_UMAP
+    EXPECT_NE(match, command_names.end());
+#else
+    EXPECT_EQ(match, command_names.end());
 #endif
 }
 

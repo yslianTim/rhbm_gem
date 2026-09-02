@@ -217,6 +217,34 @@ struct RequestFieldCatalog<RHBMTestRequest>
     }
 };
 
+#ifdef RHBM_GEM_ENABLE_UMAP
+template <>
+struct RequestFieldCatalog<UmapEmbeddingRequest>
+{
+    template <typename Visitor>
+    static void Visit(Visitor && visitor)
+    {
+        using Self = UmapEmbeddingRequest;
+        VisitFieldList(visitor,
+            RequestField{ "input_csv_path", "-i,--input",
+                "Local fitting result CSV path",
+                &Self::input_csv_path },
+            RequestField{ "num_neighbors", "--neighbors",
+                "Number of nearest neighbors",
+                &Self::num_neighbors },
+            RequestField{ "min_dist", "--min-dist",
+                "Minimum distance in the embedding",
+                &Self::min_dist },
+            RequestField{ "num_epochs", "--epochs",
+                "Optimization epochs (0 selects the automatic value)",
+                &Self::num_epochs },
+            RequestField{ "random_seed", "--seed",
+                "Initialization and optimization random seed",
+                &Self::random_seed });
+    }
+};
+#endif
+
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 template <>
 struct RequestFieldCatalog<MapVisualizationRequest>
@@ -279,6 +307,9 @@ CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & req
 CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request);
 CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request);
 CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request);
+#ifdef RHBM_GEM_ENABLE_UMAP
+CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request);
+#endif
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & request);
 CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest & request);
@@ -327,6 +358,14 @@ inline constexpr auto kStableCommands = std::tuple{
         "RHBMTestRequest",
         ExecuteRHBMTestCommand
     },
+#ifdef RHBM_GEM_ENABLE_UMAP
+    CommandEntry<UmapEmbeddingRequest>{
+        "umap_embedding",
+        "Create a 2D UMAP embedding from local fitting results",
+        "UmapEmbeddingRequest",
+        ExecuteUmapEmbeddingCommand
+    },
+#endif
 };
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE

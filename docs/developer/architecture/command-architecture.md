@@ -22,6 +22,8 @@ Stable entries live in `kStableCommands`. Experimental entries live in
 enabled; that option is off by default. The same feature guard covers experimental request DTOs,
 request fields, executor declarations, command sources, and catalog entries, so catalog visitors
 only see commands compiled into the current build.
+The stable `umap_embedding` entry follows the same complete-surface guard with
+`RHBM_GEM_ENABLE_UMAP`; it is omitted when the optional private umappp dependency is disabled.
 
 ## Public Surface
 

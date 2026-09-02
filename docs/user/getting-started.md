@@ -25,7 +25,7 @@ Some dependencies are provider-dependent or optional:
 - Core C++ dependencies (`Eigen3` `>=5.0.0,<6.0.0`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`; FETCH mode pins Eigen3 5.0.0.
 - `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
 - `GTest` is required only when `BUILD_TESTING=ON`.
-- Native UMAP build support is enabled only with `RHBM_GEM_ENABLE_UMAP=ON`; the `FETCH` provider supplies its pinned packages, while `SYSTEM` requires umappp 3.3.2 and its package dependencies under `CMAKE_PREFIX_PATH`.
+- The `umap_embedding` command is enabled only with `RHBM_GEM_ENABLE_UMAP=ON`; the `FETCH` provider supplies its pinned packages, while `SYSTEM` requires umappp 3.3.2 and its package dependencies under `CMAKE_PREFIX_PATH`. See the [`umap_embedding` command guide](/docs/user/command/umap_embedding.md).
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
 - Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.

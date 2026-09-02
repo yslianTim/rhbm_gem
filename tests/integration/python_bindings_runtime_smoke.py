@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import rhbm_gem_module as m
@@ -10,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTAL_FEATURE_ENABLED = (
     os.environ.get("RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE", "OFF").upper() == "ON"
 )
+UMAP_ENABLED = os.environ.get("RHBM_GEM_ENABLE_UMAP", "OFF").upper() == "ON"
 
 EXPECTED_COMMON_FIELDS = {
     "job_count",
@@ -45,6 +47,11 @@ def assert_module_surface() -> None:
         assert not hasattr(m, "MapVisualizationRequest")
         assert not hasattr(m, "PositionEstimationRequest")
 
+    if UMAP_ENABLED:
+        assert hasattr(m, "UmapEmbeddingRequest")
+    else:
+        assert not hasattr(m, "UmapEmbeddingRequest")
+
     for old_run_name in (
         "RunPotentialAnalysis",
         "RunPotentialDisplay",
@@ -72,6 +79,8 @@ def assert_request_objects_are_usable() -> None:
                 m.PositionEstimationRequest,
             ]
         )
+    if UMAP_ENABLED:
+        request_types.append(m.UmapEmbeddingRequest)
 
     for request_type in request_types:
         request = request_type()
@@ -146,6 +155,13 @@ def assert_request_objects_are_usable() -> None:
     display.painter_choice = m.PainterType.GAUS
     assert display.painter_choice == m.PainterType.GAUS
 
+    if UMAP_ENABLED:
+        umap = m.UmapEmbeddingRequest()
+        assert umap.num_neighbors == 15
+        assert umap.min_dist == 0.1
+        assert umap.num_epochs == 0
+        assert umap.random_seed == 42
+
 
 def has_issue(report, option_name: str) -> bool:
     return any(
@@ -168,10 +184,56 @@ def assert_command_result_runtime_behavior() -> None:
     assert has_issue(report, "-k,--save-key")
 
 
+def assert_umap_runtime_behavior() -> None:
+    if not UMAP_ENABLED:
+        return
+
+    header = (
+        "serial id,residue,spot,neighbor count,peeling ratio,"
+        "amplitude 1st,amplitude 2nd,amplitude 3rd,"
+        "width 1st,width 2nd,width 3rd,"
+        "offset 1st,offset 2nd,offset 3rd"
+    )
+    with tempfile.TemporaryDirectory(prefix="rhbm_umap_python_") as temp_dir:
+        workdir = Path(temp_dir)
+        input_path = workdir / "local_fitting_result_python.csv"
+        rows = [header]
+        for observation in range(6):
+            features = [
+                (observation + 1) * (feature + 2)
+                + (observation * observation + 3 * feature) % (feature + 3)
+                for feature in range(11)
+            ]
+            rows.append(
+                ",".join(
+                    [str(observation + 1), "ALA", "CA"]
+                    + [str(value) for value in features]
+                )
+            )
+        input_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+        request = m.UmapEmbeddingRequest()
+        request.input_csv_path = input_path
+        request.output_dir = workdir / "output"
+        request.num_neighbors = 3
+        request.min_dist = 0.2
+        request.num_epochs = 5
+        request.random_seed = 99
+        request.job_count = 1
+
+        report = m.RunCommand(request)
+        assert report.succeeded
+        output_path = Path(request.output_dir) / "umap_embedding_python.csv"
+        output_rows = output_path.read_text(encoding="utf-8").splitlines()
+        assert len(output_rows) == 7
+        assert all(len(row.split(",")) == 16 for row in output_rows)
+
+
 def main() -> int:
     assert_module_surface()
     assert_request_objects_are_usable()
     assert_command_result_runtime_behavior()
+    assert_umap_runtime_behavior()
     return 0
 
 

@@ -18,7 +18,7 @@ this project or of any third-party component.
 - The build option `RHBM_GEM_DEP_PROVIDER=FETCH` uses CMake `FetchContent` with pinned release sources and SHA256 checksums for Eigen3, CLI11, SQLite3, and Boost. It additionally fetches `pybind11` when `BUILD_PYTHON_BINDINGS=ON`, GoogleTest when `BUILD_TESTING=ON`, and the pinned umappp dependency stack when `RHBM_GEM_ENABLE_UMAP=ON`.
 - Release builds define `EIGEN_MPL2_ONLY` to constrain Eigen header usage to MPL-2.0-only subsets.
 - In `FETCH` mode, the install/export flow redistributes fetched Eigen, CLI11, Boost, and SQLite artifacts as part of the installed package.
-- The fetched umappp dependency subtree is build-only and excluded from the RHBM-GEM install/export flow.
+- The fetched umappp dependency subtree is used to compile the optional `umap_embedding` command, but remains build-only and excluded from the RHBM-GEM install/export flow.
 
 ## Components
 
@@ -32,10 +32,10 @@ this project or of any third-party component.
 | SQLite (amalgamation) | Database backend: system SQLite library in `SYSTEM` mode; embedded amalgamation (`sqlite3.c`/`sqlite3.h`) in `FETCH` mode | Public Domain (upstream declaration) | `SYSTEM` provider uses system package; `FETCH` provider uses pinned FetchContent (`sqlite-amalgamation-3490100`) | `https://www.sqlite.org/copyright.html` |
 | GoogleTest | Unit tests only | BSD-3-Clause | Used only when `BUILD_TESTING=ON`: `SYSTEM` provider uses system package; `FETCH` provider uses pinned FetchContent | `https://github.com/google/googletest/blob/v1.17.0/LICENSE` |
 | irlba | Truncated singular value decomposition used transitively by umappp | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses the installed package; `FETCH` provider uses pinned v3.1.0 | `https://github.com/libscran/irlba/blob/v3.1.0/LICENSE` |
-| knncolle | Nearest-neighbor interfaces used by umappp | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses the installed package; `FETCH` provider uses pinned v3.1.0 | `https://github.com/knncolle/knncolle/blob/v3.1.0/LICENSE` |
+| knncolle | Euclidean VP-tree nearest-neighbor search used by umappp for `umap_embedding` | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses the installed package; `FETCH` provider uses pinned v3.1.0 | `https://github.com/knncolle/knncolle/blob/v3.1.0/LICENSE` |
 | sanisizer | Integer-size validation used transitively by umappp | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses the installed package; `FETCH` provider uses pinned v0.2.0 | `https://github.com/LTLA/sanisizer/blob/v0.2.0/LICENSE` |
 | subpar | Parallelization abstraction used transitively by umappp | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses the installed package; `FETCH` provider uses pinned v0.5.0 | `https://github.com/LTLA/subpar/blob/v0.5.0/LICENSE` |
-| umappp | Header-only native C++ UMAP build support | BSD-2-Clause | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses v3.3.2; `FETCH` provider uses pinned v3.3.2 | `https://github.com/libscran/umappp/blob/v3.3.2/LICENSE` |
+| umappp | Header-only native C++ implementation used by the `umap_embedding` command | BSD-2-Clause | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: `SYSTEM` provider uses v3.3.2; `FETCH` provider uses pinned v3.3.2 | `https://github.com/libscran/umappp/blob/v3.3.2/LICENSE` |
 
 ## Optional System Dependencies (Not Bundled)
 

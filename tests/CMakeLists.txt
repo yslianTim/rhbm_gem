@@ -76,6 +76,12 @@ set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
     core/command/CommandScenarios_test.cpp
 )
 
+if(RHBM_GEM_ENABLE_UMAP)
+    list(APPEND RHBM_GEM_CORE_COMMAND_TEST_SOURCES
+        core/command/UmapEmbeddingCommand_test.cpp
+    )
+endif()
+
 set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandRunnerLifecycle_test.cpp
     core/command/CommandValidationHelpers_test.cpp
@@ -458,6 +464,7 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
         COMMAND ${CMAKE_COMMAND} -E env
                 "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
                 "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=${RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE}"
+                "RHBM_GEM_ENABLE_UMAP=${RHBM_GEM_ENABLE_UMAP}"
                 ${Python_EXECUTABLE}
                 ${PROJECT_SOURCE_DIR}/tests/integration/${script_name}
         )

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -132,6 +133,17 @@ struct RHBMTestRequest : public CommandRequestBase
     double alpha_r{ 0.1 };
     double alpha_g{ 0.2 };
 };
+
+#ifdef RHBM_GEM_ENABLE_UMAP
+struct UmapEmbeddingRequest : public CommandRequestBase
+{
+    std::filesystem::path input_csv_path{};
+    int num_neighbors{ 15 };
+    double min_dist{ 0.1 };
+    int num_epochs{ 0 };
+    std::uint64_t random_seed{ 42 };
+};
+#endif
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 struct MapVisualizationRequest : public CommandRequestBase

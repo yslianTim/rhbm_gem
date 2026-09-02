@@ -33,6 +33,9 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::core::FitOptions>);
+#ifdef RHBM_GEM_ENABLE_UMAP
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::core::UmapEmbeddingRequest>);
+#endif
 
     rhbm_gem::ModelObject model_object;
     (void)model_object;

@@ -280,6 +280,25 @@ else()
             EXCLUDE_FROM_ALL
         )
 
+        # The pinned UMAP stack is third-party header-only code. Keep project
+        # warning flags focused on RHBM-GEM sources when those templates are
+        # instantiated by the command implementation.
+        foreach(_rhbm_gem_umap_target IN ITEMS
+            umappp aarand irlba subpar sanisizer knncolle)
+            get_target_property(
+                _rhbm_gem_umap_include_dirs
+                ${_rhbm_gem_umap_target}
+                INTERFACE_INCLUDE_DIRECTORIES)
+            if(_rhbm_gem_umap_include_dirs)
+                set_property(
+                    TARGET ${_rhbm_gem_umap_target}
+                    APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+                    "${_rhbm_gem_umap_include_dirs}")
+            endif()
+        endforeach()
+        unset(_rhbm_gem_umap_include_dirs)
+        unset(_rhbm_gem_umap_target)
+
         FetchContent_GetProperties(eigen)
         set(RHBM_GEM_EIGEN3_SOURCE_DIR "${eigen_SOURCE_DIR}")
     endif()

@@ -89,6 +89,12 @@ if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     )
 endif()
 
+if(RHBM_GEM_ENABLE_UMAP)
+    target_sources(rhbm_gem PRIVATE
+        core/command/UmapEmbeddingCommand.cpp
+    )
+endif()
+
 if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
     target_sources(rhbm_gem PRIVATE
         "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.c"
@@ -112,6 +118,7 @@ if(RHBM_GEM_ENABLE_UMAP)
     target_link_libraries(rhbm_gem PRIVATE
         "$<BUILD_INTERFACE:libscran::umappp>"
     )
+    target_compile_definitions(rhbm_gem PUBLIC RHBM_GEM_ENABLE_UMAP)
 endif()
 
 if(WIN32 AND BUILD_SHARED_LIBS)
