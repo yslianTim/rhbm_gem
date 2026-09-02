@@ -27,9 +27,14 @@ constexpr std::string_view kInputHeader{
     "serial id,residue,spot,neighbor count,peeling ratio,"
     "amplitude 1st,amplitude 2nd,amplitude 3rd,"
     "width 1st,width 2nd,width 3rd,"
-    "offset 1st,offset 2nd,offset 3rd"
+    "offset 1st,offset 2nd,offset 3rd,"
+    "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
+    "width rank 1st,width rank 2nd,width rank 3rd,"
+    "offset rank 1st,offset rank 2nd,offset rank 3rd"
 };
-constexpr std::size_t kFeatureCount{ 11 };
+constexpr std::size_t kFeatureCount{ 20 };
+constexpr std::size_t kInputColumnCount{ 23 };
+constexpr std::size_t kOutputColumnCount{ 25 };
 
 std::vector<std::string> BuildFields(
     std::size_t observation,
@@ -41,7 +46,7 @@ std::vector<std::string> BuildFields(
         "ALA",
         "CA",
     };
-    fields.reserve(14);
+    fields.reserve(kInputColumnCount);
     for (std::size_t feature = 0; feature < kFeatureCount; ++feature)
     {
         const auto left{ (observation + 1) * (feature + 2) };
@@ -176,8 +181,11 @@ std::vector<std::array<double, 2>> ReadCoordinates(
     for (std::size_t line = 1; line < lines.size(); ++line)
     {
         const auto fields{ SplitFields(lines[line]) };
-        if (fields.size() != 16) return {};
-        coordinates.push_back({ std::stod(fields[14]), std::stod(fields[15]) });
+        if (fields.size() != kOutputColumnCount) return {};
+        coordinates.push_back({
+            std::stod(fields[kInputColumnCount]),
+            std::stod(fields[kInputColumnCount + 1])
+        });
     }
     return coordinates;
 }
@@ -199,7 +207,7 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     command_test::ScopedTempDir temp_dir{ "umap_embedding_success" };
     const auto input_path{ temp_dir.path() / "local_fitting_result_case.csv" };
     const auto output_dir{ temp_dir.path() / "output" };
-    const auto input_rows{ MakeRows(8, 10) };
+    const auto input_rows{ MakeRows(8, 11) };
     WriteCsv(input_path, input_rows, kInputHeader, "\r\n");
 
     auto request{ MakeRequest(input_path, output_dir) };
@@ -207,7 +215,7 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     const auto result{ RunCommand(request) };
 
     ASSERT_TRUE(result.succeeded);
-    EXPECT_TRUE(HasIssue(result, "-i,--input", "offset 3rd"));
+    EXPECT_TRUE(HasIssue(result, "-i,--input", "amplitude rank 1st"));
     EXPECT_TRUE(HasIssue(result, "--neighbors", "limited to 7"));
 
     const auto output_path{ output_dir / "umap_embedding_case.csv" };
@@ -217,12 +225,12 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     for (std::size_t row = 0; row < input_rows.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row + 1]) };
-        ASSERT_EQ(fields.size(), 16u);
+        ASSERT_EQ(fields.size(), kOutputColumnCount);
         EXPECT_EQ(
             output_lines[row + 1].substr(0, input_rows[row].size()),
             input_rows[row]);
-        EXPECT_TRUE(std::isfinite(std::stod(fields[14])));
-        EXPECT_TRUE(std::isfinite(std::stod(fields[15])));
+        EXPECT_TRUE(std::isfinite(std::stod(fields[kInputColumnCount])));
+        EXPECT_TRUE(std::isfinite(std::stod(fields[kInputColumnCount + 1])));
     }
 }
 
@@ -231,6 +239,10 @@ TEST(UmapEmbeddingCommandTest, RejectsInvalidOrReorderedHeaderAndDoesNotCreateOu
     command_test::ScopedTempDir temp_dir{ "umap_embedding_header" };
     const std::vector<std::string> invalid_headers{
         "serial id,residue,spot",
+        "serial id,residue,spot,neighbor count,peeling ratio,"
+            "amplitude 1st,amplitude 2nd,amplitude 3rd,"
+            "width 1st,width 2nd,width 3rd,"
+            "offset 1st,offset 2nd,offset 3rd",
         "serial id,spot,residue,neighbor count,peeling ratio,"
             "amplitude 1st,amplitude 2nd,amplitude 3rd,"
             "width 1st,width 2nd,width 3rd,"
@@ -272,6 +284,8 @@ TEST(UmapEmbeddingCommandTest, RejectsMalformedAndNonFiniteFeatureValues)
     nan_value[5] = "nan";
     auto infinity_value{ BuildFields(0) };
     infinity_value[6] = "inf";
+    auto rank_nan_value{ BuildFields(0) };
+    rank_nan_value[14] = "nan";
 
     const std::vector<InvalidCase> cases{
         { "missing", std::move(missing_field), "column 'layout'" },
@@ -279,6 +293,7 @@ TEST(UmapEmbeddingCommandTest, RejectsMalformedAndNonFiniteFeatureValues)
         { "invalid", std::move(invalid_number), "column 'peeling ratio'" },
         { "nan", std::move(nan_value), "column 'amplitude 1st'" },
         { "infinity", std::move(infinity_value), "column 'amplitude 2nd'" },
+        { "rank_nan", std::move(rank_nan_value), "column 'amplitude rank 1st'" },
     };
 
     for (const auto & invalid_case : cases)
@@ -340,8 +355,32 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantFeaturesWithoutWritingOutput)
     EXPECT_TRUE(HasIssue(
         result,
         "-i,--input",
-        "All 11 selected UMAP feature columns are constant"));
+        "All 16 selected UMAP feature columns are constant"));
     EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_constant.csv"));
+}
+
+TEST(UmapEmbeddingCommandTest, UsesRankColumnsAsEmbeddingFeatures)
+{
+    command_test::ScopedTempDir temp_dir{ "umap_embedding_rank_features" };
+    const auto input_path{ temp_dir.path() / "local_fitting_result_rank.csv" };
+    const auto output_dir{ temp_dir.path() / "output" };
+    std::vector<std::string> rows;
+    for (std::size_t observation = 0; observation < 6; ++observation)
+    {
+        auto fields{ BuildFields(0) };
+        fields[0] = std::to_string(observation + 1);
+        for (std::size_t feature = 11; feature < kFeatureCount; ++feature)
+        {
+            fields[3 + feature] = std::to_string((observation + feature) % 4 + 1);
+        }
+        rows.push_back(JoinFields(fields));
+    }
+    WriteCsv(input_path, rows);
+
+    const auto result{ RunCommand(MakeRequest(input_path, output_dir)) };
+
+    EXPECT_TRUE(result.succeeded);
+    EXPECT_TRUE(std::filesystem::exists(output_dir / "umap_embedding_rank.csv"));
 }
 
 TEST(UmapEmbeddingCommandTest, RejectsInvalidOptionsAndNonRegularInput)

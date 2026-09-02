@@ -16,20 +16,23 @@ SYSTEM builds prefer an installed umappp 3.3.2 stack and fetch only missing UMAP
 
 ## Input Contract
 
-The input must use this exact 14-column header and order:
+The input must use this exact 23-column header and order:
 
 ```text
-serial id,residue,spot,neighbor count,peeling ratio,amplitude 1st,amplitude 2nd,amplitude 3rd,width 1st,width 2nd,width 3rd,offset 1st,offset 2nd,offset 3rd
+serial id,residue,spot,neighbor count,peeling ratio,amplitude 1st,amplitude 2nd,amplitude 3rd,width 1st,width 2nd,width 3rd,offset 1st,offset 2nd,offset 3rd,amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,width rank 1st,width rank 2nd,width rank 3rd,offset rank 1st,offset rank 2nd,offset rank 3rd
 ```
 
-`serial id`, `residue`, and `spot` are preserved as identifiers. UMAP uses the remaining 11 columns:
+`serial id`, `residue`, and `spot` are preserved as identifiers. All remaining 20 columns are parsed as features. The current build passes these 16 features to UMAP:
 
 - neighbor count and peeling ratio
-- first-, second-, and third-stage amplitude
-- first-, second-, and third-stage width
-- first-, second-, and third-stage offset
+- first- and second-stage amplitude
+- first- and second-stage width
+- second-stage offset
+- first-, second-, and third-stage amplitude, width, and offset ranks
 
-Every data row must contain exactly 14 comma-separated fields. The 11 feature fields must parse completely as finite numbers; empty values, `nan`, and infinity are errors. Quoted fields and commas embedded inside fields are not supported. Both LF and CRLF line endings are accepted, and at least three data rows are required.
+Each rank compares the current atom with up to its three nearest selected atoms. The largest parameter value has rank 1, equal values share a rank, and models with fewer than four selected atoms use all available atoms.
+
+The third-stage amplitude and width plus the first- and third-stage offset are preserved but are not currently passed to UMAP. Every data row must contain exactly 23 comma-separated fields. The 20 feature fields must parse completely as finite numbers; empty values, `nan`, and infinity are errors. Quoted fields and commas embedded inside fields are not supported. Both LF and CRLF line endings are accepted, and at least three data rows are required.
 
 ## CLI Usage
 
@@ -57,9 +60,9 @@ RHBM-GEM umap_embedding \
 
 ## Processing and Output
 
-Each feature is independently standardized with a population Z-score before UMAP runs. A constant feature is replaced with zeros and reported as a warning. If all 11 features are constant, the command fails without writing an output file.
+Each selected feature is independently standardized with a population Z-score before UMAP runs. A constant selected feature is replaced with zeros and reported as a warning. If all 16 selected features are constant, the command fails without writing an output file.
 
-The Euclidean VP-tree UMAP result has two dimensions. Input row order and all original values are preserved, and the output appends `umap x,umap y` using round-trip-safe floating-point precision.
+The Euclidean VP-tree UMAP result has two dimensions. Input row order and all 23 original values are preserved, and the output appends `umap x,umap y` using round-trip-safe floating-point precision, producing 25 columns per row.
 
 For `local_fitting_result_model.csv`, the output is `<folder>/umap_embedding_model.csv`. Other input names use their complete stem, for example `custom.csv` becomes `umap_embedding_custom.csv`.
 

@@ -24,6 +24,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -37,6 +38,7 @@ namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
+constexpr std::size_t kLocalRankNeighborCount{ 3 };
 constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
     Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
 };
@@ -47,6 +49,32 @@ struct GaussianModelParameterSamples
     std::vector<double> width_list{};
     std::vector<double> offset_list{};
 };
+
+using GaussianParameterGetter = double (GaussianModel3D::*)() const;
+
+int ComputeLocalParameterRank(
+    const AtomObject & atom,
+    const std::vector<AtomObject *> & comparison_atoms,
+    FittingStage stage,
+    GaussianParameterGetter parameter_getter)
+{
+    const auto & current_model{
+        AtomLocalPotentialView::For(atom).GetEstimateMDPDE(stage)
+    };
+    const auto current_value{ (current_model.*parameter_getter)() };
+    int rank{ 1 };
+    for (const auto * comparison_atom : comparison_atoms)
+    {
+        const auto & comparison_model{
+            AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(stage)
+        };
+        if ((comparison_model.*parameter_getter)() > current_value)
+        {
+            ++rank;
+        }
+    }
+    return rank;
+}
 
 std::string BuildGroupPriorSpotSummary(const ModelObject & model_object, FittingStage stage)
 {
@@ -122,6 +150,7 @@ std::string BuildGroupPriorSpotSummary(const ModelObject & model_object, Fitting
 std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool peeling_applied)
 {
     auto atom_list{ model_object.GetSelectedAtoms() };
+    auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_list) };
     std::sort(
         atom_list.begin(),
         atom_list.end(),
@@ -136,13 +165,51 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
         << "serial id,residue,spot,neighbor count,peeling ratio,"
         << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         << "width 1st,width 2nd,width 3rd,"
-        << "offset 1st,offset 2nd,offset 3rd";
-    for (const auto * atom : atom_list)
+        << "offset 1st,offset 2nd,offset 3rd,"
+        << "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
+        << "width rank 1st,width rank 2nd,width rank 3rd,"
+        << "offset rank 1st,offset rank 2nd,offset rank 3rd";
+    for (auto * atom : atom_list)
     {
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         const auto & first_model{ local_view.GetEstimateMDPDE(FittingStage::First) };
         const auto & second_model{ local_view.GetEstimateMDPDE(FittingStage::Second) };
         const auto & third_model{ local_view.GetEstimateMDPDE(FittingStage::Third) };
+
+        auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::KNearestNeighbors(
+            kd_tree_root.get(),
+            atom,
+            std::min(kLocalRankNeighborCount + 1, atom_list.size()))
+        };
+        comparison_atoms.erase(
+            std::remove(comparison_atoms.begin(), comparison_atoms.end(), atom),
+            comparison_atoms.end());
+        if (comparison_atoms.size() > kLocalRankNeighborCount)
+        {
+            comparison_atoms.resize(kLocalRankNeighborCount);
+        }
+        comparison_atoms.emplace_back(atom);
+
+        constexpr std::array fitting_stages{
+            FittingStage::First,
+            FittingStage::Second,
+            FittingStage::Third
+        };
+        std::array<int, fitting_stages.size()> amplitude_ranks{};
+        std::array<int, fitting_stages.size()> width_ranks{};
+        std::array<int, fitting_stages.size()> offset_ranks{};
+        for (std::size_t stage_index = 0;
+            stage_index < fitting_stages.size();
+            ++stage_index)
+        {
+            const auto stage{ fitting_stages[stage_index] };
+            amplitude_ranks[stage_index] = ComputeLocalParameterRank(
+                *atom, comparison_atoms, stage, &GaussianModel3D::GetAmplitude);
+            width_ranks[stage_index] = ComputeLocalParameterRank(
+                *atom, comparison_atoms, stage, &GaussianModel3D::GetWidth);
+            offset_ranks[stage_index] = ComputeLocalParameterRank(
+                *atom, comparison_atoms, stage, &GaussianModel3D::GetOffset);
+        }
 
         table << '\n'
             << atom->GetSerialID() << ','
@@ -167,7 +234,16 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
             << third_model.GetWidth() << ','
             << first_model.GetOffset() << ','
             << second_model.GetOffset() << ','
-            << third_model.GetOffset();
+            << third_model.GetOffset() << ','
+            << amplitude_ranks[0] << ','
+            << amplitude_ranks[1] << ','
+            << amplitude_ranks[2] << ','
+            << width_ranks[0] << ','
+            << width_ranks[1] << ','
+            << width_ranks[2] << ','
+            << offset_ranks[0] << ','
+            << offset_ranks[1] << ','
+            << offset_ranks[2];
     }
     table << '\n';
     return table.str();

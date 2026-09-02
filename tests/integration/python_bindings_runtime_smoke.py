@@ -192,7 +192,10 @@ def assert_umap_runtime_behavior() -> None:
         "serial id,residue,spot,neighbor count,peeling ratio,"
         "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         "width 1st,width 2nd,width 3rd,"
-        "offset 1st,offset 2nd,offset 3rd"
+        "offset 1st,offset 2nd,offset 3rd,"
+        "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
+        "width rank 1st,width rank 2nd,width rank 3rd,"
+        "offset rank 1st,offset rank 2nd,offset rank 3rd"
     )
     with tempfile.TemporaryDirectory(prefix="rhbm_umap_python_") as temp_dir:
         workdir = Path(temp_dir)
@@ -202,7 +205,7 @@ def assert_umap_runtime_behavior() -> None:
             features = [
                 (observation + 1) * (feature + 2)
                 + (observation * observation + 3 * feature) % (feature + 3)
-                for feature in range(11)
+                for feature in range(20)
             ]
             rows.append(
                 ",".join(
@@ -226,7 +229,7 @@ def assert_umap_runtime_behavior() -> None:
         output_path = Path(request.output_dir) / "umap_embedding_python.csv"
         output_rows = output_path.read_text(encoding="utf-8").splitlines()
         assert len(output_rows) == 7
-        assert all(len(row.split(",")) == 16 for row in output_rows)
+        assert all(len(row.split(",")) == 25 for row in output_rows)
 
 
 def main() -> int:

@@ -64,6 +64,30 @@ bool HasTwoFractionalDigits(const std::string & value)
         && value.at(decimal_position + 2) <= '9';
 }
 
+using GaussianParameterGetter = double (rg::GaussianModel3D::*)() const;
+
+int ComputeExpectedParameterRank(
+    const rg::AtomObject & atom,
+    const std::vector<rg::AtomObject *> & comparison_atoms,
+    FittingStage stage,
+    GaussianParameterGetter parameter_getter)
+{
+    const auto & current_model{
+        rg::AtomLocalPotentialView::For(atom).GetEstimateMDPDE(stage)
+    };
+    const auto current_value{ (current_model.*parameter_getter)() };
+    return 1 + static_cast<int>(std::count_if(
+        comparison_atoms.begin(),
+        comparison_atoms.end(),
+        [stage, parameter_getter, current_value](const rg::AtomObject * comparison_atom)
+        {
+            const auto & comparison_model{
+                rg::AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(stage)
+            };
+            return (comparison_model.*parameter_getter)() > current_value;
+        }));
+}
+
 tdf::GaussianParameterDistribution MakeDistribution(
     const rg::GaussianModel3D & mean,
     const rg::GaussianModel3DUncertainty & sigma = rg::GaussianModel3DUncertainty{ 0.05, 0.025, 0.01 })
@@ -536,7 +560,10 @@ TEST(
         "serial id,residue,spot,neighbor count,peeling ratio,"
         "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         "width 1st,width 2nd,width 3rd,"
-        "offset 1st,offset 2nd,offset 3rd"
+        "offset 1st,offset 2nd,offset 3rd,"
+        "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
+        "width rank 1st,width rank 2nd,width rank 3rd,"
+        "offset rank 1st,offset rank 2nd,offset rank 3rd"
     };
     ASSERT_TRUE(std::filesystem::exists(csv_path));
     const auto csv_content{ ReadTextFile(csv_path) };
@@ -544,7 +571,7 @@ TEST(
     const auto row_begin{ csv_header.size() + 1 };
     const auto row_end{ csv_content.find('\n', row_begin) };
     const auto row{ SplitCsvLine(csv_content.substr(row_begin, row_end - row_begin)) };
-    ASSERT_EQ(row.size(), 14U);
+    ASSERT_EQ(row.size(), 23U);
     const auto * atom{ model->GetSelectedAtoms().front() };
     EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
     EXPECT_FALSE(row.at(1).empty());
@@ -555,7 +582,7 @@ TEST(
     const auto expected_peeling_ratio{ fitted_view.GetLocalFittingPeelingRatio(true) };
     ASSERT_TRUE(expected_peeling_ratio.has_value());
     EXPECT_NEAR(std::stod(row.at(4)), *expected_peeling_ratio, 0.0051);
-    for (std::size_t column = 4; column < row.size(); column++)
+    for (std::size_t column = 4; column < 14; column++)
     {
         EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
         EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
@@ -578,6 +605,10 @@ TEST(
     EXPECT_NEAR(std::stod(row.at(11)), first_model.GetOffset(), 0.0051);
     EXPECT_NEAR(std::stod(row.at(12)), second_model.GetOffset(), 0.0051);
     EXPECT_NEAR(std::stod(row.at(13)), final_model.GetOffset(), 0.0051);
+    for (std::size_t column = 14; column < row.size(); ++column)
+    {
+        EXPECT_EQ(std::stoi(row.at(column)), 1);
+    }
 
     {
         std::ofstream stale_output{ csv_path };
@@ -587,6 +618,129 @@ TEST(
     const auto quiet_csv_content{ ReadTextFile(csv_path) };
     EXPECT_EQ(quiet_csv_content.find(csv_header), 0U);
     EXPECT_EQ(quiet_csv_content.find("stale content"), std::string::npos);
+}
+
+TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossAllStages)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::CA,
+            Element::CARBON,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    ASSERT_EQ(selected_atoms.size(), 5u);
+
+    auto options{ MakeSecondStageOptions() };
+    command_test::ScopedTempDir temp_dir{ "local_fitting_result_ranks" };
+    const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
+    options.result_csv_path = csv_path;
+    rt::RunPotentialFittingWorkflow(*model, options);
+
+    std::istringstream csv{ ReadTextFile(csv_path) };
+    std::string line;
+    ASSERT_TRUE(std::getline(csv, line));
+    constexpr std::array stages{
+        FittingStage::First,
+        FittingStage::Second,
+        FittingStage::Third
+    };
+    constexpr std::array<GaussianParameterGetter, 3> parameter_getters{
+        &rg::GaussianModel3D::GetAmplitude,
+        &rg::GaussianModel3D::GetWidth,
+        &rg::GaussianModel3D::GetOffset
+    };
+    constexpr std::array<std::size_t, 3> rank_column_starts{ 14, 17, 20 };
+
+    std::size_t row_count{ 0 };
+    std::size_t verified_neighbor_set_count{ 0 };
+    while (std::getline(csv, line))
+    {
+        const auto row{ SplitCsvLine(line) };
+        ASSERT_EQ(row.size(), 23u);
+        const auto serial_id{ std::stoi(row.at(0)) };
+        const auto atom_iter{ std::find_if(
+            selected_atoms.begin(),
+            selected_atoms.end(),
+            [serial_id](const rg::AtomObject * atom)
+            {
+                return atom->GetSerialID() == serial_id;
+            })
+        };
+        ASSERT_NE(atom_iter, selected_atoms.end());
+        for (std::size_t column = 14; column < row.size(); ++column)
+        {
+            const auto rank{ std::stoi(row.at(column)) };
+            EXPECT_GE(rank, 1);
+            EXPECT_LE(rank, 4);
+        }
+
+        std::vector<rg::AtomObject *> comparison_atoms;
+        for (auto * comparison_atom : selected_atoms)
+        {
+            if (comparison_atom != *atom_iter)
+            {
+                comparison_atoms.emplace_back(comparison_atom);
+            }
+        }
+        std::sort(
+            comparison_atoms.begin(),
+            comparison_atoms.end(),
+            [atom = *atom_iter](const rg::AtomObject * lhs, const rg::AtomObject * rhs)
+            {
+                const auto lhs_distance{ Distance(atom->GetPosition(), lhs->GetPosition()) };
+                const auto rhs_distance{ Distance(atom->GetPosition(), rhs->GetPosition()) };
+                if (lhs_distance != rhs_distance)
+                {
+                    return lhs_distance < rhs_distance;
+                }
+                return lhs->GetSerialID() < rhs->GetSerialID();
+            });
+        const auto third_neighbor_distance{
+            Distance((*atom_iter)->GetPosition(), comparison_atoms[2]->GetPosition())
+        };
+        const auto fourth_neighbor_distance{
+            Distance((*atom_iter)->GetPosition(), comparison_atoms[3]->GetPosition())
+        };
+        if (std::abs(third_neighbor_distance - fourth_neighbor_distance) < 1e-12)
+        {
+            ++row_count;
+            continue;
+        }
+        comparison_atoms.resize(3);
+        comparison_atoms.emplace_back(*atom_iter);
+
+        for (std::size_t parameter = 0; parameter < parameter_getters.size(); ++parameter)
+        {
+            for (std::size_t stage = 0; stage < stages.size(); ++stage)
+            {
+                const auto expected_rank{ ComputeExpectedParameterRank(
+                    **atom_iter,
+                    comparison_atoms,
+                    stages[stage],
+                    parameter_getters[parameter])
+                };
+                const auto actual_rank{
+                    std::stoi(row.at(rank_column_starts[parameter] + stage))
+                };
+                EXPECT_EQ(actual_rank, expected_rank);
+            }
+        }
+        ++verified_neighbor_set_count;
+        ++row_count;
+    }
+    EXPECT_EQ(row_count, selected_atoms.size());
+    EXPECT_GT(verified_neighbor_set_count, 0u);
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

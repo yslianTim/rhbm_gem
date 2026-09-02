@@ -41,7 +41,10 @@ constexpr std::string_view kInputHeader{
     "serial id,residue,spot,neighbor count,peeling ratio,"
     "amplitude 1st,amplitude 2nd,amplitude 3rd,"
     "width 1st,width 2nd,width 3rd,"
-    "offset 1st,offset 2nd,offset 3rd"
+    "offset 1st,offset 2nd,offset 3rd,"
+    "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
+    "width rank 1st,width rank 2nd,width rank 3rd,"
+    "offset rank 1st,offset rank 2nd,offset rank 3rd"
 };
 
 struct UmapFeatureDefinition
@@ -52,7 +55,7 @@ struct UmapFeatureDefinition
 
 // Keep these entries in CSV column order. Toggle include_in_umap to choose the
 // features that are standardized and passed to UMAP, then rebuild the project.
-constexpr std::array<UmapFeatureDefinition, 11> kFeatureDefinitions{
+constexpr std::array<UmapFeatureDefinition, 20> kFeatureDefinitions{
     UmapFeatureDefinition{ "neighbor count", true },
     UmapFeatureDefinition{ "peeling ratio", true },
     UmapFeatureDefinition{ "amplitude 1st", true },
@@ -64,6 +67,15 @@ constexpr std::array<UmapFeatureDefinition, 11> kFeatureDefinitions{
     UmapFeatureDefinition{ "offset 1st", false },
     UmapFeatureDefinition{ "offset 2nd", true },
     UmapFeatureDefinition{ "offset 3rd", false },
+    UmapFeatureDefinition{ "amplitude rank 1st", false },
+    UmapFeatureDefinition{ "amplitude rank 2nd", true },
+    UmapFeatureDefinition{ "amplitude rank 3rd", false },
+    UmapFeatureDefinition{ "width rank 1st", false },
+    UmapFeatureDefinition{ "width rank 2nd", true },
+    UmapFeatureDefinition{ "width rank 3rd", false },
+    UmapFeatureDefinition{ "offset rank 1st", false },
+    UmapFeatureDefinition{ "offset rank 2nd", true },
+    UmapFeatureDefinition{ "offset rank 3rd", false },
 };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
@@ -188,7 +200,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
     if (header != kInputHeader)
     {
         error_message = "line 1, column 'header': local fitting result header does not match "
-            "the required 14-column order.";
+            "the required 23-column order.";
         return std::nullopt;
     }
 
@@ -215,7 +227,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         if (fields.size() != kInputColumnCount)
         {
             error_message = "line " + std::to_string(line_number)
-                + ", column 'layout': expected 14 columns, received "
+                + ", column 'layout': expected 23 columns, received "
                 + std::to_string(fields.size()) + ".";
             return std::nullopt;
         }
