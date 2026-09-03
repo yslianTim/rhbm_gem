@@ -429,15 +429,10 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
-        const auto selection{
-            SelectSecondStageSeed(
-                result.mdpde,
-                global_median)
-        };
+        const auto selection{ SelectSecondStageSeed(result.mdpde, global_median) };
         if (!selection.has_value())
         {
-            build_result.failure =
-                SecondStageInitializationFailure::SelectedSeedUnavailable;
+            build_result.failure = SecondStageInitializationFailure::SelectedSeedUnavailable;
             return build_result;
         }
 
@@ -452,8 +447,7 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
 
     if (!context.unselected_atom_list.empty() && !global_median.has_value())
     {
-        build_result.failure =
-            SecondStageInitializationFailure::UnselectedSeedUnavailable;
+        build_result.failure = SecondStageInitializationFailure::UnselectedSeedUnavailable;
         return build_result;
     }
     for (std::size_t i = 0; i < context.unselected_atom_list.size(); i++)
@@ -477,9 +471,7 @@ static void StoreSecondStageNeighborCounts(
     const std::vector<int> & neighbor_count_list)
 {
     auto analysis{ model_object.EditAnalysis() };
-    for (std::size_t atom_index = 0;
-        atom_index < context.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         analysis.SetAtomLocalNeighborCountForPeeling(
             *context.at(atom_index).atom,
@@ -501,8 +493,7 @@ static void ApplyQuarantineFallbackTargets(
             if (target.kind == QuarantineTargetKind::HardFailureCluster)
             {
                 assembled_state.at(atom_index) = previous_state.at(atom_index);
-                assembled_polish_provenance.at(atom_index) =
-                    previous_polish_provenance.at(atom_index);
+                assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
                 continue;
             }
             if (target.kind == QuarantineTargetKind::OffsetGroup)
@@ -522,14 +513,12 @@ static void ApplyQuarantineFallbackTargets(
             assembled_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
                 previous_state.at(atom_index).mdpde,
                 assembled_offset);
-            assembled_polish_provenance.at(atom_index) =
-                previous_polish_provenance.at(atom_index);
+            assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
         }
     }
 }
 
-SuspiciousBlockActivity QuarantineState::BeginIteration(
-    std::size_t accepted_iteration_count)
+SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t accepted_iteration_count)
 {
     SuspiciousBlockActivity activity{
         SuspiciousUpdateMask(m_atom_count, 0),
@@ -691,9 +680,7 @@ static bool DoesFailureAffectTarget(
             target.atom_index_list,
             [&](const auto atom_index)
             {
-                return std::ranges::binary_search(
-                    failure_target.atom_index_list,
-                    atom_index);
+                return std::ranges::binary_search(failure_target.atom_index_list, atom_index);
             })
     };
     if (!overlaps) return false;
@@ -767,15 +754,11 @@ bool QuarantineState::UpdateAfterIteration(
     {
         for (const auto & diagnostic : diagnostic_list)
         {
-            for (const auto & terminal :
-                diagnostic.attempt.terminal_diagnostic_list)
+            for (const auto & terminal : diagnostic.attempt.terminal_diagnostic_list)
             {
                 const auto reason{ terminal.reason };
                 if (reason == StabilizationTerminalReason::None) continue;
-                const StabilizationTerminalFailure failure{
-                    reason,
-                    terminal.guard_reason
-                };
+                const StabilizationTerminalFailure failure{ reason, terminal.guard_reason };
                 if (reason == StabilizationTerminalReason::GuardInfeasible &&
                     terminal.guard_atom_index.has_value() &&
                     terminal.guard_mode.has_value())
@@ -785,8 +768,7 @@ bool QuarantineState::UpdateAfterIteration(
                     {
                         std::vector<std::size_t> group_atom_index_list;
                         const auto group_id{ context.at(atom_index).group_id };
-                        for (std::size_t member_index = 0;
-                            member_index < context.size(); member_index++)
+                        for (std::size_t member_index = 0; member_index < context.size(); member_index++)
                         {
                             if (context.at(member_index).group_id == group_id)
                             {
@@ -885,9 +867,7 @@ std::size_t QuarantineState::AtomCount() const
     for (const auto & [target, state] : state_by_target)
     {
         if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
-        atom_index_set.insert(
-            target.atom_index_list.begin(),
-            target.atom_index_list.end());
+        atom_index_set.insert(target.atom_index_list.begin(), target.atom_index_list.end());
     }
     return atom_index_set.size();
 }
@@ -1111,8 +1091,7 @@ static IterationProposalResult RunProposalIteration(
                 offset_result.offset(static_cast<Eigen::Index>(position))
             };
             const auto operator_model{
-                previous_state.at(atom_index).mdpde.GetModel().WithOffset(
-                    proposed_offset)
+                previous_state.at(atom_index).mdpde.GetModel().WithOffset(proposed_offset)
             };
             if (!IsValidSecondStageGaussianModel(operator_model))
             {
@@ -1233,16 +1212,13 @@ static IterationProposalResult RunProposalIteration(
                 const auto atom_index{ key.at(position_list.at(member_position)) };
                 if (accepted)
                 {
-                    current_model_snapshot.selected.at(atom_index) =
-                        accepted_model_list.at(member_position);
-                    assessment_by_atom.at(atom_index) =
-                        accepted_assessment_list.at(member_position);
+                    current_model_snapshot.selected.at(atom_index) = accepted_model_list.at(member_position);
+                    assessment_by_atom.at(atom_index) = accepted_assessment_list.at(member_position);
                 }
                 else
                 {
                     block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                    current_model_snapshot.selected.at(atom_index) =
-                        previous_state.at(atom_index).mdpde.GetModel();
+                    current_model_snapshot.selected.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
                 }
             }
             if (!accepted)
@@ -1266,8 +1242,7 @@ static IterationProposalResult RunProposalIteration(
             }
             operator_offsets_match_proposal =
                 operator_offsets_match_proposal &&
-                fixed_point_operator.state.at(atom_index).mdpde.GetModel()
-                        .GetOffset() ==
+                fixed_point_operator.state.at(atom_index).mdpde.GetModel().GetOffset() ==
                     current_model_snapshot.selected.at(atom_index).GetOffset();
         }
     }
@@ -1369,17 +1344,14 @@ static IterationProposalResult RunProposalIteration(
             {
                 if (refit_result->unrestricted_mdpde.has_value())
                 {
-                    fixed_point_operator.state.at(atom_index).mdpde =
-                        *refit_result->unrestricted_mdpde;
+                    fixed_point_operator.state.at(atom_index).mdpde = *refit_result->unrestricted_mdpde;
                     fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
                 }
             }
-            local_refit_status_by_atom.at(atom_index) =
-                refit_result->attempted_refit_status;
+            local_refit_status_by_atom.at(atom_index) = refit_result->attempted_refit_status;
             const auto shape_solver_qualified{
                 refit_result->attempted_refit_status.has_value() &&
-                IsLocalRefitStatusSolverQualified(
-                    *refit_result->attempted_refit_status)
+                IsLocalRefitStatusSolverQualified(*refit_result->attempted_refit_status)
             };
             if (!shape_solver_qualified)
             {
@@ -1406,8 +1378,7 @@ static IterationProposalResult RunProposalIteration(
         {
             if (unrestricted_shape_list.at(atom_index).has_value())
             {
-                fixed_point_operator.state.at(atom_index).mdpde =
-                    *unrestricted_shape_list.at(atom_index);
+                fixed_point_operator.state.at(atom_index).mdpde = *unrestricted_shape_list.at(atom_index);
                 fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
             }
         }
@@ -1470,8 +1441,7 @@ static IterationProposalResult RunProposalIteration(
 
 static bool AreGraphPartitionsEqual(const CouplingGraphPartition & lhs, const CouplingGraphPartition & rhs)
 {
-    return lhs.boundary_sample_dependency_list.size() ==
-            rhs.boundary_sample_dependency_list.size() &&
+    return lhs.boundary_sample_dependency_list.size() == rhs.boundary_sample_dependency_list.size() &&
         lhs.boundary_sample_dependency_list == rhs.boundary_sample_dependency_list &&
         lhs.sample_id_list_by_key == rhs.sample_id_list_by_key;
 }
@@ -1683,9 +1653,7 @@ static IterationResult RunIteration(
     std::set<std::size_t> probation_atom_index_set;
     for (const auto & target : iteration_state.quarantine_state.probation_target_list)
     {
-        probation_atom_index_set.insert(
-            target.atom_index_list.begin(),
-            target.atom_index_list.end());
+        probation_atom_index_set.insert(target.atom_index_list.begin(), target.atom_index_list.end());
     }
     std::vector<ClusterKey> probation_key_list;
     for (const auto & key : cluster_key_list)
@@ -1805,22 +1773,17 @@ static IterationResult RunIteration(
     const auto assembled_uses_polish{
         iteration_internal::UsesPolish(assembled_polish_provenance)
     };
-    result.accepted_cluster_diagnostic_list =
-        std::move(selection.accepted_cluster_diagnostic_list);
-    result.rejected_cluster_diagnostic_list =
-        std::move(selection.rejected_cluster_diagnostic_list);
-    result.boundary_reconciliation_diagnostic_list =
-        std::move(selection.boundary_reconciliation_diagnostic_list);
-    iteration_state.rollback_atom_mask =
-        raw_iteration_result.block_activity.BuildCombinedFixedAtomMask();
+    result.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
+    result.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
+    result.boundary_reconciliation_diagnostic_list = std::move(selection.boundary_reconciliation_diagnostic_list);
+    iteration_state.rollback_atom_mask = raw_iteration_result.block_activity.BuildCombinedFixedAtomMask();
     result.attempt_number = attempt_number;
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
     result.quarantine_atom_count = iteration_state.quarantine_state.AtomCount();
     result.active_atom_count = context.size() - result.quarantine_atom_count;
     result.polish_progress = selection.polish_progress;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
-    result.operator_maximum_transformed_change =
-        std::ranges::max(operator_proposal_change_summary.maximum_list);
+    result.operator_maximum_transformed_change = std::ranges::max(operator_proposal_change_summary.maximum_list);
 
     if (selection.accepted_key_list.empty())
     {
@@ -1940,10 +1903,8 @@ static IterationResult RunIteration(
     }
 
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.accepted_maximum_transformed_change =
-        std::ranges::max(transformed_change_summary.maximum_list);
-    result.transformed_change_percentile =
-        certificate.accepted_active_movement.percentile_list;
+    result.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
+    result.transformed_change_percentile = certificate.accepted_active_movement.percentile_list;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
     certificate.suspicious_offset_fallback = has_suspicious_offset_fallback;
@@ -1957,10 +1918,7 @@ static IterationResult RunIteration(
         result.stop_reason = SecondStageStopReason::AuditPatience;
     }
 
-    LogConvergenceSafeguardAudit(
-        options.quiet_mode,
-        result,
-        certificate);
+    LogConvergenceSafeguardAudit(options.quiet_mode, result, certificate);
 
     iteration_state.previous_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);
@@ -1991,9 +1949,7 @@ void ApplyFitState(
 
 struct FinalPolishResidualSafetyResult
 {
-    FinalPolishResidualSafetyStatus status{
-        FinalPolishResidualSafetyStatus::NotEvaluated
-    };
+    FinalPolishResidualSafetyStatus status{ FinalPolishResidualSafetyStatus::NotEvaluated };
     std::optional<ConvergenceCertificate> base{};
     std::optional<ConvergenceCertificate> candidate{};
 };
@@ -2014,8 +1970,7 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
         const auto quarantine_atom_mask{
             final_block_activity.BuildCombinedFixedAtomMask()
         };
-        for (std::size_t atom_index = 0;
-            atom_index < ridge_atom_mask.size(); atom_index++)
+        for (std::size_t atom_index = 0; atom_index < ridge_atom_mask.size(); atom_index++)
         {
             if (quarantine_atom_mask.at(atom_index) != 0)
             {
@@ -2023,8 +1978,7 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
             }
         }
         const auto joint_offset_ridge_multiplier_list{
-            iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(
-                ridge_atom_mask)
+            iteration_internal::BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
         };
         auto certificate_options{ options };
         certificate_options.quiet_mode = true;
@@ -2069,8 +2023,7 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
     }
 }
 
-static bool HasComparableFinalPolishOperatorEvidence(
-    const ConvergenceCertificate & certificate)
+static bool HasComparableFinalPolishOperatorEvidence(const ConvergenceCertificate & certificate)
 {
     const auto & percentile_list{
         certificate.operator_nominal_residual.percentile_list
