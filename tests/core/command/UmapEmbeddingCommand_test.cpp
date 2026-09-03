@@ -238,7 +238,7 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
 }
 
 #ifdef HAVE_ROOT
-TEST(UmapEmbeddingCommandTest, PlotsRowsWithUnconfiguredSpotsAsOther)
+TEST(UmapEmbeddingCommandTest, SkipsPlotWhenOnlyUnconfiguredSpotsAndOtherGraphIsDisabled)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_other_spots" };
     const auto input_path{ temp_dir.path() / "local_fitting_result_other.csv" };
@@ -260,8 +260,7 @@ TEST(UmapEmbeddingCommandTest, PlotsRowsWithUnconfiguredSpotsAsOther)
     const auto output_lines{ ReadLines(output_dir / "umap_embedding_other.csv") };
     EXPECT_EQ(output_lines.size(), input_rows.size() + 1);
     const auto plot_path{ output_dir / "umap_embedding_other.pdf" };
-    ASSERT_TRUE(std::filesystem::is_regular_file(plot_path));
-    EXPECT_GT(std::filesystem::file_size(plot_path), 0u);
+    EXPECT_FALSE(std::filesystem::exists(plot_path));
 }
 #endif
 

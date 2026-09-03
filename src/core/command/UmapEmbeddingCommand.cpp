@@ -95,13 +95,41 @@ static_assert(
 // Toggle this internal switch to restrict UMAP input to the configured spots,
 // then rebuild the project.
 constexpr bool kFilterUmapInputBySpot{ false };
-constexpr std::array<std::string_view, 4> kConfiguredUmapSpots{ "C", "CA", "N", "O" };
 
-std::optional<std::size_t> FindConfiguredUmapSpotIndex(std::string_view spot)
+struct ConfiguredUmapSpot
 {
+    std::string_view label;
+    std::string_view spot;
+    std::optional<std::string_view> residue;
+};
+
+constexpr std::array<ConfiguredUmapSpot, 5> kConfiguredUmapSpots{
+    ConfiguredUmapSpot{ "C", "C", std::nullopt },
+    ConfiguredUmapSpot{ "CA", "CA", std::nullopt },
+    ConfiguredUmapSpot{ "N", "N", std::nullopt },
+    ConfiguredUmapSpot{ "O", "O", std::nullopt },
+    ConfiguredUmapSpot{ "HOH", "O", "HOH" },
+};
+
+std::optional<std::size_t> FindConfiguredUmapSpotIndex(
+    std::string_view residue,
+    std::string_view spot)
+{
+    // Match residue-specific categories before the generic spot categories.
     for (std::size_t index = 0; index < kConfiguredUmapSpots.size(); ++index)
     {
-        if (spot == kConfiguredUmapSpots[index]) return index;
+        const auto & configured_spot{ kConfiguredUmapSpots[index] };
+        if (configured_spot.residue
+            && residue == *configured_spot.residue
+            && spot == configured_spot.spot)
+        {
+            return index;
+        }
+    }
+    for (std::size_t index = 0; index < kConfiguredUmapSpots.size(); ++index)
+    {
+        const auto & configured_spot{ kConfiguredUmapSpots[index] };
+        if (!configured_spot.residue && spot == configured_spot.spot) return index;
     }
     return std::nullopt;
 }
@@ -117,10 +145,11 @@ struct UmapSpotPlotStyle
 constexpr bool kDrawOtherUmapSpotGraph{ false };
 // Keep Other last: unmatched spot names fall back to that plot category.
 constexpr std::array kUmapSpotPlotStyles{
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[0], kViolet + 1 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[1], kRed + 1 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[2], kGreen + 2 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[3], kAzure + 2 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[0].label, kViolet + 1 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[1].label, kRed + 1 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[2].label, kGreen + 2 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[3].label, kAzure + 2 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[4].label, kOrange + 7 },
     UmapSpotPlotStyle{ "Other", kGray + 2 },
 };
 constexpr std::size_t kOtherUmapSpotPlotStyleIndex{
@@ -132,7 +161,7 @@ static_assert(kUmapSpotPlotStyles.size() == kOtherUmapSpotPlotStyleIndex + 1);
 struct PreparedUmapInput
 {
     std::vector<std::string> original_rows;
-    std::vector<std::string> spot_names;
+    std::vector<std::optional<std::size_t>> configured_spot_indices;
     std::vector<double> standardized_features;
     std::vector<std::string_view> constant_features;
     int effective_neighbors{ 0 };
@@ -231,7 +260,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
 
     std::vector<std::array<double, kInputFeatureCount>> raw_features;
     std::vector<std::string> original_rows;
-    std::vector<std::string> spot_names;
+    std::vector<std::optional<std::size_t>> configured_spot_indices;
     std::vector<std::size_t> source_line_numbers;
     std::array<long double, kInputFeatureCount> means{};
     std::array<long double, kInputFeatureCount> sum_squared_differences{};
@@ -257,7 +286,10 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
                 + std::to_string(fields.size()) + ".";
             return std::nullopt;
         }
-        if (kFilterUmapInputBySpot && !FindConfiguredUmapSpotIndex(fields[2])) continue;
+        const auto configured_spot_index{
+            FindConfiguredUmapSpotIndex(fields[1], fields[2])
+        };
+        if (kFilterUmapInputBySpot && !configured_spot_index) continue;
 
         std::array<double, kInputFeatureCount> feature_row{};
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
@@ -275,7 +307,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         }
 
         original_rows.push_back(row);
-        spot_names.emplace_back(fields[2]);
+        configured_spot_indices.push_back(configured_spot_index);
         source_line_numbers.push_back(line_number);
         raw_features.push_back(feature_row);
         const long double count{ static_cast<long double>(raw_features.size()) };
@@ -376,7 +408,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
 
     PreparedUmapInput prepared;
     prepared.original_rows = std::move(original_rows);
-    prepared.spot_names = std::move(spot_names);
+    prepared.configured_spot_indices = std::move(configured_spot_indices);
     prepared.standardized_features = std::move(standardized_features);
     prepared.constant_features = std::move(constant_features);
     prepared.effective_neighbors = std::min(
@@ -542,7 +574,7 @@ bool WriteEmbeddingPlot(
             ++observation)
         {
             const auto configured_spot_index{
-                FindConfiguredUmapSpotIndex(prepared.spot_names[observation])
+                prepared.configured_spot_indices[observation]
             };
             if (!configured_spot_index && !kDrawOtherUmapSpotGraph) continue;
 
