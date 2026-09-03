@@ -20,7 +20,6 @@ struct SecondStageSeedSelectionRecord
 struct UnselectedSecondStageSeedSelectionRecord
 {
     int atom_serial_id{ 0 };
-    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
     GaussianModel3D selected_model{};
 };
 

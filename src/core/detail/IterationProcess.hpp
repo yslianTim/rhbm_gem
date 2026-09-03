@@ -3,7 +3,6 @@
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
 
-#include <array>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -15,25 +14,8 @@ namespace rhbm_gem::core::detail {
 
 enum class SecondStageSeedSource
 {
-    GroupPosterior,
-    GroupPrior,
-    GroupMedian,
+    LocalMdpde,
     GlobalMedian
-};
-
-constexpr std::array<SecondStageSeedSource, 4> kSecondStageSeedSourceList{
-    SecondStageSeedSource::GroupPosterior,
-    SecondStageSeedSource::GroupPrior,
-    SecondStageSeedSource::GroupMedian,
-    SecondStageSeedSource::GlobalMedian
-};
-
-struct SecondStageSeedCandidates
-{
-    std::optional<GaussianModel3DWithUncertainty> group_posterior{};
-    std::optional<GaussianModel3DWithUncertainty> group_prior{};
-    std::optional<GaussianModel3DWithUncertainty> group_median{};
-    std::optional<GaussianModel3DWithUncertainty> global_median{};
 };
 
 struct SecondStageSeedSelection
@@ -42,7 +24,9 @@ struct SecondStageSeedSelection
     GaussianModel3DWithUncertainty model{};
 };
 
-std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates);
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const GaussianModel3DWithUncertainty & local_mdpde,
+    const std::optional<GaussianModel3D> & global_median);
 
 enum class SecondStageInitializationFailure
 {

@@ -637,9 +637,7 @@ TEST(DataObjectModelAnalysisTest, GroupPotentialEntryKeepsStagesIndependent)
         rg::FittingStage::First,
         group_key,
         first_result);
-    entry.CopyStage(
-        rg::FittingStage::First,
-        rg::FittingStage::Second);
+    entry.AddMember(rg::FittingStage::Second, group_key, *first_atom);
 
     entry.AddMember(rg::FittingStage::First, group_key, *second_atom);
     entry.SetAlphaG(rg::FittingStage::Second, group_key, 0.8);
@@ -1229,60 +1227,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
         rg::FittingStage::Second).posterior.has_value());
 }
 
-TEST(DataObjectModelAnalysisTest, ModelAnalysisViewFindsAtomGroupPriorForAtom)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllAtoms();
-    model->ApplySymmetrySelection(false);
-    auto analysis{ model->EditAnalysis() };
-    analysis.RebuildAtomGroupsFromSelection();
-
-    const auto before_view{ model->GetAnalysisView() };
-    const auto group_key{ before_view.CollectAtomGroupKeys(
-        rg::FittingStage::Third).front() };
-    const auto & atom_list{ before_view.GetAtomObjectList(
-        rg::FittingStage::Third,
-        group_key) };
-    ASSERT_FALSE(atom_list.empty());
-
-    rg::GroupGaussianResult group_result;
-    group_result.prior = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.7, 0.9, -0.2 },
-        rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 }
-    };
-    group_result.member_results.resize(atom_list.size());
-    analysis.ApplyAtomGroupGaussianResult(
-        rg::FittingStage::Third,
-        group_key,
-        group_result);
-
-    const auto view{ model->GetAnalysisView() };
-    const auto found{ view.FindAtomGroupPriorWithUncertainty(
-        rg::FittingStage::Third,
-        *atom_list.front()) };
-    ASSERT_TRUE(found.has_value());
-    EXPECT_DOUBLE_EQ(found->GetModel().GetAmplitude(), 1.7);
-    EXPECT_DOUBLE_EQ(found->GetModel().GetWidth(), 0.9);
-    EXPECT_DOUBLE_EQ(found->GetModel().GetOffset(), -0.2);
-    EXPECT_DOUBLE_EQ(
-        found->GetStandardDeviationModel().GetWidth(),
-        0.2);
-
-    auto missing_model{ data_test::MakeModelWithBond() };
-    auto * missing_atom{ missing_model->GetAtomList().at(1).get() };
-    missing_atom->SetAtomKey(static_cast<AtomKey>(65535));
-    missing_model->SelectAllAtoms(false);
-    missing_model->SetAtomSelected(
-        missing_model->GetAtomList().at(0)->GetSerialID(),
-        true);
-    missing_model->EditAnalysis().RebuildAtomGroupsFromSelection();
-    EXPECT_FALSE(missing_model->GetAnalysisView()
-        .FindAtomGroupPriorWithUncertainty(
-            rg::FittingStage::Third,
-            *missing_atom)
-        .has_value());
-}
-
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianResultWithMismatchedMemberCount)
 {
     auto model{ data_test::MakeModelWithBond() };
@@ -1610,12 +1554,23 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesGroupAlphaForExi
     analysis.RebuildAtomGroupsFromSelection();
     analysis.InitializeGroupAlpha(rg::FittingStage::Third, 0.3);
     const auto analysis_view{ model->GetAnalysisView() };
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys(
-        rg::FittingStage::Third))
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(
+        rg::FittingStage::Third) };
+    for (const auto group_key : group_key_list)
     {
         EXPECT_DOUBLE_EQ(0.3, analysis_view.GetAtomAlphaG(
             rg::FittingStage::Third, group_key));
     }
+    ASSERT_FALSE(group_key_list.empty());
+    analysis.SetAtomGroupAlphaG(
+        rg::FittingStage::Third,
+        group_key_list.front(),
+        0.8);
+    EXPECT_DOUBLE_EQ(
+        analysis_view.GetAtomAlphaG(
+            rg::FittingStage::Third,
+            group_key_list.front()),
+        0.8);
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesLocalFittingStageResult)
@@ -1697,146 +1652,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesLocalFittingStageResu
             .GetGaussianResult(rg::FittingStage::First)
             .alpha_r,
         source_result.alpha_r);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesGroupFittingStageResult)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllAtoms();
-    model->ApplySymmetrySelection(false);
-    model->EditAnalysis().InitializeFromSelection();
-    auto analysis{ model->EditAnalysis() };
-    const auto analysis_view{ model->GetAnalysisView() };
-    const auto group_key{ analysis_view.CollectAtomGroupKeys(
-        rg::FittingStage::First).front() };
-    const auto & source_members{ analysis_view.GetAtomObjectList(
-        rg::FittingStage::First,
-        group_key) };
-
-    rg::GroupGaussianResult source_result;
-    source_result.alpha_g = 0.35;
-    source_result.mean = rg::GaussianModel3D{ 1.1, 1.2, 0.1 };
-    source_result.mdpde = rg::GaussianModel3D{ 1.3, 1.4, 0.2 };
-    source_result.prior = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.5, 1.6, 0.3 },
-        rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 }
-    };
-    source_result.member_results.resize(source_members.size());
-    analysis.ApplyAtomGroupGaussianResult(
-        rg::FittingStage::First,
-        group_key,
-        source_result);
-
-    analysis.CopyGroupFittingStageResult(
-        rg::FittingStage::First,
-        rg::FittingStage::Second);
-
-    const auto destination_view{ model->GetAnalysisView() };
-    EXPECT_TRUE(destination_view.HasAtomGroup(
-        rg::FittingStage::Second,
-        group_key));
-    EXPECT_EQ(
-        destination_view.GetAtomObjectList(
-            rg::FittingStage::Second,
-            group_key).size(),
-        source_members.size());
-    EXPECT_EQ(
-        destination_view.GetAtomObjectList(
-            rg::FittingStage::Second,
-            group_key).front(),
-        source_members.front());
-    EXPECT_DOUBLE_EQ(
-        destination_view.GetAtomGroupMean(
-            rg::FittingStage::Second,
-            group_key).GetAmplitude(),
-        source_result.mean.GetAmplitude());
-    EXPECT_DOUBLE_EQ(
-        destination_view.GetAtomGroupMDPDE(
-            rg::FittingStage::Second,
-            group_key).GetOffset(),
-        source_result.mdpde.GetOffset());
-    const auto destination_prior{ destination_view.GetAtomGroupPriorWithUncertainty(
-        rg::FittingStage::Second,
-        group_key) };
-    EXPECT_DOUBLE_EQ(
-        destination_prior.GetModel().GetWidth(),
-        source_result.prior.GetModel().GetWidth());
-    EXPECT_DOUBLE_EQ(
-        destination_prior.GetStandardDeviationModel().GetOffset(),
-        source_result.prior.GetStandardDeviationModel().GetOffset());
-    EXPECT_DOUBLE_EQ(
-        destination_view.GetAtomAlphaG(
-            rg::FittingStage::Second,
-            group_key),
-        source_result.alpha_g);
-
-    analysis.SetAtomGroupAlphaG(
-        rg::FittingStage::Second,
-        group_key,
-        0.85);
-    EXPECT_DOUBLE_EQ(
-        analysis_view.GetAtomAlphaG(
-            rg::FittingStage::First,
-            group_key),
-        source_result.alpha_g);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesCompleteFittingStageState)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllAtoms();
-    model->ApplySymmetrySelection(false);
-    model->EditAnalysis().InitializeFromSelection();
-    auto analysis{ model->EditAnalysis() };
-    const auto analysis_view{ model->GetAnalysisView() };
-    const auto group_key{ analysis_view.CollectAtomGroupKeys(
-        rg::FittingStage::First).front() };
-    const auto & atom_list{ analysis_view.GetAtomObjectList(
-        rg::FittingStage::First,
-        group_key) };
-
-    rg::LocalGaussianResult local_result;
-    local_result.alpha_r = 0.42;
-    local_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 2.0, 0.7, -0.4 },
-        rg::GaussianModel3DUncertainty{}
-    };
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::First,
-        *atom_list.front(),
-        local_result);
-
-    rg::GroupGaussianResult group_result;
-    group_result.alpha_g = 0.24;
-    group_result.mean = rg::GaussianModel3D{ 2.1, 0.8, -0.3 };
-    group_result.member_results.resize(atom_list.size());
-    analysis.ApplyAtomGroupGaussianResult(
-        rg::FittingStage::First,
-        group_key,
-        group_result);
-
-    analysis.CopyFittingStageState(
-        rg::FittingStage::First,
-        rg::FittingStage::Third);
-
-    const auto copied_local_result{
-        rg::AtomLocalPotentialView::For(*atom_list.front())
-            .GetGaussianResult(rg::FittingStage::Third)
-    };
-    EXPECT_DOUBLE_EQ(copied_local_result.alpha_r, local_result.alpha_r);
-    EXPECT_DOUBLE_EQ(
-        copied_local_result.mdpde.GetModel().GetOffset(),
-        local_result.mdpde.GetModel().GetOffset());
-    EXPECT_DOUBLE_EQ(
-        analysis_view.GetAtomGroupMean(
-            rg::FittingStage::Third,
-            group_key).GetWidth(),
-        group_result.mean.GetWidth());
-    EXPECT_DOUBLE_EQ(
-        analysis_view.GetAtomAlphaG(
-            rg::FittingStage::Third,
-            group_key),
-        group_result.alpha_g);
 }
 
 TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)

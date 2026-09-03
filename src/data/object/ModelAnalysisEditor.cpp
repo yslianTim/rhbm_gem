@@ -200,23 +200,6 @@ void ModelAnalysisEditor::CopyLocalFittingStageResult(
     }
 }
 
-void ModelAnalysisEditor::CopyGroupFittingStageResult(
-    FittingStage source_stage,
-    FittingStage destination_stage)
-{
-    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CopyStage(
-        source_stage,
-        destination_stage);
-}
-
-void ModelAnalysisEditor::CopyFittingStageState(
-    FittingStage source_stage,
-    FittingStage destination_stage)
-{
-    CopyLocalFittingStageResult(source_stage, destination_stage);
-    CopyGroupFittingStageResult(source_stage, destination_stage);
-}
-
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     FittingStage stage,
     GroupKey group_key,

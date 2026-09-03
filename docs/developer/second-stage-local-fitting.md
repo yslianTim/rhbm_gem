@@ -3,8 +3,8 @@
 ## Scope
 
 `RunSecondStageLocalFitting(ModelObject&, const FitOptions&)` refines the
-Gaussian estimates of the selected atoms after the first-stage local and group
-fits. It accounts for overlapping responses from neighboring selected atoms
+Gaussian estimates of the selected atoms after the first-stage local fit. It
+accounts for overlapping responses from neighboring selected atoms
 and unselected model atoms while updating each selected atom's amplitude,
 width, and offset. Unselected atoms contribute background responses but are
 never added to the optimizer state.
@@ -41,38 +41,35 @@ across targets and retained only when they affect at least one sample. When
 contributor set; other selection exclusions do not remove background
 contributors.
 
-Before the second stage starts, the first group fit consumes the selected raw
-sampling entries and supplies the per-atom posterior and group prior used by
-seed selection. The first-stage local MDPDE and OLS models are not passed to
-the second-stage seed selector.
+Before the second stage starts, the workflow trains the first-stage local
+`alpha_r`, performs fixed-offset local fitting on the selected raw sampling
+entries, and copies the complete local result from `FittingStage::First` to
+`FittingStage::Second`. The first stage does not train `alpha_g` or run group
+fitting.
 
-The initial Gaussian seed is rebuilt for every selected atom. The current local
-MDPDE and local OLS estimates are not seed sources. The first valid source is
-selected in this order:
+The initial Gaussian seed is rebuilt for every selected atom. The first valid
+source is selected in this order:
 
-1. group posterior;
-2. group prior;
-3. same-group parameter median;
-4. global parameter median.
+1. the atom's copied first-stage local MDPDE;
+2. the global local-MDPDE parameter median.
 
-The median sources are bootstrapped in two passes. Each atom first contributes
-at most one direct model, preferring its valid group posterior over its valid
-group prior. The component-wise group and global parameter medians are computed
-only from those direct models; atoms filled from a median are not fed back into
-either median. The selected seed replaces the complete local MDPDE model,
-including its offset and uncertainty. Direct posterior and prior seeds retain
-their uncertainty, while median seeds use zero uncertainty.
+The component-wise global amplitude, width, and offset medians are computed
+once from all valid selected local MDPDE models. Invalid local models are
+excluded, and atoms filled from the median are not fed back into its source
+pool. A valid direct local seed retains its complete model and uncertainty. A
+global-median fallback replaces the complete local MDPDE and uses zero
+uncertainty. Local OLS, group posterior, group prior, and same-group medians are
+not initialization sources.
 
 If a valid seed cannot be obtained for every selected atom, the stage exits
 without changing the stored estimates, peeling sampling entries, or group
 results.
 
-Each effective unselected neighbor then receives a transient seed from the
-same-group median or, when that group has no selected direct seed, the global
-median. Unselected seeds never feed back into either median pool. Selected and
-unselected seed summaries are logged separately. If an unselected seed cannot
-be built, the stage exits with `no-valid-unselected-neighbor-seed` before
-changing stored results.
+Each effective unselected neighbor receives the same transient global
+local-MDPDE median seed. Unselected seeds never feed back into the median pool.
+Selected and unselected seed summaries are logged separately. If the global
+median needed by an unselected contributor cannot be built, the stage exits
+with `no-valid-unselected-neighbor-seed` before changing stored results.
 
 The valid initial state is used to build a weighted coupling topology. The
 topology records atoms that jointly affect objective samples. Each iteration
@@ -266,9 +263,9 @@ offset penalty       = 0.01 * mean offset-plausibility penalty
 cluster total        = fit-range loss + tail penalty + offset penalty
 ```
 
-There is no width-prior term. Group posterior and prior models participate in
-seed selection only. The offset-plausibility residual floor uses the owning
-cluster's fixed fit scale.
+There is no width-prior term. Group posterior and prior models do not
+participate in initialization or the objective. The offset-plausibility
+residual floor uses the owning cluster's fixed fit scale.
 
 The global objective weights clusters by selected atom count. Quarantined
 blocks remain included in this normalization:
@@ -623,7 +620,7 @@ which validated state is ultimately written. Unresolved quarantine targets are
 kept at their latest validated fixed values and do not prevent unrelated active
 blocks from converging or being written.
 
-## Final state application and group fitting
+## Final state application and third-stage group fitting
 
 After the stopping policy selects the final validated state, the stage builds
 one atom-level snapshot from the MDPDE model stored in each selected result.
@@ -645,21 +642,21 @@ contributors use group medians derived from the final selected state, or their
 initial global seed when no matching selected group exists. The calculation
 preserves the original sampling-point order and metadata. Only selected local
 Gaussian results are written; unselected seeds remain transient. The selected
-results and rebuilt entries are persisted with `SetGaussianResult` and
-`SetPeelingSamplingEntries` before group fitting begins.
+results and rebuilt entries are persisted together with
+`ApplyAtomLocalSecondStageResult`. `RunSecondStageLocalFitting` then returns
+without training `alpha_g` or running group fitting.
 
-`RunSecondStageLocalFitting` then calls
-`RunGroupPotentialFitting(model_object, options, true)`. The group fit reads the
-newly persisted complete entries through `GetPeelingSamplingEntries(false)` and
-reuses the `alpha_g` trained before the first group fit.
-
-After the second stage returns, the workflow passes the same persisted peeling
-entries to `RunLocalAlphaTraining(..., true)` and
-`RunFixedOffsetLocalFitting(..., true)`, retrains `alpha_g`, and calls
-`RunGroupPotentialFitting(..., true)` for the final group fit. These later local
+After the second stage returns, the workflow copies only the second-stage local
+result to `FittingStage::Third`. It passes the same persisted peeling entries to
+`RunLocalAlphaTraining(..., FittingStage::Third)` and
+`RunFixedOffsetLocalFitting(..., FittingStage::Third)`, then runs
+`RunGroupAlphaTraining` and
+`RunGroupPotentialFitting(..., FittingStage::Third)`. These third-stage local
 fits may update local Gaussian results, but they do not rebuild or overwrite
-the peeling entries; the final group fit therefore consumes the same
-atom-level peeling snapshot written during second-stage finalization.
+the peeling entries. The third stage is therefore the only workflow stage that
+produces trained group alpha values, group models, and per-atom posteriors, and
+its group fit consumes the atom-level peeling snapshot written during
+second-stage finalization.
 
 ## Performance architecture
 

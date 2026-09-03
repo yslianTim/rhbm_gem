@@ -131,7 +131,6 @@ rg::LocalGaussianResult MakeGaussianResult(const rg::GaussianModel3D & model)
         model,
         rg::GaussianModel3DUncertainty{}
     };
-    result.posterior = result.mdpde;
     return result;
 }
 
@@ -805,7 +804,8 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
 }
 
 std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
-    const rg::GaussianModel3D & model_value)
+    const std::array<rg::GaussianModel3D, 2> & selected_seed_model_list,
+    const rg::GaussianModel3D & truth_model)
 {
     const std::vector<std::array<double, 3>> position_list{
         { 0.0, 0.0, 0.0 },
@@ -855,19 +855,22 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
     for (const auto & atom : model->GetAtomList())
     {
         all_atoms.emplace_back(atom.get());
-        truth_models.emplace_back(model_value);
+        truth_models.emplace_back(truth_model);
     }
 
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(rg::FittingStage::Second, 0.0);
-    for (auto * atom : model->GetSelectedAtoms())
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    for (std::size_t atom_index = 0;
+        atom_index < selected_atoms.size();
+        atom_index++)
     {
+        auto * atom{ selected_atoms.at(atom_index) };
         analysis.SetAtomLocalAlphaR(FittingStage::Second, *atom, 0.0);
         analysis.SetAtomLocalGaussianResult(
             FittingStage::Second,
             *atom,
-            MakeGaussianResult(model_value));
+            MakeGaussianResult(selected_seed_model_list.at(atom_index)));
         analysis.SetAtomLocalRawSamplingEntries(
             *atom, BuildSamples(*atom, all_atoms, truth_models));
     }
@@ -1472,7 +1475,7 @@ void ExpectPeelingSamplingEntriesMatchFinalModels(
 
 } // namespace
 
-TEST(EstimatorSecondStageDefenseTest, SeedSelectionUsesConfiguredFallbackPriority)
+TEST(EstimatorSecondStageDefenseTest, SeedSelectionUsesLocalMdpdeThenGlobalMedian)
 {
     const auto make_candidate = [](double amplitude)
     {
@@ -1487,57 +1490,79 @@ TEST(EstimatorSecondStageDefenseTest, SeedSelectionUsesConfiguredFallbackPriorit
             rg::GaussianModel3DUncertainty{}
         }
     };
-    seed_detail::SecondStageSeedCandidates candidates;
-    candidates.group_posterior = make_candidate(1.0);
-    candidates.group_prior = make_candidate(2.0);
-    candidates.group_median = make_candidate(3.0);
-    candidates.global_median = make_candidate(4.0);
+    auto local_mdpde{ make_candidate(1.0) };
+    std::optional<rg::GaussianModel3D> global_median{
+        make_candidate(4.0).GetModel()
+    };
 
     const auto expect_source = [&](seed_detail::SecondStageSeedSource source)
     {
-        const auto selection{ seed_detail::SelectSecondStageSeed(candidates) };
+        const auto selection{
+            seed_detail::SelectSecondStageSeed(local_mdpde, global_median)
+        };
         ASSERT_TRUE(selection.has_value());
         EXPECT_EQ(selection->source, source);
     };
-    expect_source(seed_detail::SecondStageSeedSource::GroupPosterior);
-    candidates.group_posterior = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedSource::GroupPrior);
-    candidates.group_prior = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedSource::GroupMedian);
-    candidates.group_median = invalid_candidate;
+    expect_source(seed_detail::SecondStageSeedSource::LocalMdpde);
+    local_mdpde = invalid_candidate;
     expect_source(seed_detail::SecondStageSeedSource::GlobalMedian);
-    candidates.global_median = invalid_candidate;
-    EXPECT_FALSE(seed_detail::SelectSecondStageSeed(candidates).has_value());
+    global_median = invalid_candidate.GetModel();
+    EXPECT_FALSE(seed_detail::SelectSecondStageSeed(
+        local_mdpde,
+        global_median).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, SeedSelectionReturnsCompleteSourceModelAndUncertainty)
 {
-    seed_detail::SecondStageSeedCandidates candidates;
-    candidates.group_posterior =
+    auto local_mdpde{
         rg::GaussianModel3DWithUncertainty{
             rg::GaussianModel3D{ 6.0, 0.55, -0.2 },
             rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
+        }
     };
-    candidates.group_prior = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 4.0, 0.65, 0.4 },
-        rg::GaussianModel3DUncertainty{}
+    const std::optional<rg::GaussianModel3D> global_median{
+        rg::GaussianModel3D{ 4.0, 0.65, 0.4 }
     };
 
-    const auto selection{ seed_detail::SelectSecondStageSeed(candidates) };
-    ASSERT_TRUE(selection.has_value());
-    EXPECT_EQ(selection->source, seed_detail::SecondStageSeedSource::GroupPosterior);
-    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetAmplitude(), 6.0);
-    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetWidth(), 0.55);
-    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetOffset(), -0.2);
+    const auto local_selection{
+        seed_detail::SelectSecondStageSeed(local_mdpde, global_median)
+    };
+    ASSERT_TRUE(local_selection.has_value());
+    EXPECT_EQ(local_selection->source, seed_detail::SecondStageSeedSource::LocalMdpde);
+    EXPECT_DOUBLE_EQ(local_selection->model.GetModel().GetAmplitude(), 6.0);
+    EXPECT_DOUBLE_EQ(local_selection->model.GetModel().GetWidth(), 0.55);
+    EXPECT_DOUBLE_EQ(local_selection->model.GetModel().GetOffset(), -0.2);
     EXPECT_DOUBLE_EQ(
-        selection->model.GetStandardDeviationModel().GetAmplitude(),
+        local_selection->model.GetStandardDeviationModel().GetAmplitude(),
         0.1);
     EXPECT_DOUBLE_EQ(
-        selection->model.GetStandardDeviationModel().GetWidth(),
+        local_selection->model.GetStandardDeviationModel().GetWidth(),
         0.02);
     EXPECT_DOUBLE_EQ(
-        selection->model.GetStandardDeviationModel().GetOffset(),
+        local_selection->model.GetStandardDeviationModel().GetOffset(),
         0.03);
+
+    local_mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
+        rg::GaussianModel3DUncertainty{ 0.4, 0.5, 0.6 }
+    };
+    const auto median_selection{
+        seed_detail::SelectSecondStageSeed(local_mdpde, global_median)
+    };
+    ASSERT_TRUE(median_selection.has_value());
+    EXPECT_EQ(median_selection->source, seed_detail::SecondStageSeedSource::GlobalMedian);
+    EXPECT_DOUBLE_EQ(median_selection->model.GetModel().GetAmplitude(), 4.0);
+    EXPECT_DOUBLE_EQ(median_selection->model.GetModel().GetWidth(), 0.65);
+    EXPECT_DOUBLE_EQ(median_selection->model.GetModel().GetOffset(), 0.4);
+    EXPECT_DOUBLE_EQ(
+        median_selection->model.GetStandardDeviationModel().GetAmplitude(),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        median_selection->model.GetStandardDeviationModel().GetWidth(),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        median_selection->model.GetStandardDeviationModel().GetOffset(),
+        0.0);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
@@ -5429,78 +5454,75 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinear
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingPersistsFinalModelPeelingBeforeGroupFitting)
+    RunSecondStageLocalFittingPersistsFinalModelAndPeelingWithoutGroupFitting)
 {
     auto model{ BuildSharedOffsetJointPolishDefenseModel() };
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(rg::FittingStage::Second, 0.0);
     const auto options{ MakeSecondStageOptions() };
+    const auto initial_analysis_view{ model->GetAnalysisView() };
+    const auto group_key_list{ initial_analysis_view.CollectAtomGroupKeys(
+        rg::FittingStage::Second) };
+    std::vector<rg::GaussianModel3D> initial_group_mean_list;
+    std::vector<rg::GaussianModel3D> initial_group_mdpde_list;
+    std::vector<rg::GaussianModel3D> initial_group_prior_list;
+    initial_group_mean_list.reserve(group_key_list.size());
+    initial_group_mdpde_list.reserve(group_key_list.size());
+    initial_group_prior_list.reserve(group_key_list.size());
+    for (const auto group_key : group_key_list)
+    {
+        initial_group_mean_list.emplace_back(
+            initial_analysis_view.GetAtomGroupMean(
+                rg::FittingStage::Second, group_key));
+        initial_group_mdpde_list.emplace_back(
+            initial_analysis_view.GetAtomGroupMDPDE(
+                rg::FittingStage::Second, group_key));
+        initial_group_prior_list.emplace_back(
+            initial_analysis_view.GetAtomGroupPrior(
+                rg::FittingStage::Second, group_key));
+    }
 
     rt::RunSecondStageLocalFitting(*model, options);
 
     ExpectPeelingSamplingEntriesMatchFinalModels(*model);
     const auto analysis_view{ model->GetAnalysisView() };
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys(
-        rg::FittingStage::Second))
+    ASSERT_EQ(
+        analysis_view.CollectAtomGroupKeys(rg::FittingStage::Second),
+        group_key_list);
+    for (std::size_t group_index = 0;
+        group_index < group_key_list.size();
+        group_index++)
     {
+        const auto group_key{ group_key_list.at(group_index) };
         const auto & atom_list{
             analysis_view.GetAtomObjectList(
                 rg::FittingStage::Second, group_key)
         };
-        std::vector<rg::GroupGaussianMemberInput> member_list;
-        member_list.reserve(atom_list.size());
-        for (const auto * atom : atom_list)
-        {
-            const auto local_view{
-                rg::AtomLocalPotentialView::For(*atom)
-            };
-            const auto & local_result{
-                local_view.GetGaussianResult(FittingStage::Second)
-            };
-            member_list.emplace_back(rg::GroupGaussianMemberInput{
-                local_view.GetPeelingSamplingEntries(false),
-                local_result.alpha_r,
-                local_result.mdpde.GetModel()
-            });
-        }
-        const auto expected_group_result{
-            rt::EstimateGroupGaussian(
-                member_list,
-                analysis_view.GetAtomAlphaG(
-                    rg::FittingStage::Second, group_key),
-                options)
-        };
-
+        EXPECT_DOUBLE_EQ(
+            analysis_view.GetAtomAlphaG(
+                rg::FittingStage::Second, group_key),
+            0.0);
         ExpectGaussianModelsNear(
             analysis_view.GetAtomGroupMean(
                 rg::FittingStage::Second, group_key),
-            expected_group_result.mean,
-            1.0e-10);
+            initial_group_mean_list.at(group_index),
+            0.0);
         ExpectGaussianModelsNear(
             analysis_view.GetAtomGroupMDPDE(
                 rg::FittingStage::Second, group_key),
-            expected_group_result.mdpde,
-            1.0e-10);
+            initial_group_mdpde_list.at(group_index),
+            0.0);
         ExpectGaussianModelsNear(
             analysis_view.GetAtomGroupPrior(
                 rg::FittingStage::Second, group_key),
-            expected_group_result.prior.GetModel(),
-            1.0e-10);
-        ASSERT_EQ(
-            expected_group_result.member_results.size(),
-            atom_list.size());
-        for (std::size_t i = 0; i < atom_list.size(); i++)
+            initial_group_prior_list.at(group_index),
+            0.0);
+        for (const auto * atom : atom_list)
         {
-            const auto actual_result{
-                rg::AtomLocalPotentialView::For(*atom_list.at(i))
+            EXPECT_FALSE(
+                rg::AtomLocalPotentialView::For(*atom)
                     .GetGaussianResult(FittingStage::Second)
-            };
-            ASSERT_TRUE(actual_result.posterior.has_value());
-            ExpectGaussianModelsNear(
-                actual_result.posterior->GetModel(),
-                expected_group_result.member_results.at(i).posterior.GetModel(),
-                1.0e-10);
+                    .posterior.has_value());
         }
     }
 }
@@ -5509,11 +5531,24 @@ TEST(
     EstimatorSecondStageDefenseTest,
     RunSecondStageLocalFittingIncludesEffectiveUnselectedContributors)
 {
-    const rg::GaussianModel3D seed_model{ 6.0, 0.55, 0.10 };
+    const std::array selected_seed_model_list{
+        rg::GaussianModel3D{ 5.0, 0.50, 0.05 },
+        rg::GaussianModel3D{ 7.0, 0.60, 0.15 }
+    };
+    const auto global_median{
+        median_detail::BuildGaussianParameterMedian(
+            std::vector<rg::GaussianModel3D>{
+                selected_seed_model_list.at(0),
+                selected_seed_model_list.at(1)
+            })
+    };
+    ASSERT_TRUE(global_median.has_value());
     std::optional<double> include_hydrogen_response;
     for (const bool exclude_hydrogen : { false, true })
     {
-        auto model{ BuildUnselectedContributorDefenseModel(seed_model) };
+        auto model{ BuildUnselectedContributorDefenseModel(
+            selected_seed_model_list,
+            *global_median) };
         auto options{ MakeSecondStageOptions() };
         options.exclude_hydrogen = exclude_hydrogen;
         const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
@@ -5536,7 +5571,7 @@ TEST(
         }
         ExpectUnselectedContributorPeeling(
             *model,
-            seed_model,
+            *global_median,
             exclude_hydrogen);
 
         const auto first_response{
@@ -5883,15 +5918,12 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    MissingPosteriorAndPriorSkipsSecondStageDespiteValidLocalSeeds)
+    MissingGroupSeedsUsesLocalMdpdeAndGlobalFallbackWithoutGroupFitting)
 {
     auto model{ BuildNearCollinearDefenseModel() };
     auto options{ MakeSecondStageOptions() };
-    std::vector<rg::GaussianModel3D> previous_model_list;
-    std::vector<LocalPotentialSampleList> previous_peeling_sampling_entries_list;
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(rg::FittingStage::Second, 0.0);
     for (auto * atom : model->GetSelectedAtoms())
     {
         auto result{
@@ -5902,6 +5934,13 @@ TEST(
             result.mdpde.GetModel()));
         ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
             result.ols.GetModel()));
+        if (atom == model->GetSelectedAtoms().front())
+        {
+            result.mdpde = rg::GaussianModel3DWithUncertainty{
+                rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
+                rg::GaussianModel3DUncertainty{}
+            };
+        }
         result.posterior.reset();
         analysis.SetAtomLocalGaussianResult(
             FittingStage::Second,
@@ -5909,16 +5948,13 @@ TEST(
             std::move(result));
         LocalPotentialSampleList sentinel_peeling_sampling_entries{
             LocalPotentialSample{
-                100.0 + static_cast<double>(previous_model_list.size()),
+                100.0 + static_cast<double>(atom->GetSerialID()),
                 SamplingPoint{ 0.5, atom->GetPosition(), true }
             }
         };
         analysis.SetAtomLocalPeelingSamplingEntries(
             *atom, sentinel_peeling_sampling_entries);
         analysis.SetAtomLocalNeighborCountForPeeling(*atom, 99);
-        previous_model_list.emplace_back(GetEstimateModel(*atom));
-        previous_peeling_sampling_entries_list.emplace_back(
-            std::move(sentinel_peeling_sampling_entries));
     }
     const auto previous_analysis_view{ model->GetAnalysisView() };
     std::vector<rg::GaussianModel3D> previous_group_prior_list;
@@ -5932,28 +5968,28 @@ TEST(
 
     const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
 
-    EXPECT_FALSE(peeling_applied);
+    EXPECT_TRUE(peeling_applied);
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*model->GetSelectedAtoms().at(i)),
-            previous_model_list.at(i),
-            0.0);
+        const auto * atom{ model->GetSelectedAtoms().at(i) };
+        EXPECT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
+            GetEstimateModel(*atom)));
         const auto peeling_sampling_entries{
             rg::AtomLocalPotentialView::For(
-                *model->GetSelectedAtoms().at(i))
+                *atom)
                 .GetPeelingSamplingEntries(false)
         };
-        ASSERT_EQ(peeling_sampling_entries.size(), 1U);
-        EXPECT_DOUBLE_EQ(
-            peeling_sampling_entries.front().response,
-            previous_peeling_sampling_entries_list.at(i).front().response);
+        EXPECT_GT(peeling_sampling_entries.size(), 1U);
         EXPECT_NE(
             rg::AtomLocalPotentialView::For(
-                *model->GetSelectedAtoms().at(i))
+                *atom)
                 .GetNeighborCountForPeeling(),
             99);
+        EXPECT_FALSE(
+            rg::AtomLocalPotentialView::For(*atom)
+                .GetGaussianResult(FittingStage::Second)
+                .posterior.has_value());
     }
     const auto final_analysis_view{ model->GetAnalysisView() };
     const auto group_key_list{ final_analysis_view.CollectAtomGroupKeys(

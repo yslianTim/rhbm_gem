@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <vector>
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -25,9 +24,6 @@ public:
     const GaussianModel3D & GetAtomGroupPrior(FittingStage stage, GroupKey group_key) const;
     GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(
         FittingStage stage, GroupKey group_key) const;
-    std::optional<GaussianModel3DWithUncertainty> FindAtomGroupPriorWithUncertainty(
-        FittingStage stage,
-        const AtomObject & atom_object) const;
     const std::vector<AtomObject *> & GetAtomObjectList(FittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaR(FittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaG(FittingStage stage, GroupKey group_key) const;

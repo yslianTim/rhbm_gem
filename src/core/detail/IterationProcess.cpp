@@ -6,7 +6,6 @@
 #include "data/detail/AtomClassifier.hpp"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -24,7 +23,6 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
@@ -278,17 +276,6 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
     return result;
 }
 
-static std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
-    const std::vector<GaussianModel3D> & model_list)
-{
-    const auto median_model{ BuildGaussianParameterMedian(model_list) };
-    if (!median_model.has_value()) return std::nullopt;
-    return GaussianModel3DWithUncertainty{
-        *median_model,
-        GaussianModel3DUncertainty{}
-    };
-}
-
 static SecondStageInitializationResult BuildSecondStageInitialization(
     const ModelObject & model_object,
     const FitOptions & options)
@@ -304,11 +291,9 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         context.selected_atom_list.emplace_back(AtomContext{ atom });
     }
     state.resize(context.size());
-    std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(context.size());
 
     std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
     selected_group_id_by_key.reserve(context.size());
-    const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
     atom_index_map.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
@@ -323,8 +308,6 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         state.at(atom_index) = local_view.GetGaussianResult(FittingStage::Second);
-        group_prior_list.at(atom_index) =
-            analysis_view.FindAtomGroupPriorWithUncertainty(FittingStage::Second, *atom);
         atom_context.alpha_r = local_view.GetAlphaR(FittingStage::Second);
         atom_context.refit_design = PreparedLocalGaussianDesign{
             atom_context.raw_sampling_entries,
@@ -433,51 +416,23 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         build_result.neighbor_count_list.emplace_back(static_cast<int>(neighbor_atom_set.size()));
     }
 
-    std::vector<std::vector<GaussianModel3D>> models_by_group(context.selected_atom_index_list_by_group.size());
     std::vector<GaussianModel3D> global_models;
     global_models.reserve(context.size());
 
-    for (std::size_t i = 0; i < context.size(); i++)
+    for (const auto & result : state)
     {
-        const auto & atom_context{ context.at(i) };
-        const auto & result{ state.at(i) };
-        const auto direct_selection{
-            SelectSecondStageSeed(
-                SecondStageSeedCandidates{
-                    result.posterior,
-                    group_prior_list.at(i),
-                    std::nullopt,
-                    std::nullopt
-                })
-        };
-        if (!direct_selection.has_value()) continue;
-
-        models_by_group.at(atom_context.group_id).emplace_back(direct_selection->model.GetModel());
-        global_models.emplace_back(direct_selection->model.GetModel());
+        global_models.emplace_back(result.mdpde.GetModel());
     }
-
-    std::vector<std::optional<GaussianModel3DWithUncertainty>> median_by_group(models_by_group.size());
-    for (std::size_t group_id = 0; group_id < models_by_group.size(); group_id++)
-    {
-        median_by_group.at(group_id) =
-            BuildValidGaussianParameterMedian(models_by_group.at(group_id));
-    }
-    const auto global_median{ BuildValidGaussianParameterMedian(global_models) };
+    const auto global_median{ BuildGaussianParameterMedian(global_models) };
 
     for (std::size_t i = 0; i < context.size(); i++)
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
-        const auto & atom_context{ context.at(i) };
-        const auto & group_median{ median_by_group.at(atom_context.group_id) };
         const auto selection{
             SelectSecondStageSeed(
-                SecondStageSeedCandidates{
-                    result.posterior,
-                    group_prior_list.at(i),
-                    group_median,
-                    global_median
-                })
+                result.mdpde,
+                global_median)
         };
         if (!selection.has_value())
         {
@@ -495,40 +450,22 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             });
     }
 
+    if (!context.unselected_atom_list.empty() && !global_median.has_value())
+    {
+        build_result.failure =
+            SecondStageInitializationFailure::UnselectedSeedUnavailable;
+        return build_result;
+    }
     for (std::size_t i = 0; i < context.unselected_atom_list.size(); i++)
     {
         auto & unselected_atom_contributor{
             context.unselected_atom_list.at(i)
         };
-        std::optional<GaussianModel3DWithUncertainty> group_median;
-        if (unselected_atom_contributor.selected_group_id.has_value() &&
-            *unselected_atom_contributor.selected_group_id < median_by_group.size() &&
-            median_by_group.at(*unselected_atom_contributor.selected_group_id).has_value())
-        {
-            group_median = *median_by_group.at(*unselected_atom_contributor.selected_group_id);
-        }
-        const auto selection{
-            SelectSecondStageSeed(
-                SecondStageSeedCandidates{
-                    std::nullopt,
-                    std::nullopt,
-                    group_median,
-                    global_median
-                })
-        };
-        if (!selection.has_value())
-        {
-            build_result.failure =
-                SecondStageInitializationFailure::UnselectedSeedUnavailable;
-            return build_result;
-        }
-
-        unselected_atom_contributor.initial_seed = selection->model.GetModel();
+        unselected_atom_contributor.initial_seed = *global_median;
         build_result.unselected_selection_record_list.emplace_back(
             UnselectedSecondStageSeedSelectionRecord{
                 unselected_atom_serial_id_list.at(i),
-                selection->source,
-                selection->model.GetModel()
+                *global_median
             });
     }
     return build_result;
@@ -2544,27 +2481,26 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
 
 } // namespace
 
-std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const GaussianModel3DWithUncertainty & local_mdpde,
+    const std::optional<GaussianModel3D> & global_median)
 {
-    const std::array<
-        const std::optional<GaussianModel3DWithUncertainty> *,
-        kSecondStageSeedSourceList.size()> candidate_list{
-        &candidates.group_posterior,
-        &candidates.group_prior,
-        &candidates.group_median,
-        &candidates.global_median
-    };
-    for (std::size_t index = 0; index < candidate_list.size(); index++)
+    if (IsValidSecondStageGaussianModel(local_mdpde.GetModel()))
     {
-        const auto & candidate{ *candidate_list.at(index) };
-        if (!candidate.has_value() ||
-            !IsValidSecondStageGaussianModel(candidate->GetModel()))
-        {
-            continue;
-        }
         return SecondStageSeedSelection{
-            kSecondStageSeedSourceList.at(index),
-            *candidate
+            SecondStageSeedSource::LocalMdpde,
+            local_mdpde
+        };
+    }
+    if (global_median.has_value() &&
+        IsValidSecondStageGaussianModel(*global_median))
+    {
+        return SecondStageSeedSelection{
+            SecondStageSeedSource::GlobalMedian,
+            GaussianModel3DWithUncertainty{
+                *global_median,
+                GaussianModel3DUncertainty{}
+            }
         };
     }
     return std::nullopt;
@@ -2916,12 +2852,7 @@ namespace rhbm_gem::core {
 
 bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
-    const auto fitted{ detail::RunSecondStageIterations(model_object, options) };
-    if (fitted)
-    {
-        RunGroupPotentialFitting(model_object, options, FittingStage::Second);
-    }
-    return fitted;
+    return detail::RunSecondStageIterations(model_object, options);
 }
 
 } // namespace rhbm_gem::core

@@ -36,12 +36,8 @@ const char * GetSecondStageSeedSourceText(SecondStageSeedSource source)
 {
     switch (source)
     {
-    case SecondStageSeedSource::GroupPosterior:
-        return "group-posterior";
-    case SecondStageSeedSource::GroupPrior:
-        return "group-prior";
-    case SecondStageSeedSource::GroupMedian:
-        return "group-median";
+    case SecondStageSeedSource::LocalMdpde:
+        return "local-mdpde";
     case SecondStageSeedSource::GlobalMedian:
         return "global-median";
     }
@@ -375,22 +371,25 @@ void LogSecondStageSeedSelections(
 {
     if (quiet_mode || selection_record_list.empty()) return;
 
-    std::array<std::size_t, kSecondStageSeedSourceList.size()> source_count{};
+    std::size_t local_mdpde_count{ 0 };
+    std::size_t global_median_count{ 0 };
     for (const auto & record : selection_record_list)
     {
-        source_count.at(static_cast<std::size_t>(record.source))++;
+        if (record.source == SecondStageSeedSource::LocalMdpde)
+        {
+            local_mdpde_count++;
+        }
+        else
+        {
+            global_median_count++;
+        }
     }
 
     std::ostringstream summary;
     summary << "Selected second-stage initial seeds = "
-        << selection_record_list.size() << ", sources = ";
-    for (std::size_t i = 0; i < kSecondStageSeedSourceList.size(); i++)
-    {
-        if (i != 0) summary << ", ";
-        summary << GetSecondStageSeedSourceText(kSecondStageSeedSourceList.at(i))
-            << ":" << source_count.at(i);
-    }
-    summary << ".";
+        << selection_record_list.size()
+        << ", sources = local-mdpde:" << local_mdpde_count
+        << ", global-median:" << global_median_count << ".";
     Logger::Log(LogLevel::Info, summary.str());
 
     for (std::size_t atom_index = 0;
@@ -420,25 +419,10 @@ void LogUnselectedSecondStageSeedSelections(
 {
     if (quiet_mode || selection_record_list.empty()) return;
 
-    std::size_t group_median_count{ 0 };
-    std::size_t global_median_count{ 0 };
-    for (const auto & record : selection_record_list)
-    {
-        if (record.source == SecondStageSeedSource::GroupMedian)
-        {
-            group_median_count++;
-        }
-        else if (record.source == SecondStageSeedSource::GlobalMedian)
-        {
-            global_median_count++;
-        }
-    }
-
     std::ostringstream summary;
     summary << "Unselected second-stage neighbor seeds = "
         << selection_record_list.size()
-        << ", sources = group-median:" << group_median_count
-        << ", global-median:" << global_median_count << ".";
+        << ", source = global-median:" << selection_record_list.size() << ".";
     Logger::Log(LogLevel::Info, summary.str());
 
     for (const auto & record : selection_record_list)
@@ -447,7 +431,7 @@ void LogUnselectedSecondStageSeedSelections(
         detail_message
             << "Unselected second-stage neighbor seed selection: serial ID = "
             << record.atom_serial_id
-            << ", source = " << GetSecondStageSeedSourceText(record.source)
+            << ", source = global-median"
             << std::scientific << std::setprecision(2)
             << ", seed A/B/C = "
             << record.selected_model.GetAmplitude() << "/"

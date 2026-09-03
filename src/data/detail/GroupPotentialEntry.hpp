@@ -135,11 +135,6 @@ public:
         return RequireGroup(stage, group_key).alpha_g;
     }
 
-    void CopyStage(FittingStage source_stage, FittingStage destination_stage)
-    {
-        GetGroupMap(destination_stage) = GetGroupMap(source_stage);
-    }
-
 private:
     GroupMap & GetGroupMap(FittingStage stage)
     {

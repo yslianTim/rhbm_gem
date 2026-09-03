@@ -415,18 +415,6 @@ void RunGroupAlphaTraining(
     analysis.InitializeGroupAlpha(stage, alpha_g);
 }
 
-void RunRegularPotentialFittingStage(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage)
-{
-    RunLocalAlphaTraining(model_object, options, stage);
-    RunFixedOffsetLocalFitting(model_object, options, stage);
-    RunGroupAlphaTraining(model_object, options, stage);
-    RunGroupPotentialFitting(model_object, options, stage);
-}
-
-
 } // namespace
 
 void RunFixedOffsetLocalFitting(
@@ -704,14 +692,18 @@ void RunGroupPotentialFitting(
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
     model_object.EditAnalysis().InitializeLocalFittingSeedModels();
-    
-    RunRegularPotentialFittingStage(model_object, options, FittingStage::First);
 
-    model_object.EditAnalysis().CopyFittingStageState(FittingStage::First, FittingStage::Second);
+    RunLocalAlphaTraining(model_object, options, FittingStage::First);
+    RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
+
+    model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
     const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
 
-    model_object.EditAnalysis().CopyFittingStageState(FittingStage::Second, FittingStage::Third);
-    RunRegularPotentialFittingStage(model_object, options, FittingStage::Third);
+    model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::Third);
+    RunLocalAlphaTraining(model_object, options, FittingStage::Third);
+    RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
+    RunGroupAlphaTraining(model_object, options, FittingStage::Third);
+    RunGroupPotentialFitting(model_object, options, FittingStage::Third);
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,

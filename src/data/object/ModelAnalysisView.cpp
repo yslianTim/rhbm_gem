@@ -1,6 +1,5 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
-#include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -58,16 +57,6 @@ GaussianModel3DWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertain
 {
     return ModelAnalysisData::Of(m_model_object)
         .AtomGroupEntry().GetPriorWithUncertainty(stage, group_key);
-}
-
-std::optional<GaussianModel3DWithUncertainty>
-ModelAnalysisView::FindAtomGroupPriorWithUncertainty(
-    FittingStage stage,
-    const AtomObject & atom_object) const
-{
-    const auto group_key{ data_internal::GetGroupKey(&atom_object) };
-    if (!HasAtomGroup(stage, group_key)) return std::nullopt;
-    return GetAtomGroupPriorWithUncertainty(stage, group_key);
 }
 
 const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(
