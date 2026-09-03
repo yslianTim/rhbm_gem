@@ -189,7 +189,8 @@ def assert_umap_runtime_behavior() -> None:
         return
 
     header = (
-        "serial id,residue,spot,neighbor count,"
+        "serial id,residue,spot,neighbor count for peeling,"
+        "neighbor count in 2A,"
         "signal peeling ratio,tail peeling ratio,"
         "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         "width 1st,width 2nd,width 3rd,"
@@ -206,7 +207,7 @@ def assert_umap_runtime_behavior() -> None:
             features = [
                 (observation + 1) * (feature + 2)
                 + (observation * observation + 3 * feature) % (feature + 3)
-                for feature in range(21)
+                for feature in range(22)
             ]
             rows.append(
                 ",".join(
@@ -230,7 +231,7 @@ def assert_umap_runtime_behavior() -> None:
         output_path = Path(request.output_dir) / "umap_embedding_python.csv"
         output_rows = output_path.read_text(encoding="utf-8").splitlines()
         assert len(output_rows) == 7
-        assert all(len(row.split(",")) == 26 for row in output_rows)
+        assert all(len(row.split(",")) == 27 for row in output_rows)
 
 
 def main() -> int:

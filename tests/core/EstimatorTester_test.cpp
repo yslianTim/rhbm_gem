@@ -595,7 +595,8 @@ TEST(
     }
 
     constexpr std::string_view csv_header{
-        "serial id,residue,spot,neighbor count,"
+        "serial id,residue,spot,neighbor count for peeling,"
+        "neighbor count in 2A,"
         "signal peeling ratio,tail peeling ratio,"
         "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         "width 1st,width 2nd,width 3rd,"
@@ -610,7 +611,7 @@ TEST(
     const auto row_begin{ csv_header.size() + 1 };
     const auto row_end{ csv_content.find('\n', row_begin) };
     const auto row{ SplitCsvLine(csv_content.substr(row_begin, row_end - row_begin)) };
-    ASSERT_EQ(row.size(), 24U);
+    ASSERT_EQ(row.size(), 25U);
     const auto * atom{ model->GetSelectedAtoms().front() };
     EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
     EXPECT_FALSE(row.at(1).empty());
@@ -618,6 +619,9 @@ TEST(
     EXPECT_EQ(
         std::stoi(row.at(3)),
         fitted_view.GetNeighborCountForPeeling());
+    EXPECT_EQ(
+        static_cast<std::size_t>(std::stoull(row.at(4))),
+        atom->FindNeighborAtoms(2.0, false).size());
     const auto raw_sampling_entries{ fitted_view.GetRawSamplingEntries(false) };
     const auto peeling_sampling_entries{ fitted_view.GetPeelingSamplingEntries(false) };
     const auto expected_signal_peeling_ratio{ ComputeExpectedPeelingRatio(
@@ -626,9 +630,9 @@ TEST(
         raw_sampling_entries, peeling_sampling_entries, 1.0, 2.0, true) };
     ASSERT_TRUE(expected_signal_peeling_ratio.has_value());
     ASSERT_TRUE(expected_tail_peeling_ratio.has_value());
-    EXPECT_NEAR(std::stod(row.at(4)), *expected_signal_peeling_ratio, 0.0051);
-    EXPECT_NEAR(std::stod(row.at(5)), *expected_tail_peeling_ratio, 0.0051);
-    for (std::size_t column = 4; column < 15; column++)
+    EXPECT_NEAR(std::stod(row.at(5)), *expected_signal_peeling_ratio, 0.0051);
+    EXPECT_NEAR(std::stod(row.at(6)), *expected_tail_peeling_ratio, 0.0051);
+    for (std::size_t column = 5; column < 16; column++)
     {
         EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
         EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
@@ -642,16 +646,16 @@ TEST(
     const auto & second_model{
         fitted_view.GetEstimateMDPDE(FittingStage::Second)
     };
-    EXPECT_NEAR(std::stod(row.at(6)), first_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(7)), second_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(8)), final_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(9)), first_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(10)), second_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(11)), final_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(12)), first_model.GetOffset(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(13)), second_model.GetOffset(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(14)), final_model.GetOffset(), 0.0051);
-    for (std::size_t column = 15; column < row.size(); ++column)
+    EXPECT_NEAR(std::stod(row.at(7)), first_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(8)), second_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(9)), final_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(10)), first_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(11)), second_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(12)), final_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(13)), first_model.GetOffset(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(14)), second_model.GetOffset(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(15)), final_model.GetOffset(), 0.0051);
+    for (std::size_t column = 16; column < row.size(); ++column)
     {
         EXPECT_EQ(std::stoi(row.at(column)), 1);
     }
@@ -706,14 +710,14 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossAllSt
         &rg::GaussianModel3D::GetWidth,
         &rg::GaussianModel3D::GetOffset
     };
-    constexpr std::array<std::size_t, 3> rank_column_starts{ 15, 18, 21 };
+    constexpr std::array<std::size_t, 3> rank_column_starts{ 16, 19, 22 };
 
     std::size_t row_count{ 0 };
     std::size_t verified_neighbor_set_count{ 0 };
     while (std::getline(csv, line))
     {
         const auto row{ SplitCsvLine(line) };
-        ASSERT_EQ(row.size(), 24u);
+        ASSERT_EQ(row.size(), 25u);
         const auto serial_id{ std::stoi(row.at(0)) };
         const auto atom_iter{ std::find_if(
             selected_atoms.begin(),
@@ -724,7 +728,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossAllSt
             })
         };
         ASSERT_NE(atom_iter, selected_atoms.end());
-        for (std::size_t column = 15; column < row.size(); ++column)
+        for (std::size_t column = 16; column < row.size(); ++column)
         {
             const auto rank{ std::stoi(row.at(column)) };
             EXPECT_GE(rank, 1);

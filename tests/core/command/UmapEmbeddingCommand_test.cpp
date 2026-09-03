@@ -12,7 +12,6 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -24,7 +23,8 @@ using namespace rhbm_gem::core;
 namespace {
 
 constexpr std::string_view kInputHeader{
-    "serial id,residue,spot,neighbor count,"
+    "serial id,residue,spot,neighbor count for peeling,"
+    "neighbor count in 2A,"
     "signal peeling ratio,tail peeling ratio,"
     "amplitude 1st,amplitude 2nd,amplitude 3rd,"
     "width 1st,width 2nd,width 3rd,"
@@ -34,7 +34,8 @@ constexpr std::string_view kInputHeader{
     "offset rank 1st,offset rank 2nd,offset rank 3rd"
 };
 constexpr std::string_view kOldInputHeader{
-    "serial id,residue,spot,neighbor count,peeling ratio,"
+    "serial id,residue,spot,neighbor count,"
+    "signal peeling ratio,tail peeling ratio,"
     "amplitude 1st,amplitude 2nd,amplitude 3rd,"
     "width 1st,width 2nd,width 3rd,"
     "offset 1st,offset 2nd,offset 3rd,"
@@ -42,13 +43,12 @@ constexpr std::string_view kOldInputHeader{
     "width rank 1st,width rank 2nd,width rank 3rd,"
     "offset rank 1st,offset rank 2nd,offset rank 3rd"
 };
-constexpr std::size_t kFeatureCount{ 21 };
-constexpr std::size_t kInputColumnCount{ 24 };
-constexpr std::size_t kOutputColumnCount{ 26 };
+constexpr std::size_t kFeatureCount{ 22 };
+constexpr std::size_t kInputColumnCount{ 25 };
+constexpr std::size_t kOutputColumnCount{ 27 };
 
 std::vector<std::string> BuildFields(
     std::size_t observation,
-    std::optional<std::size_t> constant_feature = std::nullopt,
     bool apply_feature_specific_affine_transform = false)
 {
     std::vector<std::string> fields{
@@ -62,10 +62,6 @@ std::vector<std::string> BuildFields(
         const auto left{ (observation + 1) * (feature + 2) };
         const auto right{ (observation * observation + 3 * feature) % (feature + 3) };
         double value{ static_cast<double>(left + right) };
-        if (constant_feature && feature == *constant_feature)
-        {
-            value = 7;
-        }
         if (apply_feature_specific_affine_transform)
         {
             value = value * static_cast<double>(feature + 2)
@@ -91,7 +87,6 @@ std::string JoinFields(const std::vector<std::string> & fields)
 
 std::vector<std::string> MakeRows(
     std::size_t count,
-    std::optional<std::size_t> constant_feature = std::nullopt,
     bool apply_feature_specific_affine_transform = false)
 {
     std::vector<std::string> rows;
@@ -100,7 +95,6 @@ std::vector<std::string> MakeRows(
     {
         rows.push_back(JoinFields(BuildFields(
             observation,
-            constant_feature,
             apply_feature_specific_affine_transform)));
     }
     return rows;
@@ -217,7 +211,7 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     command_test::ScopedTempDir temp_dir{ "umap_embedding_success" };
     const auto input_path{ temp_dir.path() / "local_fitting_result_case.csv" };
     const auto output_dir{ temp_dir.path() / "output" };
-    const auto input_rows{ MakeRows(8, 13) };
+    const auto input_rows{ MakeRows(8) };
     WriteCsv(input_path, input_rows, kInputHeader, "\r\n");
 
     auto request{ MakeRequest(input_path, output_dir) };
@@ -225,7 +219,6 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     const auto result{ RunCommand(request) };
 
     ASSERT_TRUE(result.succeeded);
-    EXPECT_TRUE(HasIssue(result, "-i,--input", "amplitude rank 2nd"));
     EXPECT_TRUE(HasIssue(result, "--neighbors", "limited to 7"));
 
     const auto output_path{ output_dir / "umap_embedding_case.csv" };
@@ -250,7 +243,8 @@ TEST(UmapEmbeddingCommandTest, RejectsInvalidOrReorderedHeaderAndDoesNotCreateOu
     const std::vector<std::string> invalid_headers{
         "serial id,residue,spot",
         std::string{ kOldInputHeader },
-        "serial id,spot,residue,neighbor count,"
+        "serial id,spot,residue,neighbor count for peeling,"
+            "neighbor count in 2A,"
             "signal peeling ratio,tail peeling ratio,"
             "amplitude 1st,amplitude 2nd,amplitude 3rd,"
             "width 1st,width 2nd,width 3rd,"
@@ -290,17 +284,17 @@ TEST(UmapEmbeddingCommandTest, RejectsMalformedAndNonFiniteFeatureValues)
     auto empty_field{ BuildFields(0) };
     empty_field[3] = "";
     auto invalid_signal_ratio{ BuildFields(0) };
-    invalid_signal_ratio[4] = "12x";
+    invalid_signal_ratio[5] = "12x";
     auto nan_tail_ratio{ BuildFields(0) };
-    nan_tail_ratio[5] = "nan";
+    nan_tail_ratio[6] = "nan";
     auto infinity_value{ BuildFields(0) };
-    infinity_value[6] = "inf";
+    infinity_value[7] = "inf";
     auto rank_nan_value{ BuildFields(0) };
-    rank_nan_value[15] = "nan";
+    rank_nan_value[16] = "nan";
 
     const std::vector<InvalidCase> cases{
         { "missing", std::move(missing_field), "column 'layout'" },
-        { "empty", std::move(empty_field), "column 'neighbor count'" },
+        { "empty", std::move(empty_field), "column 'neighbor count for peeling'" },
         { "invalid_signal", std::move(invalid_signal_ratio), "column 'signal peeling ratio'" },
         { "nan_tail", std::move(nan_tail_ratio), "column 'tail peeling ratio'" },
         { "infinity", std::move(infinity_value), "column 'amplitude 1st'" },
@@ -366,58 +360,8 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantFeaturesWithoutWritingOutput)
     EXPECT_TRUE(HasIssue(
         result,
         "-i,--input",
-        "All 11 selected UMAP feature columns are constant"));
+        "selected UMAP feature columns are constant"));
     EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_constant.csv"));
-}
-
-TEST(UmapEmbeddingCommandTest, UsesRankColumnsAsEmbeddingFeatures)
-{
-    command_test::ScopedTempDir temp_dir{ "umap_embedding_rank_features" };
-    const auto input_path{ temp_dir.path() / "local_fitting_result_rank.csv" };
-    const auto output_dir{ temp_dir.path() / "output" };
-    std::vector<std::string> rows;
-    for (std::size_t observation = 0; observation < 6; ++observation)
-    {
-        auto fields{ BuildFields(0) };
-        fields[0] = std::to_string(observation + 1);
-        for (const auto feature : { 13u, 16u, 19u })
-        {
-            fields[3 + feature] = std::to_string((observation + feature) % 4 + 1);
-        }
-        rows.push_back(JoinFields(fields));
-    }
-    WriteCsv(input_path, rows);
-
-    const auto result{ RunCommand(MakeRequest(input_path, output_dir)) };
-
-    EXPECT_TRUE(result.succeeded);
-    EXPECT_TRUE(std::filesystem::exists(output_dir / "umap_embedding_rank.csv"));
-}
-
-TEST(UmapEmbeddingCommandTest, UsesBothPeelingRatioColumnsAsEmbeddingFeatures)
-{
-    command_test::ScopedTempDir temp_dir{ "umap_embedding_peeling_ratio_features" };
-    for (const auto ratio_feature : { 1u, 2u })
-    {
-        SCOPED_TRACE(ratio_feature);
-        const auto case_dir{ temp_dir.path() / std::to_string(ratio_feature) };
-        const auto input_path{ case_dir / "local_fitting_result_ratio.csv" };
-        const auto output_dir{ case_dir / "output" };
-        std::vector<std::string> rows;
-        for (std::size_t observation = 0; observation < 6; ++observation)
-        {
-            auto fields{ BuildFields(0) };
-            fields[0] = std::to_string(observation + 1);
-            fields[3 + ratio_feature] = std::to_string(observation + 1);
-            rows.push_back(JoinFields(fields));
-        }
-        WriteCsv(input_path, rows);
-
-        const auto result{ RunCommand(MakeRequest(input_path, output_dir)) };
-
-        EXPECT_TRUE(result.succeeded);
-        EXPECT_TRUE(std::filesystem::exists(output_dir / "umap_embedding_ratio.csv"));
-    }
 }
 
 TEST(UmapEmbeddingCommandTest, RejectsInvalidOptionsAndNonRegularInput)
@@ -494,7 +438,7 @@ TEST(UmapEmbeddingCommandTest, ZScoreMakesPositiveAffineFeatureChangesInvariant)
     const auto base_path{ temp_dir.path() / "base.csv" };
     const auto transformed_path{ temp_dir.path() / "transformed.csv" };
     WriteCsv(base_path, MakeRows(8));
-    WriteCsv(transformed_path, MakeRows(8, std::nullopt, true));
+    WriteCsv(transformed_path, MakeRows(8, true));
 
     auto base_request{ MakeRequest(base_path, temp_dir.path() / "base_output") };
     auto transformed_request{

@@ -219,7 +219,8 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
     std::ostringstream table;
     table << std::fixed << std::setprecision(2);
     table
-        << "serial id,residue,spot,neighbor count,"
+        << "serial id,residue,spot,neighbor count for peeling,"
+        << "neighbor count in 2A,"
         << "signal peeling ratio,tail peeling ratio,"
         << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         << "width 1st,width 2nd,width 3rd,"
@@ -273,7 +274,8 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
             << atom->GetSerialID() << ','
             << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
             << atom->GetAtomID() << ','
-            << local_view.GetNeighborCountForPeeling() << ',';
+            << local_view.GetNeighborCountForPeeling() << ','
+            << atom->FindNeighborAtoms(2.0, false).size() << ',';
         const auto raw_sampling_entries{ local_view.GetRawSamplingEntries(false) };
         const auto peeling_sampling_entries{ local_view.GetPeelingSamplingEntries(false) };
         const auto signal_peeling_ratio{ ComputePeelingRatio(

@@ -38,7 +38,8 @@ namespace {
 constexpr std::size_t kIdentifierColumnCount{ 3 };
 constexpr std::size_t kOutputDimensionCount{ 2 };
 constexpr std::string_view kInputHeader{
-    "serial id,residue,spot,neighbor count,"
+    "serial id,residue,spot,neighbor count for peeling,"
+    "neighbor count in 2A,"
     "signal peeling ratio,tail peeling ratio,"
     "amplitude 1st,amplitude 2nd,amplitude 3rd,"
     "width 1st,width 2nd,width 3rd,"
@@ -56,8 +57,9 @@ struct UmapFeatureDefinition
 
 // Keep these entries in CSV column order. Toggle include_in_umap to choose the
 // features that are standardized and passed to UMAP, then rebuild the project.
-constexpr std::array<UmapFeatureDefinition, 21> kFeatureDefinitions{
-    UmapFeatureDefinition{ "neighbor count", true },
+constexpr std::array<UmapFeatureDefinition, 22> kFeatureDefinitions{
+    UmapFeatureDefinition{ "neighbor count for peeling", false },
+    UmapFeatureDefinition{ "neighbor count in 2A", true },
     UmapFeatureDefinition{ "signal peeling ratio", true },
     UmapFeatureDefinition{ "tail peeling ratio", true },
     UmapFeatureDefinition{ "amplitude 1st", true },
@@ -202,7 +204,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
     if (header != kInputHeader)
     {
         error_message = "line 1, column 'header': local fitting result header does not match "
-            "the required 24-column order.";
+            "the required 25-column order.";
         return std::nullopt;
     }
 
@@ -229,7 +231,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
         if (fields.size() != kInputColumnCount)
         {
             error_message = "line " + std::to_string(line_number)
-                + ", column 'layout': expected 24 columns, received "
+                + ", column 'layout': expected 25 columns, received "
                 + std::to_string(fields.size()) + ".";
             return std::nullopt;
         }
