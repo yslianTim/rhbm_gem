@@ -58,7 +58,7 @@ struct UmapFeatureDefinition
 // Keep these entries in CSV column order. Toggle include_in_umap to choose the
 // features that are standardized and passed to UMAP, then rebuild the project.
 constexpr std::array<UmapFeatureDefinition, 22> kFeatureDefinitions{
-    UmapFeatureDefinition{ "neighbor count for peeling", false },
+    UmapFeatureDefinition{ "neighbor count for peeling", true },
     UmapFeatureDefinition{ "neighbor count in 2A", true },
     UmapFeatureDefinition{ "signal peeling ratio", true },
     UmapFeatureDefinition{ "tail peeling ratio", true },
@@ -72,7 +72,7 @@ constexpr std::array<UmapFeatureDefinition, 22> kFeatureDefinitions{
     UmapFeatureDefinition{ "offset 2nd", true },
     UmapFeatureDefinition{ "offset 3rd", false },
     UmapFeatureDefinition{ "amplitude rank 1st", false },
-    UmapFeatureDefinition{ "amplitude rank 2nd", false },
+    UmapFeatureDefinition{ "amplitude rank 2nd", true },
     UmapFeatureDefinition{ "amplitude rank 3rd", false },
     UmapFeatureDefinition{ "width rank 1st", false },
     UmapFeatureDefinition{ "width rank 2nd", false },
