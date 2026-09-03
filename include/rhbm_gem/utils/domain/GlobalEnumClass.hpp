@@ -13,7 +13,8 @@ enum class Residue : uint8_t
     LEU = 11, LYS = 12, MET = 13, PHE = 14, PRO = 15,
     SER = 16, THR = 17, TRP = 18, TYR = 19, VAL = 20,
     A   = 21, C   = 22, G   = 23, U   = 24,
-    DA  = 25, DC  = 26, DG  = 27, DT  = 28
+    DA  = 25, DC  = 26, DG  = 27, DT  = 28,
+    HOH = 29
 };
 
 enum class Spot : uint16_t

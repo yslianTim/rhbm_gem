@@ -184,7 +184,8 @@ const std::unordered_map<Residue, std::vector<Link>> ComponentHelper::m_link_map
                     Link::O5p_C5p, Link::C5p_C4p, Link::C4p_O4p, Link::C4p_C3p,
                     Link::O4p_C1p, Link::C3p_O3p, Link::C3p_C2p, Link::C2p_C1p,
                     Link::C1p_N1,  Link::N1_C2,   Link::N1_C6,   Link::C2_O2,   Link::C2_N3,
-                    Link::N3_C4,   Link::C4_O4,   Link::C4_C5,   Link::C5_C7,   Link::C5_C6}}
+                    Link::N3_C4,   Link::C4_O4,   Link::C4_C5,   Link::C5_C7,   Link::C5_C6}},
+    {Residue::HOH, {Link::UNK}}
 };
 
 const std::unordered_map<Residue, std::vector<Element>> ComponentHelper::m_element_map

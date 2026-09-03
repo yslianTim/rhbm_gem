@@ -65,7 +65,8 @@ const std::unordered_map<std::string_view, Residue> ChemicalDataHelper::m_residu
     {"MET", Residue::MET}, {"PHE", Residue::PHE}, {"PRO", Residue::PRO}, {"SER", Residue::SER},
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
     {"A",   Residue::A},   {"C",   Residue::C},   {"G",   Residue::G},   {"U",   Residue::U},
-    {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT}
+    {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT},
+    {"HOH", Residue::HOH}
 };
 
 const std::unordered_map<std::string_view, Element> ChemicalDataHelper::m_element_map
@@ -288,7 +289,7 @@ const std::unordered_map<Residue, std::string> ChemicalDataHelper::m_residue_lab
     {Residue::THR, "THR"}, {Residue::TRP, "TRP"}, {Residue::TYR, "TYR"}, {Residue::VAL, "VAL"},
     {Residue::A,   "A"  }, {Residue::C,   "C"  }, {Residue::G,   "G"  }, {Residue::U,   "U"  },
     {Residue::DA,  "DA" }, {Residue::DC,  "DC" }, {Residue::DG,  "DG" }, {Residue::DT,  "DT" },
-    {Residue::UNK, "UNK"}
+    {Residue::HOH, "HOH"}, {Residue::UNK, "UNK"}
 };
 
 const std::unordered_map<Element, std::string> ChemicalDataHelper::m_element_label_map
@@ -484,7 +485,8 @@ const std::unordered_map<Residue, int> ChemicalDataHelper::m_residue_color_map
     {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883},
 
     {Residue::A,     2}, {Residue::C,     3}, {Residue::G,     4}, {Residue::U,     5},
-    {Residue::DA,    2}, {Residue::DC,    3}, {Residue::DG,    4}, {Residue::DT,    5}
+    {Residue::DA,    2}, {Residue::DC,    3}, {Residue::DG,    4}, {Residue::DT,    5},
+    {Residue::HOH,  10}, {Residue::UNK,   1}
 };
 
 const std::unordered_map<Element, int> ChemicalDataHelper::m_element_marker_map
@@ -512,7 +514,8 @@ const std::unordered_map<Residue, int> ChemicalDataHelper::m_residue_marker_map
     {Residue::THR, 36}, {Residue::TRP, 37}, {Residue::TYR, 38}, {Residue::VAL, 39},
 
     {Residue::A,    2}, {Residue::C,    3}, {Residue::G,    4}, {Residue::U,    5},
-    {Residue::DA,   2}, {Residue::DC,   3}, {Residue::DG,   4}, {Residue::DT,   5}
+    {Residue::DA,   2}, {Residue::DC,   3}, {Residue::DG,   4}, {Residue::DT,   5},
+    {Residue::HOH, 10}, {Residue::UNK,  1}
 };
 
 int ChemicalDataHelper::GetAtomicNumber(Element element)
