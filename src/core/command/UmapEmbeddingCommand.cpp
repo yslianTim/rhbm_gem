@@ -142,7 +142,7 @@ struct UmapSpotPlotStyle
 };
 
 // Toggle this internal switch to omit the Other graph, then rebuild the project.
-constexpr bool kDrawOtherUmapSpotGraph{ false };
+constexpr bool kDrawOtherUmapSpotGraph{ true };
 // Keep Other last: unmatched spot names fall back to that plot category.
 constexpr std::array kUmapSpotPlotStyles{
     UmapSpotPlotStyle{ kConfiguredUmapSpots[0].label, kViolet + 1 },
