@@ -4,6 +4,7 @@
 #include "data/detail/ModelAnalysisData.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -160,28 +161,52 @@ bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
 }
 
 std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
-    bool peeling_applied) const
+    bool peeling_applied,
+    double distance_min,
+    double distance_max) const
 {
-    const auto raw_sampling_entries{ GetRawSamplingEntries(false) };
-    const auto peeling_sampling_entries{ GetPeelingSamplingEntries(false) };
-    if (!peeling_applied
-        || raw_sampling_entries.empty()
-        || peeling_sampling_entries.empty())
+    numeric_validation::RequireFiniteNonNegativeRange(
+        distance_min,
+        distance_max,
+        "peeling ratio distance range");
+    if (!peeling_applied)
     {
         return std::nullopt;
     }
 
+    const auto raw_sampling_entries{ GetRawSamplingEntries(false) };
+    const auto peeling_sampling_entries{ GetPeelingSamplingEntries(false) };
     double raw_sum{ 0.0 };
+    std::size_t raw_sample_count{ 0 };
     for (const auto & sample : raw_sampling_entries)
     {
+        if (sample.point.distance < distance_min
+            || sample.point.distance > distance_max
+            || !std::isfinite(sample.point.distance))
+        {
+            continue;
+        }
         raw_sum += sample.response;
+        ++raw_sample_count;
     }
     double peeling_sum{ 0.0 };
+    std::size_t peeling_sample_count{ 0 };
     for (const auto & sample : peeling_sampling_entries)
     {
+        if (sample.point.distance < distance_min
+            || sample.point.distance > distance_max
+            || !std::isfinite(sample.point.distance))
+        {
+            continue;
+        }
         peeling_sum += sample.response;
+        ++peeling_sample_count;
     }
-    if (!std::isfinite(raw_sum) || !std::isfinite(peeling_sum) || raw_sum == 0.0)
+    if (raw_sample_count == 0
+        || peeling_sample_count == 0
+        || !std::isfinite(raw_sum)
+        || !std::isfinite(peeling_sum)
+        || raw_sum == 0.0)
     {
         return std::nullopt;
     }

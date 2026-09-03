@@ -12,7 +12,6 @@
 #include <iomanip>
 #include <limits>
 #include <map>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -41,6 +40,10 @@ namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr std::size_t kLocalRankNeighborCount{ 3 };
+constexpr double kSignalPeelingDistanceMin{ 0.0 };
+constexpr double kSignalPeelingDistanceMaxExclusive{ 1.0 };
+constexpr double kTailPeelingDistanceMin{ 1.0 };
+constexpr double kTailPeelingDistanceMax{ 2.0 };
 constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
     Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
 };
@@ -53,61 +56,6 @@ struct GaussianModelParameterSamples
 };
 
 using GaussianParameterGetter = double (GaussianModel3D::*)() const;
-
-constexpr bool IsSignalPeelingRadius(double radius)
-{
-    return radius >= 0.0 && radius < 1.0;
-}
-
-constexpr bool IsTailPeelingRadius(double radius)
-{
-    return radius >= 1.0 && radius <= 2.0;
-}
-
-static_assert(IsSignalPeelingRadius(0.0) && !IsTailPeelingRadius(0.0));
-static_assert(!IsSignalPeelingRadius(1.0) && IsTailPeelingRadius(1.0));
-static_assert(!IsSignalPeelingRadius(2.0) && IsTailPeelingRadius(2.0));
-
-using PeelingRadiusPredicate = bool (*)(double);
-
-std::optional<double> ComputePeelingRatio(
-    const LocalPotentialSampleList & raw_sampling_entries,
-    const LocalPotentialSampleList & peeling_sampling_entries,
-    bool peeling_applied,
-    PeelingRadiusPredicate includes_radius)
-{
-    if (!peeling_applied) return std::nullopt;
-
-    double raw_sum{ 0.0 };
-    std::size_t raw_sample_count{ 0 };
-    for (const auto & sample : raw_sampling_entries)
-    {
-        if (!includes_radius(sample.point.distance)) continue;
-        raw_sum += sample.response;
-        ++raw_sample_count;
-    }
-
-    double peeling_sum{ 0.0 };
-    std::size_t peeling_sample_count{ 0 };
-    for (const auto & sample : peeling_sampling_entries)
-    {
-        if (!includes_radius(sample.point.distance)) continue;
-        peeling_sum += sample.response;
-        ++peeling_sample_count;
-    }
-
-    if (raw_sample_count == 0
-        || peeling_sample_count == 0
-        || !std::isfinite(raw_sum)
-        || !std::isfinite(peeling_sum)
-        || raw_sum == 0.0)
-    {
-        return std::nullopt;
-    }
-
-    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
-    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
-}
 
 int ComputeLocalParameterRank(
     const AtomObject & atom,
@@ -276,18 +224,16 @@ std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool pe
             << atom->GetAtomID() << ','
             << local_view.GetNeighborCountForPeeling() << ','
             << atom->FindNeighborAtoms(2.0, false).size() << ',';
-        const auto raw_sampling_entries{ local_view.GetRawSamplingEntries(false) };
-        const auto peeling_sampling_entries{ local_view.GetPeelingSamplingEntries(false) };
-        const auto signal_peeling_ratio{ ComputePeelingRatio(
-            raw_sampling_entries,
-            peeling_sampling_entries,
+        const auto signal_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
             peeling_applied,
-            IsSignalPeelingRadius) };
-        const auto tail_peeling_ratio{ ComputePeelingRatio(
-            raw_sampling_entries,
-            peeling_sampling_entries,
+            kSignalPeelingDistanceMin,
+            std::nextafter(
+                kSignalPeelingDistanceMaxExclusive,
+                kSignalPeelingDistanceMin)) };
+        const auto tail_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
             peeling_applied,
-            IsTailPeelingRadius) };
+            kTailPeelingDistanceMin,
+            kTailPeelingDistanceMax) };
         if (signal_peeling_ratio.has_value())
         {
             table << *signal_peeling_ratio;

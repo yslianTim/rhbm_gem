@@ -30,7 +30,10 @@ public:
         double distance_min,
         double distance_max,
         std::size_t minimum_sample_count) const;
-    std::optional<double> GetLocalFittingPeelingRatio(bool peeling_applied) const;
+    std::optional<double> GetLocalFittingPeelingRatio(
+        bool peeling_applied,
+        double distance_min,
+        double distance_max) const;
     int GetNeighborCountForPeeling() const;
     double GetAlphaR(FittingStage stage) const;
 

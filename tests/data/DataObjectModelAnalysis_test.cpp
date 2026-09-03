@@ -926,6 +926,145 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingS
     EXPECT_FALSE(peeling_all_entries.at(1).point.is_selected);
 }
 
+TEST(
+    DataObjectModelAnalysisTest,
+    AtomLocalPotentialViewComputesPeelingRatioInInclusiveDistanceRange)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    const auto non_finite_distance{ std::numeric_limits<double>::quiet_NaN() };
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 10.0, SamplingPoint{ 0.5 } },
+        LocalPotentialSample{ 8.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{
+            4.0,
+            SamplingPoint{ 1.5, { 0.0, 0.0, 0.0 }, false } },
+        LocalPotentialSample{ 8.0, SamplingPoint{ 2.0 } },
+        LocalPotentialSample{ 100.0, SamplingPoint{ 2.5 } },
+        LocalPotentialSample{ 100.0, SamplingPoint{ non_finite_distance } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5 } },
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{
+            1.0,
+            SamplingPoint{ 1.5, { 0.0, 0.0, 0.0 }, false } },
+        LocalPotentialSample{ 3.0, SamplingPoint{ 2.0 } },
+        LocalPotentialSample{ 50.0, SamplingPoint{ 2.5 } },
+        LocalPotentialSample{ 50.0, SamplingPoint{ non_finite_distance } }
+    });
+
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+    const auto ratio{ view.GetLocalFittingPeelingRatio(true, 1.0, 2.0) };
+    ASSERT_TRUE(ratio.has_value());
+    EXPECT_DOUBLE_EQ(*ratio, 0.7);
+
+    const auto boundary_ratio{
+        view.GetLocalFittingPeelingRatio(true, 1.0, 1.0)
+    };
+    ASSERT_TRUE(boundary_ratio.has_value());
+    EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
+}
+
+TEST(
+    DataObjectModelAnalysisTest,
+    AtomLocalPotentialViewReturnsNulloptWhenPeelingRatioCannotBeComputed)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 2.0, SamplingPoint{ 0.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(false, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } },
+        LocalPotentialSample{ -1.0, SamplingPoint{ 0.75 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{
+            std::numeric_limits<double>::infinity(),
+            SamplingPoint{ 0.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{
+            std::numeric_limits<double>::infinity(),
+            SamplingPoint{ 0.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{
+            std::numeric_limits<double>::min(),
+            SamplingPoint{ 0.5 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{
+            std::numeric_limits<double>::max(),
+            SamplingPoint{ 0.5 } }
+    });
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+}
+
+TEST(
+    DataObjectModelAnalysisTest,
+    AtomLocalPotentialViewRejectsInvalidPeelingRatioDistanceRange)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+
+    EXPECT_THROW(
+        view.GetLocalFittingPeelingRatio(false, -0.1, 1.0),
+        std::invalid_argument);
+    EXPECT_THROW(
+        view.GetLocalFittingPeelingRatio(false, 2.0, 1.0),
+        std::invalid_argument);
+    EXPECT_THROW(
+        view.GetLocalFittingPeelingRatio(
+            false,
+            std::numeric_limits<double>::quiet_NaN(),
+            1.0),
+        std::invalid_argument);
+    EXPECT_THROW(
+        view.GetLocalFittingPeelingRatio(
+            false,
+            0.0,
+            std::numeric_limits<double>::infinity()),
+        std::invalid_argument);
+}
+
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewGetsSamplingEntriesByFittingStage)
 {
     auto model{ data_test::MakeModelWithBond() };
