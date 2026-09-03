@@ -34,7 +34,7 @@ serial id,residue,spot,neighbor count for peeling,neighbor count in 2A,signal pe
 
 Each rank compares the current atom with up to its three nearest selected atoms. The largest parameter value has rank 1, equal values share a rank, and models with fewer than four selected atoms use all available atoms.
 
-The third-stage amplitude and width, the first- and third-stage offset, and the first- and third-stage ranks are preserved but are not currently passed to UMAP. Every data row must contain exactly 25 comma-separated fields. The 22 feature fields must parse completely as finite numbers; empty values, `nan`, and infinity are errors. Quoted fields and commas embedded inside fields are not supported. Both LF and CRLF line endings are accepted, and at least three data rows are required.
+The third-stage amplitude and width, the first- and third-stage offset, and the first- and third-stage ranks are preserved but are not currently passed to UMAP. Every data row must contain exactly 25 comma-separated fields, and quoted fields or commas embedded inside fields are not supported. With the default internal setting `kFilterUmapInputBySpot = false`, every row's 22 feature fields must parse completely as finite numbers; empty values, `nan`, and infinity are errors. Developers can set this switch to `true` and rebuild to retain only spots `C`, `CA`, `N`, and `O`; excluded rows are discarded after structural validation and their feature values are not parsed. Both LF and CRLF line endings are accepted, and at least three retained data rows are required.
 
 ## CLI Usage
 
@@ -52,7 +52,7 @@ RHBM-GEM umap_embedding \
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `-i, --input` | required | One local fitting result CSV file. |
-| `--neighbors` | `15` | Nearest neighbors; must be at least 2 and is limited to `row count - 1` when necessary. |
+| `--neighbors` | `15` | Nearest neighbors; must be at least 2 and is limited to `retained row count - 1` when necessary. |
 | `--min-dist` | `0.1` | Minimum embedding distance in the inclusive range `[0, 1]`. |
 | `--epochs` | `0` | Optimization epochs; `0` selects the umappp automatic value. |
 | `--seed` | `42` | Seed used for both initialization and layout optimization. |
@@ -64,9 +64,11 @@ RHBM-GEM umap_embedding \
 
 Each selected feature is independently standardized with a population Z-score before UMAP runs. A constant selected feature is replaced with zeros and reported as a warning. If all 12 selected features are constant, the command fails without writing an output file.
 
-The Euclidean VP-tree UMAP result has two dimensions. Input row order and all 25 original values are preserved, and the output appends `umap x,umap y` using round-trip-safe floating-point precision, producing 27 columns per row.
+The Euclidean VP-tree UMAP result has two dimensions. Retained input row order and all 25 original values are preserved, and the output appends `umap x,umap y` using round-trip-safe floating-point precision, producing 27 columns per row.
 
 For `local_fitting_result_model.csv`, the output is `<folder>/umap_embedding_model.csv`. Other input names use their complete stem, for example `custom.csv` becomes `umap_embedding_custom.csv`.
+
+When ROOT support is available, the command also writes a PDF scatter plot beside the CSV with the same stem. Spots `C`, `CA`, `N`, and `O` retain separate colors. With the default internal setting `kDrawOtherUmapSpotGraph = true`, every other spot is grouped under the gray `Other` category and every embedded row is plotted exactly once, so the plotted point count equals the CSV data-row count. Developers can set this switch to `false` and rebuild to omit Other points from both the plot and its axis ranges. Categories without data are omitted from the legend. When input spot filtering is enabled, Other rows never enter UMAP or either output regardless of this drawing switch. Builds without ROOT skip the PDF and report a warning.
 
 The output is opened only after parsing, standardization, and UMAP all succeed. UMAP coordinates are meaningful relative to other rows in the same run; their absolute rotation, reflection, and scale have no fixed interpretation.
 

@@ -92,20 +92,41 @@ static_assert(
     kSelectedFeatureCount > 0,
     "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
+// Toggle this internal switch to restrict UMAP input to the configured spots,
+// then rebuild the project.
+constexpr bool kFilterUmapInputBySpot{ false };
+constexpr std::array<std::string_view, 4> kConfiguredUmapSpots{ "C", "CA", "N", "O" };
+
+std::optional<std::size_t> FindConfiguredUmapSpotIndex(std::string_view spot)
+{
+    for (std::size_t index = 0; index < kConfiguredUmapSpots.size(); ++index)
+    {
+        if (spot == kConfiguredUmapSpots[index]) return index;
+    }
+    return std::nullopt;
+}
+
 #ifdef HAVE_ROOT
 struct UmapSpotPlotStyle
 {
-    std::string_view spot;
+    std::string_view label;
     short color;
 };
 
-// Add, remove, or recolor entries here to adjust the spot categories in the plot.
+// Toggle this internal switch to omit the Other graph, then rebuild the project.
+constexpr bool kDrawOtherUmapSpotGraph{ false };
+// Keep Other last: unmatched spot names fall back to that plot category.
 constexpr std::array kUmapSpotPlotStyles{
-    UmapSpotPlotStyle{ "C", kViolet + 1 },
-    UmapSpotPlotStyle{ "CA", kRed + 1 },
-    UmapSpotPlotStyle{ "N", kGreen + 2 },
-    UmapSpotPlotStyle{ "O", kAzure + 2 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[0], kViolet + 1 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[1], kRed + 1 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[2], kGreen + 2 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[3], kAzure + 2 },
+    UmapSpotPlotStyle{ "Other", kGray + 2 },
 };
+constexpr std::size_t kOtherUmapSpotPlotStyleIndex{
+    kConfiguredUmapSpots.size()
+};
+static_assert(kUmapSpotPlotStyles.size() == kOtherUmapSpotPlotStyleIndex + 1);
 #endif
 
 struct PreparedUmapInput
@@ -211,6 +232,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
     std::vector<std::array<double, kInputFeatureCount>> raw_features;
     std::vector<std::string> original_rows;
     std::vector<std::string> spot_names;
+    std::vector<std::size_t> source_line_numbers;
     std::array<long double, kInputFeatureCount> means{};
     std::array<long double, kInputFeatureCount> sum_squared_differences{};
 
@@ -235,6 +257,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
                 + std::to_string(fields.size()) + ".";
             return std::nullopt;
         }
+        if (kFilterUmapInputBySpot && !FindConfiguredUmapSpotIndex(fields[2])) continue;
 
         std::array<double, kInputFeatureCount> feature_row{};
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
@@ -253,6 +276,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
 
         original_rows.push_back(row);
         spot_names.emplace_back(fields[2]);
+        source_line_numbers.push_back(line_number);
         raw_features.push_back(feature_row);
         const long double count{ static_cast<long double>(raw_features.size()) };
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
@@ -273,8 +297,16 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
     }
     if (raw_features.size() < 3)
     {
-        error_message = "UMAP embedding requires at least 3 data rows; found "
-            + std::to_string(raw_features.size()) + ".";
+        if constexpr (kFilterUmapInputBySpot)
+        {
+            error_message = "UMAP embedding requires at least 3 data rows after spot "
+                "filtering; found " + std::to_string(raw_features.size()) + ".";
+        }
+        else
+        {
+            error_message = "UMAP embedding requires at least 3 data rows; found "
+                + std::to_string(raw_features.size()) + ".";
+        }
         return std::nullopt;
     }
     if (raw_features.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
@@ -331,7 +363,7 @@ std::optional<PreparedUmapInput> ReadAndStandardizeInput(
             if (!std::isfinite(standardized_value))
             {
                 error_message = FormatRowLocation(
-                    observation + 2,
+                    source_line_numbers[observation],
                     kFeatureDefinitions[feature].name)
                     + ": Z-score is not finite.";
                 return std::nullopt;
@@ -472,6 +504,7 @@ void RemoveStalePlotOutput(const std::filesystem::path & plot_path)
                 + plot_path.string() + "': " + file_error.message() + ".");
     }
 }
+
 #endif
 
 bool WriteEmbeddingPlot(
@@ -499,29 +532,32 @@ bool WriteEmbeddingPlot(
         for (std::size_t category = 0; category < kUmapSpotPlotStyles.size(); ++category)
         {
             auto graph{ root_helper::CreateGraphErrors() };
-            for (std::size_t observation = 0;
-                observation < prepared.original_rows.size();
-                ++observation)
-            {
-                if (prepared.spot_names[observation]
-                    != kUmapSpotPlotStyles[category].spot)
-                {
-                    continue;
-                }
-
-                const double x{ embedding[observation * kOutputDimensionCount] };
-                const double y{ embedding[observation * kOutputDimensionCount + 1] };
-                const int point{ graph->GetN() };
-                graph->SetPoint(point, x, y);
-                graph->SetPointError(point, 0.0, 0.0);
-                plotted_x.push_back(x);
-                plotted_y.push_back(y);
-            }
             root_helper::SetMarkerAttribute(
                 graph.get(), 20, 0.8f, kUmapSpotPlotStyles[category].color, 0.75f);
             graphs[category] = std::move(graph);
         }
 
+        for (std::size_t observation = 0;
+            observation < prepared.original_rows.size();
+            ++observation)
+        {
+            const auto configured_spot_index{
+                FindConfiguredUmapSpotIndex(prepared.spot_names[observation])
+            };
+            if (!configured_spot_index && !kDrawOtherUmapSpotGraph) continue;
+
+            const std::size_t category{
+                configured_spot_index.value_or(kOtherUmapSpotPlotStyleIndex)
+            };
+            const double x{ embedding[observation * kOutputDimensionCount] };
+            const double y{ embedding[observation * kOutputDimensionCount + 1] };
+            auto * const graph{ graphs[category].get() };
+            const int point{ graph->GetN() };
+            graph->SetPoint(point, x, y);
+            graph->SetPointError(point, 0.0, 0.0);
+            plotted_x.push_back(x);
+            plotted_y.push_back(y);
+        }
         if (plotted_x.empty())
         {
             RemoveStalePlotOutput(plot_path);
@@ -569,7 +605,7 @@ bool WriteEmbeddingPlot(
             graphs[category]->Draw("P SAME");
             legend->AddEntry(
                 graphs[category].get(),
-                kUmapSpotPlotStyles[category].spot.data(),
+                kUmapSpotPlotStyles[category].label.data(),
                 "p");
         }
         legend->Draw();

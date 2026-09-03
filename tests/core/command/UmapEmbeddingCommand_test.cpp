@@ -237,6 +237,34 @@ TEST(UmapEmbeddingCommandTest, ProducesTwoFiniteCoordinatesAndPreservesCrLfRows)
     }
 }
 
+#ifdef HAVE_ROOT
+TEST(UmapEmbeddingCommandTest, PlotsRowsWithUnconfiguredSpotsAsOther)
+{
+    command_test::ScopedTempDir temp_dir{ "umap_embedding_other_spots" };
+    const auto input_path{ temp_dir.path() / "local_fitting_result_other.csv" };
+    const auto output_dir{ temp_dir.path() / "output" };
+    constexpr std::array<std::string_view, 4> other_spots{ "CB", "CG", "P", "S" };
+    std::vector<std::string> input_rows;
+    input_rows.reserve(8);
+    for (std::size_t observation = 0; observation < 8; ++observation)
+    {
+        auto fields{ BuildFields(observation) };
+        fields[2] = other_spots[observation % other_spots.size()];
+        input_rows.push_back(JoinFields(fields));
+    }
+    WriteCsv(input_path, input_rows);
+
+    const auto result{ RunCommand(MakeRequest(input_path, output_dir)) };
+
+    ASSERT_TRUE(result.succeeded);
+    const auto output_lines{ ReadLines(output_dir / "umap_embedding_other.csv") };
+    EXPECT_EQ(output_lines.size(), input_rows.size() + 1);
+    const auto plot_path{ output_dir / "umap_embedding_other.pdf" };
+    ASSERT_TRUE(std::filesystem::is_regular_file(plot_path));
+    EXPECT_GT(std::filesystem::file_size(plot_path), 0u);
+}
+#endif
+
 TEST(UmapEmbeddingCommandTest, RejectsInvalidOrReorderedHeaderAndDoesNotCreateOutput)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_header" };
