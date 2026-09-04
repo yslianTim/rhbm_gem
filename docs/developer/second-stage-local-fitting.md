@@ -8,8 +8,10 @@ accounts for overlapping responses from neighboring selected atoms
 and unselected model atoms while updating each selected atom's amplitude,
 width, and offset independently. Chemical `GroupKey`/`group_id` is neither
 queried nor stored anywhere in this stage; there are no synthetic groups,
-shared-offset columns, or selected group-median refits. Optimization clusters
-still organize sample coupling, numerical solves, and acceptance gates.
+shared-offset columns, or selected group-median refits. Residue identity is also
+neither queried nor stored: chain IDs and sequence IDs do not constrain
+components. Optimization clusters still organize selected sample coupling,
+numerical solves, and acceptance gates, with at most 100 selected atoms each.
 Third-stage chemical group estimation is unchanged.
 
 Effective unselected contributors have no optimizer state or
@@ -113,11 +115,27 @@ or renormalize either one.
 
 Adaptive rebuilds use edge hysteresis. A previously absent edge must have
 weight at least `0.06` to enter the graph, while an edge present in the previous
-post-residue-cutoff adjacency remains until its weight falls below `0.04`.
-The existing ten-residue cluster limit is then applied in descending current
-edge-weight order. Coupling Jacobians and dependency components include only
-selected participants. Binary fallback remains the conservative response to an
-invalid selected Jacobian.
+post-atom-cutoff adjacency remains until its weight falls below `0.04`.
+Initial, adaptive, and binary-fallback topologies all apply the same internal
+100-selected-atom component limit. Threshold-retained atom edges are processed
+in descending current weight order, with equal weights ordered by canonical
+atom-index pair. Union-find merges two components only when their combined
+atom count does not exceed the limit. All retained edges internal to each final
+component remain in its adjacency, not only the edges used for merging.
+Disconnected atoms remain singletons, even when their residue labels match.
+Fixed and quarantined selected atoms count toward the limit; unselected atoms
+do not. Coupling Jacobians and dependency components include only selected
+participants. Binary fallback remains the conservative response to an invalid
+selected Jacobian.
+
+The limit constrains topology partitions, not boundary or final-polish solve
+sizes. The full physical sample dependencies and pre-cutoff retained edge list
+are preserved. Boundary reconciliation and final dependency polish may connect
+multiple optimization clusters and exceed 100 atoms, without enlarging the
+original sample-target cluster's frozen background median pool. A changed
+partition still takes effect together with its background at the next iteration
+boundary, using the existing domain reset, previous/best rescoring, and
+domain-change convergence blocker.
 
 ## Iteration flow
 
@@ -502,7 +520,7 @@ state, but before peeling entries or atom models are written, the stage attempts
 one final dependency polish. Current clusters are first treated as indivisible
 DSU units. They are then merged using the complete
 `GraphTopology::sample_dependency_list`, without the weighted-edge threshold or
-ten-residue cutoff. This retains every direct selected-target/selected-neighbor
+100-atom cutoff. This retains every direct selected-target/selected-neighbor
 dependency; unselected contributors never connect these components.
 Quarantined atom shape and offset blocks are not variables, but their fixed
 models remain in every sample response and in the objective domain. A component
@@ -837,7 +855,11 @@ a synthetic group into schema-2 records.
 
 Adaptive rebuild diagnostics use a distinct
 `Adaptive local-fitting topology rebuild` record so the one-time initial
-coupling and residue-cutoff summaries remain stable. Each record reports the
+coupling and atom-cutoff summaries remain one-time initial records. The cutoff
+record uses `Local-fitting atom cutoff: atoms=N, limit=100, clusters=C,
+max-atoms=M, cutoff-edges=E.` and counts selected atoms only. Threshold-sensitivity
+summaries describe pre-cutoff connectivity; the formal component summary
+describes post-cutoff connectivity. Each adaptive rebuild record reports the
 accepted iteration, drift or interval trigger, maximum drift, old/new cluster
 and boundary-sample counts, added/removed adjacency edges, and whether the
 partition changed and is pending. The rebuild record reports no immediate
@@ -871,60 +893,68 @@ written.
 ## Workspace verification (2026-09-04)
 
 The implementation baseline was the clean revision
-`d55d79500372745e5f0c6bf49593a9a184e716cb`. The verified workspace is that
-revision plus the current uncommitted redundancy cleanup in joint-offset/polish
-assembly, proposal/refit preparation, and boundary halo initialization. The
-independent-offset, own-model refit, frozen-background, and persistence contracts
-are unchanged. Verification used AppleClang 21, RelWithDebInfo, system
-dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
+`e5ffd3a9e5f37d79b6febd254cee1e816f1afda4`. The verified workspace is that
+revision plus the current uncommitted atom-only topology change. Residue
+pre-merges and the residue-count cutoff are removed; initial, adaptive, and
+binary-fallback topology clusters now contain at most 100 selected atoms.
+Independent offsets, own-model refits, frozen backgrounds, acceptance,
+convergence, and persistence retain their existing contracts. Verification used
+AppleClang 21, RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled
+UMAP/ROOT:
 
-- `tests_all` built successfully.
-- `rhbm_tests_core_estimator` and `rhbm_tests_data_runtime` passed.
-- Full CTest passed all 18 entries, including convergence analyzer/runner
-  contracts, smoke, and serial/parallel determinism.
+- `tests_all`, `rhbm_tests_core_estimator`, and `rhbm_tests_data_runtime` passed.
+- Full CTest passed all 18 entries, including convergence analyzer/runner,
+  fold-168 runner contracts, smoke, and serial/parallel determinism.
 - `lint_all`, including repository lint and install-consumer smoke, passed.
-- The developer-only trust-model experiment ON build passed all 101 second-stage
-  defense cases, all 18 CTest entries, and lint/install-consumer smoke. The
-  experiment was restored to OFF, followed by a normal rebuild, all 100
-  second-stage defense cases, focused tests, full CTest, and lint.
-- The source `TEST`/`TEST_F` count remains 729; the separate `TEST_P` count remains
-  17. No repository test file or case was added. Existing cases were extended to
-  cover multiple active neighbors and a fixed outside-cluster neighbor, column
-  and neighbor permutations, offset ridge floors (including existing NaN
-  handling), negligible-basis rows, non-finite active/fixed neighbors, and
-  unexpanded boundary components followed by depth-zero halo expansion.
-- Existing cases verify individual ridge anchors, column permutation, own-model
-  refits, physical-offset damping, independent polish seed/decode and
-  finite-difference Jacobians, partial active sets, atom-local failures,
-  orthogonal shape/offset quarantine release, and active/nominal populations.
-- Atoms with the same chemical key and different truth offsets retain distinct
-  final offsets. Changing selected and unselected chemical keys while preserving
-  selection, elements, geometry, samples, and initial local state leaves
-  second-stage models, peeling, stop reasons, and convergence evidence unchanged.
-  Third-stage group results are not subject to this invariant.
-- Frozen-background, shared-contributor topology, hydrogen exclusion,
-  deduplication, best-audit rescoring, adaptive partition, final polish/peeling,
-  unselected non-persistence, intensity-scale, serial/parallel, and full workflow
-  regressions passed.
-- Eighteen existing fixture configurations were captured before cleanup and
-  compared after cleanup and again after restoring OFF, using the same
-  toolchain. OLS/MDPDE models, uncertainty, peeling, completion/stop records, and
-  convergence evidence matched byte-for-byte; numeric state used hexadecimal
-  floating-point serialization. Configurations covered independent/relabeled/
-  scaled offsets, joint polish, collinearity, rollback, boundary reconciliation
-  and correction, system/local/empty-system failures, shared-cluster and
-  cross-cluster unselected backgrounds, hydrogen handling, and serial/parallel
-  execution. Timing and performance counters were not compared.
-- Reverse searches found no chemical keys, shared-offset merges, group-median
-  refits, group closures, obsolete row aggregation, or removed snapshot aliases
-  in the second-stage production path. Seed decoding, conditioning cross-column
-  statistics, and effective refit assessments retain production callers. Atom
-  records remain schema 2; the analyzer still accepts legacy atom schema 1.
-- `git diff --check` passed. Public headers, fitting options, CLI, database
+- The developer-only trust-model experiment ON build passed the focused tests,
+  all 18 CTest entries, and lint/install-consumer smoke. Its defense suite
+  contains 101 cases. The experiment was restored to OFF, followed by a normal
+  rebuild, focused tests, full CTest, lint, and another numerical capture; the
+  normal defense suite contains 100 cases.
+- Source counts remain 729 `TEST`/`TEST_F` and 17 `TEST_P`. No repository test
+  file or case was added; the fold-168 runner retains its eight Python cases.
+- Existing graph tests cover 100/101-atom boundaries, isolated atoms, small
+  custom limits, strong-edge priority, equal-weight canonical tie-breaking,
+  edge/active-index permutations, complete internal edges, empty/invalid input,
+  capped binary fallback, post-cutoff hysteresis, and pre-cutoff sensitivity
+  versus post-cutoff component summaries.
+- A connected 101-atom chain plus two remote selected atoms verifies actual
+  cutoff and 101-atom boundary reconciliation, serial/parallel agreement,
+  unchanged intensity-scale tolerances, and remote-cluster improvement. The
+  chain uses slightly nonuniform spacing to avoid repeated-weight rounding ties;
+  the production weight comparisons and numerical tolerances are unchanged.
+  Uncut dependency components can exceed the 100-atom topology limit.
+- The shared-background fixture now connects selected atoms through physical
+  sample coupling rather than matching residue labels. Relabeling selected and
+  unselected chain IDs, sequence IDs, and residue names while holding selection,
+  elements, geometry, samples, initial local state, and `alpha_r` fixed leaves
+  second-stage models, peeling, stop reasons, topology records, and convergence
+  evidence unchanged. The chemical-key independence coverage is retained.
+- Frozen backgrounds, shared contributors, fixed/quarantined median pools,
+  hydrogen exclusion, deduplication, best-audit rescoring, adaptive partitions,
+  final polish/peeling, unselected non-persistence, and full workflow regressions
+  passed.
+- Eighteen existing fixture configurations were captured before the change.
+  Fifteen unaffected configurations matched byte-for-byte afterward in
+  OLS/MDPDE models, uncertainty, peeling, completion/stop records, and convergence
+  evidence, using hexadecimal floating-point serialization. The other three
+  configurations deliberately changed shared-cluster/boundary geometry to
+  exercise the new topology contract and were not treated as numerical-identity
+  controls. All 18 candidate captures matched again after restoring OFF.
+  Timing and performance counters were not compared.
+- Fold-168 baseline/report schema is now 6, with 168 selected atoms, a 100-atom
+  limit, and at least two topology clusters. Input hashes, reference quality
+  metrics, quality tolerances, and the 25-accepted-iteration gate are unchanged.
+  Runner tests passed, including rejection of legacy residue logs and schema 5.
+  The external fold-168 benchmark was not run: its model/map inputs are not
+  configured in this workspace.
+- Reverse searches found no residue lookup, residue pre-merge, residue-count
+  cutoff, chemical keys, shared-offset merge, or group-median refit in the
+  second-stage production path. Public headers, fitting options, CLI, database
   schema, selection flags, stage flow, third-stage estimators, and standalone
-  empty-selected behavior are unchanged.
+  empty-selected behavior are unchanged. `git diff --check` passed.
 
-The ROOT-disabled build retains existing unrelated painter unused-variable
-warnings; those files were not changed. The paired 600-case corpus was not
-rerun. The algorithm description above, historical audit documents, and the
-Notion algorithm description were not modified by this cleanup.
+The ROOT-disabled build retains existing unrelated painter warnings; those
+files were not changed. The paired 600-case corpus was not rerun. Historical
+audit documents are unchanged; the normative description and existing Notion
+algorithm page are synchronized to this workspace change.

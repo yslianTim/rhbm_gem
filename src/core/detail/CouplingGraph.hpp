@@ -6,7 +6,6 @@
 #include <functional>
 #include <map>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -14,8 +13,6 @@
 #include <Eigen/Dense>
 
 namespace rhbm_gem::core::detail {
-
-using ResidueKey = std::pair<std::string, int>;
 
 struct GraphWeightedEdge
 {
@@ -67,17 +64,16 @@ struct GraphTopology
 {
     std::vector<std::vector<std::size_t>> adjacency_list{};
     std::vector<GraphWeightedEdge> retained_edge_list{};
-    std::vector<ResidueKey> residue_key_by_atom_index{};
     std::vector<GraphSampleDependency> sample_dependency_list{};
     CouplingGraphSummary summary{};
-    struct ResidueCutoffSummary
+    struct AtomCutoffSummary
     {
-        std::size_t residue_count{ 0 };
-        std::size_t maximum_residue_count{ 0 };
+        std::size_t atom_count{ 0 };
+        std::size_t maximum_atom_count{ 0 };
         std::size_t cluster_count{ 0 };
         std::size_t cut_edge_count{ 0 };
-        std::size_t maximum_residue_count_limit{ 0 };
-    } residue_cutoff_summary{};
+        std::size_t maximum_atom_count_limit{ 0 };
+    } atom_cutoff_summary{};
 };
 
 struct CouplingGraphOptions
@@ -87,7 +83,7 @@ struct CouplingGraphOptions
     std::vector<double> sensitivity_minimum_weight_list{
         0.05, 0.075, 0.10, 0.15, 0.20, 0.30
     };
-    std::size_t maximum_residue_count{ 10 };
+    std::size_t maximum_atom_count{ 100 };
 };
 
 struct CouplingGraphPartition
@@ -155,7 +151,6 @@ public:
     explicit CouplingGraphBuilder(std::size_t atom_count);
     void AddSample(SampleRef sample_id, std::vector<GraphParticipant> & participant_list);
     GraphTopology BuildTopology(
-        std::vector<ResidueKey> residue_key_by_atom_index,
         const CouplingGraphOptions & options = {},
         const GraphTopology * previous_topology = nullptr);
 
@@ -189,7 +184,7 @@ GraphTopology BuildAdaptiveSecondStageGraphTopology(
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);
 
-GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count);
+GraphTopology ApplyGraphAtomCutoff(GraphTopology topology, std::size_t maximum_atom_count);
 
 CouplingGraphPartition BuildGraphPartition(
     const GraphTopology & topology,

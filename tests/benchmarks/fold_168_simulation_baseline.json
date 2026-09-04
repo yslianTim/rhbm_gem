@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "input_hashes": {
     "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
     "map": "5e0dbb13fc3a76f8a944e6e2b18393d1896fafc2ec9020457cca8e8a421f120e"
@@ -27,8 +27,8 @@
     "--exclude-hydrogen",
     "true"
   ],
-  "expected_residue_count": 20,
-  "maximum_residues_per_cluster": 10,
+  "expected_atom_count": 168,
+  "maximum_atoms_per_cluster": 100,
   "minimum_cluster_count": 2,
   "serial_ids": [
     1,

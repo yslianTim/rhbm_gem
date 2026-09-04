@@ -20,8 +20,8 @@ def make_baseline() -> dict[str, object]:
         "schema_version": regression.SCHEMA_VERSION,
         "input_hashes": regression.EXPECTED_INPUT_HASHES,
         "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
-        "expected_residue_count": 20,
-        "maximum_residues_per_cluster": 10,
+        "expected_atom_count": 168,
+        "maximum_atoms_per_cluster": 100,
         "minimum_cluster_count": 2,
         "serial_ids": list(range(1, regression.EXPECTED_ATOM_COUNT + 1)),
         "reference_quality_metrics": {
@@ -114,11 +114,11 @@ class Fold168RegressionTest(unittest.TestCase):
                 "maximum_absolute_offset": 1.05,
             },
             "second_stage_summary": {"accepted_iterations": 25},
-            "residue_cutoff_summary": {
-                "residue_count": 20,
-                "limit": 10,
+            "atom_cutoff_summary": {
+                "atom_count": 168,
+                "limit": 100,
                 "cluster_count": 2,
-                "maximum_residue_count": 10,
+                "maximum_atom_count": 100,
                 "cut_edge_count": 12,
             },
         }
@@ -130,13 +130,13 @@ class Fold168RegressionTest(unittest.TestCase):
         self.assertIn("accepted_iterations", differences)
 
         actual["second_stage_summary"]["accepted_iterations"] = 25
-        actual["residue_cutoff_summary"]["cluster_count"] = 1
-        actual["residue_cutoff_summary"]["maximum_residue_count"] = 11
+        actual["atom_cutoff_summary"]["cluster_count"] = 1
+        actual["atom_cutoff_summary"]["maximum_atom_count"] = 101
         cutoff_differences = "\n".join(
             regression.validate_quality_gate(baseline, actual))
-        self.assertIn("residue_cutoff_summary.cluster_count", cutoff_differences)
+        self.assertIn("atom_cutoff_summary.cluster_count", cutoff_differences)
         self.assertIn(
-            "residue_cutoff_summary.maximum_residue_count",
+            "atom_cutoff_summary.maximum_atom_count",
             cutoff_differences)
 
     def test_parses_stable_second_stage_summary(self) -> None:
@@ -203,19 +203,26 @@ class Fold168RegressionTest(unittest.TestCase):
                 "best_iteration=2, stop_reason=audit-patience, "
                 "best_audit_objective=1.25000000e-03, final_uses_polish=yes.\n")
 
-    def test_parses_stable_residue_cutoff_summary(self) -> None:
-        summary = regression.parse_residue_cutoff_summary(
-            "Local-fitting residue cutoff: residues=20, limit=10, clusters=2, "
-            "max-residues=10, cutoff-edges=42.\n")
+    def test_parses_stable_atom_cutoff_summary(self) -> None:
+        log = (
+            "Local-fitting atom cutoff: atoms=168, limit=100, clusters=2, "
+            "max-atoms=100, cutoff-edges=42.\n")
+        summary = regression.parse_atom_cutoff_summary(log)
         self.assertEqual(summary, {
-            "residue_count": 20,
-            "limit": 10,
+            "atom_count": 168,
+            "limit": 100,
             "cluster_count": 2,
-            "maximum_residue_count": 10,
+            "maximum_atom_count": 100,
             "cut_edge_count": 42,
         })
-        with self.assertRaises(regression.RegressionError):
-            regression.parse_residue_cutoff_summary("missing")
+        for invalid_log in (
+            "missing", log + log,
+            "Local-fitting residue cutoff: residues=20, limit=10, clusters=2, "
+            "max-residues=10, cutoff-edges=42.\n",
+        ):
+            with self.subTest(log=invalid_log):
+                with self.assertRaises(regression.RegressionError):
+                    regression.parse_atom_cutoff_summary(invalid_log)
 
     def test_hash_failure_does_not_execute_and_preserves_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -302,7 +309,7 @@ class Fold168RegressionTest(unittest.TestCase):
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             self.assertEqual(regression.load_baseline(baseline_path), baseline)
 
-            baseline["schema_version"] = 3
+            baseline["schema_version"] = 5
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             with self.assertRaises(regression.RegressionError):
                 regression.load_baseline(baseline_path)

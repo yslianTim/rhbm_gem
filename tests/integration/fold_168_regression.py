@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SAVED_KEY = "fold_gaus_charge1"
 EXPECTED_INPUT_HASHES = {
     "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
@@ -62,12 +62,12 @@ SECOND_STAGE_MULTILINE_SUMMARY_PATTERN = re.compile(
     r"best-audit|latest-validated|unavailable)",
     re.MULTILINE,
 )
-RESIDUE_CUTOFF_PATTERN = re.compile(
-    r"Local-fitting residue cutoff: "
-    r"residues=(?P<residue_count>\d+), "
+ATOM_CUTOFF_PATTERN = re.compile(
+    r"Local-fitting atom cutoff: "
+    r"atoms=(?P<atom_count>\d+), "
     r"limit=(?P<limit>\d+), "
     r"clusters=(?P<cluster_count>\d+), "
-    r"max-residues=(?P<maximum_residue_count>\d+), "
+    r"max-atoms=(?P<maximum_atom_count>\d+), "
     r"cutoff-edges=(?P<cut_edge_count>\d+)\."
 )
 
@@ -184,11 +184,11 @@ def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
     }
 
 
-def parse_residue_cutoff_summary(log_text: str) -> dict[str, int]:
-    matches = list(RESIDUE_CUTOFF_PATTERN.finditer(log_text))
+def parse_atom_cutoff_summary(log_text: str) -> dict[str, int]:
+    matches = list(ATOM_CUTOFF_PATTERN.finditer(log_text))
     if len(matches) != 1:
         raise RegressionError(
-            "Expected exactly one parseable residue cutoff summary, "
+            "Expected exactly one parseable atom cutoff summary, "
             f"found {len(matches)}.")
     return {
         name: int(value)
@@ -247,35 +247,35 @@ def validate_quality_gate(
             f"expected <= {MAXIMUM_ACCEPTED_ITERATIONS}, "
             f"got {summary.get('accepted_iterations')}")
 
-    residue_cutoff = actual.get("residue_cutoff_summary")
-    if not isinstance(residue_cutoff, dict):
-        differences.append("residue_cutoff_summary: missing")
+    atom_cutoff = actual.get("atom_cutoff_summary")
+    if not isinstance(atom_cutoff, dict):
+        differences.append("atom_cutoff_summary: missing")
     else:
-        expected_residue_count = int(baseline["expected_residue_count"])
-        maximum_residues_per_cluster = int(
-            baseline["maximum_residues_per_cluster"])
+        expected_atom_count = int(baseline["expected_atom_count"])
+        maximum_atoms_per_cluster = int(
+            baseline["maximum_atoms_per_cluster"])
         minimum_cluster_count = int(baseline["minimum_cluster_count"])
-        if int(residue_cutoff.get("residue_count", -1)) != expected_residue_count:
+        if int(atom_cutoff.get("atom_count", -1)) != expected_atom_count:
             differences.append(
-                "residue_cutoff_summary.residue_count: "
-                f"expected {expected_residue_count}, "
-                f"got {residue_cutoff.get('residue_count')}")
-        if int(residue_cutoff.get("limit", -1)) != maximum_residues_per_cluster:
+                "atom_cutoff_summary.atom_count: "
+                f"expected {expected_atom_count}, "
+                f"got {atom_cutoff.get('atom_count')}")
+        if int(atom_cutoff.get("limit", -1)) != maximum_atoms_per_cluster:
             differences.append(
-                "residue_cutoff_summary.limit: "
-                f"expected {maximum_residues_per_cluster}, "
-                f"got {residue_cutoff.get('limit')}")
-        if int(residue_cutoff.get("cluster_count", -1)) < minimum_cluster_count:
+                "atom_cutoff_summary.limit: "
+                f"expected {maximum_atoms_per_cluster}, "
+                f"got {atom_cutoff.get('limit')}")
+        if int(atom_cutoff.get("cluster_count", -1)) < minimum_cluster_count:
             differences.append(
-                "residue_cutoff_summary.cluster_count: "
+                "atom_cutoff_summary.cluster_count: "
                 f"expected >= {minimum_cluster_count}, "
-                f"got {residue_cutoff.get('cluster_count')}")
-        if int(residue_cutoff.get("maximum_residue_count", -1)) > \
-                maximum_residues_per_cluster:
+                f"got {atom_cutoff.get('cluster_count')}")
+        if int(atom_cutoff.get("maximum_atom_count", -1)) > \
+                maximum_atoms_per_cluster:
             differences.append(
-                "residue_cutoff_summary.maximum_residue_count: "
-                f"expected <= {maximum_residues_per_cluster}, "
-                f"got {residue_cutoff.get('maximum_residue_count')}")
+                "atom_cutoff_summary.maximum_atom_count: "
+                f"expected <= {maximum_atoms_per_cluster}, "
+                f"got {atom_cutoff.get('maximum_atom_count')}")
     return differences
 
 
@@ -322,7 +322,7 @@ def make_empty_actual(input_hashes: dict[str, str]) -> dict[str, Any]:
         "atoms": [],
         "quality_metrics": None,
         "second_stage_summary": None,
-        "residue_cutoff_summary": None,
+        "atom_cutoff_summary": None,
     }
 
 
@@ -348,8 +348,8 @@ def load_baseline(path: Path) -> dict[str, Any]:
     if not isinstance(serial_ids, list) or len(serial_ids) != EXPECTED_ATOM_COUNT:
         raise RegressionError("Baseline does not contain 168 serial IDs.")
     cutoff_expectations = {
-        "expected_residue_count": baseline.get("expected_residue_count"),
-        "maximum_residues_per_cluster": baseline.get("maximum_residues_per_cluster"),
+        "expected_atom_count": baseline.get("expected_atom_count"),
+        "maximum_atoms_per_cluster": baseline.get("maximum_atoms_per_cluster"),
         "minimum_cluster_count": baseline.get("minimum_cluster_count"),
     }
     if not all(
@@ -357,12 +357,12 @@ def load_baseline(path: Path) -> dict[str, Any]:
         for value in cutoff_expectations.values()
     ):
         raise RegressionError(
-            "Baseline residue cutoff expectations must be positive integers.")
-    if cutoff_expectations["maximum_residues_per_cluster"] * \
+            "Baseline atom cutoff expectations must be positive integers.")
+    if cutoff_expectations["maximum_atoms_per_cluster"] * \
             cutoff_expectations["minimum_cluster_count"] < \
-            cutoff_expectations["expected_residue_count"]:
+            cutoff_expectations["expected_atom_count"]:
         raise RegressionError(
-            "Baseline residue cutoff expectations cannot cover all residues.")
+            "Baseline atom cutoff expectations cannot cover all atoms.")
     reference_metrics = baseline.get("reference_quality_metrics")
     expected_metric_names = {
         "amplitude_rmse",
@@ -446,7 +446,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             actual["atoms"] = read_atom_results(temporary_database)
             actual["quality_metrics"] = calculate_quality_metrics(actual["atoms"])
             actual["second_stage_summary"] = parse_second_stage_summary(log_text)
-            actual["residue_cutoff_summary"] = parse_residue_cutoff_summary(log_text)
+            actual["atom_cutoff_summary"] = parse_atom_cutoff_summary(log_text)
 
         differences = validate_quality_gate(baseline, actual)
     except Exception as error:  # Preserve artifacts for all benchmark failures.

@@ -14,15 +14,12 @@
 #include <unordered_set>
 #include <utility>
 
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem::core::detail {
 
 namespace {
-
-using ResiduePair = std::pair<std::size_t, std::size_t>;
 
 class DisjointSet
 {
@@ -100,27 +97,6 @@ void UpdateGraphComponentSummary(GraphTopology & topology)
 {
     const auto atom_count{ topology.adjacency_list.size() };
     DisjointSet component_set{ atom_count };
-    if (!topology.residue_key_by_atom_index.empty())
-    {
-        if (topology.residue_key_by_atom_index.size() != atom_count)
-        {
-            throw std::invalid_argument(
-                "Local fitting coupling residue key count must match atom count.");
-        }
-        std::map<ResidueKey, std::size_t> first_atom_index_by_residue_key;
-        for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-        {
-            const auto [iter, inserted]{
-                first_atom_index_by_residue_key.emplace(
-                    topology.residue_key_by_atom_index.at(atom_index),
-                    atom_index)
-            };
-            if (!inserted)
-            {
-                component_set.Merge(iter->second, atom_index);
-            }
-        }
-    }
     for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
     {
         for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
@@ -195,10 +171,10 @@ void ValidateBuildOptions(const CouplingGraphOptions & options)
         throw std::invalid_argument(
             "Local fitting coupling retained-edge minimum weight must be in [0, minimum weight].");
     }
-    if (options.maximum_residue_count == 0)
+    if (options.maximum_atom_count == 0)
     {
         throw std::invalid_argument(
-            "Local fitting coupling maximum residue count must be positive.");
+            "Local fitting coupling maximum atom count must be positive.");
     }
     for (const auto minimum_weight : options.sensitivity_minimum_weight_list)
     {
@@ -551,23 +527,15 @@ GraphTopology CouplingGraphBuilder::BuildBinary()
 }
 
 GraphTopology CouplingGraphBuilder::BuildTopology(
-    std::vector<ResidueKey> residue_key_by_atom_index,
     const CouplingGraphOptions & options,
     const GraphTopology * previous_topology)
 {
     ValidateBuildOptions(options);
-    if (residue_key_by_atom_index.size() != m_atom_count)
-    {
-        throw std::invalid_argument(
-            "Local fitting coupling residue key count must match atom count.");
-    }
-
     auto topology{ BuildWeightedOrBinary(options, previous_topology) };
-    topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
     topology.summary.configured_minimum_weight = options.minimum_weight;
-    return ApplyGraphResidueCutoff(
+    return ApplyGraphAtomCutoff(
         std::move(topology),
-        options.maximum_residue_count);
+        options.maximum_atom_count);
 }
 
 static GraphTopology BuildSecondStageGraphTopologyImpl(
@@ -638,17 +606,8 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
         }
     }
 
-    std::vector<ResidueKey> residue_key_by_atom_index;
-    residue_key_by_atom_index.reserve(context.size());
-    for (const auto & atom_context : context)
-    {
-        residue_key_by_atom_index.emplace_back(
-            atom_context.atom->GetChainID(),
-            atom_context.atom->GetSequenceID());
-    }
     const auto topology{
         builder.BuildTopology(
-            std::move(residue_key_by_atom_index),
             options,
             previous_topology)
     };
@@ -725,16 +684,16 @@ void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
         << summary.maximum_component_ratio << ".";
     Logger::Log(LogLevel::Info, message.str());
 
-    const auto & residue_cutoff_summary{ topology.residue_cutoff_summary };
-    std::ostringstream residue_cutoff_message;
-    residue_cutoff_message
-        << "Local-fitting residue cutoff: residues="
-        << residue_cutoff_summary.residue_count
-        << ", limit=" << residue_cutoff_summary.maximum_residue_count_limit
-        << ", clusters=" << residue_cutoff_summary.cluster_count
-        << ", max-residues=" << residue_cutoff_summary.maximum_residue_count
-        << ", cutoff-edges=" << residue_cutoff_summary.cut_edge_count << ".";
-    Logger::Log(LogLevel::Info, residue_cutoff_message.str());
+    const auto & atom_cutoff_summary{ topology.atom_cutoff_summary };
+    std::ostringstream atom_cutoff_message;
+    atom_cutoff_message
+        << "Local-fitting atom cutoff: atoms="
+        << atom_cutoff_summary.atom_count
+        << ", limit=" << atom_cutoff_summary.maximum_atom_count_limit
+        << ", clusters=" << atom_cutoff_summary.cluster_count
+        << ", max-atoms=" << atom_cutoff_summary.maximum_atom_count
+        << ", cutoff-edges=" << atom_cutoff_summary.cut_edge_count << ".";
+    Logger::Log(LogLevel::Info, atom_cutoff_message.str());
 
     for (const auto & sensitivity : summary.threshold_sensitivity_list)
     {
@@ -754,53 +713,17 @@ void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
     }
 }
 
-GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximum_residue_count)
+GraphTopology ApplyGraphAtomCutoff(GraphTopology topology, std::size_t maximum_atom_count)
 {
     const auto atom_count{ topology.adjacency_list.size() };
-    const auto & residue_key_by_atom_index{ topology.residue_key_by_atom_index };
-    if (residue_key_by_atom_index.size() != atom_count)
+    if (maximum_atom_count == 0)
     {
         throw std::invalid_argument(
-            "Local fitting coupling residue key count must match atom count.");
-    }
-    if (maximum_residue_count == 0)
-    {
-        throw std::invalid_argument(
-            "Local fitting coupling maximum residue count must be positive.");
+            "Local fitting coupling maximum atom count must be positive.");
     }
 
-    std::map<ResidueKey, std::size_t> residue_index_by_key;
-    for (const auto & residue_key : residue_key_by_atom_index)
-    {
-        residue_index_by_key.emplace(residue_key, 0);
-    }
-    std::size_t next_residue_index{ 0 };
-    for (auto & entry : residue_index_by_key)
-    {
-        entry.second = next_residue_index++;
-    }
-
-    std::vector<std::size_t> residue_index_by_atom_index;
-    residue_index_by_atom_index.reserve(atom_count);
-    for (const auto & residue_key : residue_key_by_atom_index)
-    {
-        residue_index_by_atom_index.emplace_back(residue_index_by_key.at(residue_key));
-    }
-
-    std::unordered_map<ResiduePair, double, GraphIndexPairHash> maximum_weight_by_residue_pair;
-    std::size_t maximum_residue_pair_count{ 0 };
-    if (residue_index_by_key.size() > 1)
-    {
-        const auto residue_count{ residue_index_by_key.size() };
-        const auto residue_factor{ residue_count - 1 };
-        maximum_residue_pair_count =
-            residue_count > std::numeric_limits<std::size_t>::max() / residue_factor ?
-                std::numeric_limits<std::size_t>::max() :
-                residue_count * residue_factor / 2;
-    }
-    maximum_weight_by_residue_pair.reserve(std::min(
-        topology.retained_edge_list.size(),
-        maximum_residue_pair_count));
+    std::vector<const GraphWeightedEdge *> weighted_edge_list;
+    weighted_edge_list.reserve(topology.retained_edge_list.size());
     for (const auto & edge : topology.retained_edge_list)
     {
         if (edge.left_atom_index >= atom_count || edge.right_atom_index >= atom_count)
@@ -813,57 +736,29 @@ GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximu
             throw std::invalid_argument(
                 "Local fitting coupling retained edge weight must be finite.");
         }
-        const auto left_residue_index{
-            residue_index_by_atom_index.at(edge.left_atom_index)
-        };
-        const auto right_residue_index{
-            residue_index_by_atom_index.at(edge.right_atom_index)
-        };
-        if (left_residue_index == right_residue_index) continue;
-
-        const auto residue_pair{ std::minmax(left_residue_index, right_residue_index) };
-        auto weight_iter{ maximum_weight_by_residue_pair.find(residue_pair) };
-        if (weight_iter == maximum_weight_by_residue_pair.end())
-        {
-            maximum_weight_by_residue_pair.emplace(residue_pair, edge.weight);
-        }
-        else
-        {
-            weight_iter->second = std::max(weight_iter->second, edge.weight);
-        }
-    }
-
-    struct WeightedResidueEdge
-    {
-        ResiduePair residue_pair{};
-        double weight{ 0.0 };
-    };
-    std::vector<WeightedResidueEdge> weighted_residue_edge_list;
-    weighted_residue_edge_list.reserve(maximum_weight_by_residue_pair.size());
-    for (const auto & [residue_pair, weight] : maximum_weight_by_residue_pair)
-    {
-        weighted_residue_edge_list.emplace_back(WeightedResidueEdge{ residue_pair, weight });
+        weighted_edge_list.emplace_back(&edge);
     }
     std::sort(
-        weighted_residue_edge_list.begin(),
-        weighted_residue_edge_list.end(),
-        [](const auto & lhs, const auto & rhs)
+        weighted_edge_list.begin(),
+        weighted_edge_list.end(),
+        [](const auto * lhs, const auto * rhs)
         {
-            if (lhs.weight != rhs.weight) return lhs.weight > rhs.weight;
-            return lhs.residue_pair < rhs.residue_pair;
+            if (lhs->weight != rhs->weight) return lhs->weight > rhs->weight;
+            return std::minmax(lhs->left_atom_index, lhs->right_atom_index) <
+                std::minmax(rhs->left_atom_index, rhs->right_atom_index);
         });
 
-    DisjointSet residue_component_set{ residue_index_by_key.size() };
-    for (const auto & edge : weighted_residue_edge_list)
+    DisjointSet component_set{ atom_count };
+    for (const auto * edge : weighted_edge_list)
     {
-        const auto left_root{ residue_component_set.Find(edge.residue_pair.first) };
-        const auto right_root{ residue_component_set.Find(edge.residue_pair.second) };
+        const auto left_root{ component_set.Find(edge->left_atom_index) };
+        const auto right_root{ component_set.Find(edge->right_atom_index) };
         if (left_root == right_root) continue;
-        if (residue_component_set.ComponentSize(left_root) + residue_component_set.ComponentSize(right_root) > maximum_residue_count)
+        if (component_set.ComponentSize(left_root) + component_set.ComponentSize(right_root) > maximum_atom_count)
         {
             continue;
         }
-        residue_component_set.Merge(left_root, right_root);
+        component_set.Merge(left_root, right_root);
     }
 
     topology.adjacency_list.assign(atom_count, {});
@@ -873,14 +768,8 @@ GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximu
     std::size_t cut_edge_count{ 0 };
     for (const auto & edge : topology.retained_edge_list)
     {
-        const auto left_residue_index{
-            residue_index_by_atom_index.at(edge.left_atom_index)
-        };
-        const auto right_residue_index{
-            residue_index_by_atom_index.at(edge.right_atom_index)
-        };
-        if (residue_component_set.Find(left_residue_index) !=
-            residue_component_set.Find(right_residue_index))
+        if (component_set.Find(edge.left_atom_index) !=
+            component_set.Find(edge.right_atom_index))
         {
             cut_edge_count++;
             continue;
@@ -899,18 +788,15 @@ GraphTopology ApplyGraphResidueCutoff(GraphTopology topology, std::size_t maximu
         topology.adjacency_list.at(edge->right_atom_index).emplace_back(edge->left_atom_index);
     }
 
-    const auto residue_component_summary{
-        SummarizeDisjointSetComponents(residue_component_set, residue_index_by_key.size())
-    };
-    topology.residue_cutoff_summary =
-        GraphTopology::ResidueCutoffSummary{
-            residue_index_by_key.size(),
-            residue_component_summary.maximum_component_size,
-            residue_component_summary.component_count,
-            cut_edge_count,
-            maximum_residue_count
-        };
     UpdateGraphComponentSummary(topology);
+    topology.atom_cutoff_summary =
+        GraphTopology::AtomCutoffSummary{
+            atom_count,
+            topology.summary.maximum_component_size,
+            topology.summary.component_count,
+            cut_edge_count,
+            maximum_atom_count
+        };
     return topology;
 }
 
@@ -936,27 +822,6 @@ CouplingGraphPartition BuildGraphPartition(
     }
 
     DisjointSet component_set{ active_index_list.size() };
-
-    if (!topology.residue_key_by_atom_index.empty())
-    {
-        if (topology.residue_key_by_atom_index.size() != atom_count)
-        {
-            throw std::invalid_argument(
-                "Local fitting coupling residue key count must match atom count.");
-        }
-        std::map<ResidueKey, std::size_t> first_position_by_residue_key;
-        for (std::size_t position = 0; position < active_index_list.size(); position++)
-        {
-            const auto atom_index{ active_index_list.at(position) };
-            const auto & residue_key{
-                topology.residue_key_by_atom_index.at(atom_index)
-            };
-            const auto [iter, inserted]{
-                first_position_by_residue_key.emplace(residue_key, position)
-            };
-            if (!inserted) component_set.Merge(iter->second, position);
-        }
-    }
 
     for (const auto atom_index : active_index_list)
     {

@@ -72,18 +72,6 @@ double Distance(
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-std::vector<coupling_detail::ResidueKey>
-MakeUniqueResidueKeys(std::size_t count)
-{
-    std::vector<coupling_detail::ResidueKey> key_list;
-    key_list.reserve(count);
-    for (std::size_t index = 0; index < count; index++)
-    {
-        key_list.emplace_back("A", static_cast<int>(index));
-    }
-    return key_list;
-}
-
 void AddCouplingGraphSample(
     coupling_detail::CouplingGraphBuilder & builder,
     coupling_detail::SampleRef sample_id,
@@ -776,7 +764,8 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
     const std::array<rg::GaussianModel3D, 7> & truth_model_list,
     bool use_alternate_group_keys = false,
     bool shared_cluster = false,
-    bool shared_contributor = false)
+    bool shared_contributor = false,
+    bool use_alternate_residue_keys = false)
 {
     std::vector<std::array<double, 3>> position_list{
         { 0.0, 0.0, 0.0 },
@@ -787,6 +776,12 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
         { 15.0, 0.0, 0.0 },
         { 22.0, 0.0, 0.0 }
     };
+    if (shared_cluster)
+    {
+        // Selected sample responses overlap, independently of residue identity.
+        position_list.at(1) = { 0.8, 0.0, 0.0 };
+        position_list.at(3) = { 1.4, 0.0, 0.0 };
+    }
     if (shared_contributor)
     {
         // Contributor 3 affects both targets, but selected responses do not overlap.
@@ -827,8 +822,13 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
             spot_list.at(i),
             element_list.at(i),
             position_list.at(i)));
+        if (use_alternate_residue_keys)
+        {
+            atom_list.back()->SetChainID("relabeled");
+            atom_list.back()->SetSequenceID(42);
+            atom_list.back()->SetResidue(Residue::GLY);
+        }
     }
-    if (shared_cluster) atom_list.at(1)->SetSequenceID(1);
     auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
     model->SelectAllAtoms();
     for (int serial_id = 3; serial_id <= 7; serial_id++)
@@ -1023,18 +1023,20 @@ std::unique_ptr<rg::ModelObject> BuildBoundaryComponentConflictDefenseModel(
     std::vector<Spot> spot_list;
     std::vector<Element> element_list;
     std::vector<rg::GaussianModel3D> truth_model_list;
-    for (std::size_t i = 0; i < 13; i++)
+    for (std::size_t i = 0; i < 103; i++)
     {
+        // Break repeated edge-weight ties while retaining a connected 101-atom chain.
+        const auto atom_position{ static_cast<double>(i) };
         const auto x_position{
-            i < 11 ? 0.45 * static_cast<double>(i) :
-                20.0 + 0.45 * static_cast<double>(i - 11)
+            i < 101 ? 0.60 * atom_position + 0.002 * atom_position * atom_position :
+                110.0 + 0.45 * static_cast<double>(i - 101)
         };
         position_list.push_back({ x_position, 0.0, 0.0 });
         spot_list.push_back(i % 2 == 0 ? Spot::C : Spot::O);
         element_list.push_back(
             i % 2 == 0 ? Element::CARBON : Element::OXYGEN);
         const auto truth_model{
-            i >= 11 ? rg::GaussianModel3D{ 7.5, 0.70, 0.10 } :
+            i >= 101 ? rg::GaussianModel3D{ 7.5, 0.70, 0.10 } :
             i % 2 == 0 ?
                 rg::GaussianModel3D{ 10.0, 0.85, 0.25 } :
                 rg::GaussianModel3D{ 2.0, 0.40, -0.15 }
@@ -3571,7 +3573,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
     coupling_detail::CouplingGraphBuilder builder{ 2 };
     AddCouplingGraphSample(builder, { 0, 0 }, { { 0, jacobian }, { 1, jacobian } });
     AddCouplingGraphSample(builder, { 0, 1 }, { { 0, 2.0 * jacobian }, { 1, 2.0 * jacobian } });
-    const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
+    const auto topology{ builder.BuildTopology() };
     EXPECT_TRUE(HasCouplingNeighbor(topology, 0, 1));
     EXPECT_NEAR(topology.summary.weight_median, 1.0, 1.0e-12);
     EXPECT_NEAR(topology.summary.weight_percentile_95, 1.0, 1.0e-12);
@@ -3587,7 +3589,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
         { 0, 1 },
         { { 0, 10.0 * jacobian }, { 1, 2.0 * jacobian } });
     const auto scaled_topology{
-        scaled_builder.BuildTopology(MakeUniqueResidueKeys(2))
+        scaled_builder.BuildTopology()
     };
     EXPECT_TRUE(HasCouplingNeighbor(scaled_topology, 0, 1));
     EXPECT_NEAR(
@@ -3601,7 +3603,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
         { 0, 0 },
         { { 0, 1.0e-100 * jacobian }, { 1, 1.0e-100 * jacobian } });
     const auto tiny_topology{
-        tiny_builder.BuildTopology(MakeUniqueResidueKeys(2))
+        tiny_builder.BuildTopology()
     };
     EXPECT_TRUE(HasCouplingNeighbor(tiny_topology, 0, 1));
     EXPECT_NEAR(
@@ -3624,7 +3626,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipan
         });
     AddCouplingGraphSample(builder, { 0, 1 }, { { 0, unit } });
 
-    const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
+    const auto topology{ builder.BuildTopology() };
     ASSERT_EQ(topology.sample_dependency_list.size(), 2U);
     EXPECT_EQ(
         topology.sample_dependency_list.front().contributor_atom_index_list,
@@ -3639,7 +3641,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipan
     EXPECT_EQ(topology.summary.maximum_component_size, 2U);
     EXPECT_DOUBLE_EQ(topology.summary.maximum_component_ratio, 1.0);
     EXPECT_DOUBLE_EQ(topology.summary.configured_minimum_weight, 0.05);
-    EXPECT_EQ(topology.residue_cutoff_summary.maximum_residue_count_limit, 10U);
+    EXPECT_EQ(topology.atom_cutoff_summary.maximum_atom_count_limit, 100U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJacobian)
@@ -3658,7 +3660,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
             { 1, invalid }
         });
 
-    const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
+    const auto topology{ builder.BuildTopology() };
     EXPECT_FALSE(topology.summary.uses_weighted_graph);
     EXPECT_TRUE(topology.summary.threshold_sensitivity_list.empty());
     ASSERT_EQ(topology.sample_dependency_list.size(), 1U);
@@ -3668,7 +3670,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
     EXPECT_TRUE(HasCouplingNeighbor(topology, 0, 1));
 }
 
-TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueComponents)
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryUsesOnlySelectedSampleConnectivity)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     coupling_detail::CouplingGraphBuilder builder{ 2 };
@@ -3676,14 +3678,13 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
     AddCouplingGraphSample(builder, { 1, 0 }, { { 1, unit } });
 
     const auto topology{
-        builder.BuildTopology({ { "A", 1 }, { "A", 1 } })
+        builder.BuildTopology()
     };
     EXPECT_TRUE(topology.adjacency_list.at(0).empty());
     EXPECT_TRUE(topology.adjacency_list.at(1).empty());
-    EXPECT_EQ(topology.summary.component_count, 1U);
-    EXPECT_EQ(topology.summary.maximum_component_size, 2U);
-    EXPECT_DOUBLE_EQ(topology.summary.maximum_component_ratio, 1.0);
-
+    EXPECT_EQ(topology.summary.component_count, 2U);
+    EXPECT_EQ(topology.summary.maximum_component_size, 1U);
+    EXPECT_DOUBLE_EQ(topology.summary.maximum_component_ratio, 0.5);
 
     constexpr std::size_t selected_count{ 11 };
     std::vector<std::unique_ptr<rg::AtomObject>> atoms;
@@ -3695,6 +3696,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
     {
         atoms.emplace_back(MakeAtom(static_cast<int>(i + 1), Spot::C,
             Element::CARBON, { static_cast<double>(i), 0.0, 0.0 }));
+        atoms.back()->SetSequenceID(1);
         context.at(i).atom = atoms.back().get();
         state.emplace_back(MakeGaussianResult(model));
         context.at(i).raw_sampling_entries = {
@@ -3706,7 +3708,21 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
     EXPECT_EQ(background_topology.adjacency_list.size(), selected_count);
     for (const auto & neighbors : background_topology.adjacency_list) EXPECT_TRUE(neighbors.empty());
     EXPECT_EQ(background_topology.summary.component_count, selected_count);
-    EXPECT_EQ(background_topology.residue_cutoff_summary.maximum_residue_count, 1U);
+    EXPECT_EQ(background_topology.atom_cutoff_summary.maximum_atom_count, 1U);
+    const auto partition{ coupling_detail::BuildGraphPartition(
+        background_topology, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }) };
+    EXPECT_EQ(partition.sample_id_list_by_key.size(), selected_count);
+    for (std::size_t i = 0; i < atoms.size(); i++)
+    {
+        atoms.at(i)->SetChainID(i % 2 == 0 ? "B" : "C");
+        atoms.at(i)->SetSequenceID(static_cast<int>(100 - i));
+    }
+    const auto relabeled{ coupling_detail::BuildSecondStageGraphTopology(context, state, true) };
+    EXPECT_EQ(relabeled.adjacency_list, background_topology.adjacency_list);
+    EXPECT_EQ(relabeled.summary.component_count, selected_count);
+    EXPECT_EQ(coupling_detail::BuildGraphPartition(
+        relabeled, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }).sample_id_list_by_key,
+        partition.sample_id_list_by_key);
     EXPECT_THROW(coupling_detail::BuildSecondStageGraphTopology(context, {}, true), std::invalid_argument);
 
 }
@@ -3719,7 +3735,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
     AddCouplingGraphSample(weak_builder, { 0, 1 }, { { 0, 10.0 * unit } });
     AddCouplingGraphSample(weak_builder, { 1, 0 }, { { 1, 10.0 * unit } });
     const auto weak_topology{
-        weak_builder.BuildTopology(MakeUniqueResidueKeys(2))
+        weak_builder.BuildTopology()
     };
     EXPECT_FALSE(HasCouplingNeighbor(weak_topology, 0, 1));
     EXPECT_EQ(weak_topology.summary.candidate_edge_count, 1U);
@@ -3729,7 +3745,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
     AddCouplingGraphSample(cancelled_builder, { 0, 0 }, { { 0, unit }, { 1, unit } });
     AddCouplingGraphSample(cancelled_builder, { 0, 1 }, { { 0, unit }, { 1, -unit } });
     const auto cancelled_topology{
-        cancelled_builder.BuildTopology(MakeUniqueResidueKeys(2))
+        cancelled_builder.BuildTopology()
     };
     EXPECT_FALSE(HasCouplingNeighbor(cancelled_topology, 0, 1));
 }
@@ -3759,7 +3775,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphAdaptiveHysteresisAddsAndRemo
         options.minimum_weight = 0.06;
         options.retained_edge_minimum_weight = 0.04;
         return builder.BuildTopology(
-            MakeUniqueResidueKeys(2),
             options,
             previous_topology);
     };
@@ -3770,6 +3785,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphAdaptiveHysteresisAddsAndRemo
     EXPECT_FALSE(HasCouplingNeighbor(absent_midpoint, 0, 1));
     const auto added{ build_topology(0.061, &absent_previous) };
     EXPECT_TRUE(HasCouplingNeighbor(added, 0, 1));
+    const auto cutoff_previous{ coupling_detail::ApplyGraphAtomCutoff(added, 1) };
+    EXPECT_FALSE(HasCouplingNeighbor(build_topology(0.05, &cutoff_previous), 0, 1));
     const auto retained_midpoint{ build_topology(0.05, &added) };
     EXPECT_TRUE(HasCouplingNeighbor(retained_midpoint, 0, 1));
     const auto removed{ build_topology(0.039, &retained_midpoint) };
@@ -3805,8 +3822,9 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
     const std::vector<double> threshold_list{ 0.05, 0.075, 0.10, 0.15, 0.20, 0.30 };
     coupling_detail::CouplingGraphOptions options;
     options.sensitivity_minimum_weight_list = threshold_list;
+    options.maximum_atom_count = 1;
     const auto topology{
-        builder.BuildTopology(MakeUniqueResidueKeys(7), options)
+        builder.BuildTopology(options)
     };
     ASSERT_EQ(topology.retained_edge_list.size(), edge_weight_list.size());
     for (std::size_t edge_index = 0;
@@ -3845,11 +3863,13 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
             topology,
             { 0, 1, 2, 3, 4, 5, 6 })
     };
-    EXPECT_EQ(formal_threshold.component_count, formal_partition.sample_id_list_by_key.size());
+    EXPECT_EQ(formal_threshold.component_count, 4U);
+    EXPECT_EQ(formal_partition.sample_id_list_by_key.size(), 7U);
     EXPECT_EQ(formal_threshold.maximum_component_size, 2U);
-    EXPECT_EQ(topology.summary.component_count, 4U);
-    EXPECT_EQ(topology.summary.maximum_component_size, 2U);
-    EXPECT_NEAR(topology.summary.maximum_component_ratio, 2.0 / 7.0, 1.0e-12);
+    EXPECT_EQ(topology.summary.component_count, 7U);
+    EXPECT_EQ(topology.summary.maximum_component_size, 1U);
+    EXPECT_EQ(topology.atom_cutoff_summary.cut_edge_count, 3U);
+    EXPECT_NEAR(topology.summary.maximum_component_ratio, 1.0 / 7.0, 1.0e-12);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicatesBoundarySample)
@@ -4267,115 +4287,111 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
         fixture.state.at(0).mdpde.GetModel().GetAmplitude());
 }
 
-TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAndBounded)
+TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffBoundsComponentsAndPreservesDependencies)
 {
-    coupling_detail::GraphTopology topology;
-    topology.adjacency_list.resize(13);
-    for (std::size_t atom_index = 1; atom_index < 12; atom_index++)
+    for (const std::size_t atom_count : { 100U, 101U, 102U })
     {
-        topology.retained_edge_list.emplace_back(
-            coupling_detail::GraphWeightedEdge{
-                atom_index,
-                atom_index + 1,
-                1.0 - 0.01 * static_cast<double>(atom_index)
-            });
-    }
-    topology.sample_dependency_list = {
-        { { 0, 0 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 } }
-    };
-    std::vector<coupling_detail::ResidueKey> residue_key_list{
-        { "A", 1 },
-        { "A", 1 },
-        { "B", 1 }
-    };
-    for (int residue_id = 2; residue_id <= 11; residue_id++)
-    {
-        residue_key_list.emplace_back("A", residue_id);
-    }
-    topology.residue_key_by_atom_index = residue_key_list;
-
-    const auto capped_topology{
-        coupling_detail::ApplyGraphResidueCutoff(
-            std::move(topology),
-            10)
-    };
-    EXPECT_EQ(capped_topology.residue_cutoff_summary.residue_count, 12U);
-    EXPECT_GE(capped_topology.residue_cutoff_summary.cluster_count, 2U);
-    EXPECT_LE(capped_topology.residue_cutoff_summary.maximum_residue_count, 10U);
-    EXPECT_GT(capped_topology.residue_cutoff_summary.cut_edge_count, 0U);
-
-    std::vector<std::size_t> active_index_list(13);
-    for (std::size_t atom_index = 0; atom_index < active_index_list.size(); atom_index++)
-    {
-        active_index_list.at(atom_index) = atom_index;
-    }
-    const auto partition{
-        coupling_detail::BuildGraphPartition(
-            capped_topology,
-            active_index_list)
-    };
-    EXPECT_EQ(partition.boundary_sample_dependency_list.size(), 1U);
-    EXPECT_GE(partition.sample_id_list_by_key.size(), 2U);
-
-    bool found_first_residue{ false };
-    for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
-    {
-        EXPECT_EQ(sample_id_list.size(), 1U);
-        std::set<coupling_detail::ResidueKey> residue_key_set;
-        for (const auto atom_index : key)
+        coupling_detail::GraphTopology topology;
+        topology.adjacency_list.resize(atom_count);
+        // The 102-atom case also has an isolated atom, with no forced closure.
+        const std::size_t first_connected_atom{ atom_count == 102 ? 1U : 0U };
+        for (std::size_t atom_index = first_connected_atom; atom_index + 1 < atom_count; atom_index++)
         {
-            residue_key_set.emplace(residue_key_list.at(atom_index));
+            topology.retained_edge_list.push_back({
+                atom_index, atom_index + 1, 1.0 - 0.001 * static_cast<double>(atom_index) });
         }
-        EXPECT_LE(residue_key_set.size(), 10U);
-        if (std::find(key.begin(), key.end(), 0U) == key.end()) continue;
-        found_first_residue = true;
-        EXPECT_NE(std::find(key.begin(), key.end(), 1U), key.end());
-    }
-    EXPECT_TRUE(found_first_residue);
+        std::vector<std::size_t> active_index_list(atom_count);
+        std::iota(active_index_list.begin(), active_index_list.end(), 0U);
+        topology.sample_dependency_list = { { { 0, 0 }, active_index_list } };
+        const auto capped_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 100) };
+        EXPECT_EQ(capped_topology.atom_cutoff_summary.atom_count, atom_count);
+        EXPECT_EQ(capped_topology.atom_cutoff_summary.maximum_atom_count, 100U);
+        EXPECT_EQ(capped_topology.atom_cutoff_summary.cluster_count, atom_count - 99);
+        EXPECT_EQ(capped_topology.atom_cutoff_summary.cut_edge_count, atom_count == 100 ? 0U : 1U);
+        EXPECT_EQ(capped_topology.retained_edge_list.size(), topology.retained_edge_list.size());
+        ASSERT_EQ(capped_topology.sample_dependency_list.size(), 1U);
+        EXPECT_EQ(capped_topology.sample_dependency_list.front().contributor_atom_index_list,
+            active_index_list);
+        const auto partition{ coupling_detail::BuildGraphPartition(capped_topology, active_index_list) };
+        EXPECT_EQ(partition.boundary_sample_dependency_list.size(), atom_count == 100 ? 0U : 1U);
+        EXPECT_EQ(partition.sample_id_list_by_key.size(), atom_count - 99);
+        std::vector<coupling_detail::ClusterKey> owner_key_by_atom_index(atom_count);
+        for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
+        {
+            EXPECT_EQ(sample_id_list.size(), 1U);
+            EXPECT_LE(key.size(), 100U);
+            for (const auto atom_index : key) owner_key_by_atom_index.at(atom_index) = key;
+        }
+        if (first_connected_atom == 1)
+            EXPECT_EQ(partition.sample_id_list_by_key.count({ 0 }), 1U);
+        const auto polish_components{ coupling_detail::BuildUncutDependencyPolishComponents(
+            capped_topology, partition, owner_key_by_atom_index) };
+        ASSERT_EQ(polish_components.size(), 1U);
+        EXPECT_EQ(polish_components.front().atom_index_list.size(), atom_count);
 
-    std::reverse(active_index_list.begin(), active_index_list.end());
-    const auto reversed_partition{
-        coupling_detail::BuildGraphPartition(
-            capped_topology,
-            active_index_list)
-    };
-    EXPECT_EQ(
-        partition.sample_id_list_by_key.size(),
-        reversed_partition.sample_id_list_by_key.size());
-    auto expected_iter{ partition.sample_id_list_by_key.begin() };
-    auto actual_iter{ reversed_partition.sample_id_list_by_key.begin() };
-    for (; expected_iter != partition.sample_id_list_by_key.end();
-        expected_iter++, actual_iter++)
-    {
-        EXPECT_EQ(expected_iter->first, actual_iter->first);
+        std::reverse(active_index_list.begin(), active_index_list.end());
+        const auto reversed_partition{ coupling_detail::BuildGraphPartition(capped_topology, active_index_list) };
+        EXPECT_EQ(partition.sample_id_list_by_key, reversed_partition.sample_id_list_by_key);
+        ASSERT_EQ(partition.boundary_sample_dependency_list.size(), reversed_partition.boundary_sample_dependency_list.size());
+        if (!partition.boundary_sample_dependency_list.empty())
+        {
+            auto expected{ partition.boundary_sample_dependency_list.front() };
+            auto actual{ reversed_partition.boundary_sample_dependency_list.front() };
+            std::sort(expected.cluster_key_list.begin(), expected.cluster_key_list.end());
+            std::sort(actual.cluster_key_list.begin(), actual.cluster_key_list.end());
+            EXPECT_EQ(expected, actual);
+        }
     }
+
+    const auto empty{ coupling_detail::CouplingGraphBuilder{ 0 }.BuildTopology() };
+    EXPECT_EQ(empty.atom_cutoff_summary.atom_count, 0U);
+    EXPECT_EQ(empty.atom_cutoff_summary.cluster_count, 0U);
+    EXPECT_EQ(empty.atom_cutoff_summary.maximum_atom_count, 0U);
+    EXPECT_TRUE(coupling_detail::BuildGraphPartition(empty, {}).sample_id_list_by_key.empty());
+    EXPECT_THROW(coupling_detail::ApplyGraphAtomCutoff({}, 0), std::invalid_argument);
+    coupling_detail::CouplingGraphOptions invalid_options;
+    invalid_options.maximum_atom_count = 0;
+    EXPECT_THROW(coupling_detail::CouplingGraphBuilder{ 0 }.BuildTopology(invalid_options),
+        std::invalid_argument);
 }
 
-TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffPrioritizesStrongEdges)
+TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffPrioritizesStrongEdgesAndStableTies)
 {
     coupling_detail::GraphTopology topology;
     topology.adjacency_list.resize(3);
-    topology.retained_edge_list = {
-        { 1, 2, 0.80 },
-        { 0, 1, 0.90 }
-    };
-    topology.residue_key_by_atom_index = {
-        { "A", 1 }, { "A", 2 }, { "A", 3 }
-    };
-    const auto capped_topology{
-        coupling_detail::ApplyGraphResidueCutoff(
-            std::move(topology),
-            2)
-    };
-    const auto partition{
-        coupling_detail::BuildGraphPartition(
-            capped_topology,
-            { 2, 1, 0 })
-    };
+    topology.retained_edge_list = { { 1, 2, 0.80 }, { 0, 1, 0.90 }, { 0, 2, 0.70 } };
+    const auto capped_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 2) };
+    const auto partition{ coupling_detail::BuildGraphPartition(capped_topology, { 2, 1, 0 }) };
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
     EXPECT_TRUE(HasCouplingNeighbor(capped_topology, 0, 1));
     EXPECT_FALSE(HasCouplingNeighbor(capped_topology, 1, 2));
+
+    const auto singleton_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 1) };
+    EXPECT_EQ(singleton_topology.atom_cutoff_summary.cluster_count, 3U);
+    EXPECT_EQ(singleton_topology.atom_cutoff_summary.cut_edge_count, 3U);
+    const auto whole_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 3) };
+    EXPECT_EQ(whole_topology.atom_cutoff_summary.cluster_count, 1U);
+    // All three internal edges survive, not only the union-find spanning tree.
+    for (const auto & neighbors : whole_topology.adjacency_list) EXPECT_EQ(neighbors.size(), 2U);
+
+    for (auto & edge : topology.retained_edge_list) edge.weight = 0.8;
+    for (std::size_t order = 0; order < 3; order++)
+    {
+        std::rotate(topology.retained_edge_list.begin(),
+            topology.retained_edge_list.begin() + 1, topology.retained_edge_list.end());
+        for (auto & edge : topology.retained_edge_list)
+            std::swap(edge.left_atom_index, edge.right_atom_index);
+        const auto tied_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 2) };
+        EXPECT_EQ(coupling_detail::BuildGraphPartition(tied_topology, { 0, 1, 2 }).sample_id_list_by_key,
+            partition.sample_id_list_by_key);
+    }
+
+    topology.retained_edge_list.front().weight = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(coupling_detail::ApplyGraphAtomCutoff(topology, 2), std::invalid_argument);
+    topology.retained_edge_list.front().weight = 1.0;
+    topology.retained_edge_list.front().left_atom_index = 3;
+    EXPECT_THROW(coupling_detail::ApplyGraphAtomCutoff(topology, 2), std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinaryFallback)
@@ -4403,8 +4419,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
     coupling_detail::CouplingGraphOptions fallback_options;
     fallback_options.sensitivity_minimum_weight_list = { 0.05, 0.10 };
-    auto binary_topology{
-        builder.BuildTopology(MakeUniqueResidueKeys(2), fallback_options)
+    const auto binary_topology{
+        builder.BuildTopology(fallback_options)
     };
     EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
     EXPECT_TRUE(binary_topology.summary.threshold_sensitivity_list.empty());
@@ -4414,9 +4430,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
             { 0, 1 })
     };
     EXPECT_EQ(binary_partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
-    binary_topology.residue_key_by_atom_index = { { "A", 1 }, { "A", 2 } };
     const auto capped_binary_topology{
-        coupling_detail::ApplyGraphResidueCutoff(
+        coupling_detail::ApplyGraphAtomCutoff(
             binary_topology,
             1)
     };
@@ -4433,10 +4448,14 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
         overflow_builder,
         { 0, 0 },
         { { 0, huge }, { 1, huge } });
+    fallback_options.maximum_atom_count = 1;
     const auto overflow_topology{
-        overflow_builder.BuildTopology(MakeUniqueResidueKeys(2))
+        overflow_builder.BuildTopology(fallback_options)
     };
     EXPECT_FALSE(overflow_topology.summary.uses_weighted_graph);
+    EXPECT_EQ(overflow_topology.atom_cutoff_summary.cluster_count, 2U);
+    EXPECT_EQ(overflow_topology.atom_cutoff_summary.maximum_atom_count_limit, 1U);
+    EXPECT_FALSE(HasCouplingNeighbor(overflow_topology, 0, 1));
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvariant)
@@ -5543,7 +5562,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingUsesFrozenClusterBackgroundWithoutGroupKeys)
+    RunSecondStageLocalFittingUsesFrozenClusterBackgroundWithoutGroupOrResidueKeys)
 {
     const std::array seeds{ rg::GaussianModel3D{ 5.0, 0.50, 0.05 },
         rg::GaussianModel3D{ 7.0, 0.60, 0.15 } };
@@ -5594,10 +5613,17 @@ TEST(
             const bool alternate_completed{
                 rt::RunSecondStageLocalFitting(*alternate_logged, options) };
             const auto alternate_output{ testing::internal::GetCapturedStdout() };
+            auto relabeled_logged{ BuildUnselectedContributorDefenseModel(
+                scaled_seeds, scaled_truth, false, shared_cluster, shared_contributor, true) };
+            testing::internal::CaptureStdout();
+            const bool relabeled_completed{
+                rt::RunSecondStageLocalFitting(*relabeled_logged, options) };
+            const auto relabeled_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
             options.quiet_mode = true;
             ASSERT_TRUE(completed);
             ASSERT_TRUE(alternate_completed);
+            ASSERT_TRUE(relabeled_completed);
             const auto audit_records = [](const std::string & log)
             {
                 std::vector<std::string> records;
@@ -5607,7 +5633,8 @@ TEST(
                 {
                     for (const std::string marker : {
                         "Convergence safeguard audit:", "Second-stage audit terminal:",
-                        "Second-stage audit terminal atom:" })
+                        "Second-stage audit terminal atom:", "Second-stage local fitting summary:",
+                        "Local-fitting atom cutoff:", "Adaptive local-fitting topology rebuild:" })
                     {
                         const auto position{ line.find(marker) };
                         if (position != std::string::npos)
@@ -5617,9 +5644,12 @@ TEST(
                 return records;
             };
             EXPECT_EQ(audit_records(output), audit_records(alternate_output));
+            EXPECT_EQ(audit_records(output), audit_records(relabeled_output));
+            EXPECT_NE(output.find(shared_cluster ?
+                "initial components/max atoms/ratio = 1/2/1.00" :
+                "initial components/max atoms/ratio = 2/1/0.50"), std::string::npos);
             if (shared_contributor)
             {
-                EXPECT_NE(output.find("initial components/max atoms/ratio = 2/1/0.50"), std::string::npos);
                 EXPECT_NE(output.find("candidate/retained/cut edges = 0/0/0"), std::string::npos);
             }
             std::array<std::optional<rg::GaussianModel3D>, 2> first_background;
@@ -5664,12 +5694,16 @@ TEST(
                 const auto selected{ GetEstimateModel(*serial->FindAtomPtr(serial_id)) };
                 ExpectGaussianModelsNear(selected, GetEstimateModel(*parallel->FindAtomPtr(serial_id)), 1.0e-10 * scale);
                 ExpectGaussianModelsNear(selected, GetEstimateModel(*logged->FindAtomPtr(serial_id)), 1.0e-10 * scale);
+                ExpectGaussianModelsNear(selected, GetEstimateModel(*alternate_logged->FindAtomPtr(serial_id)), 0.0);
+                ExpectGaussianModelsNear(selected, GetEstimateModel(*relabeled_logged->FindAtomPtr(serial_id)), 0.0);
                 const auto view{ rg::AtomLocalPotentialView::For(*serial->FindAtomPtr(serial_id)) };
                 const auto raw{ view.GetRawSamplingEntries(false) };
                 const auto peeled{ view.GetPeelingSamplingEntries(false) };
                 const auto alternate{ rg::AtomLocalPotentialView::For(*parallel->FindAtomPtr(serial_id)).GetPeelingSamplingEntries(false) };
+                const auto relabeled{ rg::AtomLocalPotentialView::For(*relabeled_logged->FindAtomPtr(serial_id)).GetPeelingSamplingEntries(false) };
                 ASSERT_EQ(raw.size(), peeled.size());
                 ASSERT_EQ(alternate.size(), peeled.size());
+                ASSERT_EQ(relabeled.size(), peeled.size());
                 for (std::size_t row = 0; row < raw.size(); row++)
                 {
                     double background{ 0.0 };
@@ -5680,10 +5714,16 @@ TEST(
                         if (distance <= 2.5)
                             background += last_background.at(target)->ResponseAtDistance(distance);
                     }
+                    const auto * selected_neighbor{ serial->FindAtomPtr(target == 0 ? 2 : 1) };
+                    const auto selected_distance{ Distance(raw.at(row).point.position, selected_neighbor->GetPosition()) };
+                    if (selected_distance <= 2.5)
+                        background += GetEstimateModel(*selected_neighbor).ResponseAtDistance(selected_distance);
                     EXPECT_NEAR(peeled.at(row).response, raw.at(row).response - background, 1.0e-10 * scale);
                     EXPECT_NEAR(peeled.at(row).response, alternate.at(row).response, 1.0e-10 * scale);
+                    EXPECT_DOUBLE_EQ(peeled.at(row).response, relabeled.at(row).response);
                 }
-                EXPECT_EQ(view.GetNeighborCountForPeeling(), shared_contributor && target == 1 ? 2 : 1);
+                EXPECT_EQ(view.GetNeighborCountForPeeling(), shared_cluster ? 3 :
+                    shared_contributor && target == 1 ? 2 : 1);
                 const rg::GaussianModel3D normalized_selected{
                     selected.GetAmplitude() / scale, selected.GetWidth(), selected.GetOffset() / scale };
                 const rg::GaussianModel3D normalized_background{
@@ -5917,9 +5957,24 @@ TEST(
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
 
-    EXPECT_EQ(
-        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
-        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+    const auto previous_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    serial_options.quiet_mode = false;
+    testing::internal::CaptureStdout();
+    const auto serial_completed{ rt::RunSecondStageLocalFitting(*serial_model, serial_options) };
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+    EXPECT_EQ(serial_completed, rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+    const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
+    ASSERT_NE(cutoff_position, std::string::npos);
+    const auto maximum_position{ output.find(", max-atoms=", cutoff_position) };
+    const auto cuts_position{ output.find(", cutoff-edges=", cutoff_position) };
+    ASSERT_NE(maximum_position, std::string::npos);
+    ASSERT_NE(cuts_position, std::string::npos);
+    EXPECT_LE(std::stoull(output.substr(maximum_position + 12)), 100U);
+    EXPECT_GT(std::stoull(output.substr(cuts_position + 15)), 0U);
+    EXPECT_NE(output.find("Boundary-component reconciliation: clusters/atoms/boundary-samples = 2/101/"),
+        std::string::npos);
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
     const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
     ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
@@ -6040,11 +6095,11 @@ TEST(
 {
     auto model{ BuildBoundaryComponentConflictDefenseModel() };
     const auto initial_remote_error{
-        CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13)
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103)
     };
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
     EXPECT_LT(
-        CalculateSelectedAtomResponseMeanSquaredError(*model, 11, 13),
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103),
         initial_remote_error);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
