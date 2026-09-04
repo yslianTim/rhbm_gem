@@ -8,7 +8,6 @@
 #include <iomanip>
 #include <limits>
 #include <ranges>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -750,11 +749,9 @@ PolishProvenance BacktrackingWorkspace::BuildCandidatePolishProvenance(
 bool BacktrackingWorkspace::BuildCandidate(double factor)
 {
     const auto candidate_model_list{
-        BuildSharedOffsetDampedModelList(
+        BuildDampedModelList(
             m_previous_model_list,
             m_endpoint_model_list,
-            m_previous_shared_offset_list,
-            m_endpoint_shared_offset_list,
             factor)
     };
     if (!candidate_model_list.has_value())
@@ -1494,7 +1491,6 @@ ObjectiveByKey BuildObjectiveByKey(
 }
 
 BacktrackingWorkspace::BacktrackingWorkspace(
-    const SecondStageContext & context,
     const FitState & previous_state,
     const FitStatePatch & endpoint_patch,
     double minimum_transformed_change)
@@ -1508,8 +1504,6 @@ BacktrackingWorkspace::BacktrackingWorkspace(
             "Local fitting backtracking minimum transformed change is invalid.");
     }
     m_candidate_patch = endpoint_patch;
-    std::vector<std::size_t> group_id_by_atom_position;
-    group_id_by_atom_position.reserve(m_candidate_patch.atom_index_list.size());
     m_previous_model_list.reserve(m_candidate_patch.atom_index_list.size());
     m_endpoint_model_list.reserve(m_candidate_patch.atom_index_list.size());
     for (std::size_t atom_position = 0;
@@ -1517,20 +1511,12 @@ BacktrackingWorkspace::BacktrackingWorkspace(
         atom_position++)
     {
         const auto atom_index{ m_candidate_patch.atom_index_list.at(atom_position) };
-        group_id_by_atom_position.emplace_back(
-            context.at(atom_index).group_id);
         m_previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
         const auto & endpoint_mdpde{
             m_candidate_patch.mdpde_list.at(atom_position)
         };
         m_endpoint_model_list.emplace_back(endpoint_mdpde.GetModel());
     }
-    m_previous_shared_offset_list = BuildGroupMedianOffsetList(
-        group_id_by_atom_position,
-        m_previous_model_list);
-    m_endpoint_shared_offset_list = BuildGroupMedianOffsetList(
-        group_id_by_atom_position,
-        m_endpoint_model_list);
 }
 
 static std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
@@ -1760,70 +1746,34 @@ static bool TryCommitClusterCandidate(
     return true;
 }
 
-static std::optional<FitStateProposal> BuildSharedOffsetProposal(
-    const SecondStageContext & context,
+static std::optional<FitStateProposal> BuildAtomProposal(
     const FitState & outer_previous_state,
     const FitState & operator_proposal_state,
     const SuspiciousBlockActivity & block_activity,
     const ClusterKey & key,
     double factor)
 {
-    if (key.empty())
-    {
-        return std::nullopt;
-    }
-
-    std::vector<std::size_t> group_id_by_atom_position;
     std::vector<GaussianModel3D> previous_model_list;
     std::vector<GaussianModel3D> raw_model_list;
-    group_id_by_atom_position.reserve(key.size());
     previous_model_list.reserve(key.size());
     raw_model_list.reserve(key.size());
-    std::set<std::size_t> inactive_offset_group_id_set;
     for (const auto atom_index : key)
     {
-        if (!block_activity.HasActiveOffset(atom_index))
-        {
-            inactive_offset_group_id_set.emplace(
-                context.at(atom_index).group_id);
-        }
-    }
-    for (const auto atom_index : key)
-    {
-        group_id_by_atom_position.emplace_back(
-            context.at(atom_index).group_id);
-        const auto & previous_model{
-            outer_previous_state.at(atom_index).mdpde.GetModel()
-        };
-        auto operator_model{
-            operator_proposal_state.at(atom_index).mdpde.GetModel()
-        };
+        const auto & previous_model{ outer_previous_state.at(atom_index).mdpde.GetModel() };
+        auto raw_model{ operator_proposal_state.at(atom_index).mdpde.GetModel() };
         if (!block_activity.HasActiveShape(atom_index))
         {
-            operator_model = previous_model.WithOffset(operator_model.GetOffset());
+            raw_model = previous_model.WithOffset(raw_model.GetOffset());
         }
-        if (inactive_offset_group_id_set.contains(
-                context.at(atom_index).group_id))
+        if (!block_activity.HasActiveOffset(atom_index))
         {
-            operator_model = operator_model.WithOffset(previous_model.GetOffset());
+            raw_model = raw_model.WithOffset(previous_model.GetOffset());
         }
         previous_model_list.emplace_back(previous_model);
-        raw_model_list.emplace_back(operator_model);
+        raw_model_list.emplace_back(raw_model);
     }
-    auto previous_shared_offset_list{
-        BuildGroupMedianOffsetList(group_id_by_atom_position, previous_model_list)
-    };
-    auto raw_shared_offset_list{
-        BuildGroupMedianOffsetList(group_id_by_atom_position, raw_model_list)
-    };
-
     const auto candidate_model_list{
-        BuildSharedOffsetDampedModelList(
-            previous_model_list,
-            raw_model_list,
-            previous_shared_offset_list,
-            raw_shared_offset_list,
-            factor)
+        BuildDampedModelList(previous_model_list, raw_model_list, factor)
     };
     if (!candidate_model_list.has_value())
     {
@@ -2422,8 +2372,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.trust_model_candidate_funnel.generated_count++;
 #endif
             auto proposal_result{
-                BuildSharedOffsetProposal(
-                    context,
+                BuildAtomProposal(
                     previous_state,
                     search_endpoint_state,
                     search_block_activity,
@@ -2580,21 +2529,12 @@ static ClusterCandidateResult SelectClusterCandidate(
             const auto mode{ *last_guard_failure->guard_mode };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
-                const auto group_id{
-                    context.at(atom_index).group_id
+                const auto previous_offset{
+                    previous_state.at(atom_index).mdpde.GetModel().GetOffset()
                 };
-                for (const auto member_index : key)
-                {
-                    if (context.at(member_index).group_id != group_id) continue;
-                    const auto previous_offset{
-                        previous_state.at(member_index).mdpde.GetModel().GetOffset()
-                    };
-                    search_endpoint_state.at(member_index).mdpde =
-                        WithPreservedUncertaintyOffset(
-                            search_endpoint_state.at(member_index).mdpde,
-                            previous_offset);
-                    search_block_activity.offset_fixed_atom_mask.at(member_index) = 1;
-                }
+                search_endpoint_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
+                    search_endpoint_state.at(atom_index).mdpde, previous_offset);
+                search_block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
             }
             else
             {
@@ -2993,30 +2933,20 @@ static bool TryBoundaryJointCorrection(
     CandidateSelection & selection,
     BoundaryComponentReconciliationDiagnostic & diagnostic)
 {
-    if (component.offset_closure_atom_index_list.empty()) return false;
+    if (component.halo_atom_index_list.empty()) return false;
 
     std::vector<std::size_t> shape_active_atom_index_list;
-    for (const auto atom_index : component.shape_active_atom_index_list)
+    for (const auto atom_index : component.halo_atom_index_list)
     {
         if (inputs.block_activity.HasActiveShape(atom_index))
         {
             shape_active_atom_index_list.emplace_back(atom_index);
         }
     }
-    std::set<std::size_t> fixed_offset_group_id_set;
-    for (const auto atom_index : component.offset_closure_atom_index_list)
-    {
-        if (!inputs.block_activity.HasActiveOffset(atom_index))
-        {
-            fixed_offset_group_id_set.emplace(
-                inputs.context.at(atom_index).group_id);
-        }
-    }
     std::vector<std::size_t> offset_active_atom_index_list;
-    for (const auto atom_index : component.offset_closure_atom_index_list)
+    for (const auto atom_index : component.halo_atom_index_list)
     {
-        if (!fixed_offset_group_id_set.contains(
-                inputs.context.at(atom_index).group_id))
+        if (inputs.block_activity.HasActiveOffset(atom_index))
         {
             offset_active_atom_index_list.emplace_back(atom_index);
         }
@@ -3044,7 +2974,6 @@ static bool TryBoundaryJointCorrection(
     const BoundaryJointCorrectionWorkspaceKey workspace_key{
         shape_active_atom_index_list,
         offset_active_atom_index_list,
-        component.offset_closure_atom_index_list,
         component.affected_sample_ref_list
     };
     auto & solver{
@@ -3065,7 +2994,6 @@ static bool TryBoundaryJointCorrection(
             endpoint_state_view,
             shape_active_atom_index_list,
             offset_active_atom_index_list,
-            component.offset_closure_atom_index_list,
             component.affected_sample_ref_list,
             inputs.ridge_multiplier_list,
             trust_region_list,
@@ -3101,7 +3029,7 @@ static bool TryBoundaryJointCorrection(
         CountSuspiciousPolishAtoms(
             inputs.context,
             inputs.options,
-            component.offset_closure_atom_index_list,
+            component.halo_atom_index_list,
             endpoint_state_view,
             corrected_state_view);
     if (diagnostic.suspicious_candidate_atom_count != 0)
@@ -3148,7 +3076,7 @@ static bool TryBoundaryJointCorrection(
     }
 
     corrected_component_patch.ApplyTo(selection.assembled_state);
-    for (const auto atom_index : component.offset_closure_atom_index_list)
+    for (const auto atom_index : component.halo_atom_index_list)
     {
         const auto change{
             CalculateTransformedChange(
@@ -3182,8 +3110,7 @@ static void ReconcileBoundaryComponent(
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
     diagnostic.boundary_sample_count = component.boundary_sample_count;
     diagnostic.interface_atom_count = component.interface_atom_index_list.size();
-    diagnostic.shape_active_atom_count = component.shape_active_atom_index_list.size();
-    diagnostic.offset_closure_atom_count = component.offset_closure_atom_index_list.size();
+    diagnostic.shape_active_atom_count = component.halo_atom_index_list.size();
     if (previous_audit_objective != nullptr)
     {
         diagnostic.previous_component_objective = previous_audit_objective->GetTotalObjective();
@@ -3246,7 +3173,6 @@ static void ReconcileBoundaryComponent(
     }
 
     BacktrackingWorkspace backtracking_workspace{
-        inputs.context,
         inputs.previous_state,
         endpoint_patch,
         kTransformedChangeTolerance
@@ -3392,8 +3318,7 @@ static bool TryRescueBoundaryComponent(
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
     diagnostic.boundary_sample_count = component.boundary_sample_count;
     diagnostic.interface_atom_count = component.interface_atom_index_list.size();
-    diagnostic.shape_active_atom_count = component.shape_active_atom_index_list.size();
-    diagnostic.offset_closure_atom_count = component.offset_closure_atom_index_list.size();
+    diagnostic.shape_active_atom_count = component.halo_atom_index_list.size();
     diagnostic.accepted_cluster_count = component.key_list.size() - rescue_key_list.size();
     diagnostic.rescue_candidate_cluster_count = rescue_key_list.size();
     diagnostic.is_rescue_attempt = true;
@@ -3459,7 +3384,6 @@ static bool TryRescueBoundaryComponent(
             diagnostic))
     {
         BacktrackingWorkspace backtracking_workspace{
-            inputs.context,
             inputs.previous_state,
             endpoint_patch,
             kTransformedChangeTolerance
@@ -3931,17 +3855,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             const auto mode{ *terminal_diagnostic.guard_mode };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
-                const auto group_id{
-                    inputs.context.at(atom_index).group_id
-                };
-                for (const auto member_index : key)
-                {
-                    if (inputs.context.at(member_index).group_id == group_id)
-                    {
-                        inputs.block_activity.offset_fixed_atom_mask.at(
-                            member_index) = 1;
-                    }
-                }
+                inputs.block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
             }
             else
             {
@@ -4193,33 +4107,20 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     {
         const auto & component{ component_list.at(component_position) };
         std::vector<std::size_t> shape_active_index_list;
-        std::set<std::size_t> fixed_offset_group_id_set;
+        std::vector<std::size_t> offset_active_index_list;
         for (const auto atom_index : component.atom_index_list)
         {
             if (block_activity.HasActiveShape(atom_index))
             {
                 shape_active_index_list.emplace_back(atom_index);
             }
-            if (!block_activity.HasActiveOffset(atom_index))
-            {
-                fixed_offset_group_id_set.emplace(
-                    context.at(atom_index).group_id);
-            }
-        }
-        std::vector<std::size_t> offset_active_index_list;
-        std::set<std::size_t> active_offset_group_id_set;
-        for (const auto atom_index : component.atom_index_list)
-        {
-            const auto group_id{ context.at(atom_index).group_id };
-            if (!fixed_offset_group_id_set.contains(group_id))
+            if (block_activity.HasActiveOffset(atom_index))
             {
                 offset_active_index_list.emplace_back(atom_index);
-                active_offset_group_id_set.emplace(group_id);
             }
         }
         const auto parameter_count{
-            2 * shape_active_index_list.size() +
-            active_offset_group_id_set.size()
+            2 * shape_active_index_list.size() + offset_active_index_list.size()
         };
         result.diagnostic.atom_count += component.atom_index_list.size();
         result.diagnostic.parameter_count += parameter_count;
@@ -4269,7 +4170,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 const BoundaryJointCorrectionWorkspaceKey workspace_key{
                     shape_active_index_list,
                     offset_active_index_list,
-                    component.atom_index_list,
                     component.affected_sample_ref_list,
                 };
                 auto & solver{
@@ -4297,7 +4197,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             endpoint_state_view,
                             shape_active_index_list,
                             offset_active_index_list,
-                            component.atom_index_list,
                             component.affected_sample_ref_list,
                             ridge_multiplier_list,
                             trust_region_list,

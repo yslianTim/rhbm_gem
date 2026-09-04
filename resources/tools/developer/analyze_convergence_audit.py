@@ -101,11 +101,13 @@ def parse_log(text: str) -> dict[str, Any]:
                 raise ValueError("Terminal schema-2 record is incomplete")
             terminal = fields
         if fields := _fields(line, TERMINAL_ATOM_MARKER):
-            if fields.get("schema") != "1":
+            if fields.get("schema") not in ("1", "2"):
                 continue
-            required = {"serial", "group", "amplitude", "width", "offset"}
+            required = {"serial", "amplitude", "width", "offset"}
+            if fields["schema"] == "1":
+                required.add("group")
             if not required.issubset(fields):
-                raise ValueError("Terminal atom schema-1 record is incomplete")
+                raise ValueError("Terminal atom record is incomplete")
             terminal_atoms.append(fields)
     return {
         "trajectory_records": trajectory_records,

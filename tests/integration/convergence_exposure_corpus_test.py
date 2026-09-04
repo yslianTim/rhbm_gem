@@ -115,6 +115,25 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertIsNotNone(metrics)
         assert metrics is not None
         self.assertEqual(metrics["transformed_aggregate_rmse"], 0.0)
+        parser = load_module(
+            "independent_offset_audit_parser",
+            PROJECT_ROOT / "resources" / "tools" / "developer" /
+            "analyze_convergence_audit.py")
+        for schema, group_field in (("1", ", group=7"), ("2", "")):
+            record = (
+                f"Second-stage audit terminal atom: schema={schema}, serial=1"
+                f"{group_field}, amplitude=6, width=0.5, offset=0.1.")
+            parsed = parser.parse_log(record)["terminal_atoms"]
+            self.assertEqual(len(parsed), 1)
+            self.assertEqual(parsed[0]["offset"], "0.1")
+            self.assertEqual("group" in parsed[0], schema == "1")
+        with self.assertRaises(ValueError):
+            parser.parse_log(
+                "Second-stage audit terminal atom: schema=2, serial=1, width=0.5.")
+        with self.assertRaises(ValueError):
+            parser.parse_log(
+                "Second-stage audit terminal atom: schema=1, serial=1, "
+                "amplitude=6, width=0.5, offset=0.1.")
 
     def test_analyzer_reports_only_production_metrics(self) -> None:
         report = ANALYZER.analyze([

@@ -305,9 +305,8 @@ void LogAuditAtomState(
         const auto & model{ state.at(atom_index).mdpde.GetModel() };
         std::ostringstream message;
         message << std::scientific << std::setprecision(17)
-            << marker << " schema=1"
+            << marker << " schema=2"
             << ", serial=" << context.at(atom_index).atom->GetSerialID()
-            << ", group=" << context.at(atom_index).group_id
             << ", amplitude=" << model.GetAmplitude()
             << ", width=" << model.GetWidth()
             << ", offset=" << model.GetOffset();
@@ -884,11 +883,10 @@ void LogAcceptedCandidateSearchDiagnostics(
         if (!diagnostic.joint_correction_status.has_value()) continue;
         std::ostringstream correction_message;
         correction_message << std::scientific << std::setprecision(2)
-            << "Boundary-interface joint correction: direct-interface/shape-active/offset-active/closure/parameters = "
+            << "Boundary-interface joint correction: direct-interface/shape-active/offset-active/parameters = "
             << diagnostic.interface_atom_count << "/"
             << diagnostic.shape_active_atom_count << "/"
             << diagnostic.offset_active_atom_count << "/"
-            << diagnostic.offset_closure_atom_count << "/"
             << diagnostic.joint_parameter_count
             << ", status="
             << GetBoundaryJointCorrectionStatusText(

@@ -191,12 +191,10 @@ rg::GaussianModel3D MakeGaussianWithCenterSignal(
 std::pair<offset_detail::SecondStageContext,
     offset_detail::SecondStageModelSnapshot>
 BuildJointOffsetEstimationFixture(
-    const std::vector<std::size_t> & group_id_list,
     const std::vector<rg::GaussianModel3D> & model_list,
     const std::vector<double> & target_offset_list)
 {
-    if (group_id_list.size() != model_list.size() ||
-        model_list.size() != target_offset_list.size())
+    if (model_list.size() != target_offset_list.size())
     {
         throw std::invalid_argument(
             "Joint offset fixture input sizes are inconsistent.");
@@ -204,18 +202,11 @@ BuildJointOffsetEstimationFixture(
 
     offset_detail::SecondStageContext context;
     context.atom_list.resize(model_list.size());
-    std::unordered_map<std::size_t, std::size_t> dense_group_id_by_id;
     for (std::size_t atom_index = 0;
         atom_index < model_list.size();
         atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
-        const auto group_iter{
-            dense_group_id_by_id.try_emplace(
-                group_id_list.at(atom_index),
-                dense_group_id_by_id.size()).first
-        };
-        atom_context.group_id = group_iter->second;
         SamplingPoint point;
         point.distance = 0.35;
         atom_context.raw_sampling_entries.emplace_back(LocalPotentialSample{
@@ -243,12 +234,10 @@ struct JointPolishFixture
 };
 
 JointPolishFixture BuildJointPolishFixture(
-    const std::vector<std::size_t> & group_id_list,
     const std::vector<rg::GaussianModel3D> & base_model_list,
     const std::vector<rg::GaussianModel3D> & target_model_list)
 {
-    if (group_id_list.size() != base_model_list.size() ||
-        base_model_list.size() != target_model_list.size() ||
+    if (base_model_list.size() != target_model_list.size() ||
         base_model_list.empty())
     {
         throw std::invalid_argument(
@@ -264,7 +253,6 @@ JointPolishFixture BuildJointPolishFixture(
     };
     JointPolishFixture fixture;
     fixture.context.atom_list.resize(base_model_list.size());
-    std::unordered_map<std::size_t, std::size_t> selected_group_id_by_id;
     fixture.state.reserve(base_model_list.size());
     for (std::size_t atom_index = 0;
         atom_index < base_model_list.size();
@@ -290,8 +278,6 @@ JointPolishFixture BuildJointPolishFixture(
         fixture.state.emplace_back(MakeGaussianResult(
             base_model_list.at(atom_index)));
 
-        atom_context.group_id = selected_group_id_by_id.try_emplace(
-            group_id_list.at(atom_index), selected_group_id_by_id.size()).first->second;
     }
     return fixture;
 }
@@ -788,7 +774,7 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
 std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
     const std::array<rg::GaussianModel3D, 2> & selected_seed_model_list,
     const std::array<rg::GaussianModel3D, 7> & truth_model_list,
-    bool use_alternate_unselected_group_keys = false,
+    bool use_alternate_group_keys = false,
     bool shared_cluster = false,
     bool shared_contributor = false)
 {
@@ -826,12 +812,12 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
         Element::OXYGEN,
         Element::OXYGEN
     };
-    if (use_alternate_unselected_group_keys)
+    if (use_alternate_group_keys)
     {
+        spot_list.at(0) = Spot::N;
+        spot_list.at(1) = Spot::O;
         spot_list.at(2) = Spot::N;
-        element_list.at(2) = Element::NITROGEN;
         spot_list.at(3) = Spot::O;
-        element_list.at(3) = Element::OXYGEN;
     }
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
     for (std::size_t i = 0; i < position_list.size(); i++)
@@ -924,15 +910,17 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
     return model;
 }
 
-std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
-    double intensity_scale = 1.0)
+std::unique_ptr<rg::ModelObject> BuildIndependentOffsetDefenseModel(
+    double intensity_scale = 1.0,
+    bool alternate_keys = false)
 {
     auto model{ BuildDefenseModel(
         {
             std::array<double, 3>{ 0.0, 0.0, 0.0 },
             std::array<double, 3>{ 0.8, 0.0, 0.0 }
         },
-        { Spot::C, Spot::C },
+        alternate_keys ? std::vector<Spot>{ Spot::N, Spot::O } :
+            std::vector<Spot>{ Spot::C, Spot::C },
         { Element::CARBON, Element::CARBON },
         {
             rg::GaussianModel3D{
@@ -943,7 +931,7 @@ std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
             rg::GaussianModel3D{
                 4.8 * intensity_scale,
                 0.62,
-                0.05 * intensity_scale
+                -0.08 * intensity_scale
             }
         },
         rg::GaussianModel3D{
@@ -1119,8 +1107,8 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
                 std::array<double, 3>{ 10.0, 0.0, 0.0 },
                 std::array<double, 3>{ 10.0001, 0.0, 0.0 }
             },
-            { Spot::C, Spot::O, Spot::N, Spot::CA },
-            { Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON },
+            { Spot::C, Spot::C, Spot::C, Spot::C },
+            { Element::CARBON, Element::CARBON, Element::CARBON, Element::CARBON },
             {
                 rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
                 rg::GaussianModel3D{ 5.5, 0.55, -0.15 },
@@ -1863,7 +1851,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     const rg::GaussianModel3D previous_model{ 5.4, 0.52, 0.05 };
     const rg::GaussianModel3D target_model{ 6.0, 0.55, 0.10 };
     auto fixture{
-        BuildJointPolishFixture({ 10 }, { previous_model }, { target_model })
+        BuildJointPolishFixture( { previous_model }, { target_model })
     };
     constexpr double unselected_distance{ 0.25 };
     auto & atom_context{ fixture.context.at(0) };
@@ -2320,73 +2308,45 @@ TEST(EstimatorSecondStageDefenseTest, JointFittingConditioningKeepsIndependentCo
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
 }
 
-TEST(EstimatorSecondStageDefenseTest,
-    JointOffsetParameterizationSharesOnlySelectedColumns)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorPreservesIndividualRidgeAnchors)
 {
-    Eigen::VectorXd initial_atom_offset(5);
-    initial_atom_offset << 1.0, 4.0, 3.0, 2.0, 6.0;
-    const auto parameterization{
-        offset_detail::BuildJointOffsetParameterization(
-            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
-            initial_atom_offset)
-    };
-
-    ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->group_position_by_atom.size(), 5U);
-    EXPECT_EQ(parameterization->seed_offset.size(), 2);
-    EXPECT_EQ(parameterization->OffsetColumn(0), 1);
-    EXPECT_EQ(parameterization->OffsetColumn(1), 0);
-    EXPECT_EQ(
-        parameterization->OffsetColumn(0),
-        parameterization->OffsetColumn(2));
-    EXPECT_EQ(
-        parameterization->OffsetColumn(0),
-        parameterization->OffsetColumn(3));
-    EXPECT_EQ(
-        parameterization->OffsetColumn(1),
-        parameterization->OffsetColumn(4));
-    EXPECT_DOUBLE_EQ(
-        parameterization->seed_offset(parameterization->OffsetColumn(0)),
-        2.0);
-    EXPECT_DOUBLE_EQ(
-        parameterization->seed_offset(parameterization->OffsetColumn(1)),
-        5.0);
-    Eigen::VectorXd group_offset{ Eigen::VectorXd::Zero(2) };
-    group_offset(parameterization->OffsetColumn(0)) = 2.5;
-    group_offset(parameterization->OffsetColumn(1)) = 5.5;
-    const auto atom_offset{ parameterization->ExpandOffsets(group_offset) };
-    EXPECT_EQ(atom_offset.size(), 5);
-    EXPECT_DOUBLE_EQ(atom_offset(0), 2.5);
-    EXPECT_DOUBLE_EQ(atom_offset(1), 5.5);
-    EXPECT_DOUBLE_EQ(atom_offset(2), 2.5);
-    EXPECT_DOUBLE_EQ(atom_offset(3), 2.5);
-    EXPECT_DOUBLE_EQ(atom_offset(4), 5.5);
-
+    const std::vector<rg::GaussianModel3D> models{
+        { 6.0, 0.55, 1.0 }, { 6.0, 0.55, 6.0 } };
+    auto fixture{ BuildJointOffsetEstimationFixture(models, { 1.0, 6.0 }) };
+    // Identical columns constrain only the sum; ridge must retain each atom's own seed.
+    for (std::size_t atom = 0; atom < 2; atom++)
+    {
+        fixture.first.at(atom).raw_sampling_entries.front().response +=
+            models.at(1 - atom).ResponseAtDistance(0.35);
+        fixture.first.at(atom).neighbor_atom_sample_list = { { 1 - atom, 0.35 } };
+        fixture.first.at(atom).neighbor_atom_sample_offset_list = { 0, 1 };
+    }
+    alg::WeightedRidgeSolver solver;
+    const auto result{ offset_detail::EstimateJointOffsets(
+        fixture.first, { 0, 1 }, fixture.second, { 1.0, 1.0 }, solver, false) };
+    ASSERT_EQ(result.status, offset_detail::JointOffsetSolveStatus::Converged);
+    ASSERT_EQ(result.offset.size(), 2);
+    EXPECT_NEAR(result.offset(0), 1.0, 1.0e-10);
+    EXPECT_NEAR(result.offset(1), 6.0, 1.0e-10);
 }
 
-TEST(EstimatorSecondStageDefenseTest,
-    JointOffsetParameterizationUsesDeterministicGroupColumn)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumns)
 {
-    Eigen::VectorXd atom_offset(3);
-    atom_offset << 1.0, 4.0, 3.0;
-    const auto parameterization{
-        offset_detail::BuildJointOffsetParameterization(
-            std::vector<std::size_t>{ 20, 10, 20 },
-            atom_offset)
-    };
-    ASSERT_TRUE(parameterization.has_value());
-
-    Eigen::VectorXd reordered_atom_offset(3);
-    reordered_atom_offset << 4.0, 1.0, 3.0;
-    const auto reordered{
-        offset_detail::BuildJointOffsetParameterization(
-            std::vector<std::size_t>{ 10, 20, 20 },
-            reordered_atom_offset)
-    };
-    ASSERT_TRUE(reordered.has_value());
-    EXPECT_EQ(reordered->OffsetColumn(0), 0);
-    EXPECT_EQ(reordered->OffsetColumn(1), 1);
-    EXPECT_EQ(reordered->OffsetColumn(2), 1);
+    auto fixture{ BuildJointOffsetEstimationFixture(
+        { { 6.0, 0.55, 1.0 }, { 7.0, 0.60, 4.0 }, { 8.0, 0.65, 3.0 } },
+        { 1.0, 4.0, 3.0 }) };
+    alg::WeightedRidgeSolver solver;
+    const auto original{ offset_detail::EstimateJointOffsets(
+        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 1.0, 1.0 }, solver, false) };
+    const auto reordered{ offset_detail::EstimateJointOffsets(
+        fixture.first, { 1, 2, 0 }, fixture.second, { 1.0, 1.0, 1.0 }, solver, false) };
+    ASSERT_EQ(original.status, offset_detail::JointOffsetSolveStatus::Converged);
+    ASSERT_EQ(reordered.status, offset_detail::JointOffsetSolveStatus::Converged);
+    ASSERT_EQ(original.offset.size(), 3);
+    ASSERT_EQ(reordered.offset.size(), 3);
+    EXPECT_NEAR(reordered.offset(0), original.offset(1), 1.0e-12);
+    EXPECT_NEAR(reordered.offset(1), original.offset(2), 1.0e-12);
+    EXPECT_NEAR(reordered.offset(2), original.offset(0), 1.0e-12);
 }
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksSolverQualification)
@@ -2430,16 +2390,15 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromS
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorFitsIndependentAtomOffsets)
 {
     auto fixture{
         BuildJointOffsetEstimationFixture(
-            { 20, 20 },
             {
                 rg::GaussianModel3D{ 6.0, 0.55, 0.0 },
                 rg::GaussianModel3D{ 7.0, 0.60, 4.0 }
             },
-            { 2.0, 2.0 })
+            { 1.0, 3.0 })
     };
     alg::WeightedRidgeSolver solver;
     const auto result{
@@ -2456,15 +2415,15 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
         result.status,
         offset_detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(result.offset.size(), 2);
-    EXPECT_NEAR(result.offset(0), 2.0, 1.0e-5);
-    EXPECT_DOUBLE_EQ(result.offset(0), result.offset(1));
+    EXPECT_NEAR(result.offset(0), 1.0, 0.01);
+    EXPECT_NEAR(result.offset(1), 3.0, 0.01);
+    EXPECT_GT(result.offset(1) - result.offset(0), 1.9);
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsIndependentGroups)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundInRhs)
 {
     auto fixture{
         BuildJointOffsetEstimationFixture(
-            { 20, 10 },
             {
                 rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
                 rg::GaussianModel3D{ 7.0, 0.60, 3.0 }
@@ -2516,7 +2475,6 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
 {
     auto empty_fixture{
         BuildJointOffsetEstimationFixture(
-            { 20 },
             { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
             { 2.0 })
     };
@@ -2540,7 +2498,6 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
 
     auto invalid_fixture{
         BuildJointOffsetEstimationFixture(
-            { 20 },
             { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
             { 2.0 })
     };
@@ -2795,50 +2752,24 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest,
-    GroupMedianModelListUsesComponentMediansAndKeepsGroupsSeparate)
+TEST(EstimatorSecondStageDefenseTest, GaussianParameterMedianUsesValidComponentMedians)
 {
-    const std::vector<std::size_t> group_id_list{ 10, 10, 10, 20, 20, 30 };
-    const std::vector<rg::GaussianModel3D> model_list{
-        rg::GaussianModel3D{ 1.0, 0.20, 1.0 },
-        rg::GaussianModel3D{ 9.0, 0.60, 3.0 },
-        rg::GaussianModel3D{ 5.0, 0.40, 2.0 },
-        rg::GaussianModel3D{ 4.0, 0.50, -2.0 },
-        rg::GaussianModel3D{ 8.0, 0.90, 2.0 },
-        rg::GaussianModel3D{ 7.0, 0.80, 0.4 }
-    };
-
-    const auto median_model_list{
-        median_detail::BuildGroupMedianModelList(
-            group_id_list,
-            model_list)
-    };
-
-    ASSERT_EQ(median_model_list.size(), model_list.size());
-    for (const auto atom_position : std::array<std::size_t, 3>{ 0, 1, 2 })
-    {
-        ExpectGaussianModelsNear(
-            median_model_list.at(atom_position),
-            rg::GaussianModel3D{ 5.0, 0.40, 2.0 },
-            1.0e-12);
-    }
-    for (const auto atom_position : std::array<std::size_t, 2>{ 3, 4 })
-    {
-        ExpectGaussianModelsNear(
-            median_model_list.at(atom_position),
-            rg::GaussianModel3D{ 6.0, 0.70, 0.0 },
-            1.0e-12);
-    }
-    ExpectGaussianModelsNear(
-        median_model_list.at(5),
-        model_list.at(5),
-        1.0e-12);
+    const std::vector<rg::GaussianModel3D> models{
+        { 1.0, 0.6, 1.0 }, { 9.0, 0.2, 3.0 }, { 5.0, 0.4, 2.0 }, {} };
+    const auto odd{ median_detail::BuildGaussianParameterMedian(models) };
+    ASSERT_TRUE(odd.has_value());
+    ExpectGaussianModelsNear(*odd, { 5.0, 0.4, 2.0 }, 1.0e-12);
+    const auto even{ median_detail::BuildGaussianParameterMedian(
+        { { 4.0, 0.5, -2.0 }, { 8.0, 0.9, 2.0 } }) };
+    ASSERT_TRUE(even.has_value());
+    ExpectGaussianModelsNear(*even, { 6.0, 0.7, 0.0 }, 1.0e-12);
+    EXPECT_FALSE(median_detail::BuildGaussianParameterMedian({}).has_value());
+    EXPECT_FALSE(median_detail::BuildGaussianParameterMedian({ { } }).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    SharedOffsetDampedModelsInterpolatePhysicalGroupOffset)
+    DampedModelsInterpolateIndividualPhysicalOffsets)
 {
-    const std::vector<std::size_t> group_id_list{ 10, 10, 20 };
     const std::vector<rg::GaussianModel3D> previous_model_list{
         rg::GaussianModel3D{ 4.0, 0.40, 0.1 },
         rg::GaussianModel3D{ 6.0, 0.60, 0.9 },
@@ -2849,47 +2780,23 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 9.0, 0.90, 0.7 },
         rg::GaussianModel3D{ 7.0, 0.70, 2.0 }
     };
-    const auto previous_shared_offset_list{
-        median_detail::BuildGroupMedianOffsetList(
-            group_id_list,
-            previous_model_list)
-    };
-    const auto raw_shared_offset_list{
-        median_detail::BuildGroupMedianOffsetList(
-            group_id_list,
-            raw_model_list)
-    };
 
     for (const auto damping : std::array<double, 3>{ 0.0, 0.25, 1.0 })
     {
         const auto candidate_model_list{
-            median_detail::BuildSharedOffsetDampedModelList(
+            median_detail::BuildDampedModelList(
                 previous_model_list,
                 raw_model_list,
-                previous_shared_offset_list,
-                raw_shared_offset_list,
                 damping)
         };
         ASSERT_TRUE(candidate_model_list.has_value());
-        const auto expected_first_group_offset{ 0.5 + damping * 0.1 };
-        const auto expected_second_group_offset{ -1.0 + damping * 3.0 };
-        EXPECT_NEAR(
-            candidate_model_list->at(0).GetOffset(),
-            expected_first_group_offset,
-            1.0e-12);
-        EXPECT_NEAR(
-            candidate_model_list->at(1).GetOffset(),
-            expected_first_group_offset,
-            1.0e-12);
-        EXPECT_NEAR(
-            candidate_model_list->at(2).GetOffset(),
-            expected_second_group_offset,
-            1.0e-12);
-
         for (std::size_t atom_position = 0;
             atom_position < candidate_model_list->size();
             atom_position++)
         {
+            EXPECT_NEAR(candidate_model_list->at(atom_position).GetOffset(),
+                std::lerp(previous_model_list.at(atom_position).GetOffset(),
+                    raw_model_list.at(atom_position).GetOffset(), damping), 1.0e-12);
             const auto previous_coordinates{
                 previous_model_list.at(atom_position).ToTransformedCoordinates()
             };
@@ -2920,67 +2827,30 @@ TEST(EstimatorSecondStageDefenseTest,
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, GroupMedianModelsAreIntensityScaleInvariant)
+TEST(EstimatorSecondStageDefenseTest, GaussianParameterMedianIsIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };
-    const std::vector<std::size_t> group_id_list{ 10, 10, 10 };
-    const std::vector<rg::GaussianModel3D> model_list{
-        rg::GaussianModel3D{ 3.0, 0.40, -0.2 },
-        rg::GaussianModel3D{ 5.0, 0.60, 0.1 },
-        rg::GaussianModel3D{ 7.0, 0.80, 0.4 }
-    };
-    std::vector<rg::GaussianModel3D> scaled_model_list;
-    scaled_model_list.reserve(model_list.size());
-    for (const auto & model : model_list)
+    const std::vector<rg::GaussianModel3D> models{
+        { 3.0, 0.4, -0.2 }, { 5.0, 0.6, 0.1 }, { 7.0, 0.8, 0.4 } };
+    std::vector<rg::GaussianModel3D> scaled_models;
+    for (const auto & model : models)
     {
-        scaled_model_list.emplace_back(rg::GaussianModel3D{
-            scale * model.GetAmplitude(),
-            model.GetWidth(),
-            scale * model.GetOffset()
-        });
+        scaled_models.emplace_back(scale * model.GetAmplitude(), model.GetWidth(),
+            scale * model.GetOffset());
     }
-
-    const auto median_model_list{
-        median_detail::BuildGroupMedianModelList(
-            group_id_list,
-            model_list)
-    };
-    const auto scaled_median_model_list{
-        median_detail::BuildGroupMedianModelList(
-            group_id_list,
-            scaled_model_list)
-    };
-    ASSERT_EQ(median_model_list.size(), scaled_median_model_list.size());
-    for (std::size_t atom_position = 0;
-        atom_position < median_model_list.size();
-        atom_position++)
-    {
-        EXPECT_DOUBLE_EQ(
-            scale * median_model_list.at(atom_position).GetAmplitude(),
-            scaled_median_model_list.at(atom_position).GetAmplitude());
-        EXPECT_DOUBLE_EQ(
-            median_model_list.at(atom_position).GetWidth(),
-            scaled_median_model_list.at(atom_position).GetWidth());
-        EXPECT_DOUBLE_EQ(
-            scale * median_model_list.at(atom_position).GetOffset(),
-            scaled_median_model_list.at(atom_position).GetOffset());
-    }
+    const auto median{ median_detail::BuildGaussianParameterMedian(models) };
+    const auto scaled{ median_detail::BuildGaussianParameterMedian(scaled_models) };
+    ASSERT_TRUE(median.has_value());
+    ASSERT_TRUE(scaled.has_value());
+    EXPECT_DOUBLE_EQ(scale * median->GetAmplitude(), scaled->GetAmplitude());
+    EXPECT_DOUBLE_EQ(median->GetWidth(), scaled->GetWidth());
+    EXPECT_DOUBLE_EQ(scale * median->GetOffset(), scaled->GetOffset());
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    IndividualRefitUsesGroupMedianModelForTargetOffsetResponse)
+    IndividualRefitUsesOwnModelForTargetOffsetResponse)
 {
-    const auto median_model_list{
-        median_detail::BuildGroupMedianModelList(
-            std::vector<std::size_t>{ 10, 10, 10 },
-            std::vector<rg::GaussianModel3D>{
-                rg::GaussianModel3D{ 3.0, 0.70, 0.2 },
-                rg::GaussianModel3D{ 5.0, 0.80, 0.3 },
-                rg::GaussianModel3D{ 7.0, 0.90, 0.4 }
-            })
-    };
-    ASSERT_EQ(median_model_list.size(), 3U);
-    const auto & offset_model{ median_model_list.front() };
+    const rg::GaussianModel3D offset_model{ 3.0, 0.70, 0.2 };
     const rg::GaussianModel3D truth_shape{ 6.0, 0.55, 0.0 };
     LocalPotentialSampleList sample_list;
     for (const auto distance : std::array<double, 5>{
@@ -3028,19 +2898,16 @@ TEST(EstimatorSecondStageDefenseTest,
         context.at(i).raw_sampling_entries.resize(1);
         context.at(i).unselected_distance_list_by_sample = { { 0.35 } };
     }
-    context.at(0).group_id = 20;
-    context.at(1).group_id = 10;
-    context.at(2).group_id = 20;
     context.frozen_background = polish_detail::BuildFrozenBackground(context, state, { { 0, 1, 2 } });
     ASSERT_TRUE(context.frozen_background);
     ExpectGaussianModelsNear(context.frozen_background->model_by_atom.front(), { 7.0, 0.60, 3.0 }, 1.0e-12);
-    const auto parameterization{ polish_detail::JointPolishParameterization::Build({ 20, 10, 20 }, models) };
+    const auto parameterization{ polish_detail::JointPolishParameterization::Build( models) };
     ASSERT_TRUE(parameterization.has_value());
     EXPECT_EQ(parameterization->AtomCount(), 3U);
-    EXPECT_EQ(parameterization->ParameterCount(), 8);
-    EXPECT_EQ(parameterization->OffsetColumn(0), parameterization->OffsetColumn(2));
+    EXPECT_EQ(parameterization->ParameterCount(), 9);
+    EXPECT_NE(parameterization->OffsetColumn(0), parameterization->OffsetColumn(2));
     const auto frozen{ context.frozen_background };
-    auto direction{ Eigen::VectorXd::Zero(8).eval() };
+    auto direction{ Eigen::VectorXd::Zero(9).eval() };
     direction(parameterization->OffsetColumn(0)) = 6.0;
     const auto candidate{ parameterization->DecodeModels(direction, 1.0) };
     ASSERT_TRUE(candidate.has_value());
@@ -3051,8 +2918,7 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto even{ polish_detail::BuildFrozenBackground(context, state, { { 0, 1 }, { 2 } }) };
     ASSERT_TRUE(even);
     ExpectGaussianModelsNear(even->model_by_atom.front(), { 6.5, 0.575, 2.5 }, 1.0e-12);
-    const auto fixed{ polish_detail::JointPolishParameterization::BuildActiveSet(
-        { 10, 20, 30 }, models, { 1, 0, 0 }, { 1, 0, 0 }) };
+    const auto fixed{ polish_detail::JointPolishParameterization::BuildActiveSet( models, { 1, 0, 0 }, { 1, 0, 0 }) };
     ASSERT_TRUE(fixed.has_value());
     EXPECT_EQ(fixed->ParameterCount(), 3);
     constexpr double step{ 1.0e-6 };
@@ -3062,7 +2928,7 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto lower{ fixed->DecodeModels(-perturbation, 1.0) };
     ASSERT_TRUE(upper.has_value());
     ASSERT_TRUE(lower.has_value());
-    const auto response{ polish_detail::EvaluateSharedOffsetResponse(models.front(), 0.35) };
+    const auto response{ polish_detail::EvaluatePhysicalOffsetResponse(models.front(), 0.35) };
     ASSERT_TRUE(response.has_value());
     const double background{ frozen->response_by_atom.front().front() };
     EXPECT_NEAR(((upper->front().ResponseAtDistance(0.35) + background) -
@@ -3071,69 +2937,37 @@ TEST(EstimatorSecondStageDefenseTest,
 
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedians)
+TEST(EstimatorSecondStageDefenseTest, JointPolishSeedsAndDecodesIndividualOffsets)
 {
-    const std::vector<rg::GaussianModel3D> base_model_list{
-        rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
-        rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
-        rg::GaussianModel3D{ 8.0, 0.65, 3.0 },
-        rg::GaussianModel3D{ 9.0, 0.70, 2.0 },
-        rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
-    };
-    const auto parameterization{
-        polish_detail::JointPolishParameterization::Build(
-            std::vector<std::size_t>{ 20, 10, 20, 20, 10 },
-            base_model_list)
-    };
-
+    const std::vector<rg::GaussianModel3D> models{
+        { 6.0, 0.55, 1.0 }, { 7.0, 0.60, 4.0 }, { 8.0, 0.65, 3.0 },
+        { 9.0, 0.70, 2.0 }, { 10.0, 0.75, 6.0 } };
+    const auto parameterization{ polish_detail::JointPolishParameterization::Build(models) };
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->ParameterCount(), 12);
-
-    const auto seed_model_list{ parameterization->DecodeSeedModels() };
-    const auto zero_direction{
-        Eigen::VectorXd::Zero(parameterization->ParameterCount())
-    };
-    const auto zero_model_list{
-        parameterization->DecodeModels(zero_direction, 0.0)
-    };
-    ASSERT_TRUE(seed_model_list.has_value());
-    EXPECT_DOUBLE_EQ(seed_model_list->at(0).GetOffset(), 2.0);
-    EXPECT_DOUBLE_EQ(seed_model_list->at(1).GetOffset(), 5.0);
-    ASSERT_TRUE(zero_model_list.has_value());
-    ASSERT_EQ(seed_model_list->size(), zero_model_list->size());
-    for (std::size_t atom_position = 0;
-        atom_position < seed_model_list->size();
-        atom_position++)
-    {
-        ExpectGaussianModelsNear(
-            seed_model_list->at(atom_position),
-            zero_model_list->at(atom_position),
-            1.0e-12);
-    }
-
-    Eigen::VectorXd direction{
-        Eigen::VectorXd::Zero(parameterization->ParameterCount())
-    };
-    direction(parameterization->OffsetColumn(1)) = 2.0;
+    EXPECT_EQ(parameterization->ParameterCount(), 15);
+    const auto seed{ parameterization->DecodeSeedModels() };
+    ASSERT_TRUE(seed.has_value());
+    auto direction{ Eigen::VectorXd::Zero(parameterization->ParameterCount()).eval() };
     direction(parameterization->OffsetColumn(0)) = -1.0;
-    const auto candidate_model_list{
-        parameterization->DecodeModels(direction, 0.5)
-    };
-    ASSERT_TRUE(candidate_model_list.has_value());
-    EXPECT_DOUBLE_EQ(candidate_model_list->at(0).GetOffset(), 1.5);
-    EXPECT_DOUBLE_EQ(candidate_model_list->at(1).GetOffset(), 6.0);
-    EXPECT_DOUBLE_EQ(candidate_model_list->at(2).GetOffset(), 1.5);
-    EXPECT_DOUBLE_EQ(candidate_model_list->at(3).GetOffset(), 1.5);
-    EXPECT_DOUBLE_EQ(candidate_model_list->at(4).GetOffset(), 6.0);
-    EXPECT_FALSE(
-        polish_detail::JointPolishParameterization::Build(
-            std::vector<std::size_t>{ 20 },
-            base_model_list).has_value());
+    direction(parameterization->OffsetColumn(1)) = 2.0;
+    const auto candidate{ parameterization->DecodeModels(direction, 0.5) };
+    const auto zero{ parameterization->DecodeModels(direction, 0.0) };
+    ASSERT_TRUE(candidate.has_value());
+    ASSERT_TRUE(zero.has_value());
+    for (std::size_t atom = 0; atom < models.size(); atom++)
+    {
+        ExpectGaussianModelsNear(seed->at(atom), models.at(atom), 1.0e-12);
+        ExpectGaussianModelsNear(zero->at(atom), models.at(atom), 1.0e-12);
+        const auto delta{ atom == 0 ? -0.5 : atom == 1 ? 1.0 : 0.0 };
+        EXPECT_DOUBLE_EQ(candidate->at(atom).GetOffset(), models.at(atom).GetOffset() + delta);
+        for (std::size_t other = atom + 1; other < models.size(); other++)
+            EXPECT_NE(parameterization->OffsetColumn(atom), parameterization->OffsetColumn(other));
+    }
 }
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    ActiveSetJointPolishKeepsClosureOnlyShapesAndSharesOffsets)
+    ActiveSetJointPolishKeepsInactiveCoordinatesAndIndependentOffsets)
 {
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
@@ -3142,7 +2976,6 @@ TEST(
     };
     const auto parameterization{
         polish_detail::JointPolishParameterization::BuildActiveSet(
-            { 10, 10, 20 },
             base_model_list,
             { 1, 0, 1 },
             { 1, 1, 1 })
@@ -3151,7 +2984,7 @@ TEST(
     EXPECT_TRUE(parameterization->HasShapeColumn(0));
     EXPECT_FALSE(parameterization->HasShapeColumn(1));
     EXPECT_TRUE(parameterization->HasShapeColumn(2));
-    EXPECT_EQ(parameterization->ParameterCount(), 6);
+    EXPECT_EQ(parameterization->ParameterCount(), 7);
 
     Eigen::VectorXd direction{
         Eigen::VectorXd::Zero(parameterization->ParameterCount())
@@ -3176,13 +3009,12 @@ TEST(
     EXPECT_NE(
         candidate_model_list->at(2).GetWidth(),
         base_model_list.at(2).GetWidth());
-    EXPECT_DOUBLE_EQ(
+    EXPECT_NE(
         candidate_model_list->at(0).GetOffset(),
         candidate_model_list->at(1).GetOffset());
 
     const auto fixed_offset_parameterization{
         polish_detail::JointPolishParameterization::BuildActiveSet(
-            { 10, 10, 20 },
             base_model_list,
             { 1, 0, 1 },
             { 1, 1, 0 })
@@ -3190,7 +3022,7 @@ TEST(
     ASSERT_TRUE(fixed_offset_parameterization.has_value());
     EXPECT_TRUE(fixed_offset_parameterization->HasOffsetColumn(0));
     EXPECT_FALSE(fixed_offset_parameterization->HasOffsetColumn(2));
-    EXPECT_EQ(fixed_offset_parameterization->ParameterCount(), 5);
+    EXPECT_EQ(fixed_offset_parameterization->ParameterCount(), 6);
     const auto fixed_offset_models{
         fixed_offset_parameterization->DecodeModels(
             Eigen::VectorXd::Zero(fixed_offset_parameterization->ParameterCount()),
@@ -3201,8 +3033,7 @@ TEST(
         fixed_offset_models->at(2).GetOffset(),
         base_model_list.at(2).GetOffset());
 
-
-    auto fixture{ BuildJointPolishFixture({ 10, 20 },
+    auto fixture{ BuildJointPolishFixture(
         { { 6.0, 0.5, 0.1 }, { 7.0, 0.6, 0.3 } },
         { { 6.4, 0.55, 0.2 }, { 7.2, 0.62, 0.4 } }) };
     for (auto & atom : fixture.context.atom_list)
@@ -3220,7 +3051,7 @@ TEST(
         rg::algorithm::WeightedRidgeSolver solver;
         const auto correction{ polish_detail::BuildBoundaryJointCorrection(fixture.context, endpoint,
             freeze_second_shape ? polish_detail::ClusterKey{ 0 } : polish_detail::ClusterKey{ 0, 1 },
-            { 0, 1 }, { 0, 1 }, fixture.sample_ref_list, { 1.0, 1.0 }, { { { 0, 1 }, 100.0 } }, solver) };
+            { 0, 1 }, fixture.sample_ref_list, { 1.0, 1.0 }, { { { 0, 1 }, 100.0 } }, solver) };
         ASSERT_EQ(correction.status, polish_detail::BoundaryJointCorrectionStatus::CandidateReady);
         ASSERT_TRUE(correction.patch.has_value());
         EXPECT_EQ(correction.parameter_count, freeze_second_shape ? 4U : 6U);
@@ -3234,7 +3065,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    BoundaryJointCorrectionUsesActiveShapesClosureOffsetsAndPerClusterTrust)
+    BoundaryJointCorrectionUsesIndependentActiveCoordinatesAndPerClusterTrust)
 {
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
@@ -3243,12 +3074,11 @@ TEST(
     };
     const std::vector<rg::GaussianModel3D> target_model_list{
         rg::GaussianModel3D{ 6.8, 0.60, 0.30 },
-        rg::GaussianModel3D{ 4.5, 0.70, 0.30 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.20 },
         rg::GaussianModel3D{ 6.4, 0.56, -0.15 }
     };
     auto fixture{
         BuildJointPolishFixture(
-            { 10, 10, 20 },
             base_model_list,
             target_model_list)
     };
@@ -3264,7 +3094,6 @@ TEST(
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
-            { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
             {
@@ -3277,21 +3106,21 @@ TEST(
         result.status,
         polish_detail::BoundaryJointCorrectionStatus::CandidateReady);
     ASSERT_TRUE(result.patch.has_value());
-    EXPECT_EQ(result.parameter_count, 6U);
+    EXPECT_EQ(result.parameter_count, 7U);
     EXPECT_LE(result.maximum_normalized_trust_step, 1.0 + 1.0e-12);
     ASSERT_EQ(result.patch->mdpde_list.size(), 3U);
-    const auto & closure_only_candidate{
+    const auto & offset_only_candidate{
         result.patch->mdpde_list.at(1).GetModel()
     };
     EXPECT_DOUBLE_EQ(
-        closure_only_candidate.GetAmplitude(),
+        offset_only_candidate.GetAmplitude(),
         base_model_list.at(1).GetAmplitude());
     EXPECT_DOUBLE_EQ(
-        closure_only_candidate.GetWidth(),
+        offset_only_candidate.GetWidth(),
         base_model_list.at(1).GetWidth());
-    EXPECT_DOUBLE_EQ(
+    EXPECT_NE(
         result.patch->mdpde_list.at(0).GetModel().GetOffset(),
-        closure_only_candidate.GetOffset());
+        offset_only_candidate.GetOffset());
     EXPECT_DOUBLE_EQ(
         result.patch->mdpde_list.at(1)
             .GetStandardDeviationModel().GetAmplitude(),
@@ -3305,20 +3134,37 @@ TEST(
             endpoint_state,
             {},
             {},
-            { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
             { { { 0, 1, 2 }, 4.0 } },
             invalid_solver).status,
         polish_detail::BoundaryJointCorrectionStatus::InvalidInput);
 
-    alg::WeightedRidgeSolver unavailable_solver;
+    alg::WeightedRidgeSolver small_step_solver;
     EXPECT_EQ(
         polish_detail::BuildBoundaryJointCorrection(
             fixture.context,
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0, 1.0 },
+            {
+                { { 0, 1 }, 1.0e-8 },
+                { { 2 }, 1.0e-8 }
+            },
+            small_step_solver).status,
+        polish_detail::BoundaryJointCorrectionStatus::NoMaterialChange);
+
+    auto outside_patch{ polish_detail::FitStatePatch::FromState(fixture.state, { 0 }) };
+    outside_patch.mdpde_list.front() = MakeGaussianResult({ 10.0, 0.55, 0.10 }).mdpde;
+    const polish_detail::FitStateView outside_state{ fixture.state, outside_patch };
+    alg::WeightedRidgeSolver unavailable_solver;
+    EXPECT_EQ(
+        polish_detail::BuildBoundaryJointCorrection(
+            fixture.context,
+            outside_state,
+            { 0, 2 },
             { 0, 1, 2 },
             fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
@@ -3339,7 +3185,6 @@ TEST(
             endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
-            { 0, 1, 2 },
             non_finite_fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
             {
@@ -3356,7 +3201,6 @@ TEST(
     };
     auto stationary_fixture{
         BuildJointPolishFixture(
-            { 10, 20, 30 },
             stationary_model_list,
             stationary_model_list)
     };
@@ -3371,7 +3215,6 @@ TEST(
             stationary_endpoint_state,
             { 0, 2 },
             { 0, 1, 2 },
-            { 0, 1, 2 },
             stationary_fixture.sample_ref_list,
             { 1.0, 1.0, 1.0 },
             {
@@ -3384,20 +3227,18 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    JointPolishProposalSharesGroupOffset)
+    JointPolishProposalKeepsIndependentOffsets)
 {
-    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
     };
     const std::vector<rg::GaussianModel3D> target_model_list{
         rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
-        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+        rg::GaussianModel3D{ 4.0, 0.65, -0.20 }
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_id_list,
             base_model_list,
             target_model_list)
     };
@@ -3418,7 +3259,7 @@ TEST(
     EXPECT_EQ(proposal->patch.atom_index_list,
         (polish_detail::ClusterKey{ 0, 1 }));
     ASSERT_EQ(proposal->patch.mdpde_list.size(), 2U);
-    EXPECT_DOUBLE_EQ(
+    EXPECT_NE(
         proposal->patch.mdpde_list.at(0).GetModel().GetOffset(),
         proposal->patch.mdpde_list.at(1).GetModel().GetOffset());
     bool shape_changed{ false };
@@ -3446,20 +3287,18 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    JointPolishProposalRejectsUnchangedAndOutOfRegionInputs)
+    JointPolishProposalRejectsUnchangedAndRespectsSmallTrustRegion)
 {
-    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
     };
     const std::vector<rg::GaussianModel3D> target_model_list{
         rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
-        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+        rg::GaussianModel3D{ 4.0, 0.65, -0.20 }
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_id_list,
             base_model_list,
             target_model_list)
     };
@@ -3473,7 +3312,6 @@ TEST(
     };
     auto unchanged_fixture{
         BuildJointPolishFixture(
-            group_id_list,
             unchanged_model_list,
             unchanged_model_list)
     };
@@ -3494,7 +3332,7 @@ TEST(
             4.0).has_value());
 
     alg::WeightedRidgeSolver trust_region_solver;
-    EXPECT_FALSE(
+    const auto small_proposal{
         polish_detail::BuildJointPolishProposal(
             fixture.context,
             base_state_view,
@@ -3502,25 +3340,26 @@ TEST(
             fixture.sample_ref_list,
             { 1.0, 1.0 },
             trust_region_solver,
-            0.01).has_value());
+            0.01)
+    };
+    ASSERT_TRUE(small_proposal.has_value());
+    EXPECT_LE(small_proposal->step_norm, 0.01 + 1.0e-12);
 }
 
 TEST(
     EstimatorSecondStageDefenseTest,
     JointPolishProposalUsesFitStateViewBaseForTrustRegionOrigin)
 {
-    const std::vector<std::size_t> group_id_list{ 20, 20 };
     const std::vector<rg::GaussianModel3D> base_model_list{
         rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
         rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
     };
     const std::vector<rg::GaussianModel3D> target_model_list{
         rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
-        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+        rg::GaussianModel3D{ 4.0, 0.65, -0.20 }
     };
     auto fixture{
         BuildJointPolishFixture(
-            group_id_list,
             base_model_list,
             target_model_list)
     };
@@ -3538,7 +3377,6 @@ TEST(
     EXPECT_DOUBLE_EQ(base_state_view.GetModel(0).GetAmplitude(), 10.0);
     const auto patched_parameterization{
         polish_detail::JointPolishParameterization::Build(
-            group_id_list,
             std::vector<rg::GaussianModel3D>{
                 base_state_view.GetModel(0),
                 base_state_view.GetModel(1) })
@@ -3560,7 +3398,7 @@ TEST(
             0.2).has_value());
 }
 
-TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifference)
+TEST(EstimatorSecondStageDefenseTest, PhysicalOffsetJacobianMatchesFiniteDifference)
 {
     constexpr double step{ 1.0e-6 };
     const std::array<rg::GaussianModel3D, 2> model_list{
@@ -3580,7 +3418,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
         for (const auto distance : distance_list)
         {
             const auto evaluation{
-        polish_detail::EvaluateSharedOffsetResponse(
+                polish_detail::EvaluatePhysicalOffsetResponse(
                     model,
                     distance)
             };
@@ -3772,7 +3610,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
         atoms.emplace_back(MakeAtom(static_cast<int>(i + 1), Spot::C,
             Element::CARBON, { static_cast<double>(i), 0.0, 0.0 }));
         context.at(i).atom = atoms.back().get();
-        context.at(i).group_id = i;
         state.emplace_back(MakeGaussianResult(model));
         context.at(i).raw_sampling_entries = {
             { model.ResponseAtDistance(0.2) + model.ResponseAtDistance(0.3), SamplingPoint{ 0.2 } } };
@@ -4022,12 +3859,6 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
     };
     coupling_detail::SecondStageContext context;
     context.atom_list.resize(6);
-    context.at(0).group_id = 0;
-    context.at(1).group_id = 1;
-    context.at(2).group_id = 0;
-    context.at(3).group_id = 2;
-    context.at(4).group_id = 2;
-    context.at(5).group_id = 0;
     const auto component_list{
         coupling_detail::BuildBoundaryReconciliationComponents(
             context,
@@ -4046,7 +3877,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         component_list.at(0).interface_atom_index_list,
         (std::vector<std::size_t>{ 0, 1, 2 }));
     EXPECT_EQ(
-        component_list.at(0).offset_closure_atom_index_list,
+        component_list.at(0).halo_atom_index_list,
         (std::vector<std::size_t>{ 0, 1, 2 }));
     EXPECT_EQ(
         component_list.at(1).key_list,
@@ -4059,7 +3890,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         component_list.at(1).interface_atom_index_list,
         (std::vector<std::size_t>{ 3, 4 }));
     EXPECT_EQ(
-        component_list.at(1).offset_closure_atom_index_list,
+        component_list.at(1).halo_atom_index_list,
         (std::vector<std::size_t>{ 3, 4 }));
 
     EXPECT_TRUE(
@@ -4077,7 +3908,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
         });
 }
 
-TEST(EstimatorSecondStageDefenseTest, BoundaryOffsetClosureRejectsOutOfRangeAtoms)
+TEST(EstimatorSecondStageDefenseTest, BoundaryPhysicalHaloRejectsOutOfRangeAtoms)
 {
     const audit_detail::ClusterKey key_a{ 0 };
     const audit_detail::ClusterKey key_b{ 1 };
@@ -4091,7 +3922,6 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryOffsetClosureRejectsOutOfRangeAtom
     };
     coupling_detail::SecondStageContext context;
     context.atom_list.resize(1);
-    context.at(0).group_id = 0;
 
     EXPECT_THROW(
         coupling_detail::BuildBoundaryReconciliationComponents(
@@ -4113,9 +3943,8 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryOffsetClosureRejectsOutOfRangeAtom
         .key_list = { { 0, 1 } },
         .affected_sample_ref_list = {},
         .interface_atom_index_list = { 1 },
-        .shape_active_atom_index_list = {},
-        .offset_closure_atom_index_list = {},
-        .boundary_sample_count = 0
+        .halo_atom_index_list = {},
+            .boundary_sample_count = 0
     };
     EXPECT_THROW(
         coupling_detail::ExpandBoundaryReconciliationHalo(
@@ -4138,11 +3967,6 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByH
 {
     coupling_detail::SecondStageContext context;
     context.atom_list.resize(5);
-    context.at(0).group_id = 10;
-    context.at(1).group_id = 20;
-    context.at(2).group_id = 20;
-    context.at(3).group_id = 30;
-    context.at(4).group_id = 40;
     for (auto & atom_context : context.atom_list)
     {
         atom_context.raw_sampling_entries.resize(1);
@@ -4168,36 +3992,28 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByH
         .key_list = { { 0, 1 }, { 2, 3 } },
         .affected_sample_ref_list = { { 0, 0 }, { 1, 0 }, { 2, 0 } },
         .interface_atom_index_list = { 0 },
-        .shape_active_atom_index_list = { 0 },
-        .offset_closure_atom_index_list = { 0 },
+        .halo_atom_index_list = { 0 },
         .boundary_sample_count = 1
     };
     const auto depth_zero{
         coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 0)
     };
     EXPECT_EQ(depth_zero.interface_atom_index_list, (std::vector<std::size_t>{ 0 }));
-    EXPECT_EQ(depth_zero.shape_active_atom_index_list, (std::vector<std::size_t>{ 0 }));
-    EXPECT_EQ(depth_zero.offset_closure_atom_index_list, (std::vector<std::size_t>{ 0 }));
+    EXPECT_EQ(depth_zero.halo_atom_index_list, (std::vector<std::size_t>{ 0 }));
 
     const auto depth_one{
         coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 1)
     };
     EXPECT_EQ(depth_one.interface_atom_index_list, (std::vector<std::size_t>{ 0 }));
     EXPECT_EQ(
-        depth_one.shape_active_atom_index_list,
+        depth_one.halo_atom_index_list,
         (std::vector<std::size_t>{ 0, 1, 3 }));
-    EXPECT_EQ(
-        depth_one.offset_closure_atom_index_list,
-        (std::vector<std::size_t>{ 0, 1, 2, 3 }));
 
     const auto fixed_point{
         coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 10)
     };
     EXPECT_EQ(
-        fixed_point.shape_active_atom_index_list,
-        (std::vector<std::size_t>{ 0, 1, 2, 3 }));
-    EXPECT_EQ(
-        fixed_point.offset_closure_atom_index_list,
+        fixed_point.halo_atom_index_list,
         (std::vector<std::size_t>{ 0, 1, 2, 3 }));
 }
 
@@ -4275,11 +4091,10 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     };
     const std::vector<rg::GaussianModel3D> target_model_list{
         { 6.5, 0.60, 0.15 },
-        { 4.0, 0.65, 0.15 }
+        { 4.0, 0.65, -0.15 }
     };
     auto fixture{
         BuildJointPolishFixture(
-            { 10, 10 },
             base_model_list,
             target_model_list)
     };
@@ -4353,8 +4168,8 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     EXPECT_LE(
         polish_result.diagnostic.component_list.front().round_count,
         options.second_stage_dependency_polish_max_iterations);
-    EXPECT_EQ(polish_result.diagnostic.component_list.front().parameter_count, 5U);
-    EXPECT_DOUBLE_EQ(
+    EXPECT_EQ(polish_result.diagnostic.component_list.front().parameter_count, 6U);
+    EXPECT_NE(
         polish_result.state.at(0).mdpde.GetModel().GetOffset(),
         polish_result.state.at(1).mdpde.GetModel().GetOffset());
     EXPECT_NE(
@@ -4591,12 +4406,6 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3DUncertainty{ 0.20, 0.04, 0.05 }
     };
 
-    backtracking_detail::SecondStageContext context;
-    context.atom_list.resize(previous_model_list.size());
-    for (auto & atom_context : context.atom_list)
-    {
-        atom_context.group_id = 0;
-    }
     backtracking_detail::FitState previous_state;
     backtracking_detail::FitState endpoint_state;
     previous_state.resize(previous_model_list.size());
@@ -4623,7 +4432,6 @@ TEST(EstimatorSecondStageDefenseTest,
             std::vector<std::size_t>{ 1, 0 })
     };
     backtracking_detail::BacktrackingWorkspace workspace{
-        context,
         previous_state,
         endpoint_patch,
         1.0e-4
@@ -4656,9 +4464,10 @@ TEST(EstimatorSecondStageDefenseTest,
             candidate_patch.mdpde_list.at(atom_index).GetModel(),
             1.0e-12);
     }
-    EXPECT_DOUBLE_EQ(
-        candidate_state.at(0).mdpde.GetModel().GetOffset(),
-        candidate_state.at(1).mdpde.GetModel().GetOffset());
+    EXPECT_DOUBLE_EQ(candidate_state.at(0).mdpde.GetModel().GetOffset(),
+        std::lerp(-0.10, 0.40, 0.5));
+    EXPECT_DOUBLE_EQ(candidate_state.at(1).mdpde.GetModel().GetOffset(),
+        std::lerp(0.20, 0.80, 0.5));
 
     const auto merged_provenance{
         workspace.BuildCandidatePolishProvenance(
@@ -4675,7 +4484,6 @@ TEST(EstimatorSecondStageDefenseTest,
     const std::array endpoint_offsets{ 30.0, 5.0, 0.0 };
     for (std::size_t node = 0; node < 3; node++)
     {
-        median_context.at(node).group_id = node;
         median_context.at(node).raw_sampling_entries.resize(1);
         median_context.at(node).unselected_distance_list_by_sample = { { 0.3 } };
         median_previous.emplace_back(MakeGaussianResult({ 8.0 + static_cast<double>(node), 0.5, previous_offsets.at(node) }));
@@ -4684,7 +4492,7 @@ TEST(EstimatorSecondStageDefenseTest,
     median_context.frozen_background = backtracking_detail::BuildFrozenBackground(median_context, median_previous, { { 0, 1, 2 } });
     ASSERT_TRUE(median_context.frozen_background);
     const auto frozen{ median_context.frozen_background };
-    backtracking_detail::BacktrackingWorkspace median_workspace{ median_context, median_previous,
+    backtracking_detail::BacktrackingWorkspace median_workspace{ median_previous,
         backtracking_detail::FitStatePatch::FromState(median_endpoint, { 0, 1, 2 }), 1.0e-4 };
     ASSERT_EQ(median_workspace.BuildNextCandidate().status,
         backtracking_detail::BacktrackingStepStatus::CandidateReady);
@@ -4703,7 +4511,6 @@ TEST(EstimatorSecondStageDefenseTest,
 {
     backtracking_detail::SecondStageContext context;
     context.atom_list.resize(1);
-    context.at(0).group_id = 0;
     backtracking_detail::FitState previous_state(1);
     previous_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 8.0, 0.50, -0.10 },
@@ -4721,7 +4528,6 @@ TEST(EstimatorSecondStageDefenseTest,
             std::vector<std::size_t>{ 0 })
     };
     backtracking_detail::BacktrackingWorkspace change_exhausted_workspace{
-        context,
         previous_state,
         endpoint_patch,
         1.0e6
@@ -4992,16 +4798,9 @@ TEST(EstimatorSecondStageDefenseTest,
 
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(all_selected));
 
-    std::vector<std::size_t> group_id_by_atom_index(atom_count);
-    std::iota(
-        group_id_by_atom_index.begin(),
-        group_id_by_atom_index.end(),
-        0);
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
-            std::vector<audit_detail::ClusterKey>{ atom_index_list },
-            group_id_by_atom_index,
             block_activity)
     };
     const auto dual_shadow{
@@ -5044,10 +4843,10 @@ TEST(EstimatorSecondStageDefenseTest,
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    ActiveCoordinatePopulationCountsOnlySelectedSharedOffsetBlocks)
+    ActiveCoordinatePopulationCountsEverySelectedOffset)
 {
-    constexpr std::size_t large_group_size{ 100 };
-    constexpr std::size_t atom_count{ large_group_size + 1 };
+    constexpr std::size_t stable_atom_count{ 100 };
+    constexpr std::size_t atom_count{ stable_atom_count + 1 };
     std::vector<change_detail::TransformedChange> change_list(
         atom_count,
         change_detail::TransformedChange{});
@@ -5056,8 +4855,6 @@ TEST(EstimatorSecondStageDefenseTest,
         5.0e-4;
     std::vector<std::size_t> atom_index_list(atom_count);
     std::iota(atom_index_list.begin(), atom_index_list.end(), 0);
-    std::vector<std::size_t> group_id_by_atom_index(atom_count, 0);
-    group_id_by_atom_index.back() = 1;
     audit_detail::SuspiciousBlockActivity activity{
         audit_detail::SuspiciousUpdateMask(atom_count, 1),
         audit_detail::SuspiciousUpdateMask(atom_count, 0),
@@ -5066,8 +4863,6 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
-            std::vector<audit_detail::ClusterKey>{ atom_index_list },
-            group_id_by_atom_index,
             activity)
     };
     const auto audit{
@@ -5077,15 +4872,14 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_EQ(
         audit.population_size_list.at(
             rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
-        2U);
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(audit));
+        atom_count);
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(audit));
     EXPECT_TRUE(change_detail::IsTransformedChangeMaterial(change_list.back(), 1.0e-4));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtremeAndNonFiniteMembers)
 {
     const std::vector<std::size_t> atom_index_list{ 0, 1, 2 };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0, 0 };
     audit_detail::SuspiciousBlockActivity activity{
         audit_detail::SuspiciousUpdateMask(3, 1),
         audit_detail::SuspiciousUpdateMask(3, 0),
@@ -5094,8 +4888,6 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     const auto population{
         audit_detail::BuildActiveCoordinatePopulation(
             atom_index_list,
-            std::vector<audit_detail::ClusterKey>{ atom_index_list },
-            group_id_by_atom_index,
             activity)
     };
     std::vector<change_detail::TransformedChange> change_list(
@@ -5126,7 +4918,7 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     activity.shape_fixed_atom_mask = { 1, 0, 1 };
     activity.offset_fixed_atom_mask.assign(3, 1);
     const auto shape_population{ audit_detail::BuildActiveCoordinatePopulation(
-        atom_index_list, { atom_index_list }, group_id_by_atom_index, activity) };
+        atom_index_list, activity) };
     EXPECT_EQ(shape_population.active_shape_atom_index_list, (std::vector<std::size_t>{ 1 }));
     for (const auto parameter_index : std::array<std::size_t, 2>{
         rg::GaussianModel3D::LogPeakHeightCoordinateIndex(),
@@ -5143,48 +4935,31 @@ TEST(EstimatorSecondStageDefenseTest, ActiveCoordinatePopulationPreservesExtreme
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, MixedSharedOffsetActivityFailsConvergence)
+TEST(EstimatorSecondStageDefenseTest, IndependentOffsetActivityRequiresItsOwnClusterQualification)
 {
-    const std::vector<std::size_t> atom_index_list{ 0, 1 };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0 };
+    const std::vector<std::size_t> atoms{ 0, 1 };
     audit_detail::SuspiciousBlockActivity activity{
-        audit_detail::SuspiciousUpdateMask(2, 1),
-        audit_detail::SuspiciousUpdateMask{ 0, 1 },
-        audit_detail::SuspiciousUpdateMask(2, 0)
-    };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
-    const auto population{
-        audit_detail::BuildActiveCoordinatePopulation(
-            atom_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
-            activity)
-    };
-    std::vector<change_detail::TransformedChange> change_list(
-        2,
-        change_detail::TransformedChange{});
-    const auto change_audit{
-        audit_detail::SummarizeActiveDofChanges(change_list, population)
-    };
-    EXPECT_EQ(std::ranges::count(population.mixed_offset_group_mask, 1), 1);
-    EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        change_audit));
-    const std::vector<std::optional<rg::RHBMEstimationStatus>>
-        local_refit_status_by_atom(2);
+        { 1, 1 }, { 0, 1 }, { 0, 0 } };
+    const auto population{ audit_detail::BuildActiveCoordinatePopulation(atoms, activity) };
+    EXPECT_EQ(population.active_offset_atom_index_list, (std::vector<std::size_t>{ 0 }));
+    const std::vector<change_detail::TransformedChange> changes(2);
+    const auto summary{ audit_detail::SummarizeActiveDofChanges(changes, population) };
+    EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(summary));
+    const std::vector<std::optional<rg::RHBMEstimationStatus>> status(2);
     EXPECT_FALSE(audit_detail::AreActiveCoordinatesSolverQualified(
-        atom_index_list,
-        cluster_key_list,
-        group_id_by_atom_index,
-        activity,
-        local_refit_status_by_atom,
-        {}));
+        atoms, { atoms }, activity, status, {}));
+    audit_detail::ClusterHealthMap health;
+    health.emplace(atoms, audit_detail::ClusterHealth{
+        audit_detail::JointOffsetSolveStatus::Converged });
+    EXPECT_TRUE(audit_detail::AreActiveCoordinatesSolverQualified(
+        atoms, { atoms }, activity, status, health));
+    EXPECT_FALSE(audit_detail::AreActiveCoordinatesSolverQualified(
+        atoms, {}, activity, status, health));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAndNominalPopulations)
 {
     const std::vector<std::size_t> atom_index_list{ 0, 1, 2 };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0, 1, 2 };
-    const std::vector<audit_detail::ClusterKey> cluster_key_list{ atom_index_list };
     audit_detail::SuspiciousBlockActivity activity{
         audit_detail::SuspiciousUpdateMask{ 1, 1, 0 },
         audit_detail::SuspiciousUpdateMask{ 1, 1, 0 },
@@ -5197,13 +4972,9 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     };
     const auto accepted_population{ audit_detail::BuildActiveCoordinatePopulation(
         atom_index_list,
-        cluster_key_list,
-        group_id_by_atom_index,
         activity) };
     const auto nominal_population{ audit_detail::BuildActiveCoordinatePopulation(
         atom_index_list,
-        cluster_key_list,
-        group_id_by_atom_index,
         nominal_activity) };
     std::vector<change_detail::TransformedChange> changes(
         3, change_detail::TransformedChange{});
@@ -5247,10 +5018,9 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     EXPECT_TRUE(certificate.ProductionConverged());
 }
 
-TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedSharedGroup)
+TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateQualifiesIndependentOffsetActivity)
 {
     const std::vector<std::size_t> atom_index_list{ 0, 1 };
-    const std::vector<std::size_t> group_id_by_atom_index{ 0, 0 };
     audit_detail::SuspiciousBlockActivity activity{
         audit_detail::SuspiciousUpdateMask(2, 0),
         audit_detail::SuspiciousUpdateMask{ 0, 1 },
@@ -5261,8 +5031,6 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
     };
     const auto population{ audit_detail::BuildActiveCoordinatePopulation(
         atom_index_list,
-        cluster_key_list,
-        group_id_by_atom_index,
         activity) };
     std::vector<change_detail::TransformedChange> changes(
         2, change_detail::TransformedChange{});
@@ -5270,7 +5038,10 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
     audit_detail::ConvergenceCertificate certificate;
     certificate.accepted_active_movement =
         audit_detail::SummarizeActiveDofChanges(changes, population);
-    certificate.operator_nominal_residual = certificate.accepted_active_movement;
+    const audit_detail::SuspiciousBlockActivity nominal{ { 0, 0 }, { 0, 0 }, { 0, 0 } };
+    const auto nominal_population{ audit_detail::BuildActiveCoordinatePopulation(atom_index_list, nominal) };
+    certificate.operator_nominal_residual =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
     const std::vector<std::optional<rg::RHBMEstimationStatus>>
         local_refit_status_by_atom(2, rg::RHBMEstimationStatus::SUCCESS);
     audit_detail::ClusterHealthMap health_by_key;
@@ -5283,12 +5054,16 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateFailsClosedForMixedS
         audit_detail::AreActiveCoordinatesSolverQualified(
             atom_index_list,
             cluster_key_list,
-            group_id_by_atom_index,
             activity,
             local_refit_status_by_atom,
             health_by_key);
 
-    EXPECT_FALSE(certificate.solver_qualified);
+    EXPECT_TRUE(certificate.solver_qualified);
+    EXPECT_TRUE(certificate.StrictOperatorPassed());
+    EXPECT_TRUE(certificate.ProductionConverged());
+    changes.at(1).at(rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = 2.0e-3;
+    certificate.operator_nominal_residual =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
 }
@@ -5379,7 +5154,7 @@ TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluste
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotBlockRemoteCluster)
+TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotFreezeSameChemicalKeyAtoms)
 {
     auto model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
     const auto previous_fallback_model{
@@ -5518,6 +5293,38 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     EXPECT_EQ(
         state_by_target.at(target).lifecycle,
         audit_detail::QuarantineLifecycle::Exhausted);
+
+    const audit_detail::QuarantineTarget offset_target{
+        audit_detail::QuarantineTargetKind::OffsetAtom, { 0 }
+    };
+    const audit_detail::QuarantineTarget other_offset_target{
+        audit_detail::QuarantineTargetKind::OffsetAtom, { 1 }
+    };
+    auto quarantined{ state_by_target.at(target) };
+    quarantined.lifecycle = audit_detail::QuarantineLifecycle::Quarantined;
+    for (const auto & released_target : { target, offset_target })
+    {
+        state_by_target = {
+            { target, quarantined },
+            { offset_target, quarantined },
+            { other_offset_target, quarantined }
+        };
+        state_by_target.at(released_target).lifecycle =
+            audit_detail::QuarantineLifecycle::Probation;
+        const auto independent_release{
+            audit_detail::UpdateQuarantineFailureState(
+                {}, { released_target }, 20, state_by_target)
+        };
+        EXPECT_EQ(independent_release.released_target_list,
+            (std::vector{ released_target }));
+        EXPECT_FALSE(state_by_target.contains(released_target));
+        EXPECT_EQ(state_by_target.size(), 2U);
+        for (const auto & [remaining_target, state] : state_by_target)
+        {
+            EXPECT_NE(remaining_target, released_target);
+            EXPECT_EQ(state.lifecycle, audit_detail::QuarantineLifecycle::Quarantined);
+        }
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)
@@ -5573,7 +5380,7 @@ TEST(
     EstimatorSecondStageDefenseTest,
     RunSecondStageLocalFittingPersistsFinalModelAndPeelingWithoutGroupFitting)
 {
-    auto model{ BuildSharedOffsetJointPolishDefenseModel() };
+    auto model{ BuildIndependentOffsetDefenseModel() };
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto options{ MakeSecondStageOptions() };
@@ -5691,9 +5498,35 @@ TEST(
             options.quiet_mode = false;
             const bool completed{ rt::RunSecondStageLocalFitting(*logged, options) };
             const auto output{ testing::internal::GetCapturedStdout() };
+            auto alternate_logged{ BuildUnselectedContributorDefenseModel(
+                scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
+            testing::internal::CaptureStdout();
+            const bool alternate_completed{
+                rt::RunSecondStageLocalFitting(*alternate_logged, options) };
+            const auto alternate_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
             options.quiet_mode = true;
             ASSERT_TRUE(completed);
+            ASSERT_TRUE(alternate_completed);
+            const auto audit_records = [](const std::string & log)
+            {
+                std::vector<std::string> records;
+                std::istringstream lines{ log };
+                std::string line;
+                while (std::getline(lines, line))
+                {
+                    for (const std::string marker : {
+                        "Convergence safeguard audit:", "Second-stage audit terminal:",
+                        "Second-stage audit terminal atom:" })
+                    {
+                        const auto position{ line.find(marker) };
+                        if (position != std::string::npos)
+                            records.emplace_back(line.substr(position));
+                    }
+                }
+                return records;
+            };
+            EXPECT_EQ(audit_records(output), audit_records(alternate_output));
             if (shared_contributor)
             {
                 EXPECT_NE(output.find("initial components/max atoms/ratio = 2/1/0.50"), std::string::npos);
@@ -5838,28 +5671,66 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, SharedOffsetGroupParticipatesInAcceptedJointPolish)
+TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsetsAndGroupKeyInvariantResults)
 {
-    auto model{ BuildSharedOffsetJointPolishDefenseModel() };
-    const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
-
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
-
-    const auto & atom_list{ model->GetSelectedAtoms() };
-    ASSERT_EQ(atom_list.size(), 2U);
-    EXPECT_EQ(atom_list.at(0)->GetAtomKey(), atom_list.at(1)->GetAtomKey());
-    EXPECT_DOUBLE_EQ(
-        GetEstimateModel(*atom_list.at(0)).GetOffset(),
-        GetEstimateModel(*atom_list.at(1)).GetOffset());
-    EXPECT_LT(CalculateSelectedAtomResponseMeanSquaredError(*model), initial_error);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
+    auto original{ BuildIndependentOffsetDefenseModel() };
+    auto relabeled{ BuildIndependentOffsetDefenseModel(1.0, true) };
+    const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*original) };
+    const auto run_logged = [](rg::ModelObject & model)
+    {
+        auto options{ MakeSecondStageOptions() };
+        options.quiet_mode = false;
+        const auto previous_level{ Logger::GetLogLevel() };
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        const bool completed{ rt::RunSecondStageLocalFitting(model, options) };
+        const auto output{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(previous_level);
+        EXPECT_TRUE(completed);
+        std::vector<std::string> evidence;
+        std::istringstream lines{ output };
+        std::string line;
+        while (std::getline(lines, line))
+        {
+            for (const std::string marker : {
+                "Convergence safeguard audit:", "Second-stage audit terminal:",
+                "Second-stage audit terminal atom:" })
+            {
+                const auto position{ line.find(marker) };
+                if (position != std::string::npos) evidence.emplace_back(line.substr(position));
+            }
+        }
+        EXPECT_FALSE(evidence.empty());
+        return evidence;
+    };
+    const auto original_trace{ run_logged(*original) };
+    EXPECT_EQ(original_trace, run_logged(*relabeled));
+    const auto & atoms{ original->GetSelectedAtoms() };
+    const auto & changed{ relabeled->GetSelectedAtoms() };
+    ASSERT_EQ(atoms.size(), 2U);
+    EXPECT_EQ(rg::data_internal::GetGroupKey(atoms.at(0)), rg::data_internal::GetGroupKey(atoms.at(1)));
+    EXPECT_NE(rg::data_internal::GetGroupKey(changed.at(0)), rg::data_internal::GetGroupKey(changed.at(1)));
+    EXPECT_GT(std::abs(GetEstimateModel(*atoms.at(0)).GetOffset() -
+        GetEstimateModel(*atoms.at(1)).GetOffset()), 1.0e-5);
+    for (std::size_t atom = 0; atom < atoms.size(); atom++)
+    {
+        ExpectGaussianModelsNear(GetEstimateModel(*atoms.at(atom)), GetEstimateModel(*changed.at(atom)), 1.0e-12);
+        const auto peeled{ rg::AtomLocalPotentialView::For(*atoms.at(atom)).GetPeelingSamplingEntries(false) };
+        const auto other{ rg::AtomLocalPotentialView::For(*changed.at(atom)).GetPeelingSamplingEntries(false) };
+        ASSERT_EQ(peeled.size(), other.size());
+        for (std::size_t row = 0; row < peeled.size(); row++)
+            EXPECT_DOUBLE_EQ(peeled.at(row).response, other.at(row).response);
+    }
+    ExpectPeelingSamplingEntriesMatchFinalModels(*original);
+    EXPECT_LT(CalculateSelectedAtomResponseMeanSquaredError(*original), initial_error);
+    ExpectSelectedAtomEstimatesAreFinite(*original);
 }
 
-TEST(EstimatorSecondStageDefenseTest, SharedOffsetJointPolishIsIntensityScaleInvariant)
+TEST(EstimatorSecondStageDefenseTest, IndependentOffsetJointPolishIsIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };
-    auto base_model{ BuildSharedOffsetJointPolishDefenseModel() };
-    auto scaled_model{ BuildSharedOffsetJointPolishDefenseModel(scale) };
+    auto base_model{ BuildIndependentOffsetDefenseModel() };
+    auto scaled_model{ BuildIndependentOffsetDefenseModel(scale) };
 
     rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
     rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
@@ -5868,10 +5739,10 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJointPolishIsIntensityScaleInv
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
     ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
     ASSERT_EQ(base_atoms.size(), 2U);
-    EXPECT_DOUBLE_EQ(
+    EXPECT_NE(
         GetEstimateModel(*base_atoms.at(0)).GetOffset(),
         GetEstimateModel(*base_atoms.at(1)).GetOffset());
-    EXPECT_DOUBLE_EQ(
+    EXPECT_NE(
         GetEstimateModel(*scaled_atoms.at(0)).GetOffset(),
         GetEstimateModel(*scaled_atoms.at(1)).GetOffset());
     for (std::size_t i = 0; i < base_atoms.size(); i++)

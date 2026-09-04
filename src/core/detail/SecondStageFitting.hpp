@@ -36,7 +36,6 @@ struct NeighborAtomSample
 struct AtomContext
 {
     const AtomObject * atom{ nullptr };
-    std::size_t group_id{ 0 };
     LocalPotentialSampleList raw_sampling_entries{};
     std::vector<NeighborAtomSample> neighbor_atom_sample_list{};
     std::vector<std::size_t> neighbor_atom_sample_offset_list{};

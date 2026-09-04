@@ -518,13 +518,10 @@ class BacktrackingWorkspace
     std::size_t m_trial_number{ 1 };
     std::vector<GaussianModel3D> m_previous_model_list{};
     std::vector<GaussianModel3D> m_endpoint_model_list{};
-    std::vector<double> m_previous_shared_offset_list{};
-    std::vector<double> m_endpoint_shared_offset_list{};
     FitStatePatch m_candidate_patch{};
 
 public:
     BacktrackingWorkspace(
-        const SecondStageContext & context,
         const FitState & previous_state,
         const FitStatePatch & endpoint_patch,
         double minimum_transformed_change);
@@ -584,7 +581,6 @@ struct BoundaryComponentReconciliationDiagnostic
     std::size_t interface_atom_count{ 0 };
     std::size_t shape_active_atom_count{ 0 };
     std::size_t offset_active_atom_count{ 0 };
-    std::size_t offset_closure_atom_count{ 0 };
     std::size_t suspicious_candidate_atom_count{ 0 };
     std::size_t joint_parameter_count{ 0 };
     std::optional<double> joint_damping{};

@@ -50,7 +50,6 @@ struct BoundaryJointCorrectionWorkspaceKey
 {
     std::vector<std::size_t> shape_active_atom_index_list{};
     std::vector<std::size_t> offset_active_atom_index_list{};
-    std::vector<std::size_t> offset_closure_atom_index_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
 
     friend auto operator<=>(
@@ -83,24 +82,6 @@ using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
 
-struct JointOffsetParameterization
-{
-    std::vector<std::size_t> group_position_by_atom{};
-    Eigen::VectorXd seed_offset{};
-
-    Eigen::Index OffsetColumn(std::size_t atom_position) const
-    {
-        const auto group{ group_position_by_atom.at(atom_position) };
-        return static_cast<Eigen::Index>(group);
-    }
-
-    Eigen::VectorXd ExpandOffsets(const Eigen::VectorXd & group_offset) const;
-};
-
-std::optional<JointOffsetParameterization> BuildJointOffsetParameterization(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const Eigen::VectorXd & atom_offset);
-
 struct JointOffsetSolveResult
 {
     JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
@@ -119,25 +100,22 @@ class JointPolishParameterization
 {
     static constexpr Eigen::Index kShapeParameterSize{ 2 };
     static constexpr Eigen::Index kInactiveColumn{ -1 };
-    std::vector<std::size_t> m_group_position_by_atom{};
     std::vector<Eigen::Index> m_shape_column_by_atom{};
-    std::vector<Eigen::Index> m_offset_column_by_group{};
+    std::vector<Eigen::Index> m_offset_column_by_atom{};
     std::vector<Eigen::Vector2d> m_base_shape_coordinate_by_atom{};
-    std::vector<double> m_base_offset_by_group{};
+    std::vector<double> m_base_offset_by_atom{};
     Eigen::VectorXd m_seed_parameter{};
 
 public:
     static std::optional<JointPolishParameterization> Build(
-        const std::vector<std::size_t> & group_id_by_atom_position,
         const std::vector<GaussianModel3D> & base_model_list);
 
     static std::optional<JointPolishParameterization> BuildActiveSet(
-        const std::vector<std::size_t> & group_id_by_atom_position,
         const std::vector<GaussianModel3D> & base_model_list,
         const std::vector<char> & shape_active_mask,
         const std::vector<char> & offset_active_mask);
 
-    std::size_t AtomCount() const { return m_group_position_by_atom.size(); }
+    std::size_t AtomCount() const { return m_base_offset_by_atom.size(); }
     Eigen::Index ParameterCount() const { return m_seed_parameter.size(); }
 
     Eigen::Index ShapeColumn(std::size_t atom_position, std::size_t shape_parameter_index) const
@@ -153,8 +131,7 @@ public:
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
-        const auto group{ m_group_position_by_atom.at(atom_position) };
-        return m_offset_column_by_group.at(group);
+        return m_offset_column_by_atom.at(atom_position);
     }
 
     bool HasOffsetColumn(std::size_t atom_position) const
@@ -214,7 +191,6 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const FitStateView & endpoint_state,
     const std::vector<std::size_t> & shape_active_atom_index_list,
     const std::vector<std::size_t> & offset_active_atom_index_list,
-    const std::vector<std::size_t> & offset_closure_atom_index_list,
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,

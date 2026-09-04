@@ -112,8 +112,7 @@ struct BoundaryReconciliationComponent
     std::vector<ClusterKey> key_list{};
     std::vector<SampleRef> affected_sample_ref_list{};
     std::vector<std::size_t> interface_atom_index_list{};
-    std::vector<std::size_t> shape_active_atom_index_list{};
-    std::vector<std::size_t> offset_closure_atom_index_list{};
+    std::vector<std::size_t> halo_atom_index_list{};
     std::size_t boundary_sample_count{ 0 };
 
     friend bool operator==(

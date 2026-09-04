@@ -8,7 +8,6 @@
 #include <limits>
 #include <optional>
 #include <ranges>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -233,38 +232,6 @@ void SortGraphWeightedEdges(std::vector<GraphWeightedEdge> & weighted_edge_list)
         {
             return std::pair{ edge.left_atom_index, edge.right_atom_index };
         });
-}
-
-std::vector<std::size_t> BuildOffsetClosureAtomIndexList(
-    const SecondStageContext & context,
-    const std::vector<std::size_t> & component_atom_index_list,
-    const std::vector<std::size_t> & active_atom_index_list,
-    const char * active_atom_error_message,
-    const char * component_atom_error_message)
-{
-    std::set<std::size_t> touched_group_id_set;
-    for (const auto atom_index : active_atom_index_list)
-    {
-        if (atom_index >= context.size())
-        {
-            throw std::invalid_argument(active_atom_error_message);
-        }
-        touched_group_id_set.emplace(context.at(atom_index).group_id);
-    }
-
-    std::vector<std::size_t> offset_closure_atom_index_list;
-    for (const auto atom_index : component_atom_index_list)
-    {
-        if (atom_index >= context.size())
-        {
-            throw std::invalid_argument(component_atom_error_message);
-        }
-        if (touched_group_id_set.contains(context.at(atom_index).group_id))
-        {
-            offset_closure_atom_index_list.emplace_back(atom_index);
-        }
-    }
-    return offset_closure_atom_index_list;
 }
 
 } // namespace
@@ -1196,20 +1163,18 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         interface_atom_index_list.erase(
             std::ranges::unique(interface_atom_index_list).begin(),
             interface_atom_index_list.end());
-        auto offset_closure_atom_index_list{
-            BuildOffsetClosureAtomIndexList(
-                context,
-                component_atom_index_list,
-                interface_atom_index_list,
-                "Boundary reconciliation interface atom is out of range.",
-                "Boundary reconciliation component atom is out of range.")
-        };
+        for (const auto atom_index : component_atom_index_list)
+        {
+            if (atom_index >= context.size())
+            {
+                throw std::invalid_argument("Boundary reconciliation component atom is out of range.");
+            }
+        }
         component_list.emplace_back(BoundaryReconciliationComponent{
             key_list,
             BuildGraphAffectedSampleUnion(partition, key_list),
             interface_atom_index_list,
             std::move(interface_atom_index_list),
-            std::move(offset_closure_atom_index_list),
             boundary_sample_count
         });
     }
@@ -1235,12 +1200,19 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
         std::ranges::unique(component_atom_index_list).begin(),
         component_atom_index_list.end());
 
-    auto shape_active_atom_index_list{ component.interface_atom_index_list };
-    std::ranges::sort(shape_active_atom_index_list);
-    shape_active_atom_index_list.erase(
-        std::ranges::unique(shape_active_atom_index_list).begin(),
-        shape_active_atom_index_list.end());
-    for (const auto atom_index : shape_active_atom_index_list)
+    for (const auto atom_index : component_atom_index_list)
+    {
+        if (atom_index >= context.size())
+        {
+            throw std::invalid_argument("Boundary halo component atom is out of range.");
+        }
+    }
+    auto halo_atom_index_list{ component.interface_atom_index_list };
+    std::ranges::sort(halo_atom_index_list);
+    halo_atom_index_list.erase(
+        std::ranges::unique(halo_atom_index_list).begin(),
+        halo_atom_index_list.end());
+    for (const auto atom_index : halo_atom_index_list)
     {
         if (!std::ranges::binary_search(component_atom_index_list, atom_index))
         {
@@ -1251,8 +1223,8 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
 
     for (std::size_t depth = 0; depth < halo_depth; depth++)
     {
-        const auto previous_size{ shape_active_atom_index_list.size() };
-        auto expanded_atom_index_list{ shape_active_atom_index_list };
+        const auto previous_size{ halo_atom_index_list.size() };
+        auto expanded_atom_index_list{ halo_atom_index_list };
         for (const auto & sample_ref : component.affected_sample_ref_list)
         {
             if (sample_ref.atom_index >= context.size())
@@ -1283,15 +1255,15 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
             direct_participant_list.erase(
                 std::ranges::unique(direct_participant_list).begin(),
                 direct_participant_list.end());
-            const auto touches_active_shape{
+            const auto touches_halo{
                 std::ranges::any_of(
                     direct_participant_list,
                     [&](const auto atom_index)
                     {
-                        return std::ranges::binary_search(shape_active_atom_index_list, atom_index);
+                        return std::ranges::binary_search(halo_atom_index_list, atom_index);
                     })
             };
-            if (!touches_active_shape) continue;
+            if (!touches_halo) continue;
             expanded_atom_index_list.insert(
                 expanded_atom_index_list.end(),
                 direct_participant_list.begin(),
@@ -1301,20 +1273,11 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
         expanded_atom_index_list.erase(
             std::ranges::unique(expanded_atom_index_list).begin(),
             expanded_atom_index_list.end());
-        shape_active_atom_index_list = std::move(expanded_atom_index_list);
-        if (shape_active_atom_index_list.size() == previous_size) break;
+        halo_atom_index_list = std::move(expanded_atom_index_list);
+        if (halo_atom_index_list.size() == previous_size) break;
     }
 
-    auto offset_closure_atom_index_list{
-        BuildOffsetClosureAtomIndexList(
-            context,
-            component_atom_index_list,
-            shape_active_atom_index_list,
-            "Boundary halo shape-active atom is out of range.",
-            "Boundary halo component atom is out of range.")
-    };
-    component.shape_active_atom_index_list = std::move(shape_active_atom_index_list);
-    component.offset_closure_atom_index_list = std::move(offset_closure_atom_index_list);
+    component.halo_atom_index_list = std::move(halo_atom_index_list);
     return component;
 }
 

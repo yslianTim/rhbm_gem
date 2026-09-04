@@ -6,7 +6,13 @@
 Gaussian estimates of the selected atoms after the first-stage local fit. It
 accounts for overlapping responses from neighboring selected atoms
 and unselected model atoms while updating each selected atom's amplitude,
-width, and offset. Effective unselected contributors have no optimizer state or
+width, and offset independently. Chemical `GroupKey`/`group_id` is neither
+queried nor stored anywhere in this stage; there are no synthetic groups,
+shared-offset columns, or selected group-median refits. Optimization clusters
+still organize sample coupling, numerical solves, and acceptance gates.
+Third-stage chemical group estimation is unchanged.
+
+Effective unselected contributors have no optimizer state or
 estimation degrees of freedom. All three parameters of their fixed background
 model are the component-wise selected-MDPDE medians of the sample target's
 optimization cluster. This background is refreshed from the latest accepted
@@ -27,7 +33,7 @@ state to `ModelObject`. Individual outer iterations do not partially update the
 stored atom estimates.
 
 `FitOptions::second_stage_boundary_halo_depth` controls boundary-correction
-shape expansion and defaults to one physical-dependency hop. A value of zero
+parameter halo expansion and defaults to one physical-dependency hop. A value of zero
 keeps the direct-interface behavior. Final uncut-component polish is enabled by
 `FitOptions::enable_second_stage_dependency_polish`; its nonlinear round limit
 is `FitOptions::second_stage_dependency_polish_max_iterations`, which defaults
@@ -43,7 +49,7 @@ Unselected background geometry stores only per-sample distance lists. Atom
 identity is used only during initialization for neighbor search, deduplication,
 and neighbor counting; it is not retained in the context. There is no
 unselected support-row design, local result, `alpha_r`, or independent model.
-No unselected chemical `GroupKey` or `group_id` is queried or stored.
+Neither selected nor unselected chemical `GroupKey`/`group_id` is queried or stored.
 
 Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
@@ -123,45 +129,48 @@ Each outer attempt performs the following sequence:
    background. Rebuild the sampling domain and solver workspaces only if the
    partition changes. The first attempt uses the initialization background and
    baseline without rebuilding or logging the same background twice.
-2. Build the selected shape, shared-offset, and hard-failure activity masks.
+2. Build the selected per-atom shape, offset, and hard-failure activity masks.
    Fixed and quarantined selected atoms remain in the graph, median pool,
    samples, and objective domain. Reconcile per-cluster objective and trust
    states; unselected geometry has no activity mask.
-3. Jointly estimate selected offsets with one column per represented selected
-   group, using robust IRLS and the shared `kJointFittingRidgeRatio`. Preserve
-   the finite, undamped endpoint as the offset part of the fixed-point operator.
-   The frozen unselected response enters the fixed RHS, not a parameter column.
-4. Freeze the post-offset selected model snapshot. For selected refits only,
-   replace selected background models by their component-wise selected-group
-   medians, retaining the existing selected group-median offset/background
-   semantics. Subtract selected-neighbor responses and the unchanged unselected
-   background cache.
+3. Jointly estimate selected offsets with one column per atom, ordered by atom
+   index within each cluster. Each seed and ridge anchor is that atom's previous
+   offset. Robust IRLS, conditioning/collinearity guards, and
+   `kJointFittingRidgeRatio` are unchanged. Preserve the complete undamped
+   nominal solve as fixed-point evidence; production masks, validity, and
+   fallback apply per atom. Outside-cluster selected neighbors and the frozen
+   unselected response enter the fixed RHS, not parameter columns.
+4. Freeze the post-offset atom-level snapshot. Subtract each selected neighbor's
+   own complete Gaussian response and the unchanged unselected background cache.
+   The target's offset response uses its own width and offset; no selected
+   median replaces target or neighbor models.
 5. Refit selected atoms with their own trained `alpha_r` and existing
    fallback/quarantine handling. There are no unselected refits. The unrestricted
    operator uses the same frozen background and does not manufacture an endpoint
    from production fallback.
 6. Search one geometric factor sequence `1, 1/2, 1/4, ...` for each cluster.
-   Each factor constructs selected log-shape and shared-physical-offset
+   Each factor constructs selected log-shape and per-atom physical-offset
    coordinates, skips candidates outside the trust radius, applies offset-only
    and post-refit feasibility guards, and then the previous/best objective gate.
    The frozen background is unchanged at every factor. Guard never damps, trust
    never accepts, and the objective gate never chooses a second independent
    factor. If every material factor is guard-infeasible, deactivate the terminal
-   independent shape or selected offset-group block and repeat the search.
+   independent atom shape or offset block and repeat the search.
    Objective exhaustion rejects the cluster.
-7. For a solver-qualified cluster, attempt one joint
-   amplitude/width/offset polish over its active columns. Inactive shapes and
-   offset groups decode to the endpoint values and remain fixed background.
-   Keep the polish only when it strictly improves the base candidate on the
-   same objective scale.
+7. For a solver-qualified, fully active cluster, attempt one joint
+   amplitude/width/offset polish. Local polish retains its existing eligibility
+   restrictions. In the shared polish parameterization, each inactive
+   coordinate decodes to that atom's own endpoint value. Keep the polish only
+   when it strictly improves the base candidate on the same objective scale.
 8. Build the accepted-induced interaction graph from shared boundary samples.
    Revalidate each connected component. Every eligible component attempts one
-   joint correction over the boundary shape-active set. This starts with the
-   direct boundary contributors and expands by the configured number of hops.
+   joint correction over active coordinates in the physical halo, starting with
+   direct boundary contributors and expanding by the configured number of hops.
    A hop follows the raw sample target and every direct selected neighbor
-   inside the boundary component. Shape-active selected atoms may change
-   transformed amplitude and width. The offset closure has one component-local
-   column per selected group; closure-only shapes remain fixed. Merging boundary
+   inside the boundary component. Shape and offset active lists independently
+   filter this physical halo using their atom-level masks; their union is the
+   parameter atom set. There is no chemical-group closure. Each active shape has
+   two columns and each active offset has its own column. Merging boundary
    components does not change the frozen sample-to-cluster background. A valid
    endpoint remains the fallback and is replaced only when the correction fits
    every member trust radius and strictly improves that endpoint. For an invalid
@@ -209,11 +218,12 @@ constitutes the fixed-point operator for that frozen background. Adjusted
 entries are transient operator inputs; only final selected peeling entries are
 persisted.
 
-The joint-offset parameterization is cluster-local. Selected atoms with the
-same group key share one offset column within a coupling cluster; the same key
-in separate clusters has independent solve columns. Joint, boundary, and final
-polish contain only selected shape/shared-offset columns. Unselected responses
-are fixed residual/RHS terms with no Jacobian column or median chain
+Joint offsets are independent per selected atom, even for identical chemical
+keys. Joint, boundary, and final polish use `2 * active shape atoms + active
+offset atoms` columns. An offset derivative enters only its atom's column;
+the shape Jacobian retains the width derivative of that atom's offset response.
+Inactive coordinates retain their own endpoint, without averaging. Unselected
+responses are fixed residual/RHS terms with no Jacobian column or median chain
 derivative. Candidate decoding, damping, fallback, and quarantine rollback do
 not refresh any background parameter.
 
@@ -229,44 +239,37 @@ offset-to-peak ratio
 
 Accepted-movement statistics are evaluated over active optimization degrees of
 freedom, not every stored atom. Every shape-active selected atom contributes
-one log-peak and one log-width sample. Each active selected shared-offset block
-contributes one offset-to-peak sample equal to the maximum absolute transformed
-change among its members. Unselected contributors have no active or nominal
-coordinates, solver qualification, operator endpoint, or quarantine target.
-Background refresh does not create a latent-movement blocker or dilute the
-moving population. Fixed and quarantined selected coordinates are excluded
-from the accepted population; mixed-activity selected groups and non-finite
-member changes fail convergence.
+one log-peak and one log-width sample; every offset-active atom contributes
+its own absolute offset-to-peak change. Fixed and quarantined coordinates are
+excluded from accepted movement only. No group maximum or mixed-group mask is
+computed. Unselected contributors have no active or nominal coordinates,
+solver qualification, operator endpoint, or quarantine target. Background
+refresh does not create a latent-movement blocker or dilute the population.
 
-`ActiveCoordinatePopulation` stores one active shape-atom index list shared by
-the log-peak and log-width summaries, plus shared-offset member lists and their
-mixed-activity masks. Offset statistics are computed once from block maxima,
-not from an additional per-atom offset population. Empty populations retain
-zero p99 and maximum; non-finite and mixed shared-offset evidence retains the
-existing fail-closed semantics.
+`ActiveCoordinatePopulation` stores a shape-atom index list shared by the two
+shape summaries and an independent offset-atom index list. Empty populations
+retain zero p99 and maximum; non-finite evidence fails closed.
 
 Production convergence requires accepted active-DOF p99 and complete nominal-
 DOF fixed-point residual p99 below `1e-4`, with solver qualification and all
-orthogonal blockers clear. Mixed shared-offset activity is folded into solver
-qualification. Maximum transformed
-change remains a tail diagnostic and topology-drift metric, but is not a
-convergence predicate.
+orthogonal blockers clear. Maximum transformed change remains a tail diagnostic
+and topology-drift metric, but is not a convergence predicate.
 
-The strict fixed-point operator `F(S[k])` is one undamped selected joint-offset
-solve followed by undamped selected refits under this attempt's frozen
-background. If production fixed/quarantine handling changes an offset, the
-operator is evaluated separately without production fallback. An unavailable
-unrestricted offset makes the dependent shape evidence unavailable rather than
-zero. The nominal population includes all selected shape/shared-offset DOFs,
-including fixed and quarantined blocks, and does not reuse the accepted active
-population.
+The strict fixed-point operator `F(S[k])` is one undamped per-atom joint-offset
+solve followed by undamped own-model selected refits under this attempt's
+frozen background. If production fixed/quarantine handling changes an offset,
+the operator is evaluated separately without production fallback. An unavailable
+unrestricted offset makes dependent shape evidence unavailable rather than
+zero. The nominal population includes all three coordinates of every selected
+atom, including fixed and quarantined atoms, and does not reuse the accepted
+active population.
 
 Production uses full solver qualification: active local shape refits must
-report `SUCCESS`, active shared offsets must report
-`Converged`, and both require a full undamped, non-fallback endpoint. A usable
-soft endpoint may continue through candidate selection without being solver
-qualified. Historical cluster rollups and active proposal residuals are not
-evaluated by the current runtime and do not define production.
+report `SUCCESS`; each active atom offset requires its owning cluster's solve
+to report `Converged`. Both require a full undamped, non-fallback endpoint.
+A usable soft endpoint may continue through candidate selection without being
+solver qualified. Historical cluster rollups and active proposal residuals are
+not evaluated by the current runtime and do not define production.
 
 The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
@@ -356,29 +359,23 @@ The joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
 
-For a non-suspicious cluster, selected previous and operator offsets are reduced
-to one physical offset per selected `GroupKey` by deterministic component
-medians. Base proposal trials
-use factors `1, 1/2, 1/4, ...`; each trial interpolates the node-level log-peak
-and log-width coordinates and the selected-shared physical
-offset with the same factor:
+Base proposal trials use factors `1, 1/2, 1/4, ...`; each trial interpolates
+each atom's log-peak and log-width coordinates and its own physical offset
+with the same factor:
 
 ```text
-C_g(t) = C_previous,g + t * (C_raw,g - C_previous,g)
+C_i(t) = C_previous,i + t * (C_raw,i - C_previous,i)
 ```
 
-The realized node models are then re-encoded and measured against the trust
-radius. At `t = 0`, the shape is the previous shape and a selected offset is
-the previous selected-group median. At `t = 1`, the complete selected operator
-offset state is recovered. The unselected amplitude, width, and offset remain
-the same frozen values at every factor, even when selected median ordering
-changes. If
-projecting an inconsistent selected group onto its median already exceeds the
-radius, the proposal fails before objective evaluation with an explicit
-diagnostic reason.
+The realized atom models are then re-encoded and measured against the trust
+radius. At `t = 0`, every atom retains its own previous model; at `t = 1`,
+the complete per-atom operator endpoint is recovered, subject to production
+activity masks. The unselected amplitude, width, and offset remain the same
+frozen background at every factor, even when selected median ordering changes.
+There is no median projection before trust evaluation.
 
 Each cluster owns one factor sequence. Every trial first constructs the
-log-shape/shared-physical-offset candidate, then checks validity, trust
+log-shape/individual-physical-offset candidate, then checks validity, trust
 admissibility, guard feasibility, and the previous/best objective gates in that
 order. Trust-inadmissible trials do not run guard or objective evaluation.
 Search stops when the largest transformed change is below
@@ -386,8 +383,8 @@ Search stops when the largest transformed change is below
 with endpoint uncertainty and its factor is recorded. Rejected trials do not
 mutate objective state or polish provenance.
 
-When every material factor is guard-infeasible for one shape or shared-offset
-group, that block is made locally inactive and the same function restarts the
+When every material factor is guard-infeasible for one atom's shape or offset,
+that block is made locally inactive and the same function restarts the
 factor sequence for the remaining blocks. This is an iterative block-isolation
 loop, not a recursive candidate selection or a new outer attempt.
 
@@ -473,13 +470,14 @@ promotes the rejected members without trust-radius growth or shrink. Failed
 rescue is transactional: every component member retains its safe state.
 
 Boundary correction eligibility is intentionally broader than local polish
-eligibility. A component is eligible whenever at least one shape or shared-offset
-column remains active. Inactive shape columns use endpoint amplitude and width;
-an inactive offset group has no offset column and all group members use the
-endpoint offset. The frozen unselected background does not change. IRLS
+eligibility. A component is eligible whenever at least one atom shape or offset
+column remains active. Each inactive coordinate uses its atom's endpoint value.
+The physical halo determines both active lists, and their union determines the
+parameter atom set; no same-key atoms are added. The frozen unselected
+background does not change. IRLS
 objective deterioration, IRLS iteration exhaustion, and valid
 non-success local estimation statuses may participate. Local joint polish still
-requires full solver qualification. Every eligible accepted-only or rescue boundary
+requires full solver qualification and all cluster coordinates active. Every eligible accepted-only or rescue boundary
 component receives at most one correction attempt per outer iteration.
 
 Before a joint-correction candidate is accepted, neighbor-adjusted profiles are
@@ -506,17 +504,16 @@ DSU units. They are then merged using the complete
 `GraphTopology::sample_dependency_list`, without the weighted-edge threshold or
 ten-residue cutoff. This retains every direct selected-target/selected-neighbor
 dependency; unselected contributors never connect these components.
-Quarantined shape blocks and offset groups are not variables, but their fixed
+Quarantined atom shape and offset blocks are not variables, but their fixed
 models remain in every sample response and in the objective domain. A component
 is skipped only when it has no active shape or offset column.
 
-Each component is solved serially in fixed key order. Shape-active member nodes
-have log-peak and log-width variables. Each selected offset-active
-group represented in that component has one shared physical offset. The last
-validated frozen background is reused unchanged; merged components do not
-reassign samples to new background medians. Inactive independent blocks decode
-from the endpoint. The same selected group in two independent components is not
-tied across components. Sparse weighted-ridge directions,
+Each component is solved serially in fixed key order. Shape-active member atoms
+have log-peak and log-width variables, and every offset-active atom has one
+independent physical-offset variable. The last validated frozen background is
+reused unchanged; merged components do not reassign samples to new background
+medians. Inactive coordinates decode from their own atom endpoint. Sparse
+weighted-ridge directions,
 robust weights, conditioning guards, and each original cluster's trust radius
 are reused from boundary correction. Up to the configured number of nonlinear
 rounds is attempted. A round linearizes at its latest endpoint, while every
@@ -552,7 +549,7 @@ finite nominal operator evidence, and each candidate residual p99 must satisfy
 candidate_p99 <= max(base_p99, 1e-4)
 ```
 
-independently for log peak, log width, and shared offset. If the base evidence
+independently for log peak, log width, and per-atom offset-to-peak ratio. If the base evidence
 cannot be evaluated, only a strict candidate can be applied. Evaluation error,
 unavailable evidence, or any coordinate regression retains the base state.
 Maximum residual remains diagnostic and is not a gate. An applied final polish
@@ -587,12 +584,12 @@ safety status, base/candidate residual evidence, and actual application.
   than one upward excursion. Sign flip and rebound require a trustworthy
   previous radial shape; width growth and amplitude-offset compensation do not.
 - Guard is feasibility-only. The cluster controller owns the sole factor list
-  and applies one common factor to log-shape and shared physical offsets. Trust-
+  and applies one common factor to log-shape and individual physical offsets. Trust-
   inadmissible candidates skip guard and objective evaluation. A full,
   solver-qualified endpoint below `kTransformedChangeTolerance` is stationary;
   reaching that tolerance only after factor reduction is step-limited.
-- Failure is block-local. An unsafe selected offset update fixes its complete
-  shared-offset group; an unsafe shape update fixes that selected shape. A hard
+- Failure is atom-block-local. An unsafe selected offset update fixes only that
+  atom's offset; an unsafe shape update fixes only that atom's shape. A hard
   joint-offset failure retains that cluster's previous state while independent
   clusters can continue.
 - The same selected shape/offset/hard masks parameterize local polish, boundary
@@ -602,18 +599,22 @@ safety status, base/candidate residual evidence, and actual application.
   and their decoded values must equal the endpoint. Unselected geometry has
   no parameter blocks to freeze.
 - A fixed shape may retain a guard-safe jointly estimated offset. Conversely, a
-  fixed selected offset group does not prevent safe shapes in
-  that block or cluster from changing. The next attempt applies the `10x`
+  fixed atom offset does not prevent that atom's safe shape or other atoms'
+  offsets from changing. The next attempt applies the `10x`
   suspicious ridge multiplier to affected nodes.
 - Stable near-convergence failures enter stage-local quarantine only after the
   same target and reason occurs in five accepted iterations. Targets are an atom
-  shape block, a shared-offset group, or a hard-failure cluster. A changed reason
+  shape block (`ShapeAtom`), a singleton offset block (`OffsetAtom`), or a
+  hard-failure cluster. A changed reason
   or missing observation resets the pre-quarantine count.
 - Quarantine never removes atoms or rebuilds the objective domain. After two
   accepted iterations a target receives probation; a topology partition change
   may trigger it early. Each target gets at most three probes. Probes use the
   minimum trust radius `0.0625` and `10x` ridge. Overlapping probes are selected
-  in cluster, group, then atom priority.
+  in hard-failure cluster, offset atom, then shape atom priority, with only one
+  probe per overlapping atom. Shape and offset quarantine never release or
+  shadow each other; only hard-failure cluster probation can temporarily
+  shadow its member atom targets.
 - A material probation proposal must pass guards, trust/fixed-block invariants,
   member/component/global objective gates, and the historical-best gate. A
   guard-safe non-material stationary result at the minimum radius may also
@@ -659,10 +660,10 @@ below `1e-4`, and clear orthogonal blockers. Fixed and
 quarantined coordinates are excluded only from the accepted population; they
 remain in the nominal operator population. An empty accepted population passes
 its percentile check vacuously, but an all-fixed state still needs qualified,
-complete, sufficiently small nominal operator evidence. Mixed shared-offset
-activity fails solver qualification, and an unavailable endpoint makes the
-operator incomplete instead of substituting the previous state as a zero
-residual. `StrictOperatorPassed()` reuses the same certificate for converged
+complete, sufficiently small nominal operator evidence. Offset qualification
+is checked per active atom against its owning cluster's solve status. An
+unavailable endpoint makes the operator incomplete instead of substituting
+the previous state as a zero residual. `StrictOperatorPassed()` reuses the same certificate for converged
 final-polish certification without the accepted-movement or orthogonal-blocker
 terms.
 
@@ -697,9 +698,11 @@ blocks from converging or being written.
 After the stopping policy selects the final validated state and any certified
 final polish, the stage captures its selected MDPDE models together with the
 last validated immutable background. This is the actual best-audit or latest
-validated state chosen for application, not an operator endpoint or
-group-median selected snapshot. Final polish, certificate, audit, and peeling
-share this exact background; persistence never recalculates a median.
+validated state chosen for application, not an operator endpoint. Each selected
+atom keeps its own final offset. Final polish, certificate, audit, and peeling
+share this exact background; persistence neither averages selected offsets nor
+recalculates a background median. OLS/MDPDE uncertainty and polish provenance
+follow the existing application policy.
 
 For every selected atom, the stage then rebuilds its persistent peeling
 sampling entries from the raw entries:
@@ -733,9 +736,9 @@ second-stage finalization.
 
 ## Performance architecture
 
-The fitting context stores selected group membership and indexes, flattened
-selected sample-neighbor edges, unselected identities/sample-relative distances,
-prepared selected local designs, and profile-radius ordering. Geometry and
+The fitting context stores selected atom indexes, flattened selected
+sample-neighbor edges, unselected per-sample distance lists, prepared selected
+local designs, and profile-radius ordering. Geometry and
 designs are fixed for the stage. Quarantine changes only selected activity masks.
 
 Each outer iteration builds one immutable unselected background response cache,
@@ -745,8 +748,8 @@ references to their background so subsequent refreshes cannot alter them.
 Cluster candidates are represented by atom-local state patches. Candidate
 evaluation overlays direct selected model deltas on the previous
 state and evaluates the objective as baseline plus the changed sample and
-offset delta. Selected group medians are built only for the selected local-refit
-operator. For a boundary-component guard, affected sample
+offset delta. Selected local refits use one frozen post-offset own-model
+snapshot. For a boundary-component guard, affected sample
 IDs are sorted and deduplicated so a boundary sample is recomputed once. The
 boundary dependency and deterministic accepted/rescue-induced components
 are derived from the current partition and rebuilt with adaptive topology.
@@ -757,7 +760,7 @@ Joint-offset, joint-polish, and boundary-correction solvers retain their sparse
 pattern analysis while its sparsity pattern is unchanged. Unselected background
 responses have no sparse design columns or median chain derivatives.
 Boundary-correction workspaces use
-the deterministic member/interface/closure/sample signature as their key and
+the deterministic shape-active/offset-active/sample signature as their key and
 are cleared with the other solver workspaces when the partition changes.
 Independent boundary components are corrected serially in cluster-key order.
 Cluster candidate workers own independent solver state and patches. With
@@ -807,7 +810,7 @@ component objectives, locally deteriorated member count, and maximum local
 deterioration. Rescue records also include component and final assembled-global
 improvements. An attempted correction also emits
 `Boundary-interface joint correction` with its
-direct-interface/shape-active/offset-active/offset-closure/parameter counts, suspicious count,
+direct-interface/shape-active/offset-active/parameter counts, suspicious count,
 solver status,
 damping, maximum normalized trust step, strict-improvement reference/candidate
 objectives, acceptance result, and endpoint-fallback outcome. An all-rejected
@@ -819,7 +822,7 @@ entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
 Frozen-background debug diagnostics report the selected target serial,
 cluster-median amplitude/width/offset, and effective background sample count.
-They never report unselected chemical groups. Contributor-refit, hard-edge,
+No second-stage diagnostic reports a chemical group. Contributor-refit, hard-edge,
 and hard-closure-overflow diagnostics have been removed. The developer-only
 trust shadow retains its legacy `unselected-dependencies=0` trace field.
 
@@ -827,7 +830,10 @@ The current convergence trace is schema 10. It serializes only try/accepted
 iteration and atom/quarantine counts, active and nominal populations,
 accepted/operator p99 and maximum, the six-bit production certificate, and
 the four orthogonal blockers. The current analyzer accepts only schema 10;
-frozen schema-9 baselines remain historical data.
+frozen schema-9 baselines remain historical data. Atom audit records separately
+use schema 2 with serial/amplitude/width/offset and no `group` field. The analyzer
+also reads legacy atom schema 1, where `group` remains required; it never inserts
+a synthetic group into schema-2 records.
 
 Adaptive rebuild diagnostics use a distinct
 `Adaptive local-fitting topology rebuild` record so the one-time initial
@@ -864,36 +870,47 @@ written.
 
 ## Workspace verification (2026-09-04)
 
-The verified workspace is base revision
-`dea92b6701af4fe5b65a178864f12374d04a9ec6` plus the current uncommitted
-selected-only optimizer, per-iteration frozen cluster-median background, and
-redundancy cleanup changes. The numerical cleanup baseline was the uncommitted
-working tree immediately before this cleanup, not the older algorithm in HEAD.
-Verification used AppleClang 21, RelWithDebInfo, system dependencies, OpenMP 5.1
-AUTO, and disabled UMAP/ROOT:
+The implementation baseline was the clean revision
+`0b4958998e521809b2a4a4425600b54b58cb751e`. The verified workspace is that
+revision plus the current uncommitted independent-offset, own-model selected
+refit, and chemical-grouping removal changes. Verification used AppleClang 21,
+RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
 
 - `tests_all` built successfully.
 - `rhbm_tests_core_estimator` and `rhbm_tests_data_runtime` passed.
-- Full CTest passed all 18 entries.
+- Full CTest passed all 18 entries, including convergence analyzer/runner
+  contracts, smoke, and serial/parallel determinism.
 - `lint_all`, including repository lint and install-consumer smoke, passed.
-- The developer-only trust-model build also passed all 101 second-stage defense
-  cases; the experiment was restored to OFF before the final normal verification.
-- `git diff --check` passed, and the repository's `TEST`/`TEST_F` count remained
-  729. Existing cases were expanded; no test cases were added.
-- Fifteen representative replay cases (one level-0/replica-0 case per topology
-  across the natural, stationarity, and population families) matched the
-  pre-cleanup working tree exactly in semantic trajectory and terminal state.
-- Four frozen-background scenarios (separate/shared clusters at intensity
-  scales 1 and 100) retained identical selected models, 192 peeling responses,
-  stopping reasons, and 134 convergence records. The only background-trace
-  change was removing two duplicate initial records per scenario.
-- Existing tests now check one background snapshot per attempt, shared physical
-  contributors across disconnected clusters, identity deduplication, hydrogen
-  exclusion, group-key independence, and non-finite shape/shared-offset evidence.
-  Temporary numerical-comparison instrumentation was removed after verification.
-- Removed internal symbols have no remaining references; public headers, CLI,
-  fitting options, persistence schema, and standalone empty-selected behavior
-  are unchanged.
+- The developer-only trust-model experiment ON build passed all 101 second-stage
+  defense cases and all 18 CTest entries. The experiment was restored to OFF,
+  followed by a normal rebuild, focused tests, full CTest, and lint.
+- The source `TEST`/`TEST_F` count remains 729. No test file or case was added;
+  obsolete helper cases were renamed and adapted to production behavior.
+- Existing cases verify individual ridge anchors, column permutation, own-model
+  refits, physical-offset damping, independent polish seed/decode and
+  finite-difference Jacobians, partial active sets, atom-local failures,
+  orthogonal shape/offset quarantine release, and active/nominal populations.
+- Atoms with the same chemical key and different truth offsets retain distinct
+  final offsets. Changing selected and unselected chemical keys while preserving
+  selection, elements, geometry, samples, and initial local state leaves
+  second-stage models, peeling, stop reasons, and convergence evidence unchanged.
+  Third-stage group results are not subject to this invariant.
+- Frozen-background, shared-contributor topology, hydrogen exclusion,
+  deduplication, best-audit rescoring, adaptive partition, final polish/peeling,
+  unselected non-persistence, intensity-scale, serial/parallel, and full workflow
+  regressions passed.
+- Three single-atom natural controls (`unk-c`, `unk-n`, `unk-o`; level 0,
+  replica 0, seed 410000, one thread, zero noise) matched the clean baseline
+  exactly in models, stopping reasons, and convergence records after normalizing
+  only the expected atom-record schema/group-field change.
+- Reverse searches found no chemical keys, shared-offset merges, group-median
+  refits, group closures, or removed helpers in the second-stage production path.
+  Atom records use schema 2; the analyzer also accepts legacy atom schema 1.
+- `git diff --check` passed. Public headers, fitting options, CLI, database
+  schema, selection flags, stage flow, third-stage estimators, and standalone
+  empty-selected behavior are unchanged.
 
-The paired 600-case corpus was not rerun. Historical audit/corpus results are
-not recertification of this algorithm change.
+The ROOT-disabled build retains existing unrelated painter unused-variable
+warnings; those files were not changed. The paired 600-case corpus was not
+rerun. Historical audit/corpus results are not recertification of this
+algorithm change.

@@ -86,14 +86,11 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
 struct ActiveCoordinatePopulation
 {
     std::vector<std::size_t> active_shape_atom_index_list{};
-    std::vector<ClusterKey> active_offset_group_atom_index_list{};
-    std::vector<char> mixed_offset_group_mask{};
+    std::vector<std::size_t> active_offset_atom_index_list{};
 };
 
 ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity);
 
 TransformedChangeSummary SummarizeActiveDofChanges(
@@ -142,7 +139,6 @@ enum class FinalPolishResidualSafetyStatus
 bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
@@ -154,7 +150,7 @@ constexpr std::size_t kQuarantineMaximumProbationCount{ 3 };
 enum class QuarantineTargetKind
 {
     ShapeAtom,
-    OffsetGroup,
+    OffsetAtom,
     HardFailureCluster
 };
 

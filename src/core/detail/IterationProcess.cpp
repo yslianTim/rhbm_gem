@@ -3,7 +3,6 @@
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include "core/detail/CandidateSelection.hpp"
-#include "data/detail/AtomClassifier.hpp"
 
 #include <algorithm>
 #include <array>
@@ -111,7 +110,6 @@ struct QuarantineState
     SuspiciousBlockActivity BeginIteration(std::size_t accepted_iteration_count);
     SuspiciousBlockActivity BuildFinalActivity() const;
     bool UpdateAfterIteration(
-        const SecondStageContext & context,
         std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
         std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
         const SuspiciousBlockActivity & block_activity,
@@ -188,12 +186,6 @@ struct LocalAtomRefitResult
     std::optional<RHBMEstimationStatus> attempted_refit_status{};
 };
 
-struct OffsetGroupEntry
-{
-    ClusterKey cluster_key{};
-    ClusterKey atom_index_list{};
-};
-
 static void ValidateBlockActivitySize(
     std::size_t atom_count,
     const SuspiciousBlockActivity & block_activity)
@@ -206,36 +198,10 @@ static void ValidateBlockActivitySize(
     }
 }
 
-static std::vector<OffsetGroupEntry> BuildOffsetGroupEntries(
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index)
-{
-    std::vector<OffsetGroupEntry> result;
-    for (const auto & cluster_key : cluster_key_list)
-    {
-        std::map<std::size_t, ClusterKey> atom_index_list_by_group;
-        for (const auto atom_index : cluster_key)
-        {
-            atom_index_list_by_group[group_id_by_atom_index.at(atom_index)].emplace_back(atom_index);
-        }
-        for (auto & [group_id, atom_index_list] : atom_index_list_by_group)
-        {
-            static_cast<void>(group_id);
-            result.emplace_back(OffsetGroupEntry{
-                cluster_key,
-                std::move(atom_index_list)
-            });
-        }
-    }
-    return result;
-}
-
 static ConvergenceCertificate SummarizeFixedPointOperator(
     const FixedPointOperatorEvidence & evidence,
     const FitState & previous_state,
-    const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index)
+    const std::vector<std::size_t> & atom_index_list)
 {
     SuspiciousBlockActivity nominal_activity{
         SuspiciousUpdateMask(previous_state.size(), 0),
@@ -245,8 +211,6 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
     ConvergenceCertificate result;
     const auto operator_nominal_population{ BuildActiveCoordinatePopulation(
         atom_index_list,
-        cluster_key_list,
-        group_id_by_atom_index,
         nominal_activity) };
 
     std::vector<TransformedChange> change_list;
@@ -295,8 +259,6 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
     }
     state.resize(context.size());
 
-    std::unordered_map<GroupKey, std::size_t> selected_group_index_by_key;
-    selected_group_index_by_key.reserve(context.size());
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
     atom_index_map.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
@@ -309,7 +271,6 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
-        const auto group_key{ data_internal::GetGroupKey(atom) };
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         state.at(atom_index) = local_view.GetGaussianResult(FittingStage::Second);
@@ -319,8 +280,6 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
             options.distance_min,
             options.distance_max
         };
-        atom_context.group_id = selected_group_index_by_key.try_emplace(
-            group_key, selected_group_index_by_key.size()).first->second;
     }
 
     std::vector<GaussianModel3D> global_models;
@@ -447,7 +406,7 @@ static void ApplyQuarantineFallbackTargets(
                 assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
                 continue;
             }
-            if (target.kind == QuarantineTargetKind::OffsetGroup)
+            if (target.kind == QuarantineTargetKind::OffsetAtom)
             {
                 const auto previous_offset{
                     previous_state.at(atom_index).mdpde.GetModel().GetOffset()
@@ -526,7 +485,8 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t accepted_ite
                 probation_target_list,
                 [&](const auto & probation_target)
                 {
-                    return probation_target.kind > target.kind &&
+                    return probation_target.kind == QuarantineTargetKind::HardFailureCluster &&
+                        target.kind != QuarantineTargetKind::HardFailureCluster &&
                         std::ranges::any_of(
                             target.atom_index_list,
                             [&](const auto atom_index)
@@ -540,7 +500,7 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t accepted_ite
         if (shadowed_by_broader_probation) continue;
         for (const auto atom_index : target.atom_index_list)
         {
-            if (target.kind != QuarantineTargetKind::OffsetGroup)
+            if (target.kind != QuarantineTargetKind::OffsetAtom)
             {
                 activity.shape_fixed_atom_mask.at(atom_index) = 1;
             }
@@ -570,7 +530,7 @@ SuspiciousBlockActivity QuarantineState::BuildFinalActivity() const
         if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
         for (const auto atom_index : target.atom_index_list)
         {
-            if (target.kind != QuarantineTargetKind::OffsetGroup)
+            if (target.kind != QuarantineTargetKind::OffsetAtom)
             {
                 activity.shape_fixed_atom_mask.at(atom_index) = 1;
             }
@@ -607,7 +567,7 @@ static bool HasAcceptedMaterialTargetChange(
                 return true;
             }
         }
-        else if (target.kind == QuarantineTargetKind::OffsetGroup)
+        else if (target.kind == QuarantineTargetKind::OffsetAtom)
         {
             if (change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) >= kTransformedChangeTolerance)
             {
@@ -636,11 +596,11 @@ static bool DoesFailureAffectTarget(
     };
     if (!overlaps) return false;
     if (target.kind == QuarantineTargetKind::HardFailureCluster) return true;
-    if (target.kind == QuarantineTargetKind::OffsetGroup)
+    if (target.kind == QuarantineTargetKind::OffsetAtom)
     {
         return failure_target.kind != QuarantineTargetKind::ShapeAtom;
     }
-    return failure_target.kind != QuarantineTargetKind::OffsetGroup;
+    return failure_target.kind != QuarantineTargetKind::OffsetAtom;
 }
 
 static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
@@ -666,7 +626,7 @@ static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
         {
             return false;
         }
-        if (target.kind != QuarantineTargetKind::OffsetGroup &&
+        if (target.kind != QuarantineTargetKind::OffsetAtom &&
             block_activity.shape_fixed_atom_mask.at(atom_index) == 0)
         {
             return false;
@@ -681,7 +641,6 @@ static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
 }
 
 bool QuarantineState::UpdateAfterIteration(
-    const SecondStageContext & context,
     std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
     std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
     const SuspiciousBlockActivity & block_activity,
@@ -717,21 +676,10 @@ bool QuarantineState::UpdateAfterIteration(
                     const auto atom_index{ *terminal.guard_atom_index };
                     if (*terminal.guard_mode == SuspiciousUpdateMode::OffsetOnly)
                     {
-                        std::vector<std::size_t> group_atom_index_list;
-                        const auto group_id{
-                            context.at(atom_index).group_id
-                        };
-                        for (std::size_t member_index = 0; member_index < context.size(); member_index++)
-                        {
-                            if (context.at(member_index).group_id == group_id)
-                            {
-                                group_atom_index_list.emplace_back(member_index);
-                            }
-                        }
                         failure_reason_by_target.try_emplace(
                             QuarantineTarget{
-                                QuarantineTargetKind::OffsetGroup,
-                                std::move(group_atom_index_list)
+                                QuarantineTargetKind::OffsetAtom,
+                                { atom_index }
                             },
                             failure);
                     }
@@ -908,26 +856,6 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
 }
 
-static FittedGaussianSnapshot BuildSelectedGroupMedianSnapshot(
-    const SecondStageContext & context,
-    const FittedGaussianSnapshot & node_snapshot)
-{
-    if (node_snapshot.size() != context.size())
-    {
-        throw std::invalid_argument(
-            "Second-stage selected median snapshot size is inconsistent.");
-    }
-    std::vector<std::size_t> selected_group_id_list;
-    selected_group_id_list.reserve(context.size());
-    for (std::size_t atom_index = 0;
-        atom_index < context.size(); atom_index++)
-    {
-        selected_group_id_list.emplace_back(
-            context.at(atom_index).group_id);
-    }
-    return BuildGroupMedianModelList(selected_group_id_list, node_snapshot);
-}
-
 static std::vector<std::optional<GaussianModel3DWithUncertainty>>
 RunUnrestrictedShapeRefits(
     const SecondStageContext & context,
@@ -937,17 +865,10 @@ RunUnrestrictedShapeRefits(
     const auto operator_model_bundle{
         BuildSecondStageModelSnapshot(context, operator_offset_state)
     };
-    const auto selected_refit_model_bundle{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildSelectedGroupMedianSnapshot(
-                context,
-                operator_model_bundle.node))
-    };
     const auto adjusted_response_cache{
         BuildSecondStageAdjustedResponseCache(
             context,
-            selected_refit_model_bundle)
+            operator_model_bundle)
     };
     std::vector<std::optional<GaussianModel3DWithUncertainty>> result(
         context.size());
@@ -969,7 +890,7 @@ RunUnrestrictedShapeRefits(
                     adjusted_response_cache.at(atom_index),
                     context.at(atom_index).alpha_r,
                     refit_thread_size,
-                    GetFitModel(selected_refit_model_bundle.node, atom_index))
+                    GetFitModel(operator_model_bundle.node, atom_index))
             };
             if (IsValidSecondStageGaussianModel(candidate.mdpde.GetModel()))
             {
@@ -1089,15 +1010,6 @@ static IterationProposalResult RunProposalIteration(
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
     std::vector<std::optional<RHBMEstimationStatus>>
         local_refit_status_by_atom(context.size());
-    std::vector<std::size_t> group_id_by_atom_index;
-    group_id_by_atom_index.reserve(context.size());
-    for (std::size_t atom_index = 0;
-        atom_index < context.size();
-        atom_index++)
-    {
-        group_id_by_atom_index.emplace_back(
-            context.at(atom_index).group_id);
-    }
     ClusterHealthMap health_by_key;
     for (std::size_t cluster_position = 0;
         cluster_position < cluster_key_list.size();
@@ -1110,11 +1022,6 @@ static IterationProposalResult RunProposalIteration(
         };
         static_cast<void>(inserted);
         auto & health{ health_iter->second };
-        std::map<std::size_t, std::vector<std::size_t>> position_list_by_group;
-        for (std::size_t position = 0; position < key.size(); position++)
-        {
-            position_list_by_group[group_id_by_atom_index.at(key.at(position))].emplace_back(position);
-        }
         if (IsJointOffsetSolveHardFailure(offset_result.status))
         {
             health.all_local_refits_solver_qualified = false;
@@ -1128,86 +1035,31 @@ static IterationProposalResult RunProposalIteration(
             continue;
         }
 
-        for (const auto & [group_id, position_list] : position_list_by_group)
+        for (std::size_t position = 0; position < key.size(); position++)
         {
-            static_cast<void>(group_id);
-            const auto is_quarantined_group{
-                std::ranges::any_of(
-                    position_list,
-                    [&](const auto position)
-                    {
-                        const auto atom_index{ key.at(position) };
-                        return !quarantine_activity.HasActiveOffset(atom_index);
-                    })
-            };
-            if (is_quarantined_group)
+            const auto atom_index{ key.at(position) };
+            const auto & previous_model{ previous_state.at(atom_index).mdpde.GetModel() };
+            if (!quarantine_activity.HasActiveOffset(atom_index))
             {
                 health.all_local_refits_solver_qualified = false;
-                for (const auto position : position_list)
-                {
-                    const auto atom_index{ key.at(position) };
-                    block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                    current_model_snapshot.node.at(atom_index) =
-                        previous_state.at(atom_index).mdpde.GetModel();
-                }
+                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
                 continue;
             }
-            bool accepted{ true };
-            std::vector<GaussianModel3D> accepted_model_list;
-            std::vector<SuspiciousGaussianAssessment> accepted_assessment_list;
-            accepted_model_list.reserve(position_list.size());
-            accepted_assessment_list.reserve(position_list.size());
-            for (const auto position : position_list)
-            {
-                const auto atom_index{ key.at(position) };
-                const auto & previous_model{
-                    previous_state.at(atom_index).mdpde.GetModel()
-                };
-                const auto proposed_offset{
-                    offset_result.offset(static_cast<Eigen::Index>(position))
-                };
-                const auto candidate_model{
-                    previous_model.WithOffset(proposed_offset)
-                };
-                if (!IsValidSecondStageGaussianModel(candidate_model))
-                {
-                    accepted = false;
-                    break;
-                }
-                accepted_model_list.emplace_back(candidate_model);
-                const auto & assessment_samples{ context.at(atom_index).raw_sampling_entries };
-                const auto assessment{
-                    AssessSuspiciousGaussianUpdate(
-                        assessment_samples,
-                        candidate_model,
-                        options,
-                        BuildPreviousSuspiciousProfileBaseline(
-                            assessment_samples,
-                            previous_model,
-                            options),
-                        SuspiciousUpdateMode::OffsetOnly)
-                };
-                accepted_assessment_list.emplace_back(assessment);
-            }
-            for (std::size_t member_position = 0;
-                member_position < position_list.size(); member_position++)
-            {
-                const auto atom_index{ key.at(position_list.at(member_position)) };
-                if (accepted)
-                {
-                    current_model_snapshot.node.at(atom_index) = accepted_model_list.at(member_position);
-                    assessment_by_atom.at(atom_index) = accepted_assessment_list.at(member_position);
-                }
-                else
-                {
-                    block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                    current_model_snapshot.node.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
-                }
-            }
-            if (!accepted)
+            const auto candidate_model{
+                previous_model.WithOffset(offset_result.offset(static_cast<Eigen::Index>(position)))
+            };
+            if (!IsValidSecondStageGaussianModel(candidate_model))
             {
                 health.all_local_refits_solver_qualified = false;
+                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
+                continue;
             }
+            current_model_snapshot.node.at(atom_index) = candidate_model;
+            const auto & samples{ context.at(atom_index).raw_sampling_entries };
+            assessment_by_atom.at(atom_index) = AssessSuspiciousGaussianUpdate(
+                samples, candidate_model, options,
+                BuildPreviousSuspiciousProfileBaseline(samples, previous_model, options),
+                SuspiciousUpdateMode::OffsetOnly);
         }
     }
 
@@ -1230,14 +1082,7 @@ static IterationProposalResult RunProposalIteration(
         }
     }
 
-    FittedGaussianSnapshot refit_model_snapshot{
-        BuildSelectedGroupMedianSnapshot(
-            context,
-            current_model_snapshot.node)
-    };
-    const auto refit_model_bundle{
-        BuildSecondStageModelSnapshot(context, std::move(refit_model_snapshot))
-    };
+    const auto & refit_model_bundle{ current_model_snapshot };
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, refit_model_bundle)
     };
@@ -1307,16 +1152,7 @@ static IterationProposalResult RunProposalIteration(
             {
                 health.all_local_refits_solver_qualified = false;
                 block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
-                const auto failed_group_id{ group_id_by_atom_index.at(atom_index) };
-                for (std::size_t group_atom_index = 0;
-                    group_atom_index < group_id_by_atom_index.size();
-                    group_atom_index++)
-                {
-                    if (group_id_by_atom_index.at(group_atom_index) == failed_group_id)
-                    {
-                        block_activity.offset_fixed_atom_mask.at(group_atom_index) = 1;
-                    }
-                }
+                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
                 assessment_by_atom.at(atom_index) = SuspiciousGaussianAssessment{
                     .reason = SuspiciousGaussianReason::InvalidModel,
                     .normalized_margin = std::numeric_limits<double>::infinity()
@@ -1793,7 +1629,6 @@ static IterationResult RunIteration(
     IterationResult result;
     const auto has_quarantine_transition{
         iteration_state.quarantine_state.UpdateAfterIteration(
-            context,
             selection.accepted_cluster_diagnostic_list,
             selection.rejected_cluster_diagnostic_list,
             raw_iteration_result.block_activity,
@@ -1841,20 +1676,9 @@ static IterationResult RunIteration(
         return result;
     }
 
-    std::vector<std::size_t> group_id_by_atom_index;
-    group_id_by_atom_index.reserve(context.size());
-    for (std::size_t atom_index = 0;
-        atom_index < context.size();
-        atom_index++)
-    {
-        group_id_by_atom_index.emplace_back(
-            context.at(atom_index).group_id);
-    }
     const auto active_population{
         BuildActiveCoordinatePopulation(
             active_index_list,
-            cluster_key_list,
-            group_id_by_atom_index,
             raw_iteration_result.block_activity)
     };
     const auto transformed_change_summary{
@@ -1867,9 +1691,7 @@ static IterationResult RunIteration(
         SummarizeFixedPointOperator(
             raw_iteration_result.fixed_point_operator,
             previous_state,
-            iteration_state.active_index_list,
-            cluster_key_list,
-            group_id_by_atom_index)
+            iteration_state.active_index_list)
     };
     certificate.accepted_active_movement = SummarizeActiveDofChanges(
         assembled_state,
@@ -1878,7 +1700,6 @@ static IterationResult RunIteration(
     certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
         iteration_state.active_index_list,
         cluster_key_list,
-        group_id_by_atom_index,
         raw_iteration_result.block_activity,
         raw_iteration_result.local_refit_status_by_atom,
         raw_iteration_result.health_by_key);
@@ -2046,25 +1867,13 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
                 final_block_activity,
                 iteration_state.solver_workspace_by_key)
         };
-        std::vector<std::size_t> group_id_by_atom_index;
-        group_id_by_atom_index.reserve(context.size());
-        for (std::size_t atom_index = 0;
-            atom_index < context.size();
-            atom_index++)
-        {
-            group_id_by_atom_index.emplace_back(
-                context.at(atom_index).group_id);
-        }
         auto certificate{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             candidate_state,
-            iteration_state.active_index_list,
-            cluster_key_list,
-            group_id_by_atom_index) };
+            iteration_state.active_index_list) };
         certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
             iteration_state.active_index_list,
             cluster_key_list,
-            group_id_by_atom_index,
             proposal_result.block_activity,
             proposal_result.local_refit_status_by_atom,
             proposal_result.health_by_key);
@@ -2578,12 +2387,9 @@ SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
 
 ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity)
 {
-    ValidateBlockActivitySize(group_id_by_atom_index.size(), block_activity);
-
+    ValidateBlockActivitySize(block_activity.shape_fixed_atom_mask.size(), block_activity);
     ActiveCoordinatePopulation result;
     for (const auto atom_index : atom_index_list)
     {
@@ -2591,27 +2397,10 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
         {
             result.active_shape_atom_index_list.emplace_back(atom_index);
         }
-    }
-
-    const auto offset_group_list{
-        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index)
-    };
-    for (const auto & group : offset_group_list)
-    {
-        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return block_activity.HasActiveOffset(atom_index);
-            })) };
-        if (active_count == 0)
+        if (block_activity.HasActiveOffset(atom_index))
         {
-            continue;
+            result.active_offset_atom_index_list.emplace_back(atom_index);
         }
-
-        const auto is_mixed{ active_count != group.atom_index_list.size() };
-        result.active_offset_group_atom_index_list.emplace_back(group.atom_index_list);
-        result.mixed_offset_group_mask.emplace_back(is_mixed ? 1 : 0);
     }
     return result;
 }
@@ -2638,45 +2427,21 @@ TransformedChangeSummary SummarizeActiveDofChanges(
         }
     }
 
-    if (population.active_offset_group_atom_index_list.size() !=
-        population.mixed_offset_group_mask.size())
-    {
-        throw std::invalid_argument(
-            "Active-coordinate shared-offset population is inconsistent.");
-    }
-
-    auto & offset_group_change_list{
+    auto & offset_change_list{
         parameter_change_lists.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
     };
-    offset_group_change_list.reserve(
-        population.active_offset_group_atom_index_list.size());
-    for (std::size_t group_position = 0;
-        group_position < population.active_offset_group_atom_index_list.size();
-        group_position++)
+    offset_change_list.reserve(population.active_offset_atom_index_list.size());
+    for (const auto atom_index : population.active_offset_atom_index_list)
     {
-        double maximum_change{ 0.0 };
-        bool is_finite{ population.mixed_offset_group_mask.at(group_position) == 0 };
-        for (const auto atom_index :
-            population.active_offset_group_atom_index_list.at(group_position))
+        if (atom_index >= change_list.size())
         {
-            if (atom_index >= change_list.size())
-            {
-                throw std::invalid_argument(
-                    "Active-coordinate shared-offset change input is inconsistent.");
-            }
-            const auto value{
-                change_list.at(atom_index).at(
-                    GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
-            };
-            if (!std::isfinite(value))
-            {
-                is_finite = false;
-                break;
-            }
-            maximum_change = std::max(maximum_change, std::abs(value));
+            throw std::invalid_argument("Active-coordinate offset change input is inconsistent.");
         }
-        offset_group_change_list.emplace_back(
-            is_finite ? maximum_change : std::numeric_limits<double>::infinity());
+        const auto value{
+            change_list.at(atom_index).at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
+        };
+        offset_change_list.emplace_back(
+            std::isfinite(value) ? std::abs(value) : std::numeric_limits<double>::infinity());
     }
 
     TransformedChangeSummary result;
@@ -2716,12 +2481,11 @@ TransformedChangeSummary SummarizeActiveDofChanges(
 bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & group_id_by_atom_index,
     const SuspiciousBlockActivity & block_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key)
 {
-    const auto atom_count{ group_id_by_atom_index.size() };
+    const auto atom_count{ block_activity.shape_fixed_atom_mask.size() };
     ValidateBlockActivitySize(atom_count, block_activity);
     if (local_refit_status_by_atom.size() != atom_count)
     {
@@ -2739,29 +2503,22 @@ bool AreActiveCoordinatesSolverQualified(
         }
     }
 
-    for (const auto & group :
-        BuildOffsetGroupEntries(cluster_key_list, group_id_by_atom_index))
+    for (const auto atom_index : atom_index_list)
     {
-        const auto active_count{ static_cast<std::size_t>(std::ranges::count_if(
-            group.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return block_activity.HasActiveOffset(atom_index);
-            })) };
-        if (active_count == 0) continue;
-        if (active_count != group.atom_index_list.size())
+        if (!block_activity.HasActiveOffset(atom_index)) continue;
+        const auto owner{ std::ranges::find_if(cluster_key_list, [&](const auto & key)
         {
-            return false;
-        }
-
-        const auto health_iter{ health_by_key.find(group.cluster_key) };
+            return std::ranges::binary_search(key, atom_index);
+        }) };
+        if (owner == cluster_key_list.end()) return false;
+        const auto health_iter{ health_by_key.find(*owner) };
         if (health_iter == health_by_key.end() ||
-            health_iter->second.joint_offset_status !=
-                JointOffsetSolveStatus::Converged)
+            health_iter->second.joint_offset_status != JointOffsetSolveStatus::Converged)
         {
             return false;
         }
     }
+
     return true;
 }
 

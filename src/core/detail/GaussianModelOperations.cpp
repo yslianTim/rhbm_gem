@@ -4,7 +4,6 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
-#include <unordered_map>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -17,27 +16,7 @@ constexpr double kTransformedChangePercentile{ 0.99 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
 constexpr TransformedChange kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 
-using AtomPositionListByGroup = std::unordered_map<std::size_t, std::vector<std::size_t>>;
-
-AtomPositionListByGroup BuildAtomPositionListByGroup(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    std::size_t model_count)
-{
-    if (group_id_by_atom_position.size() != model_count)
-    {
-        throw std::invalid_argument("Local fitting group median inputs are inconsistent.");
-    }
-
-    AtomPositionListByGroup atom_position_list_by_group;
-    atom_position_list_by_group.reserve(group_id_by_atom_position.size());
-    for (std::size_t atom_position = 0; atom_position < group_id_by_atom_position.size(); atom_position++)
-    {
-        atom_position_list_by_group[group_id_by_atom_position.at(atom_position)].emplace_back(atom_position);
-    }
-    return atom_position_list_by_group;
-}
-
-std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(const GaussianModel3D & model, double distance)
+std::optional<PhysicalOffsetResponse> EvaluateValidPhysicalOffsetResponse(const GaussianModel3D & model, double distance)
 {
     if (!std::isfinite(distance) || distance < 0.0) return std::nullopt;
 
@@ -65,7 +44,7 @@ std::optional<SharedOffsetResponse> EvaluateValidSharedOffsetResponse(const Gaus
 
     if (!std::isfinite(log_width_derivative)) return std::nullopt;
 
-    return SharedOffsetResponse{
+    return PhysicalOffsetResponse{
         evaluation.response,
         Eigen::Vector2d{ evaluation.signal, log_width_derivative },
         evaluation.offset_basis
@@ -122,83 +101,12 @@ std::optional<GaussianModel3D> BuildGaussianParameterMedian(const std::vector<Ga
     return median_model;
 }
 
-std::vector<GaussianModel3D> BuildGroupMedianModelList(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & model_list)
-{
-    const auto atom_position_list_by_group{
-        BuildAtomPositionListByGroup(group_id_by_atom_position, model_list.size())
-    };
-    auto group_median_model_list{ model_list };
-    std::vector<GaussianModel3D> group_model_list;
-    group_model_list.reserve(model_list.size());
-    for (const auto & entry : atom_position_list_by_group)
-    {
-        const auto & atom_position_list{ entry.second };
-        group_model_list.clear();
-        for (const auto atom_position : atom_position_list)
-        {
-            group_model_list.emplace_back(model_list.at(atom_position));
-        }
-        const auto median_model{ BuildGaussianParameterMedian(group_model_list) };
-        if (!median_model.has_value()) continue;
-        for (const auto atom_position : atom_position_list)
-        {
-            group_median_model_list.at(atom_position) = *median_model;
-        }
-    }
-    return group_median_model_list;
-}
-
-std::vector<double> BuildGroupMedianOffsetList(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & model_list)
-{
-    const auto atom_position_list_by_group{
-        BuildAtomPositionListByGroup(group_id_by_atom_position, model_list.size())
-    };
-    std::vector<double> offset_list;
-    offset_list.reserve(model_list.size());
-    for (const auto & model : model_list)
-    {
-        offset_list.emplace_back(model.GetOffset());
-    }
-
-    std::vector<double> valid_offset_list;
-    valid_offset_list.reserve(model_list.size());
-    for (const auto & entry : atom_position_list_by_group)
-    {
-        const auto & atom_position_list{ entry.second };
-        valid_offset_list.clear();
-        for (const auto atom_position : atom_position_list)
-        {
-            const auto & model{ model_list.at(atom_position) };
-            if (IsValidSecondStageGaussianModel(model))
-            {
-                valid_offset_list.emplace_back(model.GetOffset());
-            }
-        }
-        if (valid_offset_list.empty()) continue;
-        const auto median{ array_helper::ComputeMedian(valid_offset_list) };
-        if (!std::isfinite(median)) continue;
-        for (const auto atom_position : atom_position_list)
-        {
-            offset_list.at(atom_position) = median;
-        }
-    }
-    return offset_list;
-}
-
-std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
+std::optional<std::vector<GaussianModel3D>> BuildDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
-    const std::vector<double> & previous_shared_offset_list,
-    const std::vector<double> & raw_shared_offset_list,
     double damping)
 {
     if (raw_model_list.size() != previous_model_list.size() ||
-        previous_shared_offset_list.size() != previous_model_list.size() ||
-        raw_shared_offset_list.size() != previous_model_list.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
         return std::nullopt;
@@ -239,8 +147,8 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
         const auto candidate_model{
             shape_model->WithOffset(
                 std::lerp(
-                    previous_shared_offset_list.at(atom_position),
-                    raw_shared_offset_list.at(atom_position),
+                    previous_model_list.at(atom_position).GetOffset(),
+                    raw_model_list.at(atom_position).GetOffset(),
                     damping))
         };
         if (!IsValidSecondStageGaussianModel(candidate_model)) return std::nullopt;
@@ -249,10 +157,10 @@ std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
     return candidate_model_list;
 }
 
-std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(const GaussianModel3D & model, double distance)
+std::optional<PhysicalOffsetResponse> EvaluatePhysicalOffsetResponse(const GaussianModel3D & model, double distance)
 {
     if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
-    return EvaluateValidSharedOffsetResponse(model, distance);
+    return EvaluateValidPhysicalOffsetResponse(model, distance);
 }
 
 std::optional<TransformedModelInvariants> BuildTransformedModelInvariants(const GaussianModel3D & model)
@@ -272,10 +180,10 @@ std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     const TransformedModelInvariants & invariants,
     double distance)
 {
-    const auto shared_offset_evaluation{
-        EvaluateValidSharedOffsetResponse(invariants.model, distance)
+    const auto physical_offset_evaluation{
+        EvaluateValidPhysicalOffsetResponse(invariants.model, distance)
     };
-    if (!shared_offset_evaluation.has_value()) return std::nullopt;
+    if (!physical_offset_evaluation.has_value()) return std::nullopt;
 
     const auto & model{ invariants.model };
     const auto width{ model.GetWidth() };
@@ -283,16 +191,16 @@ std::optional<Eigen::Vector3d> EvaluateTransformedJacobian(
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
     jacobian(static_cast<Eigen::Index>(
         GaussianModel3D::LogPeakHeightCoordinateIndex())) =
-        shared_offset_evaluation->shape_jacobian(0) +
-        model.GetOffset() * shared_offset_evaluation->offset_jacobian;
+        physical_offset_evaluation->shape_jacobian(0) +
+        model.GetOffset() * physical_offset_evaluation->offset_jacobian;
     jacobian(static_cast<Eigen::Index>(
         GaussianModel3D::LogWidthCoordinateIndex())) =
-        shared_offset_evaluation->shape_jacobian(1) +
-        model.GetOffset() * shared_offset_evaluation->offset_jacobian;
+        physical_offset_evaluation->shape_jacobian(1) +
+        model.GetOffset() * physical_offset_evaluation->offset_jacobian;
     jacobian(static_cast<Eigen::Index>(
         GaussianModel3D::OffsetToPeakRatioCoordinateIndex())) =
         invariants.peak_height * width *
-        shared_offset_evaluation->offset_jacobian / center_offset_basis_scale;
+        physical_offset_evaluation->offset_jacobian / center_offset_basis_scale;
     if (!jacobian.allFinite()) return std::nullopt;
 
     return jacobian;

@@ -24,29 +24,19 @@ GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
 std::optional<GaussianModel3D> BuildGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list);
 
-std::vector<GaussianModel3D> BuildGroupMedianModelList(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & model_list);
-
-std::vector<double> BuildGroupMedianOffsetList(
-    const std::vector<std::size_t> & group_id_by_atom_position,
-    const std::vector<GaussianModel3D> & model_list);
-
-std::optional<std::vector<GaussianModel3D>> BuildSharedOffsetDampedModelList(
+std::optional<std::vector<GaussianModel3D>> BuildDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
-    const std::vector<double> & previous_shared_offset_list,
-    const std::vector<double> & raw_shared_offset_list,
     double damping);
 
-struct SharedOffsetResponse
+struct PhysicalOffsetResponse
 {
     double response{ 0.0 };
     Eigen::Vector2d shape_jacobian{ Eigen::Vector2d::Zero() };
     double offset_jacobian{ 0.0 };
 };
 
-std::optional<SharedOffsetResponse> EvaluateSharedOffsetResponse(
+std::optional<PhysicalOffsetResponse> EvaluatePhysicalOffsetResponse(
     const GaussianModel3D & model,
     double distance);
 
