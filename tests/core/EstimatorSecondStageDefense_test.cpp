@@ -2332,14 +2332,31 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorPreservesIndividualRid
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumns)
 {
+    const std::vector<double> target_offsets{ 1.15, 3.9, 3.2, -0.2 };
     auto fixture{ BuildJointOffsetEstimationFixture(
-        { { 6.0, 0.55, 1.0 }, { 7.0, 0.60, 4.0 }, { 8.0, 0.65, 3.0 } },
-        { 1.0, 4.0, 3.0 }) };
+        { { 6.0, 0.55, 1.0 }, { 7.0, 0.60, 4.0 },
+            { 8.0, 0.65, 3.0 }, { 4.0, 0.50, -0.2 } },
+        target_offsets) };
+    // Each active target sees two active neighbors and one fixed, outside-cluster atom.
+    for (std::size_t atom_index = 0; atom_index < 3; atom_index++)
+    {
+        auto & atom{ fixture.first.at(atom_index) };
+        for (std::size_t neighbor_index = 0; neighbor_index < 4; neighbor_index++)
+        {
+            if (neighbor_index == atom_index) continue;
+            const auto distance{ 0.7 + 0.2 * static_cast<double>(neighbor_index) +
+                0.1 * static_cast<double>(atom_index) };
+            atom.neighbor_atom_sample_list.push_back({ neighbor_index, distance });
+            atom.raw_sampling_entries.front().response += fixture.second.node.at(neighbor_index)
+                .WithOffset(target_offsets.at(neighbor_index)).ResponseAtDistance(distance);
+        }
+        atom.neighbor_atom_sample_offset_list = { 0, atom.neighbor_atom_sample_list.size() };
+    }
     alg::WeightedRidgeSolver solver;
     const auto original{ offset_detail::EstimateJointOffsets(
-        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 1.0, 1.0 }, solver, false) };
+        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
     const auto reordered{ offset_detail::EstimateJointOffsets(
-        fixture.first, { 1, 2, 0 }, fixture.second, { 1.0, 1.0, 1.0 }, solver, false) };
+        fixture.first, { 1, 2, 0 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
     ASSERT_EQ(original.status, offset_detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(reordered.status, offset_detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(original.offset.size(), 3);
@@ -2347,6 +2364,21 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumn
     EXPECT_NEAR(reordered.offset(0), original.offset(1), 1.0e-12);
     EXPECT_NEAR(reordered.offset(1), original.offset(2), 1.0e-12);
     EXPECT_NEAR(reordered.offset(2), original.offset(0), 1.0e-12);
+    for (auto & atom : fixture.first.atom_list)
+    {
+        std::ranges::reverse(atom.neighbor_atom_sample_list);
+    }
+    const auto reversed_neighbors{ offset_detail::EstimateJointOffsets(
+        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
+    ASSERT_EQ(reversed_neighbors.status, original.status);
+    ASSERT_EQ(reversed_neighbors.offset.size(), original.offset.size());
+    for (Eigen::Index column = 0; column < original.offset.size(); column++)
+    {
+        EXPECT_NEAR(reversed_neighbors.offset(column), original.offset(column), 1.0e-12);
+        const auto atom_index{ static_cast<std::size_t>(column) };
+        EXPECT_LT(std::abs(original.offset(column) - target_offsets.at(atom_index)),
+            std::abs(fixture.second.node.at(atom_index).GetOffset() - target_offsets.at(atom_index)));
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksSolverQualification)
@@ -2418,6 +2450,16 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorFitsIndependentAtomOff
     EXPECT_NEAR(result.offset(0), 1.0, 0.01);
     EXPECT_NEAR(result.offset(1), 3.0, 0.01);
     EXPECT_GT(result.offset(1) - result.offset(0), 1.9);
+    for (const auto multiplier : { 0.0, 0.25, std::numeric_limits<double>::quiet_NaN() })
+    {
+        const auto clamped{ offset_detail::EstimateJointOffsets(
+            fixture.first, { 0, 1 }, fixture.second,
+            { multiplier, multiplier }, solver, false) };
+        ASSERT_EQ(clamped.status, result.status);
+        ASSERT_EQ(clamped.offset.size(), result.offset.size());
+        EXPECT_DOUBLE_EQ(clamped.offset(0), result.offset(0));
+        EXPECT_DOUBLE_EQ(clamped.offset(1), result.offset(1));
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundInRhs)
@@ -2518,6 +2560,32 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
         offset_detail::JointOffsetSolveStatus::SystemBuildFailed);
     ASSERT_EQ(invalid_result.offset.size(), 1);
     EXPECT_DOUBLE_EQ(invalid_result.offset(0), 2.0);
+
+    auto negligible_basis_fixture{ BuildJointOffsetEstimationFixture(
+        { { 6.0, 0.55, 2.0 } }, { 2.0 }) };
+    negligible_basis_fixture.first.at(0).raw_sampling_entries.front().point.distance = 1.0e20;
+    const auto negligible_basis_result{ offset_detail::EstimateJointOffsets(
+        negligible_basis_fixture.first, { 0 }, negligible_basis_fixture.second,
+        { 1.0 }, empty_solver, false) };
+    EXPECT_EQ(negligible_basis_result.status, offset_detail::JointOffsetSolveStatus::EmptySystem);
+    ASSERT_EQ(negligible_basis_result.offset.size(), 1);
+    EXPECT_DOUBLE_EQ(negligible_basis_result.offset(0), 2.0);
+
+    for (const bool active_neighbor : { false, true })
+    {
+        auto non_finite_neighbor_fixture{ BuildJointOffsetEstimationFixture(
+            { { 6.0, 0.55, 2.0 }, { 7.0, 0.60, 3.0 } }, { 2.0, 3.0 }) };
+        auto & target{ non_finite_neighbor_fixture.first.at(0) };
+        target.neighbor_atom_sample_list = { { 1, std::numeric_limits<double>::quiet_NaN() } };
+        target.neighbor_atom_sample_offset_list = { 0, 1 };
+        const auto non_finite_neighbor_result{ offset_detail::EstimateJointOffsets(
+            non_finite_neighbor_fixture.first,
+            active_neighbor ? offset_detail::ClusterKey{ 0, 1 } : offset_detail::ClusterKey{ 0 },
+            non_finite_neighbor_fixture.second, { 1.0, 1.0 }, invalid_solver, false) };
+        EXPECT_EQ(non_finite_neighbor_result.status, offset_detail::JointOffsetSolveStatus::SystemBuildFailed);
+        ASSERT_EQ(non_finite_neighbor_result.offset.size(), active_neighbor ? 2 : 1);
+        EXPECT_DOUBLE_EQ(non_finite_neighbor_result.offset(0), 2.0);
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant)
@@ -3126,6 +3194,24 @@ TEST(
             .GetStandardDeviationModel().GetAmplitude(),
         fixture.state.at(1).mdpde
             .GetStandardDeviationModel().GetAmplitude());
+
+    // Atom 1 has only an offset column: the ridge floor must not affect shape columns.
+    for (const auto multiplier : { 0.25, std::numeric_limits<double>::quiet_NaN() })
+    {
+        const auto clamped{ polish_detail::BuildBoundaryJointCorrection(
+            fixture.context, endpoint_state, { 0, 2 }, { 0, 1, 2 },
+            fixture.sample_ref_list, { 1.0, multiplier, 1.0 },
+            { { { 0, 1 }, 4.0 }, { { 2 }, 0.5 } }, solver) };
+        ASSERT_EQ(clamped.status, result.status);
+        ASSERT_TRUE(clamped.patch.has_value());
+        ASSERT_EQ(clamped.patch->mdpde_list.size(), result.patch->mdpde_list.size());
+        EXPECT_EQ(clamped.parameter_count, result.parameter_count);
+        for (std::size_t atom_index = 0; atom_index < result.patch->mdpde_list.size(); atom_index++)
+        {
+            ExpectGaussianModelsNear(clamped.patch->mdpde_list.at(atom_index).GetModel(),
+                result.patch->mdpde_list.at(atom_index).GetModel(), 0.0);
+        }
+    }
 
     alg::WeightedRidgeSolver invalid_solver;
     EXPECT_EQ(
@@ -3876,9 +3962,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
     EXPECT_EQ(
         component_list.at(0).interface_atom_index_list,
         (std::vector<std::size_t>{ 0, 1, 2 }));
-    EXPECT_EQ(
-        component_list.at(0).halo_atom_index_list,
-        (std::vector<std::size_t>{ 0, 1, 2 }));
+    EXPECT_TRUE(component_list.at(0).halo_atom_index_list.empty());
     EXPECT_EQ(
         component_list.at(1).key_list,
         (std::vector<audit_detail::ClusterKey>{ key_d, key_e }));
@@ -3889,9 +3973,15 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryReconciliationComponentsUseAccepte
     EXPECT_EQ(
         component_list.at(1).interface_atom_index_list,
         (std::vector<std::size_t>{ 3, 4 }));
-    EXPECT_EQ(
-        component_list.at(1).halo_atom_index_list,
-        (std::vector<std::size_t>{ 3, 4 }));
+    EXPECT_TRUE(component_list.at(1).halo_atom_index_list.empty());
+    for (const auto & component : component_list)
+    {
+        const auto expanded{ coupling_detail::ExpandBoundaryReconciliationHalo(context, component, 0) };
+        EXPECT_EQ(expanded.halo_atom_index_list, component.interface_atom_index_list);
+        EXPECT_EQ(expanded.interface_atom_index_list, component.interface_atom_index_list);
+        EXPECT_EQ(expanded.key_list, component.key_list);
+        EXPECT_EQ(expanded.affected_sample_ref_list, component.affected_sample_ref_list);
+    }
 
     EXPECT_TRUE(
         coupling_detail::BuildBoundaryReconciliationComponents(
@@ -3992,7 +4082,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByH
         .key_list = { { 0, 1 }, { 2, 3 } },
         .affected_sample_ref_list = { { 0, 0 }, { 1, 0 }, { 2, 0 } },
         .interface_atom_index_list = { 0 },
-        .halo_atom_index_list = { 0 },
+        .halo_atom_index_list = {},
         .boundary_sample_count = 1
     };
     const auto depth_zero{

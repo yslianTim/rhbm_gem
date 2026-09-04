@@ -913,10 +913,9 @@ static IterationProposalResult RunProposalIteration(
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
-    const auto previous_model_snapshot{
+    auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
     };
-    auto current_model_snapshot{ previous_model_snapshot };
     const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
     const auto log_debug_diagnostics{ !options.quiet_mode && is_debug_logging_enabled };
     std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
@@ -1007,7 +1006,6 @@ static IterationProposalResult RunProposalIteration(
         SuspiciousUpdateMask(context.size(), 0),
         SuspiciousUpdateMask(context.size(), 0)
     };
-    std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
     std::vector<std::optional<RHBMEstimationStatus>>
         local_refit_status_by_atom(context.size());
     ClusterHealthMap health_by_key;
@@ -1029,37 +1027,21 @@ static IterationProposalResult RunProposalIteration(
             {
                 block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
                 block_activity.hard_failure_atom_mask.at(atom_index) = 1;
-                current_model_snapshot.node.at(atom_index) =
-                    previous_state.at(atom_index).mdpde.GetModel();
             }
             continue;
         }
 
-        for (std::size_t position = 0; position < key.size(); position++)
+        for (const auto atom_index : key)
         {
-            const auto atom_index{ key.at(position) };
-            const auto & previous_model{ previous_state.at(atom_index).mdpde.GetModel() };
-            if (!quarantine_activity.HasActiveOffset(atom_index))
+            if (!quarantine_activity.HasActiveOffset(atom_index) ||
+                fixed_point_operator.offset_available_atom_mask.at(atom_index) == 0)
             {
                 health.all_local_refits_solver_qualified = false;
                 block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
                 continue;
             }
-            const auto candidate_model{
-                previous_model.WithOffset(offset_result.offset(static_cast<Eigen::Index>(position)))
-            };
-            if (!IsValidSecondStageGaussianModel(candidate_model))
-            {
-                health.all_local_refits_solver_qualified = false;
-                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                continue;
-            }
-            current_model_snapshot.node.at(atom_index) = candidate_model;
-            const auto & samples{ context.at(atom_index).raw_sampling_entries };
-            assessment_by_atom.at(atom_index) = AssessSuspiciousGaussianUpdate(
-                samples, candidate_model, options,
-                BuildPreviousSuspiciousProfileBaseline(samples, previous_model, options),
-                SuspiciousUpdateMode::OffsetOnly);
+            current_model_snapshot.node.at(atom_index) =
+                fixed_point_operator.state.at(atom_index).mdpde.GetModel();
         }
     }
 
@@ -1082,9 +1064,8 @@ static IterationProposalResult RunProposalIteration(
         }
     }
 
-    const auto & refit_model_bundle{ current_model_snapshot };
     const auto refit_response_cache{
-        BuildSecondStageAdjustedResponseCache(context, refit_model_bundle)
+        BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };
     std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(context.size());
     std::vector<std::exception_ptr> refit_exception_list(context.size());
@@ -1110,7 +1091,7 @@ static IterationProposalResult RunProposalIteration(
                 FitAtomWithJointOffsetFallback(
                     context.at(atom_index),
                     previous_state.at(atom_index),
-                    GetFitModel(refit_model_bundle.node, atom_index),
+                    GetFitModel(current_model_snapshot.node, atom_index),
                     refit_response_cache.at(atom_index),
                     refit_options);
         }
@@ -1142,6 +1123,7 @@ static IterationProposalResult RunProposalIteration(
         if (exception) std::rethrow_exception(exception);
     }
 
+    std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
     for (const auto & key : cluster_key_list)
     {
         auto & health{ health_by_key.at(key) };

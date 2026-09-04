@@ -201,6 +201,7 @@ std::vector<SampleRef> BuildGraphAffectedSampleUnion(
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & key_list);
 
+// Returns components with unexpanded halos; expand before optimization, even at depth zero.
 std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponents(
     const SecondStageContext & context,
     const CouplingGraphPartition & partition,

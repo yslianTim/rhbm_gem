@@ -247,15 +247,14 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         const auto offset_column{ static_cast<Eigen::Index>(i) };
         active_offset_column_by_atom_index.emplace(atom_index, offset_column);
         ridge_multiplier_by_column(offset_column) = std::max(
-            ridge_multiplier_by_column(offset_column),
-            ridge_multiplier_list.at(atom_index));
+            1.0, ridge_multiplier_list.at(atom_index));
     }
 
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> response_list;
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
-    std::map<Eigen::Index, double> basis_by_column;
+    std::vector<std::pair<Eigen::Index, double>> column_basis_list;
     for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
     {
         const auto active_index{ active_index_list.at(atom_position) };
@@ -281,10 +280,10 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
             auto residual{ sample.response - target_signal -
                 (model_snapshot.frozen_background ?
                     model_snapshot.frozen_background->response_by_atom.at(active_index).at(sample_index) : 0.0) };
-            basis_by_column.clear();
+            column_basis_list.clear();
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                basis_by_column[target_offset_column] += target_basis;
+                column_basis_list.emplace_back(target_offset_column, target_basis);
             }
 
             for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
@@ -292,17 +291,12 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 const auto & neighbor_model{
                     GetFitModel(model_snapshot.node, neighbor_atom_sample.atom_index)
                 };
-                Eigen::Index neighbor_offset_column{ -1 };
                 const auto neighbor_offset_column_iter{
                     active_offset_column_by_atom_index.find(
                         neighbor_atom_sample.atom_index)
                 };
-                if (neighbor_offset_column_iter !=
+                if (neighbor_offset_column_iter ==
                     active_offset_column_by_atom_index.end())
-                {
-                    neighbor_offset_column = neighbor_offset_column_iter->second;
-                }
-                if (neighbor_offset_column < 0)
                 {
                     const auto response{
                         neighbor_model.ResponseAtDistance(neighbor_atom_sample.distance)
@@ -330,42 +324,31 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 residual -= signal;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
-                    basis_by_column[neighbor_offset_column] += basis;
+                    column_basis_list.emplace_back(neighbor_offset_column_iter->second, basis);
                 }
             }
             if (!std::isfinite(residual))
             {
                 throw std::runtime_error("Joint offset residual is not finite.");
             }
-            for (auto basis_iter = basis_by_column.begin();
-                basis_iter != basis_by_column.end();)
-            {
-                if (!std::isfinite(basis_iter->second))
-                {
-                    throw std::runtime_error("Joint offset atom basis is invalid.");
-                }
-                if (std::abs(basis_iter->second) <= std::numeric_limits<double>::epsilon())
-                {
-                    basis_iter = basis_by_column.erase(basis_iter);
-                    continue;
-                }
-                ++basis_iter;
-            }
-            if (basis_by_column.empty()) continue;
+            if (column_basis_list.empty()) continue;
+            // Context neighbors exclude self and are deduplicated per sample.
+            // Preserve column order for deterministic cross-column accumulation.
+            std::ranges::sort(column_basis_list, {}, &std::pair<Eigen::Index, double>::first);
 
             const auto row_index{ static_cast<Eigen::Index>(response_list.size()) };
             response_list.emplace_back(residual);
-            for (const auto & [column_index, basis] : basis_by_column)
+            for (const auto & [column_index, basis] : column_basis_list)
             {
                 triplet_list.emplace_back(row_index, column_index, basis);
                 column_square_sum(column_index) += basis * basis;
             }
-            for (auto left_iter = basis_by_column.begin();
-                left_iter != basis_by_column.end();
+            for (auto left_iter = column_basis_list.begin();
+                left_iter != column_basis_list.end();
                 ++left_iter)
             {
                 auto right_iter{ left_iter };
-                for (++right_iter; right_iter != basis_by_column.end(); ++right_iter)
+                for (++right_iter; right_iter != column_basis_list.end(); ++right_iter)
                 {
                     column_cross_sum_map[
                         { left_iter->first, right_iter->first }] += left_iter->second * right_iter->second;
@@ -712,8 +695,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         {
             const auto offset_column{ parameterization.OffsetColumn(local_position) };
             ridge_multiplier_by_column(offset_column) = std::max(
-                ridge_multiplier_by_column(offset_column),
-                ridge_multiplier);
+                1.0, ridge_multiplier);
         }
     }
     std::vector<Eigen::Triplet<double>> triplet_list;

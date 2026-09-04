@@ -1173,8 +1173,8 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
         component_list.emplace_back(BoundaryReconciliationComponent{
             key_list,
             BuildGraphAffectedSampleUnion(partition, key_list),
-            interface_atom_index_list,
             std::move(interface_atom_index_list),
+            {},
             boundary_sample_count
         });
     }

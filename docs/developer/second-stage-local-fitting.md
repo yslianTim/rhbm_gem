@@ -871,10 +871,12 @@ written.
 ## Workspace verification (2026-09-04)
 
 The implementation baseline was the clean revision
-`0b4958998e521809b2a4a4425600b54b58cb751e`. The verified workspace is that
-revision plus the current uncommitted independent-offset, own-model selected
-refit, and chemical-grouping removal changes. Verification used AppleClang 21,
-RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
+`d55d79500372745e5f0c6bf49593a9a184e716cb`. The verified workspace is that
+revision plus the current uncommitted redundancy cleanup in joint-offset/polish
+assembly, proposal/refit preparation, and boundary halo initialization. The
+independent-offset, own-model refit, frozen-background, and persistence contracts
+are unchanged. Verification used AppleClang 21, RelWithDebInfo, system
+dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
 
 - `tests_all` built successfully.
 - `rhbm_tests_core_estimator` and `rhbm_tests_data_runtime` passed.
@@ -882,10 +884,15 @@ RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
   contracts, smoke, and serial/parallel determinism.
 - `lint_all`, including repository lint and install-consumer smoke, passed.
 - The developer-only trust-model experiment ON build passed all 101 second-stage
-  defense cases and all 18 CTest entries. The experiment was restored to OFF,
-  followed by a normal rebuild, focused tests, full CTest, and lint.
-- The source `TEST`/`TEST_F` count remains 729. No test file or case was added;
-  obsolete helper cases were renamed and adapted to production behavior.
+  defense cases, all 18 CTest entries, and lint/install-consumer smoke. The
+  experiment was restored to OFF, followed by a normal rebuild, all 100
+  second-stage defense cases, focused tests, full CTest, and lint.
+- The source `TEST`/`TEST_F` count remains 729; the separate `TEST_P` count remains
+  17. No repository test file or case was added. Existing cases were extended to
+  cover multiple active neighbors and a fixed outside-cluster neighbor, column
+  and neighbor permutations, offset ridge floors (including existing NaN
+  handling), negligible-basis rows, non-finite active/fixed neighbors, and
+  unexpanded boundary components followed by depth-zero halo expansion.
 - Existing cases verify individual ridge anchors, column permutation, own-model
   refits, physical-offset damping, independent polish seed/decode and
   finite-difference Jacobians, partial active sets, atom-local failures,
@@ -899,18 +906,25 @@ RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled UMAP/ROOT:
   deduplication, best-audit rescoring, adaptive partition, final polish/peeling,
   unselected non-persistence, intensity-scale, serial/parallel, and full workflow
   regressions passed.
-- Three single-atom natural controls (`unk-c`, `unk-n`, `unk-o`; level 0,
-  replica 0, seed 410000, one thread, zero noise) matched the clean baseline
-  exactly in models, stopping reasons, and convergence records after normalizing
-  only the expected atom-record schema/group-field change.
+- Eighteen existing fixture configurations were captured before cleanup and
+  compared after cleanup and again after restoring OFF, using the same
+  toolchain. OLS/MDPDE models, uncertainty, peeling, completion/stop records, and
+  convergence evidence matched byte-for-byte; numeric state used hexadecimal
+  floating-point serialization. Configurations covered independent/relabeled/
+  scaled offsets, joint polish, collinearity, rollback, boundary reconciliation
+  and correction, system/local/empty-system failures, shared-cluster and
+  cross-cluster unselected backgrounds, hydrogen handling, and serial/parallel
+  execution. Timing and performance counters were not compared.
 - Reverse searches found no chemical keys, shared-offset merges, group-median
-  refits, group closures, or removed helpers in the second-stage production path.
-  Atom records use schema 2; the analyzer also accepts legacy atom schema 1.
+  refits, group closures, obsolete row aggregation, or removed snapshot aliases
+  in the second-stage production path. Seed decoding, conditioning cross-column
+  statistics, and effective refit assessments retain production callers. Atom
+  records remain schema 2; the analyzer still accepts legacy atom schema 1.
 - `git diff --check` passed. Public headers, fitting options, CLI, database
   schema, selection flags, stage flow, third-stage estimators, and standalone
   empty-selected behavior are unchanged.
 
 The ROOT-disabled build retains existing unrelated painter unused-variable
 warnings; those files were not changed. The paired 600-case corpus was not
-rerun. Historical audit/corpus results are not recertification of this
-algorithm change.
+rerun. The algorithm description above, historical audit documents, and the
+Notion algorithm description were not modified by this cleanup.
