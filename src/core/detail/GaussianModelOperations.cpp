@@ -359,36 +359,6 @@ TransformedChangeSummary SummarizeTransformedChanges(const std::vector<Transform
     return summary;
 }
 
-TransformedChangeSummary SummarizeTransformedChangesByParameter(
-    const std::vector<TransformedChange> & change_list,
-    const TransformedChangeIndexListByParameter & index_list_by_parameter)
-{
-    TransformedChangeSummary summary;
-    for (std::size_t parameter_index = 0;
-        parameter_index < index_list_by_parameter.size(); parameter_index++)
-    {
-        const auto & index_list{
-            index_list_by_parameter.at(parameter_index)
-        };
-        summary.population_size_list.at(parameter_index) = index_list.size();
-        std::vector<double> parameter_change_list;
-        parameter_change_list.reserve(index_list.size());
-        for (const auto index : index_list)
-        {
-            if (index >= change_list.size())
-            {
-                throw std::invalid_argument("Local fitting masked transformed change input is inconsistent.");
-            }
-            parameter_change_list.emplace_back(change_list.at(index).at(parameter_index));
-        }
-        summary.percentile_list.at(parameter_index) =
-            array_helper::ComputePercentile(parameter_change_list, kTransformedChangePercentile);
-        summary.maximum_list.at(parameter_index) =
-            parameter_change_list.empty() ? 0.0 : *std::ranges::max_element(parameter_change_list);
-    }
-    return summary;
-}
-
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
     for (const auto value : summary.percentile_list)

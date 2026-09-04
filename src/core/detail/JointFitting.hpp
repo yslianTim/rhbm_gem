@@ -90,7 +90,8 @@ struct JointOffsetParameterization
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
-        return static_cast<Eigen::Index>(group_position_by_atom.at(atom_position));
+        const auto group{ group_position_by_atom.at(atom_position) };
+        return static_cast<Eigen::Index>(group);
     }
 
     Eigen::VectorXd ExpandOffsets(const Eigen::VectorXd & group_offset) const;
@@ -152,7 +153,8 @@ public:
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
-        return m_offset_column_by_group.at(m_group_position_by_atom.at(atom_position));
+        const auto group{ m_group_position_by_atom.at(atom_position) };
+        return m_offset_column_by_group.at(group);
     }
 
     bool HasOffsetColumn(std::size_t atom_position) const

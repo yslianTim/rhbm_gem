@@ -15,11 +15,6 @@ constexpr double kTransformedChangeTolerance{ 1.0e-4 };
 
 using TransformedChange =
     std::array<double, GaussianModel3D::TransformedCoordinateSize()>;
-using TransformedChangeIndexListByParameter =
-    std::array<
-        std::vector<std::size_t>,
-        GaussianModel3D::TransformedCoordinateSize()>;
-
 bool IsValidSecondStageGaussianModel(const GaussianModel3D & model);
 
 GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
@@ -82,10 +77,6 @@ TransformedChange CalculateTransformedChange(
 
 bool IsTransformedChangeMaterial(const TransformedChange & change, double minimum_change);
 TransformedChangeSummary SummarizeTransformedChanges(const std::vector<TransformedChange> & change_list);
-
-TransformedChangeSummary SummarizeTransformedChangesByParameter(
-    const std::vector<TransformedChange> & change_list,
-    const TransformedChangeIndexListByParameter & index_list_by_parameter);
 
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);

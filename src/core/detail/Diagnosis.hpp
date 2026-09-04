@@ -17,26 +17,16 @@ struct SecondStageSeedSelectionRecord
     GaussianModel3D selected_model{};
 };
 
-struct UnselectedSecondStageSeedSelectionRecord
-{
-    int atom_serial_id{ 0 };
-    GaussianModel3D selected_model{};
-};
-
 bool IsDebugLogLevelEnabled();
 void FinishProgressLine(bool quiet_mode);
 void LogSecondStageStart(bool quiet_mode);
-void LogSecondStageInitializationFailure(
-    bool quiet_mode,
-    SecondStageInitializationFailure failure);
+void LogSecondStageInitializationFailure(bool quiet_mode);
 void LogNoSelectedAtoms(bool quiet_mode);
 
 void LogSecondStageSeedSelections(
     const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
     bool quiet_mode);
-void LogUnselectedSecondStageSeedSelections(
-    const std::vector<UnselectedSecondStageSeedSelectionRecord> & selection_record_list,
-    bool quiet_mode);
+void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode);
 
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 void LogTrustModelShadowDiagnostics(

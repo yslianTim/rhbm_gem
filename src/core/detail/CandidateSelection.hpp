@@ -94,7 +94,6 @@ struct TrustModelShadowDiagnostic
     bool rejected_by_strict_polish{ false };
     bool final_local_candidate{ false };
     bool readiness_eligible{ false };
-    std::size_t unselected_dependency_count{ 0 };
     double elapsed_milliseconds{ 0.0 };
 };
 #endif
@@ -292,6 +291,9 @@ struct ObjectiveTolerance
     double relative_tolerance{ 0.0 };
 };
 
+inline constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+inline constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
+
 struct AuditedState
 {
     ObjectiveBreakdown objective{};
@@ -307,8 +309,6 @@ class CandidateEvaluationOverlay
     const SecondStageContext & m_context;
     const ResidualBaseline & m_baseline;
     const FitStateView & m_candidate_state;
-    std::vector<char> m_changed_group_mask{};
-    std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
 
 public:
     CandidateEvaluationOverlay(
@@ -414,11 +414,20 @@ bool IsAuditObjectiveAcceptableForProgress(
     const ObjectiveBreakdown * best,
     ObjectiveTolerance tolerance);
 
+std::optional<StabilizationTerminalDiagnostic> EvaluateClusterCandidateGuard(
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const SecondStageModelSnapshot & previous_snapshot,
+    const ClusterKey & key,
+    const FitStateView & candidate_state,
+    const SuspiciousBlockActivity & block_activity);
+
 struct ObjectiveClusterDomain
 {
     std::vector<SampleRef> fit_sample_ref_list{};
     std::vector<SampleRef> tail_sample_ref_list{};
     std::optional<ObjectiveScale> scale{};
+    std::size_t selected_atom_count{ 0 };
 };
 
 struct ObjectiveDomain
@@ -476,6 +485,11 @@ bool TryUpdateBestAuditState(
     bool candidate_uses_polish,
     std::size_t source_iteration,
     const ObjectiveBreakdown & candidate_objective,
+    BestAuditState & audit_state);
+
+void ReevaluateBestAuditState(
+    const SecondStageContext & context,
+    const ObjectiveDomain & domain,
     BestAuditState & audit_state);
 
 void ReconcileClusterObjectiveState(
@@ -630,6 +644,8 @@ struct CandidateSelectionInputs
 };
 
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs);
+
+void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, CandidateSelection & selection);
 
 struct FinalDependencyPolishDiagnostic
 {

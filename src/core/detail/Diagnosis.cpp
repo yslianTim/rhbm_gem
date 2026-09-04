@@ -334,26 +334,16 @@ void LogSecondStageStart(bool quiet_mode)
         "Run 2nd-stage local atom fitting with iterations...");
 }
 
-void LogSecondStageInitializationFailure(
-    bool quiet_mode,
-    SecondStageInitializationFailure failure)
+void LogSecondStageInitializationFailure(bool quiet_mode)
 {
-    if (quiet_mode || failure == SecondStageInitializationFailure::None) return;
-    const auto unselected_seed_failure{
-        failure == SecondStageInitializationFailure::UnselectedSeedUnavailable
-    };
+    if (quiet_mode) return;
     Logger::Log(LogLevel::Warning,
-        unselected_seed_failure ?
-            "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
-            "is available for every unselected neighbor atom." :
-            "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
-            "is available for every selected atom.");
+        "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
+        "is available for every selected atom.");
     Logger::Log(LogLevel::Info,
         "Second-stage local fitting summary: accepted_iterations=0, "
-        "best_iteration=unavailable, stop_reason=" +
-        std::string(unselected_seed_failure ?
-            "no-valid-unselected-neighbor-seed" : "no-valid-seed") +
-        ", best_audit_objective=unavailable, final_uses_polish=unavailable, "
+        "best_iteration=unavailable, stop_reason=no-valid-seed, "
+        "best_audit_objective=unavailable, final_uses_polish=unavailable, "
         "final_state_source=unavailable.");
 }
 
@@ -413,31 +403,22 @@ void LogSecondStageSeedSelections(
     }
 }
 
-void LogUnselectedSecondStageSeedSelections(
-    const std::vector<UnselectedSecondStageSeedSelectionRecord> & selection_record_list,
-    bool quiet_mode)
+void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode)
 {
-    if (quiet_mode || selection_record_list.empty()) return;
-
-    std::ostringstream summary;
-    summary << "Unselected second-stage neighbor seeds = "
-        << selection_record_list.size()
-        << ", source = global-median:" << selection_record_list.size() << ".";
-    Logger::Log(LogLevel::Info, summary.str());
-
-    for (const auto & record : selection_record_list)
+    if (quiet_mode || !IsDebugLogLevelEnabled() || !context.frozen_background) return;
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        std::ostringstream detail_message;
-        detail_message
-            << "Unselected second-stage neighbor seed selection: serial ID = "
-            << record.atom_serial_id
-            << ", source = global-median"
-            << std::scientific << std::setprecision(2)
-            << ", seed A/B/C = "
-            << record.selected_model.GetAmplitude() << "/"
-            << record.selected_model.GetWidth() << "/"
-            << record.selected_model.GetOffset() << ".";
-        Logger::Log(LogLevel::Debug, detail_message.str());
+        const auto & atom{ context.at(atom_index) };
+        const auto affected_samples{ std::ranges::count_if(atom.unselected_distance_list_by_sample,
+            [](const auto & contributors) { return !contributors.empty(); }) };
+        if (affected_samples == 0) continue;
+        const auto & model{ context.frozen_background->model_by_atom.at(atom_index) };
+        std::ostringstream message;
+        message << std::scientific << std::setprecision(17)
+            << "Second-stage frozen background: target=" << atom.atom->GetSerialID()
+            << ", A/W/C=" << model.GetAmplitude() << "/" << model.GetWidth() << "/" << model.GetOffset()
+            << ", samples=" << affected_samples << ".";
+        Logger::Log(LogLevel::Debug, message.str());
     }
 }
 
@@ -586,8 +567,7 @@ void LogTrustModelShadowDiagnostics(
                 }
                 message
                     << ", objective-backtracked=" << diagnostic.objective_backtracked
-                    << ", unselected-dependencies="
-                    << diagnostic.unselected_dependency_count
+                    << ", unselected-dependencies=0"
                     << ", elapsed-ms=" << diagnostic.elapsed_milliseconds;
                 Logger::Log(LogLevel::Debug, message.str());
             }
@@ -1209,8 +1189,8 @@ void LogAdaptiveTopologyRebuild(
         << added_edge_count << "/" << removed_edge_count
         << ", partition_changed="
         << (partition_changed ? "yes" : "no")
-        << ", objective_domain_reset="
-        << (partition_changed ? "yes" : "no") << ".";
+        << ", partition_pending=" << (partition_changed ? "yes" : "no")
+        << ", objective_domain_reset=no.";
     Logger::Log(LogLevel::Info, message.str());
 }
 

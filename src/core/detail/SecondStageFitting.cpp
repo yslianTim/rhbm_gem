@@ -12,15 +12,21 @@ namespace {
 
 double CalculateSecondStageAdjustedResponse(
     const AtomContext & atom_context,
-    std::size_t sample_index,
+    const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {
+    const auto sample_index{ sample_ref.sample_index };
     auto response_value{ atom_context.raw_sampling_entries.at(sample_index).response };
+    if (model_snapshot.frozen_background)
+    {
+        response_value -= model_snapshot.frozen_background->response_by_atom
+            .at(sample_ref.atom_index).at(sample_index);
+    }
     for (const auto & neighbor_atom_sample : atom_context.Neighbors(sample_index))
     {
-        response_value -= ResolveNeighborAtomModel(
-            neighbor_atom_sample,
-            model_snapshot).ResponseAtDistance(neighbor_atom_sample.distance);
+        response_value -= GetFitModel(
+            model_snapshot.node,
+            neighbor_atom_sample.atom_index).ResponseAtDistance(neighbor_atom_sample.distance);
     }
     return response_value;
 }
@@ -67,44 +73,59 @@ TransformedChangeSummary SummarizeTransformedChangesImpl(
     return SummarizeTransformedChanges(change_list);
 }
 
-FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
-    const SecondStageContext & context,
-    const FittedGaussianSnapshot & selected_snapshot)
-{
-    std::vector<std::optional<GaussianModel3D>> median_model_by_group;
-    median_model_by_group.reserve(context.selected_atom_index_list_by_group.size());
-    std::vector<GaussianModel3D> model_list;
-    for (const auto & atom_index_list : context.selected_atom_index_list_by_group)
-    {
-        model_list.clear();
-        model_list.reserve(atom_index_list.size());
-        for (const auto atom_index : atom_index_list)
-        {
-            model_list.emplace_back(GetFitModel(selected_snapshot, atom_index));
-        }
-        median_model_by_group.emplace_back(BuildGaussianParameterMedian(model_list));
-    }
+} // namespace
 
-    FittedGaussianSnapshot snapshot;
-    snapshot.reserve(context.unselected_atom_list.size());
-    for (const auto & contributor : context.unselected_atom_list)
+std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
+    const SecondStageContext & context,
+    const FitState & state,
+    const std::vector<ClusterKey> & cluster_key_list)
+{
+    if (state.size() != context.size()) return nullptr;
+    auto background{ std::make_shared<FrozenBackground>() };
+    background->model_by_atom.resize(context.size());
+    background->response_by_atom.resize(context.size());
+    std::vector<char> visited(context.size(), 0);
+    for (const auto & key : cluster_key_list)
     {
-        if (contributor.selected_group_id.has_value() &&
-            median_model_by_group.at(*contributor.selected_group_id).has_value())
+        std::vector<GaussianModel3D> models;
+        for (const auto atom_index : key)
         {
-            snapshot.emplace_back(*median_model_by_group.at(*contributor.selected_group_id));
-            continue;
+            if (atom_index >= state.size() || visited.at(atom_index) != 0) return nullptr;
+            visited.at(atom_index) = 1;
+            const auto & model{ state.at(atom_index).mdpde.GetModel() };
+            if (!IsValidSecondStageGaussianModel(model)) return nullptr;
+            models.emplace_back(model);
         }
-        if (!IsValidSecondStageGaussianModel(contributor.initial_seed))
+        const auto median{ BuildGaussianParameterMedian(models) };
+        if (!median.has_value()) return nullptr;
+        for (const auto atom_index : key)
         {
-            throw std::logic_error("Second-stage unselected contributor seed is unavailable.");
+            background->model_by_atom.at(atom_index) = *median;
+            const auto & atom_context{ context.at(atom_index) };
+            auto & responses{ background->response_by_atom.at(atom_index) };
+            responses.assign(atom_context.raw_sampling_entries.size(), 0.0);
+            if (atom_context.unselected_distance_list_by_sample.empty()) continue;
+            if (atom_context.unselected_distance_list_by_sample.size() != responses.size()) return nullptr;
+            for (std::size_t sample_index = 0; sample_index < responses.size(); sample_index++)
+            {
+                for (const auto distance : atom_context.unselected_distance_list_by_sample.at(sample_index))
+                {
+                    responses.at(sample_index) += median->ResponseAtDistance(distance);
+                }
+                if (!std::isfinite(responses.at(sample_index))) return nullptr;
+            }
         }
-        snapshot.emplace_back(contributor.initial_seed);
     }
-    return snapshot;
+    if (std::ranges::find(visited, 0) != visited.end()) return nullptr;
+    return background;
 }
 
-} // namespace
+double GetFrozenBackgroundResponse(const SecondStageContext & context, const SampleRef & sample_ref)
+{
+    return context.frozen_background ?
+        context.frozen_background->response_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) :
+        0.0;
+}
 
 FitStatePatch FitStatePatch::FromState(const FitState & state, ClusterKey atom_index_list)
 {
@@ -172,30 +193,15 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state)
     return BuildFittedGaussianSnapshotImpl(state);
 }
 
-const GaussianModel3D & ResolveNeighborAtomModel(
-    const NeighborAtomSample & neighbor_atom_sample,
-    const SecondStageModelSnapshot & model_snapshot)
-{
-    return neighbor_atom_sample.is_selected ?
-        GetFitModel(model_snapshot.selected, neighbor_atom_sample.atom_index) :
-        GetFitModel(model_snapshot.unselected, neighbor_atom_sample.atom_index);
-}
-
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
-    FittedGaussianSnapshot selected_snapshot)
+    FittedGaussianSnapshot node_snapshot)
 {
-    if (selected_snapshot.size() != context.size())
+    if (node_snapshot.size() != context.size())
     {
-        throw std::invalid_argument("Second-stage selected contributor snapshot size is inconsistent.");
+        throw std::invalid_argument("Second-stage node snapshot size is inconsistent.");
     }
-    auto unselected_snapshot{
-        BuildUnselectedAtomContributorSnapshot(context, selected_snapshot)
-    };
-    return SecondStageModelSnapshot{
-        std::move(selected_snapshot),
-        std::move(unselected_snapshot)
-    };
+    return SecondStageModelSnapshot{ std::move(node_snapshot), context.frozen_background };
 }
 
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
@@ -219,7 +225,7 @@ SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
         for (std::size_t j = 0; j < sample_count; j++)
         {
             response_list.emplace_back(
-                CalculateSecondStageAdjustedResponse(atom_context, j, model_snapshot));
+                CalculateSecondStageAdjustedResponse(atom_context, SampleRef{ i, j }, model_snapshot));
         }
     }
     return cache;
@@ -242,14 +248,16 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
 }
 
 LocalPotentialSampleList BuildSecondStageAdjustedSamples(
-    const AtomContext & atom_context,
+    const SecondStageContext & context,
+    std::size_t atom_index,
     const SecondStageModelSnapshot & model_snapshot)
 {
+    const auto & atom_context{ context.at(atom_index) };
     return BuildSecondStageAdjustedSamplesImpl(
         atom_context,
         [&](std::size_t sample_index)
         {
-            return CalculateSecondStageAdjustedResponse(atom_context, sample_index, model_snapshot);
+            return CalculateSecondStageAdjustedResponse(atom_context, SampleRef{ atom_index, sample_index }, model_snapshot);
         });
 }
 
@@ -265,12 +273,12 @@ std::optional<ResidualSample> EvaluateResidualSample(
     const auto adjusted_response{
         CalculateSecondStageAdjustedResponse(
             atom_context,
-            sample_ref.sample_index,
+            sample_ref,
             model_snapshot)
     };
     const auto expected_response{
         GetFitModel(
-            model_snapshot.selected,
+            model_snapshot.node,
             sample_ref.atom_index).ResponseAtDistance(sample.point.distance)
     };
     const auto residual{ adjusted_response - expected_response };
@@ -314,27 +322,6 @@ TransformedChangeSummary SummarizeTransformedChanges(
     const std::vector<std::size_t> & index_list)
 {
     return SummarizeTransformedChangesImpl(current_state, previous_state, index_list);
-}
-
-TransformedChangeSummary SummarizeTransformedChangesByParameter(
-    const FitState & current_state,
-    const FitState & previous_state,
-    const TransformedChangeIndexListByParameter & index_list_by_parameter)
-{
-    if (current_state.size() != previous_state.size())
-    {
-        throw std::invalid_argument(
-            "Local fitting masked transformed change state sizes are inconsistent.");
-    }
-    std::vector<TransformedChange> change_list;
-    change_list.reserve(current_state.size());
-    for (std::size_t i = 0; i < current_state.size(); i++)
-    {
-        change_list.emplace_back(CalculateTransformedChange(
-            GetFitModel(current_state, i),
-            GetFitModel(previous_state, i)));
-    }
-    return SummarizeTransformedChangesByParameter(change_list, index_list_by_parameter);
 }
 
 } // namespace rhbm_gem::core::detail

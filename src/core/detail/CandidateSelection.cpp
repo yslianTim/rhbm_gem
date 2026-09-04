@@ -45,8 +45,6 @@ constexpr double kFitRangeWeight{ 1.0 };
 constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
 constexpr double kOffsetPeakRatioMax{ 1.0 };
 constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
-constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
-constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 constexpr double kTrustRegionInitialRadius{ 1.0 };
 constexpr double kTrustRegionMinimumRadius{ 0.0625 };
 constexpr double kTrustRegionMaximumRadius{ 4.0 };
@@ -125,7 +123,9 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
                 kObjectiveRobustLossCutoffMultiplier)
         };
         const auto coefficient{
-            CalculateClusterAtomWeight(owner_key.size(), domain.active_atom_count) /
+            CalculateClusterAtomWeight(
+                owner_iter->second.selected_atom_count,
+                domain.active_atom_count) /
             static_cast<double>(sample_count)
         };
         if (is_fit_range)
@@ -638,29 +638,8 @@ CandidateEvaluationOverlay::CandidateEvaluationOverlay(
     const FitStateView & candidate_state)
     : m_context{ context },
       m_baseline{ baseline },
-      m_candidate_state{ candidate_state },
-      m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
-      m_changed_group_median(context.selected_atom_index_list_by_group.size())
+      m_candidate_state{ candidate_state }
 {
-    for (const auto atom_index : m_candidate_state.GetOverrideAtomIndexList())
-    {
-        m_changed_group_mask.at(m_context.at(atom_index).group_id) = 1;
-    }
-    std::vector<GaussianModel3D> model_list;
-    for (std::size_t group_id = 0; group_id < m_changed_group_mask.size(); group_id++)
-    {
-        if (m_changed_group_mask.at(group_id) == 0) continue;
-        const auto & atom_index_list{
-            m_context.selected_atom_index_list_by_group.at(group_id)
-        };
-        model_list.clear();
-        model_list.reserve(atom_index_list.size());
-        for (const auto atom_index : atom_index_list)
-        {
-            model_list.emplace_back(m_candidate_state.GetModel(atom_index));
-        }
-        m_changed_group_median.at(group_id) = BuildGaussianParameterMedian(model_list);
-    }
 }
 
 std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(const SampleRef & sample_ref) const
@@ -677,47 +656,18 @@ std::optional<ResidualSample> CandidateEvaluationOverlay::operator()(const Sampl
     for (const auto & neighbor_atom_sample :
         atom_context.Neighbors(sample_ref.sample_index))
     {
-        const GaussianModel3D * candidate_model{ nullptr };
-        const GaussianModel3D * baseline_model{ nullptr };
-        if (neighbor_atom_sample.is_selected)
+        if (m_candidate_state.FindOverride(neighbor_atom_sample.atom_index) == nullptr)
         {
-            if (m_candidate_state.FindOverride(neighbor_atom_sample.atom_index) == nullptr)
-            {
-                continue;
-            }
-            baseline_model = &GetFitModel(
-                m_baseline.model_snapshot.selected,
-                neighbor_atom_sample.atom_index);
-            candidate_model = &m_candidate_state.GetModel(neighbor_atom_sample.atom_index);
-        }
-        else
-        {
-            const auto & unselected_atom_contributor{
-                m_context.unselected_atom_list.at(neighbor_atom_sample.atom_index)
-            };
-            if (!unselected_atom_contributor.selected_group_id.has_value() ||
-                m_changed_group_mask.at(*unselected_atom_contributor.selected_group_id) == 0)
-            {
-                continue;
-            }
-            baseline_model = &GetFitModel(
-                m_baseline.model_snapshot.unselected,
-                neighbor_atom_sample.atom_index);
-            const auto & median{
-                m_changed_group_median.at(*unselected_atom_contributor.selected_group_id)
-            };
-            if (median.has_value())
-            {
-                candidate_model = &*median;
-            }
-            else
-            {
-                candidate_model = &unselected_atom_contributor.initial_seed;
-            }
+            continue;
         }
         adjusted_response +=
-            baseline_model->ResponseAtDistance(neighbor_atom_sample.distance) -
-            candidate_model->ResponseAtDistance(neighbor_atom_sample.distance);
+            GetFitModel(
+                m_baseline.model_snapshot.node,
+                neighbor_atom_sample.atom_index).ResponseAtDistance(
+                    neighbor_atom_sample.distance) -
+            m_candidate_state.GetModel(
+                neighbor_atom_sample.atom_index).ResponseAtDistance(
+                    neighbor_atom_sample.distance);
     }
     const auto expected_response{
         m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
@@ -1447,7 +1397,8 @@ ObjectiveDomain BuildObjectiveDomain(
     for (const auto & key : cluster_key_list)
     {
         auto & cluster_domain{ domain.cluster_by_key[key] };
-        domain.active_atom_count += key.size();
+        cluster_domain.selected_atom_count = key.size();
+        domain.active_atom_count += cluster_domain.selected_atom_count;
         std::vector<double> fit_residual_list;
         std::vector<double> fit_response_list;
         std::vector<double> tail_residual_list;
@@ -1566,7 +1517,8 @@ BacktrackingWorkspace::BacktrackingWorkspace(
         atom_position++)
     {
         const auto atom_index{ m_candidate_patch.atom_index_list.at(atom_position) };
-        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
+        group_id_by_atom_position.emplace_back(
+            context.at(atom_index).group_id);
         m_previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
         const auto & endpoint_mdpde{
             m_candidate_patch.mdpde_list.at(atom_position)
@@ -1675,6 +1627,18 @@ bool TryUpdateBestAuditState(
     return true;
 }
 
+void ReevaluateBestAuditState(
+    const SecondStageContext & context,
+    const ObjectiveDomain & domain,
+    BestAuditState & audit_state)
+{
+    if (!audit_state.has_value()) return;
+    const auto snapshot{ BuildSecondStageModelSnapshot(context, audit_state->state) };
+    const auto objective{ EvaluateAuditObjective(domain, SnapshotResidualEvaluator{ context, snapshot }) };
+    if (objective.has_value()) audit_state->objective = *objective;
+    else audit_state.reset();
+}
+
 void ReconcileClusterObjectiveState(
     const ObjectiveByKey & previous_objective_by_key,
     ClusterObjectiveStateMap & state_by_key)
@@ -1715,7 +1679,7 @@ static bool TryCommitClusterCandidate(
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
             candidate_overlay.GetState(),
-            candidate_overlay.GetBaseline().model_snapshot.selected,
+            candidate_overlay.GetBaseline().model_snapshot.node,
             key)
     };
     const auto maximum_transformed_change{ std::ranges::max(transformed_change_summary.maximum_list) };
@@ -1820,12 +1784,14 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
     {
         if (!block_activity.HasActiveOffset(atom_index))
         {
-            inactive_offset_group_id_set.emplace(context.at(atom_index).group_id);
+            inactive_offset_group_id_set.emplace(
+                context.at(atom_index).group_id);
         }
     }
     for (const auto atom_index : key)
     {
-        group_id_by_atom_position.emplace_back(context.at(atom_index).group_id);
+        group_id_by_atom_position.emplace_back(
+            context.at(atom_index).group_id);
         const auto & previous_model{
             outer_previous_state.at(atom_index).mdpde.GetModel()
         };
@@ -1836,39 +1802,21 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
         {
             operator_model = previous_model.WithOffset(operator_model.GetOffset());
         }
-        if (inactive_offset_group_id_set.contains(context.at(atom_index).group_id))
+        if (inactive_offset_group_id_set.contains(
+                context.at(atom_index).group_id))
         {
             operator_model = operator_model.WithOffset(previous_model.GetOffset());
         }
         previous_model_list.emplace_back(previous_model);
         raw_model_list.emplace_back(operator_model);
     }
-    const auto previous_shared_offset_list{
+    auto previous_shared_offset_list{
         BuildGroupMedianOffsetList(group_id_by_atom_position, previous_model_list)
     };
-    const auto raw_shared_offset_list{
+    auto raw_shared_offset_list{
         BuildGroupMedianOffsetList(group_id_by_atom_position, raw_model_list)
     };
 
-    const auto seed_model_list{
-        BuildSharedOffsetDampedModelList(
-            previous_model_list,
-            raw_model_list,
-            previous_shared_offset_list,
-            raw_shared_offset_list,
-            0.0)
-    };
-    if (!seed_model_list.has_value())
-    {
-        return std::nullopt;
-    }
-    const auto seed_step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, *seed_model_list)
-    };
-    if (!seed_step_norm.has_value())
-    {
-        return std::nullopt;
-    }
     const auto candidate_model_list{
         BuildSharedOffsetDampedModelList(
             previous_model_list,
@@ -1881,17 +1829,9 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
     {
         return std::nullopt;
     }
-    const auto step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list)
-    };
-    if (!step_norm.has_value())
-    {
-        return std::nullopt;
-    }
     FitStateProposal proposal{
         .patch{ .atom_index_list = key },
-        .effective_damping = factor,
-        .step_norm = *step_norm
+        .effective_damping = factor
     };
     proposal.patch.mdpde_list.reserve(key.size());
     for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
@@ -1904,6 +1844,9 @@ static std::optional<FitStateProposal> BuildSharedOffsetProposal(
                     .GetStandardDeviationModel()
             });
     }
+    const auto step_norm{ CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list) };
+    if (!step_norm.has_value()) return std::nullopt;
+    proposal.step_norm = *step_norm;
     return proposal;
 }
 
@@ -2121,7 +2064,6 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     }
 
     double predicted_residual_reduction{ 0.0 };
-    std::set<std::size_t> changed_unselected_dependency_set;
     for (const auto & sample_ref : objective_sample_ref_list)
     {
         const auto & owner_key{
@@ -2159,8 +2101,8 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         const auto & atom_context{ context.at(sample_ref.atom_index) };
         const auto target_direction{
             EvaluateTrustModelResponseDirection(
-                residual_baseline.model_snapshot.selected.at(sample_ref.atom_index),
-                candidate_snapshot.selected.at(sample_ref.atom_index),
+                residual_baseline.model_snapshot.node.at(sample_ref.atom_index),
+                candidate_snapshot.node.at(sample_ref.atom_index),
                 atom_context.raw_sampling_entries.at(sample_ref.sample_index)
                     .point.distance)
         };
@@ -2174,10 +2116,10 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         for (const auto & neighbor : atom_context.Neighbors(sample_ref.sample_index))
         {
             const auto & previous_neighbor{
-                ResolveNeighborAtomModel(neighbor, residual_baseline.model_snapshot)
+                GetFitModel(residual_baseline.model_snapshot.node, neighbor.atom_index)
             };
             const auto & candidate_neighbor{
-                ResolveNeighborAtomModel(neighbor, candidate_snapshot)
+                GetFitModel(candidate_snapshot.node, neighbor.atom_index)
             };
             const auto neighbor_direction{
                 EvaluateTrustModelResponseDirection(
@@ -2192,10 +2134,6 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
                 return result;
             }
             residual_direction -= *neighbor_direction;
-            if (!neighbor.is_selected && *neighbor_direction != 0.0)
-            {
-                changed_unselected_dependency_set.emplace(neighbor.atom_index);
-            }
         }
         const auto linearized_residual{
             previous_residual->residual + residual_direction
@@ -2207,7 +2145,9 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
                 kObjectiveRobustLossCutoffMultiplier)
         };
         const auto coefficient{
-            CalculateClusterAtomWeight(owner_key.size(), objective_domain.active_atom_count) /
+            CalculateClusterAtomWeight(
+                owner_iter->second.selected_atom_count,
+                objective_domain.active_atom_count) /
             static_cast<double>(sample_count)
         };
         const auto range_weight{ is_fit_range ? kFitRangeWeight : kTailValidationWeight };
@@ -2226,7 +2166,6 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         }
         predicted_residual_reduction += contribution;
     }
-    result.unselected_dependency_count = changed_unselected_dependency_set.size();
     result.predicted_residual_reduction = predicted_residual_reduction;
     result.predicted_penalty_reduction =
         previous_objective->offset_plausibility_penalty -
@@ -2272,37 +2211,40 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
 }
 #endif
 
-static std::optional<StabilizationTerminalDiagnostic>
+std::optional<StabilizationTerminalDiagnostic>
 EvaluateClusterCandidateGuard(
-    const CandidateSelectionInputs & inputs,
+    const SecondStageContext & context,
+    const FitOptions & options,
+    const SecondStageModelSnapshot & previous_snapshot,
     const ClusterKey & key,
     const FitStateView & candidate_state,
     const SuspiciousBlockActivity & block_activity)
 {
-    const auto & previous_snapshot{ inputs.residual_baseline.model_snapshot };
     const auto candidate_snapshot{
         BuildSecondStageModelSnapshot(
-            inputs.context,
+            context,
             BuildFittedGaussianSnapshot(candidate_state))
     };
     for (const auto atom_index : key)
     {
-        const auto & atom_context{ inputs.context.at(atom_index) };
+        const auto & atom_context{ context.at(atom_index) };
         const auto & previous_model{
-            inputs.previous_state.at(atom_index).mdpde.GetModel()
+            previous_snapshot.node.at(atom_index)
         };
         const auto & candidate_model{ candidate_state.GetModel(atom_index) };
+        if (!IsValidSecondStageGaussianModel(candidate_model))
+            return StabilizationTerminalDiagnostic{ StabilizationTerminalReason::InvalidCandidate };
         if (block_activity.HasActiveOffset(atom_index))
         {
             const auto offset_assessment{
                 AssessSuspiciousGaussianUpdate(
                     atom_context.raw_sampling_entries,
                     candidate_model,
-                    inputs.options,
+                    options,
                     BuildPreviousSuspiciousProfileBaseline(
                         atom_context.raw_sampling_entries,
                         previous_model,
-                        inputs.options),
+                        options),
                     SuspiciousUpdateMode::OffsetOnly)
             };
             if (offset_assessment.IsSuspicious())
@@ -2317,20 +2259,20 @@ EvaluateClusterCandidateGuard(
         }
         if (!block_activity.HasActiveShape(atom_index)) continue;
         const auto previous_samples{
-            BuildSecondStageAdjustedSamples(atom_context, previous_snapshot)
+            BuildSecondStageAdjustedSamples(context, atom_index, previous_snapshot)
         };
         const auto candidate_samples{
-            BuildSecondStageAdjustedSamples(atom_context, candidate_snapshot)
+            BuildSecondStageAdjustedSamples(context, atom_index, candidate_snapshot)
         };
         const auto shape_assessment{
             AssessSuspiciousGaussianUpdate(
                 candidate_samples,
                 candidate_model,
-                inputs.options,
+                options,
                 BuildPreviousSuspiciousProfileBaseline(
                     previous_samples,
                     previous_model,
-                    inputs.options),
+                    options),
                 SuspiciousUpdateMode::PostRefit)
         };
         if (shape_assessment.IsSuspicious())
@@ -2456,7 +2398,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 [&](const auto atom_index)
                 {
                     return search_block_activity.HasActiveShape(atom_index) ||
-                        search_block_activity.HasActiveOffset(atom_index);
+                        (search_block_activity.HasActiveOffset(atom_index));
                 })
         };
         if (!has_active_parameter)
@@ -2506,7 +2448,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 std::ranges::max(
                     SummarizeTransformedChanges(
                         candidate_state_view,
-                        residual_baseline.model_snapshot.selected,
+                        residual_baseline.model_snapshot.node,
                         key).maximum_list)
             };
             if (maximum_change < kTransformedChangeTolerance)
@@ -2536,7 +2478,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
             const auto guard_failure{
                 EvaluateClusterCandidateGuard(
-                    inputs,
+                    context,
+                    inputs.options,
+                    residual_baseline.model_snapshot,
                     key,
                     candidate_state_view,
                     search_block_activity)
@@ -2625,11 +2569,20 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.diagnostic.guard_rejected_trial_count != 0 &&
             last_guard_failure.has_value())
         {
+            if (!last_guard_failure->guard_atom_index.has_value() ||
+                !last_guard_failure->guard_mode.has_value())
+            {
+                terminal_diagnostic_list.emplace_back(*last_guard_failure);
+                result.diagnostic.terminal_diagnostic_list = std::move(terminal_diagnostic_list);
+                return result;
+            }
             const auto atom_index{ *last_guard_failure->guard_atom_index };
             const auto mode{ *last_guard_failure->guard_mode };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
-                const auto group_id{ context.at(atom_index).group_id };
+                const auto group_id{
+                    context.at(atom_index).group_id
+                };
                 for (const auto member_index : key)
                 {
                     if (context.at(member_index).group_id != group_id) continue;
@@ -2906,7 +2859,7 @@ EvaluateBoundaryComponentCandidate(
                     std::ranges::max(
                         SummarizeTransformedChanges(
                             candidate_overlay.GetState(),
-                            candidate_overlay.GetBaseline().model_snapshot.selected,
+                            candidate_overlay.GetBaseline().model_snapshot.node,
                             key).maximum_list);
             }
         }
@@ -3005,14 +2958,10 @@ static std::size_t CountSuspiciousPolishAtoms(
             continue;
         }
         const auto endpoint_samples{
-            BuildSecondStageAdjustedSamples(
-                context.at(atom_index),
-                endpoint_snapshot)
+            BuildSecondStageAdjustedSamples(context, atom_index, endpoint_snapshot)
         };
         const auto candidate_samples{
-            BuildSecondStageAdjustedSamples(
-                context.at(atom_index),
-                candidate_snapshot)
+            BuildSecondStageAdjustedSamples(context, atom_index, candidate_snapshot)
         };
         const auto baseline{
             BuildPreviousSuspiciousProfileBaseline(
@@ -3824,6 +3773,47 @@ static void AuditAndSalvageFinalSelection(
     selection.final_audit_objective.reset();
 }
 
+void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, CandidateSelection & selection)
+{
+    auto working_objective_state{ inputs.cluster_objective_state };
+    const auto accepted_keys{ selection.accepted_key_list };
+    for (const auto & key : accepted_keys)
+    {
+        auto patch{ FitStatePatch::FromState(selection.assembled_state, key) };
+        const FitStateView view{ inputs.previous_state, patch };
+        std::vector<GaussianModel3D> previous_models;
+        std::vector<GaussianModel3D> candidate_models;
+        for (const auto node : key)
+        {
+            previous_models.emplace_back(inputs.previous_state.at(node).mdpde.GetModel());
+            candidate_models.emplace_back(view.GetModel(node));
+        }
+        const auto norm{ CalculateModelTrustRegionStepNorm(previous_models, candidate_models) };
+        bool safe{ norm.has_value() && IsTrustRegionStepWithinRadius(*norm, inputs.trust_region_state.GetRadius(key)) &&
+            !EvaluateClusterCandidateGuard(inputs.context, inputs.options, inputs.residual_baseline.model_snapshot,
+                key, view, inputs.block_activity).has_value() };
+        if (safe)
+        {
+            ObjectiveAttemptDiagnostic diagnostic;
+            const auto & previous{ inputs.previous_objective_by_key.at(key) };
+            safe = TryCommitClusterCandidate(CandidateEvaluationOverlay{ inputs.context, inputs.residual_baseline, view },
+                key, inputs.partition.sample_id_list_by_key.at(key), previous.has_value() ? &*previous : nullptr,
+                false, inputs.objective_domain, working_objective_state.at(key), diagnostic, inputs.performance_counters);
+        }
+        if (safe) patch.ApplyTo(selection.assembled_state);
+        else RejectSelectionKeys(inputs, { key }, false, working_objective_state, selection);
+    }
+    const auto previous_audit{ EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline) };
+    if (previous_audit.has_value())
+        AuditAndSalvageFinalSelection(inputs, *previous_audit, working_objective_state, selection);
+    else
+    {
+        const auto remaining_keys{ selection.accepted_key_list };
+        RejectSelectionKeys(inputs, remaining_keys, false, working_objective_state, selection);
+    }
+    inputs.cluster_objective_state = std::move(working_objective_state);
+}
+
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 static void FinalizeTrustModelShadowDisposition(CandidateSelection & selection)
 {
@@ -3941,7 +3931,9 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             const auto mode{ *terminal_diagnostic.guard_mode };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
-                const auto group_id{ inputs.context.at(atom_index).group_id };
+                const auto group_id{
+                    inputs.context.at(atom_index).group_id
+                };
                 for (const auto member_index : key)
                 {
                     if (inputs.context.at(member_index).group_id == group_id)

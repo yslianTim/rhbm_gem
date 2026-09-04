@@ -28,13 +28,6 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
     const GaussianModel3DWithUncertainty & local_mdpde,
     const std::optional<GaussianModel3D> & global_median);
 
-enum class SecondStageInitializationFailure
-{
-    None,
-    SelectedSeedUnavailable,
-    UnselectedSeedUnavailable
-};
-
 enum class SecondStageStopReason
 {
     None,
@@ -92,7 +85,7 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
 
 struct ActiveCoordinatePopulation
 {
-    TransformedChangeIndexListByParameter active_atom_index_list_by_parameter{};
+    std::vector<std::size_t> active_shape_atom_index_list{};
     std::vector<ClusterKey> active_offset_group_atom_index_list{};
     std::vector<char> mixed_offset_group_mask{};
 };

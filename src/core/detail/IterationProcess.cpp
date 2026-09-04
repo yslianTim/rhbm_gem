@@ -6,6 +6,7 @@
 #include "data/detail/AtomClassifier.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -90,11 +91,6 @@ struct SecondStageInitializationResult
     FitState state{};
     std::vector<int> neighbor_count_list{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
-    std::vector<UnselectedSecondStageSeedSelectionRecord>
-        unselected_selection_record_list{};
-    SecondStageInitializationFailure failure{
-        SecondStageInitializationFailure::None
-    };
 };
 
 struct QuarantineState
@@ -140,6 +136,12 @@ private:
     std::size_t m_atom_count{ 0 };
 };
 
+struct PendingTopology
+{
+    GraphTopology topology{};
+    CouplingGraphPartition partition{};
+};
+
 struct IterationState
 {
     FitState previous_state{};
@@ -148,6 +150,7 @@ struct IterationState
     SuspiciousUpdateMask rollback_atom_mask{};
     std::vector<std::size_t> active_index_list{};
     CouplingGraphPartition graph_partition{};
+    std::optional<PendingTopology> pending_topology{};
     ClusterSolverWorkspaceMap solver_workspace_by_key{};
     BoundaryJointCorrectionWorkspaceMap boundary_joint_correction_workspace_by_key{};
     ObjectiveDomain objective_domain{};
@@ -276,7 +279,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
     return result;
 }
 
-static SecondStageInitializationResult BuildSecondStageInitialization(
+static std::optional<SecondStageInitializationResult> BuildSecondStageInitialization(
     const ModelObject & model_object,
     const FitOptions & options)
 {
@@ -285,22 +288,24 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
     auto & state{ build_result.state };
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    context.selected_atom_list.reserve(atom_list.size());
+    context.atom_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        context.selected_atom_list.emplace_back(AtomContext{ atom });
+        context.atom_list.emplace_back(AtomContext{ atom });
     }
     state.resize(context.size());
 
-    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key;
-    selected_group_id_by_key.reserve(context.size());
+    std::unordered_map<GroupKey, std::size_t> selected_group_index_by_key;
+    selected_group_index_by_key.reserve(context.size());
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
     atom_index_map.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
     {
         atom_index_map.emplace(context.at(i).atom, i);
     }
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
@@ -314,21 +319,43 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             options.distance_min,
             options.distance_max
         };
-        auto [group_iter, inserted]{
-            selected_group_id_by_key.emplace(group_key, context.selected_atom_index_list_by_group.size())
-        };
-        if (inserted)
-        {
-            context.selected_atom_index_list_by_group.emplace_back();
-        }
-        atom_context.group_id = group_iter->second;
-        context.selected_atom_index_list_by_group.at(atom_context.group_id).emplace_back(atom_index);
+        atom_context.group_id = selected_group_index_by_key.try_emplace(
+            group_key, selected_group_index_by_key.size()).first->second;
     }
 
-    std::unordered_map<const AtomObject *, std::size_t> unselected_atom_index_map;
-    std::vector<int> unselected_atom_serial_id_list;
+    std::vector<GaussianModel3D> global_models;
+    global_models.reserve(context.size());
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
+    {
+        global_models.emplace_back(state.at(atom_index).mdpde.GetModel());
+    }
+    const auto global_median{ BuildGaussianParameterMedian(global_models) };
+
+    for (std::size_t i = 0; i < context.size(); i++)
+    {
+        auto & result{ state.at(i) };
+        const auto original_model{ result.mdpde.GetModel() };
+        const auto selection{ SelectSecondStageSeed(result.mdpde, global_median) };
+        if (!selection.has_value())
+        {
+            return std::nullopt;
+        }
+
+        result.mdpde = selection->model;
+        build_result.selection_record_list.emplace_back(
+            SecondStageSeedSelectionRecord{
+                selection->source,
+                original_model,
+                selection->model.GetModel()
+            });
+    }
+
     build_result.neighbor_count_list.reserve(context.size());
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
@@ -336,6 +363,7 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             atom->FindNeighborAtoms(kNeighborAtomSearchRange)
         };
         std::unordered_set<const AtomObject *> neighbor_atom_set;
+        atom_context.unselected_distance_list_by_sample.resize(atom_context.raw_sampling_entries.size());
 
         atom_context.neighbor_atom_sample_offset_list.reserve(atom_context.raw_sampling_entries.size() + 1);
         atom_context.neighbor_atom_sample_offset_list.emplace_back(0);
@@ -348,6 +376,7 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
             const auto & sample{
                 atom_context.raw_sampling_entries.at(sample_index)
             };
+            std::unordered_set<const AtomObject *> sample_neighbor_set;
             for (auto * neighbor_atom : neighbor_atom_list)
             {
                 if (options.exclude_hydrogen && neighbor_atom->GetElement() == Element::HYDROGEN)
@@ -357,7 +386,8 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
                 const auto distance{
                     array_helper::ComputeNorm(sample.point.position, neighbor_atom->GetPositionRef())
                 };
-                if (distance > kNeighborContributionDistanceMax) continue;
+                if (distance > kNeighborContributionDistanceMax ||
+                    !sample_neighbor_set.emplace(neighbor_atom).second) continue;
                 neighbor_atom_set.emplace(neighbor_atom);
 
                 const auto selected_iter{
@@ -367,48 +397,13 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
                 {
                     atom_context.neighbor_atom_sample_list.emplace_back(
                         NeighborAtomSample{
-                            true,
                             selected_iter->second,
                             distance
                         });
                     continue;
                 }
 
-                auto contributor_iter{
-                    unselected_atom_index_map.find(neighbor_atom)
-                };
-                if (contributor_iter == unselected_atom_index_map.end())
-                {
-                    const auto contributor_index{
-                        context.unselected_atom_list.size()
-                    };
-                    const auto group_key{
-                        data_internal::GetGroupKey(neighbor_atom)
-                    };
-                    const auto selected_group_iter{
-                        selected_group_id_by_key.find(group_key)
-                    };
-                    context.unselected_atom_list.emplace_back(
-                        UnselectedAtomContributor{
-                            selected_group_iter ==
-                                selected_group_id_by_key.end() ?
-                                std::nullopt :
-                                std::optional<std::size_t>{
-                                    selected_group_iter->second
-                                }
-                        });
-                    unselected_atom_serial_id_list.emplace_back(
-                        neighbor_atom->GetSerialID());
-                    contributor_iter = unselected_atom_index_map.emplace(
-                        neighbor_atom,
-                        contributor_index).first;
-                }
-                atom_context.neighbor_atom_sample_list.emplace_back(
-                    NeighborAtomSample{
-                        false,
-                        contributor_iter->second,
-                        distance
-                    });
+                atom_context.unselected_distance_list_by_sample.at(sample_index).emplace_back(distance);
             }
             atom_context.neighbor_atom_sample_offset_list.emplace_back(
                 atom_context.neighbor_atom_sample_list.size());
@@ -416,52 +411,6 @@ static SecondStageInitializationResult BuildSecondStageInitialization(
         build_result.neighbor_count_list.emplace_back(static_cast<int>(neighbor_atom_set.size()));
     }
 
-    std::vector<GaussianModel3D> global_models;
-    global_models.reserve(context.size());
-
-    for (const auto & result : state)
-    {
-        global_models.emplace_back(result.mdpde.GetModel());
-    }
-    const auto global_median{ BuildGaussianParameterMedian(global_models) };
-
-    for (std::size_t i = 0; i < context.size(); i++)
-    {
-        auto & result{ state.at(i) };
-        const auto original_model{ result.mdpde.GetModel() };
-        const auto selection{ SelectSecondStageSeed(result.mdpde, global_median) };
-        if (!selection.has_value())
-        {
-            build_result.failure = SecondStageInitializationFailure::SelectedSeedUnavailable;
-            return build_result;
-        }
-
-        result.mdpde = selection->model;
-        build_result.selection_record_list.emplace_back(
-            SecondStageSeedSelectionRecord{
-                selection->source,
-                original_model,
-                selection->model.GetModel()
-            });
-    }
-
-    if (!context.unselected_atom_list.empty() && !global_median.has_value())
-    {
-        build_result.failure = SecondStageInitializationFailure::UnselectedSeedUnavailable;
-        return build_result;
-    }
-    for (std::size_t i = 0; i < context.unselected_atom_list.size(); i++)
-    {
-        auto & unselected_atom_contributor{
-            context.unselected_atom_list.at(i)
-        };
-        unselected_atom_contributor.initial_seed = *global_median;
-        build_result.unselected_selection_record_list.emplace_back(
-            UnselectedSecondStageSeedSelectionRecord{
-                unselected_atom_serial_id_list.at(i),
-                *global_median
-            });
-    }
     return build_result;
 }
 
@@ -471,7 +420,9 @@ static void StoreSecondStageNeighborCounts(
     const std::vector<int> & neighbor_count_list)
 {
     auto analysis{ model_object.EditAnalysis() };
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
     {
         analysis.SetAtomLocalNeighborCountForPeeling(
             *context.at(atom_index).atom,
@@ -767,7 +718,9 @@ bool QuarantineState::UpdateAfterIteration(
                     if (*terminal.guard_mode == SuspiciousUpdateMode::OffsetOnly)
                     {
                         std::vector<std::size_t> group_atom_index_list;
-                        const auto group_id{ context.at(atom_index).group_id };
+                        const auto group_id{
+                            context.at(atom_index).group_id
+                        };
                         for (std::size_t member_index = 0; member_index < context.size(); member_index++)
                         {
                             if (context.at(member_index).group_id == group_id)
@@ -955,23 +908,46 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
 }
 
+static FittedGaussianSnapshot BuildSelectedGroupMedianSnapshot(
+    const SecondStageContext & context,
+    const FittedGaussianSnapshot & node_snapshot)
+{
+    if (node_snapshot.size() != context.size())
+    {
+        throw std::invalid_argument(
+            "Second-stage selected median snapshot size is inconsistent.");
+    }
+    std::vector<std::size_t> selected_group_id_list;
+    selected_group_id_list.reserve(context.size());
+    for (std::size_t atom_index = 0;
+        atom_index < context.size(); atom_index++)
+    {
+        selected_group_id_list.emplace_back(
+            context.at(atom_index).group_id);
+    }
+    return BuildGroupMedianModelList(selected_group_id_list, node_snapshot);
+}
+
 static std::vector<std::optional<GaussianModel3DWithUncertainty>>
 RunUnrestrictedShapeRefits(
     const SecondStageContext & context,
     const FitState & operator_offset_state,
-    const std::vector<std::size_t> & group_id_by_atom_index,
     const FitOptions & options)
 {
-    const auto operator_refit_snapshot{
-        BuildGroupMedianModelList(
-            group_id_by_atom_index,
-            BuildFittedGaussianSnapshot(operator_offset_state))
-    };
     const auto operator_model_bundle{
-        BuildSecondStageModelSnapshot(context, operator_refit_snapshot)
+        BuildSecondStageModelSnapshot(context, operator_offset_state)
+    };
+    const auto selected_refit_model_bundle{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildSelectedGroupMedianSnapshot(
+                context,
+                operator_model_bundle.node))
     };
     const auto adjusted_response_cache{
-        BuildSecondStageAdjustedResponseCache(context, operator_model_bundle)
+        BuildSecondStageAdjustedResponseCache(
+            context,
+            selected_refit_model_bundle)
     };
     std::vector<std::optional<GaussianModel3DWithUncertainty>> result(
         context.size());
@@ -993,7 +969,7 @@ RunUnrestrictedShapeRefits(
                     adjusted_response_cache.at(atom_index),
                     context.at(atom_index).alpha_r,
                     refit_thread_size,
-                    GetFitModel(operator_model_bundle.selected, atom_index))
+                    GetFitModel(selected_refit_model_bundle.node, atom_index))
             };
             if (IsValidSecondStageGaussianModel(candidate.mdpde.GetModel()))
             {
@@ -1016,9 +992,10 @@ static IterationProposalResult RunProposalIteration(
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
-    auto current_model_snapshot{
+    const auto previous_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
     };
+    auto current_model_snapshot{ previous_model_snapshot };
     const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
     const auto log_debug_diagnostics{ !options.quiet_mode && is_debug_logging_enabled };
     std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
@@ -1114,9 +1091,12 @@ static IterationProposalResult RunProposalIteration(
         local_refit_status_by_atom(context.size());
     std::vector<std::size_t> group_id_by_atom_index;
     group_id_by_atom_index.reserve(context.size());
-    for (const auto & atom_context : context)
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
     {
-        group_id_by_atom_index.emplace_back(atom_context.group_id);
+        group_id_by_atom_index.emplace_back(
+            context.at(atom_index).group_id);
     }
     ClusterHealthMap health_by_key;
     for (std::size_t cluster_position = 0;
@@ -1142,7 +1122,7 @@ static IterationProposalResult RunProposalIteration(
             {
                 block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
                 block_activity.hard_failure_atom_mask.at(atom_index) = 1;
-                current_model_snapshot.selected.at(atom_index) =
+                current_model_snapshot.node.at(atom_index) =
                     previous_state.at(atom_index).mdpde.GetModel();
             }
             continue;
@@ -1167,7 +1147,7 @@ static IterationProposalResult RunProposalIteration(
                 {
                     const auto atom_index{ key.at(position) };
                     block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                    current_model_snapshot.selected.at(atom_index) =
+                    current_model_snapshot.node.at(atom_index) =
                         previous_state.at(atom_index).mdpde.GetModel();
                 }
                 continue;
@@ -1195,16 +1175,19 @@ static IterationProposalResult RunProposalIteration(
                     break;
                 }
                 accepted_model_list.emplace_back(candidate_model);
-                accepted_assessment_list.emplace_back(
+                const auto & assessment_samples{ context.at(atom_index).raw_sampling_entries };
+                const auto assessment{
                     AssessSuspiciousGaussianUpdate(
-                        context.at(atom_index).raw_sampling_entries,
+                        assessment_samples,
                         candidate_model,
                         options,
                         BuildPreviousSuspiciousProfileBaseline(
-                            context.at(atom_index).raw_sampling_entries,
+                            assessment_samples,
                             previous_model,
                             options),
-                        SuspiciousUpdateMode::OffsetOnly));
+                        SuspiciousUpdateMode::OffsetOnly)
+                };
+                accepted_assessment_list.emplace_back(assessment);
             }
             for (std::size_t member_position = 0;
                 member_position < position_list.size(); member_position++)
@@ -1212,13 +1195,13 @@ static IterationProposalResult RunProposalIteration(
                 const auto atom_index{ key.at(position_list.at(member_position)) };
                 if (accepted)
                 {
-                    current_model_snapshot.selected.at(atom_index) = accepted_model_list.at(member_position);
+                    current_model_snapshot.node.at(atom_index) = accepted_model_list.at(member_position);
                     assessment_by_atom.at(atom_index) = accepted_assessment_list.at(member_position);
                 }
                 else
                 {
                     block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                    current_model_snapshot.selected.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
+                    current_model_snapshot.node.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
                 }
             }
             if (!accepted)
@@ -1243,14 +1226,14 @@ static IterationProposalResult RunProposalIteration(
             operator_offsets_match_proposal =
                 operator_offsets_match_proposal &&
                 fixed_point_operator.state.at(atom_index).mdpde.GetModel().GetOffset() ==
-                    current_model_snapshot.selected.at(atom_index).GetOffset();
+                    current_model_snapshot.node.at(atom_index).GetOffset();
         }
     }
 
     FittedGaussianSnapshot refit_model_snapshot{
-        BuildGroupMedianModelList(
-            group_id_by_atom_index,
-            current_model_snapshot.selected)
+        BuildSelectedGroupMedianSnapshot(
+            context,
+            current_model_snapshot.node)
     };
     const auto refit_model_bundle{
         BuildSecondStageModelSnapshot(context, std::move(refit_model_snapshot))
@@ -1282,7 +1265,7 @@ static IterationProposalResult RunProposalIteration(
                 FitAtomWithJointOffsetFallback(
                     context.at(atom_index),
                     previous_state.at(atom_index),
-                    GetFitModel(refit_model_bundle.selected, atom_index),
+                    GetFitModel(refit_model_bundle.node, atom_index),
                     refit_response_cache.at(atom_index),
                     refit_options);
         }
@@ -1371,7 +1354,6 @@ static IterationProposalResult RunProposalIteration(
             RunUnrestrictedShapeRefits(
                 context,
                 fixed_point_operator.state,
-                group_id_by_atom_index,
                 options)
         };
         for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
@@ -1441,8 +1423,7 @@ static IterationProposalResult RunProposalIteration(
 
 static bool AreGraphPartitionsEqual(const CouplingGraphPartition & lhs, const CouplingGraphPartition & rhs)
 {
-    return lhs.boundary_sample_dependency_list.size() == rhs.boundary_sample_dependency_list.size() &&
-        lhs.boundary_sample_dependency_list == rhs.boundary_sample_dependency_list &&
+    return lhs.boundary_sample_dependency_list == rhs.boundary_sample_dependency_list &&
         lhs.sample_id_list_by_key == rhs.sample_id_list_by_key;
 }
 
@@ -1481,7 +1462,7 @@ static void ResetIterationStateForPartition(
             iteration_state.objective_domain,
             SnapshotResidualEvaluator{ context, model_snapshot })
     };
-    iteration_state.best_audit_state.reset();
+    ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
     if (audit_objective.has_value())
     {
         TryUpdateBestAuditState(
@@ -1505,7 +1486,6 @@ static bool TryRebuildAdaptiveTopology(
     const SecondStageContext & context,
     const FitOptions & options,
     const FitState & accepted_state,
-    bool accepted_uses_polish,
     GraphTopology & graph_topology,
     IterationState & iteration_state,
     PerformanceCounters & performance_counters)
@@ -1553,27 +1533,19 @@ static bool TryRebuildAdaptiveTopology(
         rebuilt_partition,
         partition_changed);
 
-    graph_topology = std::move(rebuilt_topology);
     iteration_state.topology_reference_state = accepted_state;
     iteration_state.accepted_iterations_since_topology_rebuild = 0;
-    performance_counters.RecordFullStateMaterialization();
     if (partition_changed)
     {
-        ResetIterationStateForPartition(
-            context,
-            options,
-            accepted_state,
-            accepted_uses_polish,
-            iteration_state.accepted_iteration_count,
-            std::move(rebuilt_partition),
-            iteration_state,
-            performance_counters);
+        iteration_state.pending_topology = PendingTopology{
+            std::move(rebuilt_topology), std::move(rebuilt_partition) };
     }
+    else graph_topology = std::move(rebuilt_topology);
     return partition_changed;
 }
 
 static IterationState BuildIterationState(
-    const SecondStageContext & context,
+    SecondStageContext & context,
     const GraphTopology & graph_topology,
     FitState initial_state,
     const FitOptions & options)
@@ -1591,6 +1563,10 @@ static IterationState BuildIterationState(
         0);
     iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.active_index_list);
     const auto cluster_key_list{ BuildGraphClusterKeyList(iteration_state.graph_partition) };
+    context.frozen_background = BuildFrozenBackground(context, iteration_state.previous_state, cluster_key_list);
+    if (!context.frozen_background)
+        throw std::runtime_error("Second-stage initial fixed background is unavailable.");
+    LogFrozenBackground(context, options.quiet_mode);
     iteration_internal::ResetClusterSolverWorkspace(
         cluster_key_list,
         iteration_state.solver_workspace_by_key);
@@ -1621,14 +1597,79 @@ static IterationState BuildIterationState(
     return iteration_state;
 }
 
+static bool BeginFrozenBackgroundIteration(
+    SecondStageContext & context,
+    GraphTopology & graph_topology,
+    const FitOptions & options,
+    IterationState & iteration_state,
+    PerformanceCounters & performance_counters)
+{
+    const bool partition_changed{ iteration_state.pending_topology.has_value() };
+    const auto & partition{ partition_changed ?
+        iteration_state.pending_topology->partition : iteration_state.graph_partition };
+    const auto background{ BuildFrozenBackground(
+        context, iteration_state.previous_state, BuildGraphClusterKeyList(partition)) };
+    if (!background)
+        throw std::runtime_error("Second-stage fixed background refresh is unavailable.");
+
+    const auto previous_background{ context.frozen_background };
+    context.frozen_background = background;
+    LogFrozenBackground(context, options.quiet_mode);
+    if (partition_changed)
+    {
+        auto pending{ std::move(*iteration_state.pending_topology) };
+        iteration_state.pending_topology.reset();
+        ResetIterationStateForPartition(context, options, iteration_state.previous_state,
+            iteration_internal::UsesPolish(iteration_state.previous_polish_provenance),
+            iteration_state.accepted_iteration_count, std::move(pending.partition),
+            iteration_state, performance_counters);
+        graph_topology = std::move(pending.topology);
+        LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
+        return true;
+    }
+    if (previous_background && previous_background->response_by_atom == background->response_by_atom)
+        return false;
+
+    const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.previous_state) };
+    const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
+        SnapshotResidualEvaluator{ context, previous_snapshot }) };
+    std::vector<char> changed_background_by_atom(context.size(), 1);
+    if (previous_background)
+    {
+        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+            changed_background_by_atom.at(atom_index) =
+                previous_background->response_by_atom.at(atom_index) != background->response_by_atom.at(atom_index);
+    }
+    for (const auto & [key, sample_refs] : partition.sample_id_list_by_key)
+    {
+        const bool changed{ std::ranges::any_of(sample_refs,
+            [&](const auto & sample_ref) { return changed_background_by_atom.at(sample_ref.atom_index) != 0; }) };
+        if (changed)
+            iteration_state.cluster_objective_state[key] = ClusterObjectiveState{
+                .best_objective = previous_objectives.at(key) };
+    }
+    ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
+    const auto previous_objective{ EvaluateAuditObjective(iteration_state.objective_domain,
+        SnapshotResidualEvaluator{ context, previous_snapshot }) };
+    if (previous_objective.has_value())
+    {
+        TryUpdateBestAuditState(iteration_state.previous_state,
+            iteration_internal::UsesPolish(iteration_state.previous_polish_provenance),
+            iteration_state.accepted_iteration_count, *previous_objective, iteration_state.best_audit_state);
+    }
+    return false;
+}
+
 static IterationResult RunIteration(
-    const SecondStageContext & context,
+    SecondStageContext & context,
     GraphTopology & graph_topology,
     const FitOptions & options,
     std::size_t attempt_number,
     IterationState & iteration_state,
     PerformanceCounters & performance_counters)
 {
+    const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
+        context, graph_topology, options, iteration_state, performance_counters) };
     const auto & previous_state{ iteration_state.previous_state };
     const auto & active_index_list{ iteration_state.active_index_list };
     const auto & graph_partition{ iteration_state.graph_partition };
@@ -1733,6 +1774,7 @@ static IterationResult RunIteration(
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
         .performance_counters = performance_counters
     };
+    const auto previous_cluster_objective_state{ iteration_state.cluster_objective_state };
     auto selection{ SelectClusterCandidates(candidate_inputs) };
     const auto iteration_failure_atom_mask{
         BuildSuspiciousFailureAtomMask(
@@ -1749,12 +1791,6 @@ static IterationResult RunIteration(
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
     IterationResult result;
-    result.trust_region_update =
-        iteration_state.trust_region_state.ApplyRadiusUpdates(
-            selection.grow_trust_region_key_list,
-            selection.shrink_trust_region_key_list,
-            selection.rejected_key_list,
-            selection.exhausted_key_list);
     const auto has_quarantine_transition{
         iteration_state.quarantine_state.UpdateAfterIteration(
             context,
@@ -1769,7 +1805,19 @@ static IterationResult RunIteration(
             assembled_polish_provenance,
             iteration_state.accepted_iteration_count + 1)
     };
-    if (has_quarantine_transition) selection.final_audit_objective.reset();
+    if (has_quarantine_transition)
+    {
+        selection.final_audit_objective.reset();
+        selection.assembled_state = std::move(assembled_state);
+        selection.assembled_polish_provenance = std::move(assembled_polish_provenance);
+        iteration_state.cluster_objective_state = previous_cluster_objective_state;
+        ReauditFallbackSelection(candidate_inputs, selection);
+        assembled_state = std::move(selection.assembled_state);
+        assembled_polish_provenance = std::move(selection.assembled_polish_provenance);
+    }
+    result.trust_region_update = iteration_state.trust_region_state.ApplyRadiusUpdates(
+        selection.grow_trust_region_key_list, selection.shrink_trust_region_key_list,
+        selection.rejected_key_list, selection.exhausted_key_list);
     const auto assembled_uses_polish{
         iteration_internal::UsesPolish(assembled_polish_provenance)
     };
@@ -1795,9 +1843,12 @@ static IterationResult RunIteration(
 
     std::vector<std::size_t> group_id_by_atom_index;
     group_id_by_atom_index.reserve(context.size());
-    for (const auto & atom_context : context)
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
     {
-        group_id_by_atom_index.emplace_back(atom_context.group_id);
+        group_id_by_atom_index.emplace_back(
+            context.at(atom_index).group_id);
     }
     const auto active_population{
         BuildActiveCoordinatePopulation(
@@ -1837,16 +1888,15 @@ static IterationResult RunIteration(
         context,
         options,
         assembled_state,
-        assembled_uses_polish,
         graph_topology,
         iteration_state,
-        performance_counters);
+        performance_counters) || background_partition_changed;
     if (result.objective_domain_changed)
     {
         iteration_state.quarantine_state.force_probation = true;
     }
     bool improved_best_audit{ false };
-    if (!result.objective_domain_changed)
+    bool improved_audit_baseline{ false };
     {
         auto candidate_audit_objective{ selection.final_audit_objective };
         if (!candidate_audit_objective.has_value())
@@ -1860,6 +1910,10 @@ static IterationResult RunIteration(
         }
         if (candidate_audit_objective.has_value())
         {
+            const auto previous_audit_objective{ EvaluateAuditObjective(objective_domain, residual_baseline) };
+            improved_audit_baseline = previous_audit_objective.has_value() && IsBetterAuditObjective(
+                candidate_audit_objective->GetTotalObjective(), previous_audit_objective->GetTotalObjective(),
+                kObjectiveStrictTolerance);
             improved_best_audit = TryUpdateBestAuditState(
                 assembled_state,
                 assembled_uses_polish,
@@ -1891,7 +1945,7 @@ static IterationResult RunIteration(
                 return state.lifecycle != QuarantineLifecycle::Exhausted;
             })
     };
-    if (result.objective_domain_changed || improved_best_audit ||
+    if (result.objective_domain_changed || improved_audit_baseline ||
         changed_rejected_trust_radius || has_pending_quarantine_lifecycle ||
         has_quarantine_transition)
     {
@@ -1938,7 +1992,7 @@ void ApplyFitState(
     for (std::size_t i = 0; i < context.size(); i++)
     {
         auto adjusted_sampling_entries{
-            BuildSecondStageAdjustedSamples(context.at(i), model_snapshot)
+            BuildSecondStageAdjustedSamples(context, i, model_snapshot)
         };
         analysis.ApplyAtomLocalSecondStageResult(
             *context.at(i).atom,
@@ -1994,9 +2048,12 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
         };
         std::vector<std::size_t> group_id_by_atom_index;
         group_id_by_atom_index.reserve(context.size());
-        for (const auto & atom_context : context)
+        for (std::size_t atom_index = 0;
+            atom_index < context.size();
+            atom_index++)
         {
-            group_id_by_atom_index.emplace_back(atom_context.group_id);
+            group_id_by_atom_index.emplace_back(
+                context.at(atom_index).group_id);
         }
         auto certificate{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
@@ -2230,28 +2287,20 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         auto initialization{
             BuildSecondStageInitialization(model_object, options)
         };
-        StoreSecondStageNeighborCounts(
-            model_object,
-            initialization.context,
-            initialization.neighbor_count_list);
         LogSecondStageStart(options.quiet_mode);
 
-        if (initialization.failure !=
-            SecondStageInitializationFailure::None)
+        if (!initialization.has_value())
         {
-            LogSecondStageInitializationFailure(
-                options.quiet_mode,
-                initialization.failure);
+            LogSecondStageInitializationFailure(options.quiet_mode);
             return false;
         }
+        StoreSecondStageNeighborCounts(model_object, initialization->context,
+            initialization->neighbor_count_list);
         LogSecondStageSeedSelections(
-            initialization.selection_record_list,
+            initialization->selection_record_list,
             options.quiet_mode);
-        LogUnselectedSecondStageSeedSelections(
-            initialization.unselected_selection_record_list,
-            options.quiet_mode);
-        context = std::move(initialization.context);
-        initial_state = std::move(initialization.state);
+        context = std::move(initialization->context);
+        initial_state = std::move(initialization->state);
     }
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
@@ -2294,13 +2343,6 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
                 iter + 1,
                 iteration_state,
                 performance_counters);
-            if (terminal_result.objective_domain_changed)
-            {
-                LogObjectiveDomain(
-                    iteration_state.objective_domain,
-                    options.quiet_mode,
-                    true);
-            }
             LogAcceptedCandidateSearchDiagnostics(
                 options.quiet_mode,
                 terminal_result);
@@ -2547,18 +2589,7 @@ ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
     {
         if (block_activity.HasActiveShape(atom_index))
         {
-            result.active_atom_index_list_by_parameter.at(
-                GaussianModel3D::LogPeakHeightCoordinateIndex())
-                .emplace_back(atom_index);
-            result.active_atom_index_list_by_parameter.at(
-                GaussianModel3D::LogWidthCoordinateIndex())
-                .emplace_back(atom_index);
-        }
-        if (block_activity.HasActiveOffset(atom_index))
-        {
-            result.active_atom_index_list_by_parameter.at(
-                GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
-                .emplace_back(atom_index);
+            result.active_shape_atom_index_list.emplace_back(atom_index);
         }
     }
 
@@ -2589,9 +2620,23 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     const std::vector<TransformedChange> & change_list,
     const ActiveCoordinatePopulation & population)
 {
-    auto result{ SummarizeTransformedChangesByParameter(
-        change_list,
-        population.active_atom_index_list_by_parameter) };
+    std::array<std::vector<double>, GaussianModel3D::TransformedCoordinateSize()> parameter_change_lists;
+    for (const auto parameter_index : std::array<std::size_t, 2>{
+        GaussianModel3D::LogPeakHeightCoordinateIndex(),
+        GaussianModel3D::LogWidthCoordinateIndex() })
+    {
+        auto & values{ parameter_change_lists.at(parameter_index) };
+        values.reserve(population.active_shape_atom_index_list.size());
+        for (const auto atom_index : population.active_shape_atom_index_list)
+        {
+            if (atom_index >= change_list.size())
+            {
+                throw std::invalid_argument(
+                    "Active-coordinate shape change input is inconsistent.");
+            }
+            values.emplace_back(change_list.at(atom_index).at(parameter_index));
+        }
+    }
 
     if (population.active_offset_group_atom_index_list.size() !=
         population.mixed_offset_group_mask.size())
@@ -2600,7 +2645,9 @@ TransformedChangeSummary SummarizeActiveDofChanges(
             "Active-coordinate shared-offset population is inconsistent.");
     }
 
-    std::vector<double> offset_group_change_list;
+    auto & offset_group_change_list{
+        parameter_change_lists.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
+    };
     offset_group_change_list.reserve(
         population.active_offset_group_atom_index_list.size());
     for (std::size_t group_position = 0;
@@ -2632,18 +2679,16 @@ TransformedChangeSummary SummarizeActiveDofChanges(
             is_finite ? maximum_change : std::numeric_limits<double>::infinity());
     }
 
-    result.population_size_list.at(
-        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
-        offset_group_change_list.size();
-    result.percentile_list.at(
-        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
-        array_helper::ComputePercentile(
-            offset_group_change_list,
-            kConvergencePercentile);
-    result.maximum_list.at(
-        GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) =
-        offset_group_change_list.empty() ? 0.0 :
-            *std::ranges::max_element(offset_group_change_list);
+    TransformedChangeSummary result;
+    for (std::size_t parameter_index = 0; parameter_index < parameter_change_lists.size(); parameter_index++)
+    {
+        const auto & values{ parameter_change_lists.at(parameter_index) };
+        result.population_size_list.at(parameter_index) = values.size();
+        result.percentile_list.at(parameter_index) =
+            array_helper::ComputePercentile(values, kConvergencePercentile);
+        result.maximum_list.at(parameter_index) =
+            values.empty() ? 0.0 : *std::ranges::max_element(values);
+    }
     return result;
 }
 

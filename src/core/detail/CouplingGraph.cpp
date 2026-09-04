@@ -628,20 +628,15 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
     }
 
     CouplingGraphBuilder builder{ context.size() };
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, state)
-    };
-    std::vector<std::optional<TransformedModelInvariants>> selected_model_invariants;
-    selected_model_invariants.reserve(model_snapshot.selected.size());
-    for (const auto & model : model_snapshot.selected)
+    if (state.size() != context.size())
     {
-        selected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
+        throw std::invalid_argument("Second-stage node snapshot size is inconsistent.");
     }
-    std::vector<std::optional<TransformedModelInvariants>> unselected_model_invariants;
-    unselected_model_invariants.reserve(model_snapshot.unselected.size());
-    for (const auto & model : model_snapshot.unselected)
+    std::vector<std::optional<TransformedModelInvariants>> model_invariants;
+    model_invariants.reserve(state.size());
+    for (const auto & result : state)
     {
-        unselected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
+        model_invariants.emplace_back(BuildTransformedModelInvariants(result.mdpde.GetModel()));
     }
     std::vector<GraphParticipant> participant_list;
     participant_list.reserve(context.size());
@@ -652,37 +647,20 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(j) };
             const auto target_jacobian{ EvaluateCouplingGraphJacobian(
-                selected_model_invariants.at(i),
+                model_invariants.at(i),
                 sample.point.distance) };
             participant_list.clear();
             participant_list.emplace_back(GraphParticipant{ i, target_jacobian });
             for (const auto & neighbor_atom_sample : atom_context.Neighbors(j))
             {
-                if (neighbor_atom_sample.is_selected)
-                {
-                    const auto neighbor_jacobian{ EvaluateCouplingGraphJacobian(
-                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) };
-                    participant_list.emplace_back(
-                        GraphParticipant{
-                            neighbor_atom_sample.atom_index,
-                            neighbor_jacobian
-                        });
-                    continue;
-                }
-                const auto selected_group_id{
-                    context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
-                };
-                if (!selected_group_id.has_value()) continue;
                 const auto neighbor_jacobian{ EvaluateCouplingGraphJacobian(
-                    unselected_model_invariants.at(neighbor_atom_sample.atom_index),
+                    model_invariants.at(neighbor_atom_sample.atom_index),
                     neighbor_atom_sample.distance) };
-                for (const auto selected_index :
-                    context.selected_atom_index_list_by_group.at(*selected_group_id))
-                {
-                    participant_list.emplace_back(
-                        GraphParticipant{ selected_index, neighbor_jacobian });
-                }
+                participant_list.emplace_back(
+                    GraphParticipant{
+                        neighbor_atom_sample.atom_index,
+                        neighbor_jacobian
+                    });
             }
             builder.AddSample(SampleRef{ i, j }, participant_list);
             completed_work++;
@@ -1293,8 +1271,9 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
             }
             for (const auto & neighbor : atom_context.Neighbors(sample_ref.sample_index))
             {
-                if (!neighbor.is_selected ||
-                    !std::ranges::binary_search(component_atom_index_list, neighbor.atom_index))
+                if (!std::ranges::binary_search(
+                        component_atom_index_list,
+                        neighbor.atom_index))
                 {
                     continue;
                 }

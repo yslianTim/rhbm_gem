@@ -4,6 +4,7 @@
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -28,15 +29,8 @@ struct SampleRef
 
 struct NeighborAtomSample
 {
-    bool is_selected{ true };
     std::size_t atom_index{ 0 };
     double distance{ 0.0 };
-};
-
-struct UnselectedAtomContributor
-{
-    std::optional<std::size_t> selected_group_id{};
-    GaussianModel3D initial_seed{};
 };
 
 struct AtomContext
@@ -46,6 +40,7 @@ struct AtomContext
     LocalPotentialSampleList raw_sampling_entries{};
     std::vector<NeighborAtomSample> neighbor_atom_sample_list{};
     std::vector<std::size_t> neighbor_atom_sample_offset_list{};
+    std::vector<std::vector<double>> unselected_distance_list_by_sample{};
     PreparedLocalGaussianDesign refit_design{};
     double alpha_r{ 0.0 };
 
@@ -58,18 +53,30 @@ struct AtomContext
     }
 };
 
+struct FrozenBackground
+{
+    FittedGaussianSnapshot model_by_atom{};
+    SecondStageAdjustedResponseCache response_by_atom{};
+};
+
 struct SecondStageContext
 {
-    std::vector<AtomContext> selected_atom_list{};
-    std::vector<UnselectedAtomContributor> unselected_atom_list{};
-    std::vector<std::vector<std::size_t>> selected_atom_index_list_by_group{};
+    std::vector<AtomContext> atom_list{};
+    std::shared_ptr<const FrozenBackground> frozen_background{};
 
-    std::size_t size() const { return selected_atom_list.size(); }
-    AtomContext & at(std::size_t index) { return selected_atom_list.at(index); }
-    const AtomContext & at(std::size_t index) const { return selected_atom_list.at(index); }
-    auto begin() const { return selected_atom_list.begin(); }
-    auto end() const { return selected_atom_list.end(); }
+    std::size_t size() const { return atom_list.size(); }
+    AtomContext & at(std::size_t index) { return atom_list.at(index); }
+    const AtomContext & at(std::size_t index) const { return atom_list.at(index); }
+    auto begin() const { return atom_list.begin(); }
+    auto end() const { return atom_list.end(); }
 };
+
+std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
+    const SecondStageContext & context,
+    const FitState & state,
+    const std::vector<ClusterKey> & cluster_key_list);
+
+double GetFrozenBackgroundResponse(const SecondStageContext & context, const SampleRef & sample_ref);
 
 struct FitStatePatch
 {
@@ -147,17 +154,13 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state);
 
 struct SecondStageModelSnapshot
 {
-    FittedGaussianSnapshot selected{};
-    FittedGaussianSnapshot unselected{};
+    FittedGaussianSnapshot node{};
+    std::shared_ptr<const FrozenBackground> frozen_background{};
 };
-
-const GaussianModel3D & ResolveNeighborAtomModel(
-    const NeighborAtomSample & neighbor_atom_sample,
-    const SecondStageModelSnapshot & model_snapshot);
 
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
-    FittedGaussianSnapshot selected_snapshot);
+    FittedGaussianSnapshot node_snapshot);
 
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
@@ -181,7 +184,7 @@ struct ResidualBaseline
 
     const FittedGaussianSnapshot & GetState() const
     {
-        return model_snapshot.selected;
+        return model_snapshot.node;
     }
 };
 
@@ -194,7 +197,8 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     const std::vector<double> & adjusted_response_list);
 
 LocalPotentialSampleList BuildSecondStageAdjustedSamples(
-    const AtomContext & atom_context,
+    const SecondStageContext & context,
+    std::size_t atom_index,
     const SecondStageModelSnapshot & model_snapshot);
 
 std::optional<ResidualSample> EvaluateResidualSample(
@@ -210,7 +214,7 @@ struct SnapshotResidualEvaluator
     std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
     const FittedGaussianSnapshot & GetState() const
     {
-        return model_snapshot.selected;
+        return model_snapshot.node;
     }
 };
 
@@ -227,10 +231,5 @@ TransformedChangeSummary SummarizeTransformedChanges(
     const FitStateView & current_state,
     const FittedGaussianSnapshot & previous_state,
     const std::vector<std::size_t> & index_list);
-
-TransformedChangeSummary SummarizeTransformedChangesByParameter(
-    const FitState & current_state,
-    const FitState & previous_state,
-    const TransformedChangeIndexListByParameter & index_list_by_parameter);
 
 } // namespace rhbm_gem::core::detail
