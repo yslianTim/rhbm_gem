@@ -68,9 +68,6 @@ struct GraphTopology
     CouplingGraphSummary summary{};
     struct AtomCutoffSummary
     {
-        std::size_t atom_count{ 0 };
-        std::size_t maximum_atom_count{ 0 };
-        std::size_t cluster_count{ 0 };
         std::size_t cut_edge_count{ 0 };
         std::size_t maximum_atom_count_limit{ 0 };
     } atom_cutoff_summary{};

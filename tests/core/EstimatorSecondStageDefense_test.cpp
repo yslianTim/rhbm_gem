@@ -3642,6 +3642,16 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipan
     EXPECT_DOUBLE_EQ(topology.summary.maximum_component_ratio, 1.0);
     EXPECT_DOUBLE_EQ(topology.summary.configured_minimum_weight, 0.05);
     EXPECT_EQ(topology.atom_cutoff_summary.maximum_atom_count_limit, 100U);
+
+    const auto previous_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    coupling_detail::LogGraphTopology(topology, false);
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+    EXPECT_NE(output.find(
+        "Local-fitting atom cutoff: atoms=2, limit=100, clusters=1, max-atoms=2, cutoff-edges=0."),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJacobian)
@@ -3708,7 +3718,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryUsesOnlySelectedSample
     EXPECT_EQ(background_topology.adjacency_list.size(), selected_count);
     for (const auto & neighbors : background_topology.adjacency_list) EXPECT_TRUE(neighbors.empty());
     EXPECT_EQ(background_topology.summary.component_count, selected_count);
-    EXPECT_EQ(background_topology.atom_cutoff_summary.maximum_atom_count, 1U);
+    EXPECT_EQ(background_topology.summary.maximum_component_size, 1U);
     const auto partition{ coupling_detail::BuildGraphPartition(
         background_topology, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }) };
     EXPECT_EQ(partition.sample_id_list_by_key.size(), selected_count);
@@ -4304,9 +4314,9 @@ TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffBoundsComponentsAndPrese
         std::iota(active_index_list.begin(), active_index_list.end(), 0U);
         topology.sample_dependency_list = { { { 0, 0 }, active_index_list } };
         const auto capped_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 100) };
-        EXPECT_EQ(capped_topology.atom_cutoff_summary.atom_count, atom_count);
-        EXPECT_EQ(capped_topology.atom_cutoff_summary.maximum_atom_count, 100U);
-        EXPECT_EQ(capped_topology.atom_cutoff_summary.cluster_count, atom_count - 99);
+        EXPECT_EQ(capped_topology.adjacency_list.size(), atom_count);
+        EXPECT_EQ(capped_topology.summary.maximum_component_size, 100U);
+        EXPECT_EQ(capped_topology.summary.component_count, atom_count - 99);
         EXPECT_EQ(capped_topology.atom_cutoff_summary.cut_edge_count, atom_count == 100 ? 0U : 1U);
         EXPECT_EQ(capped_topology.retained_edge_list.size(), topology.retained_edge_list.size());
         ASSERT_EQ(capped_topology.sample_dependency_list.size(), 1U);
@@ -4314,14 +4324,19 @@ TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffBoundsComponentsAndPrese
             active_index_list);
         const auto partition{ coupling_detail::BuildGraphPartition(capped_topology, active_index_list) };
         EXPECT_EQ(partition.boundary_sample_dependency_list.size(), atom_count == 100 ? 0U : 1U);
-        EXPECT_EQ(partition.sample_id_list_by_key.size(), atom_count - 99);
+        EXPECT_EQ(partition.sample_id_list_by_key.size(), capped_topology.summary.component_count);
         std::vector<coupling_detail::ClusterKey> owner_key_by_atom_index(atom_count);
+        std::size_t maximum_component_size{ 0 };
         for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
         {
             EXPECT_EQ(sample_id_list.size(), 1U);
             EXPECT_LE(key.size(), 100U);
+            maximum_component_size = std::max(maximum_component_size, key.size());
             for (const auto atom_index : key) owner_key_by_atom_index.at(atom_index) = key;
         }
+        EXPECT_EQ(capped_topology.summary.maximum_component_size, maximum_component_size);
+        EXPECT_DOUBLE_EQ(capped_topology.summary.maximum_component_ratio,
+            static_cast<double>(maximum_component_size) / static_cast<double>(atom_count));
         if (first_connected_atom == 1)
             EXPECT_EQ(partition.sample_id_list_by_key.count({ 0 }), 1U);
         const auto polish_components{ coupling_detail::BuildUncutDependencyPolishComponents(
@@ -4344,9 +4359,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffBoundsComponentsAndPrese
     }
 
     const auto empty{ coupling_detail::CouplingGraphBuilder{ 0 }.BuildTopology() };
-    EXPECT_EQ(empty.atom_cutoff_summary.atom_count, 0U);
-    EXPECT_EQ(empty.atom_cutoff_summary.cluster_count, 0U);
-    EXPECT_EQ(empty.atom_cutoff_summary.maximum_atom_count, 0U);
+    EXPECT_TRUE(empty.adjacency_list.empty());
+    EXPECT_EQ(empty.summary.component_count, 0U);
+    EXPECT_EQ(empty.summary.maximum_component_size, 0U);
+    EXPECT_DOUBLE_EQ(empty.summary.maximum_component_ratio, 0.0);
     EXPECT_TRUE(coupling_detail::BuildGraphPartition(empty, {}).sample_id_list_by_key.empty());
     EXPECT_THROW(coupling_detail::ApplyGraphAtomCutoff({}, 0), std::invalid_argument);
     coupling_detail::CouplingGraphOptions invalid_options;
@@ -4362,16 +4378,23 @@ TEST(EstimatorSecondStageDefenseTest, CouplingAtomCutoffPrioritizesStrongEdgesAn
     topology.retained_edge_list = { { 1, 2, 0.80 }, { 0, 1, 0.90 }, { 0, 2, 0.70 } };
     const auto capped_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 2) };
     const auto partition{ coupling_detail::BuildGraphPartition(capped_topology, { 2, 1, 0 }) };
+    EXPECT_EQ(capped_topology.summary.component_count, partition.sample_id_list_by_key.size());
+    EXPECT_EQ(capped_topology.summary.maximum_component_size, 2U);
+    EXPECT_DOUBLE_EQ(capped_topology.summary.maximum_component_ratio, 2.0 / 3.0);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
     EXPECT_TRUE(HasCouplingNeighbor(capped_topology, 0, 1));
     EXPECT_FALSE(HasCouplingNeighbor(capped_topology, 1, 2));
 
     const auto singleton_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 1) };
-    EXPECT_EQ(singleton_topology.atom_cutoff_summary.cluster_count, 3U);
+    EXPECT_EQ(singleton_topology.summary.component_count, 3U);
+    EXPECT_EQ(singleton_topology.summary.maximum_component_size, 1U);
+    EXPECT_DOUBLE_EQ(singleton_topology.summary.maximum_component_ratio, 1.0 / 3.0);
     EXPECT_EQ(singleton_topology.atom_cutoff_summary.cut_edge_count, 3U);
     const auto whole_topology{ coupling_detail::ApplyGraphAtomCutoff(topology, 3) };
-    EXPECT_EQ(whole_topology.atom_cutoff_summary.cluster_count, 1U);
+    EXPECT_EQ(whole_topology.summary.component_count, 1U);
+    EXPECT_EQ(whole_topology.summary.maximum_component_size, 3U);
+    EXPECT_DOUBLE_EQ(whole_topology.summary.maximum_component_ratio, 1.0);
     // All three internal edges survive, not only the union-find spanning tree.
     for (const auto & neighbors : whole_topology.adjacency_list) EXPECT_EQ(neighbors.size(), 2U);
 
@@ -4453,7 +4476,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
         overflow_builder.BuildTopology(fallback_options)
     };
     EXPECT_FALSE(overflow_topology.summary.uses_weighted_graph);
-    EXPECT_EQ(overflow_topology.atom_cutoff_summary.cluster_count, 2U);
+    EXPECT_EQ(overflow_topology.summary.component_count, 2U);
     EXPECT_EQ(overflow_topology.atom_cutoff_summary.maximum_atom_count_limit, 1U);
     EXPECT_FALSE(HasCouplingNeighbor(overflow_topology, 0, 1));
 }

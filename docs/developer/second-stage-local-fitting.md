@@ -893,14 +893,16 @@ written.
 ## Workspace verification (2026-09-04)
 
 The implementation baseline was the clean revision
-`e5ffd3a9e5f37d79b6febd254cee1e816f1afda4`. The verified workspace is that
-revision plus the current uncommitted atom-only topology change. Residue
-pre-merges and the residue-count cutoff are removed; initial, adaptive, and
-binary-fallback topology clusters now contain at most 100 selected atoms.
-Independent offsets, own-model refits, frozen backgrounds, acceptance,
-convergence, and persistence retain their existing contracts. Verification used
-AppleClang 21, RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and disabled
-UMAP/ROOT:
+`b2c0bc5c9a64afea94d131939ee2b0eb437a9613`. The verified workspace is that
+revision plus the current uncommitted atom-cutoff statistics cleanup. The
+cutoff's completed atom union-find now supplies the component summary directly,
+without rebuilding connectivity from adjacency. The cutoff summary retains
+only its limit and cut-edge count; atom count and component statistics are read
+from the existing topology and formal summary. The 100-selected-atom limit,
+edge ordering, threshold/hysteresis behavior, frozen backgrounds, acceptance,
+convergence, persistence, and diagnostic formats are unchanged. Verification
+used AppleClang 21, RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and
+disabled UMAP/ROOT:
 
 - `tests_all`, `rhbm_tests_core_estimator`, and `rhbm_tests_data_runtime` passed.
 - Full CTest passed all 18 entries, including convergence analyzer/runner,
@@ -917,14 +919,17 @@ UMAP/ROOT:
   custom limits, strong-edge priority, equal-weight canonical tie-breaking,
   edge/active-index permutations, complete internal edges, empty/invalid input,
   capped binary fallback, post-cutoff hysteresis, and pre-cutoff sensitivity
-  versus post-cutoff component summaries.
+  versus post-cutoff component summaries. Existing cases now compare the single
+  component summary against actual partitions, including component count,
+  maximum size, ratio, and empty-graph zero values, and assert the exact stable
+  atom-cutoff log record.
 - A connected 101-atom chain plus two remote selected atoms verifies actual
   cutoff and 101-atom boundary reconciliation, serial/parallel agreement,
   unchanged intensity-scale tolerances, and remote-cluster improvement. The
   chain uses slightly nonuniform spacing to avoid repeated-weight rounding ties;
   the production weight comparisons and numerical tolerances are unchanged.
   Uncut dependency components can exceed the 100-atom topology limit.
-- The shared-background fixture now connects selected atoms through physical
+- The shared-background fixture connects selected atoms through physical
   sample coupling rather than matching residue labels. Relabeling selected and
   unselected chain IDs, sequence IDs, and residue names while holding selection,
   elements, geometry, samples, initial local state, and `alpha_r` fixed leaves
@@ -935,14 +940,15 @@ UMAP/ROOT:
   final polish/peeling, unselected non-persistence, and full workflow regressions
   passed.
 - Eighteen existing fixture configurations were captured before the change.
-  Fifteen unaffected configurations matched byte-for-byte afterward in
-  OLS/MDPDE models, uncertainty, peeling, completion/stop records, and convergence
-  evidence, using hexadecimal floating-point serialization. The other three
-  configurations deliberately changed shared-cluster/boundary geometry to
-  exercise the new topology contract and were not treated as numerical-identity
-  controls. All 18 candidate captures matched again after restoring OFF.
-  Timing and performance counters were not compared.
-- Fold-168 baseline/report schema is now 6, with 168 selected atoms, a 100-atom
+  All 18 matched byte-for-byte afterward in OLS/MDPDE models, uncertainty,
+  peeling, completion/stop records, and convergence evidence, using hexadecimal
+  floating-point serialization. Initial coupling/cutoff, threshold-sensitivity,
+  adaptive-topology, and frozen-background records also matched exactly, as did
+  captured warnings. All 18 matched the clean baseline again after restoring
+  OFF. No fixture geometry was changed or configuration excluded, including the
+  shared-background and boundary fixtures changed in the preceding topology
+  revision. Timing and performance counters were not compared.
+- Fold-168 baseline/report schema remains 6, with 168 selected atoms, a 100-atom
   limit, and at least two topology clusters. Input hashes, reference quality
   metrics, quality tolerances, and the 25-accepted-iteration gate are unchanged.
   Runner tests passed, including rejection of legacy residue logs and schema 5.
@@ -955,6 +961,7 @@ UMAP/ROOT:
   empty-selected behavior are unchanged. `git diff --check` passed.
 
 The ROOT-disabled build retains existing unrelated painter warnings; those
-files were not changed. The paired 600-case corpus was not rerun. Historical
-audit documents are unchanged; the normative description and existing Notion
-algorithm page are synchronized to this workspace change.
+files were not changed. The paired 600-case corpus was not rerun. Only this
+workspace-verification record was updated in the normative document; its
+algorithm description, the existing Notion algorithm page, and historical audit
+documents are unchanged.

@@ -93,32 +93,6 @@ Eigen::Vector3d EvaluateCouplingGraphJacobian(
     return EvaluateTransformedJacobian(*invariants, distance).value_or(invalid_jacobian);
 }
 
-void UpdateGraphComponentSummary(GraphTopology & topology)
-{
-    const auto atom_count{ topology.adjacency_list.size() };
-    DisjointSet component_set{ atom_count };
-    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-    {
-        for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
-        {
-            if (neighbor_index >= atom_count)
-            {
-                throw std::invalid_argument("Local fitting coupling edge index is out of range.");
-            }
-            if (atom_index >= neighbor_index) continue;
-            component_set.Merge(atom_index, neighbor_index);
-        }
-    }
-
-    const auto component_summary{
-        SummarizeDisjointSetComponents(component_set, atom_count)
-    };
-    topology.summary.component_count = component_summary.component_count;
-    topology.summary.maximum_component_size = component_summary.maximum_component_size;
-    topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
-        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
-}
-
 void NormalizeParticipantList(std::vector<GraphParticipant> & participant_list)
 {
     std::ranges::sort(participant_list, {}, &GraphParticipant::atom_index);
@@ -688,10 +662,10 @@ void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
     std::ostringstream atom_cutoff_message;
     atom_cutoff_message
         << "Local-fitting atom cutoff: atoms="
-        << atom_cutoff_summary.atom_count
+        << topology.adjacency_list.size()
         << ", limit=" << atom_cutoff_summary.maximum_atom_count_limit
-        << ", clusters=" << atom_cutoff_summary.cluster_count
-        << ", max-atoms=" << atom_cutoff_summary.maximum_atom_count
+        << ", clusters=" << summary.component_count
+        << ", max-atoms=" << summary.maximum_component_size
         << ", cutoff-edges=" << atom_cutoff_summary.cut_edge_count << ".";
     Logger::Log(LogLevel::Info, atom_cutoff_message.str());
 
@@ -788,12 +762,15 @@ GraphTopology ApplyGraphAtomCutoff(GraphTopology topology, std::size_t maximum_a
         topology.adjacency_list.at(edge->right_atom_index).emplace_back(edge->left_atom_index);
     }
 
-    UpdateGraphComponentSummary(topology);
+    const auto component_summary{
+        SummarizeDisjointSetComponents(component_set, atom_count)
+    };
+    topology.summary.component_count = component_summary.component_count;
+    topology.summary.maximum_component_size = component_summary.maximum_component_size;
+    topology.summary.maximum_component_ratio = atom_count == 0 ? 0.0 :
+        static_cast<double>(component_summary.maximum_component_size) / static_cast<double>(atom_count);
     topology.atom_cutoff_summary =
         GraphTopology::AtomCutoffSummary{
-            atom_count,
-            topology.summary.maximum_component_size,
-            topology.summary.component_count,
             cut_edge_count,
             maximum_atom_count
         };
