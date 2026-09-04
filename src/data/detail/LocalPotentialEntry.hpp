@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -15,6 +16,7 @@ class LocalPotentialEntry
     LocalPotentialSampleList m_raw_sampling_entries;
     LocalPotentialSampleList m_peeling_sampling_entries;
     std::array<LocalGaussianResult, 3> m_gaussian_results{};
+    std::optional<GroupGaussianMemberResult> m_group_member_result{};
     int m_neighbor_count_for_peeling{ 0 };
 
 public:
@@ -41,16 +43,13 @@ public:
     {
         GaussianResult(stage) = std::move(value);
     }
-    void SetPosteriorResult(
-        FittingStage stage,
-        GaussianModel3DWithUncertainty posterior,
-        bool is_outlier,
-        double statistical_distance)
+    void SetGroupMemberResult(GroupGaussianMemberResult value)
     {
-        auto & result{ GaussianResult(stage) };
-        result.posterior = std::move(posterior);
-        result.is_outlier = is_outlier;
-        result.statistical_distance = statistical_distance;
+        m_group_member_result = std::move(value);
+    }
+    void ClearGroupMemberResult()
+    {
+        m_group_member_result.reset();
     }
     void ClearTransientFitState(FittingStage stage)
     {
@@ -73,6 +72,10 @@ public:
     const LocalGaussianResult & GaussianResult(FittingStage stage) const
     {
         return m_gaussian_results.at(StageIndex(stage));
+    }
+    const std::optional<GroupGaussianMemberResult> & GroupMemberResult() const
+    {
+        return m_group_member_result;
     }
     const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
     const LocalPotentialSampleList & PeelingSamplingEntries() const { return m_peeling_sampling_entries; }

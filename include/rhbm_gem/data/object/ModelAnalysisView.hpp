@@ -17,17 +17,16 @@ class ModelAnalysisView
     const ModelObject & m_model_object;
 
 public:
-    bool HasGroupedAnalysisData(FittingStage stage) const;
-    bool HasAtomGroup(FittingStage stage, GroupKey group_key) const;
-    const GaussianModel3D & GetAtomGroupMean(FittingStage stage, GroupKey group_key) const;
-    const GaussianModel3D & GetAtomGroupMDPDE(FittingStage stage, GroupKey group_key) const;
-    const GaussianModel3D & GetAtomGroupPrior(FittingStage stage, GroupKey group_key) const;
-    GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(
-        FittingStage stage, GroupKey group_key) const;
-    const std::vector<AtomObject *> & GetAtomObjectList(FittingStage stage, GroupKey group_key) const;
+    bool HasGroupedAnalysisData() const;
+    bool HasAtomGroup(GroupKey group_key) const;
+    const GaussianModel3D & GetAtomGroupMean(GroupKey group_key) const;
+    const GaussianModel3D & GetAtomGroupMDPDE(GroupKey group_key) const;
+    const GaussianModel3D & GetAtomGroupPrior(GroupKey group_key) const;
+    GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key) const;
+    const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key) const;
     double GetAtomAlphaR(FittingStage stage, GroupKey group_key) const;
-    double GetAtomAlphaG(FittingStage stage, GroupKey group_key) const;
-    std::vector<GroupKey> CollectAtomGroupKeys(FittingStage stage) const;
+    double GetAtomAlphaG(GroupKey group_key) const;
+    std::vector<GroupKey> CollectAtomGroupKeys() const;
 
 private:
     explicit ModelAnalysisView(const ModelObject & model_object);

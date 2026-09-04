@@ -107,10 +107,9 @@ void RunAtomOutlierDumping(
         for (auto * atom : model_object->GetSelectedAtoms())
         {
             const auto & result{
-                AtomLocalPotentialView::For(*atom).GetGaussianResult(
-                    FittingStage::Third)
+                AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
             };
-            if (!result.posterior.has_value() || !result.is_outlier) continue;
+            if (!result.has_value() || !result->is_outlier) continue;
             outfile << atom->GetSerialID() << ','
                     << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
@@ -327,12 +326,10 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
-                if (!entry_view.HasAtomGroup(FittingStage::Third, group_key)) continue;
+                if (!entry_view.HasAtomGroup(group_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
-                        << entry_view.GetAtomGroupPrior(
-                            FittingStage::Third, group_key).GetDisplayParameter(0) << ','
-                        << entry_view.GetAtomGroupPrior(
-                            FittingStage::Third, group_key).GetDisplayParameter(1) << '\n';
+                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0) << ','
+                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1) << '\n';
             }
         }
 

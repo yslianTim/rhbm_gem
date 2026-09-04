@@ -88,6 +88,11 @@ const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(
     return RequireEntry("Local estimate OLS").GaussianResult(stage).ols.GetModel();
 }
 
+const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGroupMemberResult() const
+{
+    return RequireEntry("Group Gaussian member result").GroupMemberResult();
+}
+
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(
     FittingStage stage) const
 {

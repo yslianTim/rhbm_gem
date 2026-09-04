@@ -20,6 +20,7 @@ public:
     static AtomLocalPotentialView For(const AtomObject & atom_object);
     bool IsAvailable() const;
     const LocalGaussianResult & GetGaussianResult(FittingStage stage) const;
+    const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;
     const GaussianModel3D & GetEstimateMDPDE(FittingStage stage) const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;

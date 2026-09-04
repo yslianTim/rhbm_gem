@@ -836,17 +836,13 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(FittingStage::Third, group_key)) continue;
-            if (!entry_view.HasAtomGroup(FittingStage::Third, ref_group_key)) continue;
-            y_value = entry_view.GetAtomGroupPrior(
-                FittingStage::Third, group_key).GetDisplayParameter(par_id);
-            y_error = entry_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, group_key)
+            if (!entry_view.HasAtomGroup(group_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id);
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(par_id);
-            ref_y_value = entry_view.GetAtomGroupPrior(
-                FittingStage::Third, ref_group_key).GetDisplayParameter(par_id);
-            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, ref_group_key)
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key).GetDisplayParameter(par_id);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key)
                 .GetDisplayStandardDeviation(par_id);
         }
         auto x_value{ model_object->GetResolution() };
@@ -895,22 +891,16 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(FittingStage::Third, group_key)) continue;
-            if (!entry_view.HasAtomGroup(FittingStage::Third, ref_group_key)) continue;
-            x_value = entry_view.GetAtomGroupPrior(
-                FittingStage::Third, group_key).GetDisplayParameter(1);
-            y_value = entry_view.GetAtomGroupPrior(
-                FittingStage::Third, group_key).GetDisplayParameter(0);
-            x_error = entry_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, group_key)
+            if (!entry_view.HasAtomGroup(group_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            x_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1);
+            y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0);
+            x_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(1);
-            y_error = entry_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, group_key)
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(0);
-            ref_y_value = entry_view.GetAtomGroupPrior(
-                FittingStage::Third, ref_group_key).GetDisplayParameter(0);
-            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Third, ref_group_key)
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key).GetDisplayParameter(0);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key)
                 .GetDisplayStandardDeviation(0);
         }
         if (x_value == 0.0 || ref_y_value == 0.0) continue;

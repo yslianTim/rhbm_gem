@@ -81,13 +81,13 @@ int ComputeLocalParameterRank(
     return rank;
 }
 
-std::string BuildGroupPriorSpotSummary(const ModelObject & model_object, FittingStage stage)
+std::string BuildGroupPriorSpotSummary(const ModelObject & model_object)
 {
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys(stage))
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
-        const auto & atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
         if (atom_list.empty()) continue;
 
         const auto spot{ atom_list.front()->GetSpot() };
@@ -98,7 +98,7 @@ std::string BuildGroupPriorSpotSummary(const ModelObject & model_object, Fitting
         {
             continue;
         }
-        const auto & prior{ analysis_view.GetAtomGroupPrior(stage, group_key) };
+        const auto & prior{ analysis_view.GetAtomGroupPrior(group_key) };
         auto & sample_list{ spot_sample_map[spot] };
         sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
         sample_list.width_list.emplace_back(prior.GetWidth());
@@ -380,25 +380,20 @@ void OutputLocalFittingResultTable(
     }
 }
 
-void RunGroupAlphaTraining(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage)
+void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(stage) };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
 
     std::vector<std::vector<GaussianModel3D>> model_group_list;
     model_group_list.reserve(group_key_list.size());
     for (const auto group_key : group_key_list)
     {
-        const auto & group_atom_list{
-            analysis_view.GetAtomObjectList(stage, group_key)
-        };
+        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key) };
         if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
-        analysis.EnsureAtomGroupLocalPotentials(stage, group_key);
+        analysis.EnsureAtomGroupLocalPotentials(group_key);
 
         std::vector<GaussianModel3D> group_member_models;
         group_member_models.reserve(group_atom_list.size());
@@ -406,13 +401,13 @@ void RunGroupAlphaTraining(
         {
             const auto local_view{ AtomLocalPotentialView::For(*atom) };
             group_member_models.emplace_back(
-                local_view.GetGaussianResult(stage).mdpde.GetModel());
+                local_view.GetGaussianResult(FittingStage::Third).mdpde.GetModel());
         }
         model_group_list.emplace_back(std::move(group_member_models));
     }
 
     const auto alpha_g{ TrainAlphaG(model_group_list, options) };
-    analysis.InitializeGroupAlpha(stage, alpha_g);
+    analysis.InitializeGroupAlpha(alpha_g);
 }
 
 } // namespace
@@ -597,7 +592,7 @@ void RunLocalAlphaTraining(
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(stage) };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
 
     size_t count{ 0 };
     if (!options.quiet_mode)
@@ -606,8 +601,8 @@ void RunLocalAlphaTraining(
     }
     for (const auto group_key : group_key_list)
     {
-        const auto & group_atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
-        analysis.EnsureAtomGroupLocalPotentials(stage, group_key);
+        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key) };
+        analysis.EnsureAtomGroupLocalPotentials(group_key);
         std::vector<LocalPotentialSampleList> sample_entries_list;
         sample_entries_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
@@ -633,10 +628,7 @@ void RunLocalAlphaTraining(
     }
 }
 
-void RunGroupPotentialFitting(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage)
+void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -646,7 +638,7 @@ void RunGroupPotentialFitting(
         Logger::Log(LogLevel::Info, "Run atom group fitting.");
     }
 
-    auto group_key_list{ analysis_view.CollectAtomGroupKeys(stage) };
+    auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
     auto group_key_size{ group_key_list.size() };
     size_t key_count{ 0 };
 
@@ -656,15 +648,15 @@ void RunGroupPotentialFitting(
     for (size_t k = 0; k < group_key_size; k++)
     {
         auto group_key{ group_key_list[k] };
-        const auto & atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
-        const auto alpha_g{ analysis_view.GetAtomAlphaG(stage, group_key) };
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
+        const auto alpha_g{ analysis_view.GetAtomAlphaG(group_key) };
         std::vector<GroupGaussianMemberInput> member_list;
         member_list.reserve(atom_list.size());
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::For(*atom) };
-            const auto & local_result{ local_view.GetGaussianResult(stage) };
-            auto sample_entries{ local_view.GetSamplingEntries(stage) };
+            const auto & local_result{ local_view.GetGaussianResult(FittingStage::Third) };
+            auto sample_entries{ local_view.GetSamplingEntries(FittingStage::Third) };
             member_list.emplace_back(GroupGaussianMemberInput{
                 std::move(sample_entries),
                 local_result.alpha_r,
@@ -679,7 +671,7 @@ void RunGroupPotentialFitting(
         #pragma omp critical
 #endif
         {
-            analysis.ApplyAtomGroupGaussianResult(stage, group_key, result);
+            analysis.ApplyAtomGroupGaussianResult(group_key, result);
             key_count++;
             if (!options.quiet_mode)
             {
@@ -702,12 +694,11 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::Third);
     RunLocalAlphaTraining(model_object, options, FittingStage::Third);
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
-    RunGroupAlphaTraining(model_object, options, FittingStage::Third);
-    RunGroupPotentialFitting(model_object, options, FittingStage::Third);
+    RunGroupAlphaTraining(model_object, options);
+    RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)
     {
-        Logger::Log(LogLevel::Info,
-            BuildGroupPriorSpotSummary(model_object, FittingStage::Third));
+        Logger::Log(LogLevel::Info, BuildGroupPriorSpotSummary(model_object));
     }
     if (options.result_csv_path.has_value())
     {

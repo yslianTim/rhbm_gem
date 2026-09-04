@@ -61,8 +61,8 @@ void ModelAnalysisEditor::InitializeFromSelection()
             FittingStage::Third })
     {
         InitializeLocalAlpha(stage, kInitialLocalAlpha);
-        InitializeGroupAlpha(stage, kInitialGroupAlpha);
     }
+    InitializeGroupAlpha(kInitialGroupAlpha);
 }
 
 void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
@@ -70,7 +70,7 @@ void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
     const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        EnsureAtomLocalPotential(m_model_object, *atom);
+        EnsureAtomLocalPotential(m_model_object, *atom).ClearGroupMemberResult();
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         auto result{ local_view.GetGaussianResult(FittingStage::First) };
         result.ols = GaussianModel3DWithUncertainty{
@@ -81,9 +81,6 @@ void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
             seed_model,
             GaussianModel3DUncertainty{}
         };
-        result.posterior.reset();
-        result.is_outlier = false;
-        result.statistical_distance = 0.0;
         result.fit_result.reset();
         SetAtomLocalGaussianResult(FittingStage::First, *atom, result);
         SetAtomLocalGaussianResult(FittingStage::Second, *atom, result);
@@ -99,10 +96,10 @@ void ModelAnalysisEditor::EnsureSelectedAtomLocalPotentials()
     }
 }
 
-void ModelAnalysisEditor::EnsureAtomGroupLocalPotentials(FittingStage stage, GroupKey group_key)
+void ModelAnalysisEditor::EnsureAtomGroupLocalPotentials(GroupKey group_key)
 {
     const auto & atom_list{
-        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(stage, group_key)
+        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(group_key)
     };
     for (auto * atom : atom_list)
     {
@@ -151,9 +148,7 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        group_entry.AddMember(FittingStage::First, group_key, *atom);
-        group_entry.AddMember(FittingStage::Second, group_key, *atom);
-        group_entry.AddMember(FittingStage::Third, group_key, *atom);
+        group_entry.AddMember(group_key, *atom);
     }
 }
 
@@ -171,7 +166,7 @@ void ModelAnalysisEditor::SetAtomGroupAlphaR(
     double alpha_r)
 {
     const auto & atom_list{
-        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(stage, group_key)
+        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(group_key)
     };
     for (auto * atom : atom_list)
     {
@@ -179,12 +174,12 @@ void ModelAnalysisEditor::SetAtomGroupAlphaR(
     }
 }
 
-void ModelAnalysisEditor::InitializeGroupAlpha(FittingStage stage, double alpha_g)
+void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
 {
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
-    for (const auto group_key : group_entry.CollectGroupKeys(stage))
+    for (const auto group_key : group_entry.CollectGroupKeys())
     {
-        group_entry.SetAlphaG(stage, group_key, alpha_g);
+        group_entry.SetAlphaG(group_key, alpha_g);
     }
 }
 
@@ -201,17 +196,16 @@ void ModelAnalysisEditor::CopyLocalFittingStageResult(
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
-    FittingStage stage,
     GroupKey group_key,
     const GroupGaussianResult & group_result)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
     auto & group_entry{ analysis_data.AtomGroupEntry() };
-    if (!group_entry.HasGroup(stage, group_key))
+    if (!group_entry.HasGroup(group_key))
     {
         throw std::runtime_error("Atom group entry is not available.");
     }
-    const auto & atom_list{ group_entry.GetMembers(stage, group_key) };
+    const auto & atom_list{ group_entry.GetMembers(group_key) };
     if (group_result.member_results.size() != atom_list.size())
     {
         throw std::invalid_argument("Atom group result member result count is inconsistent.");
@@ -221,13 +215,9 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     {
         const auto & member_result{ group_result.member_results.at(i) };
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
-        atom_entry.SetPosteriorResult(
-            stage,
-            member_result.posterior,
-            member_result.is_outlier,
-            member_result.statistical_distance);
+        atom_entry.SetGroupMemberResult(member_result);
     }
-    group_entry.SetGaussianResult(stage, group_key, group_result);
+    group_entry.SetGaussianResult(group_key, group_result);
 }
 
 void ModelAnalysisEditor::SetAtomLocalNeighborCountForPeeling(
@@ -248,11 +238,10 @@ void ModelAnalysisEditor::ApplyAtomLocalSecondStageResult(
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
-    FittingStage stage,
     GroupKey group_key,
     double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(stage, group_key, alpha_g);
+    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(group_key, alpha_g);
 }
 
 } // namespace rhbm_gem

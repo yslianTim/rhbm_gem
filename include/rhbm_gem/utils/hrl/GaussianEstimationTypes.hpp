@@ -27,9 +27,6 @@ struct LocalGaussianResult
         GaussianModel3D{ 0.0, 0.0 },
         GaussianModel3DUncertainty{}
     };
-    std::optional<GaussianModel3DWithUncertainty> posterior{};
-    bool is_outlier{ false };
-    double statistical_distance{ 0.0 };
     std::optional<RHBMBetaEstimateResult> fit_result{};
 };
 

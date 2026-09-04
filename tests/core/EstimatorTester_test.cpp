@@ -528,9 +528,116 @@ TEST(EstimatorTesterTest, RunGroupEstimationTestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
+TEST(EstimatorTesterTest, GroupFittingUsesThirdLocalInputsWithoutChangingLocalStages)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atoms;
+    for (int i = 0; i < 3; ++i)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(i + 1);
+        atom->SetComponentKey(1);
+        atom->SetAtomKey(static_cast<AtomKey>(Spot::CA));
+        atom->SetElement(Element::CARBON);
+        atom->SetSpot(Spot::CA);
+        atom->SetPosition({ 10.0 * static_cast<double>(i), 0.0, 0.0 });
+        atoms.emplace_back(std::move(atom));
+    }
+    rg::ModelObject model{ std::move(atoms) };
+    model.SelectAllAtoms();
+    auto analysis{ model.EditAnalysis() };
+    analysis.InitializeFromSelection();
+    const auto view{ model.GetAnalysisView() };
+    const auto group_keys{ view.CollectAtomGroupKeys() };
+    ASSERT_EQ(group_keys.size(), 1u);
+    const auto group_key{ group_keys.front() };
+    const auto & members{ view.GetAtomObjectList(group_key) };
+    constexpr std::array stages{ FittingStage::First, FittingStage::Second, FittingStage::Third };
+    std::vector<std::array<rg::LocalGaussianResult, 3>> local_results;
+    std::vector<rg::GroupGaussianMemberInput> expected_inputs;
+    for (const auto * atom : members)
+    {
+        const double index{ static_cast<double>(atom->GetSerialID()) };
+        const rg::GaussianModel3D final_model{ 1.0 + 0.2 * index, 0.5 + 0.04 * index, 0.1 * index };
+        std::array<rg::LocalGaussianResult, 3> results;
+        for (std::size_t i = 0; i < stages.size(); ++i)
+        {
+            results[i].alpha_r = 0.1 * static_cast<double>(i + 1);
+            results[i].mdpde = rg::GaussianModel3DWithUncertainty{
+                i == 2 ? final_model : rg::GaussianModel3D{ 20.0 + index, 0.9, 2.0 + static_cast<double>(i) },
+                rg::GaussianModel3DUncertainty{}
+            };
+            results[i].ols = results[i].mdpde;
+            analysis.SetAtomLocalGaussianResult(stages[i], *atom, results[i]);
+        }
+        LocalPotentialSampleList samples;
+        for (int i = 0; i < 16; ++i)
+        {
+            const double distance{ static_cast<double>(i) / 15.0 };
+            samples.emplace_back(LocalPotentialSample{
+                final_model.ResponseAtDistance(distance) + 0.005 * std::sin(4.0 * distance + index),
+                SamplingPoint{ distance, { distance, 0.0, 0.0 }, i % 3 != 0 }
+            });
+        }
+        analysis.SetAtomLocalPeelingSamplingEntries(*atom, samples);
+        auto raw_samples{ samples };
+        for (auto & sample : raw_samples) sample.response += 5.0;
+        analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_samples));
+        expected_inputs.emplace_back(rg::GroupGaussianMemberInput{
+            samples, results[2].alpha_r, final_model
+        });
+        local_results.emplace_back(std::move(results));
+        EXPECT_FALSE(rg::AtomLocalPotentialView::For(*atom).GetGroupMemberResult().has_value());
+    }
+
+    constexpr double alpha_g{ 0.2 };
+    analysis.InitializeGroupAlpha(alpha_g);
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = true;
+    const auto expected{ rt::EstimateGroupGaussian(expected_inputs, alpha_g, options) };
+    rt::RunGroupPotentialFitting(model, options);
+
+    EXPECT_EQ(view.CollectAtomGroupKeys(), group_keys);
+    EXPECT_DOUBLE_EQ(view.GetAtomAlphaG(group_key), alpha_g);
+    for (int parameter = 0; parameter < 3; ++parameter)
+    {
+        EXPECT_NEAR(view.GetAtomGroupMean(group_key).GetModelParameter(parameter),
+            expected.mean.GetModelParameter(parameter), 1e-12);
+        EXPECT_NEAR(view.GetAtomGroupMDPDE(group_key).GetModelParameter(parameter),
+            expected.mdpde.GetModelParameter(parameter), 1e-12);
+        EXPECT_NEAR(view.GetAtomGroupPrior(group_key).GetModelParameter(parameter),
+            expected.prior.GetModelParameter(parameter), 1e-12);
+        EXPECT_NEAR(view.GetAtomGroupPriorWithUncertainty(group_key).GetModelStandardDeviation(parameter),
+            expected.prior.GetModelStandardDeviation(parameter), 1e-12);
+    }
+    for (std::size_t i = 0; i < members.size(); ++i)
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::For(*members[i]) };
+        const auto & member{ local_view.GetGroupMemberResult() };
+        ASSERT_TRUE(member.has_value());
+        EXPECT_EQ(member->is_outlier, expected.member_results[i].is_outlier);
+        EXPECT_NEAR(member->statistical_distance, expected.member_results[i].statistical_distance, 1e-12);
+        for (int parameter = 0; parameter < 3; ++parameter)
+        {
+            EXPECT_NEAR(member->posterior.GetModelParameter(parameter),
+                expected.member_results[i].posterior.GetModelParameter(parameter), 1e-12);
+            EXPECT_NEAR(member->posterior.GetModelStandardDeviation(parameter),
+                expected.member_results[i].posterior.GetModelStandardDeviation(parameter), 1e-12);
+            for (std::size_t stage = 0; stage < stages.size(); ++stage)
+            {
+                const auto & local_result{ local_view.GetGaussianResult(stages[stage]) };
+                EXPECT_DOUBLE_EQ(local_result.alpha_r, local_results[i][stage].alpha_r);
+                EXPECT_DOUBLE_EQ(local_result.ols.GetModelParameter(parameter),
+                    local_results[i][stage].ols.GetModelParameter(parameter));
+                EXPECT_DOUBLE_EQ(local_result.mdpde.GetModelParameter(parameter),
+                    local_results[i][stage].mdpde.GetModelParameter(parameter));
+            }
+        }
+    }
+}
+
 TEST(
     EstimatorTesterTest,
-    RunPotentialFittingWorkflowDefersGroupEstimationUntilThirdStage)
+    RunPotentialFittingWorkflowProducesSingleGroupResultAfterLocalStages)
 {
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
@@ -569,20 +676,8 @@ TEST(
     };
     EXPECT_FALSE(fitted_view.GetPeelingSamplingEntries(false).empty());
     const auto analysis_view{ model->GetAnalysisView() };
-    for (const auto stage : { FittingStage::First, FittingStage::Second })
+    for (const auto stage : { FittingStage::First, FittingStage::Second, FittingStage::Third })
     {
-        const auto group_keys{ analysis_view.CollectAtomGroupKeys(stage) };
-        ASSERT_EQ(group_keys.size(), 1u);
-        const auto group_key{ group_keys.front() };
-        EXPECT_EQ(analysis_view.GetAtomObjectList(stage, group_key).size(), 1u);
-        EXPECT_DOUBLE_EQ(analysis_view.GetAtomAlphaG(stage, group_key), 0.0);
-        EXPECT_DOUBLE_EQ(
-            analysis_view.GetAtomGroupPrior(stage, group_key).GetAmplitude(),
-            0.0);
-        EXPECT_DOUBLE_EQ(
-            analysis_view.GetAtomGroupPrior(stage, group_key).GetWidth(),
-            0.0);
-        EXPECT_FALSE(fitted_view.GetGaussianResult(stage).posterior.has_value());
         const auto & local_model{ fitted_view.GetEstimateMDPDE(stage) };
         EXPECT_TRUE(std::isfinite(local_model.GetAmplitude()));
         EXPECT_GT(local_model.GetAmplitude(), 0.0);
@@ -590,28 +685,23 @@ TEST(
         EXPECT_GT(local_model.GetWidth(), 0.0);
         EXPECT_TRUE(std::isfinite(local_model.GetOffset()));
     }
-    const auto third_group_keys{
-        analysis_view.CollectAtomGroupKeys(FittingStage::Third)
+    const auto group_keys{
+        analysis_view.CollectAtomGroupKeys()
     };
-    ASSERT_EQ(third_group_keys.size(), 1u);
-    const auto third_group_key{ third_group_keys.front() };
+    ASSERT_EQ(group_keys.size(), 1u);
+    const auto group_key{ group_keys.front() };
     EXPECT_EQ(
-        analysis_view.GetAtomObjectList(
-            FittingStage::Third, third_group_key).size(),
+        analysis_view.GetAtomObjectList(group_key).size(),
         1u);
     EXPECT_TRUE(std::isfinite(
-        analysis_view.GetAtomGroupPrior(
-            FittingStage::Third, third_group_key).GetAmplitude()));
+        analysis_view.GetAtomGroupPrior(group_key).GetAmplitude()));
     EXPECT_GT(
-        analysis_view.GetAtomGroupPrior(
-            FittingStage::Third, third_group_key).GetWidth(),
+        analysis_view.GetAtomGroupPrior(group_key).GetWidth(),
         0.0);
     EXPECT_TRUE(std::isfinite(
-        analysis_view.GetAtomAlphaG(
-            FittingStage::Third, third_group_key)));
+        analysis_view.GetAtomAlphaG(group_key)));
     EXPECT_TRUE(
-        fitted_view.GetGaussianResult(FittingStage::Third)
-            .posterior.has_value());
+        fitted_view.GetGroupMemberResult().has_value());
 
     constexpr std::string_view csv_header{
         "serial id,residue,spot,neighbor count for peeling,"

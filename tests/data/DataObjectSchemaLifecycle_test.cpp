@@ -46,7 +46,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
     for (const auto table_name : std::array<std::string_view, 10>{
              "model_object",
              "model_chain_map",
@@ -104,7 +104,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColu
             database_path,
             "model_atom_local_potential",
             "intercept_estimate_ols_" + std::string(suffix)));
-        EXPECT_TRUE(data_test::HasColumn(
+        EXPECT_FALSE(data_test::HasColumn(
             database_path,
             "model_atom_group_potential",
             "intercept_estimate_prior_" + std::string(suffix)));
@@ -168,9 +168,36 @@ TEST(DataObjectSchemaLifecycleTest, MixedUnknownSchemaFailsFast)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_mixed_unknown" };
     const auto database_path{ temp_dir.path() / "mixed.sqlite" };
-    CreateVersionedMarkerDatabase(database_path, 14);
+    CreateVersionedMarkerDatabase(database_path, 15);
 
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
     EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionFourteenSchemaIsRejectedWithoutModification)
+{
+    ExpectVersionedDatabaseRejectedWithoutMutation(14);
+}
+
+TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSingleGroupGaussianResult)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_single_group_result" };
+    const auto database_path{ temp_dir.path() / "group.sqlite" };
+    { rg::DataRepository repository{ database_path }; }
+
+    for (const auto column : {
+             "amplitude_estimate_mean", "width_estimate_mean", "intercept_estimate_mean",
+             "amplitude_estimate_mdpde", "width_estimate_mdpde", "intercept_estimate_mdpde",
+             "amplitude_estimate_prior", "width_estimate_prior", "intercept_estimate_prior",
+             "amplitude_variance_prior", "width_variance_prior", "intercept_variance_prior",
+             "alpha_g" })
+    {
+        EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", column));
+        for (const auto suffix : { "_1st", "_2nd", "_3rd" })
+        {
+            EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential",
+                std::string(column) + suffix));
+        }
+    }
 }

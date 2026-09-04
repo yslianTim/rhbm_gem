@@ -21,8 +21,9 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
         estimate,
         rg::GaussianModel3DUncertainty{}
     };
-    local_result.posterior =
-        rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation };
+    local_entry.SetGroupMemberResult(rg::GroupGaussianMemberResult{
+        rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation }, false, 0.0
+    });
     local_entry.SetGaussianResult(
         rg::FittingStage::Third,
         local_result);
@@ -30,10 +31,8 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
     rg::AtomGroupPotentialEntry group_entry;
     rg::GroupGaussianResult group_result;
     group_result.prior = rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation };
-    group_entry.SetGaussianResult(
-        rg::FittingStage::Third, 42, group_result);
-    const auto group_gaussian{ group_entry.GetPriorWithUncertainty(
-        rg::FittingStage::Third, 42) };
+    group_entry.SetGaussianResult(42, group_result);
+    const auto group_gaussian{ group_entry.GetPriorWithUncertainty(42) };
 
     EXPECT_DOUBLE_EQ(
         local_entry.GaussianResult(rg::FittingStage::Third)
@@ -44,17 +43,14 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
             .mdpde.GetModel().GetDisplayParameter(2),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(
-        group_entry.GetPrior(rg::FittingStage::Third, 42).Intensity(),
+        group_entry.GetPrior(42).Intensity(),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(
-        group_entry.GetPrior(
-            rg::FittingStage::Third, 42).GetDisplayParameter(2),
+        group_entry.GetPrior(42).GetDisplayParameter(2),
         estimate.Intensity());
-    ASSERT_TRUE(local_entry.GaussianResult(
-        rg::FittingStage::Third).posterior.has_value());
+    ASSERT_TRUE(local_entry.GroupMemberResult().has_value());
     EXPECT_DOUBLE_EQ(
-        local_entry.GaussianResult(rg::FittingStage::Third)
-            .posterior->GetDisplayStandardDeviation(2),
+        local_entry.GroupMemberResult()->posterior.GetDisplayStandardDeviation(2),
         group_gaussian.GetDisplayStandardDeviation(2));
 }
 

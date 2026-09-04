@@ -231,7 +231,7 @@ TEST(DataObjectPersistenceTest, InvalidV14SamplingBlobLengthIsRejected)
 
     rg::DataRepository repository{ database_path };
     EXPECT_THROW((void)repository.LoadModel("model"), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
     EXPECT_EQ(
         data_test::CountRows(
             database_path, "model_atom_local_potential", "model"),
@@ -258,14 +258,15 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     local_result.mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 1.5, 0.7, -0.22 },
         rg::GaussianModel3DUncertainty{} };
-    local_result.posterior = rg::GaussianModel3DWithUncertainty{
+    rg::GroupGaussianMemberResult member_result;
+    member_result.posterior = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 1.7, 0.8, -0.33 },
         rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 } };
-    local_result.is_outlier = true;
-    local_result.statistical_distance = 2.5;
+    member_result.is_outlier = true;
+    member_result.statistical_distance = 2.5;
     const auto view{ model->GetAnalysisView() };
-    const auto group_key{
-        view.CollectAtomGroupKeys(rg::FittingStage::Third).front() };
+    const auto group_key{ view.CollectAtomGroupKeys().front() };
+    atom = view.GetAtomObjectList(group_key).front();
     rg::GroupGaussianResult group_result;
     group_result.alpha_g = 0.25;
     group_result.mean = rg::GaussianModel3D{ 2.0, 0.9, 0.12 };
@@ -274,39 +275,72 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
         rg::GaussianModel3D{ 2.2, 1.1, -0.34 },
         rg::GaussianModel3DUncertainty{ 0.4, 0.5, 0.6 } };
     group_result.member_results.resize(
-        view.GetAtomObjectList(rg::FittingStage::Third, group_key).size());
-    editor.ApplyAtomGroupGaussianResult(
-        rg::FittingStage::Third, group_key, group_result);
+        view.GetAtomObjectList(group_key).size());
+    group_result.member_results.front() = member_result;
+    editor.ApplyAtomGroupGaussianResult(group_key, group_result);
     editor.SetAtomLocalGaussianResult(
         rg::FittingStage::Third, *atom, local_result);
 
+    rg::LocalGaussianResult first_result{ local_result };
+    first_result.alpha_r = 0.1;
+    first_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 4.0, 0.9, 0.4 }, rg::GaussianModel3DUncertainty{} };
+    editor.SetAtomLocalGaussianResult(rg::FittingStage::First, *atom, first_result);
+    rg::LocalGaussianResult second_result{ first_result };
+    second_result.alpha_r = 0.2;
+    editor.SetAtomLocalGaussianResult(rg::FittingStage::Second, *atom, second_result);
     repository.SaveModel(*model, "model");
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
 
     const auto loaded_local{
         rg::AtomLocalPotentialView::For(*loaded_model->FindAtomPtr(atom->GetSerialID())) };
+    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::First), 0.1);
+    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::Second), 0.2);
+    EXPECT_DOUBLE_EQ(loaded_local.GetEstimateMDPDE(rg::FittingStage::First).GetOffset(), 0.4);
     const auto loaded_local_result{
         loaded_local.GetGaussianResult(rg::FittingStage::Third) };
     EXPECT_DOUBLE_EQ(loaded_local_result.alpha_r, 0.5);
     EXPECT_DOUBLE_EQ(loaded_local_result.ols.GetModel().GetOffset(), 0.11);
     EXPECT_DOUBLE_EQ(loaded_local_result.mdpde.GetModel().GetOffset(), -0.22);
-    ASSERT_TRUE(loaded_local_result.posterior.has_value());
+    const auto & loaded_member_result{ loaded_local.GetGroupMemberResult() };
+    ASSERT_TRUE(loaded_member_result.has_value());
     EXPECT_DOUBLE_EQ(
-        loaded_local_result.posterior->GetModel().GetOffset(), -0.33);
-    EXPECT_TRUE(loaded_local_result.is_outlier);
-    EXPECT_DOUBLE_EQ(loaded_local_result.statistical_distance, 2.5);
+        loaded_member_result->posterior.GetModel().GetOffset(), -0.33);
+    EXPECT_TRUE(loaded_member_result->is_outlier);
+    EXPECT_DOUBLE_EQ(loaded_member_result->statistical_distance, 2.5);
 
     const auto loaded_view{ loaded_model->GetAnalysisView() };
+    EXPECT_EQ(loaded_view.CollectAtomGroupKeys().size(), view.CollectAtomGroupKeys().size());
+    EXPECT_EQ(loaded_view.GetAtomObjectList(group_key).size(), view.GetAtomObjectList(group_key).size());
+    EXPECT_DOUBLE_EQ(loaded_view.GetAtomAlphaG(group_key), 0.25);
+    EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupMDPDE(group_key).GetOffset(), -0.23);
+    EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupPrior(group_key).GetOffset(), -0.34);
+    for (int parameter = 0; parameter < 3; ++parameter)
+    {
+        EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupMean(group_key).GetModelParameter(parameter),
+            group_result.mean.GetModelParameter(parameter));
+        EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupMDPDE(group_key).GetModelParameter(parameter),
+            group_result.mdpde.GetModelParameter(parameter));
+        EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupPriorWithUncertainty(group_key)
+            .GetModelStandardDeviation(parameter), group_result.prior.GetModelStandardDeviation(parameter));
+        EXPECT_DOUBLE_EQ(loaded_member_result->posterior.GetModelStandardDeviation(parameter),
+            member_result.posterior.GetModelStandardDeviation(parameter));
+    }
     EXPECT_DOUBLE_EQ(
-        loaded_view.GetAtomGroupMean(
-            rg::FittingStage::Third, group_key).GetOffset(),
+        loaded_view.GetAtomGroupMean(group_key).GetOffset(),
         0.12);
     EXPECT_DOUBLE_EQ(
-        loaded_view.GetAtomGroupPriorWithUncertainty(
-            rg::FittingStage::Third, group_key)
+        loaded_view.GetAtomGroupPriorWithUncertainty(group_key)
             .GetStandardDeviationModel().GetOffset(),
         0.6);
+
+    editor.InitializeLocalFittingSeedModels();
+    repository.SaveModel(*model, "model");
+    EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 0);
+    auto reset_model{ repository.LoadModel("model") };
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*reset_model->FindAtomPtr(atom->GetSerialID()))
+        .GetGroupMemberResult().has_value());
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)
@@ -403,4 +437,42 @@ TEST(DataObjectPersistenceTest, LoadModelThrowsWhenDatabaseKeyIsMissing)
 
     rg::DataRepository repository{ database_path };
     EXPECT_THROW((void)repository.LoadModel("missing"), std::runtime_error);
+}
+
+TEST(DataObjectPersistenceTest, GroupWriteFailureRollsBackAnalysisReplacement)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_group_rollback" };
+    const auto database_path{ temp_dir.path() / "group.sqlite" };
+    rg::DataRepository repository{ database_path };
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    auto editor{ model->EditAnalysis() };
+    editor.InitializeFromSelection();
+    const auto view{ model->GetAnalysisView() };
+    const auto group_key{ view.CollectAtomGroupKeys().front() };
+    rg::GroupGaussianResult result;
+    result.alpha_g = 0.2;
+    result.prior = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 2.0, 0.8, 0.3 }, rg::GaussianModel3DUncertainty{} };
+    result.member_results.assign(view.GetAtomObjectList(group_key).size(),
+        rg::GroupGaussianMemberResult{ result.prior, true, 2.5 });
+    editor.ApplyAtomGroupGaussianResult(group_key, result);
+    repository.SaveModel(*model, "model");
+
+    result.alpha_g = 0.9;
+    result.member_results.front().statistical_distance = 8.0;
+    editor.ApplyAtomGroupGaussianResult(group_key, result);
+    data_test::ExecuteSql(database_path,
+        "CREATE TRIGGER reject_group_insert BEFORE INSERT ON model_atom_group_potential "
+        "BEGIN SELECT RAISE(ABORT, 'test group write failure'); END;");
+    EXPECT_THROW(repository.SaveModel(*model, "model"), std::runtime_error);
+    data_test::ExecuteSql(database_path, "DROP TRIGGER reject_group_insert;");
+
+    auto loaded{ repository.LoadModel("model") };
+    const auto loaded_view{ loaded->GetAnalysisView() };
+    EXPECT_DOUBLE_EQ(loaded_view.GetAtomAlphaG(group_key), 0.2);
+    const auto & member{ rg::AtomLocalPotentialView::For(
+        *loaded_view.GetAtomObjectList(group_key).front()).GetGroupMemberResult() };
+    ASSERT_TRUE(member.has_value());
+    EXPECT_DOUBLE_EQ(member->statistical_distance, 2.5);
 }

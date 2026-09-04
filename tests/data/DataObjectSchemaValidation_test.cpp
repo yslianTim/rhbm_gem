@@ -20,11 +20,11 @@ void ExpectCurrentSchemaValidationFailure(
     const command_test::ScopedTempDir temp_dir{ temp_dir_name };
     const auto database_path{ temp_dir.path() / database_name };
     { rg::DataRepository repository{ database_path }; }
-    ASSERT_EQ(data_test::GetUserVersion(database_path), 14);
+    ASSERT_EQ(data_test::GetUserVersion(database_path), 15);
 
     mutate_database(database_path);
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 14);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
 }
 
 void RecreateChainMapTable(
@@ -84,16 +84,16 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColu
         });
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianStageColumnThrows)
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianColumnThrows)
 {
     ExpectCurrentSchemaValidationFailure(
-        "data_schema_missing_group_stage",
-        "missing_group_stage.sqlite",
+        "data_schema_missing_group_result",
+        "missing_group_result.sqlite",
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
-                "ALTER TABLE model_atom_group_potential DROP COLUMN alpha_g_2nd;");
+                "ALTER TABLE model_atom_group_potential DROP COLUMN alpha_g;");
         });
 }
 
@@ -235,4 +235,16 @@ TEST(DataObjectSchemaValidationTest, DeletingModelRootCascadesPayloadRows)
     EXPECT_EQ(data_test::CountRows(database_path, "model_object"), 0);
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom"), 0);
     EXPECT_EQ(data_test::CountRows(database_path, "model_bond"), 0);
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsGroupStageColumn)
+{
+    ExpectCurrentSchemaValidationFailure(
+        "data_schema_group_stage_column",
+        "group_stage_column.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSql(database_path,
+                "ALTER TABLE model_atom_group_potential ADD COLUMN alpha_g_3rd DOUBLE;");
+        });
 }

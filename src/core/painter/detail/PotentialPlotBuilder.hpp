@@ -46,7 +46,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, FittingStage stage, int par1_id=0, int par2_id=1);
+    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, FittingStage stage, int choice=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
@@ -73,8 +73,8 @@ public:
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionMDPDE() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionMDPDE() const;
-    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(FittingStage stage, GroupKey group_key) const;
-    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(FittingStage stage, GroupKey group_key) const;
+    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key) const;
+    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const;
 #endif
 

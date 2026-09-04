@@ -12,8 +12,9 @@ TEST(GaussianEstimationTypesTest, ResultTypesDefaultToZeroValues)
     EXPECT_DOUBLE_EQ(0.0, local_result.ols.GetModel().GetWidth());
     EXPECT_DOUBLE_EQ(0.0, local_result.mdpde.GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(0.0, local_result.mdpde.GetModel().GetWidth());
-    EXPECT_FALSE(local_result.is_outlier);
-    EXPECT_DOUBLE_EQ(0.0, local_result.statistical_distance);
+    const rg::GroupGaussianMemberResult member_result;
+    EXPECT_FALSE(member_result.is_outlier);
+    EXPECT_DOUBLE_EQ(0.0, member_result.statistical_distance);
 
     const rg::GroupGaussianResult group_result;
     EXPECT_DOUBLE_EQ(0.0, group_result.alpha_g);

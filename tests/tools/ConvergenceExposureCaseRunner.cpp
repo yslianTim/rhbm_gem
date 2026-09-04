@@ -85,7 +85,6 @@ rg::LocalGaussianResult MakeGaussianResult(const rg::GaussianModel3D & model)
     result.ols = rg::GaussianModel3DWithUncertainty{
         model, rg::GaussianModel3DUncertainty{} };
     result.mdpde = result.ols;
-    result.posterior = result.mdpde;
     return result;
 }
 
@@ -319,7 +318,7 @@ Scenario BuildScenario(const Request & request)
     model->SelectAllAtoms();
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(rg::FittingStage::Second, 0.0);
+    analysis.InitializeGroupAlpha(0.0);
     std::vector<rg::AtomObject *> selected_atoms{ model->GetSelectedAtoms() };
     for (std::size_t index = 0; index < atom_count; index++)
     {

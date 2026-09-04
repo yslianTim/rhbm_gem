@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 14;
+constexpr int kCurrentSchemaVersion = 15;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -178,7 +178,7 @@ void ValidateColumns(
     if (columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v14 column mismatch for table: " + std::string(table_name));
+            "Schema v15 column mismatch for table: " + std::string(table_name));
     }
 
     auto column_iter{ columns.begin() };
@@ -187,7 +187,7 @@ void ValidateColumns(
         if (column_iter->name != expected_name)
         {
             throw std::runtime_error(
-                "Schema v14 column mismatch for table: " + std::string(table_name));
+                "Schema v15 column mismatch for table: " + std::string(table_name));
         }
         ++column_iter;
     }
@@ -210,7 +210,7 @@ void ValidatePrimaryKey(
     if (primary_key_columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v14 primary key mismatch for table: " + std::string(table_name));
+            "Schema v15 primary key mismatch for table: " + std::string(table_name));
     }
 
     auto primary_key_iter{ primary_key_columns.begin() };
@@ -219,7 +219,7 @@ void ValidatePrimaryKey(
         if (primary_key_iter->second != expected_name)
         {
             throw std::runtime_error(
-                "Schema v14 primary key mismatch for table: " + std::string(table_name));
+                "Schema v15 primary key mismatch for table: " + std::string(table_name));
         }
         ++primary_key_iter;
     }
@@ -237,7 +237,7 @@ void ValidateSelectionColumn(
         }
     }
     throw std::runtime_error(
-        "Schema v14 requires a NOT NULL is_selected column on table: "
+        "Schema v15 requires a NOT NULL is_selected column on table: "
         + std::string(table_name));
 }
 
@@ -256,7 +256,7 @@ void ValidateModelRootForeignKey(
         }
     }
     throw std::runtime_error(
-        "Schema v14 model root foreign key mismatch for table: "
+        "Schema v15 model root foreign key mismatch for table: "
         + std::string(table_name));
 }
 
@@ -265,7 +265,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
         != static_cast<int>(kModelTableNames.size()))
     {
-        throw std::runtime_error("Schema v14 contains an unexpected schema object.");
+        throw std::runtime_error("Schema v15 contains an unexpected schema object.");
     }
 
     const auto table_names{ QueryTableNames(database) };
@@ -275,7 +275,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             kModelTableNames.begin(),
             kModelTableNames.end()))
     {
-        throw std::runtime_error("Schema v14 contains an unexpected table set.");
+        throw std::runtime_error("Schema v15 contains an unexpected table set.");
     }
 
     ValidateColumns(database, "model_object", {
@@ -320,25 +320,13 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         "amplitude_variance_posterior", "width_variance_posterior",
         "intercept_variance_posterior", "outlier_tag", "statistical_distance" });
     ValidateColumns(database, "model_atom_group_potential", {
-        "key_tag", "group_key", "amplitude_estimate_mean_1st",
-        "width_estimate_mean_1st", "intercept_estimate_mean_1st",
-        "amplitude_estimate_mdpde_1st", "width_estimate_mdpde_1st",
-        "intercept_estimate_mdpde_1st", "amplitude_estimate_prior_1st",
-        "width_estimate_prior_1st", "intercept_estimate_prior_1st",
-        "amplitude_variance_prior_1st", "width_variance_prior_1st",
-        "intercept_variance_prior_1st", "alpha_g_1st",
-        "amplitude_estimate_mean_2nd", "width_estimate_mean_2nd",
-        "intercept_estimate_mean_2nd", "amplitude_estimate_mdpde_2nd",
-        "width_estimate_mdpde_2nd", "intercept_estimate_mdpde_2nd",
-        "amplitude_estimate_prior_2nd", "width_estimate_prior_2nd",
-        "intercept_estimate_prior_2nd", "amplitude_variance_prior_2nd",
-        "width_variance_prior_2nd", "intercept_variance_prior_2nd", "alpha_g_2nd",
-        "amplitude_estimate_mean_3rd", "width_estimate_mean_3rd",
-        "intercept_estimate_mean_3rd", "amplitude_estimate_mdpde_3rd",
-        "width_estimate_mdpde_3rd", "intercept_estimate_mdpde_3rd",
-        "amplitude_estimate_prior_3rd", "width_estimate_prior_3rd",
-        "intercept_estimate_prior_3rd", "amplitude_variance_prior_3rd",
-        "width_variance_prior_3rd", "intercept_variance_prior_3rd", "alpha_g_3rd" });
+        "key_tag", "group_key", "amplitude_estimate_mean",
+        "width_estimate_mean", "intercept_estimate_mean",
+        "amplitude_estimate_mdpde", "width_estimate_mdpde",
+        "intercept_estimate_mdpde", "amplitude_estimate_prior",
+        "width_estimate_prior", "intercept_estimate_prior",
+        "amplitude_variance_prior", "width_variance_prior",
+        "intercept_variance_prior", "alpha_g" });
 
     ValidatePrimaryKey(database, "model_object", { "key_tag" });
     ValidatePrimaryKey(database, "model_chain_map", {
@@ -373,7 +361,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         rhbm_gem::model_storage::CreateTables(database);
         ValidateCurrentSchema(database);
-        database.Execute("PRAGMA user_version = 14;");
+        database.Execute("PRAGMA user_version = 15;");
         return;
     }
     if (user_version == kCurrentSchemaVersion)
@@ -382,7 +370,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v14.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v15.");
 }
 
 } // namespace

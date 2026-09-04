@@ -47,7 +47,7 @@ std::string BuildAtomGroupingSummary(const ModelObject & model_object)
 {
     return "Atomic model includes "
         + std::to_string(model_object.GetAnalysisView()
-            .CollectAtomGroupKeys(FittingStage::Third).size())
+            .CollectAtomGroupKeys().size())
         + " atom groups.";
 }
 

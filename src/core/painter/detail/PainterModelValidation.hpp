@@ -35,8 +35,7 @@ inline void RequireGroupedAnalyzedModel(
     std::string_view painter_name)
 {
     RequireLocalAnalyzedModel(model_object, painter_name);
-    if (model_object.GetAnalysisView().HasGroupedAnalysisData(
-            FittingStage::Third))
+    if (model_object.GetAnalysisView().HasGroupedAnalysisData())
     {
         return;
     }

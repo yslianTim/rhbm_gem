@@ -2,12 +2,15 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <string>
 #include <stdexcept>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -134,4 +137,42 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     };
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
+
+    const auto analysis_view{ model->GetAnalysisView() };
+    const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
+    ASSERT_EQ(group_keys.size(), 1u);
+    const auto group_key{ group_keys.front() };
+    rg::GroupGaussianResult group_result;
+    group_result.alpha_g = analysis_view.GetAtomAlphaG(group_key);
+    group_result.mean = analysis_view.GetAtomGroupMean(group_key);
+    group_result.mdpde = analysis_view.GetAtomGroupMDPDE(group_key);
+    group_result.prior = analysis_view.GetAtomGroupPriorWithUncertainty(group_key);
+    for (const auto * atom : analysis_view.GetAtomObjectList(group_key))
+    {
+        const auto & member{ rg::AtomLocalPotentialView::For(*atom).GetGroupMemberResult() };
+        ASSERT_TRUE(member.has_value());
+        group_result.member_results.emplace_back(*member);
+    }
+    group_result.member_results.front().is_outlier = true;
+    model->EditAnalysis().ApplyAtomGroupGaussianResult(group_key, group_result);
+    repository.SaveModel(*model, "pipeline/model test");
+    dump_request.printer_choice = rgc::PrinterType::ATOM_OUTLIER;
+    ASSERT_TRUE(rgc::RunCommand(dump_request).succeeded);
+
+    bool found_outlier_csv{ false };
+    for (const auto & entry : std::filesystem::directory_iterator(dump_output_dir))
+    {
+        if (entry.path().extension() != ".csv"
+            || !entry.path().filename().string().starts_with("atom_outlier_list_")) continue;
+        found_outlier_csv = true;
+        std::ifstream file{ entry.path() };
+        std::string line;
+        ASSERT_TRUE(static_cast<bool>(std::getline(file, line)));
+        EXPECT_EQ(line, "SerialID,Residue,Element,Spot");
+        ASSERT_TRUE(static_cast<bool>(std::getline(file, line)));
+        EXPECT_TRUE(line.starts_with(std::to_string(
+            analysis_view.GetAtomObjectList(group_key).front()->GetSerialID()) + ","));
+    }
+    EXPECT_TRUE(found_outlier_csv);
+
 }

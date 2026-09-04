@@ -45,7 +45,7 @@ The internal `ModelAnalysisData` contains:
 - atom-local entries keyed by atom serial ID;
 - one concrete `AtomGroupPotentialEntry` for atom groups.
 
-There is no bond-group analysis alias or bond-analysis storage path. Both local and group results have exactly three fitting stages. They use fixed-length `std::array` storage and a shared checked stage-to-index conversion.
+There is no bond-group analysis alias or bond-analysis storage path. Local results have exactly three fitting stages, stored in a fixed-length `std::array` with checked stage-to-index conversion. Group membership and statistics use a single group map. Each atom stores one optional `GroupGaussianMemberResult` independently of its local stages.
 
 The public access flow is:
 
@@ -67,6 +67,8 @@ flowchart LR
 
 `AtomLocalPotentialView::For(atom)` is the only atom-local view factory. `IsAvailable()` supports optional probing. All data getters use one consistent missing-entry check and throw when the atom is detached or its entry does not exist.
 
+Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance; it is empty until a group result is applied. Local OLS, MDPDE, and alpha-r queries still select a fitting stage, including `GetAtomAlphaR(stage, group_key)`.
+
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
 ### 4.2 Mutation access
@@ -81,7 +83,7 @@ Views are lightweight value objects containing a non-owning model or atom refere
 
 Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including second-stage local updates, group-result application, stage copying, and group-alpha updates.
 
-`InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, and initializes local and group alpha values for all three stages.
+`InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, initializes local alpha values for all three stages, and initializes group alpha once. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count. Local stage copying does not copy or overwrite member results; workflow seed initialization clears selected atoms' member results.
 
 Transient fitting state is cleared through `ModelAnalysisEditor`; `ModelObject` does not provide a forwarding wrapper.
 

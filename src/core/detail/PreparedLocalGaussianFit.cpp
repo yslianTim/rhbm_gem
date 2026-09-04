@@ -41,9 +41,6 @@ LocalGaussianResult DecodeLocalGaussianResult(
             mdpde_model,
             GaussianModel3DUncertainty{}
         },
-        std::nullopt,
-        false,
-        0.0,
         fit_result
     };
 }
