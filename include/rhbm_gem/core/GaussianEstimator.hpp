@@ -60,7 +60,6 @@ void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options);
 
-bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);
 
 } // namespace core

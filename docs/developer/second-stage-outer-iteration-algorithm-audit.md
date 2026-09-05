@@ -3,7 +3,7 @@
 ## Status and authority
 
 This document is the current decision and evidence authority for the outer
-iteration implemented by `RunSecondStageLocalFitting`. The normative execution
+iteration implemented by `detail::RunSecondStageIterations`. The normative execution
 description remains in [Second-stage local fitting](second-stage-local-fitting.md).
 The four earlier audits are immutable historical records and are linked under
 [Historical provenance](#historical-provenance).

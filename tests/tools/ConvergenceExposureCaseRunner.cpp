@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/detail/IterationProcess.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
@@ -27,6 +28,7 @@ namespace {
 
 namespace rg = rhbm_gem;
 namespace rt = rhbm_gem::core;
+namespace rt_detail = rhbm_gem::core::detail;
 
 struct Request
 {
@@ -452,7 +454,7 @@ int main(int argc, char ** argv)
         }
         else
         {
-            rt::RunSecondStageLocalFitting(*scenario.model, options);
+            rt_detail::RunSecondStageIterations(*scenario.model, options);
         }
         return 0;
     }

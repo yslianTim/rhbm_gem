@@ -2,6 +2,7 @@
 
 #include "core/detail/LocalFittingFeatures.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
+#include "core/detail/IterationProcess.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
@@ -565,7 +566,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
-    const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
+    const auto peeling_applied{ detail::RunSecondStageIterations(model_object, options) };
 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::Third);
     RunLocalAlphaTraining(model_object, options, FittingStage::Third);

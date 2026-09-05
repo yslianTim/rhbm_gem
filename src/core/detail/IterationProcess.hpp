@@ -10,6 +10,14 @@
 #include <variant>
 #include <vector>
 
+namespace rhbm_gem {
+class ModelObject;
+}
+
+namespace rhbm_gem::core {
+struct FitOptions;
+}
+
 namespace rhbm_gem::core::detail {
 
 enum class SecondStageSeedSource
@@ -208,5 +216,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
     const std::vector<QuarantineTarget> & successful_probation_target_list,
     std::size_t accepted_iteration_count,
     QuarantineFailureStateMap & state_by_target);
+
+bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options);
 
 } // namespace rhbm_gem::core::detail

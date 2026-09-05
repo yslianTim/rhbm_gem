@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
+#include "core/detail/IterationProcess.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
@@ -926,7 +927,7 @@ TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
     );
 }
 
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
+TEST(EstimatorTesterTest, RunSecondStageIterationsImprovesBadFiniteEntryScale)
 {
     auto model{ BuildSecondStageScaleDiagnosticModel() };
     SetSelectedAtomEstimateModel(
@@ -936,7 +937,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
         CalculateSelectedAtomResponseMeanSquaredError(*model)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    rt_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model)
@@ -945,7 +946,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
     EXPECT_LT(fitted_error, entry_error);
 }
 
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale)
+TEST(EstimatorTesterTest, RunSecondStageIterationsHandlesNearPerfectEntryScale)
 {
     auto model{ BuildSecondStageScaleDiagnosticModel() };
     RewriteSamplingResponsesFromSelectedAtomEstimates(*model);
@@ -953,7 +954,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale
         CalculateSelectedAtomResponseMeanSquaredError(*model)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    rt_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model)
@@ -962,7 +963,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale
     EXPECT_LE(fitted_error, entry_error + 1.0e-8);
 }
 
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffset)
+TEST(EstimatorTesterTest, RunSecondStageIterationsRollsBackSuspiciousJointOffset)
 {
     auto model{ BuildSecondStageSuspiciousOffsetDiagnosticModel() };
     auto * target_atom{ model->GetSelectedAtoms().front() };
@@ -977,7 +978,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     options.thread_size = 1;
     options.quiet_mode = true;
 
-    rt::RunSecondStageLocalFitting(*model, options);
+    rt_detail::RunSecondStageIterations(*model, options);
 
     const auto fitted_offset{
         rg::AtomLocalPotentialView::For(*target_atom)

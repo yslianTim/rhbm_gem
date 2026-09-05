@@ -42,6 +42,7 @@ namespace backtracking_detail = rhbm_gem::core::detail;
 namespace residual_detail = rhbm_gem::core::detail;
 namespace median_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
+namespace iteration_detail = rhbm_gem::core::detail;
 namespace offset_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
@@ -4190,7 +4191,7 @@ TEST(EstimatorSecondStageDefenseTest, DependencyPolishDefaultsAndIterationValida
     auto options{ MakeSecondStageOptions() };
     options.second_stage_dependency_polish_max_iterations = 0;
     EXPECT_THROW(
-        rt::RunSecondStageLocalFitting(*model, options),
+        iteration_detail::RunSecondStageIterations(*model, options),
         std::invalid_argument);
     for (std::size_t atom_index = 0;
         atom_index < model->GetSelectedAtoms().size();
@@ -5250,7 +5251,7 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousLongChainKeepsTerminalB
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < selected_atoms.size(); i++)
     {
@@ -5260,12 +5261,12 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousLongChainKeepsTerminalB
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJointOffsetSamplesAreNonFinite)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsFallsBackWhenJointOffsetSamplesAreNonFinite)
 {
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
@@ -5278,7 +5279,7 @@ TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluste
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
@@ -5296,7 +5297,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotFreezeSameChemica
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fallback_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
@@ -5468,7 +5469,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
         CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(
         GetEstimateModel(*selected_atoms.front()),
@@ -5480,13 +5481,13 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRejectsTerminalFiniteNonphysicalProfile)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsRejectsTerminalFiniteNonphysicalProfile)
 {
     auto model{ BuildFiniteNonphysicalProfileDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_model{ GetEstimateModel(*atom) };
     EXPECT_GT(fitted_model.GetAmplitude(), 0.0);
@@ -5495,12 +5496,12 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRejectsTerminalF
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinearRidgeGuard)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsAppliesCollinearRidgeGuard)
 {
     auto model{ BuildNearCollinearDefenseModel() };
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
     const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
@@ -5510,7 +5511,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinear
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingPersistsFinalModelAndPeelingWithoutGroupFitting)
+    RunSecondStageIterationsPersistsFinalModelAndPeelingWithoutGroupFitting)
 {
     auto model{ BuildIndependentOffsetDefenseModel() };
     auto analysis{ model->EditAnalysis() };
@@ -5534,7 +5535,7 @@ TEST(
             initial_analysis_view.GetAtomGroupPrior(group_key));
     }
 
-    rt::RunSecondStageLocalFitting(*model, options);
+    iteration_detail::RunSecondStageIterations(*model, options);
 
     ExpectPeelingSamplingEntriesMatchFinalModels(*model);
     const auto analysis_view{ model->GetAnalysisView() };
@@ -5575,7 +5576,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingUsesFrozenClusterBackgroundWithoutGroupOrResidueKeys)
+    RunSecondStageIterationsUsesFrozenClusterBackgroundWithoutGroupOrResidueKeys)
 {
     const std::array seeds{ rg::GaussianModel3D{ 5.0, 0.50, 0.05 },
         rg::GaussianModel3D{ 7.0, 0.60, 0.15 } };
@@ -5610,27 +5611,27 @@ TEST(
             EXPECT_NE(rg::data_internal::GetGroupKey(serial->FindAtomPtr(3)),
                 rg::data_internal::GetGroupKey(parallel->FindAtomPtr(3)));
             options.thread_size = 1;
-            ASSERT_TRUE(rt::RunSecondStageLocalFitting(*serial, options));
+            ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*serial, options));
             options.thread_size = 2;
-            ASSERT_TRUE(rt::RunSecondStageLocalFitting(*parallel, options));
+            ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*parallel, options));
             const auto previous_level{ Logger::GetLogLevel() };
             Logger::SetLogLevel(LogLevel::Debug);
             testing::internal::CaptureStdout();
             options.thread_size = 1;
             options.quiet_mode = false;
-            const bool completed{ rt::RunSecondStageLocalFitting(*logged, options) };
+            const bool completed{ iteration_detail::RunSecondStageIterations(*logged, options) };
             const auto output{ testing::internal::GetCapturedStdout() };
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
             testing::internal::CaptureStdout();
             const bool alternate_completed{
-                rt::RunSecondStageLocalFitting(*alternate_logged, options) };
+                iteration_detail::RunSecondStageIterations(*alternate_logged, options) };
             const auto alternate_output{ testing::internal::GetCapturedStdout() };
             auto relabeled_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, false, shared_cluster, shared_contributor, true) };
             testing::internal::CaptureStdout();
             const bool relabeled_completed{
-                rt::RunSecondStageLocalFitting(*relabeled_logged, options) };
+                iteration_detail::RunSecondStageIterations(*relabeled_logged, options) };
             const auto relabeled_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
             options.quiet_mode = true;
@@ -5765,16 +5766,16 @@ TEST(
     }
     auto excluded{ BuildUnselectedContributorDefenseModel(seeds, truth) };
     auto included{ BuildUnselectedContributorDefenseModel(seeds, truth) };
-    ASSERT_TRUE(rt::RunSecondStageLocalFitting(*excluded, options));
+    ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*excluded, options));
     options.exclude_hydrogen = false;
-    ASSERT_TRUE(rt::RunSecondStageLocalFitting(*included, options));
+    ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*included, options));
     EXPECT_EQ(rg::AtomLocalPotentialView::For(*included->FindAtomPtr(1)).GetNeighborCountForPeeling(), 2);
     EXPECT_NE(rg::AtomLocalPotentialView::For(*excluded->FindAtomPtr(1)).GetPeelingSamplingEntries(false).front().response,
         rg::AtomLocalPotentialView::For(*included->FindAtomPtr(1)).GetPeelingSamplingEntries(false).front().response);
 
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesClusterParameters)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsJointlyPolishesClusterParameters)
 {
     auto model{ BuildJointPolishDefenseModel() };
     const auto & atom_list{ model->GetSelectedAtoms() };
@@ -5785,7 +5786,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
     }
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
     EXPECT_LT(fitted_error, initial_error);
@@ -5826,7 +5827,7 @@ TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsets
         const auto previous_level{ Logger::GetLogLevel() };
         Logger::SetLogLevel(LogLevel::Debug);
         testing::internal::CaptureStdout();
-        const bool completed{ rt::RunSecondStageLocalFitting(model, options) };
+        const bool completed{ iteration_detail::RunSecondStageIterations(model, options) };
         const auto output{ testing::internal::GetCapturedStdout() };
         Logger::SetLogLevel(previous_level);
         EXPECT_TRUE(completed);
@@ -5875,8 +5876,8 @@ TEST(EstimatorSecondStageDefenseTest, IndependentOffsetJointPolishIsIntensitySca
     auto base_model{ BuildIndependentOffsetDefenseModel() };
     auto scaled_model{ BuildIndependentOffsetDefenseModel(scale) };
 
-    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
-    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
@@ -5907,7 +5908,7 @@ TEST(EstimatorSecondStageDefenseTest, IndependentOffsetJointPolishIsIntensitySca
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUpdatesHealthyVariablesAcrossClusters)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsUpdatesHealthyVariablesAcrossClusters)
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
@@ -5919,7 +5920,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUpdatesHealthyVa
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
     {
@@ -5934,7 +5935,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUpdatesHealthyVa
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAndParallelSelection)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsMatchesSerialAndParallelSelection)
 {
     auto serial_model{ BuildSeparatedRollbackDefenseModel() };
     auto parallel_model{ BuildSeparatedRollbackDefenseModel() };
@@ -5944,8 +5945,8 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAnd
     parallel_options.thread_size = 2;
 
     EXPECT_EQ(
-        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
-        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+        iteration_detail::RunSecondStageIterations(*serial_model, serial_options),
+        iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
     const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
@@ -5974,10 +5975,10 @@ TEST(
     Logger::SetLogLevel(LogLevel::Debug);
     serial_options.quiet_mode = false;
     testing::internal::CaptureStdout();
-    const auto serial_completed{ rt::RunSecondStageLocalFitting(*serial_model, serial_options) };
+    const auto serial_completed{ iteration_detail::RunSecondStageIterations(*serial_model, serial_options) };
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_level);
-    EXPECT_EQ(serial_completed, rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+    EXPECT_EQ(serial_completed, iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);
     const auto maximum_position{ output.find(", max-atoms=", cutoff_position) };
@@ -6010,8 +6011,8 @@ TEST(
         BuildBoundaryComponentConflictDefenseModel(intensity_scale)
     };
 
-    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
-    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
     ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
@@ -6031,14 +6032,14 @@ TEST(
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScaleInvariant)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsIsIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };
     auto base_model{ BuildNearCollinearDefenseModel() };
     auto scaled_model{ BuildNearCollinearDefenseModel(scale) };
 
-    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
-    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
@@ -6075,9 +6076,9 @@ TEST(
     parallel_options.thread_size = 2;
 
     EXPECT_EQ(
-        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
-        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
-    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+        iteration_detail::RunSecondStageIterations(*serial_model, serial_options),
+        iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
+    iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
     const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
@@ -6110,7 +6111,7 @@ TEST(
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103)
     };
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103),
         initial_remote_error);
@@ -6119,7 +6120,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingDampsOffsetStepIntoInitialTrustRadius)
+    RunSecondStageIterationsDampsOffsetStepIntoInitialTrustRadius)
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
     auto truth_coordinates{ initial_model.ToTransformedCoordinates() };
@@ -6143,7 +6144,7 @@ TEST(
     const auto previous_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
     };
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
@@ -6199,7 +6200,7 @@ TEST(
             previous_analysis_view.GetAtomGroupPrior(group_key));
     }
 
-    const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
+    const auto peeling_applied{ iteration_detail::RunSecondStageIterations(*model, options) };
 
     EXPECT_TRUE(peeling_applied);
 

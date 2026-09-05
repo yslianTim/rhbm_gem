@@ -2,7 +2,7 @@
 
 ## Scope
 
-`RunSecondStageLocalFitting(ModelObject&, const FitOptions&)` refines the
+`detail::RunSecondStageIterations(ModelObject&, const FitOptions&)` refines the
 Gaussian estimates of the selected atoms after the first-stage local fit. It
 accounts for overlapping responses from neighboring selected atoms
 and unselected model atoms while updating each selected atom's amplitude,
@@ -737,7 +737,7 @@ validated target-cluster background model. The calculation preserves original
 sampling-point order and metadata. Only selected local Gaussian results are
 written; no atom-local analysis entry is created for an unselected contributor. The selected
 results and rebuilt entries are persisted together with
-`ApplyAtomLocalSecondStageResult`. `RunSecondStageLocalFitting` then returns
+`ApplyAtomLocalSecondStageResult`. `detail::RunSecondStageIterations` then returns
 without training `alpha_g` or running group fitting.
 
 After the second stage returns, the workflow copies only the second-stage local

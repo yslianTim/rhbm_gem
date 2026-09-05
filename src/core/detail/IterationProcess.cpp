@@ -2064,7 +2064,9 @@ static void FinalizeSecondStageState(
     ApplyFitState(model_object, context, final_state);
 }
 
-static bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
+} // namespace
+
+bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
     if (options.enable_second_stage_dependency_polish &&
         options.second_stage_dependency_polish_max_iterations == 0)
@@ -2264,8 +2266,6 @@ static bool RunSecondStageIterations(ModelObject & model_object, const FitOption
         use_best_audit_state);
     return true;
 }
-
-} // namespace
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
     const GaussianModel3DWithUncertainty & local_mdpde,
@@ -2584,12 +2584,3 @@ QuarantineStateTransition UpdateQuarantineFailureState(
 }
 
 } // namespace rhbm_gem::core::detail
-
-namespace rhbm_gem::core {
-
-bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
-{
-    return detail::RunSecondStageIterations(model_object, options);
-}
-
-} // namespace rhbm_gem::core
