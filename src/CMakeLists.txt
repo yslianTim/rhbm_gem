@@ -19,6 +19,7 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
     core/GaussianEstimator.cpp
+    core/detail/LocalFittingFeatures.cpp
     core/detail/GaussianModelOperations.cpp
     core/detail/PreparedLocalGaussianFit.cpp
     core/detail/SecondStageFitting.cpp

@@ -226,9 +226,12 @@ struct RequestFieldCatalog<UmapEmbeddingRequest>
     {
         using Self = UmapEmbeddingRequest;
         VisitFieldList(visitor,
-            RequestField{ "input_csv_path", "-i,--input",
-                "Local fitting result CSV path",
-                &Self::input_csv_path },
+            RequestField{ "database_path", "-d,--database",
+                "Database file path",
+                &Self::database_path },
+            RequestField{ "model_key_tag", "-k,--model-key",
+                "Model key tag to embed",
+                &Self::model_key_tag },
             RequestField{ "num_neighbors", "--neighbors",
                 "Number of nearest neighbors",
                 &Self::num_neighbors },
@@ -361,7 +364,7 @@ inline constexpr auto kStableCommands = std::tuple{
 #ifdef RHBM_GEM_ENABLE_UMAP
     CommandEntry<UmapEmbeddingRequest>{
         "umap_embedding",
-        "Create a 2D UMAP embedding from local fitting results",
+        "Create a 2D UMAP embedding from a saved model",
         "UmapEmbeddingRequest",
         ExecuteUmapEmbeddingCommand
     },

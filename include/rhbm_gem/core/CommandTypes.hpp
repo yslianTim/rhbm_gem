@@ -137,7 +137,8 @@ struct RHBMTestRequest : public CommandRequestBase
 #ifdef RHBM_GEM_ENABLE_UMAP
 struct UmapEmbeddingRequest : public CommandRequestBase
 {
-    std::filesystem::path input_csv_path{};
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
+    std::string model_key_tag{};
     int num_neighbors{ 15 };
     double min_dist{ 0.1 };
     int num_epochs{ 0 };

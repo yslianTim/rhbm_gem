@@ -23,6 +23,7 @@ DATABASE_REQUEST_TYPES = {
     "PotentialAnalysisRequest",
     "PotentialDisplayRequest",
     "ResultDumpRequest",
+    "UmapEmbeddingRequest",
 }
 
 
@@ -157,6 +158,11 @@ def assert_request_objects_are_usable() -> None:
 
     if UMAP_ENABLED:
         umap = m.UmapEmbeddingRequest()
+        assert hasattr(umap, "database_path")
+        assert hasattr(umap, "model_key_tag")
+        assert not hasattr(umap, "input_csv_path")
+        assert Path(umap.database_path) == Path(m.PotentialAnalysisRequest().database_path)
+        assert umap.model_key_tag == ""
         assert umap.num_neighbors == 15
         assert umap.min_dist == 0.1
         assert umap.num_epochs == 0
@@ -188,37 +194,11 @@ def assert_umap_runtime_behavior() -> None:
     if not UMAP_ENABLED:
         return
 
-    header = (
-        "serial id,residue,spot,neighbor count for peeling,"
-        "neighbor count in 2A,"
-        "signal peeling ratio,tail peeling ratio,"
-        "amplitude 1st,amplitude 2nd,amplitude 3rd,"
-        "width 1st,width 2nd,width 3rd,"
-        "offset 1st,offset 2nd,offset 3rd,"
-        "amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,"
-        "width rank 1st,width rank 2nd,width rank 3rd,"
-        "offset rank 1st,offset rank 2nd,offset rank 3rd"
-    )
     with tempfile.TemporaryDirectory(prefix="rhbm_umap_python_") as temp_dir:
         workdir = Path(temp_dir)
-        input_path = workdir / "local_fitting_result_python.csv"
-        rows = [header]
-        for observation in range(6):
-            features = [
-                (observation + 1) * (feature + 2)
-                + (observation * observation + 3 * feature) % (feature + 3)
-                for feature in range(22)
-            ]
-            rows.append(
-                ",".join(
-                    [str(observation + 1), "ALA", "CA"]
-                    + [str(value) for value in features]
-                )
-            )
-        input_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
-
         request = m.UmapEmbeddingRequest()
-        request.input_csv_path = input_path
+        request.database_path = workdir / "missing.sqlite"
+        request.model_key_tag = "python"
         request.output_dir = workdir / "output"
         request.num_neighbors = 3
         request.min_dist = 0.2
@@ -227,11 +207,9 @@ def assert_umap_runtime_behavior() -> None:
         request.job_count = 1
 
         report = m.RunCommand(request)
-        assert report.succeeded
-        output_path = Path(request.output_dir) / "umap_embedding_python.csv"
-        output_rows = output_path.read_text(encoding="utf-8").splitlines()
-        assert len(output_rows) == 7
-        assert all(len(row.split(",")) == 27 for row in output_rows)
+        assert not report.succeeded
+        assert has_issue(report, "-d,--database")
+        assert not Path(request.database_path).exists()
 
 
 def main() -> int:
