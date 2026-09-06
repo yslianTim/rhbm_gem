@@ -1,21 +1,15 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <memory>
-#include <optional>
-#include <sstream>
 #include <stdexcept>
-#include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "support/CommandTestHelpers.hpp"
+#include "core/command/detail/LocalFittingFeatures.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -33,75 +27,6 @@ namespace rt_detail = rhbm_gem::core::detail;
 namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
 using rg::FittingStage;
-
-std::vector<std::string> SplitCsvLine(const std::string & line)
-{
-    std::vector<std::string> cells;
-    std::istringstream stream{ line };
-    std::string cell;
-    while (std::getline(stream, cell, ','))
-    {
-        cells.emplace_back(std::move(cell));
-    }
-    return cells;
-}
-
-std::string ReadTextFile(const std::filesystem::path & path)
-{
-    std::ifstream input{ path };
-    return std::string{
-        std::istreambuf_iterator<char>{ input },
-        std::istreambuf_iterator<char>{}
-    };
-}
-
-bool HasTwoFractionalDigits(const std::string & value)
-{
-    const auto decimal_position{ value.find('.') };
-    return decimal_position != std::string::npos
-        && decimal_position + 3 == value.size()
-        && value.at(decimal_position + 1) >= '0'
-        && value.at(decimal_position + 1) <= '9'
-        && value.at(decimal_position + 2) >= '0'
-        && value.at(decimal_position + 2) <= '9';
-}
-
-std::optional<double> ComputeExpectedPeelingRatio(
-    const LocalPotentialSampleList & raw_sampling_entries,
-    const LocalPotentialSampleList & peeling_sampling_entries,
-    double radius_min,
-    double radius_max,
-    bool include_radius_max)
-{
-    const auto includes_radius{
-        [radius_min, radius_max, include_radius_max](double radius)
-        {
-            return radius >= radius_min
-                && (include_radius_max ? radius <= radius_max : radius < radius_max);
-        }
-    };
-    double raw_sum{ 0.0 };
-    std::size_t raw_sample_count{ 0 };
-    for (const auto & sample : raw_sampling_entries)
-    {
-        if (!includes_radius(sample.point.distance)) continue;
-        raw_sum += sample.response;
-        ++raw_sample_count;
-    }
-    double peeling_sum{ 0.0 };
-    std::size_t peeling_sample_count{ 0 };
-    for (const auto & sample : peeling_sampling_entries)
-    {
-        if (!includes_radius(sample.point.distance)) continue;
-        peeling_sum += sample.response;
-        ++peeling_sample_count;
-    }
-    if (raw_sample_count == 0 || peeling_sample_count == 0 || raw_sum == 0.0)
-    {
-        return std::nullopt;
-    }
-    return (raw_sum - peeling_sum) / raw_sum;
-}
 
 using GaussianParameterGetter = double (rg::GaussianModel3D::*)() const;
 
@@ -666,9 +591,6 @@ TEST(
 
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = true;
-    command_test::ScopedTempDir temp_dir{ "local_fitting_result_table" };
-    const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
-    options.result_csv_path = csv_path;
     rt::RunPotentialFittingWorkflow(*model, options);
 
     const auto fitted_view{
@@ -703,75 +625,6 @@ TEST(
         analysis_view.GetAtomAlphaG(group_key)));
     EXPECT_TRUE(
         fitted_view.GetGroupMemberResult().has_value());
-
-    constexpr std::string_view csv_header{
-        "serial id,residue,spot,neighbor count for peeling,"
-        "neighbor count in 2A,"
-        "signal peeling ratio,tail peeling ratio,"
-        "amplitude 1st,amplitude 2nd,"
-        "width 1st,width 2nd,"
-        "offset 1st,offset 2nd,"
-        "amplitude rank 1st,amplitude rank 2nd,"
-        "width rank 1st,width rank 2nd,"
-        "offset rank 1st,offset rank 2nd"
-    };
-    ASSERT_TRUE(std::filesystem::exists(csv_path));
-    const auto csv_content{ ReadTextFile(csv_path) };
-    ASSERT_EQ(csv_content.find(csv_header), 0U);
-    const auto row_begin{ csv_header.size() + 1 };
-    const auto row_end{ csv_content.find('\n', row_begin) };
-    const auto row{ SplitCsvLine(csv_content.substr(row_begin, row_end - row_begin)) };
-    ASSERT_EQ(row.size(), 19U);
-    const auto * atom{ model->GetSelectedAtoms().front() };
-    EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
-    EXPECT_FALSE(row.at(1).empty());
-    EXPECT_EQ(row.at(2), atom->GetAtomID());
-    EXPECT_EQ(
-        std::stoi(row.at(3)),
-        fitted_view.GetNeighborCountForPeeling());
-    EXPECT_EQ(
-        static_cast<std::size_t>(std::stoull(row.at(4))),
-        atom->FindNeighborAtoms(2.0, false).size());
-    const auto raw_sampling_entries{ fitted_view.GetRawSamplingEntries(false) };
-    const auto peeling_sampling_entries{ fitted_view.GetPeelingSamplingEntries(false) };
-    const auto expected_signal_peeling_ratio{ ComputeExpectedPeelingRatio(
-        raw_sampling_entries, peeling_sampling_entries, 0.0, 1.0, false) };
-    const auto expected_tail_peeling_ratio{ ComputeExpectedPeelingRatio(
-        raw_sampling_entries, peeling_sampling_entries, 1.0, 2.0, true) };
-    ASSERT_TRUE(expected_signal_peeling_ratio.has_value());
-    ASSERT_TRUE(expected_tail_peeling_ratio.has_value());
-    EXPECT_NEAR(std::stod(row.at(5)), *expected_signal_peeling_ratio, 0.0051);
-    EXPECT_NEAR(std::stod(row.at(6)), *expected_tail_peeling_ratio, 0.0051);
-    for (std::size_t column = 5; column < 13; column++)
-    {
-        EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
-        EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
-    }
-    const auto & first_model{
-        fitted_view.GetEstimateMDPDE(FittingStage::First)
-    };
-    const auto & second_model{
-        fitted_view.GetEstimateMDPDE(FittingStage::Second)
-    };
-    EXPECT_NEAR(std::stod(row.at(7)), first_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(8)), second_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(9)), first_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(10)), second_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(11)), first_model.GetOffset(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(12)), second_model.GetOffset(), 0.0051);
-    for (std::size_t column = 13; column < row.size(); ++column)
-    {
-        EXPECT_EQ(std::stoi(row.at(column)), 1);
-    }
-
-    {
-        std::ofstream stale_output{ csv_path };
-        stale_output << "stale content";
-    }
-    rt::RunPotentialFittingWorkflow(*model, options);
-    const auto quiet_csv_content{ ReadTextFile(csv_path) };
-    EXPECT_EQ(quiet_csv_content.find(csv_header), 0U);
-    EXPECT_EQ(quiet_csv_content.find("stale content"), std::string::npos);
 }
 
 TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirstAndSecondStages)
@@ -796,14 +649,9 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
     ASSERT_EQ(selected_atoms.size(), 5u);
 
     auto options{ MakeSecondStageOptions() };
-    command_test::ScopedTempDir temp_dir{ "local_fitting_result_ranks" };
-    const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
-    options.result_csv_path = csv_path;
     rt::RunPotentialFittingWorkflow(*model, options);
 
-    std::istringstream csv{ ReadTextFile(csv_path) };
-    std::string line;
-    ASSERT_TRUE(std::getline(csv, line));
+    const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model, true) };
     constexpr std::array stages{
         FittingStage::First,
         FittingStage::Second
@@ -813,15 +661,13 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
         &rg::GaussianModel3D::GetWidth,
         &rg::GaussianModel3D::GetOffset
     };
-    constexpr std::array<std::size_t, 3> rank_column_starts{ 13, 15, 17 };
+    constexpr std::array<std::size_t, 3> rank_feature_starts{ 10, 12, 14 };
 
     std::size_t row_count{ 0 };
     std::size_t verified_neighbor_set_count{ 0 };
-    while (std::getline(csv, line))
+    for (const auto & row : rows)
     {
-        const auto row{ SplitCsvLine(line) };
-        ASSERT_EQ(row.size(), 19u);
-        const auto serial_id{ std::stoi(row.at(0)) };
+        const auto serial_id{ row.serial_id };
         const auto atom_iter{ std::find_if(
             selected_atoms.begin(),
             selected_atoms.end(),
@@ -831,9 +677,11 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
             })
         };
         ASSERT_NE(atom_iter, selected_atoms.end());
-        for (std::size_t column = 13; column < row.size(); ++column)
+        EXPECT_FALSE(row.residue.empty());
+        EXPECT_EQ(row.spot, (*atom_iter)->GetAtomID());
+        for (std::size_t feature = 10; feature < row.features.size(); ++feature)
         {
-            const auto rank{ std::stoi(row.at(column)) };
+            const auto rank{ row.features[feature] };
             EXPECT_GE(rank, 1);
             EXPECT_LE(rank, 4);
         }
@@ -884,7 +732,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
                     parameter_getters[parameter])
                 };
                 const auto actual_rank{
-                    std::stoi(row.at(rank_column_starts[parameter] + stage))
+                    row.features[rank_feature_starts[parameter] + stage]
                 };
                 EXPECT_EQ(actual_rank, expected_rank);
             }

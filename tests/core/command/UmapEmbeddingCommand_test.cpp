@@ -9,7 +9,7 @@
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingFeatures.hpp"
+#include "core/command/detail/LocalFittingFeatures.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 

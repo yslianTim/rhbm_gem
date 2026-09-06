@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <stdexcept>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
@@ -101,7 +100,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
         rgc::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
-    EXPECT_TRUE(std::filesystem::exists(
+    EXPECT_FALSE(std::filesystem::exists(
         analysis_output_dir / "local_fitting_result_pipeline_model_test.csv"));
 
     rg::DataRepository repository{ database_path };
@@ -113,18 +112,6 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     EXPECT_DOUBLE_EQ(
         model->GetStandardAverageQScore(),
         model->GetAtomList().front()->GetStandardQScore());
-
-    const auto failure_output_dir{ temp_dir.path() / "analysis_failure_output" };
-    std::filesystem::create_directories(
-        failure_output_dir / "local_fitting_result_write_failure.csv");
-    auto failure_request{ analysis_request };
-    failure_request.output_dir = failure_output_dir;
-    failure_request.saved_key_tag = "write/failure";
-    const auto failure_result{ rgc::RunCommand(failure_request) };
-    EXPECT_FALSE(failure_result.succeeded);
-    EXPECT_THROW(
-        (void)repository.LoadModel("write/failure"),
-        std::runtime_error);
 
     rgc::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;

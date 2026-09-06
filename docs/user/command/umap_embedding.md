@@ -158,8 +158,9 @@ floating-point round-off and therefore the final coordinates.
 
 ## Migrating from CSV Input
 
-The local-fitting CSV produced by `potential_analysis` remains available for
-reporting, but UMAP no longer reads it. Replace:
+`potential_analysis` no longer produces a local-fitting CSV. The UMAP output
+CSV includes the local-fitting features alongside the embedding coordinates.
+UMAP reads the saved model from the database. Replace:
 
 ```bash
 RHBM-GEM umap_embedding --input local_fitting_result_model.csv

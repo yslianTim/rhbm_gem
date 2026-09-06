@@ -2,6 +2,7 @@ add_library(rhbm_gem)
 target_compile_features(rhbm_gem PUBLIC cxx_std_20)
 
 set(RHBM_GEM_COMMAND_SOURCES
+    core/command/detail/LocalFittingFeatures.cpp
     core/command/RHBMTestCommand.cpp
     core/command/detail/RHBMTestPlotting.cpp
     core/command/MapSimulationCommand.cpp
@@ -19,7 +20,6 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
     core/GaussianEstimator.cpp
-    core/detail/LocalFittingFeatures.cpp
     core/detail/GaussianModelOperations.cpp
     core/detail/PreparedLocalGaussianFit.cpp
     core/detail/SecondStageFitting.cpp

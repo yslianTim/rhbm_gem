@@ -11,7 +11,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <map>
@@ -136,7 +135,6 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.exclude_hydrogen = request.exclude_hydrogen;
-    options.result_csv_path = request.output_dir / ("local_fitting_result_" + path_helper::EnsureSanitizedTag(request.saved_key_tag) + ".csv");
     try
     {
         RunPotentialFittingWorkflow(*model_object, options);

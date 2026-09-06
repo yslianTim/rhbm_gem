@@ -1,6 +1,5 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
-#include "core/detail/LocalFittingFeatures.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
@@ -8,8 +7,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <map>
 #include <sstream>
@@ -120,37 +117,6 @@ std::string BuildGroupPriorSpotSummary(const ModelObject & model_object)
     return summary.str();
 }
 
-std::string BuildLocalFittingResultCsv(const ModelObject & model_object, bool peeling_applied)
-{
-    const auto rows{ detail::BuildLocalFittingFeatureRows(model_object, peeling_applied) };
-    std::ostringstream table;
-    table << std::fixed << std::setprecision(2);
-    table << detail::BuildLocalFittingCsvHeader();
-    for (const auto & row : rows)
-    {
-        table << '\n'
-            << row.serial_id << ','
-            << row.residue << ','
-            << row.spot;
-        for (std::size_t feature = 0;
-            feature < detail::kLocalFittingFeatureCount;
-            ++feature)
-        {
-            table << ',';
-            if (detail::kLocalFittingFeatureIsIntegral[feature])
-            {
-                table << static_cast<long long>(row.features[feature]);
-            }
-            else
-            {
-                table << row.features[feature];
-            }
-        }
-    }
-    table << '\n';
-    return table.str();
-}
-
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
@@ -233,27 +199,6 @@ GroupGaussianResult DecodeGroupGaussianResult(
         detail::WithPreservedUncertaintyOffset(prior, group_offset),
         DecodeMemberGaussianResults(result, member_offset_list)
     };
-}
-
-void OutputLocalFittingResultTable(
-    const ModelObject & model_object,
-    bool peeling_applied,
-    const std::filesystem::path & output_path)
-{
-    const auto table{ BuildLocalFittingResultCsv(model_object, peeling_applied) };
-    std::ofstream output{ output_path, std::ios::out | std::ios::trunc };
-    if (!output.is_open())
-    {
-        throw std::runtime_error(
-            "Failed to open local fitting result CSV file: " + output_path.string());
-    }
-    output << table;
-    output.close();
-    if (!output)
-    {
-        throw std::runtime_error(
-            "Failed to write local fitting result CSV file: " + output_path.string());
-    }
 }
 
 void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
@@ -555,7 +500,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
-    const auto peeling_applied{ detail::RunSecondStageIterations(model_object, options) };
+    detail::RunSecondStageIterations(model_object, options);
 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::Third);
     RunLocalAlphaTraining(model_object, options, FittingStage::Third);
@@ -565,10 +510,6 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, BuildGroupPriorSpotSummary(model_object));
-    }
-    if (options.result_csv_path.has_value())
-    {
-        OutputLocalFittingResultTable(model_object, peeling_applied, *options.result_csv_path);
     }
 }
 

@@ -1,8 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <filesystem>
-#include <optional>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -24,7 +22,6 @@ struct FitOptions
     std::size_t second_stage_boundary_halo_depth{ 1 };
     bool enable_second_stage_dependency_polish{ true };
     std::size_t second_stage_dependency_polish_max_iterations{ 10 };
-    std::optional<std::filesystem::path> result_csv_path{};
 };
 
 double TrainAlphaR(

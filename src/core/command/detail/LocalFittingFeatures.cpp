@@ -1,4 +1,4 @@
-#include "core/detail/LocalFittingFeatures.hpp"
+#include "core/command/detail/LocalFittingFeatures.hpp"
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
