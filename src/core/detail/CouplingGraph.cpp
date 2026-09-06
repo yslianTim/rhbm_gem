@@ -512,13 +512,19 @@ GraphTopology CouplingGraphBuilder::BuildTopology(
         options.maximum_atom_count);
 }
 
-static GraphTopology BuildSecondStageGraphTopologyImpl(
+GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
     const FitState & state,
     bool quiet_mode,
-    const CouplingGraphOptions & options,
     const GraphTopology * previous_topology)
 {
+    CouplingGraphOptions options;
+    if (previous_topology != nullptr)
+    {
+        options.minimum_weight = 0.06;
+        options.retained_edge_minimum_weight = 0.04;
+    }
+
     std::size_t total_sample_count{ 0 };
     for (const auto & atom_context : context)
     {
@@ -591,36 +597,6 @@ static GraphTopology BuildSecondStageGraphTopologyImpl(
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
     }
     return topology;
-}
-
-GraphTopology BuildSecondStageGraphTopology(
-    const SecondStageContext & context,
-    const FitState & initial_state,
-    bool quiet_mode)
-{
-    return BuildSecondStageGraphTopologyImpl(
-        context,
-        initial_state,
-        quiet_mode,
-        CouplingGraphOptions{},
-        nullptr);
-}
-
-GraphTopology BuildAdaptiveSecondStageGraphTopology(
-    const SecondStageContext & context,
-    const FitState & accepted_state,
-    const GraphTopology & previous_topology,
-    bool quiet_mode)
-{
-    CouplingGraphOptions options;
-    options.minimum_weight = 0.06;
-    options.retained_edge_minimum_weight = 0.04;
-    return BuildSecondStageGraphTopologyImpl(
-        context,
-        accepted_state,
-        quiet_mode,
-        options,
-        &previous_topology);
 }
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)

@@ -619,6 +619,8 @@ struct CandidateSelection
 
 struct CandidateSelectionInputs
 {
+    // Selection updates block_activity and cluster_objective_state, reuses both
+    // solver workspace maps, and records performance through these references.
     const SecondStageContext & context;
     const FitOptions & options;
     const ResidualBaseline & residual_baseline;
@@ -626,7 +628,7 @@ struct CandidateSelectionInputs
     const ClusterHealthMap & health_by_key;
     const FitState & previous_state;
     const PolishProvenance & previous_polish_provenance;
-    const FitState & operator_proposal_state;
+    const FitState & proposal_state;
     SuspiciousBlockActivity & block_activity;
     const std::vector<double> & ridge_multiplier_list;
     const ObjectiveDomain & objective_domain;

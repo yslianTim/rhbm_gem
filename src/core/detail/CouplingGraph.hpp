@@ -98,6 +98,10 @@ struct CouplingGraphPartition
 
     std::map<ClusterKey, std::vector<SampleRef>> sample_id_list_by_key{};
     std::vector<BoundarySampleDependency> boundary_sample_dependency_list{};
+
+    friend bool operator==(
+        const CouplingGraphPartition &,
+        const CouplingGraphPartition &) = default;
 };
 
 struct BoundaryReconciliationComponent
@@ -170,14 +174,9 @@ private:
 
 GraphTopology BuildSecondStageGraphTopology(
     const SecondStageContext & context,
-    const FitState & initial_state,
-    bool quiet_mode);
-
-GraphTopology BuildAdaptiveSecondStageGraphTopology(
-    const SecondStageContext & context,
-    const FitState & accepted_state,
-    const GraphTopology & previous_topology,
-    bool quiet_mode);
+    const FitState & state,
+    bool quiet_mode,
+    const GraphTopology * previous_topology = nullptr);
 
 void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);
 
