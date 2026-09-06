@@ -1347,27 +1347,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorEnsuresAtomGroupLocalPotent
         std::runtime_error);
 }
 
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetsAtomGroupAlphaR)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * first_atom{ model->GetAtomList().at(0).get() };
-    auto * second_atom{ model->GetAtomList().at(1).get() };
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    auto analysis{ model->EditAnalysis() };
-    analysis_data.AtomGroupEntry().AddMember(101,
-        *first_atom);
-    analysis_data.AtomGroupEntry().AddMember(202,
-        *second_atom);
-    analysis.SetAtomLocalAlphaR(rg::FittingStage::Third, *first_atom, 0.8);
-
-    analysis.SetAtomGroupAlphaR(rg::FittingStage::First, 101, 0.42);
-
-    const auto first_view{ rg::AtomLocalPotentialView::For(*first_atom) };
-    EXPECT_DOUBLE_EQ(0.42, first_view.GetAlphaR(rg::FittingStage::First));
-    EXPECT_DOUBLE_EQ(0.8, first_view.GetAlphaR(rg::FittingStage::Third));
-    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*second_atom).IsAvailable());
-}
-
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalGaussianResult)
 {
     auto model{ data_test::MakeModelWithBond() };

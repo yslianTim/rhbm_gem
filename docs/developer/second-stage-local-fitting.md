@@ -62,11 +62,13 @@ background contributors. One unselected atom can affect targets in different
 clusters without connecting those clusters, and uses each target's own frozen
 cluster model.
 
-Before the second stage starts, the workflow trains the first-stage local
-`alpha_r`, performs fixed-offset local fitting on the selected raw sampling
-entries, and copies the complete local result from `FittingStage::First` to
-`FittingStage::Second`. The first stage does not train `alpha_g` or run group
-fitting.
+Before the second stage starts, the workflow independently trains one
+first-stage local `alpha_r` for each selected atom from that atom's raw sampling
+entries. Atoms below the ten-entry training threshold use the training minimum
+of zero instead of inheriting another atom's value. The workflow then performs
+fixed-offset local fitting and copies the complete local result from
+`FittingStage::First` to `FittingStage::Second`. The first stage does not train
+`alpha_g` or run group fitting.
 
 The initial Gaussian seed is rebuilt for every selected atom. The first valid
 source is selected in this order:
@@ -741,9 +743,10 @@ results and rebuilt entries are persisted together with
 without training `alpha_g` or running group fitting.
 
 After the second stage returns, the workflow copies only the second-stage local
-result to `FittingStage::Third`. It passes the same persisted peeling entries to
-`RunLocalAlphaTraining(..., FittingStage::Third)` and
-`RunFixedOffsetLocalFitting(..., FittingStage::Third)`, then runs
+result to `FittingStage::Third`. It independently retrains each selected atom's
+`alpha_r` from that atom's persisted peeling entries through
+`RunLocalAlphaTraining(..., FittingStage::Third)` and then runs
+`RunFixedOffsetLocalFitting(..., FittingStage::Third)`,
 `RunGroupAlphaTraining(model, options)` and
 `RunGroupPotentialFitting(model, options)`. These third-stage local
 fits may update local Gaussian results, but they do not rebuild or overwrite

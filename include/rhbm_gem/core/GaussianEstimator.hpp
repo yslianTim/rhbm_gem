@@ -28,7 +28,7 @@ struct FitOptions
 };
 
 double TrainAlphaR(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const LocalPotentialSampleList & sample_entries,
     const FitOptions & options);
 
 double TrainAlphaG(

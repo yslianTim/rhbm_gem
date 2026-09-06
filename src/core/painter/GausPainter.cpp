@@ -1113,13 +1113,10 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             //legend->AddEntry(map_value_graph_list.at(0).get(),
             //    "Members of Value", "l");
             legend->AddEntry(gaus_prior.get(),
-                Form("#alpha_{r} = %.1f, #alpha_{g} = %.1f",
-                    entry_iter.GetAtomAlphaR(
-                        FittingStage::Third,
-                        group_key),
+                Form("Group prior, #alpha_{g} = %.1f",
                     entry_iter.GetAtomAlphaG(group_key)), "l");
             legend->AddEntry(gaus_mean.get(),
-                "#alpha_{r} = #alpha_{g} = 0", "l");
+                "Group mean", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
                 "Map Value", "l");
             legend->Draw();

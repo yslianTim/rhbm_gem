@@ -160,20 +160,6 @@ void ModelAnalysisEditor::InitializeLocalAlpha(FittingStage stage, double alpha_
     }
 }
 
-void ModelAnalysisEditor::SetAtomGroupAlphaR(
-    FittingStage stage,
-    GroupKey group_key,
-    double alpha_r)
-{
-    const auto & atom_list{
-        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(group_key)
-    };
-    for (auto * atom : atom_list)
-    {
-        SetAtomLocalAlphaR(stage, *atom, alpha_r);
-    }
-}
-
 void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
 {
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };

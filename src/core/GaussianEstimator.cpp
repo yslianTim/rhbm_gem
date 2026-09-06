@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
-#include <limits>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -342,34 +341,27 @@ void RunFixedOffsetLocalFitting(
 }
 
 double TrainAlphaR(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const LocalPotentialSampleList & sample_entries,
     const FitOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
 
-    std::vector<RHBMMemberDataset> dataset_list;
-    dataset_list.reserve(sample_entries_list.size());
-    std::size_t response_count_min{ std::numeric_limits<std::size_t>::max() };
-    for (const auto & sample_entries : sample_entries_list)
-    {
-        dataset_list.emplace_back(
-            rhbm_helper::BuildMemberDataset(
-                sample_entries, options.distance_min, options.distance_max));
-        const auto response_count{ static_cast<std::size_t>(dataset_list.back().y.size()) };
-        response_count_min = std::min(response_count_min, response_count);
-    }
+    std::vector<RHBMMemberDataset> dataset_list{
+        rhbm_helper::BuildMemberDataset(
+            sample_entries, options.distance_min, options.distance_max)
+    };
+    const auto response_count{
+        static_cast<std::size_t>(dataset_list.front().y.size())
+    };
     auto training_options{ MakeTrainingOptions(options) };
-    if (!dataset_list.empty())
+    if (response_count < 2)
     {
-        if (response_count_min < 2)
-        {
-            return training_options.alpha_min;
-        }
-        training_options.subset_size = std::min(
-            training_options.subset_size,
-            response_count_min);
+        return training_options.alpha_min;
     }
+    training_options.subset_size = std::min(
+        training_options.subset_size,
+        response_count);
     return rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options).best_alpha;
 }
 
@@ -468,39 +460,36 @@ void RunLocalAlphaTraining(
     FittingStage stage)
 {
     auto analysis{ model_object.EditAnalysis() };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
+    analysis.EnsureSelectedAtomLocalPotentials();
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto alpha_min{ MakeTrainingOptions(options).alpha_min };
 
     size_t count{ 0 };
     if (!options.quiet_mode)
     {
-        Logger::Log(LogLevel::Info, "Run local alpha training for " + std::to_string(group_key_list.size()) + " groups.");
+        Logger::Log(LogLevel::Info,
+            "Run local alpha training for " +
+            std::to_string(atom_list.size()) + " atoms.");
     }
-    for (const auto group_key : group_key_list)
+    for (auto * atom : atom_list)
     {
-        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key) };
-        analysis.EnsureAtomGroupLocalPotentials(group_key);
-        std::vector<LocalPotentialSampleList> sample_entries_list;
-        sample_entries_list.reserve(group_atom_list.size());
-        for (auto * atom : group_atom_list)
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        auto alpha_r{ alpha_min };
+        if (local_view.HasEnoughSamplingEntriesInRange(
+                stage,
+                options.distance_min,
+                options.distance_max,
+                kMinimumAlphaRTrainingSampleCount))
         {
-            const auto local_view{ AtomLocalPotentialView::For(*atom) };
-            if (!local_view.HasEnoughSamplingEntriesInRange(
-                    stage,
-                    options.distance_min,
-                    options.distance_max,
-                    kMinimumAlphaRTrainingSampleCount)) continue;
-            sample_entries_list.emplace_back(local_view.GetSamplingEntries(stage));
+            alpha_r = TrainAlphaR(
+                local_view.GetSamplingEntries(stage),
+                options);
         }
-        if (!sample_entries_list.empty())
-        {
-            const auto alpha_r{ TrainAlphaR(sample_entries_list, options) };
-            analysis.SetAtomGroupAlphaR(stage, group_key, alpha_r);
-        }
+        analysis.SetAtomLocalAlphaR(stage, *atom, alpha_r);
         count++;
         if (!options.quiet_mode)
         {
-            Logger::ProgressPercent(count, group_key_list.size());
+            Logger::ProgressPercent(count, atom_list.size());
         }
     }
 }

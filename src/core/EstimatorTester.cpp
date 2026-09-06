@@ -195,8 +195,7 @@ LocalTestBias RunLocalEstimationTest(
         if (options.alpha_training)
         {
             const auto trained_alpha_r{
-                TrainAlphaR(
-                    std::vector<LocalPotentialSampleList>{ sample_entries }, estimator_options)
+                TrainAlphaR(sample_entries, estimator_options)
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
             const auto replica_result{

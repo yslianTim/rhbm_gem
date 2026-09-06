@@ -63,11 +63,11 @@ flowchart LR
 
 ### 4.1 Read access
 
-`ModelAnalysisView` provides typed atom-group queries only: group keys, membership, means, robust estimates, priors, uncertainty, and alpha values. It does not format summaries or CSV output.
+`ModelAnalysisView` provides typed atom-group queries only: group keys, membership, means, robust estimates, priors, uncertainty, and alpha-g values. It does not format summaries or CSV output.
 
 `AtomLocalPotentialView::For(atom)` is the only atom-local view factory. `IsAvailable()` supports optional probing. All data getters use one consistent missing-entry check and throw when the atom is detached or its entry does not exist.
 
-Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance; it is empty until a group result is applied. Local OLS, MDPDE, and alpha-r queries still select a fitting stage, including `GetAtomAlphaR(stage, group_key)`.
+Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance; it is empty until a group result is applied. Local OLS, MDPDE, and alpha-r queries are atom-local and select a fitting stage through `AtomLocalPotentialView`.
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
@@ -81,7 +81,7 @@ Views are lightweight value objects containing a non-owning model or atom refere
 - `SetAtomLocalAlphaR(...)`;
 - `SetAtomLocalNeighborCountForPeeling(...)`.
 
-Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including second-stage local updates, group-result application, stage copying, and group-alpha updates.
+Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including second-stage local updates, group-result application, stage copying, and alpha-g updates.
 
 `InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, initializes local alpha values for all three stages, and initializes group alpha once. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count. Local stage copying does not copy or overwrite member results; workflow seed initialization clears selected atoms' member results.
 
