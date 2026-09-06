@@ -42,6 +42,53 @@ is `FitOptions::second_stage_dependency_polish_max_iterations`, which defaults
 to ten. An enabled polish with a zero round limit is rejected before any model
 write. These settings intentionally have no command-line flags.
 
+## Implementation responsibilities and state ownership
+
+The internal implementation follows the iteration sequence rather than exposing
+all second-stage services through candidate selection:
+
+| Module in `src/core/detail` | Responsibility |
+| --- | --- |
+| `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
+| `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
+| `CandidateSelection` | Per-cluster candidate search, local joint polish, and trust-radius control |
+| `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage, and quarantine fallback re-audit |
+| `DependencyPolish` | Final uncut-component polish candidates and objective acceptance |
+| `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, and previous/best objective history |
+| `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
+| `Quarantine` | Failure tracking, probation, activity, and transition rollback |
+| `Diagnosis` | Progress and audit output, graph/objective diagnostics, and performance counters |
+
+`GaussianModelOperations`, `PreparedLocalGaussianFit`, `SecondStageFitting`,
+`CouplingGraph`, and `JointFitting` retain the underlying model operations,
+prepared design, state/residual representation, graph construction, and solvers.
+The public Gaussian estimator workflow and `FitOptions` are unchanged.
+
+`CandidateSelectionInputs` contains read-only algorithm inputs. Selection owns
+its working activity masks and cluster objective history and returns both in
+`CandidateSelection`. Solver workspaces and performance counters are the only
+mutable resources referenced by the inputs. Boundary helpers update this same
+selection instead of receiving a separate alias to its objective history.
+Quarantine fallback re-audit starts from the attempt's original history; the
+controller then publishes the audited history before the all-rejected exit.
+Convergence and rollback use the returned activity. The unrestricted operator
+evidence remains separate from these production restrictions.
+
+`SecondStageContext::atom_list` is accessed directly. Model snapshots capture
+both the selected Gaussian models and the immutable background in effect when
+they are built. `BuildSecondStageModelSnapshot` accepts a full fit state, a
+patch-backed state view, or existing model snapshots; callers do not need a
+separate model-projection step. The topology drift reference retains only model
+snapshots, while accepted and best-audit states retain complete local results.
+Patch/view and residual-overlay representations continue to avoid full-state
+materialization during candidate evaluation.
+
+The progress field `proposal_maximum_transformed_change` measures the constrained
+proposal's maximum movement. It is distinct from the nominal operator residual
+in `ConvergenceCertificate`; the existing progress label and audit schemas are
+unchanged. The corpus runner normalizes both legacy schema-1 terminal atoms
+(with chemical group) and current schema-2 atoms (without chemical group).
+
 ## Model context and initialization
 
 The fitting context and optimizer state contain selected atoms only. Each
@@ -969,3 +1016,45 @@ files were not changed. The paired 600-case corpus was not rerun. Only this
 workspace-verification record was updated in the normative document; its
 algorithm description, the existing Notion algorithm page, and historical audit
 documents are unchanged.
+
+
+## Readability refactor verification (2026-09-06)
+
+The paired baseline is revision `a285a63a29ff134f346b3697743d5cd2ce0032a5`.
+Its executable and shared library were preserved before implementation. Both
+build variants used Debug, system dependencies, OpenMP AUTO (5.1), UMAP, and
+ROOT; the trust-model experiment was tested both OFF and ON.
+
+- The six responsibility modules and diagnostic ownership described above are
+  implemented. No public estimator options, numerical thresholds, stop rules,
+  logging schemas, or persistence interfaces changed.
+- Both variants built `rhbm_tests` and `convergence_exposure_case_runner` and
+  passed the estimator, algorithm, math, HRL, corpus-tooling contract, exposure
+  smoke, and exposure determinism CTest entries (7/7 per variant).
+- Repository lint and `git diff --check` passed. No test file or case was added:
+  the modified defense source retains 101 declared cases (including its
+  conditional experiment case), and the corpus contract retains seven cases.
+- The existing corpus terminal normalizer incorrectly required `group` for
+  schema-2 atom records. It now follows the schema accepted by the existing
+  log parser, preserving schema-1 group fields and omitting them for schema 2.
+  The existing parser/metrics test also checks normalization of both schemas.
+- The checked 600-case manifest was run before and after with one estimator
+  thread and four independent jobs. Both completed 600/600 with zero failed
+  cases and zero safety regressions. All 600 production-semantic digests,
+  terminal-state digests, full terminal summaries, and frozen-truth digests
+  matched exactly. Objective, truth metrics, and accepted iterations therefore
+  have zero per-case differences.
+- Both runs stopped with 54 converged, 289 audit-patience, 165 all-rejected
+  backtracking-exhausted, and 92 maximum-iteration cases.
+- The comparison tool's separate strict-speedup condition did not pass:
+  elapsed median was 0.895124 s before and 0.900958 s after, while p90 was
+  6.476624 s before and 6.308444 s after. Every behavioral comparison condition
+  passed. These runs overlapped other validation work and do not constitute a
+  controlled performance benchmark; this refactor makes no speedup claim.
+
+Pair summaries, logs, and the unchanged comparison-tool report are retained in
+`build/second-stage-refactor-baseline/corpus` and
+`build/second-stage-refactor-candidate/corpus`. Baseline revision, binary hashes,
+and execution settings are recorded in
+`build/second-stage-refactor-baseline/provenance.json`. Historical audit documents
+were not changed.

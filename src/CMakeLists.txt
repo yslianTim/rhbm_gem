@@ -26,6 +26,12 @@ target_sources(rhbm_gem PRIVATE
     core/detail/CouplingGraph.cpp
     core/detail/JointFitting.cpp
     core/detail/CandidateSelection.cpp
+    core/detail/ObjectiveEvaluation.cpp
+    core/detail/SuspiciousUpdate.cpp
+    core/detail/IterationProposal.cpp
+    core/detail/Quarantine.cpp
+    core/detail/BoundaryReconciliation.cpp
+    core/detail/DependencyPolish.cpp
     core/detail/Diagnosis.cpp
     core/detail/IterationProcess.cpp
     core/MapSampler.cpp

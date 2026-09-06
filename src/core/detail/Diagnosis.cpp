@@ -1,5 +1,8 @@
 #include "core/detail/Diagnosis.hpp"
 
+#include "core/detail/IterationProcess.hpp"
+#include "core/detail/DependencyPolish.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -306,7 +309,7 @@ void LogAuditAtomState(
         std::ostringstream message;
         message << std::scientific << std::setprecision(17)
             << marker << " schema=2"
-            << ", serial=" << context.at(atom_index).atom->GetSerialID()
+            << ", serial=" << context.atom_list.at(atom_index).atom->GetSerialID()
             << ", amplitude=" << model.GetAmplitude()
             << ", width=" << model.GetWidth()
             << ", offset=" << model.GetOffset();
@@ -405,9 +408,9 @@ void LogSecondStageSeedSelections(
 void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode)
 {
     if (quiet_mode || !IsDebugLogLevelEnabled() || !context.frozen_background) return;
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
-        const auto & atom{ context.at(atom_index) };
+        const auto & atom{ context.atom_list.at(atom_index) };
         const auto affected_samples{ std::ranges::count_if(atom.unselected_distance_list_by_sample,
             [](const auto & contributors) { return !contributors.empty(); }) };
         if (affected_samples == 0) continue;
@@ -1039,7 +1042,7 @@ void LogIterationProgress(
                 *iteration_result.accepted_maximum_transformed_change) :
             std::string{ "-" }) + "/" +
             FormatProgressMaximum(
-                iteration_result.operator_maximum_transformed_change)
+                iteration_result.proposal_maximum_transformed_change)
     };
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
@@ -1492,6 +1495,361 @@ void LogSecondStageSummary(
         << (final_uses_best_audit ? "best-audit" : "latest-validated")
         << "\n";
     Logger::Log(LogLevel::Info, message.str());
+}
+
+PerformanceCounters::PerformanceCounters(
+    bool quiet_mode,
+    const SecondStageContext & context,
+    const ClusterSolverWorkspaceMap & solver_workspace_by_key,
+    const BoundaryJointCorrectionWorkspaceMap &
+        boundary_joint_correction_workspace_by_key)
+    : m_quiet_mode{ quiet_mode },
+      m_solver_workspace_by_key{ solver_workspace_by_key },
+      m_boundary_joint_correction_workspace_by_key{ boundary_joint_correction_workspace_by_key },
+      m_start_time{ std::chrono::steady_clock::now() },
+      m_cached_sample_count{ CountRawSamplingEntries(context) }
+{
+}
+
+PerformanceCounters::~PerformanceCounters()
+{
+    if (m_quiet_mode) return;
+
+    const auto symbolic_analysis_count{
+        m_retired_solver_symbolic_analysis_count + CountCurrentSolverSymbolicAnalyses()
+    };
+    const auto total_milliseconds{
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - m_start_time).count()
+    };
+    std::ostringstream message_info;
+    message_info
+        << " Second-Stage Local Fitting Performance :\n"
+        << " - boundary_reconciliation_ms = "
+        << std::fixed << std::setprecision(3) << m_boundary_reconciliation_milliseconds << "\n"
+        << " - boundary_joint_correction_ms = " << m_boundary_joint_correction_milliseconds << "\n"
+        << " - dependency_polish_ms = " << m_dependency_polish_milliseconds << "\n"
+        << " - iteration/candidate/topology/total_ms = "
+        << std::fixed << std::setprecision(3)
+        << m_iteration_phase_milliseconds << "/"
+        << m_candidate_phase_milliseconds << "/"
+        << m_topology_rebuild_milliseconds << "/"
+        << total_milliseconds << "\n";
+
+    std::ostringstream message_debug;
+    message_debug
+        << " - full_state_materializations = " << m_full_state_materialization_count.load() << "\n"
+        << " - gaussian_cache_hit/miss = "
+        << m_gaussian_cache_hit_count.load() << "/" << m_gaussian_cache_miss_count.load() << "\n"
+        << " - objective_recomputed/reused_samples = "
+        << m_objective_recomputed_sample_count.load() << "/"
+        << m_objective_reused_sample_count.load() <<"\n"
+        << " - solver_symbolic_analyses = " << symbolic_analysis_count << "\n"
+        << " - topology_rebuilds/partition_changes = "
+        << m_topology_rebuild_attempt_count << "/" << m_topology_partition_change_count<< "\n"
+        << " - boundary_reconciliations/backtracked/rejected = "
+        << m_boundary_reconciliation_attempt_count << "/"
+        << m_boundary_reconciliation_backtracked_count << "/"
+        << m_boundary_reconciliation_rejected_count << "\n"
+        << " - boundary_joint_correction_attempts/accepted/fallback = "
+        << m_boundary_joint_correction_attempt_count << "/"
+        << m_boundary_joint_correction_accepted_count << "/"
+        << m_boundary_joint_correction_fallback_count << "\n"
+        << " - boundary_rescues/accepted/fallback/rejected = "
+        << m_boundary_rescue_attempt_count << "/"
+        << m_boundary_rescue_accepted_count << "/"
+        << m_boundary_rescue_fallback_count << "/"
+        << m_boundary_rescue_rejected_count << "\n"
+        << " - boundary_rescue_exclusions_hard/invalid/no-objective = "
+        << m_boundary_rescue_hard_failure_exclusion_count << "/"
+        << m_boundary_rescue_invalid_proposal_exclusion_count << "/"
+        << m_boundary_rescue_objective_unavailable_exclusion_count << "\n"
+        << " - dependency_polish_components/attempted/accepted/fallback = "
+        << m_dependency_polish_component_count << "/"
+        << m_dependency_polish_attempt_count << "/"
+        << m_dependency_polish_accepted_count << "/"
+        << m_dependency_polish_fallback_count << "\n"
+        << " - dependency_polish_atoms/parameters/rounds = "
+        << m_dependency_polish_atom_count << "/"
+        << m_dependency_polish_parameter_count << "/"
+        << m_dependency_polish_round_count << "\n";
+
+    Logger::Log(LogLevel::Info, message_info.str());
+    Logger::Log(LogLevel::Debug, message_debug.str());
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+    std::ostringstream audit_performance;
+    audit_performance << std::scientific << std::setprecision(17)
+        << "Trust-model performance: schema=1"
+        << ", candidate-ms=" << m_candidate_phase_milliseconds
+        << ", total-ms=" << total_milliseconds;
+    Logger::Log(LogLevel::Debug, audit_performance.str());
+#endif
+}
+
+void PerformanceCounters::RecordFullStateMaterialization()
+{
+    m_full_state_materialization_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceCounters::RecordGaussianCacheMisses()
+{
+    m_gaussian_cache_miss_count.fetch_add(m_cached_sample_count, std::memory_order_relaxed);
+}
+
+void PerformanceCounters::RecordGaussianCacheHits()
+{
+    m_gaussian_cache_hit_count.fetch_add(m_cached_sample_count, std::memory_order_relaxed);
+}
+
+void PerformanceCounters::RecordObjectiveSampleEvaluation(
+    std::size_t recomputed_sample_count,
+    std::size_t total_sample_count)
+{
+    m_objective_recomputed_sample_count.fetch_add(
+        recomputed_sample_count,
+        std::memory_order_relaxed);
+    m_objective_reused_sample_count.fetch_add(
+        total_sample_count > recomputed_sample_count ?
+            total_sample_count - recomputed_sample_count : 0,
+        std::memory_order_relaxed);
+}
+
+void PerformanceCounters::FinishIterationPhase(std::chrono::steady_clock::time_point start_time)
+{
+    m_iteration_phase_milliseconds += CalculateElapsedMilliseconds(start_time);
+}
+
+void PerformanceCounters::FinishCandidatePhase(std::chrono::steady_clock::time_point start_time)
+{
+    m_candidate_phase_milliseconds += CalculateElapsedMilliseconds(start_time);
+}
+
+void PerformanceCounters::RecordSolverWorkspaceReset()
+{
+    m_retired_solver_symbolic_analysis_count += CountCurrentSolverSymbolicAnalyses();
+}
+
+void PerformanceCounters::RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed)
+{
+    m_topology_rebuild_attempt_count++;
+    if (partition_changed) m_topology_partition_change_count++;
+    m_topology_rebuild_milliseconds += elapsed_milliseconds;
+}
+
+void PerformanceCounters::RecordBoundaryReconciliation(
+    std::size_t attempt_count,
+    std::size_t backtracked_count,
+    std::size_t rejected_count,
+    double elapsed_milliseconds)
+{
+    m_boundary_reconciliation_attempt_count += attempt_count;
+    m_boundary_reconciliation_backtracked_count += backtracked_count;
+    m_boundary_reconciliation_rejected_count += rejected_count;
+    m_boundary_reconciliation_milliseconds += elapsed_milliseconds;
+}
+
+void PerformanceCounters::RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds)
+{
+    m_boundary_joint_correction_attempt_count++;
+    if (accepted)
+    {
+        m_boundary_joint_correction_accepted_count++;
+    }
+    else
+    {
+        m_boundary_joint_correction_fallback_count++;
+    }
+    m_boundary_joint_correction_milliseconds += elapsed_milliseconds;
+}
+
+void PerformanceCounters::RecordBoundaryRescue(bool accepted, bool used_fallback)
+{
+    m_boundary_rescue_attempt_count++;
+    if (accepted)
+    {
+        m_boundary_rescue_accepted_count++;
+    }
+    else
+    {
+        m_boundary_rescue_rejected_count++;
+    }
+    if (used_fallback) m_boundary_rescue_fallback_count++;
+}
+
+void PerformanceCounters::RecordBoundaryRescueExclusions(
+    std::size_t hard_failure_count,
+    std::size_t invalid_proposal_count,
+    std::size_t objective_unavailable_count)
+{
+    m_boundary_rescue_hard_failure_exclusion_count += hard_failure_count;
+    m_boundary_rescue_invalid_proposal_exclusion_count += invalid_proposal_count;
+    m_boundary_rescue_objective_unavailable_exclusion_count += objective_unavailable_count;
+}
+
+void PerformanceCounters::RecordDependencyPolish(
+    std::size_t component_count,
+    std::size_t attempt_count,
+    std::size_t accepted_count,
+    std::size_t fallback_count,
+    std::size_t atom_count,
+    std::size_t parameter_count,
+    std::size_t round_count,
+    double elapsed_milliseconds)
+{
+    m_dependency_polish_component_count += component_count;
+    m_dependency_polish_attempt_count += attempt_count;
+    m_dependency_polish_accepted_count += accepted_count;
+    m_dependency_polish_fallback_count += fallback_count;
+    m_dependency_polish_atom_count += atom_count;
+    m_dependency_polish_parameter_count += parameter_count;
+    m_dependency_polish_round_count += round_count;
+    m_dependency_polish_milliseconds += elapsed_milliseconds;
+}
+
+double PerformanceCounters::CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time)
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count();
+}
+
+std::size_t PerformanceCounters::CountRawSamplingEntries(const SecondStageContext & context)
+{
+    std::size_t count{ 0 };
+    for (const auto & atom_context : context.atom_list)
+    {
+        count += atom_context.raw_sampling_entries.size();
+    }
+    return count;
+}
+
+std::size_t PerformanceCounters::CountCurrentSolverSymbolicAnalyses() const
+{
+    std::size_t count{ 0 };
+    for (const auto & [key, workspace] : m_solver_workspace_by_key)
+    {
+        static_cast<void>(key);
+        count += workspace.joint_offset.GetSymbolicAnalysisCount();
+        count += workspace.joint_polish.GetSymbolicAnalysisCount();
+    }
+    for (const auto & [key, workspace] :
+        m_boundary_joint_correction_workspace_by_key)
+    {
+        static_cast<void>(key);
+        count += workspace.GetSymbolicAnalysisCount();
+    }
+    return count;
+}
+
+static void AppendObjectiveScaleSummary(std::ostringstream & message, const std::vector<double> & scale_list)
+{
+    if (scale_list.empty())
+    {
+        message << "unavailable";
+        return;
+    }
+    message
+        << array_helper::ComputePercentile(scale_list, 0.5) << "/"
+        << array_helper::ComputePercentile(scale_list, 0.99) << "/"
+        << std::ranges::max(scale_list);
+}
+
+void LogObjectiveDomain(
+    const ObjectiveDomain & domain,
+    bool quiet_mode,
+    bool is_terminal_reset)
+{
+    if (quiet_mode) return;
+    std::vector<double> fit_scale_list;
+    std::vector<double> tail_scale_list;
+    for (const auto & entry : domain.cluster_by_key)
+    {
+        const auto & cluster_domain{ entry.second };
+        if (!cluster_domain.scale.has_value()) continue;
+        fit_scale_list.emplace_back(cluster_domain.scale->fit);
+        if (!cluster_domain.tail_sample_ref_list.empty())
+        {
+            tail_scale_list.emplace_back(cluster_domain.scale->tail);
+        }
+    }
+    std::ostringstream message;
+    message
+        << (is_terminal_reset ?
+            "Reset second-stage objective domain" : "Initialize second-stage objective domain")
+        << ": fit/tail/offset weights = "
+        << kFitRangeWeight << "/" << kTailValidationWeight << "/" << kOffsetPlausibilityPenaltyWeight
+        << ", clusters = " << domain.cluster_by_key.size()
+        << ", active atoms = " << domain.active_atom_count
+        << ", unique fit/tail samples = " << domain.fit_sample_count << "/" << domain.tail_sample_count
+        << ", fixed fit scale median/p99/max = ";
+    AppendObjectiveScaleSummary(message, fit_scale_list);
+    message << ", fixed tail scale median/p99/max = ";
+    AppendObjectiveScaleSummary(message, tail_scale_list);
+    message << ".";
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Info, message.str());
+}
+
+void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
+{
+    if (quiet_mode) return;
+
+    const auto & summary{ topology.summary };
+    if (!summary.uses_weighted_graph)
+    {
+        Logger::Log(LogLevel::Warning,
+            "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
+        if (Logger::GetLogLevel() >= LogLevel::Debug)
+        {
+            Logger::Log(LogLevel::Debug,
+                "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
+        }
+    }
+    std::ostringstream message;
+    message << "Local-fitting coupling graph mode = "
+        << (summary.uses_weighted_graph ? "weighted" : "binary-fallback")
+        << std::scientific << std::setprecision(2)
+        << ", minimum weight = " << summary.configured_minimum_weight
+        << ", candidate/retained/cut edges = "
+        << summary.candidate_edge_count << "/"
+        << summary.retained_edge_count << "/"
+        << summary.cut_edge_count
+        << ", weight p50/p95/max = "
+        << summary.weight_median << "/"
+        << summary.weight_percentile_95 << "/"
+        << summary.weight_maximum
+        << ", initial components/max atoms/ratio = "
+        << summary.component_count << "/"
+        << summary.maximum_component_size << "/"
+        << std::fixed << std::setprecision(2)
+        << summary.maximum_component_ratio << ".";
+    Logger::Log(LogLevel::Info, message.str());
+
+    const auto & atom_cutoff_summary{ topology.atom_cutoff_summary };
+    std::ostringstream atom_cutoff_message;
+    atom_cutoff_message
+        << "Local-fitting atom cutoff: atoms="
+        << topology.adjacency_list.size()
+        << ", limit=" << atom_cutoff_summary.maximum_atom_count_limit
+        << ", clusters=" << summary.component_count
+        << ", max-atoms=" << summary.maximum_component_size
+        << ", cutoff-edges=" << atom_cutoff_summary.cut_edge_count << ".";
+    Logger::Log(LogLevel::Info, atom_cutoff_message.str());
+
+    for (const auto & sensitivity : summary.threshold_sensitivity_list)
+    {
+        std::ostringstream sensitivity_message;
+        sensitivity_message
+            << std::scientific << std::setprecision(2)
+            << "Coupling sensitivity: threshold=" << sensitivity.minimum_weight
+            << ", retained/cut="
+            << sensitivity.retained_edge_count << "/"
+            << sensitivity.cut_edge_count
+            << ", components/max-atoms/ratio="
+            << sensitivity.component_count << "/"
+            << sensitivity.maximum_component_size << "/"
+            << std::fixed << std::setprecision(2)
+            << sensitivity.maximum_component_ratio << ".";
+        Logger::Log(LogLevel::Info, sensitivity_message.str());
+    }
 }
 
 } // namespace rhbm_gem::core::detail

@@ -167,6 +167,7 @@ def normalized_terminal(parsed: dict[str, Any]) -> dict[str, Any]:
         {
             name: atom[name]
             for name in ("serial", "group", "amplitude", "width", "offset")
+            if name != "group" or atom["schema"] == "1"
         }
         for atom in sorted(
             parsed["terminal_atoms"], key=lambda row: int(row["serial"]))

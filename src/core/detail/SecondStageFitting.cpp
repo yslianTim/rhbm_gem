@@ -43,19 +43,6 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshotImpl(const State & state)
     return snapshot;
 }
 
-template<typename ResponseProvider>
-LocalPotentialSampleList BuildSecondStageAdjustedSamplesImpl(
-    const AtomContext & atom_context,
-    ResponseProvider response_provider)
-{
-    auto adjusted_sampling_entries{ atom_context.raw_sampling_entries };
-    for (std::size_t i = 0; i < adjusted_sampling_entries.size(); i++)
-    {
-        adjusted_sampling_entries.at(i).response = response_provider(i);
-    }
-    return adjusted_sampling_entries;
-}
-
 template<typename CurrentState, typename PreviousState>
 TransformedChangeSummary SummarizeTransformedChangesImpl(
     const CurrentState & current_state,
@@ -80,11 +67,11 @@ std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
     const FitState & state,
     const std::vector<ClusterKey> & cluster_key_list)
 {
-    if (state.size() != context.size()) return nullptr;
+    if (state.size() != context.atom_list.size()) return nullptr;
     auto background{ std::make_shared<FrozenBackground>() };
-    background->model_by_atom.resize(context.size());
-    background->response_by_atom.resize(context.size());
-    std::vector<char> visited(context.size(), 0);
+    background->model_by_atom.resize(context.atom_list.size());
+    background->response_by_atom.resize(context.atom_list.size());
+    std::vector<char> visited(context.atom_list.size(), 0);
     for (const auto & key : cluster_key_list)
     {
         std::vector<GaussianModel3D> models;
@@ -101,7 +88,7 @@ std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
         for (const auto atom_index : key)
         {
             background->model_by_atom.at(atom_index) = *median;
-            const auto & atom_context{ context.at(atom_index) };
+            const auto & atom_context{ context.atom_list.at(atom_index) };
             auto & responses{ background->response_by_atom.at(atom_index) };
             responses.assign(atom_context.raw_sampling_entries.size(), 0.0);
             if (atom_context.unselected_distance_list_by_sample.empty()) continue;
@@ -183,21 +170,11 @@ const GaussianModel3D & GetFitModel(const FittedGaussianSnapshot & state, std::s
     return state.at(atom_index);
 }
 
-FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state)
-{
-    return BuildFittedGaussianSnapshotImpl(state);
-}
-
-FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state)
-{
-    return BuildFittedGaussianSnapshotImpl(state);
-}
-
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     FittedGaussianSnapshot node_snapshot)
 {
-    if (node_snapshot.size() != context.size())
+    if (node_snapshot.size() != context.atom_list.size())
     {
         throw std::invalid_argument("Second-stage node snapshot size is inconsistent.");
     }
@@ -208,17 +185,24 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     const FitState & state)
 {
-    return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshot(state));
+    return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshotImpl(state));
+}
+
+SecondStageModelSnapshot BuildSecondStageModelSnapshot(
+    const SecondStageContext & context,
+    const FitStateView & state)
+{
+    return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshotImpl(state));
 }
 
 SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    SecondStageAdjustedResponseCache cache(context.size());
-    for (std::size_t i = 0; i < context.size(); i++)
+    SecondStageAdjustedResponseCache cache(context.atom_list.size());
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
-        const auto & atom_context{ context.at(i) };
+        const auto & atom_context{ context.atom_list.at(i) };
         const auto sample_count{ atom_context.raw_sampling_entries.size() };
         auto & response_list{ cache.at(i) };
         response_list.reserve(sample_count);
@@ -239,12 +223,12 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     {
         throw std::invalid_argument("Second-stage adjusted response count is inconsistent.");
     }
-    return BuildSecondStageAdjustedSamplesImpl(
-        atom_context,
-        [&](std::size_t sample_index)
-        {
-            return adjusted_response_list.at(sample_index);
-        });
+    auto adjusted_sampling_entries{ atom_context.raw_sampling_entries };
+    for (std::size_t i = 0; i < adjusted_sampling_entries.size(); i++)
+    {
+        adjusted_sampling_entries.at(i).response = adjusted_response_list.at(i);
+    }
+    return adjusted_sampling_entries;
 }
 
 LocalPotentialSampleList BuildSecondStageAdjustedSamples(
@@ -252,13 +236,14 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     std::size_t atom_index,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    const auto & atom_context{ context.at(atom_index) };
-    return BuildSecondStageAdjustedSamplesImpl(
-        atom_context,
-        [&](std::size_t sample_index)
-        {
-            return CalculateSecondStageAdjustedResponse(atom_context, SampleRef{ atom_index, sample_index }, model_snapshot);
-        });
+    const auto & atom_context{ context.atom_list.at(atom_index) };
+    auto adjusted_sampling_entries{ atom_context.raw_sampling_entries };
+    for (std::size_t i = 0; i < adjusted_sampling_entries.size(); i++)
+    {
+        adjusted_sampling_entries.at(i).response =
+            CalculateSecondStageAdjustedResponse(atom_context, SampleRef{ atom_index, i }, model_snapshot);
+    }
+    return adjusted_sampling_entries;
 }
 
 std::optional<ResidualSample> EvaluateResidualSample(
@@ -266,7 +251,7 @@ std::optional<ResidualSample> EvaluateResidualSample(
     const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    const auto & atom_context{ context.at(sample_ref.atom_index) };
+    const auto & atom_context{ context.atom_list.at(sample_ref.atom_index) };
     const auto & sample{
         atom_context.raw_sampling_entries.at(sample_ref.sample_index)
     };
@@ -290,11 +275,11 @@ ResidualBaseline BuildResidualBaseline(const SecondStageContext & context, const
 {
     ResidualBaseline baseline{
         BuildSecondStageModelSnapshot(context, state),
-        std::vector<std::vector<std::optional<ResidualSample>>>(context.size())
+        std::vector<std::vector<std::optional<ResidualSample>>>(context.atom_list.size())
     };
-    for (std::size_t i = 0; i < context.size(); i++)
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
-        const auto sample_count{ context.at(i).raw_sampling_entries.size() };
+        const auto sample_count{ context.atom_list.at(i).raw_sampling_entries.size() };
         baseline.sample_list.at(i).reserve(sample_count);
         for (std::size_t j = 0; j < sample_count; j++)
         {
@@ -317,11 +302,25 @@ TransformedChangeSummary SummarizeTransformedChanges(
 }
 
 TransformedChangeSummary SummarizeTransformedChanges(
+    const FitState & current_state,
+    const FittedGaussianSnapshot & previous_state,
+    const std::vector<std::size_t> & index_list)
+{
+    return SummarizeTransformedChangesImpl(current_state, previous_state, index_list);
+}
+
+TransformedChangeSummary SummarizeTransformedChanges(
     const FitStateView & current_state,
     const FittedGaussianSnapshot & previous_state,
     const std::vector<std::size_t> & index_list)
 {
     return SummarizeTransformedChangesImpl(current_state, previous_state, index_list);
+}
+
+void SetLocalResultOffset(LocalGaussianResult & result, double offset)
+{
+    result.ols = WithPreservedUncertaintyOffset(result.ols, offset);
+    result.mdpde = WithPreservedUncertaintyOffset(result.mdpde, offset);
 }
 
 } // namespace rhbm_gem::core::detail

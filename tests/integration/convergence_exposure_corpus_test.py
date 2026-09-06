@@ -127,6 +127,16 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             self.assertEqual(len(parsed), 1)
             self.assertEqual(parsed[0]["offset"], "0.1")
             self.assertEqual("group" in parsed[0], schema == "1")
+            terminal = RUNNER.normalized_terminal({
+                "terminal": {"reason": "converged", "try": "1", "acc": "1",
+                             "objective": "0/0/0/0"},
+                "terminal_atoms": parsed,
+            })
+            expected_atom = {name: parsed[0][name] for name in
+                             ("serial", "amplitude", "width", "offset")}
+            if schema == "1":
+                expected_atom["group"] = "7"
+            self.assertEqual(terminal["atoms"], [expected_atom])
         with self.assertRaises(ValueError):
             parser.parse_log(
                 "Second-stage audit terminal atom: schema=2, serial=1, width=0.5.")

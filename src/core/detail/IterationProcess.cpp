@@ -1,6 +1,10 @@
 #include "core/detail/IterationProcess.hpp"
 
 #include "core/detail/Diagnosis.hpp"
+#include "core/detail/IterationProposal.hpp"
+#include "core/detail/Quarantine.hpp"
+#include "core/detail/BoundaryReconciliation.hpp"
+#include "core/detail/DependencyPolish.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include "core/detail/CandidateSelection.hpp"
 
@@ -8,7 +12,6 @@
 #include <array>
 #include <chrono>
 #include <cmath>
-#include <exception>
 #include <limits>
 #include <numeric>
 #include <ranges>
@@ -25,11 +28,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
-#include <rhbm_gem/utils/math/EigenHelper.hpp>
-
-#ifdef USE_OPENMP
-#include <omp.h>
-#endif
 
 namespace rhbm_gem::core::detail {
 
@@ -74,60 +72,12 @@ void ResetClusterSolverWorkspace(
     }
 }
 
-void SetLocalResultOffset(LocalGaussianResult & result, double offset)
-{
-    result.ols = WithPreservedUncertaintyOffset(result.ols, offset);
-    result.mdpde = WithPreservedUncertaintyOffset(result.mdpde, offset);
-}
-
 struct SecondStageInitializationResult
 {
     SecondStageContext context{};
     FitState state{};
     std::vector<int> neighbor_count_list{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
-};
-
-struct QuarantineState
-{
-    QuarantineFailureStateMap state_by_target{};
-    std::vector<QuarantineTarget> probation_target_list{};
-    std::size_t entered_target_count{ 0 };
-    std::size_t released_target_count{ 0 };
-    std::size_t failed_probation_count{ 0 };
-    bool force_probation{ false };
-    QuarantineState() = default;
-
-    explicit QuarantineState(std::size_t atom_count)
-        : m_atom_count(atom_count)
-    {
-    }
-
-    SuspiciousBlockActivity BeginIteration(std::size_t accepted_iteration_count);
-    SuspiciousBlockActivity BuildFinalActivity() const;
-    bool UpdateAfterIteration(
-        std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
-        std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
-        const SuspiciousBlockActivity & block_activity,
-        std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
-        const ClusterHealthMap & health_by_key,
-        FitState & assembled_state,
-        const FitState & previous_state,
-        const PolishProvenance & previous_polish_provenance,
-        PolishProvenance & assembled_polish_provenance,
-        std::size_t accepted_iteration_count);
-    std::size_t AtomCount() const;
-    std::size_t TargetCount() const
-    {
-        return static_cast<std::size_t>(std::ranges::count_if(
-            state_by_target,
-            [](const auto & entry)
-            {
-                return entry.second.lifecycle != QuarantineLifecycle::Tracking;
-            }));
-    }
-private:
-    std::size_t m_atom_count{ 0 };
 };
 
 struct PendingTopology
@@ -139,7 +89,7 @@ struct PendingTopology
 struct IterationState
 {
     FitState accepted_state{};
-    FitState topology_reference_state{};
+    FittedGaussianSnapshot topology_reference_state{};
     PolishProvenance previous_polish_provenance{};
     SuspiciousUpdateMask rollback_atom_mask{};
     std::vector<std::size_t> selected_atom_index_list{};
@@ -155,31 +105,6 @@ struct IterationState
     std::size_t accepted_iteration_count{ 0 };
     std::size_t accepted_iterations_since_topology_rebuild{ 0 };
     std::size_t audit_patience_count{ 0 };
-};
-
-struct FixedPointOperatorEvidence
-{
-    FittedGaussianSnapshot state{};
-    std::vector<char> shape_available_atom_mask{};
-    std::vector<char> offset_available_atom_mask{};
-};
-
-struct IterationProposalResult
-{
-    FitState proposal_state{};
-    FixedPointOperatorEvidence fixed_point_operator{};
-    SuspiciousBlockActivity block_activity{};
-    std::vector<SuspiciousGaussianAssessment> assessment_by_atom{};
-    std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
-    ClusterHealthMap health_by_key{};
-};
-
-struct LocalAtomRefitResult
-{
-    LocalGaussianResult result{};
-    std::optional<GaussianModel3D> unrestricted_model{};
-    SuspiciousGaussianAssessment assessment{};
-    std::optional<RHBMEstimationStatus> attempted_refit_status{};
 };
 
 static void ValidateBlockActivitySize(
@@ -249,19 +174,19 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
     {
         context.atom_list.emplace_back(AtomContext{ atom });
     }
-    state.resize(context.size());
+    state.resize(context.atom_list.size());
 
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
-    atom_index_map.reserve(context.size());
-    for (std::size_t i = 0; i < context.size(); i++)
+    atom_index_map.reserve(context.atom_list.size());
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
-        atom_index_map.emplace(context.at(i).atom, i);
+        atom_index_map.emplace(context.atom_list.at(i).atom, i);
     }
     for (std::size_t atom_index = 0;
-        atom_index < context.size();
+        atom_index < context.atom_list.size();
         atom_index++)
     {
-        auto & atom_context{ context.at(atom_index) };
+        auto & atom_context{ context.atom_list.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
@@ -275,16 +200,16 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
     }
 
     std::vector<GaussianModel3D> global_models;
-    global_models.reserve(context.size());
+    global_models.reserve(context.atom_list.size());
     for (std::size_t atom_index = 0;
-        atom_index < context.size();
+        atom_index < context.atom_list.size();
         atom_index++)
     {
         global_models.emplace_back(state.at(atom_index).mdpde.GetModel());
     }
     const auto global_median{ BuildGaussianParameterMedian(global_models) };
 
-    for (std::size_t i = 0; i < context.size(); i++)
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
@@ -303,12 +228,12 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
             });
     }
 
-    build_result.neighbor_count_list.reserve(context.size());
+    build_result.neighbor_count_list.reserve(context.atom_list.size());
     for (std::size_t atom_index = 0;
-        atom_index < context.size();
+        atom_index < context.atom_list.size();
         atom_index++)
     {
-        auto & atom_context{ context.at(atom_index) };
+        auto & atom_context{ context.atom_list.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{
             atom->FindNeighborAtoms(kNeighborAtomSearchRange)
@@ -372,854 +297,13 @@ static void StoreSecondStageNeighborCounts(
 {
     auto analysis{ model_object.EditAnalysis() };
     for (std::size_t atom_index = 0;
-        atom_index < context.size();
+        atom_index < context.atom_list.size();
         atom_index++)
     {
         analysis.SetAtomLocalNeighborCountForPeeling(
-            *context.at(atom_index).atom,
+            *context.atom_list.at(atom_index).atom,
             neighbor_count_list.at(atom_index));
     }
-}
-
-static void ApplyQuarantineFallbackTargets(
-    const std::vector<QuarantineTarget> & target_list,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    FitState & assembled_state,
-    PolishProvenance & assembled_polish_provenance)
-{
-    for (const auto & target : target_list)
-    {
-        for (const auto atom_index : target.atom_index_list)
-        {
-            if (target.kind == QuarantineTargetKind::HardFailureCluster)
-            {
-                assembled_state.at(atom_index) = previous_state.at(atom_index);
-                assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
-                continue;
-            }
-            if (target.kind == QuarantineTargetKind::OffsetAtom)
-            {
-                const auto previous_offset{
-                    previous_state.at(atom_index).mdpde.GetModel().GetOffset()
-                };
-                SetLocalResultOffset(assembled_state.at(atom_index), previous_offset);
-                continue;
-            }
-            const auto assembled_offset{
-                assembled_state.at(atom_index).mdpde.GetModel().GetOffset()
-            };
-            assembled_state.at(atom_index).ols = WithPreservedUncertaintyOffset(
-                previous_state.at(atom_index).ols,
-                assembled_offset);
-            assembled_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
-                previous_state.at(atom_index).mdpde,
-                assembled_offset);
-            assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
-        }
-    }
-}
-
-static void ApplyQuarantineTargetActivity(
-    const QuarantineTarget & target,
-    SuspiciousBlockActivity & activity)
-{
-    for (const auto atom_index : target.atom_index_list)
-    {
-        if (target.kind != QuarantineTargetKind::OffsetAtom)
-        {
-            activity.shape_fixed_atom_mask.at(atom_index) = 1;
-        }
-        if (target.kind != QuarantineTargetKind::ShapeAtom)
-        {
-            activity.offset_fixed_atom_mask.at(atom_index) = 1;
-        }
-        if (target.kind == QuarantineTargetKind::HardFailureCluster)
-        {
-            activity.hard_failure_atom_mask.at(atom_index) = 1;
-        }
-    }
-}
-
-SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t accepted_iteration_count)
-{
-    SuspiciousBlockActivity activity{
-        SuspiciousUpdateMask(m_atom_count, 0),
-        SuspiciousUpdateMask(m_atom_count, 0),
-        SuspiciousUpdateMask(m_atom_count, 0)
-    };
-    probation_target_list.clear();
-    std::vector<QuarantineTarget> due_target_list;
-    for (auto & [target, state] : state_by_target)
-    {
-        if (state.lifecycle != QuarantineLifecycle::Quarantined) continue;
-        const auto probation_due{
-            (force_probation || accepted_iteration_count >= state.next_probation_iteration)
-        };
-        if (probation_due)
-        {
-            due_target_list.emplace_back(target);
-        }
-    }
-    std::ranges::sort(
-        due_target_list,
-        [](const auto & lhs, const auto & rhs)
-        {
-            if (lhs.kind != rhs.kind) return lhs.kind > rhs.kind;
-            return lhs.atom_index_list < rhs.atom_index_list;
-        });
-    std::set<std::size_t> selected_probation_atom_index_set;
-    for (const auto & target : due_target_list)
-    {
-        const auto overlaps_selected{
-            std::ranges::any_of(
-                target.atom_index_list,
-                [&](const auto atom_index)
-                {
-                    return selected_probation_atom_index_set.contains(atom_index);
-                })
-        };
-        if (overlaps_selected) continue;
-        state_by_target.at(target).lifecycle = QuarantineLifecycle::Probation;
-        probation_target_list.emplace_back(target);
-        selected_probation_atom_index_set.insert(
-            target.atom_index_list.begin(),
-            target.atom_index_list.end());
-    }
-    for (auto & [target, state] : state_by_target)
-    {
-        if (state.lifecycle == QuarantineLifecycle::Tracking ||
-            state.lifecycle == QuarantineLifecycle::Probation)
-        {
-            continue;
-        }
-        const auto shadowed_by_broader_probation{
-            std::ranges::any_of(
-                probation_target_list,
-                [&](const auto & probation_target)
-                {
-                    return probation_target.kind == QuarantineTargetKind::HardFailureCluster &&
-                        target.kind != QuarantineTargetKind::HardFailureCluster &&
-                        std::ranges::any_of(
-                            target.atom_index_list,
-                            [&](const auto atom_index)
-                            {
-                                return std::ranges::binary_search(
-                                    probation_target.atom_index_list,
-                                    atom_index);
-                            });
-                })
-        };
-        if (shadowed_by_broader_probation) continue;
-        ApplyQuarantineTargetActivity(target, activity);
-    }
-    force_probation = false;
-    return activity;
-}
-
-SuspiciousBlockActivity QuarantineState::BuildFinalActivity() const
-{
-    SuspiciousBlockActivity activity{
-        SuspiciousUpdateMask(m_atom_count, 0),
-        SuspiciousUpdateMask(m_atom_count, 0),
-        SuspiciousUpdateMask(m_atom_count, 0)
-    };
-    for (const auto & [target, state] : state_by_target)
-    {
-        if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
-        ApplyQuarantineTargetActivity(target, activity);
-    }
-    return activity;
-}
-
-static bool HasAcceptedMaterialTargetChange(
-    const FitState & assembled_state,
-    const FitState & previous_state,
-    const QuarantineTarget & target)
-{
-    for (const auto atom_index : target.atom_index_list)
-    {
-        const auto change{ CalculateTransformedChange(
-            assembled_state.at(atom_index).mdpde.GetModel(),
-            previous_state.at(atom_index).mdpde.GetModel()) };
-        if (target.kind == QuarantineTargetKind::ShapeAtom)
-        {
-            if (std::max(
-                change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()),
-                change.at(GaussianModel3D::LogWidthCoordinateIndex())) >=
-                kTransformedChangeTolerance)
-            {
-                return true;
-            }
-        }
-        else if (target.kind == QuarantineTargetKind::OffsetAtom)
-        {
-            if (change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) >= kTransformedChangeTolerance)
-            {
-                return true;
-            }
-        }
-        else if (IsTransformedChangeMaterial(change, kTransformedChangeTolerance))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool DoesFailureAffectTarget(
-    const QuarantineTarget & failure_target,
-    const QuarantineTarget & target)
-{
-    const auto overlaps{
-        std::ranges::any_of(
-            target.atom_index_list,
-            [&](const auto atom_index)
-            {
-                return std::ranges::binary_search(failure_target.atom_index_list, atom_index);
-            })
-    };
-    if (!overlaps) return false;
-    if (target.kind == QuarantineTargetKind::HardFailureCluster) return true;
-    if (target.kind == QuarantineTargetKind::OffsetAtom)
-    {
-        return failure_target.kind != QuarantineTargetKind::ShapeAtom;
-    }
-    return failure_target.kind != QuarantineTargetKind::OffsetAtom;
-}
-
-static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
-    const QuarantineTarget & target,
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
-    const ClusterHealthMap & health_by_key)
-{
-    for (const auto atom_index : target.atom_index_list)
-    {
-        const auto health_iter{
-            std::ranges::find_if(
-                health_by_key,
-                [&](const auto & entry)
-                {
-                    return std::ranges::binary_search(entry.first, atom_index);
-                })
-        };
-        if (health_iter == health_by_key.end() ||
-            !health_iter->second.IsSolverQualified() ||
-            atom_index >= assessment_by_atom.size() ||
-            assessment_by_atom[atom_index].IsSuspicious())
-        {
-            return false;
-        }
-        if (target.kind != QuarantineTargetKind::OffsetAtom &&
-            block_activity.shape_fixed_atom_mask.at(atom_index) == 0)
-        {
-            return false;
-        }
-        if (target.kind != QuarantineTargetKind::ShapeAtom &&
-            block_activity.offset_fixed_atom_mask.at(atom_index) == 0)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool QuarantineState::UpdateAfterIteration(
-    std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
-    std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
-    const ClusterHealthMap & health_by_key,
-    FitState & assembled_state,
-    const FitState & previous_state,
-    const PolishProvenance & previous_polish_provenance,
-    PolishProvenance & assembled_polish_provenance,
-    std::size_t accepted_iteration_count)
-{
-    QuarantineFailureReasonMap failure_reason_by_target;
-    for (const auto & [key, health] : health_by_key)
-    {
-        if (!IsJointOffsetSolveHardFailure(health.joint_offset_status)) continue;
-        failure_reason_by_target.try_emplace(
-            QuarantineTarget{ QuarantineTargetKind::HardFailureCluster, key },
-            health.joint_offset_status);
-    }
-    const auto append_terminal_observations = [&](const auto & diagnostic_list)
-    {
-        for (const auto & diagnostic : diagnostic_list)
-        {
-            for (const auto & terminal : diagnostic.attempt.terminal_diagnostic_list)
-            {
-                const auto reason{ terminal.reason };
-                if (reason == StabilizationTerminalReason::None) continue;
-                const StabilizationTerminalFailure failure{ reason, terminal.guard_reason };
-                if (reason == StabilizationTerminalReason::GuardInfeasible &&
-                    terminal.guard_atom_index.has_value() &&
-                    terminal.guard_mode.has_value())
-                {
-                    const auto atom_index{ *terminal.guard_atom_index };
-                    if (*terminal.guard_mode == SuspiciousUpdateMode::OffsetOnly)
-                    {
-                        failure_reason_by_target.try_emplace(
-                            QuarantineTarget{
-                                QuarantineTargetKind::OffsetAtom,
-                                { atom_index }
-                            },
-                            failure);
-                    }
-                    else
-                    {
-                        failure_reason_by_target.try_emplace(
-                            QuarantineTarget{
-                                QuarantineTargetKind::ShapeAtom,
-                                { atom_index }
-                            },
-                            failure);
-                    }
-                    continue;
-                }
-                failure_reason_by_target.try_emplace(
-                    QuarantineTarget{
-                        QuarantineTargetKind::HardFailureCluster,
-                        diagnostic.key
-                    },
-                    failure);
-            }
-        }
-    };
-    append_terminal_observations(accepted_diagnostic_list);
-    append_terminal_observations(rejected_diagnostic_list);
-
-    std::vector<QuarantineTarget> successful_probation_target_list;
-    for (const auto & target : probation_target_list)
-    {
-        const auto has_affecting_observation{
-            std::ranges::any_of(
-                failure_reason_by_target,
-                [&](const auto & failure)
-                {
-                    return DoesFailureAffectTarget(failure.first, target);
-                })
-        };
-        const auto accepted_material_proposal{
-            HasAcceptedMaterialTargetChange(
-                assembled_state,
-                previous_state,
-                target)
-        };
-        if (!has_affecting_observation &&
-            (accepted_material_proposal ||
-                IsGuardSafeNonMaterialSolverQualifiedEndpoint(
-                    target,
-                    block_activity,
-                    assessment_by_atom,
-                    health_by_key)))
-        {
-            successful_probation_target_list.emplace_back(target);
-        }
-    }
-    auto transition{
-        UpdateQuarantineFailureState(
-            failure_reason_by_target,
-            successful_probation_target_list,
-            accepted_iteration_count,
-            state_by_target)
-    };
-    ApplyQuarantineFallbackTargets(
-        transition.entered_target_list,
-        previous_state,
-        previous_polish_provenance,
-        assembled_state,
-        assembled_polish_provenance);
-    ApplyQuarantineFallbackTargets(
-        transition.failed_probation_target_list,
-        previous_state,
-        previous_polish_provenance,
-        assembled_state,
-        assembled_polish_provenance);
-    entered_target_count += transition.entered_target_list.size();
-    released_target_count += transition.released_target_list.size();
-    failed_probation_count += transition.failed_probation_target_list.size();
-    return !transition.entered_target_list.empty() ||
-        !transition.released_target_list.empty() ||
-        !transition.failed_probation_target_list.empty();
-}
-
-std::size_t QuarantineState::AtomCount() const
-{
-    std::set<std::size_t> atom_index_set;
-    for (const auto & [target, state] : state_by_target)
-    {
-        if (state.lifecycle == QuarantineLifecycle::Tracking) continue;
-        atom_index_set.insert(target.atom_index_list.begin(), target.atom_index_list.end());
-    }
-    return atom_index_set.size();
-}
-
-static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
-    const AtomContext & atom_context,
-    const LocalGaussianResult & previous_result,
-    const GaussianModel3D & offset_model,
-    const std::vector<double> & adjusted_response_list,
-    const FitOptions & options)
-{
-    auto adjusted_sampling_entries{
-        BuildSecondStageAdjustedSamples(atom_context, adjusted_response_list)
-    };
-    const auto & previous_model{ previous_result.mdpde.GetModel() };
-    const auto previous_baseline{
-        BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model, options)
-    };
-    SuspiciousGaussianAssessment failed_shape_assessment;
-    std::optional<RHBMEstimationStatus> attempted_refit_status;
-    std::optional<GaussianModel3D> unrestricted_model;
-    try
-    {
-        auto candidate_result{
-            atom_context.refit_design.Estimate(
-                adjusted_response_list,
-                atom_context.alpha_r,
-                options.thread_size,
-                offset_model)
-        };
-        if (candidate_result.fit_result.has_value())
-        {
-            attempted_refit_status = candidate_result.fit_result->status;
-        }
-        if (IsValidSecondStageGaussianModel(candidate_result.mdpde.GetModel()))
-        {
-            unrestricted_model = candidate_result.mdpde.GetModel();
-        }
-        const auto assessment{
-            AssessSuspiciousGaussianUpdate(
-                adjusted_sampling_entries,
-                candidate_result.mdpde.GetModel(),
-                options,
-                previous_baseline,
-                SuspiciousUpdateMode::PostRefit)
-        };
-        if (unrestricted_model.has_value())
-        {
-            return LocalAtomRefitResult{
-                std::move(candidate_result),
-                std::move(unrestricted_model),
-                assessment,
-                attempted_refit_status
-            };
-        }
-        failed_shape_assessment = assessment;
-    }
-    catch (const std::exception &)
-    {
-        failed_shape_assessment = SuspiciousGaussianAssessment{
-            .reason = SuspiciousGaussianReason::InvalidModel,
-            .normalized_margin = std::numeric_limits<double>::infinity()
-        };
-    }
-
-    auto result{ previous_result };
-    SetLocalResultOffset(result, offset_model.GetOffset());
-    auto fallback_assessment{
-        AssessSuspiciousGaussianUpdate(
-            adjusted_sampling_entries,
-            result.mdpde.GetModel(),
-            options,
-            previous_baseline,
-            SuspiciousUpdateMode::OffsetOnly)
-    };
-    if (fallback_assessment.IsSuspicious())
-    {
-        return std::nullopt;
-    }
-    return LocalAtomRefitResult{
-        std::move(result),
-        std::move(unrestricted_model),
-        failed_shape_assessment,
-        attempted_refit_status
-    };
-}
-
-static std::vector<std::optional<GaussianModel3D>>
-RunUnrestrictedShapeRefits(
-    const SecondStageContext & context,
-    const FittedGaussianSnapshot & operator_offset_state,
-    const FitOptions & options)
-{
-    const auto operator_model_bundle{
-        BuildSecondStageModelSnapshot(context, operator_offset_state)
-    };
-    const auto adjusted_response_cache{
-        BuildSecondStageAdjustedResponseCache(
-            context,
-            operator_model_bundle)
-    };
-    std::vector<std::optional<GaussianModel3D>> result(
-        context.size());
-    int refit_thread_size{ options.thread_size };
-#ifdef USE_OPENMP
-    const bool parallel_refits{
-        !IsDebugLogLevelEnabled() &&
-        options.thread_size > 1 && context.size() > 1
-    };
-    if (parallel_refits) refit_thread_size = 1;
-#pragma omp parallel for schedule(dynamic) if(parallel_refits) num_threads(options.thread_size)
-#endif
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-    {
-        try
-        {
-            const auto candidate{
-                context.at(atom_index).refit_design.Estimate(
-                    adjusted_response_cache.at(atom_index),
-                    context.at(atom_index).alpha_r,
-                    refit_thread_size,
-                    GetFitModel(operator_model_bundle.node, atom_index))
-            };
-            if (IsValidSecondStageGaussianModel(candidate.mdpde.GetModel()))
-            {
-                result.at(atom_index) = candidate.mdpde.GetModel();
-            }
-        }
-        catch (const std::exception &)
-        {
-        }
-    }
-    return result;
-}
-
-static IterationProposalResult BuildIterationProposal(
-    const SecondStageContext & context,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const FitState & previous_state,
-    const FitOptions & options,
-    const std::vector<double> & ridge_multiplier_list,
-    const SuspiciousBlockActivity & quarantine_activity,
-    ClusterSolverWorkspaceMap & solver_workspace_by_key)
-{
-    auto current_model_snapshot{
-        BuildSecondStageModelSnapshot(context, previous_state)
-    };
-    const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
-    const auto log_debug_diagnostics{ !options.quiet_mode && is_debug_logging_enabled };
-    std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
-    std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
-    const auto solve_joint_offset = [&](std::size_t cluster_position)
-    {
-        try
-        {
-            joint_offset_result_list.at(cluster_position) = EstimateJointOffsets(
-                context,
-                cluster_key_list.at(cluster_position),
-                current_model_snapshot,
-                ridge_multiplier_list,
-                solver_workspace_by_key.at(
-                    cluster_key_list.at(cluster_position)).joint_offset,
-                log_debug_diagnostics);
-        }
-        catch (...)
-        {
-            joint_offset_exception_list.at(cluster_position) = std::current_exception();
-        }
-    };
-#ifdef USE_OPENMP
-    const bool parallel_joint_offsets{
-        !is_debug_logging_enabled &&
-        options.thread_size > 1 &&
-        cluster_key_list.size() > 1
-    };
-    if (parallel_joint_offsets)
-    {
-        eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
-#pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
-        for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
-        {
-            solve_joint_offset(cluster_position);
-        }
-    }
-    else
-#endif
-    {
-        for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
-        {
-            solve_joint_offset(cluster_position);
-        }
-    }
-    for (const auto & exception : joint_offset_exception_list)
-    {
-        if (exception) std::rethrow_exception(exception);
-    }
-
-    FixedPointOperatorEvidence fixed_point_operator;
-    fixed_point_operator.state = current_model_snapshot.node;
-    fixed_point_operator.shape_available_atom_mask.assign(context.size(), 0);
-    fixed_point_operator.offset_available_atom_mask.assign(context.size(), 0);
-    for (std::size_t cluster_position = 0;
-        cluster_position < cluster_key_list.size(); cluster_position++)
-    {
-        const auto & key{ cluster_key_list.at(cluster_position) };
-        const auto & offset_result{
-            joint_offset_result_list.at(cluster_position)
-        };
-        for (std::size_t position = 0; position < key.size(); position++)
-        {
-            const auto atom_index{ key.at(position) };
-            if (IsJointOffsetSolveHardFailure(offset_result.status))
-            {
-                continue;
-            }
-            const auto proposed_offset{
-                offset_result.offset(static_cast<Eigen::Index>(position))
-            };
-            const auto operator_model{
-                previous_state.at(atom_index).mdpde.GetModel().WithOffset(proposed_offset)
-            };
-            if (!IsValidSecondStageGaussianModel(operator_model))
-            {
-                continue;
-            }
-            fixed_point_operator.state.at(atom_index) = operator_model;
-            fixed_point_operator.offset_available_atom_mask.at(atom_index) = 1;
-        }
-    }
-
-    auto proposal_state{ previous_state };
-    SuspiciousBlockActivity block_activity{
-        SuspiciousUpdateMask(context.size(), 0),
-        SuspiciousUpdateMask(context.size(), 0),
-        SuspiciousUpdateMask(context.size(), 0)
-    };
-    std::vector<std::optional<RHBMEstimationStatus>>
-        local_refit_status_by_atom(context.size());
-    ClusterHealthMap health_by_key;
-    for (std::size_t cluster_position = 0;
-        cluster_position < cluster_key_list.size();
-        cluster_position++)
-    {
-        const auto & key{ cluster_key_list.at(cluster_position) };
-        const auto & offset_result{ joint_offset_result_list.at(cluster_position) };
-        auto [health_iter, inserted]{
-            health_by_key.emplace(key, ClusterHealth{ offset_result.status })
-        };
-        static_cast<void>(inserted);
-        auto & health{ health_iter->second };
-        if (IsJointOffsetSolveHardFailure(offset_result.status))
-        {
-            health.all_local_refits_solver_qualified = false;
-            for (const auto atom_index : key)
-            {
-                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                block_activity.hard_failure_atom_mask.at(atom_index) = 1;
-            }
-            continue;
-        }
-
-        for (const auto atom_index : key)
-        {
-            if (!quarantine_activity.HasActiveOffset(atom_index) ||
-                fixed_point_operator.offset_available_atom_mask.at(atom_index) == 0)
-            {
-                health.all_local_refits_solver_qualified = false;
-                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                continue;
-            }
-            current_model_snapshot.node.at(atom_index) =
-                fixed_point_operator.state.at(atom_index);
-        }
-    }
-
-    bool operator_offsets_complete{ true };
-    bool operator_offsets_match_proposal{ true };
-    for (const auto & key : cluster_key_list)
-    {
-        for (const auto atom_index : key)
-        {
-            if (fixed_point_operator.offset_available_atom_mask.at(atom_index) == 0)
-            {
-                operator_offsets_complete = false;
-                operator_offsets_match_proposal = false;
-                continue;
-            }
-            operator_offsets_match_proposal =
-                operator_offsets_match_proposal &&
-                fixed_point_operator.state.at(atom_index).GetOffset() ==
-                    current_model_snapshot.node.at(atom_index).GetOffset();
-        }
-    }
-
-    const auto refit_response_cache{
-        BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
-    };
-    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(context.size());
-    std::vector<std::exception_ptr> refit_exception_list(context.size());
-#ifdef USE_OPENMP
-    const bool parallel_refits{
-        !is_debug_logging_enabled &&
-        options.thread_size > 1 &&
-        context.size() > 1
-    };
-#else
-    const bool parallel_refits{ false };
-#endif
-    FitOptions refit_options{ options };
-    if (parallel_refits)
-    {
-        refit_options.thread_size = 1;
-    }
-    const auto run_refit = [&](std::size_t atom_index)
-    {
-        try
-        {
-            refit_result_list.at(atom_index) =
-                FitAtomWithJointOffsetFallback(
-                    context.at(atom_index),
-                    previous_state.at(atom_index),
-                    GetFitModel(current_model_snapshot.node, atom_index),
-                    refit_response_cache.at(atom_index),
-                    refit_options);
-        }
-        catch (...)
-        {
-            refit_exception_list.at(atom_index) = std::current_exception();
-        }
-    };
-#ifdef USE_OPENMP
-    if (parallel_refits)
-    {
-        eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
-#pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
-        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-        {
-            run_refit(atom_index);
-        }
-    }
-    else
-#endif
-    {
-        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-        {
-            run_refit(atom_index);
-        }
-    }
-    for (const auto & exception : refit_exception_list)
-    {
-        if (exception) std::rethrow_exception(exception);
-    }
-
-    std::vector<SuspiciousGaussianAssessment> assessment_by_atom(context.size());
-    for (const auto & key : cluster_key_list)
-    {
-        auto & health{ health_by_key.at(key) };
-        for (const auto atom_index : key)
-        {
-            auto refit_result{ std::move(refit_result_list.at(atom_index)) };
-            if (!refit_result.has_value())
-            {
-                health.all_local_refits_solver_qualified = false;
-                block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
-                block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-                assessment_by_atom.at(atom_index) = SuspiciousGaussianAssessment{
-                    .reason = SuspiciousGaussianReason::InvalidModel,
-                    .normalized_margin = std::numeric_limits<double>::infinity()
-                };
-                continue;
-            }
-            if (operator_offsets_complete && operator_offsets_match_proposal)
-            {
-                if (refit_result->unrestricted_model.has_value())
-                {
-                    fixed_point_operator.state.at(atom_index) = *refit_result->unrestricted_model;
-                    fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
-                }
-            }
-            local_refit_status_by_atom.at(atom_index) = refit_result->attempted_refit_status;
-            const auto shape_solver_qualified{
-                refit_result->attempted_refit_status.has_value() &&
-                IsLocalRefitStatusSolverQualified(*refit_result->attempted_refit_status)
-            };
-            if (!shape_solver_qualified)
-            {
-                health.all_local_refits_solver_qualified = false;
-            }
-            if (!refit_result->unrestricted_model.has_value())
-            {
-                block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
-            }
-            assessment_by_atom.at(atom_index) = refit_result->assessment;
-            proposal_state.at(atom_index) = std::move(refit_result->result);
-        }
-    }
-    if (operator_offsets_complete && !operator_offsets_match_proposal)
-    {
-        const auto unrestricted_shape_list{
-            RunUnrestrictedShapeRefits(
-                context,
-                fixed_point_operator.state,
-                options)
-        };
-        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-        {
-            if (unrestricted_shape_list.at(atom_index).has_value())
-            {
-                fixed_point_operator.state.at(atom_index) = *unrestricted_shape_list.at(atom_index);
-                fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
-            }
-        }
-    }
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-    {
-        if (block_activity.hard_failure_atom_mask.at(atom_index) != 0)
-        {
-            proposal_state.at(atom_index) = previous_state.at(atom_index);
-            continue;
-        }
-        if (block_activity.offset_fixed_atom_mask.at(atom_index) == 0)
-        {
-            continue;
-        }
-        const auto previous_offset{
-            previous_state.at(atom_index).mdpde.GetModel().GetOffset()
-        };
-        SetLocalResultOffset(proposal_state.at(atom_index), previous_offset);
-    }
-
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-    {
-        if (!quarantine_activity.HasActiveShape(atom_index))
-        {
-            const auto accepted_offset{
-                proposal_state.at(atom_index).mdpde.GetModel().GetOffset()
-            };
-            proposal_state.at(atom_index).ols = WithPreservedUncertaintyOffset(
-                previous_state.at(atom_index).ols,
-                accepted_offset);
-            proposal_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
-                previous_state.at(atom_index).mdpde,
-                accepted_offset);
-            block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
-        }
-        if (!quarantine_activity.HasActiveOffset(atom_index))
-        {
-            const auto previous_offset{
-                previous_state.at(atom_index).mdpde.GetModel().GetOffset()
-            };
-            SetLocalResultOffset(proposal_state.at(atom_index), previous_offset);
-            block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
-        }
-        if (quarantine_activity.hard_failure_atom_mask.at(atom_index) != 0)
-        {
-            proposal_state.at(atom_index) = previous_state.at(atom_index);
-            block_activity.hard_failure_atom_mask.at(atom_index) = 1;
-        }
-    }
-    return IterationProposalResult{
-        std::move(proposal_state),
-        std::move(fixed_point_operator),
-        std::move(block_activity),
-        std::move(assessment_by_atom),
-        std::move(local_refit_status_by_atom),
-        std::move(health_by_key)
-    };
 }
 
 static void ResetIterationStateForPartition(
@@ -1323,7 +407,7 @@ static bool TryRebuildAdaptiveTopology(
         rebuilt_partition,
         partition_changed);
 
-    iteration_state.topology_reference_state = accepted_state;
+    iteration_state.topology_reference_state = BuildSecondStageModelSnapshot(context, accepted_state).node;
     iteration_state.accepted_iterations_since_topology_rebuild = 0;
     if (partition_changed)
     {
@@ -1342,11 +426,12 @@ static IterationState BuildIterationState(
 {
     IterationState iteration_state;
     iteration_state.accepted_state = std::move(initial_state);
-    iteration_state.topology_reference_state = iteration_state.accepted_state;
-    iteration_state.previous_polish_provenance.assign(context.size(), 0);
-    iteration_state.rollback_atom_mask.assign(context.size(), 0);
-    iteration_state.quarantine_state = QuarantineState(context.size());
-    iteration_state.selected_atom_index_list.resize(context.size());
+    iteration_state.topology_reference_state =
+        BuildSecondStageModelSnapshot(context, iteration_state.accepted_state).node;
+    iteration_state.previous_polish_provenance.assign(context.atom_list.size(), 0);
+    iteration_state.rollback_atom_mask.assign(context.atom_list.size(), 0);
+    iteration_state.quarantine_state = QuarantineState(context.atom_list.size());
+    iteration_state.selected_atom_index_list.resize(context.atom_list.size());
     std::iota(
         iteration_state.selected_atom_index_list.begin(),
         iteration_state.selected_atom_index_list.end(),
@@ -1421,10 +506,10 @@ static bool BeginFrozenBackgroundIteration(
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
     const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
         SnapshotResidualEvaluator{ context, previous_snapshot }) };
-    std::vector<char> changed_background_by_atom(context.size(), 1);
+    std::vector<char> changed_background_by_atom(context.atom_list.size(), 1);
     if (previous_background)
     {
-        for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+        for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
             changed_background_by_atom.at(atom_index) =
                 previous_background->response_by_atom.at(atom_index) != background->response_by_atom.at(atom_index);
     }
@@ -1565,11 +650,10 @@ static IterationResult RunIteration(
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
         .performance_counters = performance_counters
     };
-    const auto previous_cluster_objective_state{ iteration_state.cluster_objective_state };
     auto selection{ SelectClusterCandidates(candidate_inputs) };
     const auto iteration_failure_atom_mask{
         BuildSuspiciousFailureAtomMask(
-            proposal_result.block_activity,
+            selection.block_activity,
             proposal_result.assessment_by_atom)
     };
     const auto iteration_suspicious_atom_count{
@@ -1587,7 +671,7 @@ static IterationResult RunIteration(
         iteration_state.quarantine_state.UpdateAfterIteration(
             selection.accepted_cluster_diagnostic_list,
             selection.rejected_cluster_diagnostic_list,
-            proposal_result.block_activity,
+            selection.block_activity,
             proposal_result.assessment_by_atom,
             proposal_result.health_by_key,
             assembled_state,
@@ -1599,9 +683,10 @@ static IterationResult RunIteration(
     if (has_quarantine_transition)
     {
         selection.final_audit_objective.reset();
-        iteration_state.cluster_objective_state = previous_cluster_objective_state;
         ReauditFallbackSelection(candidate_inputs, selection);
     }
+    // Publish audited history before the all-rejected exit, as on accepted attempts.
+    iteration_state.cluster_objective_state = std::move(selection.cluster_objective_state);
     result.trust_region_update = iteration_state.trust_region_state.ApplyRadiusUpdates(
         selection.grow_trust_region_key_list, selection.shrink_trust_region_key_list,
         selection.rejected_key_list, selection.exhausted_key_list);
@@ -1611,14 +696,14 @@ static IterationResult RunIteration(
     result.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
     result.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
     result.boundary_reconciliation_diagnostic_list = std::move(selection.boundary_reconciliation_diagnostic_list);
-    iteration_state.rollback_atom_mask = proposal_result.block_activity.BuildCombinedFixedAtomMask();
+    iteration_state.rollback_atom_mask = selection.block_activity.BuildCombinedFixedAtomMask();
     result.attempt_number = attempt_number;
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
     result.quarantine_atom_count = iteration_state.quarantine_state.AtomCount();
-    result.active_atom_count = context.size() - result.quarantine_atom_count;
+    result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
     result.polish_progress = selection.polish_progress;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
-    result.operator_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
+    result.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
 
     if (selection.accepted_key_list.empty())
     {
@@ -1632,7 +717,7 @@ static IterationResult RunIteration(
     const auto active_population{
         BuildActiveCoordinatePopulation(
             selected_atom_index_list,
-            proposal_result.block_activity)
+            selection.block_activity)
     };
     const auto transformed_change_summary{
         SummarizeTransformedChanges(
@@ -1653,7 +738,7 @@ static IterationResult RunIteration(
     certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
         iteration_state.selected_atom_index_list,
         cluster_key_list,
-        proposal_result.block_activity,
+        selection.block_activity,
         proposal_result.local_refit_status_by_atom,
         proposal_result.health_by_key);
     // Advance accepted progress; a changed partition takes effect next attempt.
@@ -1765,13 +850,13 @@ void ApplyFitState(
     };
 
     auto analysis{ model_object.EditAnalysis() };
-    for (std::size_t i = 0; i < context.size(); i++)
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
         auto adjusted_sampling_entries{
             BuildSecondStageAdjustedSamples(context, i, model_snapshot)
         };
         analysis.ApplyAtomLocalSecondStageResult(
-            *context.at(i).atom,
+            *context.atom_list.at(i).atom,
             iteration_state.at(i),
             std::move(adjusted_sampling_entries));
     }
@@ -2002,11 +1087,11 @@ static const FitState & FinalizeSecondStageState(
         }
         else
         {
-            if (iteration_state.previous_polish_provenance.size() != context.size())
+            if (iteration_state.previous_polish_provenance.size() != context.atom_list.size())
             {
-                iteration_state.previous_polish_provenance.resize(context.size(), 0);
+                iteration_state.previous_polish_provenance.resize(context.atom_list.size(), 0);
             }
-            for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+            for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
             {
                 if (IsTransformedChangeMaterial(
                         CalculateTransformedChange(
@@ -2080,12 +1165,12 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         performance_counters.RecordFullStateMaterialization();
     }
     LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
-    const auto progress_column_widths{ BuildProgressColumnWidths(context.size()) };
+    const auto progress_column_widths{ BuildProgressColumnWidths(context.atom_list.size()) };
     LogProgressHeader(options.quiet_mode, progress_column_widths);
 
     const auto audit_comparison_objective_domain{ iteration_state.objective_domain };
     IterationResult terminal_result;
-    if (context.size() == 0)
+    if (context.atom_list.size() == 0)
     {
         terminal_result.attempt_number = 1;
         terminal_result.accepted_iteration_count =
@@ -2245,7 +1330,7 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
 
 AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const FitState & accepted_state,
-    const FitState & topology_reference_state,
+    const FittedGaussianSnapshot & topology_reference_state,
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild)
 {
@@ -2453,85 +1538,6 @@ bool AreActiveCoordinatesSolverQualified(
     }
 
     return true;
-}
-
-QuarantineStateTransition UpdateQuarantineFailureState(
-    const QuarantineFailureReasonMap & failure_reason_by_target,
-    const std::vector<QuarantineTarget> & successful_probation_target_list,
-    std::size_t accepted_iteration_count,
-    QuarantineFailureStateMap & state_by_target)
-{
-    QuarantineStateTransition transition;
-    const std::set<QuarantineTarget> successful_target_set{
-        successful_probation_target_list.begin(),
-        successful_probation_target_list.end()
-    };
-    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
-    {
-        auto & [target, state]{ *iter };
-        if (state.lifecycle != QuarantineLifecycle::Probation)
-        {
-            ++iter;
-            continue;
-        }
-        if (successful_target_set.contains(target))
-        {
-            transition.released_target_list.emplace_back(target);
-            iter = state_by_target.erase(iter);
-            continue;
-        }
-        state.probation_count++;
-        state.lifecycle =
-            state.probation_count >= kQuarantineMaximumProbationCount ?
-                QuarantineLifecycle::Exhausted :
-                QuarantineLifecycle::Quarantined;
-        state.next_probation_iteration =
-            accepted_iteration_count + kQuarantineProbationCooldown;
-        transition.failed_probation_target_list.emplace_back(target);
-        ++iter;
-    }
-
-    for (auto iter = state_by_target.begin(); iter != state_by_target.end();)
-    {
-        if (iter->second.lifecycle == QuarantineLifecycle::Tracking &&
-            !failure_reason_by_target.contains(iter->first))
-        {
-            iter = state_by_target.erase(iter);
-            continue;
-        }
-        ++iter;
-    }
-
-    for (const auto & [target, reason] : failure_reason_by_target)
-    {
-        auto [iter, inserted]{
-            state_by_target.try_emplace(
-                target,
-                QuarantineFailureState{
-                    reason,
-                    0,
-                    0,
-                    0,
-                    QuarantineLifecycle::Tracking
-                })
-        };
-        auto & state{ iter->second };
-        if (state.lifecycle != QuarantineLifecycle::Tracking) continue;
-        if (!inserted && state.reason != reason)
-        {
-            state.reason = reason;
-            state.stable_iteration_count = 0;
-        }
-        state.stable_iteration_count++;
-        if (state.stable_iteration_count >= kPersistentQuarantineFailureIterationLimit)
-        {
-            state.lifecycle = QuarantineLifecycle::Quarantined;
-            state.next_probation_iteration =
-                accepted_iteration_count + kQuarantineProbationCooldown;
-            transition.entered_target_list.emplace_back(target);
-        }
-    }
-    return transition;
 }
 
 } // namespace rhbm_gem::core::detail

@@ -11,15 +11,6 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
-double CalculateAdjustedResponse(
-    double sample_response,
-    double distance,
-    const GaussianModel3D & offset_model)
-{
-    const auto evaluation{ offset_model.EvaluateAtDistance(distance) };
-    return sample_response - (evaluation.response - evaluation.signal);
-}
-
 LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result,
@@ -102,11 +93,10 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
         {
             throw std::invalid_argument("Prepared local Gaussian sample index is out of range.");
         }
+        const auto evaluation{ offset_model.EvaluateAtDistance(design_row.distance) };
         const auto adjusted_response{
-            CalculateAdjustedResponse(
-                sample_response_list.at(design_row.source_sample_index),
-                design_row.distance,
-                offset_model)
+            sample_response_list.at(design_row.source_sample_index) -
+            (evaluation.response - evaluation.signal)
         };
         if (adjusted_response <= 0.0) continue;
         numeric_validation::RequireFinite(adjusted_response, "response", "Member dataset contains non-finite value.");

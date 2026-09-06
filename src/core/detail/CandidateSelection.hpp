@@ -3,11 +3,9 @@
 #include "core/detail/SecondStageFitting.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
+#include "core/detail/ObjectiveEvaluation.hpp"
 
-#include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <limits>
 #include <map>
 #include <optional>
 #include <vector>
@@ -17,8 +15,6 @@ struct FitOptions;
 }
 
 namespace rhbm_gem::core::detail {
-
-using PolishProvenance = std::vector<char>;
 
 struct TrustRegionRadiusUpdate
 {
@@ -114,267 +110,6 @@ public:
 
 };
 
-enum class SuspiciousGaussianReason
-{
-    None,
-    InvalidModel,
-    NonFiniteResponse,
-    OffsetMagnitude,
-    CenterSignFlip,
-    RadialRebound,
-    WidthGrowth,
-    AmplitudeOffsetCompensation
-};
-
-using SuspiciousUpdateMask = std::vector<char>;
-
-struct SuspiciousBlockActivity
-{
-    SuspiciousUpdateMask shape_fixed_atom_mask{};
-    SuspiciousUpdateMask offset_fixed_atom_mask{};
-    SuspiciousUpdateMask hard_failure_atom_mask{};
-
-    SuspiciousUpdateMask BuildCombinedFixedAtomMask() const;
-    bool HasActiveShape(std::size_t atom_index) const;
-    bool HasActiveOffset(std::size_t atom_index) const;
-};
-
-struct SuspiciousProfileAnalysis
-{
-    bool all_responses_finite{ true };
-    double distance_range{ 0.0 };
-    double max_abs_response{ 0.0 };
-    double robust_residual_scale{ 0.0 };
-    std::vector<double> radius_response_median_list{};
-};
-
-struct SuspiciousUpdateBaseline
-{
-    GaussianModel3D previous_model{};
-    SuspiciousProfileAnalysis previous_analysis{};
-};
-
-enum class SuspiciousUpdateMode
-{
-    OffsetOnly,
-    PostRefit
-};
-
-struct SuspiciousGaussianAssessment
-{
-    SuspiciousGaussianReason reason{ SuspiciousGaussianReason::None };
-    double normalized_margin{ -std::numeric_limits<double>::infinity() };
-
-    bool IsSuspicious() const { return reason != SuspiciousGaussianReason::None; }
-};
-
-SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & candidate_model,
-    const FitOptions & options,
-    const SuspiciousUpdateBaseline & previous_baseline,
-    SuspiciousUpdateMode mode);
-
-SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
-    const FitOptions & options);
-
-class PerformanceCounters
-{
-    const bool m_quiet_mode;
-    const ClusterSolverWorkspaceMap & m_solver_workspace_by_key;
-    const BoundaryJointCorrectionWorkspaceMap & m_boundary_joint_correction_workspace_by_key;
-    const std::chrono::steady_clock::time_point m_start_time;
-    const std::size_t m_cached_sample_count;
-    std::atomic<std::size_t> m_full_state_materialization_count{ 0 };
-    std::atomic<std::size_t> m_gaussian_cache_hit_count{ 0 };
-    std::atomic<std::size_t> m_gaussian_cache_miss_count{ 0 };
-    std::atomic<std::size_t> m_objective_recomputed_sample_count{ 0 };
-    std::atomic<std::size_t> m_objective_reused_sample_count{ 0 };
-    std::size_t m_retired_solver_symbolic_analysis_count{ 0 };
-    std::size_t m_topology_rebuild_attempt_count{ 0 };
-    std::size_t m_topology_partition_change_count{ 0 };
-    std::size_t m_boundary_reconciliation_attempt_count{ 0 };
-    std::size_t m_boundary_reconciliation_backtracked_count{ 0 };
-    std::size_t m_boundary_reconciliation_rejected_count{ 0 };
-    std::size_t m_boundary_joint_correction_attempt_count{ 0 };
-    std::size_t m_boundary_joint_correction_accepted_count{ 0 };
-    std::size_t m_boundary_joint_correction_fallback_count{ 0 };
-    std::size_t m_boundary_rescue_attempt_count{ 0 };
-    std::size_t m_boundary_rescue_accepted_count{ 0 };
-    std::size_t m_boundary_rescue_fallback_count{ 0 };
-    std::size_t m_boundary_rescue_rejected_count{ 0 };
-    std::size_t m_boundary_rescue_hard_failure_exclusion_count{ 0 };
-    std::size_t m_boundary_rescue_invalid_proposal_exclusion_count{ 0 };
-    std::size_t m_boundary_rescue_objective_unavailable_exclusion_count{ 0 };
-    std::size_t m_dependency_polish_component_count{ 0 };
-    std::size_t m_dependency_polish_attempt_count{ 0 };
-    std::size_t m_dependency_polish_accepted_count{ 0 };
-    std::size_t m_dependency_polish_fallback_count{ 0 };
-    std::size_t m_dependency_polish_atom_count{ 0 };
-    std::size_t m_dependency_polish_parameter_count{ 0 };
-    std::size_t m_dependency_polish_round_count{ 0 };
-    double m_iteration_phase_milliseconds{ 0.0 };
-    double m_candidate_phase_milliseconds{ 0.0 };
-    double m_topology_rebuild_milliseconds{ 0.0 };
-    double m_boundary_reconciliation_milliseconds{ 0.0 };
-    double m_boundary_joint_correction_milliseconds{ 0.0 };
-    double m_dependency_polish_milliseconds{ 0.0 };
-
-public:
-    PerformanceCounters(
-        bool quiet_mode,
-        const SecondStageContext & context,
-        const ClusterSolverWorkspaceMap & solver_workspace_by_key,
-        const BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key);
-
-    ~PerformanceCounters();
-
-    void RecordFullStateMaterialization();
-    void RecordGaussianCacheMisses();
-    void RecordGaussianCacheHits();
-    void RecordObjectiveSampleEvaluation(std::size_t recomputed_sample_count, std::size_t total_sample_count);
-    void FinishIterationPhase(std::chrono::steady_clock::time_point start_time);
-    void FinishCandidatePhase(std::chrono::steady_clock::time_point start_time);
-    void RecordSolverWorkspaceReset();
-    void RecordTopologyRebuild(double elapsed_milliseconds, bool partition_changed);
-    void RecordBoundaryReconciliation(
-        std::size_t attempt_count,
-        std::size_t backtracked_count,
-        std::size_t rejected_count,
-        double elapsed_milliseconds);
-    void RecordBoundaryJointCorrection(bool accepted, double elapsed_milliseconds);
-    void RecordBoundaryRescue(bool accepted, bool used_fallback);
-    void RecordBoundaryRescueExclusions(
-        std::size_t hard_failure_count,
-        std::size_t invalid_proposal_count,
-        std::size_t objective_unavailable_count);
-    void RecordDependencyPolish(
-        std::size_t component_count,
-        std::size_t attempt_count,
-        std::size_t accepted_count,
-        std::size_t fallback_count,
-        std::size_t atom_count,
-        std::size_t parameter_count,
-        std::size_t round_count,
-        double elapsed_milliseconds);
-
-private:
-    static double CalculateElapsedMilliseconds(std::chrono::steady_clock::time_point start_time);
-    static std::size_t CountRawSamplingEntries(const SecondStageContext & context);
-    std::size_t CountCurrentSolverSymbolicAnalyses() const;
-};
-
-constexpr double kTailValidationWeight{ 0.25 };
-
-struct ObjectiveBreakdown
-{
-    double fit_range_residual_objective{ 0.0 };
-    double tail_validation_loss{ 0.0 };
-    double offset_plausibility_penalty{ 0.0 };
-
-    constexpr double GetTailValidationPenalty() const noexcept
-    {
-        return kTailValidationWeight * tail_validation_loss;
-    }
-
-    constexpr double GetTotalObjective() const noexcept
-    {
-        return fit_range_residual_objective + GetTailValidationPenalty() + offset_plausibility_penalty;
-    }
-};
-
-struct ObjectiveTolerance
-{
-    double absolute_tolerance{ 0.0 };
-    double relative_tolerance{ 0.0 };
-};
-
-inline constexpr ObjectiveTolerance kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
-inline constexpr ObjectiveTolerance kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
-
-struct AuditedState
-{
-    ObjectiveBreakdown objective{};
-    FitState state{};
-    bool uses_polish{ false };
-    std::size_t source_iteration{ 0 };
-};
-
-using BestAuditState = std::optional<AuditedState>;
-
-class CandidateEvaluationOverlay
-{
-    const SecondStageContext & m_context;
-    const ResidualBaseline & m_baseline;
-    const FitStateView & m_candidate_state;
-
-public:
-    CandidateEvaluationOverlay(
-        const SecondStageContext & context,
-        const ResidualBaseline & baseline,
-        const FitStateView & candidate_state);
-
-    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
-    const FitStateView & GetState() const { return m_candidate_state; }
-    const ResidualBaseline & GetBaseline() const { return m_baseline; }
-};
-
-enum class PreObjectiveFailureReason
-{
-    None,
-    InvalidModel,
-    NoCandidateWithinTrustRegion
-};
-
-enum class StabilizationTerminalReason
-{
-    None,
-    GuardInfeasible,
-    ObjectiveExhausted,
-    InvalidCandidate
-};
-
-struct StabilizationTerminalDiagnostic
-{
-    StabilizationTerminalReason reason{ StabilizationTerminalReason::None };
-    std::optional<std::size_t> guard_atom_index{};
-    std::optional<SuspiciousUpdateMode> guard_mode{};
-    std::optional<SuspiciousGaussianReason> guard_reason{};
-};
-
-struct ObjectiveScale
-{
-    double fit{ 0.0 };
-    double tail{ 0.0 };
-};
-
-struct ObjectiveAttemptDiagnostic
-{
-    std::optional<double> accepted_factor{};
-    PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
-    std::optional<double> pre_objective_attempted_step_norm{};
-    std::optional<ObjectiveScale> scale{};
-    std::size_t fit_sample_count{ 0 };
-    std::size_t tail_sample_count{ 0 };
-    std::optional<ObjectiveBreakdown> candidate_objective{};
-    std::optional<ObjectiveBreakdown> previous_objective{};
-    std::optional<ObjectiveBreakdown> best_objective{};
-    double trust_region_radius{ 0.0 };
-    double trust_region_step_norm{ 0.0 };
-    bool rejected_by_previous{ false };
-    bool rejected_by_best{ false };
-    std::size_t trial_count{ 0 };
-    std::size_t invalid_trial_count{ 0 };
-    std::size_t trust_skipped_trial_count{ 0 };
-    std::size_t guard_rejected_trial_count{ 0 };
-    std::size_t objective_rejected_trial_count{ 0 };
-    std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list{};
-};
-
-struct ObjectiveDomain;
-
 TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic);
@@ -398,103 +133,6 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     TrustModelCandidateSource candidate_source,
     bool objective_backtracked);
 #endif
-
-double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);
-
-std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
-    double fit_range_residual_objective,
-    double tail_validation_loss,
-    double offset_plausibility_penalty);
-
-bool IsBetterAuditObjective(double candidate, double best, ObjectiveTolerance tolerance);
-
-bool IsAuditObjectiveAcceptableForProgress(
-    double candidate,
-    double previous,
-    const ObjectiveBreakdown * best,
-    ObjectiveTolerance tolerance);
-
-std::optional<StabilizationTerminalDiagnostic> EvaluateClusterCandidateGuard(
-    const SecondStageContext & context,
-    const FitOptions & options,
-    const SecondStageModelSnapshot & previous_snapshot,
-    const ClusterKey & key,
-    const FitStateView & candidate_state,
-    const SuspiciousBlockActivity & block_activity);
-
-struct ObjectiveClusterDomain
-{
-    std::vector<SampleRef> fit_sample_ref_list{};
-    std::vector<SampleRef> tail_sample_ref_list{};
-    std::optional<ObjectiveScale> scale{};
-    std::size_t selected_atom_count{ 0 };
-};
-
-struct ObjectiveDomain
-{
-    std::map<ClusterKey, ObjectiveClusterDomain> cluster_by_key{};
-    std::vector<ClusterKey> owner_key_by_atom_index{};
-    std::vector<std::vector<char>> fit_sample_mask_by_atom{};
-    std::size_t active_atom_count{ 0 };
-    std::size_t fit_sample_count{ 0 };
-    std::size_t tail_sample_count{ 0 };
-};
-
-void LogObjectiveDomain(
-    const ObjectiveDomain & domain,
-    bool quiet_mode,
-    bool is_terminal_reset = false);
-
-struct ClusterObjectiveState
-{
-    std::optional<ObjectiveBreakdown> best_objective{};
-    double best_maximum_transformed_change{ 0.0 };
-};
-
-using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
-using ObjectiveByKey = std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
-
-ObjectiveDomain BuildObjectiveDomain(
-    const SecondStageContext & context,
-    const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<ClusterKey> & cluster_key_list,
-    double distance_min,
-    double distance_max);
-
-
-std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const ObjectiveDomain & domain,
-    const ResidualBaseline & evaluator);
-
-std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator);
-
-ObjectiveByKey BuildObjectiveByKey(
-    const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain,
-    const ResidualBaseline & evaluator);
-
-ObjectiveByKey BuildObjectiveByKey(
-    const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator);
-
-bool TryUpdateBestAuditState(
-    const FitState & candidate_state,
-    bool candidate_uses_polish,
-    std::size_t source_iteration,
-    const ObjectiveBreakdown & candidate_objective,
-    BestAuditState & audit_state);
-
-void ReevaluateBestAuditState(
-    const SecondStageContext & context,
-    const ObjectiveDomain & domain,
-    BestAuditState & audit_state);
-
-void ReconcileClusterObjectiveState(
-    const ObjectiveByKey & previous_objective_by_key,
-    ClusterObjectiveStateMap & state_by_key);
 
 enum class BacktrackingStepStatus
 {
@@ -603,6 +241,8 @@ struct BoundaryComponentReconciliationDiagnostic
 
 struct CandidateSelection
 {
+    SuspiciousBlockActivity block_activity{};
+    ClusterObjectiveStateMap cluster_objective_state{};
     FitState assembled_state{};
     PolishProvenance assembled_polish_provenance{};
     std::vector<ClusterKey> accepted_key_list{};
@@ -619,8 +259,8 @@ struct CandidateSelection
 
 struct CandidateSelectionInputs
 {
-    // Selection updates block_activity and cluster_objective_state, reuses both
-    // solver workspace maps, and records performance through these references.
+    // Algorithm inputs stay unchanged; updated activity and objective history are
+    // returned in CandidateSelection. Only solver workspaces and counters mutate.
     const SecondStageContext & context;
     const FitOptions & options;
     const ResidualBaseline & residual_baseline;
@@ -629,11 +269,11 @@ struct CandidateSelectionInputs
     const FitState & previous_state;
     const PolishProvenance & previous_polish_provenance;
     const FitState & proposal_state;
-    SuspiciousBlockActivity & block_activity;
+    const SuspiciousBlockActivity & block_activity;
     const std::vector<double> & ridge_multiplier_list;
     const ObjectiveDomain & objective_domain;
     const ObjectiveByKey & previous_objective_by_key;
-    ClusterObjectiveStateMap & cluster_objective_state;
+    const ClusterObjectiveStateMap & cluster_objective_state;
     const BestAuditState & best_audit_state;
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
@@ -642,55 +282,5 @@ struct CandidateSelectionInputs
 };
 
 CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs);
-
-void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, CandidateSelection & selection);
-
-struct FinalDependencyPolishDiagnostic
-{
-    std::size_t component_count{ 0 };
-    std::size_t attempted_component_count{ 0 };
-    std::size_t accepted_component_count{ 0 };
-    std::size_t atom_count{ 0 };
-    std::size_t parameter_count{ 0 };
-    std::size_t round_count{ 0 };
-    std::size_t suspicious_candidate_atom_count{ 0 };
-    std::optional<double> objective_before{};
-    std::optional<double> objective_after{};
-    double elapsed_milliseconds{ 0.0 };
-    struct Component
-    {
-        std::vector<ClusterKey> key_list{};
-        std::size_t atom_count{ 0 };
-        std::size_t parameter_count{ 0 };
-        std::size_t round_count{ 0 };
-        std::size_t suspicious_candidate_atom_count{ 0 };
-        std::size_t symbolic_analysis_count{ 0 };
-        std::optional<double> objective_before{};
-        std::optional<double> objective_after{};
-        double elapsed_milliseconds{ 0.0 };
-        bool accepted{ false };
-    };
-    std::vector<Component> component_list{};
-};
-
-struct FinalDependencyPolishResult
-{
-    FitState state{};
-    std::optional<ObjectiveBreakdown> objective{};
-    FinalDependencyPolishDiagnostic diagnostic{};
-    bool accepted{ false };
-};
-
-FinalDependencyPolishResult RunFinalDependencyPolish(
-    const SecondStageContext & context,
-    const FitOptions & options,
-    const GraphTopology & topology,
-    const CouplingGraphPartition & partition,
-    const ObjectiveDomain & objective_domain,
-    const SuspiciousBlockActivity & block_activity,
-    const TrustRegionStateSet & trust_region_state,
-    const FitState & base_state,
-    BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
-    PerformanceCounters & performance_counters);
 
 } // namespace rhbm_gem::core::detail

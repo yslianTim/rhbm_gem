@@ -23,6 +23,9 @@
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProcess.hpp"
+#include "core/detail/Quarantine.hpp"
+#include "core/detail/DependencyPolish.hpp"
+#include "core/detail/Diagnosis.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -195,7 +198,7 @@ BuildJointOffsetEstimationFixture(
         atom_index < model_list.size();
         atom_index++)
     {
-        auto & atom_context{ context.at(atom_index) };
+        auto & atom_context{ context.atom_list.at(atom_index) };
         SamplingPoint point;
         point.distance = 0.35;
         atom_context.raw_sampling_entries.emplace_back(LocalPotentialSample{
@@ -247,7 +250,7 @@ JointPolishFixture BuildJointPolishFixture(
         atom_index < base_model_list.size();
         atom_index++)
     {
-        auto & atom_context{ fixture.context.at(atom_index) };
+        auto & atom_context{ fixture.context.atom_list.at(atom_index) };
         atom_context.neighbor_atom_sample_offset_list.assign(
             distance_list.size() + 1,
             0);
@@ -1549,16 +1552,16 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     // the same fixed domain; an old zero score must not block a new exact fit.
     audit_detail::SecondStageContext context;
     context.atom_list.resize(1);
-    context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0, 0 };
+    context.atom_list.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0, 0 };
     const audit_detail::FitState seed{ MakeGaussianResult({ 4.0, 0.5, 0.0 }) };
     const audit_detail::FitState earlier_best{ MakeGaussianResult({ 6.0, 0.5, 0.0 }) };
     const audit_detail::FitState previous{ MakeGaussianResult({ 5.0, 0.5, 0.0 }) };
     for (const double distance : { 0.15, 0.35, 0.60 })
     {
-        context.at(0).raw_sampling_entries.emplace_back(LocalPotentialSample{
+        context.atom_list.at(0).raw_sampling_entries.emplace_back(LocalPotentialSample{
             2.0 * previous.front().mdpde.GetModel().ResponseAtDistance(distance),
             SamplingPoint{ distance } });
-        context.at(0).unselected_distance_list_by_sample.push_back({ distance });
+        context.atom_list.at(0).unselected_distance_list_by_sample.push_back({ distance });
     }
     context.frozen_background = audit_detail::BuildFrozenBackground(context, seed, { { 0 } });
     ASSERT_TRUE(context.frozen_background);
@@ -1857,7 +1860,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         BuildJointPolishFixture( { previous_model }, { target_model })
     };
     constexpr double unselected_distance{ 0.25 };
-    auto & atom_context{ fixture.context.at(0) };
+    auto & atom_context{ fixture.context.atom_list.at(0) };
     atom_context.unselected_distance_list_by_sample.assign(atom_context.raw_sampling_entries.size(),
         { unselected_distance });
     for (auto & sample : atom_context.raw_sampling_entries)
@@ -1958,7 +1961,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         model = { model.GetAmplitude() * intensity_scale, model.GetWidth(), model.GetOffset() * intensity_scale };
     scaled_fixture.context.frozen_background = std::move(scaled_background);
 
-    for (auto & sample : scaled_fixture.context.at(0).raw_sampling_entries)
+    for (auto & sample : scaled_fixture.context.atom_list.at(0).raw_sampling_entries)
     {
         sample.response *= intensity_scale;
     }
@@ -2319,10 +2322,10 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorPreservesIndividualRid
     // Identical columns constrain only the sum; ridge must retain each atom's own seed.
     for (std::size_t atom = 0; atom < 2; atom++)
     {
-        fixture.first.at(atom).raw_sampling_entries.front().response +=
+        fixture.first.atom_list.at(atom).raw_sampling_entries.front().response +=
             models.at(1 - atom).ResponseAtDistance(0.35);
-        fixture.first.at(atom).neighbor_atom_sample_list = { { 1 - atom, 0.35 } };
-        fixture.first.at(atom).neighbor_atom_sample_offset_list = { 0, 1 };
+        fixture.first.atom_list.at(atom).neighbor_atom_sample_list = { { 1 - atom, 0.35 } };
+        fixture.first.atom_list.at(atom).neighbor_atom_sample_offset_list = { 0, 1 };
     }
     alg::WeightedRidgeSolver solver;
     const auto result{ offset_detail::EstimateJointOffsets(
@@ -2343,7 +2346,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumn
     // Each active target sees two active neighbors and one fixed, outside-cluster atom.
     for (std::size_t atom_index = 0; atom_index < 3; atom_index++)
     {
-        auto & atom{ fixture.first.at(atom_index) };
+        auto & atom{ fixture.first.atom_list.at(atom_index) };
         for (std::size_t neighbor_index = 0; neighbor_index < 4; neighbor_index++)
         {
             if (neighbor_index == atom_index) continue;
@@ -2502,8 +2505,8 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundI
     fixture.first.frozen_background = offset_detail::BuildFrozenBackground(fixture.first, state, { { 0, 1 } });
     ASSERT_TRUE(fixture.first.frozen_background);
     for (std::size_t node = 0; node < state.size(); node++)
-        for (std::size_t row = 0; row < fixture.first.at(node).raw_sampling_entries.size(); row++)
-            fixture.first.at(node).raw_sampling_entries.at(row).response +=
+        for (std::size_t row = 0; row < fixture.first.atom_list.at(node).raw_sampling_entries.size(); row++)
+            fixture.first.atom_list.at(node).raw_sampling_entries.at(row).response +=
                 fixture.first.frozen_background->response_by_atom.at(node).at(row);
     fixture.second = offset_detail::BuildSecondStageModelSnapshot(fixture.first, state);
     rg::algorithm::WeightedRidgeSolver background_solver;
@@ -2523,8 +2526,8 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
             { 2.0 })
     };
-    empty_fixture.first.at(0).raw_sampling_entries.clear();
-    empty_fixture.first.at(0).neighbor_atom_sample_offset_list.clear();
+    empty_fixture.first.atom_list.at(0).raw_sampling_entries.clear();
+    empty_fixture.first.atom_list.at(0).neighbor_atom_sample_offset_list.clear();
     alg::WeightedRidgeSolver empty_solver;
     const auto empty_result{
         offset_detail::EstimateJointOffsets(
@@ -2546,7 +2549,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
             { 2.0 })
     };
-    invalid_fixture.first.at(0).raw_sampling_entries.at(0).response =
+    invalid_fixture.first.atom_list.at(0).raw_sampling_entries.at(0).response =
         std::numeric_limits<double>::infinity();
     alg::WeightedRidgeSolver invalid_solver;
     const auto invalid_result{
@@ -2566,7 +2569,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
 
     auto negligible_basis_fixture{ BuildJointOffsetEstimationFixture(
         { { 6.0, 0.55, 2.0 } }, { 2.0 }) };
-    negligible_basis_fixture.first.at(0).raw_sampling_entries.front().point.distance = 1.0e20;
+    negligible_basis_fixture.first.atom_list.at(0).raw_sampling_entries.front().point.distance = 1.0e20;
     const auto negligible_basis_result{ offset_detail::EstimateJointOffsets(
         negligible_basis_fixture.first, { 0 }, negligible_basis_fixture.second,
         { 1.0 }, empty_solver, false) };
@@ -2578,7 +2581,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
     {
         auto non_finite_neighbor_fixture{ BuildJointOffsetEstimationFixture(
             { { 6.0, 0.55, 2.0 }, { 7.0, 0.60, 3.0 } }, { 2.0, 3.0 }) };
-        auto & target{ non_finite_neighbor_fixture.first.at(0) };
+        auto & target{ non_finite_neighbor_fixture.first.atom_list.at(0) };
         target.neighbor_atom_sample_list = { { 1, std::numeric_limits<double>::quiet_NaN() } };
         target.neighbor_atom_sample_offset_list = { 0, 1 };
         const auto non_finite_neighbor_result{ offset_detail::EstimateJointOffsets(
@@ -2656,7 +2659,7 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
     const auto none{
         audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
             small_drift_state,
-            reference_state,
+            { reference_state.at(0).mdpde.GetModel() },
             { 0 },
             2)
     };
@@ -2666,7 +2669,7 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
     const auto interval{
         audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
             small_drift_state,
-            reference_state,
+            { reference_state.at(0).mdpde.GetModel() },
             { 0 },
             3)
     };
@@ -2677,7 +2680,7 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
     const auto drift{
         audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
             large_drift_state,
-            reference_state,
+            { reference_state.at(0).mdpde.GetModel() },
             { 0 },
             1)
     };
@@ -2704,10 +2707,10 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
         ExpectGaussianModelsNear(model, { 6.0, 0.6, 2.0 }, 1.0e-12);
     EXPECT_NE(separate->response_by_atom, merged->response_by_atom);
     context.frozen_background = separate;
-    context.at(1).unselected_distance_list_by_sample.front().front() = std::numeric_limits<double>::quiet_NaN();
+    context.atom_list.at(1).unselected_distance_list_by_sample.front().front() = std::numeric_limits<double>::quiet_NaN();
     EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0, 1 } }));
     EXPECT_EQ(context.frozen_background, separate);
-    context.at(1).unselected_distance_list_by_sample.front().front() = 0.3;
+    context.atom_list.at(1).unselected_distance_list_by_sample.front().front() = 0.3;
     EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0 } }));
     EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0 }, { 0, 1 } }));
     partition_state.front().mdpde = MakeGaussianResult({ -1.0, 0.4, 1.0 }).mdpde;
@@ -2741,14 +2744,14 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTriggerIsIntensitySca
     const auto base{
         audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
             accepted_state,
-            reference_state,
+            { reference_state.at(0).mdpde.GetModel() },
             { 0 },
             1)
     };
     const auto scaled{
         audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
             scaled_accepted_state,
-            scaled_reference_state,
+            { scaled_reference_state.at(0).mdpde.GetModel() },
             { 0 },
             1)
     };
@@ -2966,8 +2969,8 @@ TEST(EstimatorSecondStageDefenseTest,
     for (std::size_t i = 0; i < models.size(); i++)
     {
         state.emplace_back(MakeGaussianResult(models.at(i)));
-        context.at(i).raw_sampling_entries.resize(1);
-        context.at(i).unselected_distance_list_by_sample = { { 0.35 } };
+        context.atom_list.at(i).raw_sampling_entries.resize(1);
+        context.atom_list.at(i).unselected_distance_list_by_sample = { { 0.35 } };
     }
     context.frozen_background = polish_detail::BuildFrozenBackground(context, state, { { 0, 1, 2 } });
     ASSERT_TRUE(context.frozen_background);
@@ -3113,8 +3116,8 @@ TEST(
     ASSERT_TRUE(fixture.context.frozen_background);
     const auto frozen{ fixture.context.frozen_background };
     for (std::size_t node = 0; node < fixture.state.size(); node++)
-        for (std::size_t row = 0; row < fixture.context.at(node).raw_sampling_entries.size(); row++)
-            fixture.context.at(node).raw_sampling_entries.at(row).response += frozen->response_by_atom.at(node).at(row);
+        for (std::size_t row = 0; row < fixture.context.atom_list.at(node).raw_sampling_entries.size(); row++)
+            fixture.context.atom_list.at(node).raw_sampling_entries.at(row).response += frozen->response_by_atom.at(node).at(row);
     const polish_detail::FitStatePatch empty_patch;
     const polish_detail::FitStateView endpoint{ fixture.state, empty_patch };
     for (const bool freeze_second_shape : { false, true })
@@ -3265,7 +3268,7 @@ TEST(
         polish_detail::BoundaryJointCorrectionStatus::TrustRegionUnavailable);
 
     auto non_finite_fixture{ fixture };
-    non_finite_fixture.context.at(0).raw_sampling_entries.at(0).response =
+    non_finite_fixture.context.atom_list.at(0).raw_sampling_entries.at(0).response =
         std::numeric_limits<double>::infinity();
     alg::WeightedRidgeSolver non_finite_solver;
     EXPECT_EQ(
@@ -3708,12 +3711,12 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryUsesOnlySelectedSample
         atoms.emplace_back(MakeAtom(static_cast<int>(i + 1), Spot::C,
             Element::CARBON, { static_cast<double>(i), 0.0, 0.0 }));
         atoms.back()->SetSequenceID(1);
-        context.at(i).atom = atoms.back().get();
+        context.atom_list.at(i).atom = atoms.back().get();
         state.emplace_back(MakeGaussianResult(model));
-        context.at(i).raw_sampling_entries = {
+        context.atom_list.at(i).raw_sampling_entries = {
             { model.ResponseAtDistance(0.2) + model.ResponseAtDistance(0.3), SamplingPoint{ 0.2 } } };
-        context.at(i).neighbor_atom_sample_offset_list = { 0, 0 };
-        context.at(i).unselected_distance_list_by_sample = { { 0.3 } };
+        context.atom_list.at(i).neighbor_atom_sample_offset_list = { 0, 0 };
+        context.atom_list.at(i).unselected_distance_list_by_sample = { { 0.3 } };
     }
     const auto background_topology{ coupling_detail::BuildSecondStageGraphTopology(context, state, true) };
     EXPECT_EQ(background_topology.adjacency_list.size(), selected_count);
@@ -4093,21 +4096,21 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryHaloExpandsPhysicalParticipantsByH
         atom_context.raw_sampling_entries.resize(1);
         atom_context.neighbor_atom_sample_offset_list = { 0, 0 };
     }
-    context.at(0).neighbor_atom_sample_list = {
+    context.atom_list.at(0).neighbor_atom_sample_list = {
         { 1, 0.5 },
         { 3, 0.5 }
     };
-    context.at(0).neighbor_atom_sample_offset_list = { 0, 2 };
-    context.at(1).neighbor_atom_sample_list = {
+    context.atom_list.at(0).neighbor_atom_sample_offset_list = { 0, 2 };
+    context.atom_list.at(1).neighbor_atom_sample_list = {
         { 2, 0.5 }
     };
-    context.at(1).neighbor_atom_sample_offset_list = { 0, 1 };
-    context.at(2).neighbor_atom_sample_list = {
+    context.atom_list.at(1).neighbor_atom_sample_offset_list = { 0, 1 };
+    context.atom_list.at(2).neighbor_atom_sample_list = {
         { 3, 0.5 },
         { 4, 0.5 }
     };
-    context.at(2).neighbor_atom_sample_offset_list = { 0, 2 };
-    context.at(2).unselected_distance_list_by_sample = { { 0.5 } };
+    context.atom_list.at(2).neighbor_atom_sample_offset_list = { 0, 2 };
+    context.atom_list.at(2).unselected_distance_list_by_sample = { { 0.5 } };
 
     const coupling_detail::BoundaryReconciliationComponent component{
         .key_list = { { 0, 1 }, { 2, 3 } },
@@ -4260,9 +4263,9 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     };
     auto options{ MakeSecondStageOptions() };
     const polish_detail::SuspiciousBlockActivity all_active{
-        std::vector<char>(fixture.context.size(), 0),
-        std::vector<char>(fixture.context.size(), 0),
-        std::vector<char>(fixture.context.size(), 0)
+        std::vector<char>(fixture.context.atom_list.size(), 0),
+        std::vector<char>(fixture.context.atom_list.size(), 0),
+        std::vector<char>(fixture.context.atom_list.size(), 0)
     };
     const auto polish_result{
         polish_detail::RunFinalDependencyPolish(
@@ -4617,8 +4620,8 @@ TEST(EstimatorSecondStageDefenseTest,
     const std::array endpoint_offsets{ 30.0, 5.0, 0.0 };
     for (std::size_t node = 0; node < 3; node++)
     {
-        median_context.at(node).raw_sampling_entries.resize(1);
-        median_context.at(node).unselected_distance_list_by_sample = { { 0.3 } };
+        median_context.atom_list.at(node).raw_sampling_entries.resize(1);
+        median_context.atom_list.at(node).unselected_distance_list_by_sample = { { 0.3 } };
         median_previous.emplace_back(MakeGaussianResult({ 8.0 + static_cast<double>(node), 0.5, previous_offsets.at(node) }));
         median_endpoint.emplace_back(MakeGaussianResult({ 17.0 - static_cast<double>(node), 0.7, endpoint_offsets.at(node) }));
     }
@@ -4679,16 +4682,16 @@ TEST(EstimatorSecondStageDefenseTest,
 {
     residual_detail::SecondStageContext context;
     context.atom_list.resize(1);
-    context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
+    context.atom_list.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
     const rg::GaussianModel3D previous_model{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D candidate_model{ 10.0, 0.60, 0.20 };
     constexpr double contributor_distance{ 0.25 };
     for (const auto distance : { 0.15, 0.45 })
     {
-        context.at(0).raw_sampling_entries.emplace_back(LocalPotentialSample{
+        context.atom_list.at(0).raw_sampling_entries.emplace_back(LocalPotentialSample{
             candidate_model.ResponseAtDistance(distance) + previous_model.ResponseAtDistance(contributor_distance),
             SamplingPoint{ distance } });
-        context.at(0).unselected_distance_list_by_sample.push_back({ contributor_distance });
+        context.atom_list.at(0).unselected_distance_list_by_sample.push_back({ contributor_distance });
     }
     const residual_detail::FitState previous_state{ MakeGaussianResult(previous_model) };
     context.frozen_background = residual_detail::BuildFrozenBackground(context, previous_state, { { 0 } });
@@ -4702,8 +4705,7 @@ TEST(EstimatorSecondStageDefenseTest,
     const residual_detail::FitStateView candidate_view{ previous_state, patch };
     const residual_detail::CandidateEvaluationOverlay overlay{ context, baseline, candidate_view };
     const residual_detail::SampleRef sample_ref{ 0, 1 };
-    const auto candidate_snapshot{ residual_detail::BuildSecondStageModelSnapshot(
-        context, residual_detail::BuildFittedGaussianSnapshot(candidate_view)) };
+    const auto candidate_snapshot{ residual_detail::BuildSecondStageModelSnapshot(context, candidate_view) };
     const auto direct{ residual_detail::EvaluateResidualSample(context, sample_ref, candidate_snapshot) };
     const auto overlaid{ overlay(sample_ref) };
     ASSERT_TRUE(direct.has_value());
@@ -4734,12 +4736,12 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
 {
     audit_detail::SecondStageContext context;
     context.atom_list.resize(1);
-    context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
+    context.atom_list.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
 
     const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
     for (const auto distance : { 0.15, 0.45 })
     {
-        context.at(0).raw_sampling_entries.emplace_back(
+        context.atom_list.at(0).raw_sampling_entries.emplace_back(
             LocalPotentialSample{
                 model.ResponseAtDistance(distance),
                 SamplingPoint{ distance }

@@ -4,10 +4,8 @@
 #include "core/detail/GaussianModelOperations.hpp"
 
 #include <cstddef>
-#include <map>
 #include <optional>
 #include <span>
-#include <variant>
 #include <vector>
 
 namespace rhbm_gem {
@@ -30,6 +28,13 @@ struct SecondStageSeedSelection
 {
     SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
     GaussianModel3DWithUncertainty model{};
+};
+
+struct SecondStageSeedSelectionRecord
+{
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3D original_model{};
+    GaussianModel3D selected_model{};
 };
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
@@ -63,7 +68,7 @@ struct IterationResult
     PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     std::optional<double> accepted_maximum_transformed_change{};
-    double operator_maximum_transformed_change{ 0.0 };
+    double proposal_maximum_transformed_change{ 0.0 };
     SecondStageStopReason stop_reason{ SecondStageStopReason::None };
     bool objective_domain_changed{ false };
     TransformedChange transformed_change_percentile{};
@@ -87,7 +92,7 @@ struct AdaptiveTopologyRebuildDecision
 
 AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
     const FitState & accepted_state,
-    const FitState & topology_reference_state,
+    const FittedGaussianSnapshot & topology_reference_state,
     const std::vector<std::size_t> & active_index_list,
     std::size_t accepted_iterations_since_rebuild);
 
@@ -150,72 +155,6 @@ bool AreActiveCoordinatesSolverQualified(
     const SuspiciousBlockActivity & block_activity,
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
-
-constexpr std::size_t kPersistentQuarantineFailureIterationLimit{ 5 };
-constexpr std::size_t kQuarantineProbationCooldown{ 2 };
-constexpr std::size_t kQuarantineMaximumProbationCount{ 3 };
-
-enum class QuarantineTargetKind
-{
-    ShapeAtom,
-    OffsetAtom,
-    HardFailureCluster
-};
-
-struct QuarantineTarget
-{
-    QuarantineTargetKind kind{ QuarantineTargetKind::ShapeAtom };
-    std::vector<std::size_t> atom_index_list{};
-
-    friend auto operator<=>(const QuarantineTarget &, const QuarantineTarget &) = default;
-};
-
-struct StabilizationTerminalFailure
-{
-    StabilizationTerminalReason category{ StabilizationTerminalReason::None };
-    std::optional<SuspiciousGaussianReason> guard_reason{};
-
-    friend auto operator<=>(
-        const StabilizationTerminalFailure &,
-        const StabilizationTerminalFailure &) = default;
-};
-
-using QuarantineFailureReason =
-    std::variant<JointOffsetSolveStatus, StabilizationTerminalFailure>;
-
-using QuarantineFailureReasonMap = std::map<QuarantineTarget, QuarantineFailureReason>;
-
-enum class QuarantineLifecycle
-{
-    Tracking,
-    Quarantined,
-    Probation,
-    Exhausted
-};
-
-struct QuarantineFailureState
-{
-    QuarantineFailureReason reason{};
-    std::size_t stable_iteration_count{ 0 };
-    std::size_t probation_count{ 0 };
-    std::size_t next_probation_iteration{ 0 };
-    QuarantineLifecycle lifecycle{ QuarantineLifecycle::Tracking };
-};
-
-using QuarantineFailureStateMap = std::map<QuarantineTarget, QuarantineFailureState>;
-
-struct QuarantineStateTransition
-{
-    std::vector<QuarantineTarget> entered_target_list{};
-    std::vector<QuarantineTarget> released_target_list{};
-    std::vector<QuarantineTarget> failed_probation_target_list{};
-};
-
-QuarantineStateTransition UpdateQuarantineFailureState(
-    const QuarantineFailureReasonMap & failure_reason_by_target,
-    const std::vector<QuarantineTarget> & successful_probation_target_list,
-    std::size_t accepted_iteration_count,
-    QuarantineFailureStateMap & state_by_target);
 
 bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options);
 

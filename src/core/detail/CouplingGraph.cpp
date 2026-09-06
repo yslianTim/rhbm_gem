@@ -4,11 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iomanip>
 #include <limits>
 #include <optional>
 #include <ranges>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -526,7 +524,7 @@ GraphTopology BuildSecondStageGraphTopology(
     }
 
     std::size_t total_sample_count{ 0 };
-    for (const auto & atom_context : context)
+    for (const auto & atom_context : context.atom_list)
     {
         total_sample_count += atom_context.raw_sampling_entries.size();
     }
@@ -542,8 +540,8 @@ GraphTopology BuildSecondStageGraphTopology(
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
     }
 
-    CouplingGraphBuilder builder{ context.size() };
-    if (state.size() != context.size())
+    CouplingGraphBuilder builder{ context.atom_list.size() };
+    if (state.size() != context.atom_list.size())
     {
         throw std::invalid_argument("Second-stage node snapshot size is inconsistent.");
     }
@@ -554,10 +552,10 @@ GraphTopology BuildSecondStageGraphTopology(
         model_invariants.emplace_back(BuildTransformedModelInvariants(result.mdpde.GetModel()));
     }
     std::vector<GraphParticipant> participant_list;
-    participant_list.reserve(context.size());
-    for (std::size_t i = 0; i < context.size(); i++)
+    participant_list.reserve(context.atom_list.size());
+    for (std::size_t i = 0; i < context.atom_list.size(); i++)
     {
-        const auto & atom_context{ context.at(i) };
+        const auto & atom_context{ context.atom_list.at(i) };
         for (std::size_t j = 0; j < atom_context.raw_sampling_entries.size(); j++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(j) };
@@ -597,70 +595,6 @@ GraphTopology BuildSecondStageGraphTopology(
         Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
     }
     return topology;
-}
-
-void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
-{
-    if (quiet_mode) return;
-
-    const auto & summary{ topology.summary };
-    if (!summary.uses_weighted_graph)
-    {
-        Logger::Log(LogLevel::Warning,
-            "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
-        if (Logger::GetLogLevel() >= LogLevel::Debug)
-        {
-            Logger::Log(LogLevel::Debug,
-                "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
-        }
-    }
-    std::ostringstream message;
-    message << "Local-fitting coupling graph mode = "
-        << (summary.uses_weighted_graph ? "weighted" : "binary-fallback")
-        << std::scientific << std::setprecision(2)
-        << ", minimum weight = " << summary.configured_minimum_weight
-        << ", candidate/retained/cut edges = "
-        << summary.candidate_edge_count << "/"
-        << summary.retained_edge_count << "/"
-        << summary.cut_edge_count
-        << ", weight p50/p95/max = "
-        << summary.weight_median << "/"
-        << summary.weight_percentile_95 << "/"
-        << summary.weight_maximum
-        << ", initial components/max atoms/ratio = "
-        << summary.component_count << "/"
-        << summary.maximum_component_size << "/"
-        << std::fixed << std::setprecision(2)
-        << summary.maximum_component_ratio << ".";
-    Logger::Log(LogLevel::Info, message.str());
-
-    const auto & atom_cutoff_summary{ topology.atom_cutoff_summary };
-    std::ostringstream atom_cutoff_message;
-    atom_cutoff_message
-        << "Local-fitting atom cutoff: atoms="
-        << topology.adjacency_list.size()
-        << ", limit=" << atom_cutoff_summary.maximum_atom_count_limit
-        << ", clusters=" << summary.component_count
-        << ", max-atoms=" << summary.maximum_component_size
-        << ", cutoff-edges=" << atom_cutoff_summary.cut_edge_count << ".";
-    Logger::Log(LogLevel::Info, atom_cutoff_message.str());
-
-    for (const auto & sensitivity : summary.threshold_sensitivity_list)
-    {
-        std::ostringstream sensitivity_message;
-        sensitivity_message
-            << std::scientific << std::setprecision(2)
-            << "Coupling sensitivity: threshold=" << sensitivity.minimum_weight
-            << ", retained/cut="
-            << sensitivity.retained_edge_count << "/"
-            << sensitivity.cut_edge_count
-            << ", components/max-atoms/ratio="
-            << sensitivity.component_count << "/"
-            << sensitivity.maximum_component_size << "/"
-            << std::fixed << std::setprecision(2)
-            << sensitivity.maximum_component_ratio << ".";
-        Logger::Log(LogLevel::Info, sensitivity_message.str());
-    }
 }
 
 GraphTopology ApplyGraphAtomCutoff(GraphTopology topology, std::size_t maximum_atom_count)
@@ -983,7 +917,7 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
             interface_atom_index_list.end());
         for (const auto atom_index : component_atom_index_list)
         {
-            if (atom_index >= context.size())
+            if (atom_index >= context.atom_list.size())
             {
                 throw std::invalid_argument("Boundary reconciliation component atom is out of range.");
             }
@@ -1020,7 +954,7 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
 
     for (const auto atom_index : component_atom_index_list)
     {
-        if (atom_index >= context.size())
+        if (atom_index >= context.atom_list.size())
         {
             throw std::invalid_argument("Boundary halo component atom is out of range.");
         }
@@ -1045,11 +979,11 @@ BoundaryReconciliationComponent ExpandBoundaryReconciliationHalo(
         auto expanded_atom_index_list{ halo_atom_index_list };
         for (const auto & sample_ref : component.affected_sample_ref_list)
         {
-            if (sample_ref.atom_index >= context.size())
+            if (sample_ref.atom_index >= context.atom_list.size())
             {
                 throw std::invalid_argument("Boundary halo sample owner is out of range.");
             }
-            const auto & atom_context{ context.at(sample_ref.atom_index) };
+            const auto & atom_context{ context.atom_list.at(sample_ref.atom_index) };
             if (sample_ref.sample_index >= atom_context.raw_sampling_entries.size())
             {
                 throw std::invalid_argument("Boundary halo sample index is out of range.");

@@ -178,8 +178,6 @@ GraphTopology BuildSecondStageGraphTopology(
     bool quiet_mode,
     const GraphTopology * previous_topology = nullptr);
 
-void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);
-
 GraphTopology ApplyGraphAtomCutoff(GraphTopology topology, std::size_t maximum_atom_count);
 
 CouplingGraphPartition BuildGraphPartition(

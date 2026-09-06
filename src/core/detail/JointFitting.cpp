@@ -259,7 +259,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     {
         const auto active_index{ active_index_list.at(atom_position) };
         const auto target_offset_column{ static_cast<Eigen::Index>(atom_position) };
-        const auto & atom_context{ context.at(active_index) };
+        const auto & atom_context{ context.atom_list.at(active_index) };
         const auto & target_model{
             GetFitModel(model_snapshot.node, active_index)
         };
@@ -703,7 +703,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     residual_list.reserve(sample_ref_list.size());
     for (const auto & sample_ref : sample_ref_list)
     {
-        const auto & atom_context{ context.at(sample_ref.atom_index) };
+        const auto & atom_context{ context.atom_list.at(sample_ref.atom_index) };
         const auto & sample{
             atom_context.raw_sampling_entries.at(sample_ref.sample_index)
         };
@@ -975,8 +975,8 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
         sample_ref_list.empty() ||
-        endpoint_state.size() != context.size() ||
-        ridge_multiplier_list.size() != context.size() ||
+        endpoint_state.size() != context.atom_list.size() ||
+        ridge_multiplier_list.size() != context.atom_list.size() ||
         trust_region_list.empty() ||
         !std::ranges::is_sorted(shape_active_atom_index_list) ||
         !std::ranges::is_sorted(offset_active_atom_index_list))
@@ -992,7 +992,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         std::ranges::unique(parameter_atom_index_list).begin(), parameter_atom_index_list.end());
     for (const auto atom_index : parameter_atom_index_list)
     {
-        if (atom_index >= context.size() ||
+        if (atom_index >= context.atom_list.size() ||
             !std::ranges::any_of(trust_region_list, [&](const auto & region)
             {
                 return std::ranges::find(region.key, atom_index) != region.key.end();
@@ -1066,7 +1066,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         previous_model_list.reserve(trust_region.key.size());
         for (const auto atom_index : trust_region.key)
         {
-            if (atom_index >= context.size()) return result;
+            if (atom_index >= context.atom_list.size()) return result;
             previous_model_list.emplace_back(endpoint_state.GetBaseModel(atom_index));
         }
     }

@@ -16,6 +16,7 @@ class AtomObject;
 namespace rhbm_gem::core::detail {
 
 using ClusterKey = std::vector<std::size_t>;
+using PolishProvenance = std::vector<char>;
 using FitState = std::vector<LocalGaussianResult>;
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
@@ -62,12 +63,6 @@ struct SecondStageContext
 {
     std::vector<AtomContext> atom_list{};
     std::shared_ptr<const FrozenBackground> frozen_background{};
-
-    std::size_t size() const { return atom_list.size(); }
-    AtomContext & at(std::size_t index) { return atom_list.at(index); }
-    const AtomContext & at(std::size_t index) const { return atom_list.at(index); }
-    auto begin() const { return atom_list.begin(); }
-    auto end() const { return atom_list.end(); }
 };
 
 std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
@@ -148,9 +143,6 @@ const GaussianModel3D & GetFitModel(
     const FittedGaussianSnapshot & state,
     std::size_t atom_index);
 
-FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state);
-FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state);
-
 struct SecondStageModelSnapshot
 {
     FittedGaussianSnapshot node{};
@@ -164,6 +156,10 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     const FitState & state);
+
+SecondStageModelSnapshot BuildSecondStageModelSnapshot(
+    const SecondStageContext & context,
+    const FitStateView & state);
 
 struct ResidualSample
 {
@@ -227,8 +223,15 @@ TransformedChangeSummary SummarizeTransformedChanges(
     const std::vector<std::size_t> & index_list);
 
 TransformedChangeSummary SummarizeTransformedChanges(
+    const FitState & current_state,
+    const FittedGaussianSnapshot & previous_state,
+    const std::vector<std::size_t> & index_list);
+
+TransformedChangeSummary SummarizeTransformedChanges(
     const FitStateView & current_state,
     const FittedGaussianSnapshot & previous_state,
     const std::vector<std::size_t> & index_list);
+
+void SetLocalResultOffset(LocalGaussianResult & result, double offset);
 
 } // namespace rhbm_gem::core::detail
