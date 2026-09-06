@@ -36,16 +36,16 @@ local-fitting analysis for every selected atom:
 - raw and peeling samples sufficient to calculate both `[0, 1)` Å and
   `[1, 2]` Å peeling ratios;
 - the peeling neighbor count;
-- finite first-, second-, and third-stage MDPDE amplitude, width, and offset.
+- finite first- and second-stage MDPDE amplitude, width, and offset.
 
 Missing samples, an undefined ratio, or any non-finite reconstructed feature
 makes the model incomplete and fails the command. No atom is silently skipped.
 
-For each selected atom, the command reconstructs the same 22 features used by
+For each selected atom, the command reconstructs the same 16 features used by
 the local-fitting CSV:
 
 ```text
-neighbor count for peeling,neighbor count in 2A,signal peeling ratio,tail peeling ratio,amplitude 1st,amplitude 2nd,amplitude 3rd,width 1st,width 2nd,width 3rd,offset 1st,offset 2nd,offset 3rd,amplitude rank 1st,amplitude rank 2nd,amplitude rank 3rd,width rank 1st,width rank 2nd,width rank 3rd,offset rank 1st,offset rank 2nd,offset rank 3rd
+neighbor count for peeling,neighbor count in 2A,signal peeling ratio,tail peeling ratio,amplitude 1st,amplitude 2nd,width 1st,width 2nd,offset 1st,offset 2nd,amplitude rank 1st,amplitude rank 2nd,width rank 1st,width rank 2nd,offset rank 1st,offset rank 2nd
 ```
 
 `neighbor count in 2A` counts all atoms in the owning model within an
@@ -64,7 +64,7 @@ to UMAP:
 - second-stage offset;
 - second-stage amplitude, width, and offset ranks.
 
-The other ten reconstructed features remain in the result CSV but are not passed
+The other four reconstructed features remain in the result CSV but are not passed
 to UMAP. With the default internal setting `kFilterUmapInputBySpot = false`,
 all selected atoms are retained. Developers can enable the filter and rebuild to
 retain only `C`, `CA`, `N`, `O`, and residue `HOH` with spot `O`.
@@ -110,8 +110,8 @@ full `double` values and are not quantized to two decimal places. The output
 uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
-The CSV contains the identifiers `serial id,residue,spot`, all 22 reconstructed
-features, and `umap x,umap y`: 27 columns in total. Its name is
+The CSV contains the identifiers `serial id,residue,spot`, all 16 reconstructed
+features, and `umap x,umap y`: 21 columns in total. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 

@@ -90,8 +90,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
 
     constexpr std::array fitting_stages{
         FittingStage::First,
-        FittingStage::Second,
-        FittingStage::Third
+        FittingStage::Second
     };
 
     std::vector<LocalFittingFeatureRow> rows;
@@ -101,7 +100,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         const auto & first_model{ local_view.GetEstimateMDPDE(FittingStage::First) };
         const auto & second_model{ local_view.GetEstimateMDPDE(FittingStage::Second) };
-        const auto & third_model{ local_view.GetEstimateMDPDE(FittingStage::Third) };
 
         auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::KNearestNeighbors(
             kd_tree_root.get(),
@@ -155,22 +153,16 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             OptionalFeatureValue(tail_peeling_ratio),
             first_model.GetAmplitude(),
             second_model.GetAmplitude(),
-            third_model.GetAmplitude(),
             first_model.GetWidth(),
             second_model.GetWidth(),
-            third_model.GetWidth(),
             first_model.GetOffset(),
             second_model.GetOffset(),
-            third_model.GetOffset(),
             static_cast<double>(amplitude_ranks[0]),
             static_cast<double>(amplitude_ranks[1]),
-            static_cast<double>(amplitude_ranks[2]),
             static_cast<double>(width_ranks[0]),
             static_cast<double>(width_ranks[1]),
-            static_cast<double>(width_ranks[2]),
             static_cast<double>(offset_ranks[0]),
             static_cast<double>(offset_ranks[1]),
-            static_cast<double>(offset_ranks[2]),
         };
         rows.emplace_back(std::move(row));
     }

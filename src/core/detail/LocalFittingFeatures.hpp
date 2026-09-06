@@ -15,7 +15,7 @@ class ModelObject;
 namespace rhbm_gem::core::detail {
 
 inline constexpr std::size_t kLocalFittingIdentifierColumnCount{ 3 };
-inline constexpr std::size_t kLocalFittingFeatureCount{ 22 };
+inline constexpr std::size_t kLocalFittingFeatureCount{ 16 };
 inline constexpr std::size_t kLocalFittingColumnCount{
     kLocalFittingIdentifierColumnCount + kLocalFittingFeatureCount
 };
@@ -35,34 +35,28 @@ inline constexpr std::array<std::string_view, kLocalFittingFeatureCount>
         "tail peeling ratio",
         "amplitude 1st",
         "amplitude 2nd",
-        "amplitude 3rd",
         "width 1st",
         "width 2nd",
-        "width 3rd",
         "offset 1st",
         "offset 2nd",
-        "offset 3rd",
         "amplitude rank 1st",
         "amplitude rank 2nd",
-        "amplitude rank 3rd",
         "width rank 1st",
         "width rank 2nd",
-        "width rank 3rd",
         "offset rank 1st",
         "offset rank 2nd",
-        "offset rank 3rd",
     };
 
 inline constexpr std::array<bool, kLocalFittingFeatureCount>
     kLocalFittingFeatureIsIntegral{
         true, true,
         false, false,
-        false, false, false,
-        false, false, false,
-        false, false, false,
-        true, true, true,
-        true, true, true,
-        true, true, true,
+        false, false,
+        false, false,
+        false, false,
+        true, true,
+        true, true,
+        true, true,
     };
 
 struct LocalFittingFeatureRow
