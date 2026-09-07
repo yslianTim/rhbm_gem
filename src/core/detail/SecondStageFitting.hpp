@@ -201,18 +201,6 @@ std::optional<ResidualSample> EvaluateResidualSample(
     const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot);
 
-struct SnapshotResidualEvaluator
-{
-    const SecondStageContext & context;
-    const SecondStageModelSnapshot & model_snapshot;
-
-    std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
-    const FittedGaussianSnapshot & GetState() const
-    {
-        return model_snapshot.node;
-    }
-};
-
 ResidualBaseline BuildResidualBaseline(
     const SecondStageContext & context,
     const FitState & state);

@@ -30,13 +30,6 @@ constexpr double kTrustRegionShrinkFactor{ 0.5 };
 constexpr double kTrustRegionGrowthFactor{ 2.0 };
 constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
 
-struct CandidateWork
-{
-    const ClusterKey & key;
-    const std::vector<SampleRef> & objective_samples;
-    ClusterSolverWorkspace & solver_workspace;
-};
-
 bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
 {
     return std::isfinite(step_norm) &&
@@ -316,19 +309,20 @@ BacktrackingWorkspace::BacktrackingWorkspace(
 
 static std::optional<FitStateProposal> BuildAtomProposal(
     const FitState & outer_previous_state,
-    const FitState & proposal_state,
+    const FitStatePatch & endpoint_patch,
     const SuspiciousBlockActivity & block_activity,
-    const ClusterKey & key,
     double factor)
 {
+    const auto & key{ endpoint_patch.atom_index_list };
     std::vector<GaussianModel3D> previous_model_list;
     std::vector<GaussianModel3D> raw_model_list;
     previous_model_list.reserve(key.size());
     raw_model_list.reserve(key.size());
-    for (const auto atom_index : key)
+    for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
     {
+        const auto atom_index{ key.at(atom_position) };
         const auto & previous_model{ outer_previous_state.at(atom_index).mdpde.GetModel() };
-        auto raw_model{ proposal_state.at(atom_index).mdpde.GetModel() };
+        auto raw_model{ endpoint_patch.mdpde_list.at(atom_position).GetModel() };
         if (!block_activity.HasActiveShape(atom_index))
         {
             raw_model = previous_model.WithOffset(raw_model.GetOffset());
@@ -354,12 +348,10 @@ static std::optional<FitStateProposal> BuildAtomProposal(
     proposal.patch.mdpde_list.reserve(key.size());
     for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
     {
-        const auto atom_index{ key.at(atom_position) };
         proposal.patch.mdpde_list.emplace_back(
             GaussianModel3DWithUncertainty{
                 candidate_model_list->at(atom_position),
-                proposal_state.at(atom_index).mdpde
-                    .GetStandardDeviationModel()
+                endpoint_patch.mdpde_list.at(atom_position).GetStandardDeviationModel()
             });
     }
     const auto step_norm{ CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list) };
@@ -685,10 +677,9 @@ static ClusterCandidateResult SelectClusterCandidate(
     {
         result.polish_provenance.emplace_back(previous_polish_provenance.at(atom_index));
     }
-    auto search_endpoint_state{ inputs.proposal_state };
+    auto search_endpoint_patch{ FitStatePatch::FromState(inputs.proposal_state, key) };
     auto search_block_activity{ inputs.block_activity };
     std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list;
-    std::optional<FitStatePatch> accepted_patch;
     double best_rescue_objective{ std::numeric_limits<double>::infinity() };
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
@@ -775,7 +766,7 @@ static ClusterCandidateResult SelectClusterCandidate(
         };
         if (!has_active_parameter)
         {
-            accepted_patch = FitStatePatch::FromState(previous_state, key);
+            result.accepted_patch = FitStatePatch::FromState(previous_state, key);
             result.diagnostic.previous_objective = previous_objective_entry;
             result.diagnostic.candidate_objective = previous_objective_entry;
             result.diagnostic.trust_region_step_norm = 0.0;
@@ -796,9 +787,8 @@ static ClusterCandidateResult SelectClusterCandidate(
             auto proposal_result{
                 BuildAtomProposal(
                     previous_state,
-                    search_endpoint_state,
+                    search_endpoint_patch,
                     search_block_activity,
-                    key,
                     factor)
             };
             if (!proposal_result.has_value())
@@ -814,11 +804,16 @@ static ClusterCandidateResult SelectClusterCandidate(
             auto proposal{ std::move(*proposal_result) };
             result.diagnostic.pre_objective_attempted_step_norm = proposal.step_norm;
             result.diagnostic.trust_region_step_norm = proposal.step_norm;
-            const FitStateView candidate_state_view{ previous_state, proposal.patch };
+            const CandidateEvaluationOverlay candidate_overlay{
+                context,
+                residual_baseline,
+                previous_state,
+                proposal.patch
+            };
             const auto maximum_change{
                 std::ranges::max(
                     SummarizeTransformedChanges(
-                        candidate_state_view,
+                        candidate_overlay.GetState(),
                         residual_baseline.model_snapshot.node,
                         key).maximum_list)
             };
@@ -832,7 +827,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     result.diagnostic.accepted_factor = 1.0;
                     result.diagnostic.previous_objective = previous_objective_entry;
                     result.diagnostic.candidate_objective = previous_objective_entry;
-                    accepted_patch = std::move(proposal.patch);
+                    result.accepted_patch = std::move(proposal.patch);
                 }
                 break;
             }
@@ -853,7 +848,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     inputs.options,
                     residual_baseline.model_snapshot,
                     key,
-                    candidate_state_view,
+                    candidate_overlay.GetState(),
                     search_block_activity)
             };
             if (guard_failure.has_value())
@@ -883,11 +878,6 @@ static ClusterCandidateResult SelectClusterCandidate(
                 .objective_rejected_trial_count =
                     result.diagnostic.objective_rejected_trial_count
             };
-            const CandidateEvaluationOverlay candidate_overlay{
-                context,
-                residual_baseline,
-                candidate_state_view
-            };
             const auto committed{ TryCommitClusterCandidate(
                     candidate_overlay,
                     key,
@@ -916,7 +906,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 final_trust_model_trial_index = trust_model_trial_index;
 #endif
                 result.diagnostic = std::move(trial_diagnostic);
-                accepted_patch = std::move(proposal.patch);
+                result.accepted_patch = std::move(proposal.patch);
                 break;
             }
             trial_diagnostic.objective_rejected_trial_count++;
@@ -934,7 +924,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
             result.diagnostic = std::move(trial_diagnostic);
         }
-        if (accepted_patch.has_value()) break;
+        if (result.accepted_patch.has_value()) break;
 
         if (result.diagnostic.objective_rejected_trial_count == 0 &&
             result.diagnostic.guard_rejected_trial_count != 0 &&
@@ -949,21 +939,23 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
             const auto atom_index{ *last_guard_failure->guard_atom_index };
             const auto mode{ *last_guard_failure->guard_mode };
+            auto & endpoint_model{ search_endpoint_patch.mdpde_list.at(
+                static_cast<std::size_t>(std::ranges::lower_bound(key, atom_index) - key.begin())) };
             if (mode == SuspiciousUpdateMode::OffsetOnly)
             {
                 const auto previous_offset{
                     previous_state.at(atom_index).mdpde.GetModel().GetOffset()
                 };
-                search_endpoint_state.at(atom_index).mdpde = WithPreservedUncertaintyOffset(
-                    search_endpoint_state.at(atom_index).mdpde, previous_offset);
+                endpoint_model = WithPreservedUncertaintyOffset(
+                    endpoint_model, previous_offset);
                 search_block_activity.offset_fixed_atom_mask.at(atom_index) = 1;
             }
             else
             {
                 const auto retained_offset{
-                    search_endpoint_state.at(atom_index).mdpde.GetModel().GetOffset()
+                    endpoint_model.GetModel().GetOffset()
                 };
-                search_endpoint_state.at(atom_index).mdpde =
+                endpoint_model =
                     WithPreservedUncertaintyOffset(
                         previous_state.at(atom_index).mdpde,
                         retained_offset);
@@ -993,8 +985,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     result.diagnostic.terminal_diagnostic_list =
         std::move(terminal_diagnostic_list);
 
-    auto base_patch{ std::move(*accepted_patch) };
-    const FitStateView base_state_view{ previous_state, base_patch };
+    const FitStateView base_state_view{ previous_state, *result.accepted_patch };
     for (std::size_t position = 0; position < key.size(); position++)
     {
         if (IsTransformedChangeMaterial(
@@ -1031,14 +1022,11 @@ static ClusterCandidateResult SelectClusterCandidate(
             polish_diagnostic.accepted_factor = polished_candidate->effective_damping;
             polish_diagnostic.trust_region_radius = trust_region_radius;
             polish_diagnostic.trust_region_step_norm = polished_candidate->step_norm;
-            const FitStateView polished_state_view{
-                previous_state,
-                polished_candidate->patch
-            };
             const CandidateEvaluationOverlay polished_overlay{
                 context,
                 residual_baseline,
-                polished_state_view
+                previous_state,
+                polished_candidate->patch
             };
             const auto polish_committed{ TryCommitClusterCandidate(
                     polished_overlay,
@@ -1103,10 +1091,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
         }
     }
-    if (!result.accepted_patch.has_value())
-    {
-        result.accepted_patch = std::move(base_patch);
-    }
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     if (final_trust_model_trial_index.has_value())
     {
@@ -1165,28 +1149,25 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     const auto candidate_phase_start{ std::chrono::steady_clock::now() };
     const auto & partition{ inputs.partition };
     auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
-    std::vector<CandidateWork> candidate_work_list;
-    candidate_work_list.reserve(partition.sample_id_list_by_key.size());
-    for (const auto & [key, objective_samples] : partition.sample_id_list_by_key)
+    const auto cluster_key_list{ BuildGraphClusterKeyList(partition) };
+    // Validate workspace coverage before any parallel solver mutates state.
+    for (const auto & key : cluster_key_list)
     {
-        candidate_work_list.emplace_back(
-            key,
-            objective_samples,
-            solver_workspace_by_key.at(key));
+        static_cast<void>(solver_workspace_by_key.at(key));
     }
 
-    std::vector<ClusterCandidateResult> result_list(candidate_work_list.size());
-    std::vector<std::exception_ptr> exception_list(candidate_work_list.size());
+    std::vector<ClusterCandidateResult> result_list(cluster_key_list.size());
+    std::vector<std::exception_ptr> exception_list(cluster_key_list.size());
     const auto select_candidate = [&](std::size_t position)
     {
         try
         {
-            const auto & work{ candidate_work_list.at(position) };
+            const auto & key{ cluster_key_list.at(position) };
             result_list.at(position) = SelectClusterCandidate(
                 inputs,
-                work.key,
-                work.objective_samples,
-                work.solver_workspace);
+                key,
+                partition.sample_id_list_by_key.at(key),
+                solver_workspace_by_key.at(key));
         }
         catch (...)
         {
@@ -1194,12 +1175,12 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
         }
     };
 #ifdef USE_OPENMP
-    if (inputs.options.thread_size > 1 && candidate_work_list.size() > 1)
+    if (inputs.options.thread_size > 1 && cluster_key_list.size() > 1)
     {
         eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(inputs.options.thread_size)
         for (std::size_t position = 0;
-            position < candidate_work_list.size(); position++)
+            position < cluster_key_list.size(); position++)
         {
             select_candidate(position);
         }
@@ -1208,7 +1189,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
 #endif
     {
         for (std::size_t position = 0;
-            position < candidate_work_list.size(); position++)
+            position < cluster_key_list.size(); position++)
         {
             select_candidate(position);
         }
@@ -1230,7 +1211,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     for (std::size_t position = 0; position < result_list.size(); position++)
     {
         auto & result{ result_list.at(position) };
-        const auto & key{ candidate_work_list.at(position).key };
+        const auto & key{ cluster_key_list.at(position) };
         for (const auto & terminal_diagnostic :
             result.diagnostic.terminal_diagnostic_list)
         {

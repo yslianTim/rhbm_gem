@@ -165,7 +165,9 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         break;
                     }
                     diagnostic.parameter_count = correction_result.parameter_count;
-                    const FitStateView candidate_state_view{
+                    const CandidateEvaluationOverlay candidate_overlay{
+                        context,
+                        base_baseline,
                         base_state,
                         *correction_result.patch
                     };
@@ -175,7 +177,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             [&](const auto atom_index)
                             {
                                 return !IsValidSecondStageGaussianModel(
-                                    candidate_state_view.GetModel(atom_index));
+                                    candidate_overlay.GetState().GetModel(atom_index));
                             })
                     };
                     if (has_invalid_model) break;
@@ -186,7 +188,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             options,
                             component.atom_index_list,
                             endpoint_state_view,
-                            candidate_state_view)
+                            candidate_overlay.GetState())
                     };
                     diagnostic.suspicious_candidate_atom_count +=
                         suspicious_atom_count;
@@ -194,11 +196,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         suspicious_atom_count;
                     if (suspicious_atom_count != 0) break;
 
-                    const CandidateEvaluationOverlay candidate_overlay{
-                        context,
-                        base_baseline,
-                        candidate_state_view
-                    };
                     const auto candidate_objective{
                         EvaluateObjectiveDelta(
                             candidate_overlay,
@@ -306,8 +303,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     {
         performance_counters.RecordFullStateMaterialization();
         const auto snapshot{ BuildSecondStageModelSnapshot(context, state) };
-        const SnapshotResidualEvaluator evaluator{ context, snapshot };
-        return EvaluateAuditObjective(objective_domain, evaluator);
+        return EvaluateAuditObjective(objective_domain, context, snapshot);
     };
 
     auto assembled_objective{

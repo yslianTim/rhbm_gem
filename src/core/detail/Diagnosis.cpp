@@ -1333,7 +1333,7 @@ void LogSecondStageAuditTerminal(
     const auto objective{
         EvaluateAuditObjective(
             comparison_objective_domain,
-            SnapshotResidualEvaluator{ context, model_snapshot })
+            context, model_snapshot)
     };
     std::ostringstream message;
     message << std::scientific << std::setprecision(6)

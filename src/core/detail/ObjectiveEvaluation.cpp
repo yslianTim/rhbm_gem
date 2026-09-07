@@ -121,8 +121,9 @@ std::optional<double> EvaluateOffsetPlausibilityPenalty(
     return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
 }
 
-template<typename Evaluator>
+template<typename State, typename Evaluator>
 std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
+    const State & state,
     const Evaluator & evaluator,
     const ClusterKey & changed_key,
     const std::vector<SampleRef> & sample_ref_list,
@@ -133,7 +134,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     };
     if (!residual_contribution.has_value()) return std::nullopt;
     const auto offset_penalty{
-        EvaluateOffsetPlausibilityPenalty(evaluator.GetState(), changed_key, domain)
+        EvaluateOffsetPlausibilityPenalty(state, changed_key, domain)
     };
     if (!offset_penalty.has_value()) return std::nullopt;
     return BuildObjectiveBreakdown(
@@ -142,9 +143,10 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
         *offset_penalty);
 }
 
-template<typename Evaluator>
+template<typename State, typename Evaluator>
 std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     const ObjectiveDomain & domain,
+    const State & state,
     const Evaluator & evaluator)
 {
     double fit_range_residual_objective{ 0.0 };
@@ -168,7 +170,7 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
         if (!tail_contribution.has_value()) return std::nullopt;
         const auto offset_contribution{
             EvaluateOffsetPlausibilityPenalty(
-                evaluator.GetState(),
+                state,
                 key,
                 domain)
         };
@@ -185,10 +187,11 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
         offset_plausibility_penalty);
 }
 
-template<typename Evaluator>
+template<typename State, typename Evaluator>
 ObjectiveByKey BuildObjectiveByKeyImpl(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
+    const State & state,
     const Evaluator & evaluator)
 {
     ObjectiveByKey objective_by_key;
@@ -198,6 +201,7 @@ ObjectiveByKey BuildObjectiveByKeyImpl(
         objective_by_key.emplace(
             key,
             EvaluateObjectiveContributionImpl(
+                state,
                 evaluator,
                 key,
                 sample_ref_list,
@@ -214,7 +218,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
-    return EvaluateObjectiveContributionImpl(evaluator, changed_key, sample_ref_list, domain);
+    return EvaluateObjectiveContributionImpl(evaluator.GetState(), evaluator, changed_key, sample_ref_list, domain);
 }
 
 std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
@@ -223,16 +227,17 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
-    return EvaluateObjectiveContributionImpl(evaluator, changed_key, sample_ref_list, domain);
+    return EvaluateObjectiveContributionImpl(evaluator.GetState(), evaluator, changed_key, sample_ref_list, domain);
 }
 
 CandidateEvaluationOverlay::CandidateEvaluationOverlay(
     const SecondStageContext & context,
     const ResidualBaseline & baseline,
-    const FitStateView & candidate_state)
+    const FitState & base_state,
+    const FitStatePatch & candidate_patch)
     : m_context{ context },
       m_baseline{ baseline },
-      m_candidate_state{ candidate_state }
+      m_candidate_state{ base_state, candidate_patch }
 {
 }
 
@@ -461,14 +466,19 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
     const ResidualBaseline & evaluator)
 {
-    return EvaluateAuditObjectiveImpl(domain, evaluator);
+    return EvaluateAuditObjectiveImpl(domain, evaluator.GetState(), evaluator);
 }
 
 std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator)
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & model_snapshot)
 {
-    return EvaluateAuditObjectiveImpl(domain, evaluator);
+    return EvaluateAuditObjectiveImpl(domain, model_snapshot.node,
+        [&](const SampleRef & sample_ref)
+        {
+            return EvaluateResidualSample(context, sample_ref, model_snapshot);
+        });
 }
 
 ObjectiveByKey BuildObjectiveByKey(
@@ -476,15 +486,20 @@ ObjectiveByKey BuildObjectiveByKey(
     const ObjectiveDomain & domain,
     const ResidualBaseline & evaluator)
 {
-    return BuildObjectiveByKeyImpl(partition, domain, evaluator);
+    return BuildObjectiveByKeyImpl(partition, domain, evaluator.GetState(), evaluator);
 }
 
 ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator)
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & model_snapshot)
 {
-    return BuildObjectiveByKeyImpl(partition, domain, evaluator);
+    return BuildObjectiveByKeyImpl(partition, domain, model_snapshot.node,
+        [&](const SampleRef & sample_ref)
+        {
+            return EvaluateResidualSample(context, sample_ref, model_snapshot);
+        });
 }
 
 std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
@@ -588,7 +603,7 @@ void ReevaluateBestAuditState(
 {
     if (!audit_state.has_value()) return;
     const auto snapshot{ BuildSecondStageModelSnapshot(context, audit_state->state) };
-    const auto objective{ EvaluateAuditObjective(domain, SnapshotResidualEvaluator{ context, snapshot }) };
+    const auto objective{ EvaluateAuditObjective(domain, context, snapshot) };
     if (objective.has_value()) audit_state->objective = *objective;
     else audit_state.reset();
 }

@@ -47,12 +47,17 @@ bool UsesPolish(const PolishProvenance & provenance)
 }
 
 std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
-    const SuspiciousUpdateMask & suspicious_mask)
+    const SuspiciousUpdateMask & rollback_atom_mask,
+    const SuspiciousBlockActivity & block_activity,
+    const std::set<std::size_t> & probation_atom_index_set)
 {
-    std::vector<double> ridge_multiplier_list(suspicious_mask.size(), 1.0);
-    for (std::size_t atom_index = 0; atom_index < suspicious_mask.size(); atom_index++)
+    std::vector<double> ridge_multiplier_list(rollback_atom_mask.size(), 1.0);
+    for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
-        if (suspicious_mask.at(atom_index) != 0)
+        if (rollback_atom_mask.at(atom_index) != 0 ||
+            !block_activity.HasActiveShape(atom_index) ||
+            !block_activity.HasActiveOffset(atom_index) ||
+            probation_atom_index_set.contains(atom_index))
         {
             ridge_multiplier_list.at(atom_index) =
                 kSuspiciousJointOffsetRidgeMultiplier;
@@ -306,6 +311,28 @@ static void StoreSecondStageNeighborCounts(
     }
 }
 
+static void RefreshBestAuditState(
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & model_snapshot,
+    IterationState & iteration_state)
+{
+    ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
+    const auto audit_objective{
+        EvaluateAuditObjective(
+            iteration_state.objective_domain,
+            context, model_snapshot)
+    };
+    if (audit_objective.has_value())
+    {
+        TryUpdateBestAuditState(
+            iteration_state.accepted_state,
+            UsesPolish(iteration_state.previous_polish_provenance),
+            iteration_state.accepted_iteration_count,
+            *audit_objective,
+            iteration_state.best_audit_state);
+    }
+}
+
 static void ResetIterationStateForPartition(
     const SecondStageContext & context,
     const FitOptions & options,
@@ -328,26 +355,12 @@ static void ResetIterationStateForPartition(
         BuildObjectiveByKey(
             partition,
             iteration_state.objective_domain,
-            SnapshotResidualEvaluator{ context, model_snapshot })
+            context, model_snapshot)
     };
     ReconcileClusterObjectiveState(
         objective_by_key,
         iteration_state.cluster_objective_state);
-    const auto audit_objective{
-        EvaluateAuditObjective(
-            iteration_state.objective_domain,
-            SnapshotResidualEvaluator{ context, model_snapshot })
-    };
-    ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
-    if (audit_objective.has_value())
-    {
-        TryUpdateBestAuditState(
-            iteration_state.accepted_state,
-            UsesPolish(iteration_state.previous_polish_provenance),
-            iteration_state.accepted_iteration_count,
-            *audit_objective,
-            iteration_state.best_audit_state);
-    }
+    RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
     ResetClusterSolverWorkspace(
@@ -457,7 +470,7 @@ static IterationState BuildIterationState(
     const auto initial_audit_objective{
         EvaluateAuditObjective(
             iteration_state.objective_domain,
-            SnapshotResidualEvaluator{ context, initial_model_snapshot })
+            context, initial_model_snapshot)
     };
     if (initial_audit_objective.has_value())
     {
@@ -505,7 +518,7 @@ static bool BeginFrozenBackgroundIteration(
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
     const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
-        SnapshotResidualEvaluator{ context, previous_snapshot }) };
+        context, previous_snapshot) };
     std::vector<char> changed_background_by_atom(context.atom_list.size(), 1);
     if (previous_background)
     {
@@ -521,15 +534,7 @@ static bool BeginFrozenBackgroundIteration(
             iteration_state.cluster_objective_state[key] = ClusterObjectiveState{
                 .best_objective = previous_objectives.at(key) };
     }
-    ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
-    const auto previous_objective{ EvaluateAuditObjective(iteration_state.objective_domain,
-        SnapshotResidualEvaluator{ context, previous_snapshot }) };
-    if (previous_objective.has_value())
-    {
-        TryUpdateBestAuditState(iteration_state.accepted_state,
-            UsesPolish(iteration_state.previous_polish_provenance),
-            iteration_state.accepted_iteration_count, *previous_objective, iteration_state.best_audit_state);
-    }
+    RefreshBestAuditState(context, previous_snapshot, iteration_state);
     return false;
 }
 
@@ -584,23 +589,11 @@ static IterationResult RunIteration(
         }
     }
     iteration_state.trust_region_state.ResetToMinimum(probation_key_list);
-    auto ridge_atom_mask{ iteration_state.rollback_atom_mask };
-    const auto quarantine_atom_mask{
-        quarantine_activity.BuildCombinedFixedAtomMask()
-    };
-    for (std::size_t atom_index = 0; atom_index < ridge_atom_mask.size(); atom_index++)
-    {
-        if (quarantine_atom_mask.at(atom_index) != 0)
-        {
-            ridge_atom_mask.at(atom_index) = 1;
-        }
-        if (probation_atom_index_set.contains(atom_index))
-        {
-            ridge_atom_mask.at(atom_index) = 1;
-        }
-    }
     const auto joint_offset_ridge_multiplier_list{
-        BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
+        BuildSuspiciousJointOffsetRidgeMultiplierList(
+            iteration_state.rollback_atom_mask,
+            quarantine_activity,
+            probation_atom_index_set)
     };
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
@@ -766,7 +759,7 @@ static IterationResult RunIteration(
             };
             candidate_audit_objective = EvaluateAuditObjective(
                 iteration_state.objective_domain,
-                SnapshotResidualEvaluator{ context, candidate_model_snapshot });
+                context, candidate_model_snapshot);
         }
         if (candidate_audit_objective.has_value())
         {
@@ -881,19 +874,11 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
         const auto cluster_key_list{
             BuildGraphClusterKeyList(iteration_state.graph_partition)
         };
-        auto ridge_atom_mask{ iteration_state.rollback_atom_mask };
-        const auto quarantine_atom_mask{
-            final_block_activity.BuildCombinedFixedAtomMask()
-        };
-        for (std::size_t atom_index = 0; atom_index < ridge_atom_mask.size(); atom_index++)
-        {
-            if (quarantine_atom_mask.at(atom_index) != 0)
-            {
-                ridge_atom_mask.at(atom_index) = 1;
-            }
-        }
         const auto joint_offset_ridge_multiplier_list{
-            BuildSuspiciousJointOffsetRidgeMultiplierList(ridge_atom_mask)
+            BuildSuspiciousJointOffsetRidgeMultiplierList(
+                iteration_state.rollback_atom_mask,
+                final_block_activity,
+                {})
         };
         auto certificate_options{ options };
         certificate_options.quiet_mode = true;

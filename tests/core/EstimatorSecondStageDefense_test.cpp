@@ -1568,7 +1568,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     const auto old_snapshot{ audit_detail::BuildSecondStageModelSnapshot(context, earlier_best) };
     const auto domain{ audit_detail::BuildObjectiveDomain(context, old_snapshot, { { 0 } }, 0.0, 1.0) };
     const auto old_score{ audit_detail::EvaluateAuditObjective(
-        domain, audit_detail::SnapshotResidualEvaluator{ context, old_snapshot }) };
+        domain, context, old_snapshot) };
     ASSERT_TRUE(old_score.has_value());
     audit_state.reset();
     ASSERT_TRUE(audit_detail::TryUpdateBestAuditState(earlier_best, true, 3, *old_score, audit_state));
@@ -1582,7 +1582,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     ExpectGaussianModelsNear(audit_state->state.front().mdpde.GetModel(), earlier_best.front().mdpde.GetModel(), 0.0);
     const auto refreshed_snapshot{ audit_detail::BuildSecondStageModelSnapshot(context, previous) };
     const auto refreshed_score{ audit_detail::EvaluateAuditObjective(
-        domain, audit_detail::SnapshotResidualEvaluator{ context, refreshed_snapshot }) };
+        domain, context, refreshed_snapshot) };
     ASSERT_TRUE(refreshed_score.has_value());
     EXPECT_TRUE(audit_detail::TryUpdateBestAuditState(previous, false, 4, *refreshed_score, audit_state));
     EXPECT_EQ(audit_state->source_iteration, 4U);
@@ -1918,10 +1918,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     const auto candidate_objective{
         trust_detail::EvaluateAuditObjective(
             objective_domain,
-            trust_detail::SnapshotResidualEvaluator{
-                fixture.context,
-                candidate_snapshot
-            })
+            fixture.context, candidate_snapshot)
     };
     ASSERT_TRUE(candidate_objective.has_value());
 
@@ -2005,10 +2002,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     const auto scaled_candidate_objective{
         trust_detail::EvaluateAuditObjective(
             scaled_domain,
-            trust_detail::SnapshotResidualEvaluator{
-                scaled_fixture.context,
-                scaled_candidate_snapshot
-            })
+            scaled_fixture.context, scaled_candidate_snapshot)
     };
     ASSERT_TRUE(scaled_previous_objective.has_value());
     ASSERT_TRUE(scaled_candidate_objective.has_value());
@@ -2081,10 +2075,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     const auto tail_candidate_objective{
         trust_detail::EvaluateAuditObjective(
             tail_domain,
-            trust_detail::SnapshotResidualEvaluator{
-                fixture.context,
-                candidate_snapshot
-            })
+            fixture.context, candidate_snapshot)
     };
     ASSERT_TRUE(tail_previous_objective.has_value());
     ASSERT_TRUE(tail_candidate_objective.has_value());
@@ -2176,10 +2167,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     const auto opposite_objective{
         trust_detail::EvaluateAuditObjective(
             objective_domain,
-            trust_detail::SnapshotResidualEvaluator{
-                fixture.context,
-                opposite_snapshot
-            })
+            fixture.context, opposite_snapshot)
     };
     ASSERT_TRUE(opposite_objective.has_value());
     const auto nonpositive_prediction{
@@ -4702,10 +4690,14 @@ TEST(EstimatorSecondStageDefenseTest,
     residual_detail::FitStatePatch patch;
     patch.atom_index_list = { 0 };
     patch.mdpde_list = { MakeGaussianResult(candidate_model).mdpde };
-    const residual_detail::FitStateView candidate_view{ previous_state, patch };
-    const residual_detail::CandidateEvaluationOverlay overlay{ context, baseline, candidate_view };
+    const residual_detail::CandidateEvaluationOverlay overlay{
+        context,
+        baseline,
+        previous_state,
+        patch
+    };
     const residual_detail::SampleRef sample_ref{ 0, 1 };
-    const auto candidate_snapshot{ residual_detail::BuildSecondStageModelSnapshot(context, candidate_view) };
+    const auto candidate_snapshot{ residual_detail::BuildSecondStageModelSnapshot(context, overlay.GetState()) };
     const auto direct{ residual_detail::EvaluateResidualSample(context, sample_ref, candidate_snapshot) };
     const auto overlaid{ overlay(sample_ref) };
     ASSERT_TRUE(direct.has_value());
@@ -4715,7 +4707,7 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_DOUBLE_EQ(direct->residual, overlaid->residual);
     const auto samples{ residual_detail::BuildSecondStageAdjustedSamples(context, 0, candidate_snapshot) };
     EXPECT_DOUBLE_EQ(samples.at(1).response, direct->adjusted_response);
-    EXPECT_EQ(candidate_view.size(), 1U);
+    EXPECT_EQ(overlay.GetState().size(), 1U);
 
     // A later refresh must not change an already captured snapshot or overlay.
     const residual_detail::FitState next_state{ MakeGaussianResult(candidate_model) };
@@ -4768,10 +4760,7 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
         const auto snapshot_objective{
             audit_detail::EvaluateAuditObjective(
                 domain,
-                audit_detail::SnapshotResidualEvaluator{
-                    context,
-                    baseline.model_snapshot
-                })
+                context, baseline.model_snapshot)
         };
         const auto baseline_objective{
             audit_detail::EvaluateAuditObjective(domain, baseline)

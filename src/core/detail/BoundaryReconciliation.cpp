@@ -341,7 +341,9 @@ static bool TryBoundaryJointCorrection(
         record_performance(false);
         return false;
     }
-    const FitStateView corrected_state_view{
+    const CandidateEvaluationOverlay corrected_overlay{
+        inputs.context,
+        inputs.residual_baseline,
         inputs.previous_state,
         corrected_component_patch
     };
@@ -351,17 +353,12 @@ static bool TryBoundaryJointCorrection(
             inputs.options,
             component.halo_atom_index_list,
             endpoint_state_view,
-            corrected_state_view);
+            corrected_overlay.GetState());
     if (diagnostic.suspicious_candidate_atom_count != 0)
     {
         record_performance(false);
         return false;
     }
-    const CandidateEvaluationOverlay corrected_overlay{
-        inputs.context,
-        inputs.residual_baseline,
-        corrected_state_view
-    };
     const auto raw_candidate_objective{
         EvaluateObjectiveDelta(
             corrected_overlay,
@@ -438,14 +435,11 @@ static bool TryBacktrackBoundaryComponent(
         step = backtracking_workspace.BuildNextCandidate())
     {
         diagnostic.trial_count = step.trial_number;
-        const FitStateView candidate_state_view{
-            inputs.previous_state,
-            backtracking_workspace.GetCandidatePatch()
-        };
         const CandidateEvaluationOverlay candidate_overlay{
             inputs.context,
             inputs.residual_baseline,
-            candidate_state_view
+            inputs.previous_state,
+            backtracking_workspace.GetCandidatePatch()
         };
         accepted_evaluation = EvaluateBoundaryComponentCandidate(
             inputs,
@@ -497,14 +491,11 @@ static void ReconcileBoundaryComponent(
         diagnostic.previous_component_objective = previous_audit_objective->GetTotalObjective();
     }
     const auto endpoint_patch{ BuildSelectionPatch(selection, component.key_list) };
-    const FitStateView endpoint_state_view{
-        inputs.previous_state,
-        endpoint_patch
-    };
     const CandidateEvaluationOverlay endpoint_overlay{
         inputs.context,
         inputs.residual_baseline,
-        endpoint_state_view
+        inputs.previous_state,
+        endpoint_patch
     };
     const auto endpoint_evaluation{
         EvaluateBoundaryComponentCandidate(
@@ -673,11 +664,11 @@ static bool TryRescueBoundaryComponent(
                 "Boundary rescue candidate patch does not match its component.");
         }
     }
-    const FitStateView endpoint_state_view{ inputs.previous_state, endpoint_patch };
     const CandidateEvaluationOverlay endpoint_overlay{
         inputs.context,
         inputs.residual_baseline,
-        endpoint_state_view
+        inputs.previous_state,
+        endpoint_patch
     };
     const auto endpoint_evaluation{
         EvaluateBoundaryComponentCandidate(
@@ -823,14 +814,11 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     const auto candidate_patch{
         BuildSelectionPatch(selection, selection.accepted_key_list)
     };
-    const FitStateView candidate_state_view{
-        inputs.previous_state,
-        candidate_patch
-    };
     const CandidateEvaluationOverlay candidate_overlay{
         inputs.context,
         inputs.residual_baseline,
-        candidate_state_view
+        inputs.previous_state,
+        candidate_patch
     };
     const auto affected_sample_ref_list{
         BuildGraphAffectedSampleUnion(inputs.partition, selection.accepted_key_list)
@@ -907,14 +895,11 @@ static void AuditAndSalvageFinalSelection(
         const auto candidate_patch{
             BuildSelectionPatch(selection, component.key_list)
         };
-        const FitStateView candidate_state_view{
-            inputs.previous_state,
-            candidate_patch
-        };
         const CandidateEvaluationOverlay candidate_overlay{
             inputs.context,
             inputs.residual_baseline,
-            candidate_state_view
+            inputs.previous_state,
+            candidate_patch
         };
         const auto candidate_audit_objective{
             EvaluateObjectiveDelta(
@@ -988,23 +973,25 @@ void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, Candidate
     for (const auto & key : accepted_keys)
     {
         auto patch{ FitStatePatch::FromState(selection.assembled_state, key) };
-        const FitStateView view{ inputs.previous_state, patch };
+        const CandidateEvaluationOverlay candidate_overlay{
+            inputs.context, inputs.residual_baseline, inputs.previous_state, patch
+        };
         std::vector<GaussianModel3D> previous_models;
         std::vector<GaussianModel3D> candidate_models;
         for (const auto node : key)
         {
             previous_models.emplace_back(inputs.previous_state.at(node).mdpde.GetModel());
-            candidate_models.emplace_back(view.GetModel(node));
+            candidate_models.emplace_back(candidate_overlay.GetState().GetModel(node));
         }
         const auto norm{ CalculateModelTrustRegionStepNorm(previous_models, candidate_models) };
         bool safe{ norm.has_value() && IsTrustRegionStepWithinRadius(*norm, inputs.trust_region_state.GetRadius(key)) &&
             !EvaluateClusterCandidateGuard(inputs.context, inputs.options, inputs.residual_baseline.model_snapshot,
-                key, view, selection.block_activity).has_value() };
+                key, candidate_overlay.GetState(), selection.block_activity).has_value() };
         if (safe)
         {
             ObjectiveAttemptDiagnostic diagnostic;
             const auto & previous{ inputs.previous_objective_by_key.at(key) };
-            safe = TryCommitClusterCandidate(CandidateEvaluationOverlay{ inputs.context, inputs.residual_baseline, view },
+            safe = TryCommitClusterCandidate(candidate_overlay,
                 key, inputs.partition.sample_id_list_by_key.at(key), previous.has_value() ? &*previous : nullptr,
                 false, inputs.objective_domain, selection.cluster_objective_state.at(key), diagnostic, inputs.performance_counters);
         }

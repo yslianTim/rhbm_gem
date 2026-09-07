@@ -150,11 +150,6 @@ void FitStatePatch::ApplyTo(FitState & state) const
     }
 }
 
-std::optional<ResidualSample> SnapshotResidualEvaluator::operator()(const SampleRef & sample_ref) const
-{
-    return EvaluateResidualSample(context, sample_ref, model_snapshot);
-}
-
 const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index)
 {
     return state.at(atom_index).mdpde.GetModel();

@@ -55,13 +55,14 @@ class CandidateEvaluationOverlay
 {
     const SecondStageContext & m_context;
     const ResidualBaseline & m_baseline;
-    const FitStateView & m_candidate_state;
+    FitStateView m_candidate_state;
 
 public:
     CandidateEvaluationOverlay(
         const SecondStageContext & context,
         const ResidualBaseline & baseline,
-        const FitStateView & candidate_state);
+        const FitState & base_state,
+        const FitStatePatch & candidate_patch);
 
     std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
     const FitStateView & GetState() const { return m_candidate_state; }
@@ -160,7 +161,8 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
 
 std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator);
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & model_snapshot);
 
 ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
@@ -170,7 +172,8 @@ ObjectiveByKey BuildObjectiveByKey(
 ObjectiveByKey BuildObjectiveByKey(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
-    const SnapshotResidualEvaluator & evaluator);
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & model_snapshot);
 
 bool TryUpdateBestAuditState(
     const FitState & candidate_state,
