@@ -22,7 +22,7 @@ CONVERGENCE_ANALYZER_PATH = Path(__file__).with_name(
 CORPUS_ANALYZER_PATH = Path(__file__).with_name(
     "analyze_convergence_exposure_corpus.py")
 TRUTH_MARKER = "Convergence exposure truth:"
-CASE_SUMMARY_SCHEMA_VERSION = 13
+CASE_SUMMARY_SCHEMA_VERSION = 14
 FIELD_PATTERN = re.compile(
     r"(?:^|, )(?P<name>[a-z][a-z0-9-]*)=(?P<value>[^,]+)")
 
@@ -200,6 +200,8 @@ def _truth_metrics(
         serial = int(row["serial"])
         if serial not in truth:
             continue
+        if serial in seen:
+            return None
         seen.add(serial)
         for name in squared:
             error = float(row[name]) - truth[serial][name]
@@ -245,17 +247,56 @@ def _truth_metrics(
 
 def _safety_regression(parsed: dict[str, Any]) -> bool:
     terminal = parsed.get("terminal")
-    if terminal is None:
+    records = parsed.get("trajectory_records", [])
+    polish = parsed.get("polish")
+    if terminal is None or not parsed.get("terminal_atoms") or polish is None:
         return True
     try:
-        if not all(math.isfinite(float(value)) for value in
-                   terminal["objective"].split("/")):
+        if not records and (terminal["reason"] == "converged" or int(terminal["acc"]) != 0):
             return True
-        return any(
-            not all(math.isfinite(float(atom[name])) for name in
-                    ("amplitude", "width", "offset")) or
-            float(atom["amplitude"]) <= 0.0 or float(atom["width"]) <= 0.0
-            for atom in parsed["terminal_atoms"])
+        if not all(math.isfinite(float(v)) for v in terminal["objective"].split("/")):
+            return True
+        if any(not all(math.isfinite(float(atom[k])) for k in ("amplitude", "width", "offset"))
+               or float(atom["amplitude"]) <= 0 or float(atom["width"]) <= 0 for atom in parsed["terminal_atoms"]):
+            return True
+        for record in records:
+            certificate = [int(v) for v in record["certificate"].split("/")]
+            if len(certificate) != 6 or any(v not in (0, 1) for v in certificate):
+                return True
+            if certificate[5] and (certificate != [1] * 6 or record["blockers"] != "0/0/0/0"):
+                return True
+            for field, index in (("accepted-active-p99", 1), ("operator-nominal-residual-p99", 3)):
+                values = [float(v) for v in record[field].split("/")]
+                if len(values) != 3 or (certificate[index] and any(not math.isfinite(v) or v > 1e-4 for v in values)):
+                    return True
+        if terminal["reason"] == "converged" and records[-1]["certificate"] != "1/1/1/1/1/1":
+            return True
+        if polish["applied"] not in ("yes", "no") or polish["accepted"] not in ("yes", "no"):
+            return True
+        status = polish["residual-safety"]
+        if status not in ("absolute-passed", "relative-passed", "failed", "not-evaluated", "error"):
+            return True
+        passed = status in ("absolute-passed", "relative-passed")
+        if (polish["applied"] == "yes") != (polish["accepted"] == "yes" and passed):
+            return True
+        if polish["applied"] == "yes":
+            if polish["candidate-solver-qualified"] != "yes" or polish["candidate-operator-complete"] != "yes":
+                return True
+            candidate = [float(v) for v in polish["candidate-residual-p99"].split("/")]
+            if len(candidate) != 3 or not all(math.isfinite(v) for v in candidate):
+                return True
+            if status == "absolute-passed":
+                if any(v > 1e-4 for v in candidate):
+                    return True
+            else:
+                if terminal["reason"] == "converged" or polish["residual-safety-policy"] != "non-regression":
+                    return True
+                if polish["base-solver-qualified"] != "yes" or polish["base-operator-complete"] != "yes":
+                    return True
+                base = [float(v) for v in polish["base-residual-p99"].split("/")]
+                if len(base) != 3 or any(not math.isfinite(v) for v in base) or any(c > max(b, 1e-4) for c, b in zip(candidate, base)):
+                    return True
+        return False
     except (KeyError, TypeError, ValueError):
         return True
 
@@ -292,15 +333,17 @@ def run_case(
     summary_path = case_directory / "case-summary.json"
     expected_reference = (
         str(reference_directory) if reference_directory is not None else None)
+    executable_sha256 = hashlib.sha256(executable.read_bytes()).hexdigest()
     required_artifacts = (
         "run.log", "scenario-truth.json", "trajectory-schema-10.json",
-        "terminal-schema-2.json", "case-summary.json")
+        "terminal-schema-2.json", "diagnostics-schema-1.json", "case-summary.json")
     if summary_path.is_file() and all(
         (case_directory / name).is_file() for name in required_artifacts
     ):
         cached = json.loads(summary_path.read_text(encoding="utf-8"))
         if (cached.get("schema_version") == CASE_SUMMARY_SCHEMA_VERSION and
                 cached.get("status") == "complete" and
+                cached.get("executable_sha256") == executable_sha256 and
                 cached.get("case") == case and
                 cached.get("thread_count") == thread_count and
                 cached.get("reference_truth_directory") == expected_reference):
@@ -329,8 +372,11 @@ def run_case(
         parsed = CONVERGENCE_ANALYZER.parse_log(log_text)
         terminal_digest_value = normalized_terminal(parsed)
         truth = load_reference_truth(reference_directory, case["case_id"])
+        emitted_truth = parse_truth(log_text)
         if truth is None:
-            truth = parse_truth(log_text)
+            truth = emitted_truth
+        elif truth != emitted_truth:
+            raise ValueError("Generated truth differs from frozen reference truth")
         truth_metrics = _truth_metrics(parsed["terminal_atoms"], truth)
         if truth_metrics is None:
             raise ValueError("Terminal atoms do not cover frozen truth")
@@ -377,9 +423,12 @@ def run_case(
         "schema_version": 2,
         **terminal_digest_value,
     })
+    write_json(case_directory / "diagnostics-schema-1.json", parsed["diagnostics"])
     summary = {
         "schema_version": CASE_SUMMARY_SCHEMA_VERSION,
         "status": "complete",
+        "executable_sha256": executable_sha256,
+        "diagnostics": parsed["diagnostics"],
         "case": case,
         "thread_count": thread_count,
         "reference_truth_directory": (
@@ -419,7 +468,7 @@ def build_compact_baseline(
         for row in complete
     ]
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "case_identity_sha256": semantic_digest(case_identity),
         "frozen_truth_sha256": semantic_digest(truth_identity),
@@ -431,7 +480,7 @@ def build_compact_baseline(
             "comparison": CORPUS_ANALYZER.COMPARISON_SCHEMA_VERSION,
         },
         "production_definition": (
-            "solver-qualified (including shared-group consistency) && "
+            "solver-qualified && per-atom offset availability && "
             "accepted-active-p99 && operator-complete && "
             "operator-nominal-p99 && orthogonal-clear"),
         "case_count": aggregate["case_count"],
@@ -540,8 +589,9 @@ def run(argv: Sequence[str] | None = None) -> int:
                 comparison["candidate_complete_count"] != 600 or
                 comparison["baseline_failed_case_count"] != 0 or
                 comparison["candidate_failed_case_count"] != 0):
-            comparison["blocking_gate"]["conditions"]["complete-pair"] = False
-            comparison["blocking_gate"]["passed"] = False
+            for gate in ("safety_gate", "quality_gate", "efficiency_gate"):
+                comparison[gate]["conditions"]["complete-pair"] = False
+                comparison[gate]["passed"] = False
         write_json(args.output_dir / "comparison.json", comparison)
     write_json(
         args.output_dir / "compact-baseline.json",

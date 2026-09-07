@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -94,7 +95,8 @@ JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    bool log_debug_diagnostics);
+    bool log_debug_diagnostics,
+    std::string_view diagnostic_phase = "outer-operator");
 
 class JointPolishParameterization
 {
@@ -194,6 +196,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
-    algorithm::WeightedRidgeSolver & reusable_solver);
+    algorithm::WeightedRidgeSolver & reusable_solver,
+    std::string_view diagnostic_phase = "boundary-reconciliation");
 
 } // namespace rhbm_gem::core::detail

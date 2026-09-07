@@ -161,7 +161,8 @@ IterationProposalResult BuildIterationProposal(
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
-    ClusterSolverWorkspaceMap & solver_workspace_by_key)
+    ClusterSolverWorkspaceMap & solver_workspace_by_key,
+    std::string_view diagnostic_phase)
 {
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
@@ -181,7 +182,8 @@ IterationProposalResult BuildIterationProposal(
                 ridge_multiplier_list,
                 solver_workspace_by_key.at(
                     cluster_key_list.at(cluster_position)).joint_offset,
-                log_debug_diagnostics);
+                log_debug_diagnostics,
+                diagnostic_phase);
         }
         catch (...)
         {

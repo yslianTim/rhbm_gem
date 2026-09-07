@@ -79,7 +79,7 @@ require that experiment. Its smoke, schema/analyzer, and determinism checks are
 normal small CTest entries; the paired 600-case gate is deliberately excluded
 from CTest and is run with the `convergence_exposure_corpus` build target. Each
 case retains only the current run log, frozen truth, schema-10 trajectory,
-schema-2 terminal state, and schema-13 case summary.
+schema-2 terminal state, and schema-14 case summary and schema-1 diagnostics.
 
 Run repository guards and install consumer smoke (lint lane):
 

@@ -21,6 +21,25 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
+void LogConditioning(
+    const JointFittingConditioning & conditioning,
+    const Eigen::VectorXd & ridge_multiplier,
+    std::string_view solve,
+    std::string_view phase)
+{
+    if (Logger::GetLogLevel() < LogLevel::Debug) return;
+    std::ostringstream message;
+    message << std::scientific << std::setprecision(17)
+        << "Second-stage conditioning: schema=1, solve=" << solve
+        << ", phase=" << phase
+        << ", columns=" << ridge_multiplier.size()
+        << ", pivot-ratio=" << conditioning.pivot_ratio
+        << ", guard=" << conditioning.guard_required
+        << ", ridge-min=" << ridge_multiplier.minCoeff()
+        << ", ridge-max=" << ridge_multiplier.maxCoeff() << ".";
+    Logger::Log(LogLevel::Debug, message.str());
+}
+
 constexpr int kRobustLossMaximumIterations{ 50 };
 constexpr double kJointFittingRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointFittingResidualScaleMin{ 1.0e-12 };
@@ -235,7 +254,8 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
     const Eigen::VectorXd & previous_offset,
-    bool log_debug_diagnostics)
+    bool log_debug_diagnostics,
+    std::string_view diagnostic_phase)
 {
     const auto column_count{ previous_offset.size() };
     std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_atom_index;
@@ -416,6 +436,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
             Logger::Log(LogLevel::Debug, message.str());
         }
     }
+    LogConditioning(conditioning, ridge_multiplier_by_column, "joint-offset", diagnostic_phase);
     system.previous_parameter = previous_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
@@ -474,8 +495,21 @@ JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    bool log_debug_diagnostics)
+    bool log_debug_diagnostics,
+    std::string_view diagnostic_phase)
 {
+    const auto report = [&](JointOffsetSolveResult result)
+    {
+        if (Logger::GetLogLevel() >= LogLevel::Debug)
+        {
+            std::ostringstream message;
+            message << "Second-stage solve: schema=1, solve=joint-offset, phase="
+                << diagnostic_phase << ", status=" << static_cast<int>(result.status)
+                << ", hard-failure=" << IsJointOffsetSolveHardFailure(result.status) << ".";
+            Logger::Log(LogLevel::Debug, message.str());
+        }
+        return result;
+    };
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
@@ -487,10 +521,10 @@ JointOffsetSolveResult EstimateJointOffsets(
     }
     if (previous_offset.size() == 0 || !previous_offset.allFinite())
     {
-        return JointOffsetSolveResult{
+        return report(JointOffsetSolveResult{
             JointOffsetSolveStatus::SystemBuildFailed,
             previous_offset
-        };
+        });
     }
     algorithm::WeightedRidgeSystem system;
     try
@@ -501,31 +535,32 @@ JointOffsetSolveResult EstimateJointOffsets(
             model_snapshot,
             ridge_multiplier_list,
             previous_offset,
-            log_debug_diagnostics);
+            log_debug_diagnostics,
+            diagnostic_phase);
     }
     catch (const std::runtime_error &)
     {
-        return JointOffsetSolveResult{
+        return report(JointOffsetSolveResult{
             JointOffsetSolveStatus::SystemBuildFailed,
             previous_offset
-        };
+        });
     }
     if (system.response.size() == 0)
     {
-        return JointOffsetSolveResult{
+        return report(JointOffsetSolveResult{
             JointOffsetSolveStatus::EmptySystem,
             previous_offset
-        };
+        });
     }
 
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
     Eigen::VectorXd offset;
     if (!reusable_solver.Solve(system, weight, offset))
     {
-        return JointOffsetSolveResult{
+        return report(JointOffsetSolveResult{
             JointOffsetSolveStatus::InitialSolveFailed,
             previous_offset
-        };
+        });
     }
 
     for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
@@ -548,10 +583,10 @@ JointOffsetSolveResult EstimateJointOffsets(
         Eigen::VectorXd updated_offset;
         if (!reusable_solver.Solve(system, weight, updated_offset))
         {
-            return JointOffsetSolveResult{
+            return report(JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
                 previous_offset
-            };
+            });
         }
         const auto current_objective{
             CalculateWeightedRidgeSurrogateObjective(system, weight, offset)
@@ -561,9 +596,9 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
         if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
         {
-            return JointOffsetSolveResult{
+            return report(JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
-                offset };
+                offset });
         }
         const auto maximum_change{
             algorithm::CalculateMaximumNormalizedVectorChange(
@@ -574,11 +609,11 @@ JointOffsetSolveResult EstimateJointOffsets(
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
-            return JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) };
+            return report(JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) });
         }
     }
 
-    return JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) };
+    return report(JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) });
 }
 
 std::optional<JointPolishParameterization> JointPolishParameterization::Build(
@@ -661,7 +696,8 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const std::vector<double> & ridge_multiplier_list,
     const JointPolishParameterization & parameterization,
     const std::vector<GaussianModel3D> & seed_model_list,
-    algorithm::WeightedRidgeSolver & reusable_solver)
+    algorithm::WeightedRidgeSolver & reusable_solver,
+    std::string_view diagnostic_phase)
 {
     if (key.empty() || sample_ref_list.empty() ||
         parameterization.AtomCount() != key.size() ||
@@ -820,6 +856,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 ridge_multiplier_by_column(column_index));
     }
 
+    LogConditioning(conditioning, ridge_multiplier_by_column, "joint-polish", diagnostic_phase);
     const auto residual_scale{
         std::max(
             array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
@@ -836,7 +873,15 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     }
 
     Eigen::VectorXd direction;
-    if (!reusable_solver.Solve(system, weight, direction))
+    const auto solved{ reusable_solver.Solve(system, weight, direction) };
+    if (Logger::GetLogLevel() >= LogLevel::Debug)
+    {
+        std::ostringstream message;
+        message << "Second-stage solve: schema=1, solve=joint-polish, phase="
+            << diagnostic_phase << ", status=" << (solved ? "solved" : "failed") << ".";
+        Logger::Log(LogLevel::Debug, message.str());
+    }
+    if (!solved)
     {
         return std::nullopt;
     }
@@ -887,7 +932,8 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
             ridge_multiplier_list,
             *parameterization,
             *seed_model_list,
-            reusable_solver)
+            reusable_solver,
+            "candidate-polish")
     };
     if (!direction.has_value()) return std::nullopt;
 
@@ -970,7 +1016,8 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<SampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
-    algorithm::WeightedRidgeSolver & reusable_solver)
+    algorithm::WeightedRidgeSolver & reusable_solver,
+    std::string_view diagnostic_phase)
 {
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
@@ -1043,7 +1090,8 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             ridge_multiplier_list,
             *parameterization,
             *seed_model_list,
-            reusable_solver)
+            reusable_solver,
+            diagnostic_phase)
     };
     if (!direction.has_value())
     {

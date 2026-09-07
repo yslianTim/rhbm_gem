@@ -17,6 +17,7 @@
 #include <ranges>
 #include <set>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,6 +28,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem::core::detail {
@@ -127,7 +129,8 @@ static void ValidateBlockActivitySize(
 static ConvergenceCertificate SummarizeFixedPointOperator(
     const FixedPointOperatorEvidence & evidence,
     const FitState & previous_state,
-    const std::vector<std::size_t> & atom_index_list)
+    const std::vector<std::size_t> & atom_index_list,
+    std::string_view diagnostic_phase = "outer-operator")
 {
     ConvergenceCertificate result;
     const ActiveCoordinatePopulation operator_nominal_population{
@@ -162,6 +165,22 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
             return evidence.shape_available_atom_mask.at(atom_index) != 0 &&
                 evidence.offset_available_atom_mask.at(atom_index) != 0;
         });
+    if (Logger::GetLogLevel() >= LogLevel::Debug)
+    {
+        std::size_t shape_unavailable{ 0 };
+        std::size_t offset_unavailable{ 0 };
+        for (const auto atom_index : atom_index_list)
+        {
+            shape_unavailable += evidence.shape_available_atom_mask.at(atom_index) == 0;
+            offset_unavailable += evidence.offset_available_atom_mask.at(atom_index) == 0;
+        }
+        std::ostringstream message;
+        message << "Second-stage availability: schema=1, phase=" << diagnostic_phase
+            << ", nominal-atoms=" << atom_index_list.size()
+            << ", shape-unavailable=" << shape_unavailable
+            << ", offset-unavailable=" << offset_unavailable << ".";
+        Logger::Log(LogLevel::Debug, message.str());
+    }
     return result;
 }
 
@@ -890,12 +909,14 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
                 certificate_options,
                 joint_offset_ridge_multiplier_list,
                 final_block_activity,
-                iteration_state.solver_workspace_by_key)
+                iteration_state.solver_workspace_by_key,
+                "final-recertification")
         };
         auto certificate{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             candidate_state,
-            iteration_state.selected_atom_index_list) };
+            iteration_state.selected_atom_index_list,
+            "final-recertification") };
         certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
             iteration_state.selected_atom_index_list,
             cluster_key_list,

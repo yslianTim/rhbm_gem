@@ -2302,6 +2302,28 @@ TEST(EstimatorSecondStageDefenseTest, JointFittingConditioningKeepsIndependentCo
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
 }
 
+TEST(EstimatorSecondStageDefenseTest, JointFittingConditioningFailsClosedAndIncludesThreshold)
+{
+    Eigen::SparseMatrix<double> zero_column{ 2, 2 };
+    zero_column.insert(0, 0) = 1.0;
+    auto result{ conditioning_detail::EvaluateJointFittingConditioning(zero_column, 1.0e-8) };
+    EXPECT_TRUE(result.guard_required);
+    EXPECT_DOUBLE_EQ(result.pivot_ratio, 0.0);
+    zero_column.insert(1, 1) = std::numeric_limits<double>::infinity();
+    result = conditioning_detail::EvaluateJointFittingConditioning(zero_column, 1.0e-8);
+    EXPECT_TRUE(result.guard_required);
+    EXPECT_DOUBLE_EQ(result.pivot_ratio, 0.0);
+
+    Eigen::SparseMatrix<double> identity{ 2, 2 };
+    identity.setIdentity();
+    result = conditioning_detail::EvaluateJointFittingConditioning(identity, 1.0);
+    EXPECT_TRUE(result.guard_required);
+    EXPECT_DOUBLE_EQ(result.pivot_ratio, 1.0);
+    result = conditioning_detail::EvaluateJointFittingConditioning(
+        identity, std::nextafter(1.0, 0.0));
+    EXPECT_FALSE(result.guard_required);
+}
+
 TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorPreservesIndividualRidgeAnchors)
 {
     const std::vector<rg::GaussianModel3D> models{

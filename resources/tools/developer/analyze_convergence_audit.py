@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any, Iterable, Sequence
@@ -49,7 +50,7 @@ def _fields(line: str, marker: str) -> dict[str, str] | None:
 
 
 def _integers(value: str) -> list[int]:
-    return [int(float(item)) for item in value.split("/")]
+    return [int(item) for item in value.split("/")]
 
 
 def _validate_certificate(record: dict[str, str]) -> None:
@@ -90,7 +91,39 @@ def parse_log(text: str) -> dict[str, Any]:
     trajectory_records: list[dict[str, str]] = []
     terminal: dict[str, str] | None = None
     terminal_atoms: list[dict[str, str]] = []
+    polish = None
+    conditioning = []
+    availability = []
+    solves = []
     for line in text.splitlines():
+        if fields := _fields(line, "Second-stage solve:"):
+            if fields.get("schema") != "1":
+                raise ValueError("Unsupported solve schema")
+            if not {"solve", "phase", "status"}.issubset(fields):
+                raise ValueError("Incomplete solve diagnostic")
+            solves.append(fields)
+        if fields := _fields(line, "Second-stage conditioning:"):
+            if fields.get("schema") != "1":
+                raise ValueError("Unsupported conditioning schema")
+            if not {"solve", "phase", "columns", "pivot-ratio", "guard", "ridge-min", "ridge-max"}.issubset(fields):
+                raise ValueError("Incomplete conditioning diagnostic")
+            if fields["guard"] not in ("0", "1") or int(fields["columns"]) <= 0:
+                raise ValueError("Invalid conditioning population or guard")
+            values = [float(fields[k]) for k in ("pivot-ratio", "ridge-min", "ridge-max")]
+            if not all(math.isfinite(v) for v in values) or not (0 <= values[0] <= 1 and 0 < values[1] <= values[2]):
+                raise ValueError("Invalid conditioning metric")
+            conditioning.append(fields)
+        if fields := _fields(line, "Second-stage availability:"):
+            if fields.get("schema") != "1":
+                raise ValueError("Unsupported availability schema")
+            if not {"phase", "nominal-atoms", "shape-unavailable", "offset-unavailable"}.issubset(fields):
+                raise ValueError("Incomplete availability diagnostic")
+            count = int(fields["nominal-atoms"])
+            if count < 0 or any(not 0 <= int(fields[k]) <= count for k in ("shape-unavailable", "offset-unavailable")):
+                raise ValueError("Invalid availability population")
+            availability.append(fields)
+        if fields := _fields(line, "Final dependency polish:"):
+            polish = fields
         if record := parse_record(line):
             trajectory_records.append(record)
         if fields := _fields(line, TERMINAL_MARKER):
@@ -113,6 +146,9 @@ def parse_log(text: str) -> dict[str, Any]:
         "trajectory_records": trajectory_records,
         "terminal": terminal,
         "terminal_atoms": terminal_atoms,
+        "polish": polish,
+        "diagnostics": {"schema_version": 1, "conditioning": conditioning, "availability": availability, "solves": solves,
+                        "populations": [{k: record[k] for k in ("try", "accepted-active-population", "operator-nominal-population")} for record in trajectory_records]},
     }
 
 

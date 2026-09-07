@@ -1058,3 +1058,15 @@ Pair summaries, logs, and the unchanged comparison-tool report are retained in
 and execution settings are recorded in
 `build/second-stage-refactor-baseline/provenance.json`. Historical audit documents
 were not changed.
+
+
+## Per-atom P0 recertification (2026-09-07)
+
+The exact `a4354e698e77398154009d231907ebf3ed4b1d52` HEAD was paired against
+diagnostic/tooling-only changes on the full 600-case corpus. Safety and per-case
+quality/trajectory neutrality passed; the separate efficiency gate failed.
+Historical manifest/case identity hashes match, but historical frozen-truth
+continuity remains unverified. See the [authoritative P0 audit result](
+second-stage-outer-iteration-algorithm-audit.md#p0-result-2026-09-07) for
+per-atom availability/population/conditioning definitions, measurements,
+provenance, limitations, and replay commands.

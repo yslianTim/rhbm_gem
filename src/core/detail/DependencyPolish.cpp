@@ -153,7 +153,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             component.affected_sample_ref_list,
                             ridge_multiplier_list,
                             trust_region_list,
-                            solver)
+                            solver,
+                            "final-dependency-polish")
                     };
                     diagnostic.symbolic_analysis_count +=
                         solver.GetSymbolicAnalysisCount() -

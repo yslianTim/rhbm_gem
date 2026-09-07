@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import copy
 from pathlib import Path
 import unittest
 
@@ -37,12 +38,12 @@ def case_summary(
     truth_rmse: float = 0.1,
     accepted_iteration: int = 4,
     elapsed_seconds: float = 1.0,
-    trajectory_digest: str = "trajectory",
-    terminal_digest: str = "terminal",
+    trajectory_digest: str = "a" * 64,
+    terminal_digest: str = "b" * 64,
     stop_reason: str = "converged",
 ) -> dict[str, object]:
     return {
-        "schema_version": 13,
+        "schema_version": 14,
         "status": "complete",
         "case": {
             "case_id": case_id,
@@ -54,7 +55,7 @@ def case_summary(
         "production_converged": stop_reason == "converged",
         "semantic_trajectory_sha256": trajectory_digest,
         "terminal_state_sha256": terminal_digest,
-        "frozen_truth_sha256": "truth",
+        "frozen_truth_sha256": "c" * 64,
         "safety_regression": False,
         "terminal": {
             "reason": stop_reason,
@@ -94,12 +95,12 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         aggregate = ANALYZER.analyze([summary])
         baseline = RUNNER.build_compact_baseline(
             b'{"schema_version":1}', [summary], aggregate)
-        self.assertEqual(baseline["schema_version"], 3)
+        self.assertEqual(baseline["schema_version"], 4)
         self.assertEqual(baseline["schema_contract"]["trajectory"], 10)
         self.assertEqual(baseline["schema_contract"]["terminal"], 2)
-        self.assertEqual(baseline["schema_contract"]["case_summary"], 13)
-        self.assertEqual(baseline["schema_contract"]["aggregate"], 8)
-        self.assertEqual(baseline["schema_contract"]["comparison"], 4)
+        self.assertEqual(baseline["schema_contract"]["case_summary"], 14)
+        self.assertEqual(baseline["schema_contract"]["aggregate"], 9)
+        self.assertEqual(baseline["schema_contract"]["comparison"], 5)
         self.assertNotIn("comparator_set", baseline["schema_contract"])
         self.assertNotIn("comparator_definitions", baseline)
         self.assertEqual(baseline["cases"][0][4], "converged")
@@ -115,6 +116,11 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertIsNotNone(metrics)
         assert metrics is not None
         self.assertEqual(metrics["transformed_aggregate_rmse"], 0.0)
+        target = {"serial": "1", "amplitude": "6", "width": "0.5", "offset": "0.1"}
+        neighbor = {"serial": "2", "amplitude": "1", "width": "0.5", "offset": "0"}
+        self.assertEqual(RUNNER._truth_metrics([target, neighbor], truth)["transformed_aggregate_rmse"], 0.0)
+        self.assertIsNone(RUNNER._truth_metrics([target, target], truth))
+        self.assertIsNone(RUNNER._truth_metrics([neighbor], truth))
         parser = load_module(
             "independent_offset_audit_parser",
             PROJECT_ROOT / "resources" / "tools" / "developer" /
@@ -150,7 +156,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             case_summary("a"),
             case_summary("b", stop_reason="audit-patience"),
         ])
-        self.assertEqual(report["schema_version"], 8)
+        self.assertEqual(report["schema_version"], 9)
         self.assertEqual(report["case_count"], 2)
         self.assertEqual(report["production_convergence_count"], 1)
         self.assertEqual(
@@ -170,7 +176,7 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
             case_summary("b", elapsed_seconds=3.0),
         ])
         comparison = ANALYZER.compare(before, after)
-        self.assertEqual(comparison["schema_version"], 4)
+        self.assertEqual(comparison["schema_version"], 5)
         self.assertEqual(comparison["production_semantic_match_count"], 2)
         self.assertEqual(comparison["terminal_state_match_count"], 2)
         self.assertEqual(comparison["objective_delta"]["median"], 0.0)
@@ -178,7 +184,85 @@ class ConvergenceExposureCorpusTest(unittest.TestCase):
         self.assertEqual(
             comparison["accepted_iteration_delta"]["median"], 0.0)
         self.assertTrue(comparison["elapsed_seconds"]["strictly_lower"])
-        self.assertTrue(comparison["blocking_gate"]["passed"])
+        self.assertFalse(comparison["safety_gate"]["passed"])  # Only two cases.
+        self.assertFalse(comparison["quality_gate"]["passed"])
+
+    def test_full_pair_separates_safety_quality_and_efficiency(self) -> None:
+        before = ANALYZER.analyze([case_summary(str(i)) for i in range(600)])
+        after = copy.deepcopy(before)
+        report = ANALYZER.compare(before, after)
+        self.assertTrue(report["safety_gate"]["passed"])
+        self.assertTrue(report["quality_gate"]["passed"])
+        self.assertFalse(report["efficiency_gate"]["passed"])
+        after["cases"][0]["objective"] += 0.01
+        self.assertFalse(ANALYZER.compare(before, after)["quality_gate"]["passed"])
+
+    def test_missing_and_nonfinite_evidence_fails_closed(self) -> None:
+        before = ANALYZER.analyze([case_summary(str(i)) for i in range(600)])
+        for field, value in (("objective", None), ("truth_rmse", float("nan")),
+                             ("accepted_iteration", float("inf")),
+                             ("semantic_trajectory_sha256", None), ("terminal_state_sha256", None)):
+            after = copy.deepcopy(before)
+            after["cases"][0][field] = value
+            self.assertFalse(ANALYZER.compare(before, after)["quality_gate"]["passed"])
+        after = copy.deepcopy(before)
+        after["cases"][0]["safety_regression"] = None
+        self.assertFalse(ANALYZER.compare(before, after)["safety_gate"]["passed"])
+        after = copy.deepcopy(before)
+        after["cases"][0]["elapsed_seconds"] = None
+        self.assertFalse(ANALYZER.compare(before, after)["efficiency_gate"]["passed"])
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            ANALYZER.analyze([case_summary("same"), case_summary("same")])
+        with self.assertRaisesRegex(ValueError, "identities differ"):
+            ANALYZER.compare(before, ANALYZER.analyze([case_summary("missing")]))
+        self.assertFalse(ANALYZER.compare(ANALYZER.analyze([]), ANALYZER.analyze([]))["safety_gate"]["passed"])
+
+    def test_safety_requires_certificate_and_polish_evidence(self) -> None:
+        record = {"certificate": "1/1/1/1/1/1", "blockers": "0/0/0/0",
+                  "accepted-active-p99": "0/0/0", "operator-nominal-residual-p99": "0/0/0"}
+        parsed = {"terminal": {"objective": "1/0/0/1", "reason": "converged", "acc": "1"},
+                  "terminal_atoms": [{"amplitude": "1", "width": "1", "offset": "0"}],
+                  "trajectory_records": [record],
+                  "polish": {"accepted": "no", "applied": "no", "residual-safety": "not-evaluated"}}
+        self.assertFalse(RUNNER._safety_regression(parsed))
+        rejected = copy.deepcopy(parsed)
+        rejected["terminal"].update({"reason": "all-rejected-backtracking-exhausted", "acc": "0"})
+        rejected["trajectory_records"] = []
+        self.assertFalse(RUNNER._safety_regression(rejected))
+        rejected["terminal"]["acc"] = "1"
+        self.assertTrue(RUNNER._safety_regression(rejected))
+        for key in ("polish", "trajectory_records", "terminal_atoms"):
+            bad = copy.deepcopy(parsed)
+            bad.pop(key)
+            self.assertTrue(RUNNER._safety_regression(bad))
+        bad = copy.deepcopy(parsed)
+        bad["trajectory_records"][0]["operator-nominal-residual-p99"] = "0/inf/0"
+        self.assertTrue(RUNNER._safety_regression(bad))
+        bad = copy.deepcopy(parsed)
+        bad["polish"].update({"accepted": "yes", "applied": "yes", "residual-safety": "failed"})
+        self.assertTrue(RUNNER._safety_regression(bad))
+
+    def test_diagnostics_are_validated_and_excluded_from_production_digest(self) -> None:
+        trajectory = ("Convergence safeguard audit: schema=10, try=1, acc=1, atoms=1, "
+                      "quarantine=0, accepted-active-population=1/1/1, operator-nominal-population=1/1/1, "
+                      "certificate=1/1/1/1/1/1, accepted-active-p99=0/0/0, accepted-active-max=0/0/0, "
+                      "operator-nominal-residual-p99=0/0/0, operator-nominal-residual-max=0/0/0, blockers=0/0/0/0.")
+        diagnostic = ("Second-stage conditioning: schema=1, solve=joint-offset, phase=outer-operator, "
+                      "columns=1, pivot-ratio=1, guard=0, ridge-min=1, ridge-max=1.")
+        baseline = RUNNER.CONVERGENCE_ANALYZER.parse_log(trajectory)
+        candidate = RUNNER.CONVERGENCE_ANALYZER.parse_log(trajectory + "\n" + diagnostic)
+        self.assertEqual(RUNNER.semantic_digest(RUNNER.semantic_trajectory(baseline["trajectory_records"])),
+                         RUNNER.semantic_digest(RUNNER.semantic_trajectory(candidate["trajectory_records"])))
+        self.assertEqual(len(candidate["diagnostics"]["conditioning"]), 1)
+        for invalid in (diagnostic.replace("pivot-ratio=1", "pivot-ratio=nan"),
+                        diagnostic.replace(", columns=1", ""), diagnostic.replace("schema=1", "schema=9")):
+            with self.assertRaises(ValueError):
+                RUNNER.CONVERGENCE_ANALYZER.parse_log(invalid)
+        summary = case_summary("a")
+        summary["diagnostics"] = candidate["diagnostics"]
+        stats = ANALYZER.analyze([summary])["diagnostics"]
+        self.assertEqual(stats["conditioning_case_count"], 1)
+        self.assertEqual(stats["conditioning"]["all/outer-operator/joint-offset"]["pivot_ratio"]["minimum"], 1.0)
 
     def test_timing_is_excluded_from_semantic_digest(self) -> None:
         value = [{"try": "1", "certificate": "1/1/1/1/1/1"}]
