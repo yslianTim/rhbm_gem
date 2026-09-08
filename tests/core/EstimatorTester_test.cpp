@@ -11,6 +11,7 @@
 
 #include "core/command/detail/LocalFittingFeatures.hpp"
 #include "core/detail/IterationProcess.hpp"
+#include "core/detail/FittingRanges.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
@@ -84,8 +85,6 @@ rt::GroupTestOptions MakeGroupOptions(
 rt::FitOptions MakeSecondStageOptions()
 {
     rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
     return options;
@@ -240,8 +239,6 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     auto model{ std::move(input.replica_model_objects.front()) };
 
     rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
     options.thread_size = 2;
     options.quiet_mode = true;
     rt::RunLocalAlphaTraining(*model, options, FittingStage::First);
@@ -336,6 +333,20 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
 
     EXPECT_TRUE(prepared_dataset.X.isApprox(legacy_dataset.X, 0.0));
     EXPECT_TRUE(prepared_dataset.y.isApprox(legacy_dataset.y, 0.0));
+
+    const rt_detail::PreparedLocalGaussianDesign signal_design{
+        samples, 0.0, rt_detail::kSignalDistanceMax
+    };
+    const auto signal_dataset{ signal_design.BuildDataset(response_list, offset_model) };
+    ASSERT_EQ(signal_dataset.X.rows(), 3);
+    EXPECT_DOUBLE_EQ(signal_dataset.X(0, 1), 0.0);
+    EXPECT_DOUBLE_EQ(signal_dataset.X(2, 1), -0.5);
+    const rt::FitOptions options;
+    const auto fitted{ rt::EstimateLocalGaussian(samples, 0.0, options, offset_model) };
+    const auto expected{ signal_design.Estimate(response_list, 0.0, options.thread_size, offset_model) };
+    EXPECT_DOUBLE_EQ(fitted.mdpde.GetModel().GetAmplitude(), expected.mdpde.GetModel().GetAmplitude());
+    EXPECT_DOUBLE_EQ(fitted.mdpde.GetModel().GetWidth(), expected.mdpde.GetModel().GetWidth());
+
 
     std::fill(response_list.begin(), response_list.end(), -1.0);
     for (auto & sample : adjusted_samples) sample.response = -1.0;
@@ -814,8 +825,6 @@ TEST(EstimatorTesterTest, RunSecondStageIterationsRollsBackSuspiciousJointOffset
     };
 
     rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
 

@@ -350,7 +350,6 @@ static bool TryBoundaryJointCorrection(
     diagnostic.suspicious_candidate_atom_count =
         CountSuspiciousPolishAtoms(
             inputs.context,
-            inputs.options,
             component.halo_atom_index_list,
             endpoint_state_view,
             corrected_overlay.GetState());
@@ -985,7 +984,7 @@ void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, Candidate
         }
         const auto norm{ CalculateModelTrustRegionStepNorm(previous_models, candidate_models) };
         bool safe{ norm.has_value() && IsTrustRegionStepWithinRadius(*norm, inputs.trust_region_state.GetRadius(key)) &&
-            !EvaluateClusterCandidateGuard(inputs.context, inputs.options, inputs.residual_baseline.model_snapshot,
+            !EvaluateClusterCandidateGuard(inputs.context, inputs.residual_baseline.model_snapshot,
                 key, candidate_overlay.GetState(), selection.block_activity).has_value() };
         if (safe)
         {

@@ -86,8 +86,6 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::string saved_key_tag{ "model" };
     bool asymmetry_flag{ false };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
-    double fit_range_min{ 0.0 };
-    double fit_range_max{ 1.0 };
 };
 
 struct PotentialDisplayRequest : public CommandRequestBase
@@ -128,8 +126,6 @@ struct MapSimulationRequest : public CommandRequestBase
 struct RHBMTestRequest : public CommandRequestBase
 {
     TesterType tester_choice{ TesterType::BENCHMARK };
-    double fit_range_min{ 0.0 };
-    double fit_range_max{ 1.0 };
     double alpha_r{ 0.1 };
     double alpha_g{ 0.2 };
 };

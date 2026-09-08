@@ -511,6 +511,13 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
             objective_domain.owner_key_by_atom_index.at(sample_ref.atom_index)
         };
         if (owner_key.empty()) continue;
+        const auto in_fit{
+            objective_domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
+        };
+        const auto in_tail{
+            objective_domain.tail_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
+        };
+        if (!in_fit && !in_tail) continue;
         const auto owner_iter{ objective_domain.cluster_by_key.find(owner_key) };
         const auto previous_residual{ residual_baseline(sample_ref) };
         if (owner_iter == objective_domain.cluster_by_key.end() ||
@@ -521,24 +528,6 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
             result.shadow_action = DetermineTrustModelShadowAction(result);
             return result;
         }
-        const auto is_fit_range{
-            objective_domain.fit_sample_mask_by_atom.at(sample_ref.atom_index)
-                .at(sample_ref.sample_index) != 0
-        };
-        const auto sample_count{ is_fit_range ?
-            owner_iter->second.fit_sample_ref_list.size() :
-            owner_iter->second.tail_sample_ref_list.size()
-        };
-        const auto scale{ is_fit_range ?
-            owner_iter->second.scale->fit : owner_iter->second.scale->tail
-        };
-        if (sample_count == 0 || !std::isfinite(scale) || scale <= 0.0)
-        {
-            result.status = TrustModelPredictionStatus::ResidualUnavailable;
-            result.shadow_action = DetermineTrustModelShadowAction(result);
-            return result;
-        }
-
         const auto & atom_context{ context.atom_list.at(sample_ref.atom_index) };
         const auto target_direction{
             EvaluateTrustModelResponseDirection(
@@ -579,33 +568,51 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
         const auto linearized_residual{
             previous_residual->residual + residual_direction
         };
-        const auto weight{
-            algorithm::CalculateCauchyWeight(
-                previous_residual->residual,
-                scale,
-                kObjectiveRobustLossCutoffMultiplier)
-        };
-        const auto coefficient{
-            CalculateClusterAtomWeight(
-                owner_iter->second.selected_atom_count,
-                objective_domain.active_atom_count) /
-            static_cast<double>(sample_count)
-        };
-        const auto range_weight{ is_fit_range ? kFitRangeWeight : kTailValidationWeight };
-        const auto previous_normalized{ previous_residual->residual / scale };
-        const auto linearized_normalized{ linearized_residual / scale };
-        const auto contribution{
-            0.5 * range_weight * coefficient * weight *
-            (previous_normalized * previous_normalized -
-                linearized_normalized * linearized_normalized)
-        };
-        if (!std::isfinite(contribution))
+        for (const bool is_fit_range : { true, false })
         {
-            result.status = TrustModelPredictionStatus::Nonfinite;
-            result.shadow_action = DetermineTrustModelShadowAction(result);
-            return result;
+            if (!(is_fit_range ? in_fit : in_tail)) continue;
+            const auto sample_count{ is_fit_range ?
+                owner_iter->second.fit_sample_ref_list.size() :
+                owner_iter->second.tail_sample_ref_list.size()
+            };
+            const auto scale{ is_fit_range ?
+                owner_iter->second.scale->fit : owner_iter->second.scale->tail
+            };
+            if (sample_count == 0 || !std::isfinite(scale) || scale <= 0.0)
+            {
+                result.status = TrustModelPredictionStatus::ResidualUnavailable;
+                result.shadow_action = DetermineTrustModelShadowAction(result);
+                return result;
+            }
+
+            const auto weight{
+                algorithm::CalculateCauchyWeight(
+                    previous_residual->residual,
+                    scale,
+                    kObjectiveRobustLossCutoffMultiplier)
+            };
+            const auto coefficient{
+                CalculateClusterAtomWeight(
+                    owner_iter->second.selected_atom_count,
+                    objective_domain.active_atom_count) /
+                static_cast<double>(sample_count)
+            };
+            const auto range_weight{ is_fit_range ? kFitRangeWeight : kTailValidationWeight };
+            const auto previous_normalized{ previous_residual->residual / scale };
+            const auto linearized_normalized{ linearized_residual / scale };
+            const auto contribution{
+                0.5 * range_weight * coefficient * weight *
+                (previous_normalized * previous_normalized -
+                    linearized_normalized * linearized_normalized)
+            };
+            if (!std::isfinite(contribution))
+            {
+                result.status = TrustModelPredictionStatus::Nonfinite;
+                result.shadow_action = DetermineTrustModelShadowAction(result);
+                return result;
+            }
+            predicted_residual_reduction += contribution;
         }
-        predicted_residual_reduction += contribution;
     }
     result.predicted_residual_reduction = predicted_residual_reduction;
     result.predicted_penalty_reduction =
@@ -845,7 +852,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             const auto guard_failure{
                 EvaluateClusterCandidateGuard(
                     context,
-                    inputs.options,
                     residual_baseline.model_snapshot,
                     key,
                     candidate_overlay.GetState(),

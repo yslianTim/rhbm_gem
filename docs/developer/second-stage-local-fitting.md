@@ -62,7 +62,8 @@ all second-stage services through candidate selection:
 `GaussianModelOperations`, `PreparedLocalGaussianFit`, `SecondStageFitting`,
 `CouplingGraph`, and `JointFitting` retain the underlying model operations,
 prepared design, state/residual representation, graph construction, and solvers.
-The public Gaussian estimator workflow and `FitOptions` are unchanged.
+The public Gaussian estimator workflow uses internal fitting-range constants;
+`FitOptions` does not expose radial bounds.
 
 `CandidateSelectionInputs` contains read-only algorithm inputs. Selection owns
 its working activity masks and cluster objective history and returns both in
@@ -347,10 +348,28 @@ be decoded to a valid Gaussian model.
 
 Every selected raw sample belongs to exactly one owner cluster: the cluster
 containing the sample's selected target atom. Unselected contributors never own
-objective rows. Samples whose distances are inside the inclusive
-`distance_min <= distance <= distance_max` interval form the fit-range domain;
-all other raw samples form the tail-validation domain. Selection flags and the
-sign of the response do not remove samples from either domain.
+objective rows. `src/core/detail/FittingRanges.hpp` defines three internal
+constants: `kSignalDistanceMax = 1.0`, `kTailDistanceMin = 1.2`, and
+`kTailDistanceMax = 2.0`, in angstroms. The signal/fit domain is the inclusive
+`[0, kSignalDistanceMax]` interval; the tail objective domain independently uses
+`[kTailDistanceMin, kTailDistanceMax]`. Selection flags and the sign of the
+response do not remove samples from either objective domain. Direct signal
+refits and alpha training use the signal interval, with the refit's existing
+positive adjusted-response filter.
+
+The ranges may overlap or leave a gap. An overlapping sample contributes to
+both objective terms using their respective scales and sample counts; its
+residual is evaluated once per contribution evaluation. Samples in neither
+region are skipped before residual and scale validation. Full and incremental
+objectives use the same membership rules, and unique-sample performance counts
+use the union rather than the sum of region counts.
+
+The default gap `(1.0, 1.2)` is excluded from both residual objective terms.
+Offset estimation still uses all raw samples, and joint polish retains its
+existing sample sources, so this gap is not excluded from every solver. Tail
+is an objective constraint region, not a strictly held-out validation set.
+`PotentialAnalysisRequest` and `RHBMTestRequest` no longer expose fitting
+bounds, and neither command accepts `--fit-min` or `--fit-max`.
 
 The initial validated state supplies two independent, fixed robust scales for
 each cluster:

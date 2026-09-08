@@ -43,8 +43,6 @@ Command-specific fields:
 - `saved_key_tag`
 - `asymmetry_flag`
 - `sampling_method`
-- `fit_range_min`
-- `fit_range_max`
 
 `sampling_method` uses the shared `SphereSamplingMethod` enum and is exposed
 through the `--sampling-method` CLI flag.
@@ -88,6 +86,21 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 
 `CommandRunner` creates `output_dir` during filesystem preflight when needed.
+
+## Internal fitting ranges
+
+Fitting ranges are internal constants in `src/core/detail/FittingRanges.hpp`.
+Signal fitting and alpha training use `[0, 1.0]` Å; the second-stage tail
+objective uses `[1.2, 2.0]` Å. Both boundaries are inclusive. The two ranges
+are independent and may overlap or leave a gap when the constants are changed.
+An overlapping sample contributes to both objective terms, each with its own
+scale and sample-count normalization. Samples in neither region contribute to
+neither residual objective term.
+
+Offset fitting still uses all raw samples, and joint polish keeps its existing
+sample sources. The gap is therefore not excluded from every estimation step;
+tail is an objective constraint region, not a strictly held-out validation set.
+Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 
 ## Tests to Update When Behavior Changes
 

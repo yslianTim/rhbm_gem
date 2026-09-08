@@ -84,8 +84,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     const GaussianModel3D gaus_truth{ 8.0, width_prior, -0.1 };
 
     FitOptions options;
-    options.distance_min = request.fit_range_min;
-    options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.quiet_mode = true;
 
@@ -145,8 +143,6 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     const auto error_sigma{ 0.01 };
     const auto width_prior{ 0.5 };
     FitOptions options;
-    options.distance_min = request.fit_range_min;
-    options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.quiet_mode = true;
 
@@ -469,19 +465,8 @@ void NormalizeAndValidateRequest(
     RHBMTestRequest & request)
 {
     runner.RequireEnum(request, &RHBMTestRequest::tester_choice);
-    runner.RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_min);
-    runner.RequireFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_max);
     runner.RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_r);
     runner.RequireFinitePositiveScalar(request, &RHBMTestRequest::alpha_g);
-}
-
-void ValidatePreparedRequest(
-    CommandRunner<RHBMTestRequest> & runner,
-    const RHBMTestRequest & request)
-{
-    runner.RequirePrepareCondition(
-        request.fit_range_min <= request.fit_range_max,
-        "Expected --fit-min <= --fit-max.");
 }
 
 bool ExecutePreparedRequest(const RHBMTestRequest & request)
@@ -523,7 +508,6 @@ CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request)
     return CommandRunner<RHBMTestRequest>{}.Run(
         request,
         NormalizeAndValidateRequest,
-        ValidatePreparedRequest,
         ExecutePreparedRequest);
 }
 

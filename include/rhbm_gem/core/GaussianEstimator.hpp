@@ -14,8 +14,6 @@ namespace core {
 
 struct FitOptions
 {
-    double distance_min{ 0.0 };
-    double distance_max{ 1.0 };
     int thread_size{ 1 };
     bool quiet_mode{ false };
     bool exclude_hydrogen{ false };

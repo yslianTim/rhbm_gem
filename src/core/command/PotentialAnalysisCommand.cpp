@@ -60,8 +60,6 @@ void NormalizeAndValidateRequest(
         request, &PotentialAnalysisRequest::simulated_map_resolution);
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
     runner.RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
-    runner.RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
-    runner.RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
 }
 
 bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
@@ -131,8 +129,6 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
-    options.distance_min = request.fit_range_min;
-    options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.exclude_hydrogen = request.exclude_hydrogen;
     try
@@ -159,9 +155,6 @@ void ValidatePreparedRequest(
     runner.RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    runner.RequirePrepareCondition(
-        request.fit_range_min <= request.fit_range_max,
-        "Expected --fit-min <= --fit-max.");
 }
 
 } // namespace

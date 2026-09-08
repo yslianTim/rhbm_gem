@@ -3,6 +3,10 @@
 #include "core/detail/JointFitting.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 
+namespace rhbm_gem::core {
+struct FitOptions;
+}
+
 namespace rhbm_gem::core::detail {
 
 struct FixedPointOperatorEvidence

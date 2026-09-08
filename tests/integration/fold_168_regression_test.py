@@ -308,6 +308,11 @@ class Fold168RegressionTest(unittest.TestCase):
             baseline = make_baseline()
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             self.assertEqual(regression.load_baseline(baseline_path), baseline)
+            historical_path = Path(__file__).parents[1] / "benchmarks" / "fold_168_simulation_baseline.json"
+            historical = json.loads(historical_path.read_text(encoding="utf-8"))
+            self.assertEqual(regression.load_baseline(historical_path), historical)
+            self.assertNotIn("--fit-max", regression.COMMAND_ARGUMENT_TEMPLATE)
+            self.assertNotIn("--fit-min", regression.COMMAND_ARGUMENT_TEMPLATE)
 
             baseline["schema_version"] = 5
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")

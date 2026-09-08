@@ -122,6 +122,8 @@ bool IsAuditObjectiveAcceptableForProgress(
 
 struct ObjectiveClusterDomain
 {
+    // Unique union of the independently selected fit and tail samples.
+    std::vector<SampleRef> sample_ref_list{};
     std::vector<SampleRef> fit_sample_ref_list{};
     std::vector<SampleRef> tail_sample_ref_list{};
     std::optional<ObjectiveScale> scale{};
@@ -133,6 +135,8 @@ struct ObjectiveDomain
     std::map<ClusterKey, ObjectiveClusterDomain> cluster_by_key{};
     std::vector<ClusterKey> owner_key_by_atom_index{};
     std::vector<std::vector<char>> fit_sample_mask_by_atom{};
+    std::vector<std::vector<char>> tail_sample_mask_by_atom{};
+    std::size_t unique_sample_count{ 0 };
     std::size_t active_atom_count{ 0 };
     std::size_t fit_sample_count{ 0 };
     std::size_t tail_sample_count{ 0 };
@@ -150,9 +154,7 @@ using ObjectiveByKey = std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
 ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<ClusterKey> & cluster_key_list,
-    double distance_min,
-    double distance_max);
+    const std::vector<ClusterKey> & cluster_key_list);
 
 
 std::optional<ObjectiveBreakdown> EvaluateAuditObjective(

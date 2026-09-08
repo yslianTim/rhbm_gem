@@ -260,8 +260,6 @@ Scenario BuildScenario(const Request & request)
         reference_scenario.replica_size = 1;
         reference_scenario.random_seed = 0;
         rt::FitOptions reference_options;
-        reference_options.distance_min = 0.0;
-        reference_options.distance_max = 1.0;
         reference_options.thread_size = request.threads;
         reference_options.quiet_mode = true;
         const auto reference_gaussian{
@@ -444,8 +442,6 @@ int main(int argc, char ** argv)
         LogScenario(request, scenario);
         Logger::SetLogLevel(LogLevel::Debug);
         rt::FitOptions options;
-        options.distance_min = 0.0;
-        options.distance_max = 1.0;
         options.thread_size = request.threads;
         options.quiet_mode = false;
         if (request.family == "natural")

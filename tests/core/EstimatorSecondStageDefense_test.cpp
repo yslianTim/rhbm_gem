@@ -28,6 +28,7 @@
 #include "core/detail/Diagnosis.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -59,8 +60,6 @@ static_assert(!std::is_default_constructible_v<audit_detail::ClusterHealth>);
 rt::FitOptions MakeSecondStageOptions()
 {
     rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
     return options;
@@ -317,17 +316,15 @@ LocalPotentialSampleList BuildSuspiciousGuardSamples(
 audit_detail::SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdateForTest(
     const LocalPotentialSampleList & sample_entries,
     const rg::GaussianModel3D & previous_model,
-    const rg::GaussianModel3D & candidate_model,
-    const rt::FitOptions & options)
+    const rg::GaussianModel3D & candidate_model)
 {
     const auto previous_baseline{
         audit_detail::BuildPreviousSuspiciousProfileBaseline(
-            sample_entries, previous_model, options)
+            sample_entries, previous_model)
     };
     return audit_detail::AssessSuspiciousGaussianUpdate(
         sample_entries,
         candidate_model,
-        options,
         previous_baseline,
         audit_detail::SuspiciousUpdateMode::PostRefit).reason;
 }
@@ -335,21 +332,18 @@ audit_detail::SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdateForTest(
 audit_detail::SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdateForTest(
     const LocalPotentialSampleList & sample_entries,
     const rg::GaussianModel3D & previous_model,
-    const rg::GaussianModel3D & candidate_model,
-    const rt::FitOptions & options)
+    const rg::GaussianModel3D & candidate_model)
 {
     return audit_detail::AssessSuspiciousGaussianUpdate(
         sample_entries,
         candidate_model,
-        options,
         audit_detail::BuildPreviousSuspiciousProfileBaseline(
-            sample_entries, previous_model, options),
+            sample_entries, previous_model),
         audit_detail::SuspiciousUpdateMode::OffsetOnly).reason;
 }
 
 TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)
 {
-    const auto options{ MakeSecondStageOptions() };
     const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
     const auto sample_list{
         BuildSuspiciousGuardSamples(
@@ -362,20 +356,17 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
         EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
-            rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
-            options),
+            rg::GaussianModel3D{ -1.0, 1.0, 0.0 }),
         audit_detail::SuspiciousGaussianReason::InvalidModel);
     const auto previous_baseline{
         audit_detail::BuildPreviousSuspiciousProfileBaseline(
             sample_list,
-            previous_model,
-            options)
+            previous_model)
     };
     const auto invalid_assessment{
         audit_detail::AssessSuspiciousGaussianUpdate(
             sample_list,
             rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
-            options,
             previous_baseline,
             audit_detail::SuspiciousUpdateMode::PostRefit)
     };
@@ -391,14 +382,12 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
         EvaluateSuspiciousPostRefitUpdateForTest(
             non_finite_sample_list,
             previous_model,
-            previous_model,
-            options),
+            previous_model),
         audit_detail::SuspiciousGaussianReason::NonFiniteResponse);
 }
 
 TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkipsWidthGuard)
 {
-    const auto options{ MakeSecondStageOptions() };
     const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
     const auto sample_list{
         BuildSuspiciousGuardSamples(
@@ -414,18 +403,15 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
         EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
-            large_offset_model,
-            options),
+            large_offset_model),
         audit_detail::SuspiciousGaussianReason::OffsetMagnitude);
     const auto large_offset_assessment{
         audit_detail::AssessSuspiciousGaussianUpdate(
             sample_list,
             large_offset_model,
-            options,
             audit_detail::BuildPreviousSuspiciousProfileBaseline(
                 sample_list,
-                previous_model,
-                options),
+                previous_model),
             audit_detail::SuspiciousUpdateMode::OffsetOnly)
     };
     EXPECT_GT(large_offset_assessment.normalized_margin, 0.0);
@@ -435,18 +421,15 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
         EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
-            wide_model,
-            options),
+            wide_model),
         audit_detail::SuspiciousGaussianReason::None);
     const auto safe_offset_assessment{
         audit_detail::AssessSuspiciousGaussianUpdate(
             sample_list,
             previous_model,
-            options,
             audit_detail::BuildPreviousSuspiciousProfileBaseline(
                 sample_list,
-                previous_model,
-                options),
+                previous_model),
             audit_detail::SuspiciousUpdateMode::OffsetOnly)
     };
     EXPECT_LE(safe_offset_assessment.normalized_margin, 0.0);
@@ -454,14 +437,12 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
         EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
-            wide_model,
-            options),
+            wide_model),
         audit_detail::SuspiciousGaussianReason::WidthGrowth);
 }
 
 TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAcceptsUnchangedShapeOutsideProfileRange)
 {
-    const auto options{ MakeSecondStageOptions() };
     const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
     const auto sample_list{
         BuildSuspiciousGuardSamples(
@@ -475,22 +456,18 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAcceptsUnchangedShapeOu
         EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
-            fallback_model,
-            options),
+            fallback_model),
         audit_detail::SuspiciousGaussianReason::WidthGrowth);
     EXPECT_EQ(
         EvaluateSuspiciousOffsetUpdateForTest(
             sample_list,
             previous_model,
-            fallback_model,
-            options),
+            fallback_model),
         audit_detail::SuspiciousGaussianReason::None);
 }
 
 TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseAndEffectSizeThresholds)
 {
-    auto options{ MakeSecondStageOptions() };
-    options.distance_max = 0.02;
     const auto previous_model{ MakeGaussianWithCenterSignal(0.01, 1.0) };
     const auto noisy_sample_list{
         BuildSuspiciousGuardSamples(
@@ -512,15 +489,13 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
         EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
-            candidate_with_center_offset(1.3),
-            options),
+            candidate_with_center_offset(1.3)),
         audit_detail::SuspiciousGaussianReason::None);
     EXPECT_EQ(
         EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
-            candidate_with_center_offset(1.6),
-            options),
+            candidate_with_center_offset(1.6)),
         audit_detail::SuspiciousGaussianReason::CenterSignFlip);
 
     const auto zero_mad_sample_list{
@@ -533,15 +508,13 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
         EvaluateSuspiciousOffsetUpdateForTest(
             zero_mad_sample_list,
             previous_model,
-            candidate_with_center_offset(1.2),
-            options),
+            candidate_with_center_offset(1.2)),
         audit_detail::SuspiciousGaussianReason::None);
     EXPECT_EQ(
         EvaluateSuspiciousOffsetUpdateForTest(
             zero_mad_sample_list,
             previous_model,
-            candidate_with_center_offset(1.3),
-            options),
+            candidate_with_center_offset(1.3)),
         audit_detail::SuspiciousGaussianReason::CenterSignFlip);
 
     const auto low_snr_sample_list{
@@ -558,8 +531,7 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
         EvaluateSuspiciousOffsetUpdateForTest(
             low_snr_sample_list,
             previous_model,
-            candidate_with_center_offset(0.3),
-            options),
+            candidate_with_center_offset(0.3)),
         audit_detail::SuspiciousGaussianReason::None);
 
     const auto negative_profile_samples{
@@ -572,16 +544,13 @@ TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseA
         EvaluateSuspiciousOffsetUpdateForTest(
             negative_profile_samples,
             previous_model,
-            candidate_with_center_offset(-1.5),
-            options),
+            candidate_with_center_offset(-1.5)),
         audit_detail::SuspiciousGaussianReason::None);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursionCount)
 {
-    auto options{ MakeSecondStageOptions() };
-    options.distance_max = 4.0;
-    const auto previous_model{ MakeGaussianWithCenterSignal(1.0e-6, 1.0) };
+    const auto previous_model{ MakeGaussianWithCenterSignal(1.0e-6, 0.25) };
     const auto candidate_model{
         previous_model.WithOffset(
             0.6 / previous_model.OffsetBasisAtDistance(0.0))
@@ -589,7 +558,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
     const auto noisy_sample_list{
         BuildSuspiciousGuardSamples(
             previous_model,
-            { 0.0, 2.0, 4.0 },
+            { 0.0, 0.5, 1.0 },
             {
                 { 0.8, 1.0, 1.2 },
                 { 0.8, 1.0, 1.2 },
@@ -600,14 +569,13 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
         EvaluateSuspiciousOffsetUpdateForTest(
             noisy_sample_list,
             previous_model,
-            candidate_model,
-            options),
+            candidate_model),
         audit_detail::SuspiciousGaussianReason::None);
 
     const auto low_noise_sample_list{
         BuildSuspiciousGuardSamples(
             previous_model,
-            { 0.0, 2.0, 4.0 },
+            { 0.0, 0.5, 1.0 },
             {
                 { 0.95, 1.0, 1.05 },
                 { 0.95, 1.0, 1.05 },
@@ -618,8 +586,7 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
         EvaluateSuspiciousOffsetUpdateForTest(
             low_noise_sample_list,
             previous_model,
-            candidate_model,
-            options),
+            candidate_model),
         audit_detail::SuspiciousGaussianReason::RadialRebound);
 
     const auto excursion_model{ MakeGaussianWithCenterSignal(1.0, 1.0) };
@@ -637,13 +604,11 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
                 { 0.6 }
             })
     };
-    options.distance_max = 0.41;
     EXPECT_EQ(
         EvaluateSuspiciousOffsetUpdateForTest(
             one_excursion_samples,
             excursion_model,
-            excursion_model,
-            options),
+            excursion_model),
         audit_detail::SuspiciousGaussianReason::None);
 
     const auto two_excursion_samples{
@@ -662,14 +627,12 @@ TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursion
         EvaluateSuspiciousOffsetUpdateForTest(
             two_excursion_samples,
             excursion_model,
-            excursion_model,
-            options),
+            excursion_model),
         audit_detail::SuspiciousGaussianReason::RadialRebound);
 }
 
 TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTrustedRadialShape)
 {
-    auto options{ MakeSecondStageOptions() };
     const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
     const auto short_range_samples{
         BuildSuspiciousGuardSamples(
@@ -682,8 +645,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         EvaluateSuspiciousPostRefitUpdateForTest(
             short_range_samples,
             previous_model,
-            range_wide_model,
-            options),
+            range_wide_model),
         audit_detail::SuspiciousGaussianReason::WidthGrowth);
 
     const auto previous_compensation_model{
@@ -702,8 +664,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
-            candidate_compensation_model,
-            options),
+            candidate_compensation_model),
         audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation);
 
     const auto same_direction_model{
@@ -713,8 +674,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
-            same_direction_model,
-            options),
+            same_direction_model),
         audit_detail::SuspiciousGaussianReason::None);
 
     const auto insufficient_signal_model{
@@ -724,8 +684,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
-            insufficient_signal_model,
-            options),
+            insufficient_signal_model),
         audit_detail::SuspiciousGaussianReason::None);
 }
 
@@ -1566,7 +1525,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     context.frozen_background = audit_detail::BuildFrozenBackground(context, seed, { { 0 } });
     ASSERT_TRUE(context.frozen_background);
     const auto old_snapshot{ audit_detail::BuildSecondStageModelSnapshot(context, earlier_best) };
-    const auto domain{ audit_detail::BuildObjectiveDomain(context, old_snapshot, { { 0 } }, 0.0, 1.0) };
+    const auto domain{ audit_detail::BuildObjectiveDomain(context, old_snapshot, { { 0 } }) };
     const auto old_score{ audit_detail::EvaluateAuditObjective(
         domain, context, old_snapshot) };
     ASSERT_TRUE(old_score.has_value());
@@ -1877,9 +1836,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         trust_detail::BuildObjectiveDomain(
             fixture.context,
             previous_snapshot,
-            { key },
-            0.0,
-            1.0)
+            { key })
     };
     const auto residual_baseline{
         trust_detail::BuildResidualBaseline(fixture.context, fixture.state)
@@ -1982,9 +1939,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         trust_detail::BuildObjectiveDomain(
             scaled_fixture.context,
             scaled_previous_snapshot,
-            { key },
-            0.0,
-            1.0)
+            { key })
     };
     const auto scaled_baseline{
         trust_detail::BuildResidualBaseline(
@@ -2059,14 +2014,13 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         0.15,
         1.0e-12);
 
-    const auto tail_domain{
-        trust_detail::BuildObjectiveDomain(
-            fixture.context,
-            previous_snapshot,
-            { key },
-            0.0,
-            0.30)
-    };
+    // Overlap is an additional objective role, not another residual evaluation.
+    auto tail_domain{ objective_domain };
+    auto & tail_cluster{ tail_domain.cluster_by_key.at(key) };
+    tail_cluster.tail_sample_ref_list = tail_cluster.fit_sample_ref_list;
+    tail_cluster.scale->tail = tail_cluster.scale->fit;
+    tail_domain.tail_sample_mask_by_atom = tail_domain.fit_sample_mask_by_atom;
+    tail_domain.tail_sample_count = tail_domain.fit_sample_count;
     const auto tail_previous_objective{
         trust_detail::EvaluateAuditObjective(
             tail_domain,
@@ -2100,6 +2054,13 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
         trust_detail::TrustModelPredictionStatus::Available);
     ASSERT_TRUE(tail_diagnostic.rho.has_value());
     EXPECT_NEAR(*tail_diagnostic.rho, 1.0, 0.10);
+    ASSERT_TRUE(tail_diagnostic.predicted_residual_reduction.has_value());
+    ASSERT_TRUE(diagnostic.predicted_residual_reduction.has_value());
+    EXPECT_NEAR(*tail_diagnostic.predicted_residual_reduction,
+        (1.0 + trust_detail::kTailValidationWeight) * *diagnostic.predicted_residual_reduction,
+        1.0e-12);
+    EXPECT_EQ(tail_domain.unique_sample_count, objective_domain.unique_sample_count);
+
 
     auto nonmaterial_prediction_domain{ objective_domain };
     nonmaterial_prediction_domain.cluster_by_key.at(key).scale->fit *= 1.0e6;
@@ -4256,9 +4217,7 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
         audit_detail::BuildObjectiveDomain(
             fixture.context,
             base_snapshot,
-            coupling_detail::BuildGraphClusterKeyList(partition),
-            0.0,
-            1.0)
+            coupling_detail::BuildGraphClusterKeyList(partition))
     };
     polish_detail::TrustRegionStateSet trust_region_state;
     trust_region_state.Reconcile(
@@ -4748,60 +4707,100 @@ TEST(EstimatorSecondStageDefenseTest,
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartitions)
 {
-    audit_detail::SecondStageContext context;
-    context.atom_list.resize(1);
-    context.atom_list.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
-
     const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
-    for (const auto distance : { 0.15, 0.45 })
+    const audit_detail::ClusterKey key{ 0 };
+    for (const bool include_tail : { false, true })
     {
-        context.atom_list.at(0).raw_sampling_entries.emplace_back(
-            LocalPotentialSample{
-                model.ResponseAtDistance(distance),
-                SamplingPoint{ distance }
-            });
+        audit_detail::SecondStageContext context;
+        context.atom_list.resize(1);
+        auto & atom{ context.atom_list.front() };
+        const std::vector<double> distances{ include_tail ?
+            std::vector<double>{ 0.0, 1.0, 1.1, 1.2, 2.0, 2.1 } :
+            std::vector<double>{ 0.0, 1.0, 1.1, 2.1 }
+        };
+        atom.neighbor_atom_sample_offset_list.assign(distances.size() + 1, 0);
+        std::vector<audit_detail::SampleRef> all_samples;
+        for (const auto distance : distances)
+        {
+            all_samples.push_back({ 0, atom.raw_sampling_entries.size() });
+            atom.raw_sampling_entries.push_back({ model.ResponseAtDistance(distance) + 0.1,
+                SamplingPoint{ distance } });
+        }
+        const audit_detail::FitState state{ MakeGaussianResult(model) };
+        auto baseline{ audit_detail::BuildResidualBaseline(context, state) };
+        auto domain{ audit_detail::BuildObjectiveDomain(context, baseline.model_snapshot, { key }) };
+        EXPECT_EQ(domain.fit_sample_count, 2U);
+        EXPECT_EQ(domain.tail_sample_count, include_tail ? 2U : 0U);
+        EXPECT_EQ(domain.unique_sample_count, include_tail ? 4U : 2U);
+        EXPECT_EQ(domain.fit_sample_mask_by_atom.front(),
+            (include_tail ? std::vector<char>{ 1, 1, 0, 0, 0, 0 } : std::vector<char>{ 1, 1, 0, 0 }));
+        EXPECT_EQ(domain.tail_sample_mask_by_atom.front(),
+            (include_tail ? std::vector<char>{ 0, 0, 0, 1, 1, 0 } : std::vector<char>{ 0, 0, 0, 0 }));
+
+        // Excluded samples must be skipped even when their cached residual is unavailable.
+        baseline.sample_list.front().at(2).reset();
+        baseline.sample_list.front().back().reset();
+        audit_detail::ClusterSolverWorkspaceMap workspaces;
+        audit_detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        audit_detail::PerformanceCounters counters{ true, context, workspaces, corrections };
+        auto candidate_state{ state };
+        candidate_state.front() = MakeGaussianResult({ 8.1, 0.51, -0.10 });
+        const auto patch{ audit_detail::FitStatePatch::FromState(candidate_state, key) };
+        const audit_detail::CandidateEvaluationOverlay overlay{ context, baseline, state, patch };
+        const auto candidate_snapshot{ audit_detail::BuildSecondStageModelSnapshot(context, candidate_state) };
+        for (const bool overlap : { false, true })
+        {
+            auto & cluster{ domain.cluster_by_key.at(key) };
+            if (overlap)
+            {
+                // Keep the physical sample union unchanged; give r=1 both roles.
+                cluster.tail_sample_ref_list.push_back({ 0, 1 });
+                domain.tail_sample_mask_by_atom.front().at(1) = 1;
+                domain.tail_sample_count++;
+                cluster.scale->tail = 2.0 * cluster.scale->fit;
+            }
+            const auto snapshot_objective{ audit_detail::EvaluateAuditObjective(domain, context, baseline.model_snapshot) };
+            const auto baseline_objective{ audit_detail::EvaluateAuditObjective(domain, baseline) };
+            const auto contribution{ audit_detail::EvaluateObjectiveContribution(baseline, key, all_samples, domain) };
+            ASSERT_TRUE(snapshot_objective.has_value());
+            ASSERT_TRUE(baseline_objective.has_value());
+            ASSERT_TRUE(contribution.has_value());
+            EXPECT_DOUBLE_EQ(snapshot_objective->GetTotalObjective(), baseline_objective->GetTotalObjective());
+            EXPECT_DOUBLE_EQ(contribution->GetTotalObjective(), baseline_objective->GetTotalObjective());
+            if (!include_tail && !overlap) EXPECT_DOUBLE_EQ(baseline_objective->tail_validation_loss, 0.0);
+            double expected_tail{ 0.0 };
+            for (const auto & ref : cluster.tail_sample_ref_list)
+            {
+                expected_tail += alg::CalculateCauchyLoss(
+                    baseline(ref)->residual / cluster.scale->tail,
+                    audit_detail::kObjectiveRobustLossCutoffMultiplier) /
+                    static_cast<double>(cluster.tail_sample_ref_list.size());
+            }
+            EXPECT_NEAR(baseline_objective->tail_validation_loss, expected_tail, 1.0e-12);
+            const auto delta{ audit_detail::EvaluateObjectiveDelta(
+                overlay, all_samples, domain, *baseline_objective, counters) };
+            const auto full{ audit_detail::EvaluateAuditObjective(domain, context, candidate_snapshot) };
+            ASSERT_TRUE(delta.has_value());
+            ASSERT_TRUE(full.has_value());
+            EXPECT_NEAR(delta->fit_range_residual_objective, full->fit_range_residual_objective, 1.0e-12);
+            EXPECT_NEAR(delta->tail_validation_loss, full->tail_validation_loss, 1.0e-12);
+            EXPECT_EQ(domain.unique_sample_count, include_tail ? 4U : 2U);
+        }
     }
 
-    audit_detail::FitState state;
-    state.emplace_back(MakeGaussianResult(model));
-    const auto baseline{ audit_detail::BuildResidualBaseline(context, state) };
-    const auto cluster_key_list{
-        std::vector<audit_detail::ClusterKey>{ audit_detail::ClusterKey{ 0 } }
+    audit_detail::SecondStageContext tail_only_context;
+    tail_only_context.atom_list.resize(1);
+    auto & tail_only_atom{ tail_only_context.atom_list.front() };
+    tail_only_atom.neighbor_atom_sample_offset_list = { 0, 0 };
+    tail_only_atom.raw_sampling_entries.push_back({ model.ResponseAtDistance(1.2), SamplingPoint{ 1.2 } });
+    const audit_detail::FitState tail_only_state{ MakeGaussianResult(model) };
+    const auto tail_only_baseline{ audit_detail::BuildResidualBaseline(tail_only_context, tail_only_state) };
+    const auto tail_only_domain{
+        audit_detail::BuildObjectiveDomain(tail_only_context, tail_only_baseline.model_snapshot, { key })
     };
+    EXPECT_FALSE(tail_only_domain.cluster_by_key.at(key).scale.has_value());
+    EXPECT_FALSE(audit_detail::EvaluateAuditObjective(tail_only_domain, tail_only_baseline).has_value());
 
-    for (const auto distance_max : { 0.30, 1.0 })
-    {
-        const auto domain{
-            audit_detail::BuildObjectiveDomain(
-                context,
-                baseline.model_snapshot,
-                cluster_key_list,
-                0.0,
-                distance_max)
-        };
-        const auto snapshot_objective{
-            audit_detail::EvaluateAuditObjective(
-                domain,
-                context, baseline.model_snapshot)
-        };
-        const auto baseline_objective{
-            audit_detail::EvaluateAuditObjective(domain, baseline)
-        };
-        ASSERT_TRUE(snapshot_objective.has_value());
-        ASSERT_TRUE(baseline_objective.has_value());
-        EXPECT_DOUBLE_EQ(
-            snapshot_objective->fit_range_residual_objective,
-            baseline_objective->fit_range_residual_objective);
-        EXPECT_DOUBLE_EQ(
-            snapshot_objective->tail_validation_loss,
-            baseline_objective->tail_validation_loss);
-        EXPECT_DOUBLE_EQ(
-            snapshot_objective->offset_plausibility_penalty,
-            baseline_objective->offset_plausibility_penalty);
-        EXPECT_DOUBLE_EQ(
-            snapshot_objective->GetTotalObjective(),
-            baseline_objective->GetTotalObjective());
-    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)

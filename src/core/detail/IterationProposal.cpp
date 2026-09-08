@@ -26,14 +26,14 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const LocalGaussianResult & previous_result,
     const GaussianModel3D & offset_model,
     const std::vector<double> & adjusted_response_list,
-    const FitOptions & options)
+    int thread_size)
 {
     auto adjusted_sampling_entries{
         BuildSecondStageAdjustedSamples(atom_context, adjusted_response_list)
     };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
-        BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model, options)
+        BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model)
     };
     SuspiciousGaussianAssessment failed_shape_assessment;
     std::optional<RHBMEstimationStatus> attempted_refit_status;
@@ -44,7 +44,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
             atom_context.refit_design.Estimate(
                 adjusted_response_list,
                 atom_context.alpha_r,
-                options.thread_size,
+                thread_size,
                 offset_model)
         };
         if (candidate_result.fit_result.has_value())
@@ -59,7 +59,6 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
             AssessSuspiciousGaussianUpdate(
                 adjusted_sampling_entries,
                 candidate_result.mdpde.GetModel(),
-                options,
                 previous_baseline,
                 SuspiciousUpdateMode::PostRefit)
         };
@@ -88,7 +87,6 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         AssessSuspiciousGaussianUpdate(
             adjusted_sampling_entries,
             result.mdpde.GetModel(),
-            options,
             previous_baseline,
             SuspiciousUpdateMode::OffsetOnly)
     };
@@ -329,11 +327,7 @@ IterationProposalResult BuildIterationProposal(
 #else
     const bool parallel_refits{ false };
 #endif
-    FitOptions refit_options{ options };
-    if (parallel_refits)
-    {
-        refit_options.thread_size = 1;
-    }
+    const int refit_thread_size{ parallel_refits ? 1 : options.thread_size };
     const auto run_refit = [&](std::size_t atom_index)
     {
         try
@@ -344,7 +338,7 @@ IterationProposalResult BuildIterationProposal(
                     previous_state.at(atom_index),
                     GetFitModel(current_model_snapshot.node, atom_index),
                     refit_response_cache.at(atom_index),
-                    refit_options);
+                    refit_thread_size);
         }
         catch (...)
         {

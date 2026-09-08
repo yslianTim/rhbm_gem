@@ -1,5 +1,6 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
+#include "core/detail/FittingRanges.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
@@ -289,12 +290,9 @@ double TrainAlphaR(
     const LocalPotentialSampleList & sample_entries,
     const FitOptions & options)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min, options.distance_max, "fit range");
-
     std::vector<RHBMMemberDataset> dataset_list{
         rhbm_helper::BuildMemberDataset(
-            sample_entries, options.distance_min, options.distance_max)
+            sample_entries, 0.0, detail::kSignalDistanceMax)
     };
     const auto response_count{
         static_cast<std::size_t>(dataset_list.front().y.size())
@@ -345,8 +343,8 @@ LocalGaussianResult EstimateLocalGaussian(
 {
     const detail::PreparedLocalGaussianDesign design{
         sample_entries,
-        options.distance_min,
-        options.distance_max
+        0.0,
+        detail::kSignalDistanceMax
     };
     const auto sample_response_list{ CollectSampleResponses(sample_entries) };
     return design.Estimate(
@@ -361,8 +359,6 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const FitOptions & options)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
 
     const RHBMExecutionOptions execution_options{
@@ -378,8 +374,8 @@ GroupGaussianResult EstimateGroupGaussian(
     {
         const detail::PreparedLocalGaussianDesign design{
             member.sample_entries,
-            options.distance_min,
-            options.distance_max
+            0.0,
+            detail::kSignalDistanceMax
         };
         auto dataset{
             design.BuildDataset(
@@ -422,8 +418,8 @@ void RunLocalAlphaTraining(
         auto alpha_r{ alpha_min };
         if (local_view.HasEnoughSamplingEntriesInRange(
                 stage,
-                options.distance_min,
-                options.distance_max,
+                0.0,
+                detail::kSignalDistanceMax,
                 kMinimumAlphaRTrainingSampleCount))
         {
             alpha_r = TrainAlphaR(

@@ -1,13 +1,12 @@
 #include "core/detail/SuspiciousUpdate.hpp"
 
+#include "core/detail/FittingRanges.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <ranges>
 #include <stdexcept>
 #include <utility>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem::core::detail {
@@ -69,7 +68,6 @@ static bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
 static SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model,
-    const FitOptions & options,
     SuspiciousProfileAnalysisMode mode)
 {
     SuspiciousProfileAnalysis analysis;
@@ -92,7 +90,7 @@ static SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
             analysis.all_responses_finite = false;
             continue;
         }
-        if (distance < options.distance_min || distance > options.distance_max) continue;
+        if (!IsSignalDistance(distance)) continue;
         profile_samples.emplace_back(distance, response);
         if (calculate_residual_scale)
         {
@@ -115,19 +113,15 @@ static SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
         while (i < profile_samples.size() && IsSameSuspiciousProfileRadius(profile_samples.at(i).first, radius))
         {
             const auto response{ profile_samples.at(i).second };
-            analysis.max_abs_response = std::max(
-                analysis.max_abs_response,
-                std::abs(response));
+            analysis.max_abs_response = std::max(analysis.max_abs_response, std::abs(response));
             response_list.emplace_back(response);
             i++;
         }
-        analysis.radius_response_median_list.emplace_back(
-            array_helper::ComputeMedian(response_list));
+        analysis.radius_response_median_list.emplace_back(array_helper::ComputeMedian(response_list));
     }
     if (calculate_residual_scale)
     {
-        analysis.robust_residual_scale =
-            array_helper::ComputeMedianAbsoluteDeviationScale(residual_list);
+        analysis.robust_residual_scale = array_helper::ComputeMedianAbsoluteDeviationScale(residual_list);
     }
     return analysis;
 }
@@ -348,7 +342,6 @@ static double CalculateAmplitudeOffsetCompensationMargin(
 SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & candidate_model,
-    const FitOptions & options,
     const SuspiciousUpdateBaseline & previous_baseline,
     SuspiciousUpdateMode mode)
 {
@@ -365,7 +358,6 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
         BuildSuspiciousProfileAnalysis(
             sample_entries,
             candidate_model,
-            options,
             SuspiciousProfileAnalysisMode::Candidate)
     };
     if (!candidate_analysis.all_responses_finite)
@@ -461,15 +453,13 @@ SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
 
 SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
-    const FitOptions & options)
+    const GaussianModel3D & previous_model)
 {
     return SuspiciousUpdateBaseline{
         previous_model,
         BuildSuspiciousProfileAnalysis(
             sample_entries,
             previous_model,
-            options,
             SuspiciousProfileAnalysisMode::PreviousBaseline)
     };
 }
@@ -477,7 +467,6 @@ SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
 std::optional<StabilizationTerminalDiagnostic>
 EvaluateClusterCandidateGuard(
     const SecondStageContext & context,
-    const FitOptions & options,
     const SecondStageModelSnapshot & previous_snapshot,
     const ClusterKey & key,
     const FitStateView & candidate_state,
@@ -501,11 +490,9 @@ EvaluateClusterCandidateGuard(
                 AssessSuspiciousGaussianUpdate(
                     atom_context.raw_sampling_entries,
                     candidate_model,
-                    options,
                     BuildPreviousSuspiciousProfileBaseline(
                         atom_context.raw_sampling_entries,
-                        previous_model,
-                        options),
+                        previous_model),
                     SuspiciousUpdateMode::OffsetOnly)
             };
             if (offset_assessment.IsSuspicious())
@@ -529,11 +516,9 @@ EvaluateClusterCandidateGuard(
             AssessSuspiciousGaussianUpdate(
                 candidate_samples,
                 candidate_model,
-                options,
                 BuildPreviousSuspiciousProfileBaseline(
                     previous_samples,
-                    previous_model,
-                    options),
+                    previous_model),
                 SuspiciousUpdateMode::PostRefit)
         };
         if (shape_assessment.IsSuspicious())
@@ -551,7 +536,6 @@ EvaluateClusterCandidateGuard(
 
 std::size_t CountSuspiciousPolishAtoms(
     const SecondStageContext & context,
-    const FitOptions & options,
     const std::vector<std::size_t> & atom_index_list,
     const FitStateView & endpoint_state,
     const FitStateView & candidate_state)
@@ -583,13 +567,11 @@ std::size_t CountSuspiciousPolishAtoms(
         const auto baseline{
             BuildPreviousSuspiciousProfileBaseline(
                 endpoint_samples,
-                endpoint_state.GetModel(atom_index),
-                options)
+                endpoint_state.GetModel(atom_index))
         };
         if (AssessSuspiciousGaussianUpdate(
                 candidate_samples,
                 candidate_state.GetModel(atom_index),
-                options,
                 baseline,
                 SuspiciousUpdateMode::PostRefit).reason !=
             SuspiciousGaussianReason::None)

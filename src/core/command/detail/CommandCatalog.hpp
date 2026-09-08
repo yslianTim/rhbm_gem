@@ -79,13 +79,7 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
                 &Self::asymmetry_flag },
             RequestField{ "sampling_method", "--sampling-method",
                 "Sphere sampling method",
-                &Self::sampling_method },
-            RequestField{ "fit_range_min", "--fit-min",
-                "Minimum fitting range",
-                &Self::fit_range_min },
-            RequestField{ "fit_range_max", "--fit-max",
-                "Maximum fitting range",
-                &Self::fit_range_max });
+                &Self::sampling_method });
     }
 };
 
@@ -202,12 +196,6 @@ struct RequestFieldCatalog<RHBMTestRequest>
             RequestField{ "tester_choice", "-t,--tester",
                 "Tester option",
                 &Self::tester_choice },
-            RequestField{ "fit_range_min", "--fit-min",
-                "Minimum fitting range",
-                &Self::fit_range_min },
-            RequestField{ "fit_range_max", "--fit-max",
-                "Maximum fitting range",
-                &Self::fit_range_max },
             RequestField{ "alpha_r", "--alpha-r",
                 "Alpha value for R",
                 &Self::alpha_r },

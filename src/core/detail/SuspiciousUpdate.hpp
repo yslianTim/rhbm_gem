@@ -4,8 +4,6 @@
 
 #include <limits>
 
-namespace rhbm_gem::core { struct FitOptions; }
-
 namespace rhbm_gem::core::detail {
 
 enum class SuspiciousGaussianReason
@@ -65,14 +63,12 @@ struct SuspiciousGaussianAssessment
 SuspiciousGaussianAssessment AssessSuspiciousGaussianUpdate(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & candidate_model,
-    const FitOptions & options,
     const SuspiciousUpdateBaseline & previous_baseline,
     SuspiciousUpdateMode mode);
 
 SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
-    const FitOptions & options);
+    const GaussianModel3D & previous_model);
 
 enum class StabilizationTerminalReason
 {
@@ -92,7 +88,6 @@ struct StabilizationTerminalDiagnostic
 
 std::optional<StabilizationTerminalDiagnostic> EvaluateClusterCandidateGuard(
     const SecondStageContext & context,
-    const FitOptions & options,
     const SecondStageModelSnapshot & previous_snapshot,
     const ClusterKey & key,
     const FitStateView & candidate_state,
@@ -100,7 +95,6 @@ std::optional<StabilizationTerminalDiagnostic> EvaluateClusterCandidateGuard(
 
 std::size_t CountSuspiciousPolishAtoms(
     const SecondStageContext & context,
-    const FitOptions & options,
     const std::vector<std::size_t> & atom_index_list,
     const FitStateView & endpoint_state,
     const FitStateView & candidate_state);

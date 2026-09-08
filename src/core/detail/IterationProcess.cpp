@@ -1,5 +1,6 @@
 #include "core/detail/IterationProcess.hpp"
 
+#include "core/detail/FittingRanges.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProposal.hpp"
 #include "core/detail/Quarantine.hpp"
@@ -61,8 +62,7 @@ std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
             !block_activity.HasActiveOffset(atom_index) ||
             probation_atom_index_set.contains(atom_index))
         {
-            ridge_multiplier_list.at(atom_index) =
-                kSuspiciousJointOffsetRidgeMultiplier;
+            ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
         }
     }
     return ridge_multiplier_list;
@@ -140,8 +140,7 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
 
     std::vector<TransformedChange> change_list;
     change_list.reserve(previous_state.size());
-    for (std::size_t atom_index = 0;
-        atom_index < previous_state.size(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < previous_state.size(); atom_index++)
     {
         auto change{ CalculateTransformedChange(
             GetFitModel(evidence.state, atom_index),
@@ -206,9 +205,7 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
     {
         atom_index_map.emplace(context.atom_list.at(i).atom, i);
     }
-    for (std::size_t atom_index = 0;
-        atom_index < context.atom_list.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
         auto & atom_context{ context.atom_list.at(atom_index) };
         const auto * atom{ atom_context.atom };
@@ -218,16 +215,14 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
         atom_context.alpha_r = local_view.GetAlphaR(FittingStage::Second);
         atom_context.refit_design = PreparedLocalGaussianDesign{
             atom_context.raw_sampling_entries,
-            options.distance_min,
-            options.distance_max
+            0.0,
+            kSignalDistanceMax
         };
     }
 
     std::vector<GaussianModel3D> global_models;
     global_models.reserve(context.atom_list.size());
-    for (std::size_t atom_index = 0;
-        atom_index < context.atom_list.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
         global_models.emplace_back(state.at(atom_index).mdpde.GetModel());
     }
@@ -238,10 +233,7 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
         const auto selection{ SelectSecondStageSeed(result.mdpde, global_median) };
-        if (!selection.has_value())
-        {
-            return std::nullopt;
-        }
+        if (!selection.has_value()) return std::nullopt;
 
         result.mdpde = selection->model;
         build_result.selection_record_list.emplace_back(
@@ -320,9 +312,7 @@ static void StoreSecondStageNeighborCounts(
     const std::vector<int> & neighbor_count_list)
 {
     auto analysis{ model_object.EditAnalysis() };
-    for (std::size_t atom_index = 0;
-        atom_index < context.atom_list.size();
-        atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
         analysis.SetAtomLocalNeighborCountForPeeling(
             *context.atom_list.at(atom_index).atom,
@@ -337,9 +327,7 @@ static void RefreshBestAuditState(
 {
     ReevaluateBestAuditState(context, iteration_state.objective_domain, iteration_state.best_audit_state);
     const auto audit_objective{
-        EvaluateAuditObjective(
-            iteration_state.objective_domain,
-            context, model_snapshot)
+        EvaluateAuditObjective(iteration_state.objective_domain, context, model_snapshot)
     };
     if (audit_objective.has_value())
     {
@@ -354,7 +342,6 @@ static void RefreshBestAuditState(
 
 static void ResetIterationStateForPartition(
     const SecondStageContext & context,
-    const FitOptions & options,
     CouplingGraphPartition partition,
     IterationState & iteration_state,
     PerformanceCounters & performance_counters)
@@ -363,18 +350,10 @@ static void ResetIterationStateForPartition(
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(context, iteration_state.accepted_state)
     };
-    iteration_state.objective_domain = BuildObjectiveDomain(
-        context,
-        model_snapshot,
-        cluster_key_list,
-        options.distance_min,
-        options.distance_max);
+    iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
     iteration_state.cluster_objective_state.clear();
     const auto objective_by_key{
-        BuildObjectiveByKey(
-            partition,
-            iteration_state.objective_domain,
-            context, model_snapshot)
+        BuildObjectiveByKey(partition, iteration_state.objective_domain, context, model_snapshot)
     };
     ReconcileClusterObjectiveState(
         objective_by_key,
@@ -382,9 +361,7 @@ static void ResetIterationStateForPartition(
     RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
-    ResetClusterSolverWorkspace(
-        cluster_key_list,
-        iteration_state.solver_workspace_by_key);
+    ResetClusterSolverWorkspace(cluster_key_list, iteration_state.solver_workspace_by_key);
     iteration_state.boundary_joint_correction_workspace_by_key.clear();
     iteration_state.graph_partition = std::move(partition);
     iteration_state.audit_patience_count = 0;
@@ -421,9 +398,7 @@ static bool TryRebuildAdaptiveTopology(
             rebuilt_topology,
             iteration_state.selected_atom_index_list)
     };
-    const auto partition_changed{
-        iteration_state.graph_partition != rebuilt_partition
-    };
+    const auto partition_changed{ iteration_state.graph_partition != rebuilt_partition };
     const auto elapsed_milliseconds{
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rebuild_start).count()
     };
@@ -458,8 +433,7 @@ static IterationState BuildIterationState(
 {
     IterationState iteration_state;
     iteration_state.accepted_state = std::move(initial_state);
-    iteration_state.topology_reference_state =
-        BuildSecondStageModelSnapshot(context, iteration_state.accepted_state).node;
+    iteration_state.topology_reference_state = BuildSecondStageModelSnapshot(context, iteration_state.accepted_state).node;
     iteration_state.previous_polish_provenance.assign(context.atom_list.size(), 0);
     iteration_state.rollback_atom_mask.assign(context.atom_list.size(), 0);
     iteration_state.quarantine_state = QuarantineState(context.atom_list.size());
@@ -471,21 +445,16 @@ static IterationState BuildIterationState(
     iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.selected_atom_index_list);
     const auto cluster_key_list{ BuildGraphClusterKeyList(iteration_state.graph_partition) };
     context.frozen_background = BuildFrozenBackground(context, iteration_state.accepted_state, cluster_key_list);
-    if (!context.frozen_background)
-        throw std::runtime_error("Second-stage initial fixed background is unavailable.");
+    if (!context.frozen_background) throw std::runtime_error("Second-stage initial fixed background is unavailable.");
     LogFrozenBackground(context, options.quiet_mode);
-    ResetClusterSolverWorkspace(
-        cluster_key_list,
-        iteration_state.solver_workspace_by_key);
+    ResetClusterSolverWorkspace(cluster_key_list, iteration_state.solver_workspace_by_key);
     const auto initial_model_snapshot{
         BuildSecondStageModelSnapshot(context, iteration_state.accepted_state)
     };
     iteration_state.objective_domain = BuildObjectiveDomain(
         context,
         initial_model_snapshot,
-        cluster_key_list,
-        options.distance_min,
-        options.distance_max);
+        cluster_key_list);
     const auto initial_audit_objective{
         EvaluateAuditObjective(
             iteration_state.objective_domain,
@@ -495,8 +464,7 @@ static IterationState BuildIterationState(
     {
         TryUpdateBestAuditState(
             iteration_state.accepted_state,
-            UsesPolish(
-                iteration_state.previous_polish_provenance),
+            UsesPolish(iteration_state.previous_polish_provenance),
             0,
             *initial_audit_objective,
             iteration_state.best_audit_state);
@@ -516,8 +484,7 @@ static bool BeginFrozenBackgroundIteration(
         iteration_state.pending_topology->partition : iteration_state.graph_partition };
     const auto background{ BuildFrozenBackground(
         context, iteration_state.accepted_state, BuildGraphClusterKeyList(partition)) };
-    if (!background)
-        throw std::runtime_error("Second-stage fixed background refresh is unavailable.");
+    if (!background) throw std::runtime_error("Second-stage fixed background refresh is unavailable.");
 
     const auto previous_background{ context.frozen_background };
     context.frozen_background = background;
@@ -526,14 +493,13 @@ static bool BeginFrozenBackgroundIteration(
     {
         auto pending{ std::move(*iteration_state.pending_topology) };
         iteration_state.pending_topology.reset();
-        ResetIterationStateForPartition(context, options, std::move(pending.partition),
+        ResetIterationStateForPartition(context, std::move(pending.partition),
             iteration_state, performance_counters);
         graph_topology = std::move(pending.topology);
         LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         return true;
     }
-    if (previous_background && previous_background->response_by_atom == background->response_by_atom)
-        return false;
+    if (previous_background && previous_background->response_by_atom == background->response_by_atom) return false;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
     const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
@@ -634,12 +600,9 @@ static IterationResult RunIteration(
         proposal_result.assessment_by_atom,
         proposal_result.block_activity);
 
-    const auto & proposal_state{
-        proposal_result.proposal_state
-    };
+    const auto & proposal_state{ proposal_result.proposal_state };
     const auto proposal_change_summary{
-        SummarizeTransformedChanges(
-            proposal_state, previous_state, selected_atom_index_list)
+        SummarizeTransformedChanges(proposal_state, previous_state, selected_atom_index_list)
     };
     // Select cluster candidates, then reconcile their shared boundary samples.
     const CandidateSelectionInputs candidate_inputs{
@@ -702,9 +665,7 @@ static IterationResult RunIteration(
     result.trust_region_update = iteration_state.trust_region_state.ApplyRadiusUpdates(
         selection.grow_trust_region_key_list, selection.shrink_trust_region_key_list,
         selection.rejected_key_list, selection.exhausted_key_list);
-    const auto assembled_uses_polish{
-        UsesPolish(assembled_polish_provenance)
-    };
+    const auto assembled_uses_polish{ UsesPolish(assembled_polish_provenance) };
     result.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
     result.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
     result.boundary_reconciliation_diagnostic_list = std::move(selection.boundary_reconciliation_diagnostic_list);

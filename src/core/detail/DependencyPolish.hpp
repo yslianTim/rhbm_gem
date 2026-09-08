@@ -3,6 +3,10 @@
 #include "core/detail/ObjectiveEvaluation.hpp"
 #include "core/detail/JointFitting.hpp"
 
+namespace rhbm_gem::core {
+struct FitOptions;
+}
+
 namespace rhbm_gem::core::detail {
 
 class TrustRegionStateSet;

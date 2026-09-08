@@ -31,7 +31,6 @@ COMMAND_ARGUMENT_TEMPLATE = [
     "-v", "3",
     "--simulation", "true",
     "-r", "0.50",
-    "--fit-max", "1.0",
     "--exclude-hydrogen", "true",
 ]
 EXPECTED_ATOM_COUNT = 168
@@ -342,7 +341,13 @@ def load_baseline(path: Path) -> dict[str, Any]:
             f"Unsupported baseline schema version: {baseline.get('schema_version')!r}.")
     if baseline.get("input_hashes") != EXPECTED_INPUT_HASHES:
         raise RegressionError("Baseline input hashes do not match the fixed fold-168 fixture.")
-    if baseline.get("command_arguments") != COMMAND_ARGUMENT_TEMPLATE:
+    # Preserve the recorded command of the historical quality baseline. The
+    # removed flag selected the same signal upper bound; it is never executed.
+    historical_arguments = [
+        *COMMAND_ARGUMENT_TEMPLATE[:-2], "--fit-max", "1.0",
+        *COMMAND_ARGUMENT_TEMPLATE[-2:],
+    ]
+    if baseline.get("command_arguments") not in (COMMAND_ARGUMENT_TEMPLATE, historical_arguments):
         raise RegressionError("Baseline command arguments do not match the fixed benchmark command.")
     serial_ids = baseline.get("serial_ids")
     if not isinstance(serial_ids, list) or len(serial_ids) != EXPECTED_ATOM_COUNT:

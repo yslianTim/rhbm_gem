@@ -1,6 +1,7 @@
 #include "core/detail/ObjectiveEvaluation.hpp"
 
 #include "core/detail/Diagnosis.hpp"
+#include "core/detail/FittingRanges.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,19 @@ namespace {
 constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
 constexpr double kOffsetPeakRatioMax{ 1.0 };
+
+std::size_t CountObjectiveSamples(
+    const std::vector<SampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain)
+{
+    return static_cast<std::size_t>(std::ranges::count_if(sample_ref_list, [&](const SampleRef & sample_ref)
+    {
+        return !domain.owner_key_by_atom_index.at(sample_ref.atom_index).empty() &&
+            (domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0 ||
+                domain.tail_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0);
+    }));
+}
+
 template<typename ResidualEvaluator>
 std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
     const std::vector<SampleRef> & sample_ref_list,
@@ -33,6 +47,13 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
             domain.owner_key_by_atom_index.at(sample_ref.atom_index)
         };
         if (owner_key.empty()) continue;
+        const auto in_fit{
+            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
+        };
+        const auto in_tail{
+            domain.tail_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
+        };
+        if (!in_fit && !in_tail) continue;
         const auto owner_iter{ domain.cluster_by_key.find(owner_key) };
         if (owner_iter == domain.cluster_by_key.end() ||
             !owner_iter->second.scale.has_value())
@@ -41,35 +62,33 @@ std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
         }
         const auto residual_sample{ residual_evaluator(sample_ref) };
         if (!residual_sample.has_value()) return std::nullopt;
-        const auto is_fit_range{
-            domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
-        };
-        const auto sample_count{
-            is_fit_range ? owner_iter->second.fit_sample_ref_list.size() :
+        for (const bool is_fit_range : { true, false })
+        {
+            if (!(is_fit_range ? in_fit : in_tail)) continue;
+            const auto sample_count{ is_fit_range ?
+                owner_iter->second.fit_sample_ref_list.size() :
                 owner_iter->second.tail_sample_ref_list.size()
-        };
-        if (sample_count == 0) return std::nullopt;
-        const auto scale{
-            is_fit_range ? owner_iter->second.scale->fit : owner_iter->second.scale->tail
-        };
-        const auto loss{
-            algorithm::CalculateCauchyLoss(
-                residual_sample->residual / scale,
-                kObjectiveRobustLossCutoffMultiplier)
-        };
-        const auto coefficient{
-            CalculateClusterAtomWeight(
-                owner_iter->second.selected_atom_count,
-                domain.active_atom_count) /
-            static_cast<double>(sample_count)
-        };
-        if (is_fit_range)
-        {
-            contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
-        }
-        else
-        {
-            contribution.tail_validation_loss += coefficient * loss;
+            };
+            if (sample_count == 0) return std::nullopt;
+            const auto scale{ is_fit_range ? owner_iter->second.scale->fit : owner_iter->second.scale->tail };
+            const auto loss{
+                algorithm::CalculateCauchyLoss(
+                    residual_sample->residual / scale,
+                    kObjectiveRobustLossCutoffMultiplier)
+            };
+            const auto coefficient{
+                CalculateClusterAtomWeight(
+                    owner_iter->second.selected_atom_count,
+                    domain.active_atom_count) / static_cast<double>(sample_count)
+            };
+            if (is_fit_range)
+            {
+                contribution.fit_range_residual_objective += kFitRangeWeight * coefficient * loss;
+            }
+            else
+            {
+                contribution.tail_validation_loss += coefficient * loss;
+            }
         }
     }
     if (!std::isfinite(contribution.fit_range_residual_objective) ||
@@ -154,20 +173,13 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     double offset_plausibility_penalty{ 0.0 };
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
-        const auto fit_contribution{
+        const auto residual_contribution{
             EvaluateResidualObjectiveContribution(
-                cluster_domain.fit_sample_ref_list,
+                cluster_domain.sample_ref_list,
                 domain,
                 evaluator)
         };
-        if (!fit_contribution.has_value()) return std::nullopt;
-        const auto tail_contribution{
-            EvaluateResidualObjectiveContribution(
-                cluster_domain.tail_sample_ref_list,
-                domain,
-                evaluator)
-        };
-        if (!tail_contribution.has_value()) return std::nullopt;
+        if (!residual_contribution.has_value()) return std::nullopt;
         const auto offset_contribution{
             EvaluateOffsetPlausibilityPenalty(
                 state,
@@ -175,10 +187,8 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
                 domain)
         };
         if (!offset_contribution.has_value()) return std::nullopt;
-        fit_range_residual_objective += fit_contribution->fit_range_residual_objective;
-        fit_range_residual_objective += tail_contribution->fit_range_residual_objective;
-        tail_validation_loss += fit_contribution->tail_validation_loss;
-        tail_validation_loss += tail_contribution->tail_validation_loss;
+        fit_range_residual_objective += residual_contribution->fit_range_residual_objective;
+        tail_validation_loss += residual_contribution->tail_validation_loss;
         offset_plausibility_penalty += *offset_contribution;
     }
     return BuildObjectiveBreakdown(
@@ -381,16 +391,17 @@ static std::optional<double> BuildFixedObjectiveScale(
 ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<ClusterKey> & cluster_key_list,
-    double distance_min,
-    double distance_max)
+    const std::vector<ClusterKey> & cluster_key_list)
 {
     ObjectiveDomain domain;
     domain.owner_key_by_atom_index.resize(context.atom_list.size());
     domain.fit_sample_mask_by_atom.resize(context.atom_list.size());
+    domain.tail_sample_mask_by_atom.resize(context.atom_list.size());
     for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
         domain.fit_sample_mask_by_atom.at(atom_index).resize(
+            context.atom_list.at(atom_index).raw_sampling_entries.size(), 0);
+        domain.tail_sample_mask_by_atom.at(atom_index).resize(
             context.atom_list.at(atom_index).raw_sampling_entries.size(), 0);
     }
     for (const auto & key : cluster_key_list)
@@ -409,30 +420,32 @@ ObjectiveDomain BuildObjectiveDomain(
             for (std::size_t sample_index = 0; sample_index < raw_sampling_entries.size(); sample_index++)
             {
                 const SampleRef sample_ref{ atom_index, sample_index };
+                const auto distance{ raw_sampling_entries.at(sample_index).point.distance };
+                const auto in_fit{ IsSignalDistance(distance) };
+                const auto in_tail{ IsTailDistance(distance) };
+                domain.fit_sample_mask_by_atom.at(atom_index).at(sample_index) = in_fit;
+                domain.tail_sample_mask_by_atom.at(atom_index).at(sample_index) = in_tail;
+                if (!in_fit && !in_tail) continue;
+                cluster_domain.sample_ref_list.emplace_back(sample_ref);
                 const auto residual_sample{
                     EvaluateResidualSample(context, sample_ref, model_snapshot)
                 };
-                const auto distance{
-                    raw_sampling_entries.at(sample_index).point.distance
-                };
-                const auto is_fit_range{ distance >= distance_min && distance <= distance_max };
-                domain.fit_sample_mask_by_atom.at(atom_index).at(sample_index) =
-                    is_fit_range ? 1 : 0;
-                auto & sample_ref_list{ is_fit_range ?
-                    cluster_domain.fit_sample_ref_list : cluster_domain.tail_sample_ref_list
-                };
-                sample_ref_list.emplace_back(sample_ref);
-                if (!residual_sample.has_value()) continue;
-                auto & residual_list{
-                    is_fit_range ? fit_residual_list : tail_residual_list
-                };
-                auto & response_list{
-                    is_fit_range ? fit_response_list : tail_response_list
-                };
-                residual_list.emplace_back(residual_sample->residual);
-                response_list.emplace_back(residual_sample->adjusted_response);
+                for (const bool is_fit_range : { true, false })
+                {
+                    if (!(is_fit_range ? in_fit : in_tail)) continue;
+                    auto & sample_ref_list{ is_fit_range ?
+                        cluster_domain.fit_sample_ref_list : cluster_domain.tail_sample_ref_list
+                    };
+                    sample_ref_list.emplace_back(sample_ref);
+                    if (!residual_sample.has_value()) continue;
+                    auto & residual_list{ is_fit_range ? fit_residual_list : tail_residual_list };
+                    auto & response_list{ is_fit_range ? fit_response_list : tail_response_list };
+                    residual_list.emplace_back(residual_sample->residual);
+                    response_list.emplace_back(residual_sample->adjusted_response);
+                }
             }
         }
+        domain.unique_sample_count += cluster_domain.sample_ref_list.size();
         domain.fit_sample_count += cluster_domain.fit_sample_ref_list.size();
         domain.tail_sample_count += cluster_domain.tail_sample_ref_list.size();
         const auto fit_scale{
@@ -512,9 +525,9 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const auto & changed_key{
         candidate_overlay.GetState().GetOverrideAtomIndexList()
     };
-    const auto unique_sample_count{ domain.fit_sample_count + domain.tail_sample_count };
+    const auto unique_sample_count{ domain.unique_sample_count };
     performance_counters.RecordObjectiveSampleEvaluation(
-        affected_sample_ref_list.size(),
+        CountObjectiveSamples(affected_sample_ref_list, domain),
         unique_sample_count);
     const auto candidate_changed{
         EvaluateObjectiveContribution(
@@ -640,10 +653,10 @@ bool TryCommitClusterCandidate(
     PerformanceCounters & performance_counters)
 {
     const auto unique_sample_count{
-        domain.fit_sample_count + domain.tail_sample_count
+        domain.unique_sample_count
     };
     performance_counters.RecordObjectiveSampleEvaluation(
-        objective_sample_ref_list.size(),
+        CountObjectiveSamples(objective_sample_ref_list, domain),
         unique_sample_count);
     const auto transformed_change_summary{
         SummarizeTransformedChanges(

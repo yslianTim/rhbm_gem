@@ -186,7 +186,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     const auto suspicious_atom_count{
                         CountSuspiciousPolishAtoms(
                             context,
-                            options,
                             component.atom_index_list,
                             endpoint_state_view,
                             candidate_overlay.GetState())

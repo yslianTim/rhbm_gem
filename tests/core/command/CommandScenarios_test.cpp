@@ -426,18 +426,6 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     }
 }
 
-TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
-{
-    RHBMTestRequest request{};
-    request.fit_range_min = 2.0;
-    request.fit_range_max = 1.0;
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
-}
-
 TEST(CommandScenariosTest, PotentialDisplayRejectsMalformedReferenceGroups)
 {
     PotentialDisplayRequest request{};

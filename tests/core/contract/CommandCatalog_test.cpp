@@ -256,6 +256,23 @@ TEST(CommandCatalogTest, RunCommandCLIReturnsSuccessForHelpRequest)
     const int argc{ static_cast<int>(std::size(argv)) };
 
     EXPECT_EQ(RunCommandCLI(argc, argv), 0);
+    for (const auto & name : { "potential_analysis", "rhbm_test" })
+    {
+        std::string command_name{ name };
+        char * command_argv[]{ program, command_name.data(), help_flag };
+        testing::internal::CaptureStdout();
+        EXPECT_EQ(RunCommandCLI(3, command_argv), 0);
+        const auto help{ testing::internal::GetCapturedStdout() };
+        EXPECT_EQ(help.find("--fit-min"), std::string::npos);
+        EXPECT_EQ(help.find("--fit-max"), std::string::npos);
+        for (const auto & option : { "--fit-min", "--fit-max" })
+        {
+            std::string removed_option{ option };
+            char value[]{ "1.0" };
+            char * removed_argv[]{ program, command_name.data(), removed_option.data(), value };
+            EXPECT_NE(RunCommandCLI(4, removed_argv), 0);
+        }
+    }
 }
 
 TEST(CommandCatalogTest, RunCommandCLIReturnsFailureForMissingCommandInput)
