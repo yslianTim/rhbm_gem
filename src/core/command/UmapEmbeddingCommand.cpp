@@ -57,9 +57,12 @@ constexpr std::array<UmapFeatureDefinition, detail::kLocalFittingFeatureCount>
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], true },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], true },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[9], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[9], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[10], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[11], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[12], true },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(

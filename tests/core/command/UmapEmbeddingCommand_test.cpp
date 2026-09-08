@@ -339,9 +339,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(
         output_lines.front(),
         "serial id,residue,spot,neighbor count for peeling,neighbor count in 2A,"
-        "signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,"
+        "neighbor count in 1.5A,neighbor distance norm in 2A,neighbor distance norm in 1.5A,"
+        "signal peeling ratio,tail peeling ratio,"
+        "amplitude 2nd,width 2nd,offset 2nd,"
         "amplitude rank 2nd,width rank 2nd,offset rank 2nd,umap x,umap y");
-    EXPECT_EQ(kOutputColumnCount, 15u);
+    EXPECT_EQ(kOutputColumnCount, 18u);
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -356,9 +358,48 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     }
 
     const auto first_fields{ SplitFields(output_lines[1]) };
+    EXPECT_EQ(first_fields[5], "2");
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[6]), std::sqrt(2.8125));
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), std::sqrt(2.8125));
     const double expected_amplitude{ kAmplitudeBase + 0.102 };
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), expected_amplitude);
-    EXPECT_GT(first_fields[7].size(), 6u);
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[10]), expected_amplitude);
+    EXPECT_GT(first_fields[10].size(), 6u);
+
+    FeatureModelOptions geometry_options;
+    geometry_options.atom_count = 7;
+    auto geometry_model{ BuildFeatureModel(geometry_options) };
+    constexpr std::array<std::array<double, 3>, 7> positions{{
+        { 0.0, 0.0, 0.0 },
+        { 0.0, 0.0, 1.0 },
+        { 1.5, 0.0, 0.0 },
+        { 0.0, 0.0, 1.51 },
+        { 0.0, 2.0, 0.0 },
+        { 2.01, 0.0, 0.0 },
+        { 10.0, 0.0, 0.0 },
+    }};
+    for (const auto & atom : geometry_model->GetAtomList())
+    {
+        atom->SetPosition(positions[static_cast<std::size_t>(atom->GetSerialID() - 1)]);
+    }
+    geometry_model->SelectAtoms([](const rg::AtomObject & atom)
+    {
+        return atom.GetSerialID() == 1 || atom.GetSerialID() == 7;
+    });
+    const auto geometry_rows{
+        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model, true)
+    };
+    ASSERT_EQ(geometry_rows.size(), 2u);
+    EXPECT_EQ(geometry_rows[0].serial_id, 1);
+    EXPECT_DOUBLE_EQ(geometry_rows[0].features[1], 4.0);
+    EXPECT_DOUBLE_EQ(geometry_rows[0].features[2], 2.0);
+    EXPECT_DOUBLE_EQ(
+        geometry_rows[0].features[3], std::sqrt(1.0 + 2.25 + 2.2801 + 4.0));
+    EXPECT_DOUBLE_EQ(geometry_rows[0].features[4], std::sqrt(3.25));
+    EXPECT_EQ(geometry_rows[1].serial_id, 7);
+    EXPECT_DOUBLE_EQ(geometry_rows[1].features[1], 0.0);
+    EXPECT_DOUBLE_EQ(geometry_rows[1].features[2], 0.0);
+    EXPECT_DOUBLE_EQ(geometry_rows[1].features[3], 0.0);
+    EXPECT_DOUBLE_EQ(geometry_rows[1].features[4], 0.0);
 
 #ifdef HAVE_ROOT
     EXPECT_TRUE(std::filesystem::is_regular_file(
@@ -498,6 +539,16 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     FeatureModelOptions options;
     options.constant_features = true;
     SeedFeatureDatabase(database_path, "constant", options);
+    const auto feature_rows{
+        rg::core::detail::BuildLocalFittingFeatureRows(*BuildFeatureModel(options), true)
+    };
+    ASSERT_EQ(feature_rows.size(), options.atom_count);
+    for (const auto & row : feature_rows)
+    {
+        EXPECT_DOUBLE_EQ(row.features[2], 0.0);
+        EXPECT_DOUBLE_EQ(row.features[3], 0.0);
+        EXPECT_DOUBLE_EQ(row.features[4], 0.0);
+    }
 
     const auto output_dir{ temp_dir.path() / "output" };
     const auto result{

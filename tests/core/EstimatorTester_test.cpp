@@ -668,7 +668,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
         &rg::GaussianModel3D::GetWidth,
         &rg::GaussianModel3D::GetOffset
     };
-    constexpr std::array<std::size_t, 3> rank_feature_indices{ 7, 8, 9 };
+    constexpr std::array<std::size_t, 3> rank_feature_indices{ 10, 11, 12 };
 
     std::size_t row_count{ 0 };
     std::size_t verified_neighbor_set_count{ 0 };
@@ -686,7 +686,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
         ASSERT_NE(atom_iter, selected_atoms.end());
         EXPECT_FALSE(row.residue.empty());
         EXPECT_EQ(row.spot, (*atom_iter)->GetAtomID());
-        for (std::size_t feature = 7; feature < row.features.size(); ++feature)
+        for (std::size_t feature = 10; feature < row.features.size(); ++feature)
         {
             const auto rank{ row.features[feature] };
             EXPECT_GE(rank, 1);
