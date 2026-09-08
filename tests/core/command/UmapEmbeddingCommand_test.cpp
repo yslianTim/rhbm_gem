@@ -457,22 +457,71 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
 TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_other_spots" };
-    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
-    FeatureModelOptions options;
-    options.atom_id = "CB";
-    SeedFeatureDatabase(database_path, "other", options);
-
-    const auto output_dir{ temp_dir.path() / "output" };
-    const auto result{ RunCommand(MakeRequest(database_path, output_dir, "other")) };
-
-    ASSERT_TRUE(result.succeeded);
+    std::vector<std::vector<Element>> element_sets{
+        { Element::HYDROGEN, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
+          Element::PHOSPHORUS, Element::SULFUR, Element::UNK },
+        { Element::CARBON, Element::SULFUR, Element::IRON, Element::UNK },
+        {},
+    };
+    for (int atomic_number = 1; atomic_number <= 25; ++atomic_number)
+    {
+        element_sets.back().push_back(static_cast<Element>(atomic_number));
+    }
+    element_sets.back().push_back(Element::UNK);
+    for (std::size_t scenario = 0; scenario < element_sets.size(); ++scenario)
+    {
+        SCOPED_TRACE(scenario);
+        const auto & elements{ element_sets[scenario] };
+        const auto model_key{ "other_" + std::to_string(scenario) };
+        const auto database_path{ temp_dir.path() / (model_key + ".sqlite") };
+        FeatureModelOptions options;
+        options.atom_id = "CB";
+        options.atom_count = 5 + elements.size();
+        auto model{ BuildFeatureModel(options) };
+        constexpr std::array<std::string_view, 5> configured_spots{ "C", "CA", "N", "O", "O" };
+        constexpr std::array<Element, 5> configured_elements{
+            Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::OXYGEN
+        };
+        for (std::size_t index = 0; index < options.atom_count; ++index)
+        {
+            auto * atom{ model->FindAtomPtr(static_cast<int>(index + 1)) };
+            if (index < configured_spots.size())
+            {
+                atom->SetAtomID(std::string(configured_spots[index]));
+                atom->SetElement(configured_elements[index]);
+                if (index == 4) atom->SetComponentID("HOH");
+            }
+            else
+            {
+                atom->SetElement(elements[index - configured_spots.size()]);
+            }
+        }
+        {
+            rg::DataRepository repository{ database_path };
+            repository.SaveModel(*model, model_key);
+        }
+        const auto output_dir{ temp_dir.path() / model_key };
+        const auto result{ RunCommand(MakeRequest(database_path, output_dir, model_key)) };
+        ASSERT_TRUE(result.succeeded);
+        const auto lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + ".csv")) };
+        ASSERT_EQ(lines.size(), options.atom_count + 1);
+        EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader() + ",umap x,umap y");
+        for (std::size_t row = 1; row < lines.size(); ++row)
+        {
+            const auto fields{ SplitFields(lines[row]) };
+            ASSERT_EQ(fields.size(), kOutputColumnCount);
+            EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
+            EXPECT_TRUE(std::isfinite(std::stod(fields[kOutputColumnCount - 2])));
+            EXPECT_TRUE(std::isfinite(std::stod(fields[kOutputColumnCount - 1])));
+        }
+        const auto plot_path{ output_dir / ("umap_embedding_" + model_key + ".pdf") };
 #ifdef HAVE_ROOT
-    EXPECT_TRUE(std::filesystem::is_regular_file(
-        output_dir / "umap_embedding_other.pdf"));
+        ASSERT_TRUE(std::filesystem::is_regular_file(plot_path));
+        EXPECT_GT(std::filesystem::file_size(plot_path), 0u);
 #else
-    EXPECT_FALSE(std::filesystem::exists(
-        output_dir / "umap_embedding_other.pdf"));
+        EXPECT_FALSE(std::filesystem::exists(plot_path));
 #endif
+    }
 }
 
 TEST(UmapEmbeddingCommandTest, AttributesDatabaseAndModelLoadFailures)

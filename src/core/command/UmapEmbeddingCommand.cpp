@@ -2,7 +2,9 @@
 #include "core/command/detail/LocalFittingFeatures.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -26,6 +28,7 @@
 #include <exception>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -123,27 +126,43 @@ struct UmapSpotPlotStyle
     short color;
 };
 
-// Toggle this internal switch to omit the Other graph, then rebuild the project.
+// Toggle this internal switch to omit all Other element graphs, then rebuild the project.
 constexpr bool kDrawOtherUmapSpotGraph{ true };
-// Keep Other last: unmatched spot names fall back to that plot category.
 constexpr std::array kUmapSpotPlotStyles{
     UmapSpotPlotStyle{ kConfiguredUmapSpots[0].label, kViolet + 1 },
     UmapSpotPlotStyle{ kConfiguredUmapSpots[1].label, kRed + 1 },
     UmapSpotPlotStyle{ kConfiguredUmapSpots[2].label, kGreen + 2 },
     UmapSpotPlotStyle{ kConfiguredUmapSpots[3].label, kAzure + 2 },
     UmapSpotPlotStyle{ kConfiguredUmapSpots[4].label, kOrange + 7 },
-    UmapSpotPlotStyle{ "Other", kGray + 2 },
 };
-constexpr std::size_t kOtherUmapSpotPlotStyleIndex{
-    kConfiguredUmapSpots.size()
-};
-static_assert(kUmapSpotPlotStyles.size() == kOtherUmapSpotPlotStyleIndex + 1);
+static_assert(kUmapSpotPlotStyles.size() == kConfiguredUmapSpots.size());
+
+int GetOtherElementColor(Element element)
+{
+    switch (element)
+    {
+    case Element::HYDROGEN:   return kGray+2;
+    case Element::CARBON:     return kRed+1;
+    case Element::NITROGEN:   return kGreen+2;
+    case Element::OXYGEN:     return kAzure+2;
+    case Element::PHOSPHORUS: return kOrange+7;
+    case Element::SULFUR:     return kAzure;
+    case Element::UNK:        return kBlack;
+    default: break;
+    }
+    const auto hue{ static_cast<float>(std::fmod(
+        ChemicalDataHelper::GetAtomicNumber(element) * 137.508, 360.0)) };
+    float red{}, green{}, blue{};
+    TColor::HSV2RGB(hue, 0.65f, 0.75f, red, green, blue);
+    return TColor::GetColor(red, green, blue);
+}
 #endif
 
 struct PreparedUmapInput
 {
     std::vector<detail::LocalFittingFeatureRow> feature_rows;
     std::vector<std::optional<std::size_t>> configured_spot_indices;
+    std::vector<Element> elements;
     std::vector<double> standardized_features;
     std::vector<std::string_view> constant_features;
     int effective_neighbors{ 0 };
@@ -196,8 +215,10 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
 
     std::vector<detail::LocalFittingFeatureRow> feature_rows;
     std::vector<std::optional<std::size_t>> configured_spot_indices;
+    std::vector<Element> elements;
     feature_rows.reserve(source_rows.size());
     configured_spot_indices.reserve(source_rows.size());
+    elements.reserve(source_rows.size());
     std::array<long double, kInputFeatureCount> means{};
     std::array<long double, kInputFeatureCount> sum_squared_differences{};
 
@@ -221,6 +242,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
             }
         }
 
+        elements.push_back(model_object.FindAtomPtr(row.serial_id)->GetElement());
         feature_rows.emplace_back(std::move(row));
         configured_spot_indices.push_back(configured_spot_index);
         const auto & stored_row{ feature_rows.back() };
@@ -319,6 +341,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     PreparedUmapInput prepared;
     prepared.feature_rows = std::move(feature_rows);
     prepared.configured_spot_indices = std::move(configured_spot_indices);
+    prepared.elements = std::move(elements);
     prepared.standardized_features = std::move(standardized_features);
     prepared.constant_features = std::move(constant_features);
     prepared.effective_neighbors = std::min(
@@ -483,19 +506,50 @@ bool WriteEmbeddingPlot(
     const auto plot_path{ BuildPlotOutputPath(prepared) };
     try
     {
-        std::array<std::unique_ptr<TGraphErrors>, kUmapSpotPlotStyles.size()> graphs;
+        std::vector<Element> other_elements;
+        if (kDrawOtherUmapSpotGraph)
+        {
+            for (std::size_t observation = 0; observation < prepared.feature_rows.size(); ++observation)
+            {
+                if (!prepared.configured_spot_indices[observation])
+                {
+                    other_elements.push_back(prepared.elements[observation]);
+                }
+            }
+            std::sort(other_elements.begin(), other_elements.end(), [](Element lhs, Element rhs)
+            {
+                if (lhs == Element::UNK) return false;
+                if (rhs == Element::UNK) return true;
+                return ChemicalDataHelper::GetAtomicNumber(lhs) < ChemicalDataHelper::GetAtomicNumber(rhs);
+            });
+            other_elements.erase(
+                std::unique(other_elements.begin(), other_elements.end()),
+                other_elements.end());
+        }
+        std::vector<std::unique_ptr<TGraphErrors>> graphs;
+        std::vector<std::string> labels;
         std::vector<double> plotted_x;
         std::vector<double> plotted_y;
         plotted_x.reserve(prepared.feature_rows.size());
         plotted_y.reserve(prepared.feature_rows.size());
 
-        for (std::size_t category = 0; category < kUmapSpotPlotStyles.size(); ++category)
+        for (const auto & style : kUmapSpotPlotStyles)
         {
             auto graph{ root_helper::CreateGraphErrors() };
-            auto marker{ (category == kUmapSpotPlotStyles.size() - 1) ? 24 : 20 }; 
+            root_helper::SetMarkerAttribute(graph.get(), 20, 0.8f, style.color, 0.75f);
+            graphs.emplace_back(std::move(graph));
+            labels.emplace_back(style.label);
+        }
+        for (const auto element : other_elements)
+        {
+            auto graph{ root_helper::CreateGraphErrors() };
             root_helper::SetMarkerAttribute(
-                graph.get(), static_cast<short>(marker), 0.8f, kUmapSpotPlotStyles[category].color, 0.75f);
-            graphs[category] = std::move(graph);
+                graph.get(), 24, 0.8f,
+                static_cast<short>(GetOtherElementColor(element)), 0.75f);
+            graphs.emplace_back(std::move(graph));
+            labels.emplace_back(element == Element::UNK
+                ? "Other Unknown"
+                : "Other " + std::string(ChemicalDataHelper::GetLabel(element)));
         }
 
         for (std::size_t observation = 0;
@@ -507,9 +561,10 @@ bool WriteEmbeddingPlot(
             };
             if (!configured_spot_index && !kDrawOtherUmapSpotGraph) continue;
 
-            const std::size_t category{
-                configured_spot_index.value_or(kOtherUmapSpotPlotStyleIndex)
-            };
+            const std::size_t category{ configured_spot_index ? *configured_spot_index
+                : kUmapSpotPlotStyles.size() + static_cast<std::size_t>(std::distance(
+                    other_elements.begin(),
+                    std::find(other_elements.begin(), other_elements.end(), prepared.elements[observation]))) };
             const double x{ embedding[observation * kOutputDimensionCount] };
             const double y{ embedding[observation * kOutputDimensionCount + 1] };
             auto * const graph{ graphs[category].get() };
@@ -530,16 +585,23 @@ bool WriteEmbeddingPlot(
 
         const auto x_range{ array_helper::ComputeScalingRangeTuple(plotted_x, 0.1) };
         const auto y_range{ array_helper::ComputeScalingRangeTuple(plotted_y, 0.1) };
-        auto canvas{ root_helper::CreateCanvas("umap_embedding_canvas", "", 900, 700) };
+        const auto visible_categories{ static_cast<int>(std::count_if(
+            graphs.begin(), graphs.end(), [](const auto & graph) { return graph->GetN() > 0; })) };
+        const int legend_columns{ (visible_categories + 19) / 20 };
+        const int canvas_width{ 900 + 230 * legend_columns };
+        const float plot_right{ 900.0f / static_cast<float>(canvas_width) };
+        auto canvas{ root_helper::CreateCanvas("umap_embedding_canvas", "", canvas_width, 700) };
         root_helper::SetCanvasDefaultStyle(canvas.get());
         root_helper::SetPadDefaultStyle(canvas.get());
-        root_helper::SetPadMarginAttribute(canvas.get(), 0.12f, 0.04f, 0.12f, 0.08f);
+        root_helper::SetPadMarginAttribute(
+            canvas.get(), 108.0f / static_cast<float>(canvas_width),
+            1.0f - plot_right, 0.16f, 0.08f);
         root_helper::SetPadLayout(canvas.get(), 1, 1, 0, 0, 1, 1);
         canvas->cd();
 
         auto frame{ root_helper::CreateHist2D(
             "umap_embedding_frame",
-            "UMAP embedding by spot",
+            "UMAP embedding by spot and element",
             100,
             std::get<0>(x_range),
             std::get<1>(x_range),
@@ -557,16 +619,20 @@ bool WriteEmbeddingPlot(
         root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 40.0f, 0.01f);
         frame->Draw();
 
-        auto legend{ root_helper::CreateLegend(0.80, 0.72, 0.94, 0.90) };
+        const int legend_rows{ (visible_categories + legend_columns - 1) / legend_columns };
+        auto legend{ root_helper::CreateLegend(
+            plot_right + 10.0 / canvas_width, 0.90 - 0.035 * legend_rows,
+            1.0 - 10.0 / canvas_width, 0.90) };
+        legend->SetNColumns(legend_columns);
         root_helper::SetLegendDefaultStyle(legend.get());
-        root_helper::SetTextAttribute(legend.get(), 35.0f, 133, 12);
-        for (std::size_t category = 0; category < kUmapSpotPlotStyles.size(); ++category)
+        root_helper::SetTextAttribute(legend.get(), 18.0f, 133, 12);
+        for (std::size_t category = 0; category < graphs.size(); ++category)
         {
             if (graphs[category]->GetN() == 0) continue;
             graphs[category]->Draw("P SAME");
             legend->AddEntry(
                 graphs[category].get(),
-                kUmapSpotPlotStyles[category].label.data(),
+                labels[category].c_str(),
                 "p");
         }
         legend->Draw();
