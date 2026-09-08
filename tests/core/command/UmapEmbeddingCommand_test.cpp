@@ -35,7 +35,7 @@ namespace rg = rhbm_gem;
 constexpr std::size_t kOutputColumnCount{
     rg::core::detail::kLocalFittingColumnCount + 2
 };
-constexpr double kFirstAmplitudeBase{ 1.123456789012345 };
+constexpr double kAmplitudeBase{ 1.123456789012345 };
 
 struct FeatureModelOptions
 {
@@ -48,6 +48,7 @@ struct FeatureModelOptions
     bool omit_peeling_samples{ false };
     bool invalid_signal_ratio{ false };
     bool infinite_amplitude{ false };
+    bool infinite_first_amplitude{ false };
     std::string atom_id{ "CA" };
 };
 
@@ -78,7 +79,7 @@ rg::LocalGaussianResult MakeGaussianResult(
 {
     double amplitude{ options.exact_affine_values
         ? FeaturePattern(serial_id, stage, options.constant_features)
-        : kFirstAmplitudeBase
+        : kAmplitudeBase
             + 0.017 * FeaturePattern(serial_id, stage, options.constant_features) };
     double width{ options.exact_affine_values
         ? FeaturePattern(serial_id, stage + 3, options.constant_features)
@@ -99,7 +100,9 @@ rg::LocalGaussianResult MakeGaussianResult(
         width, options.affine_transform, scale, transform_offset);
     offset = MaybeTransform(
         offset, options.affine_transform, scale, transform_offset);
-    if (options.infinite_amplitude && serial_id == 1 && stage == 0)
+    if (serial_id == 1
+        && ((options.infinite_amplitude && stage == 1)
+            || (options.infinite_first_amplitude && stage == 0)))
     {
         amplitude = std::numeric_limits<double>::infinity();
     }
@@ -317,7 +320,9 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     const auto output_dir{ temp_dir.path() / "output" };
     const std::string model_key{ "model/key weird" };
-    SeedFeatureDatabase(database_path, model_key);
+    FeatureModelOptions options;
+    options.infinite_first_amplitude = true;
+    SeedFeatureDatabase(database_path, model_key, options);
 
     auto request{ MakeRequest(database_path, output_dir, model_key) };
     request.num_neighbors = 15;
@@ -333,7 +338,10 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     ASSERT_EQ(output_lines.size(), 9u);
     EXPECT_EQ(
         output_lines.front(),
-        rg::core::detail::BuildLocalFittingCsvHeader() + ",umap x,umap y");
+        "serial id,residue,spot,neighbor count for peeling,neighbor count in 2A,"
+        "signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,"
+        "amplitude rank 2nd,width rank 2nd,offset rank 2nd,umap x,umap y");
+    EXPECT_EQ(kOutputColumnCount, 15u);
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -348,7 +356,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     }
 
     const auto first_fields{ SplitFields(output_lines[1]) };
-    const double expected_amplitude{ kFirstAmplitudeBase + 0.034 };
+    const double expected_amplitude{ kAmplitudeBase + 0.102 };
     EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), expected_amplitude);
     EXPECT_GT(first_fields[7].size(), 6u);
 
@@ -458,7 +466,7 @@ TEST(UmapEmbeddingCommandTest, RejectsIncompleteOrNonFiniteSavedAnalysis)
 
     FeatureModelOptions infinite_amplitude;
     infinite_amplitude.infinite_amplitude = true;
-    cases.push_back({ "infinite", infinite_amplitude, "amplitude 1st" });
+    cases.push_back({ "infinite", infinite_amplitude, "amplitude 2nd" });
 
     FeatureModelOptions too_short;
     too_short.atom_count = 2;
@@ -500,7 +508,7 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     EXPECT_TRUE(HasIssue(
         result,
         "-k,--model-key",
-        "All 12 selected UMAP feature columns are constant"));
+        "All 10 selected UMAP feature columns are constant"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".csv"), 0u);
 }
 

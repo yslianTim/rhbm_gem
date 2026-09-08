@@ -638,7 +638,7 @@ TEST(
         fitted_view.GetGroupMemberResult().has_value());
 }
 
-TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirstAndSecondStages)
+TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondStage)
 {
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
@@ -663,16 +663,12 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
     rt::RunPotentialFittingWorkflow(*model, options);
 
     const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model, true) };
-    constexpr std::array stages{
-        FittingStage::First,
-        FittingStage::Second
-    };
     constexpr std::array<GaussianParameterGetter, 3> parameter_getters{
         &rg::GaussianModel3D::GetAmplitude,
         &rg::GaussianModel3D::GetWidth,
         &rg::GaussianModel3D::GetOffset
     };
-    constexpr std::array<std::size_t, 3> rank_feature_starts{ 10, 12, 14 };
+    constexpr std::array<std::size_t, 3> rank_feature_indices{ 7, 8, 9 };
 
     std::size_t row_count{ 0 };
     std::size_t verified_neighbor_set_count{ 0 };
@@ -690,7 +686,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
         ASSERT_NE(atom_iter, selected_atoms.end());
         EXPECT_FALSE(row.residue.empty());
         EXPECT_EQ(row.spot, (*atom_iter)->GetAtomID());
-        for (std::size_t feature = 10; feature < row.features.size(); ++feature)
+        for (std::size_t feature = 7; feature < row.features.size(); ++feature)
         {
             const auto rank{ row.features[feature] };
             EXPECT_GE(rank, 1);
@@ -734,19 +730,14 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsAcrossFirst
 
         for (std::size_t parameter = 0; parameter < parameter_getters.size(); ++parameter)
         {
-            for (std::size_t stage = 0; stage < stages.size(); ++stage)
-            {
-                const auto expected_rank{ ComputeExpectedParameterRank(
-                    **atom_iter,
-                    comparison_atoms,
-                    stages[stage],
-                    parameter_getters[parameter])
-                };
-                const auto actual_rank{
-                    row.features[rank_feature_starts[parameter] + stage]
-                };
-                EXPECT_EQ(actual_rank, expected_rank);
-            }
+            const auto expected_rank{ ComputeExpectedParameterRank(
+                **atom_iter,
+                comparison_atoms,
+                FittingStage::Second,
+                parameter_getters[parameter])
+            };
+            const auto actual_rank{ row.features[rank_feature_indices[parameter]] };
+            EXPECT_EQ(actual_rank, expected_rank);
         }
         ++verified_neighbor_set_count;
         ++row_count;
