@@ -401,6 +401,50 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[3], 0.0);
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[4], 0.0);
 
+    for (const auto & atom : geometry_model->GetAtomList())
+    {
+        if (atom->GetSerialID() == 2 || atom->GetSerialID() == 4)
+        {
+            atom->SetElement(Element::HYDROGEN);
+        }
+    }
+    const auto hydrogen_rows{
+        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model, true)
+    };
+    ASSERT_EQ(hydrogen_rows.size(), geometry_rows.size());
+    constexpr bool include_hydrogen{
+        rg::core::detail::kLocalFittingNeighborFeaturesIncludeHydrogen
+    };
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], include_hydrogen ? 4.0 : 2.0);
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], include_hydrogen ? 2.0 : 1.0);
+    EXPECT_DOUBLE_EQ(
+        hydrogen_rows[0].features[3], include_hydrogen ? std::sqrt(9.5301) : 2.5);
+    EXPECT_DOUBLE_EQ(
+        hydrogen_rows[0].features[4], include_hydrogen ? std::sqrt(3.25) : 1.5);
+    for (std::size_t feature = 1; feature <= 4; ++feature)
+    {
+        EXPECT_DOUBLE_EQ(hydrogen_rows[1].features[feature], 0.0);
+    }
+    for (std::size_t row = 0; row < geometry_rows.size(); ++row)
+    {
+        EXPECT_EQ(hydrogen_rows[row].serial_id, geometry_rows[row].serial_id);
+        EXPECT_EQ(hydrogen_rows[row].residue, geometry_rows[row].residue);
+        EXPECT_EQ(hydrogen_rows[row].spot, geometry_rows[row].spot);
+        for (std::size_t feature = 0; feature < geometry_rows[row].features.size(); ++feature)
+        {
+            if (feature >= 1 && feature <= 4) continue;
+            const auto expected{ geometry_rows[row].features[feature] };
+            if (std::isnan(expected))
+            {
+                EXPECT_TRUE(std::isnan(hydrogen_rows[row].features[feature]));
+            }
+            else
+            {
+                EXPECT_DOUBLE_EQ(hydrogen_rows[row].features[feature], expected);
+            }
+        }
+    }
+
 #ifdef HAVE_ROOT
     EXPECT_TRUE(std::filesystem::is_regular_file(
         output_dir / "umap_embedding_model_key_weird.pdf"));

@@ -127,11 +127,18 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
 
         const auto neighbors{ atom->FindNeighborAtoms(2.0, false) };
         const auto & position{ atom->GetPositionRef() };
+        std::size_t neighbor_count_in_2A{ 0 };
         std::size_t neighbor_count_in_1_5A{ 0 };
         double neighbor_distance_squared_sum{ 0.0 };
         double neighbor_distance_squared_sum_in_1_5A{ 0.0 };
         for (const auto * neighbor : neighbors)
         {
+            if (!kLocalFittingNeighborFeaturesIncludeHydrogen
+                && neighbor->GetElement() == Element::HYDROGEN)
+            {
+                continue;
+            }
+            ++neighbor_count_in_2A;
             const auto & neighbor_position{ neighbor->GetPositionRef() };
             const auto dx{ neighbor_position[0] - position[0] };
             const auto dy{ neighbor_position[1] - position[1] };
@@ -151,7 +158,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         row.spot = atom->GetAtomID();
         row.features = {
             static_cast<double>(local_view.GetNeighborCountForPeeling()),
-            static_cast<double>(neighbors.size()),
+            static_cast<double>(neighbor_count_in_2A),
             static_cast<double>(neighbor_count_in_1_5A),
             std::sqrt(neighbor_distance_squared_sum),
             std::sqrt(neighbor_distance_squared_sum_in_1_5A),
