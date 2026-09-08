@@ -14,7 +14,6 @@ namespace rhbm_gem::core::detail {
 
 struct IterationResult;
 struct ConvergenceCertificate;
-struct AdaptiveTopologyRebuildDecision;
 struct SecondStageSeedSelectionRecord;
 struct ClusterCandidateDiagnostic;
 struct FinalDependencyPolishResult;
@@ -162,7 +161,7 @@ void LogConvergenceSafeguardAudit(
 void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
-    const AdaptiveTopologyRebuildDecision & decision,
+    double maximum_transformed_drift,
     const GraphTopology & previous_topology,
     const GraphTopology & rebuilt_topology,
     const CouplingGraphPartition & previous_partition,

@@ -68,18 +68,6 @@ std::string_view GetSecondStageStopReasonText(SecondStageStopReason reason)
     return "";
 }
 
-std::string_view GetAdaptiveTopologyTriggerText(
-    AdaptiveTopologyRebuildTrigger trigger)
-{
-    switch (trigger)
-    {
-    case AdaptiveTopologyRebuildTrigger::Drift: return "drift";
-    case AdaptiveTopologyRebuildTrigger::Interval: return "interval";
-    case AdaptiveTopologyRebuildTrigger::None: return "none";
-    }
-    return "unknown";
-}
-
 std::string_view GetFinalPolishCertificationPolicyText(
     FinalPolishCertificationPolicy policy)
 {
@@ -1156,7 +1144,7 @@ void LogConvergenceSafeguardAudit(
 void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
-    const AdaptiveTopologyRebuildDecision & decision,
+    double maximum_transformed_drift,
     const GraphTopology & previous_topology,
     const GraphTopology & rebuilt_topology,
     const CouplingGraphPartition & previous_partition,
@@ -1177,9 +1165,9 @@ void LogAdaptiveTopologyRebuild(
     message
         << "Adaptive local-fitting topology rebuild: accepted_iteration="
         << accepted_iteration_count
-        << ", trigger=" << GetAdaptiveTopologyTriggerText(decision.trigger)
+        << ", trigger=drift"
         << std::scientific << std::setprecision(2)
-        << ", drift=" << decision.maximum_transformed_drift
+        << ", drift=" << maximum_transformed_drift
         << ", clusters="
         << previous_partition.sample_id_list_by_key.size() << "/"
         << rebuilt_partition.sample_id_list_by_key.size()

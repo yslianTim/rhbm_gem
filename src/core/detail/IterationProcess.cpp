@@ -110,7 +110,6 @@ struct IterationState
     ClusterObjectiveStateMap cluster_objective_state{};
     TrustRegionStateSet trust_region_state{};
     std::size_t accepted_iteration_count{ 0 };
-    std::size_t accepted_iterations_since_topology_rebuild{ 0 };
     std::size_t audit_patience_count{ 0 };
 };
 
@@ -375,14 +374,13 @@ static bool TryRebuildAdaptiveTopology(
     IterationState & iteration_state,
     PerformanceCounters & performance_counters)
 {
-    const auto decision{
-        EvaluateAdaptiveTopologyRebuildTrigger(
+    const auto maximum_transformed_drift{
+        CalculateAdaptiveTopologyDrift(
             accepted_state,
             iteration_state.topology_reference_state,
-            iteration_state.selected_atom_index_list,
-            iteration_state.accepted_iterations_since_topology_rebuild)
+            iteration_state.selected_atom_index_list)
     };
-    if (decision.trigger == AdaptiveTopologyRebuildTrigger::None) return false;
+    if (!(maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)) return false;
 
     FinishProgressLine(options.quiet_mode);
     const auto rebuild_start{ std::chrono::steady_clock::now() };
@@ -407,7 +405,7 @@ static bool TryRebuildAdaptiveTopology(
     LogAdaptiveTopologyRebuild(
         options.quiet_mode,
         iteration_state.accepted_iteration_count,
-        decision,
+        maximum_transformed_drift,
         graph_topology,
         rebuilt_topology,
         iteration_state.graph_partition,
@@ -415,7 +413,6 @@ static bool TryRebuildAdaptiveTopology(
         partition_changed);
 
     iteration_state.topology_reference_state = BuildSecondStageModelSnapshot(context, accepted_state).node;
-    iteration_state.accepted_iterations_since_topology_rebuild = 0;
     if (partition_changed)
     {
         iteration_state.pending_topology = PendingTopology{
@@ -716,7 +713,6 @@ static IterationResult RunIteration(
         proposal_result.health_by_key);
     // Advance accepted progress; a changed partition takes effect next attempt.
     iteration_state.accepted_iteration_count++;
-    iteration_state.accepted_iterations_since_topology_rebuild++;
     result.objective_domain_changed = TryRebuildAdaptiveTopology(
         context,
         options,
@@ -1295,11 +1291,10 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
     return std::nullopt;
 }
 
-AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
+double CalculateAdaptiveTopologyDrift(
     const FitState & accepted_state,
     const FittedGaussianSnapshot & topology_reference_state,
-    const std::vector<std::size_t> & active_index_list,
-    std::size_t accepted_iterations_since_rebuild)
+    const std::vector<std::size_t> & active_index_list)
 {
     const auto drift_summary{
         SummarizeTransformedChanges(
@@ -1307,25 +1302,7 @@ AdaptiveTopologyRebuildDecision EvaluateAdaptiveTopologyRebuildTrigger(
             topology_reference_state,
             active_index_list)
     };
-    const auto maximum_transformed_drift{ std::ranges::max(drift_summary.maximum_list) };
-    if (maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)
-    {
-        return AdaptiveTopologyRebuildDecision{
-            AdaptiveTopologyRebuildTrigger::Drift,
-            maximum_transformed_drift
-        };
-    }
-    if (accepted_iterations_since_rebuild >= kAdaptiveTopologyRebuildAcceptedIterationInterval)
-    {
-        return AdaptiveTopologyRebuildDecision{
-            AdaptiveTopologyRebuildTrigger::Interval,
-            maximum_transformed_drift
-        };
-    }
-    return AdaptiveTopologyRebuildDecision{
-        AdaptiveTopologyRebuildTrigger::None,
-        maximum_transformed_drift
-    };
+    return std::ranges::max(drift_summary.maximum_list);
 }
 
 bool ConvergenceCertificate::StrictOperatorPassed() const

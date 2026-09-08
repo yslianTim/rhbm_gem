@@ -156,10 +156,11 @@ is committed. There is no separate unselected seed or refit failure path.
 
 The initial weighted topology retains the fixed minimum edge weight `0.05`.
 After accepted iterations, the stage adaptively rebuilds the topology from the
-latest validated atom models when either the maximum transformed-coordinate
-drift from the last topology reference state reaches `0.10`, or three accepted
-iterations have elapsed since the last rebuild. Rejected attempts do not
-advance this interval. Quarantined parameter blocks
+latest validated atom models only when the maximum transformed-coordinate
+drift from the last topology reference state reaches `0.10`. Accepted iteration
+count does not trigger a rebuild. The reference snapshot is updated only at
+initialization and after an actual rebuild, so drift accumulates relative to
+the last rebuild rather than the previous iteration. Quarantined parameter blocks
 remain in the graph and objective domain, so quarantine does not itself rebuild
 or renormalize either one.
 

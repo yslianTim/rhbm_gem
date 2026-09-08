@@ -2599,64 +2599,43 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndIntervalTriggers)
+TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTracksReferenceState)
 {
-    const audit_detail::FitState reference_state{
-        MakeGaussianResult(rg::GaussianModel3D{ 8.0, 0.50, 0.10 })
+    const auto make_state = [](double log_width)
+    {
+        return audit_detail::FitState{ MakeGaussianResult(
+            *rg::GaussianModel3D::FromTransformedCoordinates(
+                rg::GaussianModel3D::TransformedCoordinates{ 0.0, log_width, 0.0 })) };
     };
-    auto small_drift_state{ reference_state };
-    auto large_drift_state{ reference_state };
-    const auto reference_coordinates{
-        reference_state.at(0).mdpde.GetModel().ToTransformedCoordinates()
+    // These widths round-trip to a transformed difference of exactly 0.10.
+    const auto reference_state{ make_state(-0.097) };
+    const audit_detail::FittedGaussianSnapshot reference{
+        reference_state.at(0).mdpde.GetModel() };
+    const auto unchanged{
+        audit_detail::CalculateAdaptiveTopologyDrift(reference_state, reference, { 0 })
     };
-    ASSERT_TRUE(reference_coordinates.has_value());
-    auto small_coordinates{ *reference_coordinates };
-    auto large_coordinates{ *reference_coordinates };
-    small_coordinates(static_cast<Eigen::Index>(
-        rg::GaussianModel3D::LogWidthCoordinateIndex())) += 0.099;
-    large_coordinates(static_cast<Eigen::Index>(
-        rg::GaussianModel3D::LogWidthCoordinateIndex())) += 0.101;
-    const auto small_model{
-        rg::GaussianModel3D::FromTransformedCoordinates(small_coordinates)
-    };
-    const auto large_model{
-        rg::GaussianModel3D::FromTransformedCoordinates(large_coordinates)
-    };
-    ASSERT_TRUE(small_model.has_value());
-    ASSERT_TRUE(large_model.has_value());
-    small_drift_state.at(0) = MakeGaussianResult(*small_model);
-    large_drift_state.at(0) = MakeGaussianResult(*large_model);
+    EXPECT_EQ(unchanged, 0.0);
 
-    const auto none{
-        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
-            small_drift_state,
-            { reference_state.at(0).mdpde.GetModel() },
-            { 0 },
-            2)
-    };
-    EXPECT_EQ(none.trigger, audit_detail::AdaptiveTopologyRebuildTrigger::None);
-    EXPECT_NEAR(none.maximum_transformed_drift, 0.099, 1.0e-12);
+    // More than three accepted updates stay below the original reference threshold.
+    for (const auto drift : { 0.02, 0.04, 0.06, 0.08, 0.099 })
+    {
+        const auto maximum_transformed_drift{ audit_detail::CalculateAdaptiveTopologyDrift(
+            make_state(-0.097 + drift), reference, { 0 }) };
+        EXPECT_NEAR(maximum_transformed_drift, drift, 1.0e-12);
+    }
+    const auto threshold_state{ make_state(-0.097 + 0.10) };
+    const auto threshold{ audit_detail::CalculateAdaptiveTopologyDrift(
+        threshold_state, reference, { 0 }) };
+    ASSERT_EQ(threshold, audit_detail::kAdaptiveTopologyRebuildDriftThreshold);
+    const auto above{ audit_detail::CalculateAdaptiveTopologyDrift(
+        make_state(-0.097 + 0.101), reference, { 0 }) };
+    EXPECT_NEAR(above, 0.101, 1.0e-12);
 
-    const auto interval{
-        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
-            small_drift_state,
-            { reference_state.at(0).mdpde.GetModel() },
-            { 0 },
-            3)
-    };
-    EXPECT_EQ(
-        interval.trigger,
-        audit_detail::AdaptiveTopologyRebuildTrigger::Interval);
-
-    const auto drift{
-        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
-            large_drift_state,
-            { reference_state.at(0).mdpde.GetModel() },
-            { 0 },
-            1)
-    };
-    EXPECT_EQ(drift.trigger, audit_detail::AdaptiveTopologyRebuildTrigger::Drift);
-    EXPECT_NEAR(drift.maximum_transformed_drift, 0.101, 1.0e-12);
+    const audit_detail::FittedGaussianSnapshot rebuilt_reference{
+        threshold_state.at(0).mdpde.GetModel() };
+    const auto after_rebuild{ audit_detail::CalculateAdaptiveTopologyDrift(
+        make_state(-0.097 + 0.12), rebuilt_reference, { 0 }) };
+    EXPECT_NEAR(after_rebuild, 0.02, 1.0e-12);
 
 
     audit_detail::SecondStageContext context;
@@ -2690,7 +2669,7 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyRebuildUsesDriftAndInterva
 
 }
 
-TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTriggerIsIntensityScaleInvariant)
+TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftIsIntensityScaleInvariant)
 {
     constexpr double intensity_scale{ 100.0 };
     const audit_detail::FitState reference_state{
@@ -2713,23 +2692,20 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTriggerIsIntensitySca
     };
 
     const auto base{
-        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+        audit_detail::CalculateAdaptiveTopologyDrift(
             accepted_state,
             { reference_state.at(0).mdpde.GetModel() },
-            { 0 },
-            1)
+            { 0 })
     };
     const auto scaled{
-        audit_detail::EvaluateAdaptiveTopologyRebuildTrigger(
+        audit_detail::CalculateAdaptiveTopologyDrift(
             scaled_accepted_state,
             { scaled_reference_state.at(0).mdpde.GetModel() },
-            { 0 },
-            1)
+            { 0 })
     };
-    EXPECT_EQ(base.trigger, scaled.trigger);
     EXPECT_NEAR(
-        base.maximum_transformed_drift,
-        scaled.maximum_transformed_drift,
+        base,
+        scaled,
         1.0e-12);
 }
 
@@ -5664,7 +5640,11 @@ TEST(
                     {
                         const auto position{ line.find(marker) };
                         if (position != std::string::npos)
+                        {
+                            if (marker == "Adaptive local-fitting topology rebuild:")
+                                EXPECT_NE(line.find(", trigger=drift, drift="), std::string::npos);
                             records.emplace_back(line.substr(position));
+                        }
                     }
                 }
                 return records;
