@@ -53,19 +53,19 @@ struct UmapFeatureDefinition
 // choose the features that are standardized and passed to UMAP, then rebuild.
 constexpr std::array<UmapFeatureDefinition, detail::kLocalFittingFeatureCount>
     kFeatureDefinitions{
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], true },// true when exclude hydrogen
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], true },// true when exclude hydrogen
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[9], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[10], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[11], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[12], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[10], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[11], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[12], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[13], true },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
@@ -545,7 +545,7 @@ bool WriteEmbeddingPlot(
         {
             auto graph{ root_helper::CreateGraphErrors() };
             root_helper::SetMarkerAttribute(
-                graph.get(), 24, 0.8f,
+                graph.get(), 5, 0.8f,
                 static_cast<short>(GetOtherElementColor(element)), 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(element == Element::UNK
