@@ -410,15 +410,10 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model, true)
     };
     ASSERT_EQ(hydrogen_rows.size(), geometry_rows.size());
-    constexpr bool include_hydrogen{
-        rg::core::detail::kLocalFittingNeighborFeaturesIncludeHydrogen
-    };
-    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], include_hydrogen ? 4.0 : 2.0);
-    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], include_hydrogen ? 2.0 : 1.0);
-    EXPECT_DOUBLE_EQ(
-        hydrogen_rows[0].features[3], include_hydrogen ? 6.01 : 3.5);
-    EXPECT_DOUBLE_EQ(
-        hydrogen_rows[0].features[4], include_hydrogen ? 2.5 : 1.5);
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], 2.0);
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], 1.0);
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[3], 3.5);
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[4], 1.5);
     for (std::size_t feature = 1; feature <= 4; ++feature)
     {
         EXPECT_DOUBLE_EQ(hydrogen_rows[1].features[feature], 0.0);

@@ -56,16 +56,16 @@ inclusive 2 Å radius and excludes the current atom. Unselected atoms are includ
 The result is in Å and is zero when there are no neighbors. For neighbor distances
 of 1 Å and 1.5 Å, the sum is 2.5 Å.
 `neighbor distance sum in 1.5A` applies the same sum to neighbors within an
-inclusive 1.5 Å radius. These counts and sums exclude hydrogen by default,
-controlled by `kLocalFittingNeighborFeaturesIncludeHydrogen`.
+inclusive 1.5 Å radius. These counts and sums always exclude hydrogen candidates
+and share the full-model non-hydrogen KD-tree used for the closest-neighbor distance.
+A selected hydrogen atom also queries non-hydrogen neighbors.
 
 `distance to closest neighbor` uses KNN to find the nearest non-hydrogen atom
 in the entire owning model, including unselected atoms and excluding the current
 atom by identity, without a radius limit. It is the Euclidean distance in Å;
 distinct atoms at the same position have distance zero. A selected hydrogen atom
 also queries non-hydrogen neighbors. This feature always excludes hydrogen
-candidates, independently of the radius-feature switch, and assumes an eligible
-neighbor exists.
+candidates and assumes an eligible neighbor exists.
 
 Each peeling ratio is
 `(raw sum - peeling sum) / raw sum` in its distance range. Each rank compares

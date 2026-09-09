@@ -139,7 +139,9 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             kTailPeelingDistanceMin,
             kTailPeelingDistanceMax) };
 
-        const auto neighbors{ atom->FindNeighborAtoms(2.0, false) };
+        const auto neighbors{ KDTreeAlgorithm<AtomObject>::RangeSearch(
+            non_hydrogen_kd_tree_root.get(), atom, 2.0)
+        };
         const auto & position{ atom->GetPositionRef() };
         auto closest_neighbors{ KDTreeAlgorithm<AtomObject>::KNearestNeighbors(
             non_hydrogen_kd_tree_root.get(),
@@ -160,11 +162,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         double neighbor_distance_sum_in_1_5A{ 0.0 };
         for (const auto * neighbor : neighbors)
         {
-            if (!kLocalFittingNeighborFeaturesIncludeHydrogen
-                && neighbor->GetElement() == Element::HYDROGEN)
-            {
-                continue;
-            }
+            if (neighbor == atom) continue;
             ++neighbor_count_in_2A;
             const auto & neighbor_position{ neighbor->GetPositionRef() };
             const auto distance{

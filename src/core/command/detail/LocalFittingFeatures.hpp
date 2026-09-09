@@ -14,9 +14,6 @@ class ModelObject;
 
 namespace rhbm_gem::core::detail {
 
-// Controls only neighbor counts and distance sums within 2A and 1.5A.
-inline constexpr bool kLocalFittingNeighborFeaturesIncludeHydrogen{ false };
-
 inline constexpr std::size_t kLocalFittingIdentifierColumnCount{ 3 };
 inline constexpr std::size_t kLocalFittingFeatureCount{ 14 };
 inline constexpr std::size_t kLocalFittingColumnCount{
