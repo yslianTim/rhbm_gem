@@ -41,22 +41,20 @@ local-fitting analysis for every selected atom:
 Missing samples, an undefined ratio, or any non-finite reconstructed feature
 makes the model incomplete and fails the command. No atom is silently skipped.
 
-For each selected atom, the command reconstructs the same 14 features used by
+For each selected atom, the command reconstructs the same 12 features used by
 the local-fitting CSV:
 
 ```text
-neighbor count for peeling,neighbor count in 2A,neighbor count in 1.5A,neighbor distance sum in 2A,neighbor distance sum in 1.5A,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,amplitude rank 2nd,width rank 2nd,offset rank 2nd,distance to closest neighbor
+neighbor count for peeling,neighbor count in 2A,neighbor distance sum in 2A,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,amplitude rank 2nd,width rank 2nd,offset rank 2nd,distance to closest neighbor
 ```
 
 `neighbor count in 2A` counts non-hydrogen atoms in the owning model within an
 inclusive 2 Å radius and excludes the current atom. Unselected atoms are included.
-`neighbor count in 1.5A` counts the same kind of neighbors within an inclusive
-1.5 Å radius. Both counts are zero when there are no neighbors within their radius.
+The count is zero when there are no neighbors within the radius.
 `neighbor distance sum in 2A` sums the Euclidean distances to the same neighbors.
 The result is in Å and is zero when there are no neighbors. For neighbor distances
 of 1 Å and 1.5 Å, the sum is 2.5 Å.
-`neighbor distance sum in 1.5A` applies the same sum to neighbors within an
-inclusive 1.5 Å radius. These counts and sums always exclude hydrogen candidates
+The count and distance sum always exclude hydrogen candidates
 and share the full-model non-hydrogen KD-tree used for the closest-neighbor distance.
 A selected hydrogen atom also queries non-hydrogen neighbors.
 
@@ -73,16 +71,15 @@ the current atom with up to its three nearest selected atoms; the largest value
 has rank 1, equal values share a rank, and models with fewer than four selected
 atoms use all available atoms.
 
-Rows are ordered by atom serial ID. The current build passes these 13 features
+Rows are ordered by atom serial ID. The current build passes these four features
 to UMAP:
 
-- peeling neighbor count, neighbor counts within 2 Å and 1.5 Å,
-  distance sums within 2 Å and 1.5 Å, and both peeling ratios;
-- second-stage amplitude and width;
-- second-stage amplitude, width, and offset ranks;
+- neighbor count in 2A;
+- neighbor distance sum in 2A;
+- tail peeling ratio;
 - distance to closest neighbor.
 
-Second-stage offset remains in the CSV and is validated, but is not passed to UMAP.
+The remaining features stay in the CSV and are validated, but are not passed to UMAP.
 With the default internal setting
 `kFilterUmapInputBySpot = false`,
 all selected atoms are retained. Developers can enable the filter and rebuild to
@@ -129,8 +126,8 @@ full `double` values and are not quantized to two decimal places. The output
 uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
-The CSV contains the identifiers `serial id,residue,spot`, all 14 reconstructed
-features, and `umap x,umap y`: 19 columns in total. Its name is
+The CSV contains the identifiers `serial id,residue,spot`, all 12 reconstructed
+features, and `umap x,umap y`: 17 columns in total. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 

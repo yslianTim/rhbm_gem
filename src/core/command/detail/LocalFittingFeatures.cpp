@@ -124,9 +124,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         };
 
         std::size_t neighbor_count_in_2A{ 0 };
-        std::size_t neighbor_count_in_1_5A{ 0 };
         double neighbor_distance_sum{ 0.0 };
-        double neighbor_distance_sum_in_1_5A{ 0.0 };
         for (const auto * neighbor : neighbors)
         {
             if (neighbor == atom) continue;
@@ -136,11 +134,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
                 array_helper::ComputeNorm(neighbor_position, position)
             };
             neighbor_distance_sum += distance;
-            if (distance <= 1.5)
-            {
-                neighbor_count_in_1_5A++;
-                neighbor_distance_sum_in_1_5A += distance;
-            }
         }
 
         LocalFittingFeatureRow row;
@@ -150,9 +143,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         row.features = {
             static_cast<double>(local_view.GetNeighborCountForPeeling()),
             static_cast<double>(neighbor_count_in_2A),
-            static_cast<double>(neighbor_count_in_1_5A),
             neighbor_distance_sum,
-            neighbor_distance_sum_in_1_5A,
             OptionalFeatureValue(signal_peeling_ratio),
             OptionalFeatureValue(tail_peeling_ratio),
             second_model.GetAmplitude(),

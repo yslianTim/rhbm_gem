@@ -337,11 +337,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(
         output_lines.front(),
         "serial id,residue,spot,neighbor count for peeling,neighbor count in 2A,"
-        "neighbor count in 1.5A,neighbor distance sum in 2A,neighbor distance sum in 1.5A,"
+        "neighbor distance sum in 2A,"
         "signal peeling ratio,tail peeling ratio,"
         "amplitude 2nd,width 2nd,offset 2nd,"
         "amplitude rank 2nd,width rank 2nd,offset rank 2nd,distance to closest neighbor,umap x,umap y");
-    EXPECT_EQ(kOutputColumnCount, 19u);
+    EXPECT_EQ(kOutputColumnCount, 17u);
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -356,12 +356,10 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     }
 
     const auto first_fields{ SplitFields(output_lines[1]) };
-    EXPECT_EQ(first_fields[5], "2");
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[6]), 2.25);
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), 2.25);
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[5]), 2.25);
     const double expected_amplitude{ kAmplitudeBase + 0.102 };
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[10]), expected_amplitude);
-    EXPECT_GT(first_fields[10].size(), 6u);
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[8]), expected_amplitude);
+    EXPECT_GT(first_fields[8].size(), 6u);
 
     FeatureModelOptions geometry_options;
     geometry_options.atom_count = 7;
@@ -389,15 +387,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     ASSERT_EQ(geometry_rows.size(), 2u);
     EXPECT_EQ(geometry_rows[0].serial_id, 1);
     EXPECT_DOUBLE_EQ(geometry_rows[0].features[1], 4.0);
-    EXPECT_DOUBLE_EQ(geometry_rows[0].features[2], 2.0);
     EXPECT_DOUBLE_EQ(
-        geometry_rows[0].features[3], 1.0 + 1.5 + 1.51 + 2.0);
-    EXPECT_DOUBLE_EQ(geometry_rows[0].features[4], 2.5);
+        geometry_rows[0].features[2], 1.0 + 1.5 + 1.51 + 2.0);
     EXPECT_EQ(geometry_rows[1].serial_id, 7);
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[1], 0.0);
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[2], 0.0);
-    EXPECT_DOUBLE_EQ(geometry_rows[1].features[3], 0.0);
-    EXPECT_DOUBLE_EQ(geometry_rows[1].features[4], 0.0);
 
     for (const auto & atom : geometry_model->GetAtomList())
     {
@@ -411,10 +405,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     };
     ASSERT_EQ(hydrogen_rows.size(), geometry_rows.size());
     EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], 2.0);
-    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], 1.0);
-    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[3], 3.5);
-    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[4], 1.5);
-    for (std::size_t feature = 1; feature <= 4; ++feature)
+    EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], 3.5);
+    for (std::size_t feature = 1; feature <= 2; ++feature)
     {
         EXPECT_DOUBLE_EQ(hydrogen_rows[1].features[feature], 0.0);
     }
@@ -425,7 +417,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         EXPECT_EQ(hydrogen_rows[row].spot, geometry_rows[row].spot);
         for (std::size_t feature = 0; feature < geometry_rows[row].features.size(); ++feature)
         {
-            if ((feature >= 1 && feature <= 4) || feature == 13) continue;
+            if ((feature >= 1 && feature <= 2) || feature == 11) continue;
             const auto expected{ geometry_rows[row].features[feature] };
             if (std::isnan(expected))
             {
@@ -632,8 +624,6 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     for (const auto & row : feature_rows)
     {
         EXPECT_DOUBLE_EQ(row.features[2], 0.0);
-        EXPECT_DOUBLE_EQ(row.features[3], 0.0);
-        EXPECT_DOUBLE_EQ(row.features[4], 0.0);
     }
 
     const auto output_dir{ temp_dir.path() / "output" };
@@ -645,7 +635,7 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     EXPECT_TRUE(HasIssue(
         result,
         "-k,--model-key",
-        "All 13 selected UMAP feature columns are constant"));
+        "All 4 selected UMAP feature columns are constant"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".csv"), 0u);
 }
 
