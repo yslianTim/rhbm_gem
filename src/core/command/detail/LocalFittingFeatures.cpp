@@ -5,6 +5,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include <algorithm>
@@ -77,6 +78,19 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
     auto atom_list{ model_object.GetSelectedAtoms() };
     if (atom_list.empty()) return {};
 
+    std::vector<AtomObject *> non_hydrogen_atoms;
+    non_hydrogen_atoms.reserve(model_object.GetAtomList().size());
+    for (const auto & atom : model_object.GetAtomList())
+    {
+        if (atom->GetElement() != Element::HYDROGEN)
+        {
+            non_hydrogen_atoms.push_back(atom.get());
+        }
+    }
+    auto non_hydrogen_kd_tree_root{
+        KDTreeAlgorithm<AtomObject>::BuildKDTree(non_hydrogen_atoms)
+    };
+
     auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_list) };
     std::sort(
         atom_list.begin(),
@@ -127,6 +141,19 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
 
         const auto neighbors{ atom->FindNeighborAtoms(2.0, false) };
         const auto & position{ atom->GetPositionRef() };
+        auto closest_neighbors{ KDTreeAlgorithm<AtomObject>::KNearestNeighbors(
+            non_hydrogen_kd_tree_root.get(),
+            atom,
+            std::min(std::size_t{ 2 }, non_hydrogen_atoms.size()))
+        };
+        closest_neighbors.erase(
+            std::remove(closest_neighbors.begin(), closest_neighbors.end(), atom),
+            closest_neighbors.end());
+        const auto & closest_position{ closest_neighbors.at(0)->GetPositionRef() };
+        const auto distance_to_closest_neighbor{
+            array_helper::ComputeNorm(closest_position, position)
+        };
+
         std::size_t neighbor_count_in_2A{ 0 };
         std::size_t neighbor_count_in_1_5A{ 0 };
         double neighbor_distance_sum{ 0.0 };
@@ -140,10 +167,9 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             }
             ++neighbor_count_in_2A;
             const auto & neighbor_position{ neighbor->GetPositionRef() };
-            const auto dx{ neighbor_position[0] - position[0] };
-            const auto dy{ neighbor_position[1] - position[1] };
-            const auto dz{ neighbor_position[2] - position[2] };
-            const auto distance{ std::sqrt(dx * dx + dy * dy + dz * dz) };
+            const auto distance{
+                array_helper::ComputeNorm(neighbor_position, position)
+            };
             neighbor_distance_sum += distance;
             if (distance <= 1.5)
             {
@@ -170,6 +196,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             static_cast<double>(amplitude_rank),
             static_cast<double>(width_rank),
             static_cast<double>(offset_rank),
+            distance_to_closest_neighbor,
         };
         rows.emplace_back(std::move(row));
     }

@@ -337,11 +337,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(
         output_lines.front(),
         "serial id,residue,spot,neighbor count for peeling,neighbor count in 2A,"
-        "neighbor count in 1.5A,neighbor distance norm in 2A,neighbor distance norm in 1.5A,"
+        "neighbor count in 1.5A,neighbor distance sum in 2A,neighbor distance sum in 1.5A,"
         "signal peeling ratio,tail peeling ratio,"
         "amplitude 2nd,width 2nd,offset 2nd,"
-        "amplitude rank 2nd,width rank 2nd,offset rank 2nd,umap x,umap y");
-    EXPECT_EQ(kOutputColumnCount, 18u);
+        "amplitude rank 2nd,width rank 2nd,offset rank 2nd,distance to closest neighbor,umap x,umap y");
+    EXPECT_EQ(kOutputColumnCount, 19u);
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -357,8 +357,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
 
     const auto first_fields{ SplitFields(output_lines[1]) };
     EXPECT_EQ(first_fields[5], "2");
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[6]), std::sqrt(2.8125));
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), std::sqrt(2.8125));
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[6]), 2.25);
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), 2.25);
     const double expected_amplitude{ kAmplitudeBase + 0.102 };
     EXPECT_DOUBLE_EQ(std::stod(first_fields[10]), expected_amplitude);
     EXPECT_GT(first_fields[10].size(), 6u);
@@ -391,8 +391,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_DOUBLE_EQ(geometry_rows[0].features[1], 4.0);
     EXPECT_DOUBLE_EQ(geometry_rows[0].features[2], 2.0);
     EXPECT_DOUBLE_EQ(
-        geometry_rows[0].features[3], std::sqrt(1.0 + 2.25 + 2.2801 + 4.0));
-    EXPECT_DOUBLE_EQ(geometry_rows[0].features[4], std::sqrt(3.25));
+        geometry_rows[0].features[3], 1.0 + 1.5 + 1.51 + 2.0);
+    EXPECT_DOUBLE_EQ(geometry_rows[0].features[4], 2.5);
     EXPECT_EQ(geometry_rows[1].serial_id, 7);
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[1], 0.0);
     EXPECT_DOUBLE_EQ(geometry_rows[1].features[2], 0.0);
@@ -416,9 +416,9 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], include_hydrogen ? 4.0 : 2.0);
     EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[2], include_hydrogen ? 2.0 : 1.0);
     EXPECT_DOUBLE_EQ(
-        hydrogen_rows[0].features[3], include_hydrogen ? std::sqrt(9.5301) : 2.5);
+        hydrogen_rows[0].features[3], include_hydrogen ? 6.01 : 3.5);
     EXPECT_DOUBLE_EQ(
-        hydrogen_rows[0].features[4], include_hydrogen ? std::sqrt(3.25) : 1.5);
+        hydrogen_rows[0].features[4], include_hydrogen ? 2.5 : 1.5);
     for (std::size_t feature = 1; feature <= 4; ++feature)
     {
         EXPECT_DOUBLE_EQ(hydrogen_rows[1].features[feature], 0.0);
@@ -430,7 +430,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         EXPECT_EQ(hydrogen_rows[row].spot, geometry_rows[row].spot);
         for (std::size_t feature = 0; feature < geometry_rows[row].features.size(); ++feature)
         {
-            if (feature >= 1 && feature <= 4) continue;
+            if ((feature >= 1 && feature <= 4) || feature == 13) continue;
             const auto expected{ geometry_rows[row].features[feature] };
             if (std::isnan(expected))
             {
@@ -650,7 +650,7 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     EXPECT_TRUE(HasIssue(
         result,
         "-k,--model-key",
-        "All 10 selected UMAP feature columns are constant"));
+        "All 13 selected UMAP feature columns are constant"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".csv"), 0u);
 }
 
