@@ -925,12 +925,12 @@ TEST(
     });
 
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto ratio{ view.GetLocalFittingPeelingRatio(true, 1.0, 2.0) };
+    const auto ratio{ view.GetLocalFittingPeelingRatio(1.0, 2.0) };
     ASSERT_TRUE(ratio.has_value());
     EXPECT_DOUBLE_EQ(*ratio, 0.7);
 
     const auto boundary_ratio{
-        view.GetLocalFittingPeelingRatio(true, 1.0, 1.0)
+        view.GetLocalFittingPeelingRatio(1.0, 1.0)
     };
     ASSERT_TRUE(boundary_ratio.has_value());
     EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
@@ -951,12 +951,14 @@ TEST(
     analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
         LocalPotentialSample{ 2.0, SamplingPoint{ 0.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(false, 0.0, 1.0).has_value());
+    const auto ratio{ view.GetLocalFittingPeelingRatio(0.0, 1.0) };
+    ASSERT_TRUE(ratio.has_value());
+    EXPECT_DOUBLE_EQ(*ratio, 0.5);
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } }
@@ -964,7 +966,7 @@ TEST(
     analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
         LocalPotentialSample{ 2.0, SamplingPoint{ 1.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } },
@@ -973,14 +975,14 @@ TEST(
     analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
         LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{
             std::numeric_limits<double>::infinity(),
             SamplingPoint{ 0.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
@@ -990,7 +992,7 @@ TEST(
             std::numeric_limits<double>::infinity(),
             SamplingPoint{ 0.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 
     analysis.SetAtomLocalRawSamplingEntries(*atom, {
         LocalPotentialSample{
@@ -1002,7 +1004,7 @@ TEST(
             std::numeric_limits<double>::max(),
             SamplingPoint{ 0.5 } }
     });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(true, 0.0, 1.0).has_value());
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 }
 
 TEST(
@@ -1014,20 +1016,18 @@ TEST(
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
 
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(false, -0.1, 1.0),
+        view.GetLocalFittingPeelingRatio(-0.1, 1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(false, 2.0, 1.0),
+        view.GetLocalFittingPeelingRatio(2.0, 1.0),
         std::invalid_argument);
     EXPECT_THROW(
         view.GetLocalFittingPeelingRatio(
-            false,
             std::numeric_limits<double>::quiet_NaN(),
             1.0),
         std::invalid_argument);
     EXPECT_THROW(
         view.GetLocalFittingPeelingRatio(
-            false,
             0.0,
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);

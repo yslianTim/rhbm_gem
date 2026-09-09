@@ -137,7 +137,6 @@ bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
 }
 
 std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
-    bool peeling_applied,
     double distance_min,
     double distance_max) const
 {
@@ -145,7 +144,6 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
         distance_min,
         distance_max,
         "peeling ratio distance range");
-    if (!peeling_applied) return std::nullopt;
 
     double raw_sum{ 0.0 };
     std::size_t raw_sample_count{ 0 };

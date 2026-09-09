@@ -384,7 +384,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         return atom.GetSerialID() == 1 || atom.GetSerialID() == 7;
     });
     const auto geometry_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model, true)
+        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model)
     };
     ASSERT_EQ(geometry_rows.size(), 2u);
     EXPECT_EQ(geometry_rows[0].serial_id, 1);
@@ -407,7 +407,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         }
     }
     const auto hydrogen_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model, true)
+        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model)
     };
     ASSERT_EQ(hydrogen_rows.size(), geometry_rows.size());
     EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[1], 2.0);
@@ -626,7 +626,7 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     options.constant_features = true;
     SeedFeatureDatabase(database_path, "constant", options);
     const auto feature_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*BuildFeatureModel(options), true)
+        rg::core::detail::BuildLocalFittingFeatureRows(*BuildFeatureModel(options))
     };
     ASSERT_EQ(feature_rows.size(), options.atom_count);
     for (const auto & row : feature_rows)

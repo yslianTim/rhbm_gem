@@ -687,7 +687,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
     auto options{ MakeSecondStageOptions() };
     rt::RunPotentialFittingWorkflow(*model, options);
 
-    const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model, true) };
+    const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model) };
     constexpr std::array<GaussianParameterGetter, 3> parameter_getters{
         &rg::GaussianModel3D::GetAmplitude,
         &rg::GaussianModel3D::GetWidth,

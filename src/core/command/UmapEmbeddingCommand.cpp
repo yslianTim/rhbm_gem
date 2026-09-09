@@ -205,7 +205,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     std::vector<detail::LocalFittingFeatureRow> source_rows;
     try
     {
-        source_rows = detail::BuildLocalFittingFeatureRows(model_object, true);
+        source_rows = detail::BuildLocalFittingFeatureRows(model_object);
     }
     catch (const std::exception & error)
     {

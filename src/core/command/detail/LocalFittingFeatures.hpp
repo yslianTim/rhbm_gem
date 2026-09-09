@@ -66,7 +66,6 @@ struct LocalFittingFeatureRow
 std::string BuildLocalFittingCsvHeader();
 
 std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
-    const ModelObject & model_object,
-    bool peeling_applied);
+    const ModelObject & model_object);
 
 } // namespace rhbm_gem::core::detail

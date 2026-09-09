@@ -8,7 +8,6 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <optional>
@@ -20,10 +19,6 @@ namespace rhbm_gem::core::detail {
 namespace {
 
 constexpr std::size_t kLocalRankNeighborCount{ 3 };
-constexpr double kSignalPeelingDistanceMin{ 0.0 };
-constexpr double kSignalPeelingDistanceMaxExclusive{ 1.0 };
-constexpr double kTailPeelingDistanceMin{ 1.0 };
-constexpr double kTailPeelingDistanceMax{ 2.0 };
 
 double OptionalFeatureValue(const std::optional<double> & value)
 {
@@ -45,9 +40,7 @@ std::string BuildLocalFittingCsvHeader()
     return header;
 }
 
-std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
-    const ModelObject & model_object,
-    bool peeling_applied)
+std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObject & model_object)
 {
     auto atom_list{ model_object.GetSelectedAtoms() };
     if (atom_list.empty()) return {};
@@ -101,28 +94,17 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             const auto & comparison_model{
                 AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(FittingStage::Second)
             };
-            if (comparison_model.GetAmplitude() > second_model.GetAmplitude())
-            {
-                ++amplitude_rank;
-            }
-            if (comparison_model.GetWidth() > second_model.GetWidth())
-            {
-                ++width_rank;
-            }
-            if (comparison_model.GetOffset() > second_model.GetOffset())
-            {
-                ++offset_rank;
-            }
+            if (comparison_model.GetAmplitude() > second_model.GetAmplitude()) amplitude_rank++;
+            if (comparison_model.GetWidth() > second_model.GetWidth()) width_rank++;
+            if (comparison_model.GetOffset() > second_model.GetOffset()) offset_rank++;
         }
 
-        const auto signal_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
-            peeling_applied,
-            kSignalPeelingDistanceMin,
-            std::nextafter(kSignalPeelingDistanceMaxExclusive, kSignalPeelingDistanceMin)) };
-        const auto tail_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
-            peeling_applied,
-            kTailPeelingDistanceMin,
-            kTailPeelingDistanceMax) };
+        const auto signal_peeling_ratio{
+            local_view.GetLocalFittingPeelingRatio(0.0, 1.0)
+        };
+        const auto tail_peeling_ratio{
+            local_view.GetLocalFittingPeelingRatio(1.0, 2.0)
+        };
 
         const auto neighbors{ KDTreeAlgorithm<AtomObject>::RangeSearch(
             non_hydrogen_kd_tree_root.get(), atom, 2.0)
@@ -148,7 +130,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         for (const auto * neighbor : neighbors)
         {
             if (neighbor == atom) continue;
-            ++neighbor_count_in_2A;
+            neighbor_count_in_2A++;
             const auto & neighbor_position{ neighbor->GetPositionRef() };
             const auto distance{
                 array_helper::ComputeNorm(neighbor_position, position)
@@ -156,7 +138,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             neighbor_distance_sum += distance;
             if (distance <= 1.5)
             {
-                ++neighbor_count_in_1_5A;
+                neighbor_count_in_1_5A++;
                 neighbor_distance_sum_in_1_5A += distance;
             }
         }
