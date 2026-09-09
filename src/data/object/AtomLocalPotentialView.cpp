@@ -76,14 +76,12 @@ const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * co
     return RequireLocalEntry(FindEntry(), context);
 }
 
-const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(
-    FittingStage stage) const
+const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(FittingStage stage) const
 {
     return RequireEntry("Local Gaussian result").GaussianResult(stage);
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(
-    FittingStage stage) const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(FittingStage stage) const
 {
     return RequireEntry("Local estimate OLS").GaussianResult(stage).ols.GetModel();
 }
@@ -93,8 +91,7 @@ const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGrou
     return RequireEntry("Group Gaussian member result").GroupMemberResult();
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(
-    FittingStage stage) const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(FittingStage stage) const
 {
     return RequireEntry("Local estimate MDPDE").GaussianResult(stage).mdpde.GetModel();
 }
@@ -111,13 +108,12 @@ LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool 
     return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
-    FittingStage stage) const
+LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(FittingStage stage) const
 {
     switch (stage)
     {
         case FittingStage::First:
-            return GetRawSamplingEntries();
+            return GetRawSamplingEntries(true);
         case FittingStage::Second:
             return GetPeelingSamplingEntries(false);
     }
@@ -130,35 +126,12 @@ bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
     double distance_max,
     std::size_t minimum_sample_count) const
 {
-    const auto & entry{ RequireEntry("Local fitting samples") };
-    const LocalPotentialSampleList * sample_entries{ nullptr };
-    bool apply_selection{ false };
-    switch (stage)
-    {
-        case FittingStage::First:
-            sample_entries = &entry.RawSamplingEntries();
-            apply_selection = true;
-            break;
-        case FittingStage::Second:
-            sample_entries = &entry.PeelingSamplingEntries();
-            break;
-        default:
-            throw std::invalid_argument("Unknown local fitting stage.");
-    }
-
     std::size_t count{ 0 };
-    for (const auto & sample : *sample_entries)
+    for (const auto & sample : GetSamplingEntries(stage))
     {
-        if (apply_selection && !sample.point.is_selected) continue;
-        if (sample.point.distance < distance_min || sample.point.distance > distance_max)
-        {
-            continue;
-        }
+        if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
         count++;
-        if (count >= minimum_sample_count)
-        {
-            return true;
-        }
+        if (count >= minimum_sample_count) return true;
     }
     return false;
 }
@@ -172,47 +145,25 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
         distance_min,
         distance_max,
         "peeling ratio distance range");
-    if (!peeling_applied)
-    {
-        return std::nullopt;
-    }
+    if (!peeling_applied) return std::nullopt;
 
-    const auto raw_sampling_entries{ GetRawSamplingEntries(false) };
-    const auto peeling_sampling_entries{ GetPeelingSamplingEntries(false) };
     double raw_sum{ 0.0 };
     std::size_t raw_sample_count{ 0 };
-    for (const auto & sample : raw_sampling_entries)
+    for (const auto & sample : GetRawSamplingEntries(false))
     {
-        if (sample.point.distance < distance_min
-            || sample.point.distance > distance_max
-            || !std::isfinite(sample.point.distance))
-        {
-            continue;
-        }
+        if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
         raw_sum += sample.response;
         ++raw_sample_count;
     }
     double peeling_sum{ 0.0 };
     std::size_t peeling_sample_count{ 0 };
-    for (const auto & sample : peeling_sampling_entries)
+    for (const auto & sample : GetPeelingSamplingEntries(false))
     {
-        if (sample.point.distance < distance_min
-            || sample.point.distance > distance_max
-            || !std::isfinite(sample.point.distance))
-        {
-            continue;
-        }
+        if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
         peeling_sum += sample.response;
         ++peeling_sample_count;
     }
-    if (raw_sample_count == 0
-        || peeling_sample_count == 0
-        || !std::isfinite(raw_sum)
-        || !std::isfinite(peeling_sum)
-        || raw_sum == 0.0)
-    {
-        return std::nullopt;
-    }
+    if (raw_sample_count == 0 || peeling_sample_count == 0 || raw_sum == 0.0) return std::nullopt;
 
     const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
     return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
