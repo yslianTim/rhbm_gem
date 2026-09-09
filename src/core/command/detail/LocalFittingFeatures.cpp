@@ -6,7 +6,6 @@
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
-#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -25,31 +24,6 @@ constexpr double kSignalPeelingDistanceMin{ 0.0 };
 constexpr double kSignalPeelingDistanceMaxExclusive{ 1.0 };
 constexpr double kTailPeelingDistanceMin{ 1.0 };
 constexpr double kTailPeelingDistanceMax{ 2.0 };
-
-using GaussianParameterGetter = double (GaussianModel3D::*)() const;
-
-int ComputeLocalParameterRank(
-    const AtomObject & atom,
-    const std::vector<AtomObject *> & comparison_atoms,
-    GaussianParameterGetter parameter_getter)
-{
-    const auto & current_model{
-        AtomLocalPotentialView::For(atom).GetEstimateMDPDE(FittingStage::Second)
-    };
-    const auto current_value{ (current_model.*parameter_getter)() };
-    int rank{ 1 };
-    for (const auto * comparison_atom : comparison_atoms)
-    {
-        const auto & comparison_model{
-            AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(FittingStage::Second)
-        };
-        if ((comparison_model.*parameter_getter)() > current_value)
-        {
-            ++rank;
-        }
-    }
-    return rank;
-}
 
 double OptionalFeatureValue(const std::optional<double> & value)
 {
@@ -119,21 +93,32 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         {
             comparison_atoms.resize(kLocalRankNeighborCount);
         }
-        comparison_atoms.emplace_back(atom);
-
-        const auto amplitude_rank{ ComputeLocalParameterRank(
-            *atom, comparison_atoms, &GaussianModel3D::GetAmplitude) };
-        const auto width_rank{ ComputeLocalParameterRank(
-            *atom, comparison_atoms, &GaussianModel3D::GetWidth) };
-        const auto offset_rank{ ComputeLocalParameterRank(
-            *atom, comparison_atoms, &GaussianModel3D::GetOffset) };
+        int amplitude_rank{ 1 };
+        int width_rank{ 1 };
+        int offset_rank{ 1 };
+        for (const auto * comparison_atom : comparison_atoms)
+        {
+            const auto & comparison_model{
+                AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(FittingStage::Second)
+            };
+            if (comparison_model.GetAmplitude() > second_model.GetAmplitude())
+            {
+                ++amplitude_rank;
+            }
+            if (comparison_model.GetWidth() > second_model.GetWidth())
+            {
+                ++width_rank;
+            }
+            if (comparison_model.GetOffset() > second_model.GetOffset())
+            {
+                ++offset_rank;
+            }
+        }
 
         const auto signal_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
             peeling_applied,
             kSignalPeelingDistanceMin,
-            std::nextafter(
-                kSignalPeelingDistanceMaxExclusive,
-                kSignalPeelingDistanceMin)) };
+            std::nextafter(kSignalPeelingDistanceMaxExclusive, kSignalPeelingDistanceMin)) };
         const auto tail_peeling_ratio{ local_view.GetLocalFittingPeelingRatio(
             peeling_applied,
             kTailPeelingDistanceMin,
