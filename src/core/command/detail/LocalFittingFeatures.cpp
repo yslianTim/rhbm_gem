@@ -18,8 +18,6 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
-constexpr std::size_t kLocalRankNeighborCount{ 3 };
-
 double OptionalFeatureValue(const std::optional<double> & value)
 {
     return value.value_or(std::numeric_limits<double>::quiet_NaN());
@@ -74,23 +72,15 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
         const auto & second_model{ local_view.GetEstimateMDPDE(FittingStage::Second) };
 
-        auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::KNearestNeighbors(
-            kd_tree_root.get(),
-            atom,
-            std::min(kLocalRankNeighborCount + 1, atom_list.size()))
+        const auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::RangeSearch(
+            kd_tree_root.get(), atom, 2.0)
         };
-        comparison_atoms.erase(
-            std::remove(comparison_atoms.begin(), comparison_atoms.end(), atom),
-            comparison_atoms.end());
-        if (comparison_atoms.size() > kLocalRankNeighborCount)
-        {
-            comparison_atoms.resize(kLocalRankNeighborCount);
-        }
         int amplitude_rank{ 1 };
         int width_rank{ 1 };
         int offset_rank{ 1 };
         for (const auto * comparison_atom : comparison_atoms)
         {
+            if (comparison_atom == atom) continue;
             const auto & comparison_model{
                 AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(FittingStage::Second)
             };
@@ -123,12 +113,10 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             array_helper::ComputeNorm(closest_position, position)
         };
 
-        std::size_t neighbor_count_in_2A{ 0 };
         double neighbor_distance_sum{ 0.0 };
         for (const auto * neighbor : neighbors)
         {
             if (neighbor == atom) continue;
-            neighbor_count_in_2A++;
             const auto & neighbor_position{ neighbor->GetPositionRef() };
             const auto distance{
                 array_helper::ComputeNorm(neighbor_position, position)
@@ -141,9 +129,8 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         row.residue = ChemicalDataHelper::GetLabel(atom->GetResidue());
         row.spot = atom->GetAtomID();
         row.features = {
-            static_cast<double>(local_view.GetNeighborCountForPeeling()),
-            static_cast<double>(neighbor_count_in_2A),
             neighbor_distance_sum,
+            distance_to_closest_neighbor,
             OptionalFeatureValue(signal_peeling_ratio),
             OptionalFeatureValue(tail_peeling_ratio),
             second_model.GetAmplitude(),
@@ -152,7 +139,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             static_cast<double>(amplitude_rank),
             static_cast<double>(width_rank),
             static_cast<double>(offset_rank),
-            distance_to_closest_neighbor,
         };
         rows.emplace_back(std::move(row));
     }

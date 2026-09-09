@@ -663,7 +663,7 @@ TEST(
         fitted_view.GetGroupMemberResult().has_value());
 }
 
-TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondStage)
+TEST(EstimatorTesterTest, LocalFittingResultRanksUseSelectedAtomsWithin2AInSecondStage)
 {
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
@@ -693,10 +693,9 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
         &rg::GaussianModel3D::GetWidth,
         &rg::GaussianModel3D::GetOffset
     };
-    constexpr std::array<std::size_t, 3> rank_feature_indices{ 8, 9, 10 };
+    constexpr std::array<std::size_t, 3> rank_feature_indices{ 7, 8, 9 };
 
     std::size_t row_count{ 0 };
-    std::size_t verified_neighbor_set_count{ 0 };
     for (const auto & row : rows)
     {
         const auto serial_id{ row.serial_id };
@@ -711,47 +710,21 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
         ASSERT_NE(atom_iter, selected_atoms.end());
         EXPECT_FALSE(row.residue.empty());
         EXPECT_EQ(row.spot, (*atom_iter)->GetAtomID());
-        for (const auto feature : rank_feature_indices)
-        {
-            const auto rank{ row.features[feature] };
-            EXPECT_GE(rank, 1);
-            EXPECT_LE(rank, 4);
-        }
-
         std::vector<rg::AtomObject *> comparison_atoms;
         for (auto * comparison_atom : selected_atoms)
         {
-            if (comparison_atom != *atom_iter)
+            if (comparison_atom != *atom_iter &&
+                Distance((*atom_iter)->GetPosition(), comparison_atom->GetPosition()) <= 2.0)
             {
                 comparison_atoms.emplace_back(comparison_atom);
             }
         }
-        std::sort(
-            comparison_atoms.begin(),
-            comparison_atoms.end(),
-            [atom = *atom_iter](const rg::AtomObject * lhs, const rg::AtomObject * rhs)
-            {
-                const auto lhs_distance{ Distance(atom->GetPosition(), lhs->GetPosition()) };
-                const auto rhs_distance{ Distance(atom->GetPosition(), rhs->GetPosition()) };
-                if (lhs_distance != rhs_distance)
-                {
-                    return lhs_distance < rhs_distance;
-                }
-                return lhs->GetSerialID() < rhs->GetSerialID();
-            });
-        const auto third_neighbor_distance{
-            Distance((*atom_iter)->GetPosition(), comparison_atoms[2]->GetPosition())
-        };
-        const auto fourth_neighbor_distance{
-            Distance((*atom_iter)->GetPosition(), comparison_atoms[3]->GetPosition())
-        };
-        if (std::abs(third_neighbor_distance - fourth_neighbor_distance) < 1e-12)
+        for (const auto feature : rank_feature_indices)
         {
-            ++row_count;
-            continue;
+            const auto rank{ row.features[feature] };
+            EXPECT_GE(rank, 1);
+            EXPECT_LE(rank, comparison_atoms.size() + 1);
         }
-        comparison_atoms.resize(3);
-        comparison_atoms.emplace_back(*atom_iter);
 
         for (std::size_t parameter = 0; parameter < parameter_getters.size(); ++parameter)
         {
@@ -764,11 +737,9 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseThreeNearestAtomsInSecondSta
             const auto actual_rank{ row.features[rank_feature_indices[parameter]] };
             EXPECT_EQ(actual_rank, expected_rank);
         }
-        ++verified_neighbor_set_count;
         ++row_count;
     }
     EXPECT_EQ(row_count, selected_atoms.size());
-    EXPECT_GT(verified_neighbor_set_count, 0u);
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

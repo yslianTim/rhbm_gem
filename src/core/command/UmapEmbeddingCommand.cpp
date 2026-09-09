@@ -53,18 +53,16 @@ struct UmapFeatureDefinition
 // choose the features that are standardized and passed to UMAP, then rebuild.
 constexpr std::array<UmapFeatureDefinition, detail::kLocalFittingFeatureCount>
     kFeatureDefinitions{
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], true },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], false },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], true },
+        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[9], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[10], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[11], true },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(

@@ -41,22 +41,19 @@ local-fitting analysis for every selected atom:
 Missing samples, an undefined ratio, or any non-finite reconstructed feature
 makes the model incomplete and fails the command. No atom is silently skipped.
 
-For each selected atom, the command reconstructs the same 12 features used by
+For each selected atom, the command reconstructs the same 10 features used by
 the local-fitting CSV:
 
 ```text
-neighbor count for peeling,neighbor count in 2A,neighbor distance sum in 2A,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,amplitude rank 2nd,width rank 2nd,offset rank 2nd,distance to closest neighbor
+neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,amplitude rank 2nd,width rank 2nd,offset rank 2nd
 ```
 
-`neighbor count in 2A` counts non-hydrogen atoms in the owning model within an
-inclusive 2 Å radius and excludes the current atom. Unselected atoms are included.
-The count is zero when there are no neighbors within the radius.
-`neighbor distance sum in 2A` sums the Euclidean distances to the same neighbors.
-The result is in Å and is zero when there are no neighbors. For neighbor distances
-of 1 Å and 1.5 Å, the sum is 2.5 Å.
-The count and distance sum always exclude hydrogen candidates
-and share the full-model non-hydrogen KD-tree used for the closest-neighbor distance.
-A selected hydrogen atom also queries non-hydrogen neighbors.
+`neighbor distance sum in 2A` sums the Euclidean distances to non-hydrogen
+atoms in the owning model within an inclusive 2 Å radius, including unselected
+atoms and excluding the current atom by identity. The result is in Å and is zero
+when there are no neighbors. For neighbor distances of 1 Å and 1.5 Å, the sum is
+2.5 Å. It shares the full-model non-hydrogen KD-tree used for the closest-neighbor
+distance. A selected hydrogen atom also queries non-hydrogen neighbors.
 
 `distance to closest neighbor` uses KNN to find the nearest non-hydrogen atom
 in the entire owning model, including unselected atoms and excluding the current
@@ -67,17 +64,20 @@ candidates and assumes an eligible neighbor exists.
 
 Each peeling ratio is
 `(raw sum - peeling sum) / raw sum` in its distance range. Each rank compares
-the current atom with up to its three nearest selected atoms; the largest value
-has rank 1, equal values share a rank, and models with fewer than four selected
-atoms use all available atoms.
+the current atom with all other selected atoms within an inclusive 2 Å radius,
+using second-stage amplitude, width, or offset. The largest value has rank 1;
+each rank is one plus the number of neighbors with a strictly larger value.
+Equal values share a rank, and no neighbors means rank 1. The current atom is
+excluded by identity; distinct atoms at the same position are included.
+Unlike the 2 Å distance sum, ranks use only selected atoms and do not
+exclude selected hydrogen atoms.
 
-Rows are ordered by atom serial ID. The current build passes these four features
+Rows are ordered by atom serial ID. The current build passes these three features
 to UMAP:
 
-- neighbor count in 2A;
 - neighbor distance sum in 2A;
-- tail peeling ratio;
-- distance to closest neighbor.
+- distance to closest neighbor;
+- tail peeling ratio.
 
 The remaining features stay in the CSV and are validated, but are not passed to UMAP.
 With the default internal setting
