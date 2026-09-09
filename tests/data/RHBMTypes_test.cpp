@@ -25,7 +25,7 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
         rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation }, false, 0.0
     });
     local_entry.SetGaussianResult(
-        rg::FittingStage::Third,
+        rg::FittingStage::Second,
         local_result);
 
     rg::AtomGroupPotentialEntry group_entry;
@@ -35,11 +35,11 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
     const auto group_gaussian{ group_entry.GetPriorWithUncertainty(42) };
 
     EXPECT_DOUBLE_EQ(
-        local_entry.GaussianResult(rg::FittingStage::Third)
+        local_entry.GaussianResult(rg::FittingStage::Second)
             .mdpde.GetModel().Intensity(),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(
-        local_entry.GaussianResult(rg::FittingStage::Third)
+        local_entry.GaussianResult(rg::FittingStage::Second)
             .mdpde.GetModel().GetDisplayParameter(2),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(

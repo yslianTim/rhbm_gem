@@ -442,7 +442,7 @@ void GausPainter::PaintGausScatterPlot(ModelObject * model_object, const std::st
         y_array.reserve(model_object->GetSelectedAtomCount());
         for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
         {
-            auto graph{ plot_builder->CreateAtomGausEstimateScatterGraph(element_type, FittingStage::Third, k) };
+            auto graph{ plot_builder->CreateAtomGausEstimateScatterGraph(element_type, FittingStage::Second, k) };
             auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
             auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
             short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?

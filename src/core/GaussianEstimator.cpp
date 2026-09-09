@@ -223,7 +223,7 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
         {
             const auto local_view{ AtomLocalPotentialView::For(*atom) };
             group_member_models.emplace_back(
-                local_view.GetGaussianResult(FittingStage::Third).mdpde.GetModel());
+                local_view.GetGaussianResult(FittingStage::Second).mdpde.GetModel());
         }
         model_group_list.emplace_back(std::move(group_member_models));
     }
@@ -462,8 +462,8 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::For(*atom) };
-            const auto & local_result{ local_view.GetGaussianResult(FittingStage::Third) };
-            auto sample_entries{ local_view.GetSamplingEntries(FittingStage::Third) };
+            const auto & local_result{ local_view.GetGaussianResult(FittingStage::Second) };
+            auto sample_entries{ local_view.GetSamplingEntries(FittingStage::Second) };
             member_list.emplace_back(GroupGaussianMemberInput{
                 std::move(sample_entries),
                 local_result.alpha_r,
@@ -498,9 +498,6 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
     detail::RunSecondStageIterations(model_object, options);
 
-    model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::Third);
-    RunLocalAlphaTraining(model_object, options, FittingStage::Third);
-    RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)

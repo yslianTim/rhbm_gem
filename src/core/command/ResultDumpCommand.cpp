@@ -271,7 +271,7 @@ void RunGausEstimatesDumping(
         {
             const auto entry{ AtomLocalPotentialView::For(*atom) };
             const auto & estimate{
-                entry.GetEstimateMDPDE(FittingStage::Third)
+                entry.GetEstimateMDPDE(FittingStage::Second)
             };
             outfile << atom->GetSerialID() << ',' << estimate.GetAmplitude() << ','
                     << estimate.GetWidth() << ',' << atom->GetPosition().at(0) << ','

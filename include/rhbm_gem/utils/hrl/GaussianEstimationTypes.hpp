@@ -12,8 +12,7 @@ namespace rhbm_gem {
 enum class FittingStage
 {
     First,
-    Second,
-    Third
+    Second
 };
 
 struct LocalGaussianResult

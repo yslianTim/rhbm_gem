@@ -87,10 +87,10 @@ def read_atom_results(database_path: Path) -> list[dict[str, Any]]:
     query = """
         SELECT local.serial_id,
                atom.element,
-               local.amplitude_estimate_mdpde_3rd,
-               local.width_estimate_mdpde_3rd,
-               local.intercept_estimate_mdpde_3rd,
-               local.alpha_r_3rd
+               local.amplitude_estimate_mdpde_2nd,
+               local.width_estimate_mdpde_2nd,
+               local.intercept_estimate_mdpde_2nd,
+               local.alpha_r_2nd
           FROM model_atom_local_potential AS local
           JOIN model_atom AS atom
             ON atom.key_tag = local.key_tag

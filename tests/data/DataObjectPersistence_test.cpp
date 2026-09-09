@@ -231,7 +231,7 @@ TEST(DataObjectPersistenceTest, InvalidV14SamplingBlobLengthIsRejected)
 
     rg::DataRepository repository{ database_path };
     EXPECT_THROW((void)repository.LoadModel("model"), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 16);
     EXPECT_EQ(
         data_test::CountRows(
             database_path, "model_atom_local_potential", "model"),
@@ -279,16 +279,14 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     group_result.member_results.front() = member_result;
     editor.ApplyAtomGroupGaussianResult(group_key, group_result);
     editor.SetAtomLocalGaussianResult(
-        rg::FittingStage::Third, *atom, local_result);
+        rg::FittingStage::Second, *atom, local_result);
 
     rg::LocalGaussianResult first_result{ local_result };
     first_result.alpha_r = 0.1;
     first_result.mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 4.0, 0.9, 0.4 }, rg::GaussianModel3DUncertainty{} };
     editor.SetAtomLocalGaussianResult(rg::FittingStage::First, *atom, first_result);
-    rg::LocalGaussianResult second_result{ first_result };
-    second_result.alpha_r = 0.2;
-    editor.SetAtomLocalGaussianResult(rg::FittingStage::Second, *atom, second_result);
+    editor.SetAtomLocalNeighborCountForPeeling(*atom, 7);
     repository.SaveModel(*model, "model");
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
@@ -296,10 +294,11 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     const auto loaded_local{
         rg::AtomLocalPotentialView::For(*loaded_model->FindAtomPtr(atom->GetSerialID())) };
     EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::First), 0.1);
-    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::Second), 0.2);
+    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::Second), 0.5);
+    EXPECT_EQ(loaded_local.GetNeighborCountForPeeling(), 7);
     EXPECT_DOUBLE_EQ(loaded_local.GetEstimateMDPDE(rg::FittingStage::First).GetOffset(), 0.4);
     const auto loaded_local_result{
-        loaded_local.GetGaussianResult(rg::FittingStage::Third) };
+        loaded_local.GetGaussianResult(rg::FittingStage::Second) };
     EXPECT_DOUBLE_EQ(loaded_local_result.alpha_r, 0.5);
     EXPECT_DOUBLE_EQ(loaded_local_result.ols.GetModel().GetOffset(), 0.11);
     EXPECT_DOUBLE_EQ(loaded_local_result.mdpde.GetModel().GetOffset(), -0.22);
@@ -414,7 +413,7 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedColumns)
     model->SetBondSelected(
         atoms.at(0)->GetSerialID(), atoms.at(1)->GetSerialID(), true);
     model->EditAnalysis().SetAtomLocalAlphaR(
-        rg::FittingStage::Third, *atoms.at(1), 0.9);
+        rg::FittingStage::Second, *atoms.at(1), 0.9);
 
     rg::DataRepository repository{ database_path };
     repository.SaveModel(*model, "model");

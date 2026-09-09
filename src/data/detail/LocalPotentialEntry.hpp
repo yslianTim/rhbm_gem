@@ -15,7 +15,7 @@ class LocalPotentialEntry
 {
     LocalPotentialSampleList m_raw_sampling_entries;
     LocalPotentialSampleList m_peeling_sampling_entries;
-    std::array<LocalGaussianResult, 3> m_gaussian_results{};
+    std::array<LocalGaussianResult, 2> m_gaussian_results{};
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
     int m_neighbor_count_for_peeling{ 0 };
 
@@ -84,7 +84,7 @@ private:
     static std::size_t StageIndex(FittingStage stage)
     {
         const auto index{ static_cast<std::size_t>(stage) };
-        if (index >= 3)
+        if (index >= 2)
         {
             throw std::invalid_argument("Unknown local fitting stage.");
         }

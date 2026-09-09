@@ -1539,7 +1539,7 @@ void WriteAtomSiteBlock(
         if (!AtomLocalPotentialView::For(*atom).IsAvailable()) continue;
         const auto model_entry{AtomLocalPotentialView::For(*atom)};
         auto gaus_estimate{
-            model_entry.GetEstimateMDPDE(FittingStage::Third)
+            model_entry.GetEstimateMDPDE(FittingStage::Second)
                 .GetDisplayParameter(model_par)
         };
         auto position{atom->GetPosition()};

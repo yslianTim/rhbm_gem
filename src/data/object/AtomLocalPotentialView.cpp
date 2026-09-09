@@ -119,7 +119,6 @@ LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
         case FittingStage::First:
             return GetRawSamplingEntries();
         case FittingStage::Second:
-        case FittingStage::Third:
             return GetPeelingSamplingEntries(false);
     }
     throw std::invalid_argument("Unknown local fitting stage.");
@@ -141,7 +140,6 @@ bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
             apply_selection = true;
             break;
         case FittingStage::Second:
-        case FittingStage::Third:
             sample_entries = &entry.PeelingSamplingEntries();
             break;
         default:

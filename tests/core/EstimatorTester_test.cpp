@@ -465,7 +465,7 @@ TEST(EstimatorTesterTest, RunGroupEstimationTestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
-TEST(EstimatorTesterTest, GroupFittingUsesThirdLocalInputsWithoutChangingLocalStages)
+TEST(EstimatorTesterTest, GroupFittingUsesSecondLocalInputsWithoutChangingLocalStages)
 {
     std::vector<std::unique_ptr<rg::AtomObject>> atoms;
     for (int i = 0; i < 3; ++i)
@@ -488,19 +488,19 @@ TEST(EstimatorTesterTest, GroupFittingUsesThirdLocalInputsWithoutChangingLocalSt
     ASSERT_EQ(group_keys.size(), 1u);
     const auto group_key{ group_keys.front() };
     const auto & members{ view.GetAtomObjectList(group_key) };
-    constexpr std::array stages{ FittingStage::First, FittingStage::Second, FittingStage::Third };
-    std::vector<std::array<rg::LocalGaussianResult, 3>> local_results;
+    constexpr std::array stages{ FittingStage::First, FittingStage::Second };
+    std::vector<std::array<rg::LocalGaussianResult, 2>> local_results;
     std::vector<rg::GroupGaussianMemberInput> expected_inputs;
     for (const auto * atom : members)
     {
         const double index{ static_cast<double>(atom->GetSerialID()) };
         const rg::GaussianModel3D final_model{ 1.0 + 0.2 * index, 0.5 + 0.04 * index, 0.1 * index };
-        std::array<rg::LocalGaussianResult, 3> results;
+        std::array<rg::LocalGaussianResult, 2> results;
         for (std::size_t i = 0; i < stages.size(); ++i)
         {
             results[i].alpha_r = 0.1 * static_cast<double>(i + 1);
             results[i].mdpde = rg::GaussianModel3DWithUncertainty{
-                i == 2 ? final_model : rg::GaussianModel3D{ 20.0 + index, 0.9, 2.0 + static_cast<double>(i) },
+                i == 1 ? final_model : rg::GaussianModel3D{ 20.0 + index, 0.9, 2.0 + static_cast<double>(i) },
                 rg::GaussianModel3DUncertainty{}
             };
             results[i].ols = results[i].mdpde;
@@ -520,7 +520,7 @@ TEST(EstimatorTesterTest, GroupFittingUsesThirdLocalInputsWithoutChangingLocalSt
         for (auto & sample : raw_samples) sample.response += 5.0;
         analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_samples));
         expected_inputs.emplace_back(rg::GroupGaussianMemberInput{
-            samples, results[2].alpha_r, final_model
+            samples, results[1].alpha_r, final_model
         });
         local_results.emplace_back(std::move(results));
         EXPECT_FALSE(rg::AtomLocalPotentialView::For(*atom).GetGroupMemberResult().has_value());
@@ -602,15 +602,40 @@ TEST(
 
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = true;
+    auto analysis{ model->EditAnalysis() };
+    analysis.InitializeLocalFittingSeedModels();
+    rt::RunLocalAlphaTraining(*model, options, FittingStage::First);
+    rt::RunFixedOffsetLocalFitting(*model, options, FittingStage::First);
+    analysis.CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
+    rt_detail::RunSecondStageIterations(*model, options);
+    const auto expected_local{ initial_view.GetGaussianResult(FittingStage::Second) };
+    const auto expected_samples{ initial_view.GetPeelingSamplingEntries(false) };
+
     rt::RunPotentialFittingWorkflow(*model, options);
 
     const auto fitted_view{
         rg::AtomLocalPotentialView::For(
             *model->GetSelectedAtoms().front())
     };
+    const auto actual_local{ fitted_view.GetGaussianResult(FittingStage::Second) };
+    EXPECT_DOUBLE_EQ(actual_local.alpha_r, expected_local.alpha_r);
+    for (int parameter = 0; parameter < 3; ++parameter)
+    {
+        EXPECT_DOUBLE_EQ(actual_local.ols.GetModelParameter(parameter),
+            expected_local.ols.GetModelParameter(parameter));
+        EXPECT_DOUBLE_EQ(actual_local.mdpde.GetModelParameter(parameter),
+            expected_local.mdpde.GetModelParameter(parameter));
+    }
+    const auto actual_samples{ fitted_view.GetPeelingSamplingEntries(false) };
+    ASSERT_EQ(actual_samples.size(), expected_samples.size());
+    for (std::size_t i = 0; i < actual_samples.size(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(actual_samples[i].response, expected_samples[i].response);
+        EXPECT_DOUBLE_EQ(actual_samples[i].point.distance, expected_samples[i].point.distance);
+    }
     EXPECT_FALSE(fitted_view.GetPeelingSamplingEntries(false).empty());
     const auto analysis_view{ model->GetAnalysisView() };
-    for (const auto stage : { FittingStage::First, FittingStage::Second, FittingStage::Third })
+    for (const auto stage : { FittingStage::First, FittingStage::Second })
     {
         const auto & local_model{ fitted_view.GetEstimateMDPDE(stage) };
         EXPECT_TRUE(std::isfinite(local_model.GetAmplitude()));

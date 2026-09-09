@@ -162,13 +162,6 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
         width_estimate_mdpde_2nd DOUBLE,
         intercept_estimate_mdpde_2nd DOUBLE,
         alpha_r_2nd DOUBLE,
-        amplitude_estimate_ols_3rd DOUBLE,
-        width_estimate_ols_3rd DOUBLE,
-        intercept_estimate_ols_3rd DOUBLE,
-        amplitude_estimate_mdpde_3rd DOUBLE,
-        width_estimate_mdpde_3rd DOUBLE,
-        intercept_estimate_mdpde_3rd DOUBLE,
-        alpha_r_3rd DOUBLE,
         neighbor_count_for_peeling INTEGER DEFAULT 0,
         PRIMARY KEY (key_tag, serial_id),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -308,13 +301,10 @@ inline constexpr auto kInsertModelAtomLocalSql = R"sql(
         amplitude_estimate_ols_2nd, width_estimate_ols_2nd, intercept_estimate_ols_2nd,
         amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd,
         intercept_estimate_mdpde_2nd, alpha_r_2nd,
-        amplitude_estimate_ols_3rd, width_estimate_ols_3rd, intercept_estimate_ols_3rd,
-        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd,
-        intercept_estimate_mdpde_3rd, alpha_r_3rd,
         neighbor_count_for_peeling
     ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
@@ -397,9 +387,6 @@ inline constexpr auto kSelectModelAtomLocalSql = R"sql(
         amplitude_estimate_ols_2nd, width_estimate_ols_2nd, intercept_estimate_ols_2nd,
         amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd,
         intercept_estimate_mdpde_2nd, alpha_r_2nd,
-        amplitude_estimate_ols_3rd, width_estimate_ols_3rd, intercept_estimate_ols_3rd,
-        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd,
-        intercept_estimate_mdpde_3rd, alpha_r_3rd,
         COALESCE(neighbor_count_for_peeling, 0)
     FROM model_atom_local_potential WHERE key_tag = ?;
 )sql"sv;
@@ -1004,8 +991,7 @@ void SaveAtomLocalPotentialEntryList(
             };
             bind_gaussian_result(5, FittingStage::First);
             bind_gaussian_result(12, FittingStage::Second);
-            bind_gaussian_result(19, FittingStage::Third);
-            statement_db.Bind<int>(26, entry->NeighborCountForPeeling());
+            statement_db.Bind<int>(19, entry->NeighborCountForPeeling());
         });
     }
 }
@@ -1194,10 +1180,7 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         entry->SetGaussianResult(
             FittingStage::Second,
             read_gaussian_result(10));
-        entry->SetGaussianResult(
-            FittingStage::Third,
-            read_gaussian_result(17));
-        entry->SetNeighborCountForPeeling(database.GetColumn<int>(24));
+        entry->SetNeighborCountForPeeling(database.GetColumn<int>(17));
         entry_map[serial_id] = std::move(entry);
     }
 

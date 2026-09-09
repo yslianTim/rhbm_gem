@@ -196,8 +196,6 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
             rg::FittingStage::First, *atom, MakeGaussianResult(serial_id, 0, options));
         analysis.SetAtomLocalGaussianResult(
             rg::FittingStage::Second, *atom, MakeGaussianResult(serial_id, 1, options));
-        analysis.SetAtomLocalGaussianResult(
-            rg::FittingStage::Third, *atom, MakeGaussianResult(serial_id, 2, options));
     }
     return model;
 }

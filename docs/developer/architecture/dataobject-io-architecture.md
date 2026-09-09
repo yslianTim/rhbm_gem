@@ -1,6 +1,6 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v15 boundary.
+This document describes the current typed file I/O and Model-only SQLite v16 boundary.
 
 ## 1. Public Surface
 
@@ -73,15 +73,15 @@ There is no intermediate persistence forwarding class. `ModelObjectStorage` rema
 
 Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
 
-## 6. SQLite v15 Lifecycle
+## 6. SQLite v16 Lifecycle
 
 The accepted states are intentionally strict:
 
-1. An empty database with `PRAGMA user_version = 0` is initialized as v15.
-2. A database with `PRAGMA user_version = 15` is accepted only after structural validation.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v16.
+2. A database with `PRAGMA user_version = 16` is accepted only after structural validation.
 3. Every other version or pre-existing unexpected structure is rejected.
 
-There are no migrations and no overwrite-on-open fallback. In particular, v14 and earlier versions are rejected without changing their versions, tables, or rows.
+There are no migrations and no overwrite-on-open fallback. In particular, v15 and earlier versions are rejected without changing their versions, tables, or rows.
 
 Validation checks:
 
@@ -91,7 +91,7 @@ Validation checks:
 - `NOT NULL is_selected` on atom and bond rows;
 - direct `key_tag` foreign keys from every child table to `model_object(key_tag)` with `ON DELETE CASCADE`.
 
-## 7. v15 Table Topology
+## 7. v16 Table Topology
 
 `model_object` is the direct root. There is no `object_catalog`, `map_list`, or legacy bond-analysis table.
 
@@ -140,9 +140,9 @@ SQLite scalar fields are bound and read as `double` directly. Runtime values are
 
 Atom-group membership is derived from restored selection and atom classification. The group table stores no `member_size` column.
 
-Local Gaussian data retains fixed three-stage wide rows for OLS, MDPDE, and alpha-r. Group Gaussian data stores one result per group: mean, MDPDE, prior, prior uncertainty, and alpha-g. Group columns have no stage suffixes.
+Local Gaussian data retains fixed two-stage wide rows for OLS, MDPDE, and alpha-r. Group Gaussian data stores one result per group: mean, MDPDE, prior, prior uncertainty, and alpha-g. Group columns have no stage suffixes.
 
-In memory, group membership and statistics use a single group map. Each atom stores an optional `GroupGaussianMemberResult` independently of its three local results. Read the posterior, outlier flag, and statistical distance through `AtomLocalPotentialView::GetGroupMemberResult()`; an available local entry with no group fit returns `std::nullopt`. Group-result and membership APIs take the group key without a fitting stage. Local alpha-r access still selects a stage. The group workflow always uses the final (`Third`) local inputs.
+In memory, group membership and statistics use a single group map. Each atom stores an optional `GroupGaussianMemberResult` independently of its two local results. Read the posterior, outlier flag, and statistical distance through `AtomLocalPotentialView::GetGroupMemberResult()`; an available local entry with no group fit returns `std::nullopt`. Group-result and membership APIs take the group key without a fitting stage. Local alpha-r access still selects a stage. The group workflow always uses the final (`Second`) local inputs.
 
 Copying or updating a local fitting stage leaves the independent group member result intact. Workflow seed initialization clears selected atoms' group member results; clearing all analysis removes them as well. The posterior table continues to store one row per atom.
 

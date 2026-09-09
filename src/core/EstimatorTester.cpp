@@ -139,7 +139,7 @@ Eigen::MatrixXd EstimateAtomicModelFullStageModels(
             AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
-            local_view.GetGaussianResult(FittingStage::Third)
+            local_view.GetGaussianResult(FittingStage::Second)
         };
         estimation_matrix.col(i) = gaussian_result.mdpde.GetModel().ToVector();
     }
@@ -431,7 +431,7 @@ BiasStatistics RunAtomicModelFullEstimationTest(
             AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
-            local_view.GetGaussianResult(FittingStage::Third)
+            local_view.GetGaussianResult(FittingStage::Second)
         };
         bias_matrix.col(i) =
             CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), input.gaus_true);

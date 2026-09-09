@@ -46,7 +46,6 @@ void ModelAnalysisEditor::ClearTransientFitStates()
         {
             entry->ClearTransientFitState(FittingStage::First);
             entry->ClearTransientFitState(FittingStage::Second);
-            entry->ClearTransientFitState(FittingStage::Third);
         }
     }
 }
@@ -57,8 +56,7 @@ void ModelAnalysisEditor::InitializeFromSelection()
     RebuildAtomGroupsFromSelection();
     for (const auto stage : {
             FittingStage::First,
-            FittingStage::Second,
-            FittingStage::Third })
+            FittingStage::Second })
     {
         InitializeLocalAlpha(stage, kInitialLocalAlpha);
     }
@@ -83,8 +81,7 @@ void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
         };
         result.fit_result.reset();
         SetAtomLocalGaussianResult(FittingStage::First, *atom, result);
-        SetAtomLocalGaussianResult(FittingStage::Second, *atom, result);
-        SetAtomLocalGaussianResult(FittingStage::Third, *atom, std::move(result));
+        SetAtomLocalGaussianResult(FittingStage::Second, *atom, std::move(result));
     }
 }
 

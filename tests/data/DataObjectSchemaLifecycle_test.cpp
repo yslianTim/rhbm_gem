@@ -46,7 +46,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 16);
     for (const auto table_name : std::array<std::string_view, 10>{
              "model_object",
              "model_chain_map",
@@ -98,7 +98,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColu
     const auto database_path{ temp_dir.path() / "gaussian.sqlite" };
     { rg::DataRepository repository{ database_path }; }
 
-    for (const auto suffix : { "1st", "2nd", "3rd" })
+    for (const auto suffix : { "1st", "2nd" })
     {
         EXPECT_TRUE(data_test::HasColumn(
             database_path,
@@ -108,6 +108,13 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColu
             database_path,
             "model_atom_group_potential",
             "intercept_estimate_prior_" + std::string(suffix)));
+    }
+    for (const auto column : {
+             "amplitude_estimate_ols_3rd", "width_estimate_ols_3rd", "intercept_estimate_ols_3rd",
+             "amplitude_estimate_mdpde_3rd", "width_estimate_mdpde_3rd", "intercept_estimate_mdpde_3rd",
+             "alpha_r_3rd" })
+    {
+        EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_local_potential", column));
     }
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "is_selected"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond", "is_selected"));
@@ -168,16 +175,17 @@ TEST(DataObjectSchemaLifecycleTest, MixedUnknownSchemaFailsFast)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_mixed_unknown" };
     const auto database_path{ temp_dir.path() / "mixed.sqlite" };
-    CreateVersionedMarkerDatabase(database_path, 15);
+    CreateVersionedMarkerDatabase(database_path, 16);
 
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 15);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 16);
     EXPECT_EQ(data_test::CountRows(database_path, "legacy_marker"), 1);
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionFourteenSchemaIsRejectedWithoutModification)
+TEST(DataObjectSchemaLifecycleTest, VersionFourteenAndFifteenSchemasAreRejectedWithoutModification)
 {
     ExpectVersionedDatabaseRejectedWithoutMutation(14);
+    ExpectVersionedDatabaseRejectedWithoutMutation(15);
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSingleGroupGaussianResult)

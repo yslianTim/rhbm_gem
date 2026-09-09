@@ -12,7 +12,7 @@ shared-offset columns, or selected group-median refits. Residue identity is also
 neither queried nor stored: chain IDs and sequence IDs do not constrain
 components. Optimization clusters still organize selected sample coupling,
 numerical solves, and acceptance gates, with at most 100 selected atoms each.
-Chemical group estimation runs once after the third local fitting stage.
+Chemical group estimation runs once after the second local fitting stage.
 
 Effective unselected contributors have no optimizer state or
 estimation degrees of freedom. All three parameters of their fixed background
@@ -809,19 +809,15 @@ results and rebuilt entries are persisted together with
 `ApplyAtomLocalSecondStageResult`. `detail::RunSecondStageIterations` then returns
 without training `alpha_g` or running group fitting.
 
-After the second stage returns, the workflow copies only the second-stage local
-result to `FittingStage::Third`. It independently retrains each selected atom's
-`alpha_r` from that atom's persisted peeling entries through
-`RunLocalAlphaTraining(..., FittingStage::Third)` and then runs
-`RunFixedOffsetLocalFitting(..., FittingStage::Third)`,
+After the second stage returns, the workflow directly runs
 `RunGroupAlphaTraining(model, options)` and
-`RunGroupPotentialFitting(model, options)`. These third-stage local
-fits may update local Gaussian results, but they do not rebuild or overwrite
-the peeling entries. The final group fit consumes the third-stage local models,
-alpha-r values, and atom-level peeling snapshot written during second-stage
-finalization. It produces one group result and one optional posterior/outlier
-result per atom, stored independently of local fitting stages. Group fitting
-and group-result access do not accept a fitting-stage parameter.
+`RunGroupPotentialFitting(model, options)` without further local fitting.
+The group fit consumes the `FittingStage::Second` local models, alpha-r values,
+and atom-level peeling snapshot written during second-stage finalization.
+It preserves both local fitting results and the peeling entries, and produces
+one group result and one optional posterior/outlier result per atom, stored
+independently of local fitting stages. Group fitting and group-result access
+do not accept a fitting-stage parameter.
 
 ## Performance architecture
 

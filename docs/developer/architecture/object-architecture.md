@@ -83,7 +83,7 @@ Views are lightweight value objects containing a non-owning model or atom refere
 
 Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including second-stage local updates, group-result application, stage copying, and alpha-g updates.
 
-`InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, initializes local alpha values for all three stages, and initializes group alpha once. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count. Local stage copying does not copy or overwrite member results; workflow seed initialization clears selected atoms' member results.
+`InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, initializes local alpha values for both local stages, and initializes group alpha once. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count. Local stage copying does not copy or overwrite member results; workflow seed initialization clears selected atoms' member results.
 
 Transient fitting state is cleared through `ModelAnalysisEditor`; `ModelObject` does not provide a forwarding wrapper.
 
