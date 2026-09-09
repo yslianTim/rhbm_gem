@@ -129,8 +129,8 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
         const auto & position{ atom->GetPositionRef() };
         std::size_t neighbor_count_in_2A{ 0 };
         std::size_t neighbor_count_in_1_5A{ 0 };
-        double neighbor_distance_squared_sum{ 0.0 };
-        double neighbor_distance_squared_sum_in_1_5A{ 0.0 };
+        double neighbor_distance_sum{ 0.0 };
+        double neighbor_distance_sum_in_1_5A{ 0.0 };
         for (const auto * neighbor : neighbors)
         {
             if (!kLocalFittingNeighborFeaturesIncludeHydrogen
@@ -143,12 +143,12 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             const auto dx{ neighbor_position[0] - position[0] };
             const auto dy{ neighbor_position[1] - position[1] };
             const auto dz{ neighbor_position[2] - position[2] };
-            const auto distance_squared{ dx * dx + dy * dy + dz * dz };
-            neighbor_distance_squared_sum += distance_squared;
-            if (distance_squared <= 1.5 * 1.5)
+            const auto distance{ std::sqrt(dx * dx + dy * dy + dz * dz) };
+            neighbor_distance_sum += distance;
+            if (distance <= 1.5)
             {
                 ++neighbor_count_in_1_5A;
-                neighbor_distance_squared_sum_in_1_5A += distance_squared;
+                neighbor_distance_sum_in_1_5A += distance;
             }
         }
 
@@ -160,8 +160,8 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
             static_cast<double>(local_view.GetNeighborCountForPeeling()),
             static_cast<double>(neighbor_count_in_2A),
             static_cast<double>(neighbor_count_in_1_5A),
-            std::sqrt(neighbor_distance_squared_sum),
-            std::sqrt(neighbor_distance_squared_sum_in_1_5A),
+            neighbor_distance_sum,
+            neighbor_distance_sum_in_1_5A,
             OptionalFeatureValue(signal_peeling_ratio),
             OptionalFeatureValue(tail_peeling_ratio),
             second_model.GetAmplitude(),
