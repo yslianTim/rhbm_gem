@@ -535,7 +535,7 @@ bool WriteEmbeddingPlot(
         for (const auto & style : kUmapSpotPlotStyles)
         {
             auto graph{ root_helper::CreateGraphErrors() };
-            root_helper::SetMarkerAttribute(graph.get(), 20, 0.8f, style.color, 0.75f);
+            root_helper::SetMarkerAttribute(graph.get(), 24, 0.8f, style.color, 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(style.label);
         }
