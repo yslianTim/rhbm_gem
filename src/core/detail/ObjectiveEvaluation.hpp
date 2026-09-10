@@ -96,6 +96,7 @@ struct JointCandidateObjectiveDiagnostic
     std::optional<ObjectiveBreakdown> previous{};
     std::optional<ObjectiveBreakdown> best{};
     std::optional<ObjectiveBreakdown> candidate{};
+    std::optional<ObjectiveBreakdown> stored_best{};
     bool best_checked{ false };
     std::string_view outcome{ "accepted" };
     std::string best_source_id{};
@@ -113,6 +114,8 @@ struct ObjectiveAttemptDiagnostic
     std::optional<ObjectiveBreakdown> candidate_objective{};
     std::optional<ObjectiveBreakdown> previous_objective{};
     std::optional<ObjectiveBreakdown> best_objective{};
+    std::optional<ObjectiveBreakdown> stored_best_objective{};
+    bool best_reference_unavailable{ false };
     double trust_region_radius{ 0.0 };
     double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
@@ -187,8 +190,11 @@ struct BestObjectiveTraceEnvironment
 
 struct ClusterObjectiveState
 {
+    // Historical value for provenance; acceptance reevaluates best_parameters
+    // with the candidate neighbors and current objective domain.
     std::optional<ObjectiveBreakdown> best_objective{};
     double best_maximum_transformed_change{ 0.0 };
+    FitStatePatch best_parameters{};
     std::shared_ptr<const BestObjectiveSource> best_source{};
     std::string_view best_reset_reason{ "initialize" };
     std::shared_ptr<const BestObjectiveSource> reset_source{};
@@ -237,7 +243,18 @@ void ReevaluateBestAuditState(
 
 void ReconcileClusterObjectiveState(
     const ObjectiveByKey & previous_objective_by_key,
+    const FitState & accepted_state,
     ClusterObjectiveStateMap & state_by_key);
+
+FitStatePatch CaptureClusterParameters(const FitStateView & state, const ClusterKey & key);
+
+std::optional<ObjectiveBreakdown> EvaluateBestObjectiveReference(
+    const CandidateEvaluationOverlay & candidate,
+    const ClusterKey & key,
+    const std::vector<SampleRef> & samples,
+    const ObjectiveDomain & domain,
+    const ClusterObjectiveState & state,
+    PerformanceCounters & performance_counters);
 
 std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const ResidualBaseline & evaluator,

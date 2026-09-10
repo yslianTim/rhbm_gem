@@ -130,8 +130,9 @@ EvaluateBoundaryComponentCandidate(
                     diagnostic,
                     inputs.performance_counters, record ? record->source : "boundary"))
             {
+                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, diagnostic.previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, diagnostic.best_objective.has_value());
+                    diagnostic.best_objective, diagnostic.candidate_objective, objective_state.best_objective.has_value());
                 DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
                     inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
                 return std::nullopt;
@@ -140,7 +141,18 @@ EvaluateBoundaryComponentCandidate(
         else
         {
             diagnostic.previous_objective = previous_objective;
-            diagnostic.best_objective = objective_state.best_objective;
+            diagnostic.stored_best_objective = objective_state.best_objective;
+            diagnostic.best_objective = EvaluateBestObjectiveReference(
+                candidate_overlay, key, inputs.partition.sample_id_list_by_key.at(key),
+                inputs.objective_domain, objective_state, inputs.performance_counters);
+            if (objective_state.best_objective && !diagnostic.best_objective)
+            {
+                if (record) record->stored_best = objective_state.best_objective;
+                RecordJointMemberRejection(record, key, previous_objective,
+                    diagnostic.best_objective, std::nullopt, false);
+                if (record) record->outcome = "best-reference-unavailable";
+                return std::nullopt;
+            }
             diagnostic.candidate_objective = EvaluateObjectiveContribution(
                 candidate_overlay,
                 key,
@@ -148,6 +160,7 @@ EvaluateBoundaryComponentCandidate(
                 inputs.objective_domain);
             if (!diagnostic.candidate_objective.has_value() || !previous_objective.has_value())
             {
+                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, previous_objective,
                     diagnostic.best_objective, diagnostic.candidate_objective, false);
                 DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
@@ -164,6 +177,7 @@ EvaluateBoundaryComponentCandidate(
                     previous_value,
                     kObjectiveProgressTolerance))
             {
+                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, previous_objective,
                     diagnostic.best_objective, diagnostic.candidate_objective, false);
                 DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
@@ -184,14 +198,15 @@ EvaluateBoundaryComponentCandidate(
                     kObjectiveStrictTolerance)
             };
             if (improves_member &&
-                (!objective_state.best_objective.has_value() ||
+                (!diagnostic.best_objective.has_value() ||
                     IsBetterAuditObjective(
                         candidate_value,
-                        objective_state.best_objective->GetTotalObjective(),
+                        diagnostic.best_objective->GetTotalObjective(),
                         kObjectiveStrictTolerance)))
             {
                 const auto before_step{ objective_state.best_maximum_transformed_change };
                 objective_state.best_objective = diagnostic.candidate_objective;
+                objective_state.best_parameters = CaptureClusterParameters(candidate_overlay.GetState(), key);
                 objective_state.best_maximum_transformed_change =
                     std::ranges::max(
                         SummarizeTransformedChanges(

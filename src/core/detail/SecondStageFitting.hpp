@@ -130,6 +130,7 @@ public:
         return m_patch.atom_index_list;
     }
 
+    const FitState & GetBaseState() const { return m_base_state; }
     std::size_t size() const { return m_base_state.size(); }
 };
 

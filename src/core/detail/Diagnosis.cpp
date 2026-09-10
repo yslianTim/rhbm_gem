@@ -675,10 +675,17 @@ void LogRejectedClusterDiagnostics(
         AppendObjectiveBreakdown(message, diagnostic.candidate_objective);
         message << ", previous = ";
         AppendObjectiveBreakdown(message, diagnostic.previous_objective);
-        message << ", best = ";
+        message << ", stored-best = ";
+        AppendObjectiveBreakdown(message, diagnostic.stored_best_objective);
+        message << ", best-reference = ";
         AppendObjectiveBreakdown(message, diagnostic.best_objective);
+        message << ", reference-environment=candidate";
         message << ", rejected-by = ";
-        if (!diagnostic.candidate_objective.has_value())
+        if (diagnostic.best_reference_unavailable)
+        {
+            message << "best-reference-unavailable";
+        }
+        else if (!diagnostic.candidate_objective.has_value())
         {
             message << "objective-unavailable";
         }
@@ -1019,7 +1026,9 @@ void RecordJointMemberRejection(
     record->best = best;
     record->candidate = candidate;
     record->best_checked = best_checked;
-    if (!previous || !candidate)
+    if (best_checked && !best)
+        record->outcome = "best-reference-unavailable";
+    else if (!previous || !candidate)
         record->outcome = "member-objective-unavailable";
     else if (!std::isfinite(previous->GetTotalObjective()) ||
         !std::isfinite(candidate->GetTotalObjective()) ||
@@ -1046,7 +1055,7 @@ static void LogJointCandidateDiagnostics(
         if (record.outcome == "accepted") continue;
         std::ostringstream message;
         message << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10)
-            << "Joint candidate objective rejection: schema=1, source=" << record.source
+            << "Joint candidate objective rejection: schema=2, source=" << record.source
             << ", candidate=" << index + 1 << ", round=" << record.round << ", factor=";
         if (record.factor) message << *record.factor;
         else message << "unavailable";
@@ -1074,7 +1083,9 @@ static void LogJointCandidateDiagnostics(
             message << value->fit_range_residual_objective << "/" << value->GetTailValidationPenalty() << "/" << value->offset_plausibility_penalty << "/" << value->GetTotalObjective();
         };
         append_objective("previous", record.previous);
+        append_objective("stored-best", record.stored_best);
         append_objective("best", record.best);
+        message << ", reference-environment=candidate";
         append_objective("candidate-objective", record.candidate);
         const auto append_gate = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & reference, bool checked)
         {

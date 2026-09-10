@@ -25,6 +25,7 @@
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/Quarantine.hpp"
 #include "core/detail/DependencyPolish.hpp"
+#include "core/detail/BoundaryReconciliation.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -1691,12 +1692,19 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
     const auto retained_source{ std::make_shared<audit_detail::BestObjectiveSource>() };
     retained_source->id = "retained-source";
     state_by_key.at(existing_key).best_source = retained_source;
+    const audit_detail::FitState accepted_state{
+        MakeGaussianResult({ 6.0, 0.5, 0.0 }), MakeGaussianResult({ 7.0, 0.5, 0.0 }) };
+    state_by_key.at(existing_key).best_parameters =
+        audit_detail::FitStatePatch::FromState(accepted_state, existing_key);
     audit_detail::ReconcileClusterObjectiveState(
         previous_objective_by_key,
+        accepted_state,
         state_by_key);
 
     EXPECT_EQ(state_by_key.at(existing_key).best_source, retained_source);
     EXPECT_FALSE(state_by_key.at(new_key).best_source);
+    EXPECT_EQ(state_by_key.at(new_key).best_parameters.atom_index_list, new_key);
+    EXPECT_DOUBLE_EQ(state_by_key.at(new_key).best_parameters.mdpde_list.at(0).GetModel().GetAmplitude(), 7.0);
     ASSERT_EQ(state_by_key.size(), 2U);
     ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
     EXPECT_DOUBLE_EQ(
@@ -4850,6 +4858,252 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
     Logger::SetLogLevel(saved_level);
 }
 
+TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllAffectedSamples)
+{
+    audit_detail::SecondStageContext context;
+    context.atom_list.resize(3);
+    const audit_detail::FitState historical{
+        MakeGaussianResult({ 6.0, 0.5, 0.05 }),
+        MakeGaussianResult({ 7.0, 0.6, -0.02 }),
+        MakeGaussianResult({ 8.0, 0.5, 0.03 }) };
+    const audit_detail::ClusterKey key{ 0, 1 };
+    std::vector<audit_detail::SampleRef> samples;
+    for (std::size_t atom = 0; atom < 3; atom++)
+    {
+        auto & target{ context.atom_list.at(atom) };
+        for (const auto distance : { 0.0, 0.5, 1.5 })
+        {
+            samples.push_back({ atom, target.raw_sampling_entries.size() });
+            target.neighbor_atom_sample_offset_list.push_back(target.neighbor_atom_sample_list.size());
+            double response{ historical.at(atom).mdpde.GetModel().ResponseAtDistance(distance) + 0.1 };
+            for (std::size_t neighbor = 0; neighbor < 3; neighbor++)
+            {
+                if (neighbor == atom) continue;
+                target.neighbor_atom_sample_list.push_back({ neighbor, 1.0 });
+                response += historical.at(neighbor).mdpde.GetModel().ResponseAtDistance(1.0);
+            }
+            target.raw_sampling_entries.push_back({ response, SamplingPoint{ distance } });
+        }
+        target.neighbor_atom_sample_offset_list.push_back(target.neighbor_atom_sample_list.size());
+    }
+    auto background{ std::make_shared<audit_detail::FrozenBackground>() };
+    background->response_by_atom.assign(3, std::vector<double>(3, 0.025));
+    context.frozen_background = background;
+    const auto baseline{ audit_detail::BuildResidualBaseline(context, historical) };
+    const auto domain{ audit_detail::BuildObjectiveDomain(context, baseline.model_snapshot, { key, { 2 } }) };
+    audit_detail::ClusterObjectiveState best;
+    best.best_objective = audit_detail::EvaluateObjectiveContribution(baseline, key, samples, domain);
+    best.best_parameters = audit_detail::FitStatePatch::FromState(historical, key);
+    ASSERT_TRUE(best.best_objective);
+    audit_detail::ClusterSolverWorkspaceMap workspaces;
+    audit_detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    audit_detail::PerformanceCounters counters{ true, context, workspaces, corrections };
+
+    // Each factor changes both cluster members and their external neighbor.
+    for (const auto factor : { 0.0, 0.25, 0.5, 1.0 })
+    {
+        auto candidate{ historical };
+        candidate.at(0) = MakeGaussianResult({ 6.0 + factor, 0.5, 0.05 });
+        candidate.at(1) = MakeGaussianResult({ 7.0 - factor, 0.6, -0.02 });
+        candidate.at(2) = MakeGaussianResult({ 8.0 - factor, 0.5, 0.03 });
+        const auto patch{ audit_detail::FitStatePatch::FromState(candidate, { 0, 1, 2 }) };
+        const audit_detail::CandidateEvaluationOverlay overlay{ context, baseline, historical, patch };
+        const auto reference{ audit_detail::EvaluateBestObjectiveReference(
+            overlay, key, samples, domain, best, counters) };
+        best.best_parameters.ApplyTo(candidate);
+        const auto direct_baseline{ audit_detail::BuildResidualBaseline(context, candidate) };
+        const auto direct{ audit_detail::EvaluateObjectiveContribution(direct_baseline, key, samples, domain) };
+        ASSERT_TRUE(reference);
+        ASSERT_TRUE(direct);
+        EXPECT_NEAR(reference->fit_range_residual_objective, direct->fit_range_residual_objective, 1.0e-12);
+        EXPECT_NEAR(reference->tail_validation_loss, direct->tail_validation_loss, 1.0e-12);
+        EXPECT_NEAR(reference->offset_plausibility_penalty, direct->offset_plausibility_penalty, 1.0e-12);
+        if (factor == 0.0) EXPECT_NEAR(reference->GetTotalObjective(), best.best_objective->GetTotalObjective(), 1.0e-12);
+    }
+
+    auto current{ historical };
+    current.at(2) = MakeGaussianResult({ 7.0, 0.5, 0.03 });
+    const auto current_baseline{ audit_detail::BuildResidualBaseline(context, current) };
+    const auto current_objective{ audit_detail::EvaluateObjectiveContribution(current_baseline, key, samples, domain) };
+    ASSERT_TRUE(current_objective);
+    EXPECT_TRUE(audit_detail::IsObjectiveDeteriorated(current_objective->GetTotalObjective(),
+        best.best_objective->GetTotalObjective(), audit_detail::kObjectiveProgressTolerance));
+    const auto unchanged_patch{ audit_detail::FitStatePatch::FromState(current, key) };
+    const audit_detail::CandidateEvaluationOverlay unchanged{ context, current_baseline, current, unchanged_patch };
+    const auto saved_level{ Logger::GetLogLevel() };
+    for (const auto level : { LogLevel::Info, LogLevel::Debug })
+    {
+        Logger::SetLogLevel(level);
+        for (const bool quiet : { false, true })
+        {
+            audit_detail::BeginBestObjectiveTrace(context, quiet, domain, 2, 1);
+            auto trial_best{ best };
+            audit_detail::ObjectiveAttemptDiagnostic diagnostic;
+            EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(unchanged, key, samples, &*current_objective,
+                false, domain, trial_best, diagnostic, counters, "test"));
+            EXPECT_FALSE(diagnostic.rejected_by_best);
+            ASSERT_TRUE(diagnostic.best_objective);
+            EXPECT_NEAR(diagnostic.best_objective->GetTotalObjective(), current_objective->GetTotalObjective(), 1.0e-12);
+            EXPECT_DOUBLE_EQ(trial_best.best_objective->GetTotalObjective(), best.best_objective->GetTotalObjective());
+        }
+    }
+    Logger::SetLogLevel(saved_level);
+    context.best_trace.reset();
+
+    auto worse{ current };
+    worse.at(0) = MakeGaussianResult({ 20.0, 0.5, 0.05 });
+    const auto worse_patch{ audit_detail::FitStatePatch::FromState(worse, key) };
+    const audit_detail::CandidateEvaluationOverlay worse_overlay{ context, current_baseline, current, worse_patch };
+    const auto worse_objective{ audit_detail::EvaluateObjectiveContribution(worse_overlay, key, samples, domain) };
+    ASSERT_TRUE(worse_objective);
+    audit_detail::ObjectiveAttemptDiagnostic rejected;
+    auto trial_best{ best };
+    // Isolate the best gate by allowing the previous gate to pass.
+    EXPECT_FALSE(audit_detail::TryCommitClusterCandidate(worse_overlay, key, samples, &*worse_objective,
+        false, domain, trial_best, rejected, counters, "test"));
+    EXPECT_TRUE(rejected.rejected_by_best);
+    EXPECT_FALSE(rejected.rejected_by_previous);
+    EXPECT_DOUBLE_EQ(trial_best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.0);
+
+    auto missing{ best };
+    missing.best_parameters = {};
+    EXPECT_THROW(audit_detail::EvaluateBestObjectiveReference(unchanged, key, samples, domain, missing, counters), std::logic_error);
+    auto unavailable_domain{ domain };
+    unavailable_domain.cluster_by_key.at(key).scale.reset();
+    EXPECT_FALSE(audit_detail::TryCommitClusterCandidate(unchanged, key, samples, &*current_objective,
+        false, unavailable_domain, trial_best, rejected, counters, "test"));
+    EXPECT_TRUE(rejected.best_reference_unavailable);
+}
+
+TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovementAndTie)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const audit_detail::ClusterKey key{ 0 };
+    const auto baseline{ audit_detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    const auto domain{ audit_detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+    const auto previous{ audit_detail::EvaluateObjectiveContribution(baseline, key, fixture.sample_ref_list, domain) };
+    ASSERT_TRUE(previous);
+    audit_detail::ClusterObjectiveStateMap states;
+    audit_detail::ReconcileClusterObjectiveState({ { key, previous } }, fixture.state, states);
+    auto & best{ states.at(key) };
+    audit_detail::ClusterSolverWorkspaceMap workspaces;
+    audit_detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    audit_detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    const audit_detail::FitState improved{ MakeGaussianResult({ 6.4, 0.5, 0.0 }) };
+    const auto patch{ audit_detail::FitStatePatch::FromState(improved, key) };
+    const audit_detail::CandidateEvaluationOverlay overlay{ fixture.context, baseline, fixture.state, patch };
+    audit_detail::ObjectiveAttemptDiagnostic diagnostic;
+    EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(overlay, key, fixture.sample_ref_list, &*previous,
+        false, domain, best, diagnostic, counters, "test"));
+    EXPECT_LT(best.best_objective->GetTotalObjective(), previous->GetTotalObjective());
+    EXPECT_DOUBLE_EQ(best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.4);
+    EXPECT_GT(best.best_maximum_transformed_change, 0.0);
+
+    const auto improved_baseline{ audit_detail::BuildResidualBaseline(fixture.context, improved) };
+    const auto improved_objective{ audit_detail::EvaluateObjectiveContribution(
+        improved_baseline, key, fixture.sample_ref_list, domain) };
+    ASSERT_TRUE(improved_objective);
+    const audit_detail::CandidateEvaluationOverlay tie{ fixture.context, improved_baseline, improved, patch };
+    EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(tie, key, fixture.sample_ref_list, &*improved_objective,
+        false, domain, best, diagnostic, counters, "test"));
+    EXPECT_DOUBLE_EQ(best.best_maximum_transformed_change, 0.0);
+    EXPECT_DOUBLE_EQ(best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.4);
+
+    // Reset/reinitialization must replace the saved parameters as well as the scalar.
+    states.clear();
+    audit_detail::ReconcileClusterObjectiveState({ { key, improved_objective } }, improved, states);
+    EXPECT_DOUBLE_EQ(states.at(key).best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.4);
+    audit_detail::ReconcileClusterObjectiveState({}, improved, states);
+    EXPECT_TRUE(states.empty());
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryRejectionRestoresBestParameterSnapshots)
+{
+    const std::vector<rg::GaussianModel3D> models{ { 6.0, 0.5, 0.0 }, { 7.0, 0.5, 0.0 } };
+    auto fixture{ BuildJointPolishFixture(models, models) };
+    const std::vector<audit_detail::ClusterKey> keys{ { 0 }, { 1 } };
+    audit_detail::CouplingGraphPartition partition;
+    for (const auto & key : keys) partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+    partition.boundary_sample_dependency_list = { { { 0, 0 }, keys, { 0, 1 } } };
+    const auto baseline{ audit_detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    const auto domain{ audit_detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, keys) };
+    const auto previous{ audit_detail::BuildObjectiveByKey(partition, domain, baseline) };
+    audit_detail::ClusterObjectiveStateMap history;
+    audit_detail::ReconcileClusterObjectiveState(previous, fixture.state, history);
+    auto candidate{ fixture.state };
+    for (auto & result : candidate) result = MakeGaussianResult({ 20.0, 0.5, 0.0 });
+    const audit_detail::PolishProvenance provenance(2, 0);
+    const audit_detail::SuspiciousBlockActivity fixed{ { 1, 1 }, { 1, 1 }, { 1, 1 } };
+    const std::vector<double> ridge(2, 1.0);
+    const audit_detail::ClusterHealthMap health;
+    const audit_detail::BestAuditState audit;
+    audit_detail::TrustRegionStateSet trust;
+    trust.Reconcile(keys);
+    audit_detail::ClusterSolverWorkspaceMap workspaces;
+    audit_detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    audit_detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    const auto options{ MakeSecondStageOptions() };
+    const audit_detail::CandidateSelectionInputs inputs{
+        fixture.context, options, baseline, partition, health, fixture.state, provenance,
+        candidate, fixed, ridge, domain, previous, history, audit, trust, workspaces, corrections, counters };
+    audit_detail::CandidateSelection selection;
+    selection.block_activity = fixed;
+    selection.cluster_objective_state = history;
+    selection.assembled_state = candidate;
+    selection.assembled_polish_provenance = provenance;
+    selection.accepted_key_list = keys;
+    for (const auto & key : keys)
+    {
+        auto & provisional{ selection.cluster_objective_state.at(key) };
+        provisional.best_parameters = audit_detail::FitStatePatch::FromState(candidate, key);
+        provisional.best_objective = audit_detail::ObjectiveBreakdown{ 10.0, 0.0, 0.0 };
+    }
+    audit_detail::ReconcileSelectedBoundaries(inputs, {}, selection);
+    EXPECT_TRUE(selection.accepted_key_list.empty());
+    EXPECT_EQ(selection.rejected_key_list.size(), 2U);
+    for (const auto & key : keys)
+    {
+        const auto & restored{ selection.cluster_objective_state.at(key) };
+        EXPECT_DOUBLE_EQ(restored.best_objective->GetTotalObjective(), history.at(key).best_objective->GetTotalObjective());
+        ExpectGaussianModelsNear(restored.best_parameters.mdpde_list.front().GetModel(), models.at(key.front()), 0.0);
+        ExpectGaussianModelsNear(selection.assembled_state.at(key.front()).mdpde.GetModel(), models.at(key.front()), 0.0);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, BestReferenceDiagnosticsReportTheEvaluatedGate)
+{
+    audit_detail::JointCandidateObjectiveDiagnostic record;
+    record.source = "endpoint";
+    record.stored_best = audit_detail::ObjectiveBreakdown{ 1.0, 0.0, 0.0 };
+    audit_detail::RecordJointMemberRejection(&record, { 0 },
+        audit_detail::ObjectiveBreakdown{ 4.0, 0.0, 0.0 },
+        audit_detail::ObjectiveBreakdown{ 2.0, 0.0, 0.0 },
+        audit_detail::ObjectiveBreakdown{ 3.0, 0.0, 0.0 }, true);
+    EXPECT_EQ(record.outcome, "best");
+    audit_detail::IterationResult result;
+    auto & boundary{ result.boundary_reconciliation_diagnostic_list.emplace_back() };
+    boundary.key_list = { { 0 }, { 1 } };
+    boundary.objective_diagnostic_list.push_back(record);
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    audit_detail::LogAcceptedCandidateSearchDiagnostics(false, result);
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_NE(output.find("Joint candidate objective rejection: schema=2"), std::string::npos);
+    EXPECT_NE(output.find("reference-environment=candidate"), std::string::npos);
+    const auto reference_position{ output.find("best-reference=") };
+    const auto stored_position{ output.find("stored-best=") };
+    ASSERT_NE(reference_position, std::string::npos);
+    ASSERT_NE(stored_position, std::string::npos);
+    EXPECT_DOUBLE_EQ(std::stod(output.substr(reference_position + std::string("best-reference=").size())), 2.0);
+    EXPECT_DOUBLE_EQ(std::stod(output.substr(stored_position + std::string("stored-best=").size())), 1.0);
+    audit_detail::RecordJointMemberRejection(&record, { 0 },
+        audit_detail::ObjectiveBreakdown{ 4.0, 0.0, 0.0 }, std::nullopt,
+        audit_detail::ObjectiveBreakdown{ 3.0, 0.0, 0.0 }, true);
+    EXPECT_EQ(record.outcome, "best-reference-unavailable");
+}
+
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
 {
     const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
@@ -6068,8 +6322,10 @@ TEST(
     Logger::SetLogLevel(previous_level);
     parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
-    EXPECT_NE(output.find("Joint candidate objective rejection: schema=1"), std::string::npos);
+    EXPECT_NE(output.find("Joint candidate objective rejection: schema=2"), std::string::npos);
     EXPECT_NE(output.find("previous-gate=candidate<=reference+tolerance"), std::string::npos);
+    EXPECT_NE(output.find("stored-best="), std::string::npos);
+    EXPECT_NE(output.find("reference-environment=candidate"), std::string::npos);
     EXPECT_NE(output.find("Cluster best source: schema=1"), std::string::npos);
     EXPECT_NE(output.find("Cluster best publication: schema=1"), std::string::npos);
     EXPECT_NE(output.find("Cluster best comparison: schema=1"), std::string::npos);

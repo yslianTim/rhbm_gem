@@ -357,6 +357,7 @@ static void ResetIterationStateForPartition(
     };
     ReconcileClusterObjectiveState(
         objective_by_key,
+        iteration_state.accepted_state,
         iteration_state.cluster_objective_state);
     for (auto & [key, state] : iteration_state.cluster_objective_state)
     {
@@ -522,7 +523,9 @@ static bool BeginFrozenBackgroundIteration(
         {
             const auto prior{ iteration_state.cluster_objective_state.at(key).best_source };
             iteration_state.cluster_objective_state[key] = ClusterObjectiveState{
-                .best_objective = previous_objectives.at(key), .best_reset_reason = "background-reset",
+                .best_objective = previous_objectives.at(key),
+                .best_parameters = FitStatePatch::FromState(iteration_state.accepted_state, key),
+                .best_reset_reason = "background-reset",
                 .reset_source = prior };
         }
     }
@@ -555,7 +558,7 @@ static IterationResult RunIteration(
     const auto previous_objective_by_key{
         BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
-    ReconcileClusterObjectiveState(previous_objective_by_key, iteration_state.cluster_objective_state);
+    ReconcileClusterObjectiveState(previous_objective_by_key, previous_state, iteration_state.cluster_objective_state);
     BeginBestObjectiveTrace(context, options.quiet_mode, objective_domain,
         attempt_number, iteration_state.accepted_iteration_count);
     if (context.best_trace)
