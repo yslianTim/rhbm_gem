@@ -718,6 +718,109 @@ void LogAllRejectedResolution(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
+JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
+    bool quiet_mode,
+    std::vector<JointCandidateObjectiveDiagnostic> & records,
+    std::string_view source,
+    std::optional<double> factor,
+    std::size_t round)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return nullptr;
+    return &records.emplace_back(JointCandidateObjectiveDiagnostic{
+        .source = source, .round = round, .factor = factor });
+}
+
+void RecordJointMemberRejection(
+    JointCandidateObjectiveDiagnostic * record,
+    const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous,
+    const std::optional<ObjectiveBreakdown> & best,
+    const std::optional<ObjectiveBreakdown> & candidate,
+    bool best_checked)
+{
+    if (record == nullptr) return;
+    record->member_key = key;
+    record->previous = previous;
+    record->best = best;
+    record->candidate = candidate;
+    record->best_checked = best_checked;
+    if (!previous || !candidate)
+        record->outcome = "member-objective-unavailable";
+    else if (!std::isfinite(previous->GetTotalObjective()) ||
+        !std::isfinite(candidate->GetTotalObjective()) ||
+        (best_checked && best && !std::isfinite(best->GetTotalObjective())))
+        record->outcome = "member-objective-nonfinite";
+    else
+    {
+        const bool previous_failed{ IsObjectiveDeteriorated(candidate->GetTotalObjective(),
+            previous->GetTotalObjective(), kObjectiveProgressTolerance) };
+        const bool best_failed{ best_checked && best && IsObjectiveDeteriorated(
+            candidate->GetTotalObjective(), best->GetTotalObjective(), kObjectiveProgressTolerance) };
+        record->outcome = previous_failed ? (best_failed ? "previous+best" : "previous") :
+            (best_failed ? "best" : "member-check-failed");
+    }
+}
+
+static void LogJointCandidateDiagnostics(
+    const std::vector<ClusterKey> & component,
+    const std::vector<JointCandidateObjectiveDiagnostic> & records)
+{
+    for (std::size_t index = 0; index < records.size(); index++)
+    {
+        const auto & record{ records.at(index) };
+        if (record.outcome == "accepted") continue;
+        std::ostringstream message;
+        message << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10)
+            << "Joint candidate objective rejection: schema=1, source=" << record.source
+            << ", candidate=" << index + 1 << ", round=" << record.round << ", factor=";
+        if (record.factor) message << *record.factor;
+        else message << "unavailable";
+        const auto append_key = [&](const ClusterKey & key)
+        {
+            message << "[";
+            for (std::size_t i = 0; i < key.size(); i++)
+            {
+                if (i != 0) message << ",";
+                message << key.at(i);
+            }
+            message << "]";
+        };
+        message << ", component=";
+        for (const auto & key : component) append_key(key);
+        message << ", member=";
+        if (record.member_key.empty()) message << "none";
+        else append_key(record.member_key);
+        message << ", atoms=" << record.member_key.size() << ", outcome=" << record.outcome;
+        const auto append_objective = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & value)
+        {
+            message << ", " << label << "=";
+            if (!value) { message << "unavailable"; return; }
+            message << value->fit_range_residual_objective << "/" << value->GetTailValidationPenalty() << "/" << value->offset_plausibility_penalty << "/" << value->GetTotalObjective();
+        };
+        append_objective("previous", record.previous);
+        append_objective("best", record.best);
+        append_objective("candidate-objective", record.candidate);
+        const auto append_gate = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & reference, bool checked)
+        {
+            message << ", " << label << "-gate=";
+            if (!checked) { message << "not-checked"; return; }
+            if (!reference || !record.candidate) { message << "unavailable"; return; }
+            const auto value{ reference->GetTotalObjective() };
+            const auto tolerance{ CalculateObjectiveTolerance(value, kObjectiveProgressTolerance) };
+            message << "candidate<=reference+tolerance"
+                << ", " << label << "-reference=" << value
+                << ", " << label << "-delta=" << record.candidate->GetTotalObjective() - value
+                << ", " << label << "-absolute=" << kObjectiveProgressTolerance.absolute_tolerance
+                << ", " << label << "-relative=" << kObjectiveProgressTolerance.relative_tolerance
+                << ", " << label << "-tolerance=" << tolerance
+                << ", " << label << "-limit=" << value + tolerance;
+        };
+        append_gate("previous", record.previous, !record.member_key.empty());
+        append_gate("best", record.best, record.best_checked);
+        Logger::Log(LogLevel::Debug, message.str());
+    }
+}
+
 void LogAcceptedCandidateSearchDiagnostics(
     bool quiet_mode,
     const IterationResult & iteration_result)
@@ -871,6 +974,7 @@ void LogAcceptedCandidateSearchDiagnostics(
         append_objective(diagnostic.candidate_component_objective);
         message << ".";
         Logger::Log(LogLevel::Debug, message.str());
+        LogJointCandidateDiagnostics(diagnostic.key_list, diagnostic.objective_diagnostic_list);
         if (!diagnostic.joint_correction_status.has_value()) continue;
         std::ostringstream correction_message;
         correction_message << std::scientific << std::setprecision(2)
@@ -1302,6 +1406,7 @@ void LogFinalDependencyPolish(
             << ", elapsed_ms=" << std::fixed << std::setprecision(3)
             << component.elapsed_milliseconds << ".";
         Logger::Log(LogLevel::Debug, component_message.str());
+        LogJointCandidateDiagnostics(component.key_list, component.objective_diagnostic_list);
     }
 }
 

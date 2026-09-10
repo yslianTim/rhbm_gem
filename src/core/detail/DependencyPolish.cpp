@@ -196,6 +196,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         suspicious_atom_count;
                     if (suspicious_atom_count != 0) break;
 
+                    auto * record{ BeginJointCandidateDiagnostic(options.quiet_mode,
+                        diagnostic.objective_diagnostic_list, "final-polish", correction_result.damping, round + 1) };
                     const auto candidate_objective{
                         EvaluateObjectiveDelta(
                             candidate_overlay,
@@ -210,6 +212,12 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             endpoint_objective.GetTotalObjective(),
                             kObjectiveStrictTolerance))
                     {
+                        if (record)
+                        {
+                            record->previous = endpoint_objective;
+                            record->candidate = candidate_objective;
+                            record->outcome = "members-not-evaluated-global-improvement-failed-or-unavailable";
+                        }
                         break;
                     }
 
@@ -224,6 +232,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                                 if (sample_iter ==
                                     partition.sample_id_list_by_key.end())
                                 {
+                                    RecordJointMemberRejection(record, key, std::nullopt, std::nullopt, std::nullopt, false);
+                                    if (record) record->outcome = "member-samples-unavailable";
                                     return false;
                                 }
                                 auto owned_sample_ref_list{ sample_iter->second };
@@ -253,12 +263,15 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                                         owned_sample_ref_list,
                                         objective_domain)
                                 };
-                                return base_contribution.has_value() &&
+                                const bool passed{ base_contribution.has_value() &&
                                     candidate_contribution.has_value() &&
                                     !IsObjectiveDeteriorated(
                                         candidate_contribution->GetTotalObjective(),
                                         base_contribution->GetTotalObjective(),
-                                        kObjectiveProgressTolerance);
+                                        kObjectiveProgressTolerance) };
+                                if (!passed) RecordJointMemberRejection(record, key, base_contribution,
+                                    std::nullopt, candidate_contribution, false);
+                                return passed;
                             })
                     };
                     if (!member_guard_passed) break;

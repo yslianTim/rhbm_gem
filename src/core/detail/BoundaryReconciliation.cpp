@@ -103,7 +103,8 @@ EvaluateBoundaryComponentCandidate(
     const BoundaryReconciliationComponent & component,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ObjectiveBreakdown * previous_audit_objective,
-    bool cooperative = false)
+    bool cooperative,
+    JointCandidateObjectiveDiagnostic * record)
 {
     BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
@@ -124,11 +125,15 @@ EvaluateBoundaryComponentCandidate(
                     diagnostic,
                     inputs.performance_counters))
             {
+                RecordJointMemberRejection(record, key, diagnostic.previous_objective,
+                    diagnostic.best_objective, diagnostic.candidate_objective, diagnostic.best_objective.has_value());
                 return std::nullopt;
             }
         }
         else
         {
+            diagnostic.previous_objective = previous_objective;
+            diagnostic.best_objective = objective_state.best_objective;
             diagnostic.candidate_objective = EvaluateObjectiveContribution(
                 candidate_overlay,
                 key,
@@ -136,6 +141,8 @@ EvaluateBoundaryComponentCandidate(
                 inputs.objective_domain);
             if (!diagnostic.candidate_objective.has_value() || !previous_objective.has_value())
             {
+                RecordJointMemberRejection(record, key, previous_objective,
+                    diagnostic.best_objective, diagnostic.candidate_objective, false);
                 return std::nullopt;
             }
             const auto candidate_value{
@@ -148,6 +155,8 @@ EvaluateBoundaryComponentCandidate(
                     previous_value,
                     kObjectiveProgressTolerance))
             {
+                RecordJointMemberRejection(record, key, previous_objective,
+                    diagnostic.best_objective, diagnostic.candidate_objective, false);
                 return std::nullopt;
             }
             if (candidate_value > previous_value)
@@ -192,13 +201,18 @@ EvaluateBoundaryComponentCandidate(
         best_audit_objective,
         previous_audit_objective,
         inputs.performance_counters) };
-    if (!audit_objective.has_value()) return std::nullopt;
+    if (!audit_objective.has_value())
+    {
+        if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+        return std::nullopt;
+    }
     if (cooperative &&
         !IsBetterAuditObjective(
             audit_objective->GetTotalObjective(),
             previous_audit_objective->GetTotalObjective(),
             kObjectiveStrictTolerance))
     {
+        if (record) record->outcome = "members-passed-strict-improvement-failed";
         return std::nullopt;
     }
     evaluation.audit_objective = *audit_objective;
@@ -370,13 +384,17 @@ static bool TryBoundaryJointCorrection(
     {
         diagnostic.joint_candidate_component_objective = raw_candidate_objective->GetTotalObjective();
     }
+    auto * record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
+        diagnostic.objective_diagnostic_list,
+        diagnostic.is_rescue_attempt ? "rescue-joint-correction" : "joint-correction",
+        correction_result.damping) };
     const auto candidate_evaluation{
         EvaluateBoundaryComponentCandidate(
             inputs,
             component,
             corrected_overlay,
             &previous_audit_objective,
-            diagnostic.is_rescue_attempt)
+            diagnostic.is_rescue_attempt, record)
     };
     const auto is_strict_improvement{
         candidate_evaluation.has_value() &&
@@ -387,6 +405,8 @@ static bool TryBoundaryJointCorrection(
     };
     if (!is_strict_improvement)
     {
+        if (record && candidate_evaluation)
+            record->outcome = "members-passed-strict-improvement-failed";
         record_performance(false);
         return false;
     }
@@ -440,12 +460,15 @@ static bool TryBacktrackBoundaryComponent(
             inputs.previous_state,
             backtracking_workspace.GetCandidatePatch()
         };
+        auto * record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
+            diagnostic.objective_diagnostic_list,
+            diagnostic.is_rescue_attempt ? "rescue-backtracking" : "backtracking", step.factor) };
         accepted_evaluation = EvaluateBoundaryComponentCandidate(
             inputs,
             component,
             candidate_overlay,
             previous_audit_objective,
-            diagnostic.is_rescue_attempt);
+            diagnostic.is_rescue_attempt, record);
         if (accepted_evaluation.has_value()) break;
     }
     if (!accepted_evaluation.has_value())
@@ -496,12 +519,15 @@ static void ReconcileBoundaryComponent(
         inputs.previous_state,
         endpoint_patch
     };
+    auto * endpoint_record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
+        diagnostic.objective_diagnostic_list,
+        diagnostic.is_rescue_attempt ? "rescue-endpoint" : "endpoint", 1.0) };
     const auto endpoint_evaluation{
         EvaluateBoundaryComponentCandidate(
             inputs,
             component,
             endpoint_overlay,
-            previous_audit_objective)
+            previous_audit_objective, false, endpoint_record)
     };
     if (endpoint_evaluation.has_value())
     {
@@ -669,13 +695,16 @@ static bool TryRescueBoundaryComponent(
         inputs.previous_state,
         endpoint_patch
     };
+    auto * endpoint_record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
+        diagnostic.objective_diagnostic_list,
+        diagnostic.is_rescue_attempt ? "rescue-endpoint" : "endpoint", 1.0) };
     const auto endpoint_evaluation{
         EvaluateBoundaryComponentCandidate(
             inputs,
             component,
             endpoint_overlay,
             &previous_audit_objective,
-            true)
+            true, endpoint_record)
     };
     if (endpoint_evaluation.has_value())
     {

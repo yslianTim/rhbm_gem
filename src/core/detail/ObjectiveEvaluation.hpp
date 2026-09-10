@@ -4,6 +4,7 @@
 #include "core/detail/SuspiciousUpdate.hpp"
 
 #include <map>
+#include <string_view>
 
 namespace rhbm_gem::core::detail {
 
@@ -80,6 +81,19 @@ struct ObjectiveScale
 {
     double fit{ 0.0 };
     double tail{ 0.0 };
+};
+
+struct JointCandidateObjectiveDiagnostic
+{
+    std::string_view source{};
+    std::size_t round{ 0 };
+    std::optional<double> factor{};
+    ClusterKey member_key{};
+    std::optional<ObjectiveBreakdown> previous{};
+    std::optional<ObjectiveBreakdown> best{};
+    std::optional<ObjectiveBreakdown> candidate{};
+    bool best_checked{ false };
+    std::string_view outcome{ "accepted" };
 };
 
 struct ObjectiveAttemptDiagnostic

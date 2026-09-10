@@ -905,6 +905,26 @@ affected atom's reason, margin, and fixed shape/offset/hard block. Completion
 warnings report cumulative quarantine
 entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
+Joint-candidate member guards emit `Joint candidate objective rejection: schema=1`
+Debug records alongside their component summary. Each record identifies the
+candidate source (endpoint, joint correction, backtracking, rescue variants, or
+final polish), component keys, evaluation sequence, factor, and polish round.
+Only the first failing member is recorded; evaluation retains its existing
+short-circuit order. Full member keys use internal selected-atom indexes.
+Previous/best/candidate objectives use fit/tail-weighted/offset/total order,
+with `max_digits10` precision. Enabled member gates report the reference,
+candidate-minus-reference delta, absolute/relative tolerance, calculated
+`tolerance`, and inclusive upper bound `reference + tolerance`. The tolerance
+is `absolute + relative * abs(reference)` using `kObjectiveProgressTolerance`.
+Best gates are `not-checked` in cooperative rescue and final polish; absent
+values are `unavailable`. Member failure outcomes distinguish previous, best,
+both, missing evidence, and nonfinite evidence. Records with `member=none`
+distinguish a downstream global failure after member checks from a final-polish
+global failure before member checks. Local rejection summaries remain local:
+`rejected-by=none` does not imply that a later joint candidate passed.
+These diagnostics reuse evaluated objectives and do not add solves or objective
+evaluations. Info and quiet modes emit no new records.
+
 Frozen-background debug diagnostics report the selected target serial,
 global-median amplitude/width/offset, and effective background sample count.
 No second-stage diagnostic reports a chemical group. Contributor-refit, hard-edge,

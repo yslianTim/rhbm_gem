@@ -34,6 +34,7 @@ struct FinalDependencyPolishDiagnostic
         std::optional<double> objective_before{};
         std::optional<double> objective_after{};
         double elapsed_milliseconds{ 0.0 };
+        std::vector<JointCandidateObjectiveDiagnostic> objective_diagnostic_list{};
         bool accepted{ false };
     };
     std::vector<Component> component_list{};

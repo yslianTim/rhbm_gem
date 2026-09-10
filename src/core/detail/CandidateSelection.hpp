@@ -235,6 +235,7 @@ struct BoundaryComponentReconciliationDiagnostic
     double maximum_local_deterioration{ 0.0 };
     std::optional<double> component_improvement{};
     std::optional<double> global_improvement{};
+    std::vector<JointCandidateObjectiveDiagnostic> objective_diagnostic_list{};
     bool is_rescue_attempt{ false };
     bool exhausted{ false };
 };

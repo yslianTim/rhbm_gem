@@ -5995,6 +5995,8 @@ TEST(
     Logger::SetLogLevel(previous_level);
     parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
+    EXPECT_NE(output.find("Joint candidate objective rejection: schema=1"), std::string::npos);
+    EXPECT_NE(output.find("previous-gate=candidate<=reference+tolerance"), std::string::npos);
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);
     const auto maximum_position{ output.find(", max-atoms=", cutoff_position) };

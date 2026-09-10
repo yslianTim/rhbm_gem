@@ -21,6 +21,21 @@ enum class SecondStageStopReason;
 enum class FinalPolishCertificationPolicy;
 enum class FinalPolishResidualSafetyStatus;
 
+JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
+    bool quiet_mode,
+    std::vector<JointCandidateObjectiveDiagnostic> & records,
+    std::string_view source,
+    std::optional<double> factor = std::nullopt,
+    std::size_t round = 0);
+
+void RecordJointMemberRejection(
+    JointCandidateObjectiveDiagnostic * record,
+    const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous,
+    const std::optional<ObjectiveBreakdown> & best,
+    const std::optional<ObjectiveBreakdown> & candidate,
+    bool best_checked);
+
 class PerformanceCounters
 {
     const bool m_quiet_mode;
