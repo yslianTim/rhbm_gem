@@ -1080,7 +1080,7 @@ static const FitState & FinalizeSecondStageState(
 
 } // namespace
 
-bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
+void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
     if (options.enable_second_stage_dependency_polish &&
         options.second_stage_dependency_polish_max_iterations == 0)
@@ -1088,19 +1088,19 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         throw std::invalid_argument(
             "Second-stage dependency polish maximum iterations must be positive when enabled.");
     }
+
+    model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
     // Prepare seeds and sampling context before establishing the initial objective.
     SecondStageContext context;
     FitState initial_state;
     {
-        auto initialization{
-            BuildSecondStageInitialization(model_object, options)
-        };
+        auto initialization{ BuildSecondStageInitialization(model_object, options) };
         LogSecondStageStart(options.quiet_mode);
 
         if (!initialization.has_value())
         {
             LogSecondStageInitializationFailure(options.quiet_mode);
-            return false;
+            return;
         }
         StoreSecondStageNeighborCounts(model_object, initialization->context,
             initialization->neighbor_count_list);
@@ -1136,8 +1136,7 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
     if (context.atom_list.size() == 0)
     {
         terminal_result.attempt_number = 1;
-        terminal_result.accepted_iteration_count =
-            iteration_state.accepted_iteration_count;
+        terminal_result.accepted_iteration_count = iteration_state.accepted_iteration_count;
         terminal_result.stop_reason = SecondStageStopReason::Quarantine;
     }
     else
@@ -1155,9 +1154,7 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
                 options.quiet_mode,
                 terminal_result);
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-            LogTrustModelShadowDiagnostics(
-                options.quiet_mode,
-                terminal_result);
+            LogTrustModelShadowDiagnostics(options.quiet_mode, terminal_result);
 #endif
             LogRejectedClusterDiagnostics(
                 options.quiet_mode,
@@ -1167,14 +1164,10 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
                 progress_column_widths,
                 terminal_result);
 
-            if (terminal_result.stop_reason ==
-                    SecondStageStopReason::AllRejectedBacktrackingExhausted ||
-                terminal_result.stop_reason ==
-                    SecondStageStopReason::AllRejectedAtMaximumIterations)
+            if (terminal_result.stop_reason == SecondStageStopReason::AllRejectedBacktrackingExhausted ||
+                terminal_result.stop_reason == SecondStageStopReason::AllRejectedAtMaximumIterations)
             {
-                LogAllRejectedResolution(
-                    options.quiet_mode,
-                    terminal_result);
+                LogAllRejectedResolution(options.quiet_mode, terminal_result);
             }
             if (terminal_result.stop_reason != SecondStageStopReason::None)
             {
@@ -1244,8 +1237,7 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
                 finalized_state);
         }
     }
-    else if (terminal_result.stop_reason ==
-        SecondStageStopReason::MaximumIterations)
+    else if (terminal_result.stop_reason == SecondStageStopReason::MaximumIterations)
     {
         LogMaximumIterations(
             options.quiet_mode,
@@ -1263,7 +1255,6 @@ bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         iteration_state.previous_polish_provenance,
         terminal_result.stop_reason,
         use_best_audit_state);
-    return true;
 }
 
 std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
@@ -1277,8 +1268,7 @@ std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
             local_mdpde
         };
     }
-    if (global_median.has_value() &&
-        IsValidSecondStageGaussianModel(*global_median))
+    if (global_median.has_value() && IsValidSecondStageGaussianModel(*global_median))
     {
         return SecondStageSeedSelection{
             SecondStageSeedSource::GlobalMedian,
@@ -1341,8 +1331,7 @@ SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
         result.at(atom_index) =
             block_activity.hard_failure_atom_mask.at(atom_index) != 0 ||
             (has_fixed_endpoint &&
-                assessment_by_atom[atom_index].reason !=
-                    SuspiciousGaussianReason::None) ? 1 : 0;
+                assessment_by_atom[atom_index].reason != SuspiciousGaussianReason::None) ? 1 : 0;
     }
     return result;
 }
@@ -1382,8 +1371,7 @@ TransformedChangeSummary SummarizeActiveDofChanges(
         {
             if (atom_index >= change_list.size())
             {
-                throw std::invalid_argument(
-                    "Active-coordinate shape change input is inconsistent.");
+                throw std::invalid_argument("Active-coordinate shape change input is inconsistent.");
             }
             values.emplace_back(change_list.at(atom_index).at(parameter_index));
         }
@@ -1411,10 +1399,8 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     {
         const auto & values{ parameter_change_lists.at(parameter_index) };
         result.population_size_list.at(parameter_index) = values.size();
-        result.percentile_list.at(parameter_index) =
-            array_helper::ComputePercentile(values, kConvergencePercentile);
-        result.maximum_list.at(parameter_index) =
-            values.empty() ? 0.0 : *std::ranges::max_element(values);
+        result.percentile_list.at(parameter_index) = array_helper::ComputePercentile(values, kConvergencePercentile);
+        result.maximum_list.at(parameter_index) = values.empty() ? 0.0 : *std::ranges::max_element(values);
     }
     return result;
 }
@@ -1426,8 +1412,7 @@ TransformedChangeSummary SummarizeActiveDofChanges(
 {
     if (current_state.size() != previous_state.size())
     {
-        throw std::invalid_argument(
-            "Active-coordinate transformed state sizes are inconsistent.");
+        throw std::invalid_argument("Active-coordinate transformed state sizes are inconsistent.");
     }
     std::vector<TransformedChange> change_list;
     change_list.reserve(current_state.size());
@@ -1451,8 +1436,7 @@ bool AreActiveCoordinatesSolverQualified(
     ValidateBlockActivitySize(atom_count, block_activity);
     if (local_refit_status_by_atom.size() != atom_count)
     {
-        throw std::invalid_argument(
-            "Convergence audit qualification inputs are inconsistent.");
+        throw std::invalid_argument("Convergence audit qualification inputs are inconsistent.");
     }
 
     for (const auto atom_index : atom_index_list)

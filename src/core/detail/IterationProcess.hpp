@@ -141,6 +141,6 @@ bool AreActiveCoordinatesSolverQualified(
     std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
     const ClusterHealthMap & health_by_key);
 
-bool RunSecondStageIterations(ModelObject & model_object, const FitOptions & options);
+void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options);
 
 } // namespace rhbm_gem::core::detail

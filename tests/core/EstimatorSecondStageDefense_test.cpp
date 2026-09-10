@@ -5599,33 +5599,28 @@ TEST(
             EXPECT_NE(rg::data_internal::GetGroupKey(serial->FindAtomPtr(3)),
                 rg::data_internal::GetGroupKey(parallel->FindAtomPtr(3)));
             options.thread_size = 1;
-            ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*serial, options));
+            iteration_detail::RunSecondStageIterations(*serial, options);
             options.thread_size = 2;
-            ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*parallel, options));
+            iteration_detail::RunSecondStageIterations(*parallel, options);
             const auto previous_level{ Logger::GetLogLevel() };
             Logger::SetLogLevel(LogLevel::Debug);
             testing::internal::CaptureStdout();
             options.thread_size = 1;
             options.quiet_mode = false;
-            const bool completed{ iteration_detail::RunSecondStageIterations(*logged, options) };
+            iteration_detail::RunSecondStageIterations(*logged, options);
             const auto output{ testing::internal::GetCapturedStdout() };
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
             testing::internal::CaptureStdout();
-            const bool alternate_completed{
-                iteration_detail::RunSecondStageIterations(*alternate_logged, options) };
+            iteration_detail::RunSecondStageIterations(*alternate_logged, options);
             const auto alternate_output{ testing::internal::GetCapturedStdout() };
             auto relabeled_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, false, shared_cluster, shared_contributor, true) };
             testing::internal::CaptureStdout();
-            const bool relabeled_completed{
-                iteration_detail::RunSecondStageIterations(*relabeled_logged, options) };
+            iteration_detail::RunSecondStageIterations(*relabeled_logged, options);
             const auto relabeled_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
             options.quiet_mode = true;
-            ASSERT_TRUE(completed);
-            ASSERT_TRUE(alternate_completed);
-            ASSERT_TRUE(relabeled_completed);
             const auto audit_records = [](const std::string & log)
             {
                 std::vector<std::string> records;
@@ -5758,9 +5753,9 @@ TEST(
     }
     auto excluded{ BuildUnselectedContributorDefenseModel(seeds, truth) };
     auto included{ BuildUnselectedContributorDefenseModel(seeds, truth) };
-    ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*excluded, options));
+    iteration_detail::RunSecondStageIterations(*excluded, options);
     options.exclude_hydrogen = false;
-    ASSERT_TRUE(iteration_detail::RunSecondStageIterations(*included, options));
+    iteration_detail::RunSecondStageIterations(*included, options);
     EXPECT_EQ(rg::AtomLocalPotentialView::For(*included->FindAtomPtr(1)).GetNeighborCountForPeeling(), 2);
     EXPECT_NE(rg::AtomLocalPotentialView::For(*excluded->FindAtomPtr(1)).GetPeelingSamplingEntries(false).front().response,
         rg::AtomLocalPotentialView::For(*included->FindAtomPtr(1)).GetPeelingSamplingEntries(false).front().response);
@@ -5819,10 +5814,9 @@ TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsets
         const auto previous_level{ Logger::GetLogLevel() };
         Logger::SetLogLevel(LogLevel::Debug);
         testing::internal::CaptureStdout();
-        const bool completed{ iteration_detail::RunSecondStageIterations(model, options) };
+        iteration_detail::RunSecondStageIterations(model, options);
         const auto output{ testing::internal::GetCapturedStdout() };
         Logger::SetLogLevel(previous_level);
-        EXPECT_TRUE(completed);
         std::vector<std::string> evidence;
         std::istringstream lines{ output };
         std::string line;
@@ -5936,9 +5930,8 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsMatchesSerialAndPa
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
 
-    EXPECT_EQ(
-        iteration_detail::RunSecondStageIterations(*serial_model, serial_options),
-        iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
+    iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
+    iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
     const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
@@ -5967,10 +5960,10 @@ TEST(
     Logger::SetLogLevel(LogLevel::Debug);
     serial_options.quiet_mode = false;
     testing::internal::CaptureStdout();
-    const auto serial_completed{ iteration_detail::RunSecondStageIterations(*serial_model, serial_options) };
+    iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_level);
-    EXPECT_EQ(serial_completed, iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
+    iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);
     const auto maximum_position{ output.find(", max-atoms=", cutoff_position) };
@@ -6067,9 +6060,8 @@ TEST(
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
 
-    EXPECT_EQ(
-        iteration_detail::RunSecondStageIterations(*serial_model, serial_options),
-        iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options));
+    iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
+    iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
     iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
@@ -6192,9 +6184,7 @@ TEST(
             previous_analysis_view.GetAtomGroupPrior(group_key));
     }
 
-    const auto peeling_applied{ iteration_detail::RunSecondStageIterations(*model, options) };
-
-    EXPECT_TRUE(peeling_applied);
+    iteration_detail::RunSecondStageIterations(*model, options);
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {

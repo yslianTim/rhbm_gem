@@ -495,7 +495,6 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunLocalAlphaTraining(model_object, options, FittingStage::First);
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
 
-    model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
     detail::RunSecondStageIterations(model_object, options);
 
     RunGroupAlphaTraining(model_object, options);
