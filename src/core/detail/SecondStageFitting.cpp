@@ -64,46 +64,41 @@ TransformedChangeSummary SummarizeTransformedChangesImpl(
 
 std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
     const SecondStageContext & context,
-    const FitState & state,
-    const std::vector<ClusterKey> & cluster_key_list)
+    const FitState & state)
 {
     if (state.size() != context.atom_list.size()) return nullptr;
     auto background{ std::make_shared<FrozenBackground>() };
     background->model_by_atom.resize(context.atom_list.size());
     background->response_by_atom.resize(context.atom_list.size());
-    std::vector<char> visited(context.atom_list.size(), 0);
-    for (const auto & key : cluster_key_list)
+    if (state.empty()) return background;
+
+    std::vector<GaussianModel3D> models;
+    models.reserve(state.size());
+    for (const auto & result : state)
     {
-        std::vector<GaussianModel3D> models;
-        for (const auto atom_index : key)
+        const auto & model{ result.mdpde.GetModel() };
+        if (!IsValidSecondStageGaussianModel(model)) return nullptr;
+        models.emplace_back(model);
+    }
+    const auto median{ BuildGaussianParameterMedian(models) };
+    if (!median.has_value()) return nullptr;
+    for (std::size_t atom_index = 0; atom_index < state.size(); atom_index++)
+    {
+        background->model_by_atom.at(atom_index) = *median;
+        const auto & atom_context{ context.atom_list.at(atom_index) };
+        auto & responses{ background->response_by_atom.at(atom_index) };
+        responses.assign(atom_context.raw_sampling_entries.size(), 0.0);
+        if (atom_context.unselected_distance_list_by_sample.empty()) continue;
+        if (atom_context.unselected_distance_list_by_sample.size() != responses.size()) return nullptr;
+        for (std::size_t sample_index = 0; sample_index < responses.size(); sample_index++)
         {
-            if (atom_index >= state.size() || visited.at(atom_index) != 0) return nullptr;
-            visited.at(atom_index) = 1;
-            const auto & model{ state.at(atom_index).mdpde.GetModel() };
-            if (!IsValidSecondStageGaussianModel(model)) return nullptr;
-            models.emplace_back(model);
-        }
-        const auto median{ BuildGaussianParameterMedian(models) };
-        if (!median.has_value()) return nullptr;
-        for (const auto atom_index : key)
-        {
-            background->model_by_atom.at(atom_index) = *median;
-            const auto & atom_context{ context.atom_list.at(atom_index) };
-            auto & responses{ background->response_by_atom.at(atom_index) };
-            responses.assign(atom_context.raw_sampling_entries.size(), 0.0);
-            if (atom_context.unselected_distance_list_by_sample.empty()) continue;
-            if (atom_context.unselected_distance_list_by_sample.size() != responses.size()) return nullptr;
-            for (std::size_t sample_index = 0; sample_index < responses.size(); sample_index++)
+            for (const auto distance : atom_context.unselected_distance_list_by_sample.at(sample_index))
             {
-                for (const auto distance : atom_context.unselected_distance_list_by_sample.at(sample_index))
-                {
-                    responses.at(sample_index) += median->ResponseAtDistance(distance);
-                }
-                if (!std::isfinite(responses.at(sample_index))) return nullptr;
+                responses.at(sample_index) += median->ResponseAtDistance(distance);
             }
+            if (!std::isfinite(responses.at(sample_index))) return nullptr;
         }
     }
-    if (std::ranges::find(visited, 0) != visited.end()) return nullptr;
     return background;
 }
 
@@ -251,10 +246,7 @@ std::optional<ResidualSample> EvaluateResidualSample(
         atom_context.raw_sampling_entries.at(sample_ref.sample_index)
     };
     const auto adjusted_response{
-        CalculateSecondStageAdjustedResponse(
-            atom_context,
-            sample_ref,
-            model_snapshot)
+        CalculateSecondStageAdjustedResponse(atom_context, sample_ref, model_snapshot)
     };
     const auto expected_response{
         GetFitModel(

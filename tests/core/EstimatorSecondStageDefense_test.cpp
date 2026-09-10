@@ -1522,7 +1522,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
             SamplingPoint{ distance } });
         context.atom_list.at(0).unselected_distance_list_by_sample.push_back({ distance });
     }
-    context.frozen_background = audit_detail::BuildFrozenBackground(context, seed, { { 0 } });
+    context.frozen_background = audit_detail::BuildFrozenBackground(context, seed);
     ASSERT_TRUE(context.frozen_background);
     const auto old_snapshot{ audit_detail::BuildSecondStageModelSnapshot(context, earlier_best) };
     const auto domain{ audit_detail::BuildObjectiveDomain(context, old_snapshot, { { 0 } }) };
@@ -1531,7 +1531,7 @@ TEST(EstimatorSecondStageDefenseTest, BestAuditStateUpdateUsesPrecomputedObjecti
     ASSERT_TRUE(old_score.has_value());
     audit_state.reset();
     ASSERT_TRUE(audit_detail::TryUpdateBestAuditState(earlier_best, true, 3, *old_score, audit_state));
-    context.frozen_background = audit_detail::BuildFrozenBackground(context, previous, { { 0 } });
+    context.frozen_background = audit_detail::BuildFrozenBackground(context, previous);
     ASSERT_TRUE(context.frozen_background);
     audit_detail::ReevaluateBestAuditState(context, domain, audit_state);
     ASSERT_TRUE(audit_state.has_value());
@@ -1825,7 +1825,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
     for (auto & sample : atom_context.raw_sampling_entries)
         sample.response += previous_model.ResponseAtDistance(unselected_distance);
     const trust_detail::ClusterKey key{ 0 };
-    fixture.context.frozen_background = trust_detail::BuildFrozenBackground(fixture.context, fixture.state, { key });
+    fixture.context.frozen_background = trust_detail::BuildFrozenBackground(fixture.context, fixture.state);
     ASSERT_TRUE(fixture.context.frozen_background);
     const auto previous_snapshot{
         trust_detail::BuildSecondStageModelSnapshot(
@@ -2473,7 +2473,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundI
     for (const auto & gaussian : fixture.second.node) state.emplace_back(MakeGaussianResult(gaussian));
     for (auto & atom : fixture.first.atom_list)
         atom.unselected_distance_list_by_sample.assign(atom.raw_sampling_entries.size(), { 0.4 });
-    fixture.first.frozen_background = offset_detail::BuildFrozenBackground(fixture.first, state, { { 0, 1 } });
+    fixture.first.frozen_background = offset_detail::BuildFrozenBackground(fixture.first, state);
     ASSERT_TRUE(fixture.first.frozen_background);
     for (std::size_t node = 0; node < state.size(); node++)
         for (std::size_t row = 0; row < fixture.first.atom_list.at(node).raw_sampling_entries.size(); row++)
@@ -2647,25 +2647,24 @@ TEST(EstimatorSecondStageDefenseTest, AdaptiveTopologyDriftTracksReferenceState)
         atom.raw_sampling_entries.resize(1);
         atom.unselected_distance_list_by_sample = { { 0.3 } };
     }
-    const auto separate{ audit_detail::BuildFrozenBackground(context, partition_state, { { 0 }, { 1 } }) };
-    const auto merged{ audit_detail::BuildFrozenBackground(context, partition_state, { { 0, 1 } }) };
-    ASSERT_TRUE(separate);
-    ASSERT_TRUE(merged);
-    ExpectGaussianModelsNear(separate->model_by_atom.at(0), partition_state.at(0).mdpde.GetModel(), 0.0);
-    ExpectGaussianModelsNear(separate->model_by_atom.at(1), partition_state.at(1).mdpde.GetModel(), 0.0);
-    for (const auto & model : merged->model_by_atom)
-        ExpectGaussianModelsNear(model, { 6.0, 0.6, 2.0 }, 1.0e-12);
-    EXPECT_NE(separate->response_by_atom, merged->response_by_atom);
-    context.frozen_background = separate;
+    const auto background{ audit_detail::BuildFrozenBackground(context, partition_state) };
+    ASSERT_TRUE(background);
+    ExpectGaussianModelsNear(background->model_by_atom.at(0), { 6.0, 0.6, 2.0 }, 1.0e-12);
+    ExpectGaussianModelsNear(background->model_by_atom.at(1), { 6.0, 0.6, 2.0 }, 1.0e-12);
+    EXPECT_EQ(background->response_by_atom.at(0), background->response_by_atom.at(1));
+    context.frozen_background = background;
     context.atom_list.at(1).unselected_distance_list_by_sample.front().front() = std::numeric_limits<double>::quiet_NaN();
-    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0, 1 } }));
-    EXPECT_EQ(context.frozen_background, separate);
+    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state));
+    EXPECT_EQ(context.frozen_background, background);
     context.atom_list.at(1).unselected_distance_list_by_sample.front().front() = 0.3;
-    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0 } }));
-    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0 }, { 0, 1 } }));
+    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, {}));
+    const auto empty{ audit_detail::BuildFrozenBackground({}, {}) };
+    ASSERT_TRUE(empty);
+    EXPECT_TRUE(empty->model_by_atom.empty());
+    EXPECT_TRUE(empty->response_by_atom.empty());
     partition_state.front().mdpde = MakeGaussianResult({ -1.0, 0.4, 1.0 }).mdpde;
-    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state, { { 0, 1 } }));
-    ExpectGaussianModelsNear(separate->model_by_atom.at(0), { 4.0, 0.4, 1.0 }, 0.0);
+    EXPECT_FALSE(audit_detail::BuildFrozenBackground(context, partition_state));
+    ExpectGaussianModelsNear(background->model_by_atom.at(0), { 6.0, 0.6, 2.0 }, 1.0e-12);
 
 }
 
@@ -2906,7 +2905,7 @@ TEST(EstimatorSecondStageDefenseTest,
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    JointPolishParameterizationKeepsClusterBackgroundFrozen)
+    JointPolishParameterizationKeepsGlobalBackgroundFrozen)
 {
     const std::vector<rg::GaussianModel3D> models{
         { 6.0, 0.55, 1.0 }, { 7.0, 0.60, 4.0 }, { 8.0, 0.65, 3.0 } };
@@ -2919,7 +2918,7 @@ TEST(EstimatorSecondStageDefenseTest,
         context.atom_list.at(i).raw_sampling_entries.resize(1);
         context.atom_list.at(i).unselected_distance_list_by_sample = { { 0.35 } };
     }
-    context.frozen_background = polish_detail::BuildFrozenBackground(context, state, { { 0, 1, 2 } });
+    context.frozen_background = polish_detail::BuildFrozenBackground(context, state);
     ASSERT_TRUE(context.frozen_background);
     ExpectGaussianModelsNear(context.frozen_background->model_by_atom.front(), { 7.0, 0.60, 3.0 }, 1.0e-12);
     const auto parameterization{ polish_detail::JointPolishParameterization::Build( models) };
@@ -2936,7 +2935,10 @@ TEST(EstimatorSecondStageDefenseTest,
     ExpectGaussianModelsNear(frozen->model_by_atom.front(), { 7.0, 0.60, 3.0 }, 1.0e-12);
 
     // A fixed selected member still contributes equally to the even median.
-    const auto even{ polish_detail::BuildFrozenBackground(context, state, { { 0, 1 }, { 2 } }) };
+    auto even_context{ context };
+    even_context.atom_list.resize(2);
+    const polish_detail::FitState even_state{ state.at(0), state.at(1) };
+    const auto even{ polish_detail::BuildFrozenBackground(even_context, even_state) };
     ASSERT_TRUE(even);
     ExpectGaussianModelsNear(even->model_by_atom.front(), { 6.5, 0.575, 2.5 }, 1.0e-12);
     const auto fixed{ polish_detail::JointPolishParameterization::BuildActiveSet( models, { 1, 0, 0 }, { 1, 0, 0 }) };
@@ -3059,7 +3061,7 @@ TEST(
         { { 6.4, 0.55, 0.2 }, { 7.2, 0.62, 0.4 } }) };
     for (auto & atom : fixture.context.atom_list)
         atom.unselected_distance_list_by_sample.assign(atom.raw_sampling_entries.size(), { 0.35 });
-    fixture.context.frozen_background = polish_detail::BuildFrozenBackground(fixture.context, fixture.state, { { 0 }, { 1 } });
+    fixture.context.frozen_background = polish_detail::BuildFrozenBackground(fixture.context, fixture.state);
     ASSERT_TRUE(fixture.context.frozen_background);
     const auto frozen{ fixture.context.frozen_background };
     for (std::size_t node = 0; node < fixture.state.size(); node++)
@@ -3078,8 +3080,8 @@ TEST(
         EXPECT_EQ(correction.parameter_count, freeze_second_shape ? 4U : 6U);
         EXPECT_EQ(correction.patch->atom_index_list, (polish_detail::ClusterKey{ 0, 1 }));
         EXPECT_EQ(fixture.context.frozen_background, frozen);
-        ExpectGaussianModelsNear(frozen->model_by_atom.at(0), { 6.0, 0.5, 0.1 }, 1.0e-12);
-        ExpectGaussianModelsNear(frozen->model_by_atom.at(1), { 7.0, 0.6, 0.3 }, 1.0e-12);
+        ExpectGaussianModelsNear(frozen->model_by_atom.at(0), { 6.5, 0.55, 0.2 }, 1.0e-12);
+        ExpectGaussianModelsNear(frozen->model_by_atom.at(1), { 6.5, 0.55, 0.2 }, 1.0e-12);
     }
 
 }
@@ -4570,7 +4572,7 @@ TEST(EstimatorSecondStageDefenseTest,
         median_previous.emplace_back(MakeGaussianResult({ 8.0 + static_cast<double>(node), 0.5, previous_offsets.at(node) }));
         median_endpoint.emplace_back(MakeGaussianResult({ 17.0 - static_cast<double>(node), 0.7, endpoint_offsets.at(node) }));
     }
-    median_context.frozen_background = backtracking_detail::BuildFrozenBackground(median_context, median_previous, { { 0, 1, 2 } });
+    median_context.frozen_background = backtracking_detail::BuildFrozenBackground(median_context, median_previous);
     ASSERT_TRUE(median_context.frozen_background);
     const auto frozen{ median_context.frozen_background };
     backtracking_detail::BacktrackingWorkspace median_workspace{ median_previous,
@@ -4580,7 +4582,7 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_EQ(median_workspace.GetCandidatePatch().atom_index_list.size(), 3U);
     EXPECT_EQ(median_context.frozen_background, frozen);
     ExpectGaussianModelsNear(frozen->model_by_atom.front(), { 9.0, 0.5, 10.0 }, 1.0e-12);
-    const auto next{ backtracking_detail::BuildFrozenBackground(median_context, median_endpoint, { { 0, 1, 2 } }) };
+    const auto next{ backtracking_detail::BuildFrozenBackground(median_context, median_endpoint) };
     ASSERT_TRUE(next);
     ExpectGaussianModelsNear(next->model_by_atom.front(), { 16.0, 0.7, 5.0 }, 1.0e-12);
     EXPECT_NE(next->response_by_atom, frozen->response_by_atom);
@@ -4639,7 +4641,7 @@ TEST(EstimatorSecondStageDefenseTest,
         context.atom_list.at(0).unselected_distance_list_by_sample.push_back({ contributor_distance });
     }
     const residual_detail::FitState previous_state{ MakeGaussianResult(previous_model) };
-    context.frozen_background = residual_detail::BuildFrozenBackground(context, previous_state, { { 0 } });
+    context.frozen_background = residual_detail::BuildFrozenBackground(context, previous_state);
     ASSERT_TRUE(context.frozen_background);
     const auto baseline{ residual_detail::BuildResidualBaseline(context, previous_state) };
     ASSERT_TRUE(baseline.sample_list.at(0).at(1).has_value());
@@ -4668,7 +4670,7 @@ TEST(EstimatorSecondStageDefenseTest,
 
     // A later refresh must not change an already captured snapshot or overlay.
     const residual_detail::FitState next_state{ MakeGaussianResult(candidate_model) };
-    context.frozen_background = residual_detail::BuildFrozenBackground(context, next_state, { { 0 } });
+    context.frozen_background = residual_detail::BuildFrozenBackground(context, next_state);
     ASSERT_TRUE(context.frozen_background);
     EXPECT_NE(context.frozen_background->response_by_atom, candidate_snapshot.frozen_background->response_by_atom);
     const auto old_response{ residual_detail::EvaluateResidualSample(context, sample_ref, candidate_snapshot) };
@@ -5239,6 +5241,7 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitSuspiciousLongChainKeepsTerminalB
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < selected_atoms.size(); i++)
@@ -5254,6 +5257,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsFallsBackWhenJoint
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
@@ -5267,6 +5271,7 @@ TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluste
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     EXPECT_LT(
@@ -5285,6 +5290,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotFreezeSameChemica
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fallback_model{
@@ -5457,6 +5463,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
         CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3)
     };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(
@@ -5475,6 +5482,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsRejectsTerminalFin
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_model{ GetEstimateModel(*atom) };
@@ -5489,6 +5497,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsAppliesCollinearRi
     auto model{ BuildNearCollinearDefenseModel() };
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
@@ -5523,6 +5532,7 @@ TEST(
             initial_analysis_view.GetAtomGroupPrior(group_key));
     }
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, options);
 
     ExpectPeelingSamplingEntriesMatchFinalModels(*model);
@@ -5564,7 +5574,7 @@ TEST(
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageIterationsUsesFrozenClusterBackgroundWithoutGroupOrResidueKeys)
+    RunSecondStageIterationsUsesFrozenGlobalBackgroundWithoutGroupOrResidueKeys)
 {
     const std::array seeds{ rg::GaussianModel3D{ 5.0, 0.50, 0.05 },
         rg::GaussianModel3D{ 7.0, 0.60, 0.15 } };
@@ -5599,24 +5609,29 @@ TEST(
             EXPECT_NE(rg::data_internal::GetGroupKey(serial->FindAtomPtr(3)),
                 rg::data_internal::GetGroupKey(parallel->FindAtomPtr(3)));
             options.thread_size = 1;
+            serial->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*serial, options);
             options.thread_size = 2;
+            parallel->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*parallel, options);
             const auto previous_level{ Logger::GetLogLevel() };
             Logger::SetLogLevel(LogLevel::Debug);
             testing::internal::CaptureStdout();
             options.thread_size = 1;
             options.quiet_mode = false;
+            logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*logged, options);
             const auto output{ testing::internal::GetCapturedStdout() };
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
             testing::internal::CaptureStdout();
+            alternate_logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*alternate_logged, options);
             const auto alternate_output{ testing::internal::GetCapturedStdout() };
             auto relabeled_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, false, shared_cluster, shared_contributor, true) };
             testing::internal::CaptureStdout();
+            relabeled_logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*relabeled_logged, options);
             const auto relabeled_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
@@ -5680,6 +5695,11 @@ TEST(
                 double amplitude{ 0.0 }, width{ 0.0 }, offset{ 0.0 };
                 ASSERT_TRUE(static_cast<bool>(values >> amplitude >> width >> offset));
                 last_background.at(target) = rg::GaussianModel3D{ amplitude, width, offset };
+                if (target == 1)
+                {
+                    ASSERT_TRUE(last_background.at(0).has_value());
+                    ExpectGaussianModelsNear(*last_background.at(0), *last_background.at(1), 0.0);
+                }
                 if (!first_background.at(target).has_value()) first_background.at(target) = last_background.at(target);
             }
             for (std::size_t target = 0; target < 2; target++)
@@ -5688,8 +5708,8 @@ TEST(
                 ASSERT_TRUE(last_background.at(target).has_value());
                 EXPECT_EQ(first_iteration_background_count.at(target), 1U);
                 EXPECT_EQ(background_count.at(target), attempt_count);
-                const auto expected_initial{ shared_cluster ?
-                    *median_detail::BuildGaussianParameterMedian({ scaled_seeds[0], scaled_seeds[1] }) : scaled_seeds[target] };
+                const auto expected_initial{
+                    *median_detail::BuildGaussianParameterMedian({ scaled_seeds[0], scaled_seeds[1] }) };
                 ExpectGaussianModelsNear(*first_background.at(target), expected_initial, 1.0e-12 * scale);
                 const int serial_id{ static_cast<int>(target + 1) };
                 const auto selected{ GetEstimateModel(*serial->FindAtomPtr(serial_id)) };
@@ -5753,8 +5773,10 @@ TEST(
     }
     auto excluded{ BuildUnselectedContributorDefenseModel(seeds, truth) };
     auto included{ BuildUnselectedContributorDefenseModel(seeds, truth) };
+    excluded->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*excluded, options);
     options.exclude_hydrogen = false;
+    included->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*included, options);
     EXPECT_EQ(rg::AtomLocalPotentialView::For(*included->FindAtomPtr(1)).GetNeighborCountForPeeling(), 2);
     EXPECT_NE(rg::AtomLocalPotentialView::For(*excluded->FindAtomPtr(1)).GetPeelingSamplingEntries(false).front().response,
@@ -5773,6 +5795,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsJointlyPolishesClu
     }
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
@@ -5814,6 +5837,7 @@ TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsets
         const auto previous_level{ Logger::GetLogLevel() };
         Logger::SetLogLevel(LogLevel::Debug);
         testing::internal::CaptureStdout();
+        model.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
         iteration_detail::RunSecondStageIterations(model, options);
         const auto output{ testing::internal::GetCapturedStdout() };
         Logger::SetLogLevel(previous_level);
@@ -5862,7 +5886,9 @@ TEST(EstimatorSecondStageDefenseTest, IndependentOffsetJointPolishIsIntensitySca
     auto base_model{ BuildIndependentOffsetDefenseModel() };
     auto scaled_model{ BuildIndependentOffsetDefenseModel(scale) };
 
+    base_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    scaled_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
@@ -5906,6 +5932,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsUpdatesHealthyVari
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
@@ -5930,7 +5957,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsMatchesSerialAndPa
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
 
+    serial_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
+    parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
@@ -5960,9 +5989,11 @@ TEST(
     Logger::SetLogLevel(LogLevel::Debug);
     serial_options.quiet_mode = false;
     testing::internal::CaptureStdout();
+    serial_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_level);
+    parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);
@@ -5996,7 +6027,9 @@ TEST(
         BuildBoundaryComponentConflictDefenseModel(intensity_scale)
     };
 
+    base_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    scaled_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
@@ -6023,7 +6056,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageIterationsIsIntensityScaleIn
     auto base_model{ BuildNearCollinearDefenseModel() };
     auto scaled_model{ BuildNearCollinearDefenseModel(scale) };
 
+    base_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*base_model, MakeSecondStageOptions());
+    scaled_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
@@ -6060,8 +6095,11 @@ TEST(
     serial_options.thread_size = 1;
     parallel_options.thread_size = 2;
 
+    serial_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*serial_model, serial_options);
+    parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
+    scaled_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*scaled_model, MakeSecondStageOptions());
 
     const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
@@ -6095,6 +6133,7 @@ TEST(
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103)
     };
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 101, 103),
@@ -6128,6 +6167,7 @@ TEST(
     const auto previous_model{
         GetEstimateModel(*model->GetSelectedAtoms().front())
     };
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
 
     const auto fitted_model{
@@ -6184,6 +6224,7 @@ TEST(
             previous_analysis_view.GetAtomGroupPrior(group_key));
     }
 
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*model, options);
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)

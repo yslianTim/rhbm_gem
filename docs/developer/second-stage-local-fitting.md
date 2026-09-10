@@ -16,9 +16,9 @@ Chemical group estimation runs once after the second local fitting stage.
 
 Effective unselected contributors have no optimizer state or
 estimation degrees of freedom. All three parameters of their fixed background
-model are the component-wise selected-MDPDE medians of the sample target's
-optimization cluster. This background is refreshed from the latest accepted
-selected state at each outer-iteration boundary and frozen throughout that
+model are the component-wise MDPDE medians of all selected atoms, independent
+of the sample target's optimization cluster. This background is refreshed from
+the latest accepted selected state at each outer-iteration boundary and frozen throughout that
 attempt, including candidate selection, polish, audit, and operator evaluation.
 Unselected responses still contribute to fitting, residuals, and final peeling,
 but no unselected model is persisted.
@@ -143,7 +143,7 @@ selected-only partition is built, the stage builds a complete, finite frozen
 background before constructing the initial objective baseline. The first attempt
 reuses this cache and baseline; boundary refresh starts with the second attempt.
 
-Each cluster median includes every selected atom in the cluster with equal
+The global median includes every selected atom in the current state with equal
 weight, including fixed and quarantined atoms. Amplitude, width, and offset
 are reduced independently by the existing Gaussian parameter median helper:
 odd populations use the central value; even populations average the two central
@@ -182,8 +182,8 @@ selected Jacobian.
 The limit constrains topology partitions, not boundary or final-polish solve
 sizes. The full physical sample dependencies and pre-cutoff retained edge list
 are preserved. Boundary reconciliation and final dependency polish may connect
-multiple optimization clusters and exceed 100 atoms, without enlarging the
-original sample-target cluster's frozen background median pool. A changed
+multiple optimization clusters and exceed 100 atoms, without changing the
+global selected-atom background median pool. A changed
 partition still takes effect together with its background at the next iteration
 boundary, using the existing domain reset, previous/best rescoring, and
 domain-change convergence blocker.
@@ -193,7 +193,7 @@ domain-change convergence blocker.
 Each outer attempt performs the following sequence:
 
 1. Apply any pending selected-only partition at the iteration boundary. Build
-   and freeze the cluster-median background from the latest accepted selected
+   and freeze the global-median background from the latest accepted selected
    state, then re-evaluate previous and retained best objectives under this same
    background. Rebuild the sampling domain and solver workspaces only if the
    partition changes. The first attempt uses the initialization background and
@@ -240,7 +240,7 @@ Each outer attempt performs the following sequence:
    filter this physical halo using their atom-level masks; their union is the
    parameter atom set. There is no chemical-group closure. Each active shape has
    two columns and each active offset has its own column. Merging boundary
-   components does not change the frozen sample-to-cluster background. A valid
+   components does not change the frozen global background. A valid
    endpoint remains the fallback and is replaced only when the correction fits
    every member trust radius and strictly improves that endpoint. For an invalid
    endpoint, the correction must strictly improve the previous component
@@ -802,7 +802,7 @@ peeling response = raw response
 
 Selected neighbors use their final atom-level MDPDE models. Every unselected
 contribution is already included in the frozen per-sample cache, with its last
-validated target-cluster background model. The calculation preserves original
+validated global-median background model. The calculation preserves original
 sampling-point order and metadata. Only selected local Gaussian results are
 written; no atom-local analysis entry is created for an unselected contributor. The selected
 results and rebuilt entries are persisted together with
@@ -906,7 +906,7 @@ warnings report cumulative quarantine
 entries, releases, failed probation probes, and unresolved targets. Convergence
 and summary messages finish the active progress line before normal line output.
 Frozen-background debug diagnostics report the selected target serial,
-cluster-median amplitude/width/offset, and effective background sample count.
+global-median amplitude/width/offset, and effective background sample count.
 No second-stage diagnostic reports a chemical group. Contributor-refit, hard-edge,
 and hard-closure-overflow diagnostics have been removed. The developer-only
 trust shadow retains its legacy `unselected-dependencies=0` trace field.

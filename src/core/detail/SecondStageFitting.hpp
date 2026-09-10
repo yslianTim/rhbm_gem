@@ -67,8 +67,7 @@ struct SecondStageContext
 
 std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
     const SecondStageContext & context,
-    const FitState & state,
-    const std::vector<ClusterKey> & cluster_key_list);
+    const FitState & state);
 
 double GetFrozenBackgroundResponse(const SecondStageContext & context, const SampleRef & sample_ref);
 

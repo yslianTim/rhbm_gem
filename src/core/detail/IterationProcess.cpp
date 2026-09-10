@@ -441,7 +441,7 @@ static IterationState BuildIterationState(
         0);
     iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.selected_atom_index_list);
     const auto cluster_key_list{ BuildGraphClusterKeyList(iteration_state.graph_partition) };
-    context.frozen_background = BuildFrozenBackground(context, iteration_state.accepted_state, cluster_key_list);
+    context.frozen_background = BuildFrozenBackground(context, iteration_state.accepted_state);
     if (!context.frozen_background) throw std::runtime_error("Second-stage initial fixed background is unavailable.");
     LogFrozenBackground(context, options.quiet_mode);
     ResetClusterSolverWorkspace(cluster_key_list, iteration_state.solver_workspace_by_key);
@@ -479,8 +479,7 @@ static bool BeginFrozenBackgroundIteration(
     const bool partition_changed{ iteration_state.pending_topology.has_value() };
     const auto & partition{ partition_changed ?
         iteration_state.pending_topology->partition : iteration_state.graph_partition };
-    const auto background{ BuildFrozenBackground(
-        context, iteration_state.accepted_state, BuildGraphClusterKeyList(partition)) };
+    const auto background{ BuildFrozenBackground(context, iteration_state.accepted_state) };
     if (!background) throw std::runtime_error("Second-stage fixed background refresh is unavailable.");
 
     const auto previous_background{ context.frozen_background };
