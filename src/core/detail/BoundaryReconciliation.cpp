@@ -1,3 +1,4 @@
+#include "core/detail/PhaseAudit.hpp"
 #include "core/detail/BoundaryReconciliation.hpp"
 
 #include "core/detail/Diagnosis.hpp"
@@ -402,6 +403,9 @@ static bool TryBoundaryJointCorrection(
             corrected_overlay.GetState());
     if (diagnostic.suspicious_candidate_atom_count != 0)
     {
+        if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+            diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
+            corrected_overlay.GetState(), &endpoint_state_view, correction_result.damping, "rejected", "suspicious", true);
         record_performance(false);
         return false;
     }
@@ -436,6 +440,11 @@ static bool TryBoundaryJointCorrection(
             improvement_reference_objective.GetTotalObjective(),
             kObjectiveStrictTolerance)
     };
+    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+        diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
+        corrected_overlay.GetState(), &endpoint_state_view, correction_result.damping,
+        is_strict_improvement ? "accepted" : "rejected",
+        candidate_evaluation && !is_strict_improvement ? "strict-improvement" : (record ? record->outcome : ""), true);
     if (!is_strict_improvement)
     {
         if (record && candidate_evaluation)
@@ -502,6 +511,10 @@ static bool TryBacktrackBoundaryComponent(
             candidate_overlay,
             previous_audit_objective,
             diagnostic.is_rescue_attempt, record);
+        if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+            diagnostic.is_rescue_attempt ? "rescue-backtracking" : "boundary-backtracking", endpoint_patch.atom_index_list,
+            candidate_overlay.GetState(), nullptr, step.factor, accepted_evaluation ? "accepted" : "rejected",
+            record ? record->outcome : "", false, false);
         if (accepted_evaluation.has_value()) break;
     }
     if (!accepted_evaluation.has_value())
@@ -562,6 +575,10 @@ static void ReconcileBoundaryComponent(
             endpoint_overlay,
             previous_audit_objective, false, endpoint_record)
     };
+    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+        diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
+        endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
+        endpoint_record ? endpoint_record->outcome : "");
     if (endpoint_evaluation.has_value())
     {
         diagnostic.endpoint_component_objective = endpoint_evaluation->audit_objective.GetTotalObjective();
@@ -739,6 +756,10 @@ static bool TryRescueBoundaryComponent(
             &previous_audit_objective,
             true, endpoint_record)
     };
+    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+        diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
+        endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
+        endpoint_record ? endpoint_record->outcome : "");
     if (endpoint_evaluation.has_value())
     {
         diagnostic.endpoint_component_objective =

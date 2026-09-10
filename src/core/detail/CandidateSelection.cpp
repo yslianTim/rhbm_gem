@@ -1,3 +1,4 @@
+#include "core/detail/PhaseAudit.hpp"
 #include "core/detail/CandidateSelection.hpp"
 
 #include "core/detail/BoundaryReconciliation.hpp"
@@ -941,6 +942,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             {
                 terminal_diagnostic_list.emplace_back(*last_guard_failure);
                 result.diagnostic.terminal_diagnostic_list = std::move(terminal_diagnostic_list);
+                if (context.phase_audit) context.phase_audit->Missing("local-search", key, "guard-failed");
                 return result;
             }
             const auto atom_index{ *last_guard_failure->guard_atom_index };
@@ -986,12 +988,15 @@ static ClusterCandidateResult SelectClusterCandidate(
             std::move(terminal_diagnostic_list);
         result.radius_action = TrustRegionRadiusAction::Keep;
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
+        if (context.phase_audit) context.phase_audit->Missing("local-search", key, "search-exhausted");
         return result;
     }
     result.diagnostic.terminal_diagnostic_list =
         std::move(terminal_diagnostic_list);
 
     const FitStateView base_state_view{ previous_state, *result.accepted_patch };
+    if (context.phase_audit) context.phase_audit->Capture("local-search", key, base_state_view,
+        nullptr, result.diagnostic.accepted_factor.value_or(1.0), "accepted");
     for (std::size_t position = 0; position < key.size(); position++)
     {
         if (IsTransformedChangeMaterial(
@@ -1021,6 +1026,7 @@ static ClusterCandidateResult SelectClusterCandidate(
         if (!polished_candidate.has_value())
         {
             result.polish_progress.skipped_count = 1;
+            if (context.phase_audit) context.phase_audit->Missing("local-polish", key, "no-polish-proposal");
         }
         else
         {
@@ -1045,6 +1051,10 @@ static ClusterCandidateResult SelectClusterCandidate(
                     result.objective_state,
                     polish_diagnostic,
                     performance_counters, "local-polish") };
+            if (context.phase_audit) context.phase_audit->Capture("local-polish", key,
+                polished_overlay.GetState(), &base_state_view, polished_candidate->effective_damping,
+                polish_committed ? "accepted" : "rejected",
+                polish_committed ? "" : PhaseAuditRejectionReason(polish_diagnostic), true);
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             result.trust_model_candidate_funnel.polish_objective_evaluated_count++;
             const auto rejected_by_strict_polish{
@@ -1327,7 +1337,13 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
     inputs.performance_counters.RecordFullStateMaterialization();
 
+    if (inputs.context.phase_audit)
+    {
+        inputs.context.phase_audit->CaptureSearchAssembly();
+        inputs.context.phase_audit->CaptureState("assembly-after-polish", selection.assembled_state, true);
+    }
     ReconcileSelectedBoundaries(inputs, rescue_patch_by_key, selection);
+    if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureState("boundary-final", selection.assembled_state);
     for (const auto & key : locally_polished_key_list)
     {
         if (ContainsClusterKey(selection.accepted_key_list, key)) continue;

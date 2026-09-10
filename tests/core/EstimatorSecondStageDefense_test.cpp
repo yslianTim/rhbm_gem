@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <future>
 #include <limits>
 #include <memory>
 #include <numeric>
@@ -17,6 +18,7 @@
 
 #include "core/detail/GaussianModelOperations.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
+#include "core/detail/PhaseAudit.hpp"
 #include "core/detail/SecondStageFitting.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
@@ -6592,5 +6594,198 @@ TEST(
             final_analysis_view.GetAtomGroupPrior(group_key_list.at(i)),
             previous_group_prior_list.at(i),
             0.0);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAndDoNotPublishCandidates)
+{
+    audit_detail::SecondStageContext context;
+    context.atom_list.resize(3);
+    const audit_detail::FitState baseline{
+        MakeGaussianResult({ 6.0, 0.5, 0.05 }), MakeGaussianResult({ 7.0, 0.6, -0.02 }),
+        MakeGaussianResult({ 8.0, 0.5, 0.03 }) };
+    for (std::size_t atom = 0; atom < 3; atom++)
+    {
+        auto & target{ context.atom_list.at(atom) };
+        for (const auto distance : { 0.0, 0.25, 0.5, 0.75, 1.5 })
+        {
+            target.neighbor_atom_sample_offset_list.push_back(target.neighbor_atom_sample_list.size());
+            double response{ baseline.at(atom).mdpde.GetModel().ResponseAtDistance(distance) + 0.1 };
+            for (std::size_t neighbor = 0; neighbor < 3; neighbor++)
+                if (neighbor != atom)
+                {
+                    target.neighbor_atom_sample_list.push_back({ neighbor, 1.0 });
+                    response += baseline.at(neighbor).mdpde.GetModel().ResponseAtDistance(1.0);
+                }
+            target.raw_sampling_entries.push_back({ response, SamplingPoint{ distance } });
+        }
+        target.neighbor_atom_sample_offset_list.push_back(target.neighbor_atom_sample_list.size());
+        target.refit_design = audit_detail::PreparedLocalGaussianDesign(target.raw_sampling_entries, 0.0, 1.0);
+    }
+    auto background{ std::make_shared<audit_detail::FrozenBackground>() };
+    background->response_by_atom.assign(3, std::vector<double>(5, 0.025));
+    context.frozen_background = background;
+    const std::vector<audit_detail::ClusterKey> keys{ { 0, 1 }, { 2 } };
+    const auto domain{ audit_detail::BuildObjectiveDomain(context,
+        audit_detail::BuildSecondStageModelSnapshot(context, baseline), keys) };
+    const audit_detail::SuspiciousBlockActivity activity{ std::vector<char>(3, 0), std::vector<char>(3, 0), std::vector<char>(3, 0) };
+    audit_detail::ClusterSolverWorkspaceMap workspaces;
+    for (const auto & key : keys) workspaces.try_emplace(key);
+    auto options{ MakeSecondStageOptions() };
+    const auto production{ audit_detail::BuildIterationProposal(context, keys, baseline, options,
+        std::vector<double>(3, 1.0), activity, workspaces) };
+    const auto analyses{ workspaces.at(keys.front()).joint_offset.GetSymbolicAnalysisCount() };
+    auto candidate{ baseline };
+    candidate[0] = MakeGaussianResult({ 6.1, 0.51, 0.06 });
+    candidate[2] = MakeGaussianResult({ 7.9, 0.5, 0.03 });
+    const auto patch{ audit_detail::FitStatePatch::FromState(candidate, { 0, 2 }) };
+    const audit_detail::FitStateView view{ baseline, patch };
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    audit_detail::PhaseAudit collector(context, domain, baseline, keys, 6, 12);
+    collector.Capture("local-polish", { 0, 2 }, view, nullptr, 1.0, "rejected", "best", true);
+    collector.CaptureState("assembly-after-polish", candidate, true);
+    collector.Missing("local-search", { 2 }, "search-exhausted");
+    auto incomplete{ production.fixed_point_operator };
+    incomplete.shape_available_atom_mask[0] = 0;
+    collector.CaptureOperator(incomplete);
+    testing::internal::CaptureStdout();
+    collector.Finish(options, std::vector<double>(3, 1.0), activity, production, baseline);
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_EQ(workspaces.at(keys.front()).joint_offset.GetSymbolicAnalysisCount(), analyses);
+    EXPECT_DOUBLE_EQ(baseline[0].mdpde.GetModel().GetAmplitude(), 6.0);
+    const auto independent{ audit_detail::EvaluateAuditObjective(domain,
+        audit_detail::BuildResidualBaseline(context, candidate)) };
+    ASSERT_TRUE(independent);
+    // Compare every serialized component with an independently materialized residual baseline.
+    for (const auto & [field, value] : std::vector<std::pair<std::string, double>>{
+        { "fit", independent->fit_range_residual_objective },
+        { "tail_weighted", independent->GetTailValidationPenalty() },
+        { "offset", independent->offset_plausibility_penalty },
+        { "total", independent->GetTotalObjective() } })
+    {
+        const auto line_begin{ output.find("\"stage\":\"local-polish\"") };
+        ASSERT_NE(line_begin, std::string::npos);
+        const auto value_begin{ output.find("\"" + field + "\":", line_begin) };
+        ASSERT_NE(value_begin, std::string::npos);
+        EXPECT_NEAR(std::stod(output.substr(value_begin + field.size() + 3)), value, 1e-12);
+    }
+    EXPECT_NE(output.find("\"disposition\":\"rejected\",\"reason\":\"best\",\"final_retained\":false"), std::string::npos);
+    EXPECT_NE(output.find("\"alpha\":0.001"), std::string::npos);
+    // Independently rerun T(candidate), then compare its residual (not the candidate movement).
+    audit_detail::ClusterSolverWorkspaceMap candidate_workspaces;
+    for (const auto & key : keys) candidate_workspaces.try_emplace(key);
+    const auto candidate_operator{ audit_detail::BuildIterationProposal(context, keys, candidate, options,
+        std::vector<double>(3, 1.0), activity, candidate_workspaces) };
+    std::vector<audit_detail::TransformedChange> residuals;
+    for (std::size_t i = 0; i < candidate.size(); i++)
+        residuals.push_back(audit_detail::CalculateTransformedChange(
+            candidate_operator.fixed_point_operator.state[i], candidate[i].mdpde.GetModel()));
+    const auto expected_residual{ audit_detail::SummarizeActiveDofChanges(residuals, { { 0, 1, 2 }, { 0, 1, 2 } }) };
+    const auto polish_position{ output.find("\"stage\":\"local-polish\"") };
+    auto residual_position{ output.find("\"p99\":[", polish_position) };
+    ASSERT_NE(residual_position, std::string::npos);
+    residual_position += 7;
+    for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
+    {
+        std::size_t consumed{ 0 };
+        EXPECT_NEAR(std::stod(output.substr(residual_position), &consumed), expected_residual.percentile_list[coordinate], 1e-12);
+        residual_position += consumed + 1;
+    }
+    auto half{ baseline };
+    for (std::size_t i = 0; i < half.size(); i++)
+    {
+        const auto a{ baseline[i].mdpde.GetModel() }, b{ candidate[i].mdpde.GetModel() };
+        half[i] = MakeGaussianResult({ std::sqrt(a.GetAmplitude() * b.GetAmplitude()),
+            std::sqrt(a.GetWidth() * b.GetWidth()), 0.5 * (a.GetOffset() + b.GetOffset()) });
+    }
+    const auto half_objective{ audit_detail::EvaluateAuditObjective(domain, audit_detail::BuildResidualBaseline(context, half)) };
+    ASSERT_TRUE(half_objective);
+    const auto half_position{ output.find("\"alpha\":0.5", polish_position) };
+    ASSERT_NE(half_position, std::string::npos);
+    const auto half_total{ output.find("\"total\":", half_position) };
+    ASSERT_NE(half_total, std::string::npos);
+    EXPECT_NEAR(std::stod(output.substr(half_total + 8)), half_objective->GetTotalObjective(), 1e-12);
+
+    EXPECT_NE(output.find("search-exhausted"), std::string::npos);
+    EXPECT_NE(output.find("incomplete-production-operator"), std::string::npos);
+    EXPECT_NE(output.find("\"population\":[3,3,3]"), std::string::npos);
+    EXPECT_NE(output.find("\"production_operator\":"), std::string::npos);
+    EXPECT_NE(output.find("\"domain_id\":12"), std::string::npos);
+    const auto collect_workers = [&](bool parallel)
+    {
+        audit_detail::PhaseAudit workers(context, domain, baseline, keys, 7, 12);
+        const auto capture = [&](const audit_detail::ClusterKey & key)
+        {
+            const auto worker_patch{ audit_detail::FitStatePatch::FromState(candidate, key) };
+            const audit_detail::FitStateView worker_view{ baseline, worker_patch };
+            workers.Capture("local-search", key, worker_view, nullptr, 1.0, "accepted");
+            workers.Capture("local-polish", key, worker_view, &worker_view, 1.0, "rejected", "strict-improvement", true);
+        };
+        if (parallel)
+        {
+            auto first{ std::async(std::launch::async, capture, keys[0]) };
+            auto second{ std::async(std::launch::async, capture, keys[1]) };
+            first.get(); second.get();
+        }
+        else for (const auto & key : keys) capture(key);
+        workers.CaptureSearchAssembly();
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        workers.Finish(options, std::vector<double>(3, 1.0), activity, production, baseline);
+        auto log{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(saved_level);
+        log.resize(log.find("[Debug] Second-stage phase audit counters:"));
+        return log;
+    };
+    EXPECT_EQ(collect_workers(false), collect_workers(true));
+    auto incomplete_context{ context };
+    incomplete_context.atom_list[0].refit_design = {};
+    audit_detail::PhaseAudit failed_operator(incomplete_context, domain, baseline, keys, 8, 12);
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    failed_operator.Finish(options, std::vector<double>(3, 1.0), activity, production, baseline);
+    const auto failed_output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_NE(failed_output.find("\"reason\":\"incomplete-operator\""), std::string::npos);
+    EXPECT_NE(failed_output.find("\"p99\":null"), std::string::npos);
+    EXPECT_NE(failed_output.find("\"operator_reproduced\":false"), std::string::npos);
+    EXPECT_EQ(workspaces.at(keys.front()).joint_offset.GetSymbolicAnalysisCount(), analyses);
+
+    EXPECT_FALSE(audit_detail::BeginPhaseAudit(context, true, domain, baseline, keys, 1, 1));
+    Logger::SetLogLevel(LogLevel::Info);
+    EXPECT_FALSE(audit_detail::BeginPhaseAudit(context, false, domain, baseline, keys, 1, 1));
+    Logger::SetLogLevel(saved_level);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PhaseAuditQuietAndEnabledRunsPreserveFinalParameters)
+{
+    auto quiet_model{ BuildJointPolishDefenseModel() };
+    auto traced_model{ BuildJointPolishDefenseModel() };
+    quiet_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
+    traced_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    auto options{ MakeSecondStageOptions() };
+    testing::internal::CaptureStdout();
+    iteration_detail::RunSecondStageIterations(*quiet_model, options);
+    const auto quiet_output{ testing::internal::GetCapturedStdout() };
+    options.quiet_mode = false;
+    testing::internal::CaptureStdout();
+    iteration_detail::RunSecondStageIterations(*traced_model, options);
+    const auto traced_output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_EQ(quiet_output.find("Second-stage phase audit:"), std::string::npos);
+    EXPECT_EQ(traced_output.find("Second-stage phase audit error:"), std::string::npos);
+    const auto & quiet_atoms{ quiet_model->GetSelectedAtoms() };
+    const auto & traced_atoms{ traced_model->GetSelectedAtoms() };
+    ASSERT_EQ(quiet_atoms.size(), traced_atoms.size());
+    for (std::size_t i = 0; i < quiet_atoms.size(); i++)
+    {
+        const auto a{ GetEstimateModel(*quiet_atoms[i]) }, b{ GetEstimateModel(*traced_atoms[i]) };
+        EXPECT_DOUBLE_EQ(a.GetAmplitude(), b.GetAmplitude());
+        EXPECT_DOUBLE_EQ(a.GetWidth(), b.GetWidth());
+        EXPECT_DOUBLE_EQ(a.GetOffset(), b.GetOffset());
     }
 }

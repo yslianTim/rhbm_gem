@@ -32,6 +32,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/Quarantine.cpp
     core/detail/BoundaryReconciliation.cpp
     core/detail/DependencyPolish.cpp
+    core/detail/PhaseAudit.cpp
     core/detail/Diagnosis.cpp
     core/detail/IterationProcess.cpp
     core/MapSampler.cpp
@@ -135,6 +136,9 @@ rhbm_gem_apply_library_install_rpath(rhbm_gem)
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     target_compile_definitions(rhbm_gem PUBLIC RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
+endif()
+if(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE)
+    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE)
 endif()
 if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     target_compile_definitions(rhbm_gem PRIVATE

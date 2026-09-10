@@ -1,3 +1,4 @@
+#include "core/detail/PhaseAudit.hpp"
 #include "core/detail/IterationProcess.hpp"
 
 #include "core/detail/FittingRanges.hpp"
@@ -111,6 +112,7 @@ struct IterationState
     TrustRegionStateSet trust_region_state{};
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
+    std::size_t phase_audit_domain_id{ 1 };
 };
 
 static void ValidateBlockActivitySize(
@@ -350,6 +352,7 @@ static void ResetIterationStateForPartition(
         BuildSecondStageModelSnapshot(context, iteration_state.accepted_state)
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
+    iteration_state.phase_audit_domain_id++;
     const auto previous_objective_states{ context.best_trace ? iteration_state.cluster_objective_state : ClusterObjectiveStateMap{} };
     iteration_state.cluster_objective_state.clear();
     const auto objective_by_key{
@@ -504,6 +507,7 @@ static bool BeginFrozenBackgroundIteration(
         return true;
     }
     if (previous_background && previous_background->response_by_atom == background->response_by_atom) return false;
+    iteration_state.phase_audit_domain_id++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
     const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
@@ -600,6 +604,8 @@ static IterationResult RunIteration(
             quarantine_activity,
             probation_atom_index_set)
     };
+    context.phase_audit = BeginPhaseAudit(context, options.quiet_mode, objective_domain,
+        previous_state, cluster_key_list, attempt_number, iteration_state.phase_audit_domain_id);
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{
@@ -615,6 +621,11 @@ static IterationResult RunIteration(
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();
 
+    if (context.phase_audit)
+    {
+        context.phase_audit->CaptureOperator(proposal_result.fixed_point_operator);
+        context.phase_audit->CaptureState("production-proposal", proposal_result.proposal_state, true);
+    }
     LogUnrestrictedOperatorAssessments(
         options.quiet_mode,
         proposal_result.assessment_by_atom,
@@ -680,6 +691,9 @@ static IterationResult RunIteration(
         selection.final_audit_objective.reset();
         ReauditFallbackSelection(candidate_inputs, selection);
     }
+    if (context.phase_audit)
+        context.phase_audit->CaptureState("final-selection",
+            selection.accepted_key_list.empty() ? previous_state : assembled_state);
     // Publish audited history before the all-rejected exit, as on accepted attempts.
     iteration_state.cluster_objective_state = std::move(selection.cluster_objective_state);
     LogBestObjectivePublication(context, iteration_state.cluster_objective_state);
@@ -701,6 +715,8 @@ static IterationResult RunIteration(
 
     if (selection.accepted_key_list.empty())
     {
+        if (context.phase_audit) context.phase_audit->Finish(options, joint_offset_ridge_multiplier_list,
+            quarantine_activity, proposal_result, previous_state);
         result.stop_reason = attempt_number >= kMaximumIterations ?
             SecondStageStopReason::AllRejectedAtMaximumIterations :
             SecondStageStopReason::AllRejectedBacktrackingExhausted;
@@ -827,6 +843,8 @@ static IterationResult RunIteration(
 
     LogConvergenceSafeguardAudit(options.quiet_mode, result, certificate);
 
+    if (context.phase_audit) context.phase_audit->Finish(options, joint_offset_ridge_multiplier_list,
+        quarantine_activity, proposal_result, assembled_state);
     // Commit the accepted state even when this attempt reaches a stopping condition.
     iteration_state.accepted_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);

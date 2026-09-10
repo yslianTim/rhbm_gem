@@ -27,7 +27,7 @@ void LogConditioning(
     std::string_view solve,
     std::string_view phase)
 {
-    if (Logger::GetLogLevel() < LogLevel::Debug) return;
+    if (phase == "phase-audit" || Logger::GetLogLevel() < LogLevel::Debug) return;
     std::ostringstream message;
     message << std::scientific << std::setprecision(17)
         << "Second-stage conditioning: schema=1, solve=" << solve
@@ -500,7 +500,7 @@ JointOffsetSolveResult EstimateJointOffsets(
 {
     const auto report = [&](JointOffsetSolveResult result)
     {
-        if (Logger::GetLogLevel() >= LogLevel::Debug)
+        if (diagnostic_phase != "phase-audit" && Logger::GetLogLevel() >= LogLevel::Debug)
         {
             std::ostringstream message;
             message << "Second-stage solve: schema=1, solve=joint-offset, phase="

@@ -314,6 +314,16 @@ endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(
+        NAME second_stage_phase_audit_parser_test
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/integration/second_stage_phase_audit_test.py"
+    )
+    set_tests_properties(
+        second_stage_phase_audit_parser_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm"
+    )
+
+    add_test(
         NAME fold_168_regression_runner_test
         COMMAND "${Python_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression_test.py"

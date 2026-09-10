@@ -23,6 +23,8 @@ option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
 option(RHBM_GEM_ENABLE_FOLD_168_REGRESSION
     "Enable the external 168-atom simulation regression benchmark" OFF)
+option(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
+    "Enable developer-only isolated second-stage phase auditing" OFF)
 option(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     "Enable developer-only frozen-IRLS trust-model instrumentation" OFF)
 
