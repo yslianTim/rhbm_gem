@@ -1044,7 +1044,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain,
                     result.objective_state,
                     polish_diagnostic,
-                    performance_counters) };
+                    performance_counters, "local-polish") };
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
             result.trust_model_candidate_funnel.polish_objective_evaluated_count++;
             const auto rejected_by_strict_polish{

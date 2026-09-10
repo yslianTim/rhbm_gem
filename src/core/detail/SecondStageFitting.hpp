@@ -59,9 +59,12 @@ struct FrozenBackground
     SecondStageAdjustedResponseCache response_by_atom{};
 };
 
+struct BestObjectiveTraceEnvironment;
+
 struct SecondStageContext
 {
     std::vector<AtomContext> atom_list{};
+    std::shared_ptr<BestObjectiveTraceEnvironment> best_trace{};
     std::shared_ptr<const FrozenBackground> frozen_background{};
 };
 

@@ -718,6 +718,281 @@ void LogAllRejectedResolution(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
+namespace {
+
+std::string BestTraceKey(const ClusterKey & key)
+{
+    std::ostringstream out;
+    out << "[";
+    for (std::size_t i = 0; i < key.size(); i++)
+    {
+        if (i) out << ",";
+        out << key.at(i);
+    }
+    out << "]";
+    return out.str();
+}
+
+void AppendBestTraceObjective(std::ostream & out, const std::optional<ObjectiveBreakdown> & value)
+{
+    if (!value) { out << "unavailable"; return; }
+    out << value->fit_range_residual_objective << "/" << value->GetTailValidationPenalty()
+        << "/" << value->offset_plausibility_penalty << "/" << value->GetTotalObjective();
+}
+
+void AppendBestTraceModel(std::ostream & out, const GaussianModel3D & model)
+{
+    out << model.GetAmplitude() << "/" << model.GetWidth() << "/" << model.GetOffset();
+}
+
+bool SameBestTraceModel(const GaussianModel3D & a, const GaussianModel3D & b)
+{
+    return a.GetAmplitude() == b.GetAmplitude() && a.GetWidth() == b.GetWidth() && a.GetOffset() == b.GetOffset();
+}
+
+} // namespace
+
+void BeginBestObjectiveTrace(
+    SecondStageContext & context, bool quiet_mode, const ObjectiveDomain & domain,
+    std::size_t attempt, std::size_t accepted_iteration)
+{
+    context.best_trace.reset();
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+    context.best_trace = std::make_shared<BestObjectiveTraceEnvironment>();
+    context.best_trace->attempt = attempt;
+    context.best_trace->accepted_iteration = accepted_iteration;
+    context.best_trace->domain = std::make_shared<const ObjectiveDomain>(domain);
+}
+
+void CaptureBestObjectiveSource(
+    const SecondStageContext & context, const ClusterKey & key,
+    SecondStageModelSnapshot snapshot, const std::vector<SampleRef> & sample_refs,
+    ClusterObjectiveState & state, const std::optional<ObjectiveBreakdown> & before,
+    double before_step, std::string_view source, std::string_view reason,
+    std::size_t candidate_number, std::optional<double> factor)
+{
+    if (!context.best_trace) return;
+    auto & trace{ *context.best_trace };
+    auto event{ std::make_shared<BestObjectiveSource>() };
+    event->key = key;
+    const auto predecessor{ state.reset_source ? state.reset_source : state.best_source };
+    if (predecessor) event->predecessor_id = predecessor->id;
+    event->attempt = trace.attempt;
+    event->accepted_iteration = trace.accepted_iteration;
+    event->source = source;
+    event->reason = reason;
+    event->candidate_number = candidate_number;
+    event->factor = factor;
+    event->before = before;
+    event->before_step = before_step;
+    event->objective = state.best_objective;
+    event->step = state.best_maximum_transformed_change;
+    event->snapshot = std::move(snapshot);
+    event->domain = trace.domain;
+    event->sample_refs = sample_refs;
+    // One worker evaluates each key. Boundary evaluation follows worker completion.
+    // The lock protects the shared container; IDs use per-key execution order.
+    std::lock_guard lock{ trace.mutex };
+    event->sequence = ++trace.sequence_by_key[key];
+    event->id = std::to_string(trace.attempt) + "/" + BestTraceKey(key) + "/" + std::to_string(event->sequence);
+    state.best_source = event;
+    state.reset_source.reset();
+    trace.events.emplace_back(std::move(event));
+}
+
+void LogBestObjectivePublication(const SecondStageContext & context, const ClusterObjectiveStateMap & states)
+{
+    if (!context.best_trace) return;
+    auto events{ context.best_trace->events };
+    std::ranges::sort(events, [](const auto & a, const auto & b)
+    {
+        return a->key == b->key ? a->sequence < b->sequence : a->key < b->key;
+    });
+    for (const auto & event : events)
+    {
+        const auto iter{ states.find(event->key) };
+        const bool retained{ iter != states.end() && iter->second.best_source == event };
+        std::ostringstream out;
+        out << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10)
+            << "Cluster best source: schema=1, id=" << event->id << ", key=" << BestTraceKey(event->key)
+            << ", try=" << event->attempt << ", acc-before=" << event->accepted_iteration
+            << ", source=" << event->source << ", candidate=" << event->candidate_number
+            << ", predecessor=" << (event->predecessor_id.empty() ? "unavailable" : event->predecessor_id)
+            << ", reason=" << event->reason << ", retained=" << (retained ? "yes" : "no")
+            << ", factor=";
+        if (event->factor) out << *event->factor; else out << "unavailable";
+        out << ", before="; AppendBestTraceObjective(out, event->before);
+        out << ", best="; AppendBestTraceObjective(out, event->objective);
+        out << ", step-before/after=" << event->before_step << "/" << event->step;
+        Logger::Log(LogLevel::Debug, out.str());
+    }
+    for (const auto & [key, state] : states)
+    {
+        std::ostringstream out;
+        out << "Cluster best publication: schema=1, try=" << context.best_trace->attempt
+            << ", acc-before=" << context.best_trace->accepted_iteration << ", key=" << BestTraceKey(key)
+            << ", best-source=" << (state.best_source ? state.best_source->id : "unavailable");
+        Logger::Log(LogLevel::Debug, out.str());
+    }
+}
+
+void DiagnoseBestObjectiveComparison(
+    JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
+    const ClusterKey & key, const std::vector<SampleRef> & samples,
+    const ObjectiveDomain & domain, const ClusterObjectiveState & state)
+{
+    if (!record || !candidate.GetContext().best_trace || !state.best_objective) return;
+    if (!state.best_source)
+    {
+        record->best_comparison_lines.emplace_back("Cluster best comparison: schema=1, status=unavailable, diagnostic-only=yes");
+        return;
+    }
+    const auto & origin{ *state.best_source };
+    record->best_source_id = origin.id;
+    if (origin.key != key || !origin.domain || !domain.cluster_by_key.contains(key) ||
+        origin.snapshot.node.size() != candidate.GetState().size())
+    {
+        record->best_comparison_lines.emplace_back("Cluster best comparison: schema=1, status=not-comparable, diagnostic-only=yes");
+        return;
+    }
+    const auto & context{ candidate.GetContext() };
+    const auto & previous{ candidate.GetBaseline().model_snapshot };
+    const auto proposed{ BuildSecondStageModelSnapshot(context, candidate.GetState()) };
+    std::size_t evaluations{ 0 }, residual_evaluations{ 0 };
+    const auto evaluate = [&](const SecondStageModelSnapshot & snapshot, const ObjectiveDomain & eval_domain,
+                              const std::vector<SampleRef> & refs)
+    {
+        // Independent diagnostic baseline. Immutable atom samples are read from context;
+        // the supplied snapshot owns the background used by EvaluateResidualSample.
+        ResidualBaseline baseline{ snapshot, {} };
+        baseline.sample_list.resize(context.atom_list.size());
+        for (const auto & ref : refs)
+        {
+            auto & list{ baseline.sample_list.at(ref.atom_index) };
+            if (list.empty()) list.resize(context.atom_list.at(ref.atom_index).raw_sampling_entries.size());
+            list.at(ref.sample_index) = EvaluateResidualSample(context, ref, snapshot);
+            residual_evaluations++;
+        }
+        evaluations++;
+        return EvaluateObjectiveContribution(baseline, key, refs, eval_domain);
+    };
+    const auto historical{ evaluate(origin.snapshot, *origin.domain, origin.sample_refs) };
+    const auto domain_only{ evaluate(origin.snapshot, domain, samples) };
+    auto background_snapshot{ origin.snapshot };
+    background_snapshot.frozen_background = proposed.frozen_background;
+    const auto background_only{ evaluate(background_snapshot, domain, samples) };
+    auto previous_environment{ previous };
+    auto candidate_environment{ proposed };
+    for (const auto atom : key)
+    {
+        previous_environment.node.at(atom) = origin.snapshot.node.at(atom);
+        candidate_environment.node.at(atom) = origin.snapshot.node.at(atom);
+    }
+    const auto current_previous{ evaluate(previous_environment, domain, samples) };
+    const auto current_candidate{ evaluate(candidate_environment, domain, samples) };
+    std::ostringstream out;
+    out << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10)
+        << "Cluster best comparison: schema=1, best-source=" << origin.id << ", key=" << BestTraceKey(key)
+        << ", diagnostic-only=yes, evaluations=" << evaluations << ", residual-evaluations=" << residual_evaluations;
+    const auto append = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & objective)
+    {
+        out << ", " << label << "="; AppendBestTraceObjective(out, objective);
+    };
+    append("stored", state.best_objective);
+    append("historical", historical);
+    append("domain-only", domain_only);
+    append("background-after-domain", background_only);
+    append("previous-environment", current_previous);
+    append("candidate-environment", current_candidate);
+    append("previous", record->previous);
+    append("candidate", record->candidate);
+    const auto delta = [&](std::string_view label, const auto & a, const auto & b)
+    {
+        out << ", " << label << "=";
+        if (!a || !b) { out << "unavailable"; return; }
+        out << b->fit_range_residual_objective - a->fit_range_residual_objective << "/"
+            << b->GetTailValidationPenalty() - a->GetTailValidationPenalty() << "/"
+            << b->offset_plausibility_penalty - a->offset_plausibility_penalty << "/"
+            << b->GetTotalObjective() - a->GetTotalObjective();
+    };
+    delta("historical-minus-stored", state.best_objective, historical);
+    delta("domain-delta", historical, domain_only);
+    delta("background-delta", domain_only, background_only);
+    delta("previous-neighbor-delta", background_only, current_previous);
+    delta("candidate-neighbor-delta", background_only, current_candidate);
+    const auto gate = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & reference)
+    {
+        out << ", " << label << "-gate=";
+        if (!reference || !record->candidate) { out << "unavailable"; return; }
+        const auto value{ reference->GetTotalObjective() };
+        const auto tolerance{ CalculateObjectiveTolerance(value, kObjectiveProgressTolerance) };
+        out << (IsObjectiveDeteriorated(record->candidate->GetTotalObjective(), value, kObjectiveProgressTolerance) ? "fail" : "pass")
+            << ", " << label << "-reference=" << value
+            << ", " << label << "-delta=" << record->candidate->GetTotalObjective() - value
+            << ", " << label << "-absolute=" << kObjectiveProgressTolerance.absolute_tolerance
+            << ", " << label << "-relative=" << kObjectiveProgressTolerance.relative_tolerance
+            << ", " << label << "-tolerance=" << tolerance << ", " << label << "-limit=" << value + tolerance;
+    };
+    gate("stored", state.best_objective);
+    gate("previous-environment", current_previous);
+    gate("candidate-environment", current_candidate);
+    record->best_comparison_lines.emplace_back(out.str());
+
+    std::set<SampleRef> all_samples(origin.sample_refs.begin(), origin.sample_refs.end());
+    all_samples.insert(samples.begin(), samples.end());
+    std::set<std::size_t> contributors(key.begin(), key.end());
+    bool owner_changed{ false }, mask_changed{ false }, scale_changed{ false }, normalization_changed{ false }, background_changed{ false };
+    normalization_changed = origin.domain->active_atom_count != domain.active_atom_count ||
+        origin.domain->unique_sample_count != domain.unique_sample_count ||
+        origin.domain->fit_sample_count != domain.fit_sample_count || origin.domain->tail_sample_count != domain.tail_sample_count;
+    for (const auto & ref : all_samples)
+    {
+        contributors.insert(ref.atom_index);
+        for (const auto & neighbor : context.atom_list.at(ref.atom_index).Neighbors(ref.sample_index))
+            contributors.insert(neighbor.atom_index);
+        const auto & old_owner{ origin.domain->owner_key_by_atom_index.at(ref.atom_index) };
+        const auto & new_owner{ domain.owner_key_by_atom_index.at(ref.atom_index) };
+        owner_changed |= old_owner != new_owner;
+        mask_changed |= origin.domain->fit_sample_mask_by_atom.at(ref.atom_index).at(ref.sample_index) != domain.fit_sample_mask_by_atom.at(ref.atom_index).at(ref.sample_index) ||
+            origin.domain->tail_sample_mask_by_atom.at(ref.atom_index).at(ref.sample_index) != domain.tail_sample_mask_by_atom.at(ref.atom_index).at(ref.sample_index);
+        const auto old_iter{ origin.domain->cluster_by_key.find(old_owner) };
+        const auto new_iter{ domain.cluster_by_key.find(new_owner) };
+        if (old_iter == origin.domain->cluster_by_key.end() || new_iter == domain.cluster_by_key.end())
+        {
+            scale_changed |= old_iter != origin.domain->cluster_by_key.end() || new_iter != domain.cluster_by_key.end();
+            normalization_changed |= scale_changed;
+        }
+        else
+        {
+            const auto & a{ old_iter->second }; const auto & b{ new_iter->second };
+            scale_changed |= a.scale.has_value() != b.scale.has_value() ||
+                (a.scale && b.scale && (a.scale->fit != b.scale->fit || a.scale->tail != b.scale->tail));
+            normalization_changed |= a.selected_atom_count != b.selected_atom_count ||
+                a.fit_sample_ref_list.size() != b.fit_sample_ref_list.size() || a.tail_sample_ref_list.size() != b.tail_sample_ref_list.size();
+        }
+        const auto response = [&](const auto & snapshot)
+        {
+            return snapshot.frozen_background ? snapshot.frozen_background->response_by_atom.at(ref.atom_index).at(ref.sample_index) : 0.0;
+        };
+        background_changed |= response(origin.snapshot) != response(proposed);
+    }
+    std::ostringstream changes;
+    changes << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10)
+        << "Cluster best environment: schema=1, best-source=" << origin.id << ", key=" << BestTraceKey(key)
+        << ", samples-changed=" << (origin.sample_refs != samples) << ", owner-changed=" << owner_changed
+        << ", mask-changed=" << mask_changed << ", scale-changed=" << scale_changed
+        << ", normalization-changed=" << normalization_changed << ", background-response-changed=" << background_changed
+        << ", models[atom:historical/previous/candidate]=";
+    for (const auto atom : contributors)
+    {
+        const auto & a{ origin.snapshot.node.at(atom) }; const auto & b{ previous.node.at(atom) }; const auto & c{ proposed.node.at(atom) };
+        if (std::ranges::find(key, atom) == key.end() && SameBestTraceModel(a, b) && SameBestTraceModel(a, c)) continue;
+        changes << " {" << atom << (std::ranges::find(key, atom) != key.end() ? ":member:" : ":contributor:");
+        AppendBestTraceModel(changes, a); changes << "|"; AppendBestTraceModel(changes, b); changes << "|"; AppendBestTraceModel(changes, c); changes << "}";
+    }
+    record->best_comparison_lines.emplace_back(changes.str());
+}
+
 JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
     bool quiet_mode,
     std::vector<JointCandidateObjectiveDiagnostic> & records,
@@ -727,7 +1002,7 @@ JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return nullptr;
     return &records.emplace_back(JointCandidateObjectiveDiagnostic{
-        .source = source, .round = round, .factor = factor });
+        .source = source, .round = round, .candidate_number = records.size() + 1, .factor = factor });
 }
 
 void RecordJointMemberRejection(
@@ -791,6 +1066,7 @@ static void LogJointCandidateDiagnostics(
         if (record.member_key.empty()) message << "none";
         else append_key(record.member_key);
         message << ", atoms=" << record.member_key.size() << ", outcome=" << record.outcome;
+        if (!record.best_source_id.empty()) message << ", best-source=" << record.best_source_id;
         const auto append_objective = [&](std::string_view label, const std::optional<ObjectiveBreakdown> & value)
         {
             message << ", " << label << "=";
@@ -818,6 +1094,7 @@ static void LogJointCandidateDiagnostics(
         append_gate("previous", record.previous, !record.member_key.empty());
         append_gate("best", record.best, record.best_checked);
         Logger::Log(LogLevel::Debug, message.str());
+        for (const auto & line : record.best_comparison_lines) Logger::Log(LogLevel::Debug, line);
     }
 }
 

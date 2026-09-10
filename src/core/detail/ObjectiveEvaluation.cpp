@@ -650,7 +650,8 @@ bool TryCommitClusterCandidate(
     const ObjectiveDomain & domain,
     ClusterObjectiveState & objective_state,
     ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    std::string_view source)
 {
     const auto unique_sample_count{
         domain.unique_sample_count
@@ -736,8 +737,17 @@ bool TryCommitClusterCandidate(
     }
     if (is_better_than_best)
     {
+        const auto before_step{ objective_state.best_maximum_transformed_change };
         objective_state.best_objective = diagnostic.candidate_objective;
         objective_state.best_maximum_transformed_change = maximum_transformed_change;
+        if (candidate_overlay.GetContext().best_trace)
+            CaptureBestObjectiveSource(candidate_overlay.GetContext(), key,
+                BuildSecondStageModelSnapshot(candidate_overlay.GetContext(), candidate_overlay.GetState()),
+                objective_sample_ref_list, objective_state, diagnostic.best_objective, before_step,
+                source, !diagnostic.best_objective ? "first-best" :
+                    (IsBetterAuditObjective(candidate_objective_value, diagnostic.best_objective->GetTotalObjective(),
+                        kObjectiveStrictTolerance) ? "strict-improvement" : "step-tie-break"),
+                diagnostic.trial_count, diagnostic.accepted_factor);
     }
     return true;
 }

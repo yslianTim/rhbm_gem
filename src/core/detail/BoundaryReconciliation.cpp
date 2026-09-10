@@ -111,6 +111,11 @@ EvaluateBoundaryComponentCandidate(
     {
         auto objective_state{ inputs.cluster_objective_state.at(key) };
         ObjectiveAttemptDiagnostic diagnostic;
+        if (record)
+        {
+            diagnostic.trial_count = record->candidate_number;
+            diagnostic.accepted_factor = record->factor;
+        }
         const auto & previous_objective{ inputs.previous_objective_by_key.at(key) };
         if (!cooperative)
         {
@@ -123,10 +128,12 @@ EvaluateBoundaryComponentCandidate(
                     inputs.objective_domain,
                     objective_state,
                     diagnostic,
-                    inputs.performance_counters))
+                    inputs.performance_counters, record ? record->source : "boundary"))
             {
                 RecordJointMemberRejection(record, key, diagnostic.previous_objective,
                     diagnostic.best_objective, diagnostic.candidate_objective, diagnostic.best_objective.has_value());
+                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
+                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
                 return std::nullopt;
             }
         }
@@ -143,6 +150,8 @@ EvaluateBoundaryComponentCandidate(
             {
                 RecordJointMemberRejection(record, key, previous_objective,
                     diagnostic.best_objective, diagnostic.candidate_objective, false);
+                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
+                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
                 return std::nullopt;
             }
             const auto candidate_value{
@@ -157,6 +166,8 @@ EvaluateBoundaryComponentCandidate(
             {
                 RecordJointMemberRejection(record, key, previous_objective,
                     diagnostic.best_objective, diagnostic.candidate_objective, false);
+                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
+                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
                 return std::nullopt;
             }
             if (candidate_value > previous_value)
@@ -179,6 +190,7 @@ EvaluateBoundaryComponentCandidate(
                         objective_state.best_objective->GetTotalObjective(),
                         kObjectiveStrictTolerance)))
             {
+                const auto before_step{ objective_state.best_maximum_transformed_change };
                 objective_state.best_objective = diagnostic.candidate_objective;
                 objective_state.best_maximum_transformed_change =
                     std::ranges::max(
@@ -186,6 +198,12 @@ EvaluateBoundaryComponentCandidate(
                             candidate_overlay.GetState(),
                             candidate_overlay.GetBaseline().model_snapshot.node,
                             key).maximum_list);
+                if (inputs.context.best_trace)
+                    CaptureBestObjectiveSource(inputs.context, key,
+                        BuildSecondStageModelSnapshot(inputs.context, candidate_overlay.GetState()),
+                        inputs.partition.sample_id_list_by_key.at(key), objective_state,
+                        diagnostic.best_objective, before_step, record ? record->source : "rescue",
+                        "strict-improvement", record ? record->candidate_number : 0, record ? record->factor : std::nullopt);
             }
         }
         evaluation.objective_state_by_key.emplace(key, std::move(objective_state));
@@ -1021,7 +1039,7 @@ void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, Candidate
             const auto & previous{ inputs.previous_objective_by_key.at(key) };
             safe = TryCommitClusterCandidate(candidate_overlay,
                 key, inputs.partition.sample_id_list_by_key.at(key), previous.has_value() ? &*previous : nullptr,
-                false, inputs.objective_domain, selection.cluster_objective_state.at(key), diagnostic, inputs.performance_counters);
+                false, inputs.objective_domain, selection.cluster_objective_state.at(key), diagnostic, inputs.performance_counters, "fallback-reaudit");
         }
         if (safe) patch.ApplyTo(selection.assembled_state);
         else RejectSelectionKeys(inputs, { key }, false, selection);

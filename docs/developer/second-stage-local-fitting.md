@@ -922,8 +922,39 @@ both, missing evidence, and nonfinite evidence. Records with `member=none`
 distinguish a downstream global failure after member checks from a final-polish
 global failure before member checks. Local rejection summaries remain local:
 `rejected-by=none` does not imply that a later joint candidate passed.
-These diagnostics reuse evaluated objectives and do not add solves or objective
-evaluations. Info and quiet modes emit no new records.
+Member rejection records reuse the evaluated objectives. Debug mode additionally
+tracks cluster-best provenance and performs diagnostic-only reference comparisons;
+Info and quiet modes create no provenance snapshots or extra evaluations.
+
+`Cluster best source: schema=1` records best initialization, partition/background
+resets, candidate improvements, and step tie-break updates. IDs combine attempt,
+full cluster key, and per-key update sequence, independent of worker completion
+order. Each record retains the effective model snapshot (including candidate
+overlays), shared immutable background/domain, and contribution sample refs.
+`predecessor` links updates and same-key resets. `retained` distinguishes provisional
+updates from the source finally published for the attempt; `Cluster best publication`
+identifies that source even when it originated in an earlier attempt. Copying or
+rolling back a cluster objective state also copies or restores its source.
+
+When a joint member fails with a best reference, `Cluster best comparison: schema=1`
+links that source and reports stored, historically reproduced, and re-evaluated best
+objectives in fit/tail-weighted/offset/total order. Re-evaluation holds historical
+member parameters fixed and substitutes either the current previous-state or actual
+candidate's external models. A separate ordered decomposition substitutes current
+domain/sample refs, then frozen background, then external models. These deltas are
+order-dependent diagnostics, not independent causal contributions. Original and
+re-evaluated gate results use the existing progress-tolerance helper; only the
+original gate participates in acceptance. Each record counts its additional
+objective and residual-sample evaluations separately from production counters.
+
+`Cluster best environment: schema=1` compares actual sample refs, ownership,
+fit/tail masks, scales, normalization counts, and background responses. It lists
+historical/previous/candidate parameters for the member and changed contributors
+of those samples. Historical model/domain/background snapshots are immutable;
+re-evaluation uses an independent sparse residual baseline and does not change the
+live context, solver caches, best values, or convergence decisions. All numeric
+records use `max_digits10`. Missing provenance is `unavailable`; incompatible keys
+or snapshots are `not-comparable`.
 
 Frozen-background debug diagnostics report the selected target serial,
 global-median amplitude/width/offset, and effective background sample count.

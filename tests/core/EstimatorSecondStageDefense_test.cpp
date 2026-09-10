@@ -1688,10 +1688,15 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
             0.25
         });
 
+    const auto retained_source{ std::make_shared<audit_detail::BestObjectiveSource>() };
+    retained_source->id = "retained-source";
+    state_by_key.at(existing_key).best_source = retained_source;
     audit_detail::ReconcileClusterObjectiveState(
         previous_objective_by_key,
         state_by_key);
 
+    EXPECT_EQ(state_by_key.at(existing_key).best_source, retained_source);
+    EXPECT_FALSE(state_by_key.at(new_key).best_source);
     ASSERT_EQ(state_by_key.size(), 2U);
     ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
     EXPECT_DOUBLE_EQ(
@@ -4779,6 +4784,70 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartit
     EXPECT_FALSE(tail_only_domain.cluster_by_key.at(key).scale.has_value());
     EXPECT_FALSE(audit_detail::EvaluateAuditObjective(tail_only_domain, tail_only_baseline).has_value());
 
+    // A fixed member's objective still changes when a contributing neighbor changes.
+    audit_detail::SecondStageContext trace_context;
+    trace_context.atom_list.resize(2);
+    audit_detail::FitState historical_state{ MakeGaussianResult(model), MakeGaussianResult({ 6.0, 0.6, 0.05 }) };
+    for (const auto distance : { 0.0, 0.5, 1.5 })
+    {
+        auto & target{ trace_context.atom_list.at(0) };
+        target.neighbor_atom_sample_offset_list.push_back(target.neighbor_atom_sample_list.size());
+        target.neighbor_atom_sample_list.push_back({ 1, 1.0 });
+        target.raw_sampling_entries.push_back({ model.ResponseAtDistance(distance) +
+            historical_state.at(1).mdpde.GetModel().ResponseAtDistance(1.0) + 0.1, SamplingPoint{ distance } });
+    }
+    trace_context.atom_list.at(0).neighbor_atom_sample_offset_list.push_back(3);
+    trace_context.atom_list.at(1).raw_sampling_entries.push_back({ 6.2, SamplingPoint{ 0.0 } });
+    trace_context.atom_list.at(1).neighbor_atom_sample_offset_list = { 0, 0 };
+    const auto historical_baseline{ audit_detail::BuildResidualBaseline(trace_context, historical_state) };
+    auto trace_domain{ audit_detail::BuildObjectiveDomain(trace_context, historical_baseline.model_snapshot, { { 0 }, { 1 } }) };
+    const auto refs{ trace_domain.cluster_by_key.at(key).sample_ref_list };
+    audit_detail::ClusterObjectiveState best_state;
+    best_state.best_objective = audit_detail::EvaluateObjectiveContribution(historical_baseline, key, refs, trace_domain);
+    ASSERT_TRUE(best_state.best_objective);
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    audit_detail::BeginBestObjectiveTrace(trace_context, false, trace_domain, 3, 2);
+    audit_detail::CaptureBestObjectiveSource(trace_context, key, historical_baseline.model_snapshot, refs,
+        best_state, std::nullopt, 0.0, "iteration-baseline", "initialize");
+    const auto source{ best_state.best_source };
+    ASSERT_TRUE(source);
+    EXPECT_EQ(source->attempt, 3U);
+    EXPECT_EQ(source->accepted_iteration, 2U);
+    auto proposed_state{ historical_state };
+    proposed_state.at(1) = MakeGaussianResult({ 5.0, 0.6, 0.05 });
+    const auto neighbor_patch{ audit_detail::FitStatePatch::FromState(proposed_state, { 1 }) };
+    const audit_detail::CandidateEvaluationOverlay neighbor_overlay{
+        trace_context, historical_baseline, historical_state, neighbor_patch };
+    audit_detail::JointCandidateObjectiveDiagnostic comparison;
+    comparison.previous = best_state.best_objective;
+    comparison.candidate = audit_detail::EvaluateObjectiveContribution(neighbor_overlay, key, refs, trace_domain);
+    audit_detail::DiagnoseBestObjectiveComparison(&comparison, neighbor_overlay, key, refs, trace_domain, best_state);
+    ASSERT_EQ(comparison.best_comparison_lines.size(), 2U);
+    EXPECT_NE(comparison.best_comparison_lines.front().find("candidate-environment-gate=pass"), std::string::npos);
+    EXPECT_NE(comparison.best_comparison_lines.back().find("1:contributor:"), std::string::npos);
+    EXPECT_NE(comparison.best_comparison_lines.back().find("scale-changed=0"), std::string::npos);
+    EXPECT_EQ(best_state.best_source, source);
+    EXPECT_DOUBLE_EQ(source->snapshot.node.at(1).GetAmplitude(), 6.0);
+
+    auto changed_background{ std::make_shared<audit_detail::FrozenBackground>() };
+    changed_background->response_by_atom = { { 0.2, 0.2, 0.2 }, { 0.0 } };
+    trace_context.frozen_background = changed_background;
+    trace_domain.cluster_by_key.at(key).scale->fit *= 2.0;
+    comparison.best_comparison_lines.clear();
+    audit_detail::DiagnoseBestObjectiveComparison(&comparison, neighbor_overlay, key, refs, trace_domain, best_state);
+    EXPECT_NE(comparison.best_comparison_lines.back().find("scale-changed=1"), std::string::npos);
+    EXPECT_NE(comparison.best_comparison_lines.back().find("background-response-changed=1"), std::string::npos);
+    EXPECT_FALSE(source->snapshot.frozen_background);
+    audit_detail::BeginBestObjectiveTrace(trace_context, true, trace_domain, 4, 3);
+    EXPECT_FALSE(trace_context.best_trace);
+    comparison.best_comparison_lines.clear();
+    audit_detail::DiagnoseBestObjectiveComparison(&comparison, neighbor_overlay, key, refs, trace_domain, best_state);
+    EXPECT_TRUE(comparison.best_comparison_lines.empty());
+    Logger::SetLogLevel(LogLevel::Info);
+    audit_detail::BeginBestObjectiveTrace(trace_context, false, trace_domain, 4, 3);
+    EXPECT_FALSE(trace_context.best_trace);
+    Logger::SetLogLevel(saved_level);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
@@ -5625,6 +5694,7 @@ TEST(
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
             testing::internal::CaptureStdout();
+            options.thread_size = 2;
             alternate_logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
             iteration_detail::RunSecondStageIterations(*alternate_logged, options);
             const auto alternate_output{ testing::internal::GetCapturedStdout() };
@@ -5646,7 +5716,8 @@ TEST(
                     for (const std::string marker : {
                         "Convergence safeguard audit:", "Second-stage audit terminal:",
                         "Second-stage audit terminal atom:", "Second-stage local fitting summary:",
-                        "Local-fitting atom cutoff:", "Adaptive local-fitting topology rebuild:" })
+                        "Local-fitting atom cutoff:", "Adaptive local-fitting topology rebuild:",
+                        "Cluster best source:", "Cluster best publication:" })
                     {
                         const auto position{ line.find(marker) };
                         if (position != std::string::npos)
@@ -5661,6 +5732,8 @@ TEST(
             };
             EXPECT_EQ(audit_records(output), audit_records(alternate_output));
             EXPECT_EQ(audit_records(output), audit_records(relabeled_output));
+            if (!shared_cluster && !shared_contributor)
+                EXPECT_NE(output.find("reason=background-reset"), std::string::npos);
             EXPECT_NE(output.find(shared_cluster ?
                 "initial components/max atoms/ratio = 1/2/1.00" :
                 "initial components/max atoms/ratio = 2/1/0.50"), std::string::npos);
@@ -5997,6 +6070,11 @@ TEST(
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
     EXPECT_NE(output.find("Joint candidate objective rejection: schema=1"), std::string::npos);
     EXPECT_NE(output.find("previous-gate=candidate<=reference+tolerance"), std::string::npos);
+    EXPECT_NE(output.find("Cluster best source: schema=1"), std::string::npos);
+    EXPECT_NE(output.find("Cluster best publication: schema=1"), std::string::npos);
+    EXPECT_NE(output.find("Cluster best comparison: schema=1"), std::string::npos);
+    EXPECT_NE(output.find("candidate-environment-gate="), std::string::npos);
+    EXPECT_NE(output.find("retained=no"), std::string::npos);
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);
     const auto maximum_position{ output.find(", max-atoms=", cutoff_position) };

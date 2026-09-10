@@ -350,6 +350,7 @@ static void ResetIterationStateForPartition(
         BuildSecondStageModelSnapshot(context, iteration_state.accepted_state)
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
+    const auto previous_objective_states{ context.best_trace ? iteration_state.cluster_objective_state : ClusterObjectiveStateMap{} };
     iteration_state.cluster_objective_state.clear();
     const auto objective_by_key{
         BuildObjectiveByKey(partition, iteration_state.objective_domain, context, model_snapshot)
@@ -357,6 +358,12 @@ static void ResetIterationStateForPartition(
     ReconcileClusterObjectiveState(
         objective_by_key,
         iteration_state.cluster_objective_state);
+    for (auto & [key, state] : iteration_state.cluster_objective_state)
+    {
+        state.best_reset_reason = "partition-reset";
+        const auto prior{ previous_objective_states.find(key) };
+        if (prior != previous_objective_states.end()) state.reset_source = prior->second.best_source;
+    }
     RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
@@ -512,8 +519,12 @@ static bool BeginFrozenBackgroundIteration(
         const bool changed{ std::ranges::any_of(sample_refs,
             [&](const auto & sample_ref) { return changed_background_by_atom.at(sample_ref.atom_index) != 0; }) };
         if (changed)
+        {
+            const auto prior{ iteration_state.cluster_objective_state.at(key).best_source };
             iteration_state.cluster_objective_state[key] = ClusterObjectiveState{
-                .best_objective = previous_objectives.at(key) };
+                .best_objective = previous_objectives.at(key), .best_reset_reason = "background-reset",
+                .reset_source = prior };
+        }
     }
     RefreshBestAuditState(context, previous_snapshot, iteration_state);
     return false;
@@ -545,6 +556,16 @@ static IterationResult RunIteration(
         BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
     ReconcileClusterObjectiveState(previous_objective_by_key, iteration_state.cluster_objective_state);
+    BeginBestObjectiveTrace(context, options.quiet_mode, objective_domain,
+        attempt_number, iteration_state.accepted_iteration_count);
+    if (context.best_trace)
+        for (auto & [key, state] : iteration_state.cluster_objective_state)
+            if (state.best_objective && !state.best_source)
+                CaptureBestObjectiveSource(context, key, residual_baseline.model_snapshot,
+                    graph_partition.sample_id_list_by_key.at(key), state,
+                    state.reset_source ? state.reset_source->objective : std::nullopt,
+                    state.reset_source ? state.reset_source->step : 0.0,
+                    "iteration-baseline", state.best_reset_reason);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
     const auto quarantine_activity{
@@ -658,6 +679,7 @@ static IterationResult RunIteration(
     }
     // Publish audited history before the all-rejected exit, as on accepted attempts.
     iteration_state.cluster_objective_state = std::move(selection.cluster_objective_state);
+    LogBestObjectivePublication(context, iteration_state.cluster_objective_state);
     result.trust_region_update = iteration_state.trust_region_state.ApplyRadiusUpdates(
         selection.grow_trust_region_key_list, selection.shrink_trust_region_key_list,
         selection.rejected_key_list, selection.exhausted_key_list);

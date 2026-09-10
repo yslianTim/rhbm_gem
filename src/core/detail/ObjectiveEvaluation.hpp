@@ -4,6 +4,8 @@
 #include "core/detail/SuspiciousUpdate.hpp"
 
 #include <map>
+#include <mutex>
+#include <string>
 #include <string_view>
 
 namespace rhbm_gem::core::detail {
@@ -67,6 +69,7 @@ public:
 
     std::optional<ResidualSample> operator()(const SampleRef & sample_ref) const;
     const FitStateView & GetState() const { return m_candidate_state; }
+    const SecondStageContext & GetContext() const { return m_context; }
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
 };
 
@@ -87,6 +90,7 @@ struct JointCandidateObjectiveDiagnostic
 {
     std::string_view source{};
     std::size_t round{ 0 };
+    std::size_t candidate_number{ 0 };
     std::optional<double> factor{};
     ClusterKey member_key{};
     std::optional<ObjectiveBreakdown> previous{};
@@ -94,6 +98,8 @@ struct JointCandidateObjectiveDiagnostic
     std::optional<ObjectiveBreakdown> candidate{};
     bool best_checked{ false };
     std::string_view outcome{ "accepted" };
+    std::string best_source_id{};
+    std::vector<std::string> best_comparison_lines{};
 };
 
 struct ObjectiveAttemptDiagnostic
@@ -156,10 +162,36 @@ struct ObjectiveDomain
     std::size_t tail_sample_count{ 0 };
 };
 
+struct BestObjectiveSource
+{
+    std::string id{}, predecessor_id{};
+    ClusterKey key{};
+    std::size_t attempt{ 0 }, accepted_iteration{ 0 }, sequence{ 0 }, candidate_number{ 0 };
+    std::string_view source{}, reason{};
+    std::optional<double> factor{};
+    std::optional<ObjectiveBreakdown> before{}, objective{};
+    double before_step{ 0.0 }, step{ 0.0 };
+    SecondStageModelSnapshot snapshot{};
+    std::shared_ptr<const ObjectiveDomain> domain{};
+    std::vector<SampleRef> sample_refs{};
+};
+
+struct BestObjectiveTraceEnvironment
+{
+    std::size_t attempt{ 0 }, accepted_iteration{ 0 };
+    std::shared_ptr<const ObjectiveDomain> domain{};
+    std::mutex mutex{};
+    std::map<ClusterKey, std::size_t> sequence_by_key{};
+    std::vector<std::shared_ptr<const BestObjectiveSource>> events{};
+};
+
 struct ClusterObjectiveState
 {
     std::optional<ObjectiveBreakdown> best_objective{};
     double best_maximum_transformed_change{ 0.0 };
+    std::shared_ptr<const BestObjectiveSource> best_source{};
+    std::string_view best_reset_reason{ "initialize" };
+    std::shared_ptr<const BestObjectiveSource> reset_source{};
 };
 
 using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
@@ -252,6 +284,7 @@ bool TryCommitClusterCandidate(
     const ObjectiveDomain & domain,
     ClusterObjectiveState & objective_state,
     ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters & performance_counters);
+    PerformanceCounters & performance_counters,
+    std::string_view source = "local-candidate");
 
 } // namespace rhbm_gem::core::detail
