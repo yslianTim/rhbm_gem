@@ -509,11 +509,7 @@ void LogRejectedClusterDiagnostics(
         AppendObjectiveBreakdown(message, diagnostic.best_objective);
         message << ", reference-environment=candidate";
         message << ", rejected-by = ";
-        if (diagnostic.best_reference_unavailable)
-        {
-            message << "best-reference-unavailable";
-        }
-        else if (!diagnostic.candidate_objective.has_value())
+        if (!diagnostic.candidate_objective.has_value())
         {
             message << "objective-unavailable";
         }

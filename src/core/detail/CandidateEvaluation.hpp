@@ -6,7 +6,7 @@ namespace rhbm_gem::core::detail {
 
 enum class CandidateScope
 {
-    LocalSearch, LocalPolish, FallbackReaudit, Boundary,
+    LocalSearch, LocalPolish, Boundary,
     CooperativeRescue
 };
 
@@ -56,8 +56,6 @@ struct LocalCandidateReference
     ObjectiveAttemptDiagnostic diagnostic;
     PerformanceCounters & counters;
     std::string_view source{ "local-candidate" };
-    const SuspiciousBlockActivity * activity{ nullptr };
-    double radius{ 0.0 };
 };
 
 struct BoundaryCandidateReference

@@ -4961,14 +4961,15 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     ASSERT_TRUE(worse_objective);
     audit_detail::ObjectiveAttemptDiagnostic rejected;
     auto trial_best{ best };
-    // Isolate the best gate by allowing the previous gate to pass.
+    // A candidate passing the previous gate is no longer rejected by cluster history.
     const auto worse_evaluation{ audit_detail::EvaluateCandidate(worse_overlay, audit_detail::CandidateScope::LocalSearch,
         audit_detail::LocalCandidateReference{key, samples, &*worse_objective, domain,
             trial_best, rejected, counters, "test"}) };
-    EXPECT_FALSE(worse_evaluation.accepted);
+    EXPECT_TRUE(worse_evaluation.accepted);
     rejected = worse_evaluation.diagnostic;
-    EXPECT_FALSE(worse_evaluation.objective_state);
-    EXPECT_TRUE(rejected.rejected_by_best);
+    ASSERT_TRUE(worse_evaluation.objective_state);
+    if (worse_evaluation.accepted) trial_best = *worse_evaluation.objective_state;
+    EXPECT_FALSE(rejected.rejected_by_best);
     EXPECT_FALSE(rejected.rejected_by_previous);
     EXPECT_DOUBLE_EQ(trial_best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.0);
 
@@ -4983,7 +4984,7 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     EXPECT_FALSE(unavailable_evaluation.accepted);
     rejected = unavailable_evaluation.diagnostic;
     EXPECT_FALSE(unavailable_evaluation.objective_state);
-    EXPECT_TRUE(rejected.best_reference_unavailable);
+    EXPECT_FALSE(rejected.best_reference_unavailable);
 }
 
 TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovementAndTie)
@@ -5663,7 +5664,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotFreezeSameChemica
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableReasonAndReleasesOnProbation)
+TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableReasonAndReleasesOnDomainRetry)
 {
     const audit_detail::QuarantineTarget target{
         audit_detail::QuarantineTargetKind::ShapeAtom,
@@ -5672,7 +5673,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     audit_detail::QuarantineFailureStateMap state_by_target;
     const auto observe = [&](
         audit_detail::SuspiciousGaussianReason reason,
-        std::size_t accepted_iteration_count)
+        std::size_t domain_revision)
     {
         return audit_detail::UpdateQuarantineFailureState(
             {
@@ -5685,7 +5686,8 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
                 }
             },
             {},
-            accepted_iteration_count,
+            {},
+            domain_revision,
             state_by_target);
     };
 
@@ -5693,20 +5695,20 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         .entered_target_list.empty());
     EXPECT_NE(
         state_by_target.at(target).lifecycle,
-        audit_detail::QuarantineLifecycle::Exhausted);
+        audit_detail::QuarantineLifecycle::Frozen);
     EXPECT_TRUE(observe(audit_detail::SuspiciousGaussianReason::WidthGrowth, 2)
         .entered_target_list.empty());
     EXPECT_TRUE(observe(
         audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
         3).entered_target_list.empty());
     EXPECT_EQ(state_by_target.at(target).stable_iteration_count, 1U);
-    for (std::size_t accepted_iteration = 4;
-        accepted_iteration < 7;
-        accepted_iteration++)
+    for (std::size_t domain_revision = 4;
+        domain_revision < 7;
+        domain_revision++)
     {
         EXPECT_TRUE(observe(
             audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
-            accepted_iteration).entered_target_list.empty());
+            domain_revision).entered_target_list.empty());
     }
     const auto entered{
         observe(
@@ -5716,16 +5718,15 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     ASSERT_EQ(entered.entered_target_list, (std::vector{ target }));
     ASSERT_EQ(
         state_by_target.at(target).lifecycle,
-        audit_detail::QuarantineLifecycle::Quarantined);
+        audit_detail::QuarantineLifecycle::Frozen);
     EXPECT_EQ(
-        state_by_target.at(target).next_probation_iteration,
-        7U + audit_detail::kQuarantineProbationCooldown);
+        state_by_target.at(target).last_domain_revision,
+        7U);
 
-    state_by_target.at(target).lifecycle =
-        audit_detail::QuarantineLifecycle::Probation;
     const auto released{
         audit_detail::UpdateQuarantineFailureState(
             {},
+            { target },
             { target },
             9,
             state_by_target)
@@ -5741,16 +5742,13 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
                 audit_detail::SuspiciousGaussianReason::WidthGrowth
             },
             audit_detail::kPersistentQuarantineFailureIterationLimit,
-            0,
-            0,
-            audit_detail::QuarantineLifecycle::Quarantined
+            9,
+            audit_detail::QuarantineLifecycle::Frozen
         });
-    for (std::size_t probation = 1;
-        probation <= audit_detail::kQuarantineMaximumProbationCount;
-        probation++)
+    for (std::size_t retry = 1;
+        retry <= 3;
+        retry++)
     {
-        state_by_target.at(target).lifecycle =
-            audit_detail::QuarantineLifecycle::Probation;
         const auto failed{
             audit_detail::UpdateQuarantineFailureState(
                 {
@@ -5762,16 +5760,17 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
                         }
                     }
                 },
+                { target },
                 {},
-                9 + probation,
+                9 + retry,
                 state_by_target)
         };
-        EXPECT_EQ(failed.failed_probation_target_list, (std::vector{ target }));
-        EXPECT_EQ(state_by_target.at(target).probation_count, probation);
+        EXPECT_EQ(failed.failed_retry_target_list, (std::vector{ target }));
+        EXPECT_EQ(state_by_target.at(target).last_domain_revision, 9 + retry);
     }
     EXPECT_EQ(
         state_by_target.at(target).lifecycle,
-        audit_detail::QuarantineLifecycle::Exhausted);
+        audit_detail::QuarantineLifecycle::Frozen);
 
     const audit_detail::QuarantineTarget offset_target{
         audit_detail::QuarantineTargetKind::OffsetAtom, { 0 }
@@ -5780,7 +5779,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         audit_detail::QuarantineTargetKind::OffsetAtom, { 1 }
     };
     auto quarantined{ state_by_target.at(target) };
-    quarantined.lifecycle = audit_detail::QuarantineLifecycle::Quarantined;
+    quarantined.lifecycle = audit_detail::QuarantineLifecycle::Frozen;
     for (const auto & released_target : { target, offset_target })
     {
         state_by_target = {
@@ -5788,11 +5787,9 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
             { offset_target, quarantined },
             { other_offset_target, quarantined }
         };
-        state_by_target.at(released_target).lifecycle =
-            audit_detail::QuarantineLifecycle::Probation;
         const auto independent_release{
             audit_detail::UpdateQuarantineFailureState(
-                {}, { released_target }, 20, state_by_target)
+                {}, { released_target }, { released_target }, 20, state_by_target)
         };
         EXPECT_EQ(independent_release.released_target_list,
             (std::vector{ released_target }));
@@ -5801,7 +5798,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         for (const auto & [remaining_target, state] : state_by_target)
         {
             EXPECT_NE(remaining_target, released_target);
-            EXPECT_EQ(state.lifecycle, audit_detail::QuarantineLifecycle::Quarantined);
+            EXPECT_EQ(state.lifecycle, audit_detail::QuarantineLifecycle::Frozen);
         }
     }
 }
@@ -6351,14 +6348,14 @@ TEST(
     Logger::SetLogLevel(previous_level);
     parallel_model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
     iteration_detail::RunSecondStageIterations(*parallel_model, parallel_options);
-    EXPECT_NE(output.find("Joint candidate objective rejection: schema=2"), std::string::npos);
-    EXPECT_NE(output.find("previous-gate=candidate<=reference+tolerance"), std::string::npos);
-    EXPECT_NE(output.find("stored-best="), std::string::npos);
-    EXPECT_NE(output.find("reference-environment=candidate"), std::string::npos);
+    EXPECT_EQ(output.find("Joint candidate objective rejection: schema=2"), std::string::npos);
+    EXPECT_EQ(output.find("previous-gate=candidate<=reference+tolerance"), std::string::npos);
+    EXPECT_EQ(output.find("stored-best="), std::string::npos);
+    EXPECT_EQ(output.find("reference-environment=candidate"), std::string::npos);
     EXPECT_NE(output.find("Cluster best source: schema=1"), std::string::npos);
     EXPECT_NE(output.find("Cluster best publication: schema=1"), std::string::npos);
-    EXPECT_NE(output.find("Cluster best comparison: schema=1"), std::string::npos);
-    EXPECT_NE(output.find("candidate-environment-gate="), std::string::npos);
+    EXPECT_EQ(output.find("Cluster best comparison: schema=1"), std::string::npos);
+    EXPECT_EQ(output.find("candidate-environment-gate="), std::string::npos);
     EXPECT_NE(output.find("retained=no"), std::string::npos);
     const auto cutoff_position{ output.find("Local-fitting atom cutoff: atoms=103, limit=100, clusters=") };
     ASSERT_NE(cutoff_position, std::string::npos);

@@ -82,7 +82,6 @@ class CandidateTransactionBuilder
     void AuditAndSalvageFinalSelection(
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective);
-    void ReauditFallbackSelection(const CandidateSelectionInputs & inputs);
 public:
     CandidateTransactionBuilder() = default;
     explicit CandidateTransactionBuilder(CandidateSelection initial) : m_selection(std::move(initial)) {}
@@ -93,6 +92,6 @@ public:
         const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key);
     const CandidateSelection & View() const { return m_selection; }
     CandidateTransaction Finish(const CandidateSelectionInputs &, const QuarantineState &,
-        std::span<const SuspiciousGaussianAssessment>, const ClusterHealthMap &, std::size_t accepted_iteration) &&;
+        std::span<const SuspiciousGaussianAssessment>, const ClusterHealthMap &, const FixedPointOperatorEvidence &, std::size_t domain_revision) &&;
 };
 } // namespace rhbm_gem::core::detail

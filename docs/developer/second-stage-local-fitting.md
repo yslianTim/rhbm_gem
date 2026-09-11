@@ -59,11 +59,11 @@ all second-stage services through candidate selection:
 | `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results, original gate ordering, and proposed history updates |
 | `CandidateTransaction` | Private selection builder, staged quarantine, and consuming publication of validated results |
-| `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage, and quarantine fallback re-audit |
+| `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, and previous/best objective history |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
-| `Quarantine` | Failure tracking, probation, activity, and transition rollback |
+| `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
 | `Diagnosis` | Progress and certificate output, graph/objective diagnostics, and performance counters |
 | `PhaseAudit` / `TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
 
@@ -78,8 +78,8 @@ The public Gaussian estimator workflow uses internal fitting-range constants;
 objective history; boundary operations are its private methods. Evaluators
 return values and proposed history updates without changing caller history.
 Solver workspaces, counters and observers remain mutable working resources.
-Quarantine is staged on a copy, and fallback re-audit starts from the attempt's
-original history. The builder then freezes a read-only `CandidateTransaction`.
+Quarantine is staged on a copy and changes only next-iteration activity,
+without modifying the audited state or requiring fallback re-audit. The builder then freezes a read-only `CandidateTransaction`.
 Its consuming commit publishes validated state, provenance, history, quarantine
 and radius actions, including the required rejection updates on all-rejected
 attempts. Convergence uses the committed candidate and the retained previous
@@ -231,7 +231,7 @@ Each outer attempt performs the following sequence:
 6. Search one geometric factor sequence `1, 1/2, 1/4, ...` for each cluster.
    Each factor constructs selected log-shape and per-atom physical-offset
    coordinates, skips candidates outside the trust radius, applies offset-only
-   and post-refit feasibility guards, and then the previous/best objective gate.
+   and post-refit feasibility guards, and then the previous objective gate. Cluster best is history/tie-break only.
    The frozen background is unchanged at every factor. Guard never damps, trust
    never accepts, and the objective gate never chooses a second independent
    factor. If every material factor is guard-infeasible, deactivate the terminal
@@ -274,9 +274,8 @@ Each outer attempt performs the following sequence:
    first passing subset is found. If only strictly improving units remain but the
    historical best gate still fails, roll back the attempt without weakening the
    gate.
-10. Update reversible quarantine/probation. Any fallback is re-audited under
-    the unchanged background, salvaging independent passing components, then
-    trust radii are updated. An accepted state's adaptive rebuild can queue a
+10. Stage Active/Frozen quarantine for the next iteration without changing
+    the audited state. Publish quarantine and trust-radius updates together. An accepted state's adaptive rebuild can queue a
     new partition for the next attempt; pending changes block convergence.
     Update the global best and audit patience using same-background scores.
 
@@ -304,7 +303,7 @@ offset atoms` columns. An offset derivative enters only its atom's column;
 the shape Jacobian retains the width derivative of that atom's offset response.
 Inactive coordinates retain their own endpoint, without averaging. Unselected
 responses are fixed residual/RHS terms with no Jacobian column or median chain
-derivative. Candidate decoding, damping, fallback, and quarantine rollback do
+derivative. Candidate decoding, damping, and solver fallback do
 not refresh any background parameter.
 
 ## Parameter coordinates
@@ -431,11 +430,15 @@ changes.
 Candidate scoring uses a provisional copy of the cluster objective state. A
 rejected base, polish, candidate-search trial, or boundary-component candidate does not
 advance the previous or best references. The best objective and maximum
-transformed change are retained to break objective ties.
+transformed change are retained to break objective ties. Cluster best is not an
+acceptance gate: after the previous gate (and strict local-polish improvement),
+reevaluate stored parameters in the candidate neighbor environment for history.
+Unavailable historical evidence preserves the old history and disables its tie
+break, without rejecting the candidate. Local and rescue share this updater.
 
 At each background refresh, re-evaluate both the previous selected state and
 the retained global best under the new cache before comparing or choosing
-them. Reset each affected cluster's local best threshold to this attempt's
+them. Reset each affected cluster's local best history to this attempt's
 previous baseline; do not compare historical numbers computed under another
 background. An unavailable retained-best objective discards that best entry.
 Background-only refresh does not rebuild the sampling domain or its fixed
@@ -451,8 +454,8 @@ tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
 
 Progress and deterioration comparisons use
 `1e-8 + 1e-3 * abs(reference)`. Strict best, tie, and polish-improvement
-comparisons use `1e-10 + 1e-8 * abs(reference)`. Candidate comparisons against
-previous and best compute separate tolerances from their respective references.
+comparisons use `1e-10 + 1e-8 * abs(reference)`. Global gate comparisons against previous and best retain separate tolerances;
+cluster best comparisons only update history.
 The joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
@@ -474,8 +477,8 @@ There is no median projection before trust evaluation.
 
 Each cluster owns one factor sequence. Every trial first constructs the
 log-shape/individual-physical-offset candidate, then checks validity, trust
-admissibility, guard feasibility, and the previous/best objective gates in that
-order. Trust-inadmissible trials do not run guard or objective evaluation.
+admissibility, guard feasibility, and the previous objective gate in that
+order. Cluster-best history is evaluated only after acceptance gates pass. Trust-inadmissible trials do not run guard or objective evaluation.
 Search stops when the largest transformed change is below
 `kTransformedChangeTolerance`; the first passing material trial is committed
 with endpoint uncertainty and its factor is recorded. Rejected trials do not
@@ -551,8 +554,8 @@ whose objective is slightly worse than its previous value, but only within the
 normal progress tolerance. The endpoint or its joint/backtracked replacement
 must strictly improve the component audit, and the tentatively assembled state
 must then strictly improve the previous global audit without violating the
-historical-best tolerance. Member historical bests are updated only for actual
-member improvements and do not independently veto rescue. Successful rescue
+global historical-best tolerance. Member historical bests use the same
+history/tie-break updater as local candidates and do not independently veto rescue. Successful rescue
 promotes the rejected members without trust-radius growth or shrink. Failed
 rescue is transactional: every component member retains its safe state.
 
@@ -581,6 +584,10 @@ recomputed after each removal. The first passing subset is committed atomically.
 If all remaining units strictly improve the previous objective but cannot satisfy
 the historical best gate, the complete remaining attempt is marked exhausted;
 objective tolerances are never relaxed.
+
+The attempted fixed-order atomic component replacement was withdrawn after two
+remote-cluster regressions with unavailable global baselines; see
+[P2 status and evidence](second-stage-p2-structure.md). Greedy salvage remains.
 
 ## Final uncut dependency polish
 
@@ -677,26 +684,28 @@ failed, error, or not-evaluated status, candidate evidence and actual applicatio
   fixed atom offset does not prevent that atom's safe shape or other atoms'
   offsets from changing. The next attempt applies the `10x`
   suspicious ridge multiplier to affected nodes.
-- Stable near-convergence failures enter stage-local quarantine only after the
-  same target and reason occurs in five accepted iterations. Targets are an atom
-  shape block (`ShapeAtom`), a singleton offset block (`OffsetAtom`), or a
-  hard-failure cluster. A changed reason
-  or missing observation resets the pre-quarantine count.
-- Quarantine never removes atoms or rebuilds the objective domain. After two
-  accepted iterations a target receives probation; a topology partition change
-  may trigger it early. Each target gets at most three probes. Probes use the
-  minimum trust radius `0.0625` and `10x` ridge. Overlapping probes are selected
-  in hard-failure cluster, offset atom, then shape atom priority, with only one
-  probe per overlapping atom. Shape and offset quarantine never release or
-  shadow each other; only hard-failure cluster probation can temporarily
-  shadow its member atom targets.
-- A material probation proposal must pass guards, trust/fixed-block invariants,
-  member/component/global objective gates, and the historical-best gate. A
-  guard-safe non-material stationary result at the minimum radius may also
-  release the target. Failure restores the previous fixed block and increments
-  the probe count; after three failures the target remains fixed only until the
-  current second-stage call ends. Fallback/rollback changes selected blocks
-  only and passes the same frozen-background audit before commit.
+- Active targets freeze after five consecutive observations of the same terminal
+  reason. Targets remain shape blocks, offset blocks or hard-failure clusters.
+  A changed reason or absent observation resets active tracking; a background
+  refresh alone does not clear the consecutive-failure count.
+- Frozen targets record the last attempted objective-domain revision. The
+  revision advances on an applied partition/domain change or changed background
+  response, not on an unchanged rebuild or merely queued topology. Each new
+  revision permits one retry; retries are transient, not a third lifecycle.
+  Background updates can consequently permit a retry every iteration.
+- Retry keys use minimum radius `0.0625` and `10x` ridge. Non-retrying Frozen
+  masks retain priority; overlapping retry targets do not unlock coordinates
+  still frozen by another target. No cooldown, attempt limit or Exhausted state
+  remains. Frozen targets awaiting a domain change do not hold audit patience
+  open as a scheduled recovery; active failure tracking and transitions still do.
+- Recovery needs no affecting failure and all required target coordinates active.
+  It requires a finally accepted material change, or a complete, guard-safe,
+  solver-qualified nonmaterial unrestricted endpoint. Missing evidence cannot
+  release a target. A failed retry records the revision and remains Frozen.
+- Newly Frozen targets affect only the next proposal. Lifecycle updates never
+  rewrite the audited model/provenance, so quarantine fallback re-audit is removed.
+  Immediate block isolation and solver fallback remain. Final activity still
+  fixes unresolved targets; transition convergence blockers remain.
 - Rejected-cluster debug output distinguishes failures before objective
   evaluation from objective rejection. Pre-objective failures report their
   proposal reason, radius, available step norm, and `objective =
@@ -891,7 +900,8 @@ debug record reports unified trial dispositions, terminal category, radius
 action, and stop classification. Operator-assessment debug records report each
 affected atom's reason, margin, and fixed shape/offset/hard block. Completion
 warnings report cumulative quarantine
-entries, releases, failed probation probes, and unresolved targets. Convergence
+entries, releases, failed domain retries, and unresolved targets. The existing
+probation counter positions retain their schema and now count domain retries. Convergence
 and summary messages finish the active progress line before normal line output.
 Joint-candidate member guards emit `Joint candidate objective rejection: schema=1`
 Debug records alongside their component summary. Each record identifies the

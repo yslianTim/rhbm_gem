@@ -643,7 +643,6 @@ std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext & context, 
 }
 [[maybe_unused]] static std::string_view PhaseAuditRejectionReason(const ObjectiveAttemptDiagnostic & diagnostic)
 {
-    if (diagnostic.best_reference_unavailable) return "best-reference-unavailable";
     if (!diagnostic.candidate_objective) return "objective-unavailable";
     if (diagnostic.rejected_by_previous) return diagnostic.rejected_by_best ? "previous+best" : "previous";
     if (diagnostic.rejected_by_best) return "best";

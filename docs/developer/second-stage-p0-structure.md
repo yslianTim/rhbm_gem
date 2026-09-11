@@ -8,23 +8,22 @@ search factors, solver calls, objective references, stop precedence, or final
 persistence policy. No tests or test cases are added. Existing tests only adapt
 to moved internal declarations and the separated certificate measurements.
 
-The execution map includes the retained P1 final-polish changes. Cooperative
-rescue retains its original policy; production radii use Keep/Shrink only.
+The execution map includes the retained P1 changes and [P2 steps 1–2](second-stage-p2-structure.md).
+Production radii use Keep/Shrink only. P2 component transactions were withdrawn
+after remote-cluster regressions; global greedy salvage remains.
 
 ## Ownership and execution
 
 ```mermaid
 flowchart TD
-    A[Validated previous state and frozen domain] --> B[Build unrestricted operator and constrained proposal]
+    A[Validated previous state and frozen domain] --> U[Domain-aware Frozen target retry]
+    U --> B[Build unrestricted operator and constrained proposal]
     B --> C[Private CandidateTransactionBuilder]
     C --> D[Local search and local polish]
     D --> E[Boundary correction and backtracking]
     E --> F[Cooperative rescue and global salvage]
-    F --> G[Staged quarantine transition]
-    G --> H{Fallback changed state?}
-    H -- yes --> I[Fallback re-audit and global salvage]
-    H -- no --> J[Freeze CandidateTransaction]
-    I --> J
+    F --> G[Stage next-iteration Active or Frozen status]
+    G --> J[Freeze CandidateTransaction; audited model unchanged]
     J --> K[Consume once: publish state, history, quarantine and radius actions]
     K --> L{Any accepted clusters?}
     L -- no --> M[Retain previous model; preserve rejection lifecycle updates]
@@ -43,11 +42,11 @@ flowchart TD
 ```
 
 `CandidateTransactionBuilder` owns the only writable selection. Boundary,
-rescue, rejection, and fallback operations are private builder methods; stage
+rescue and rejection operations are private builder methods; stage
 orchestration outside the builder receives read-only results. It keeps one
 assembled state and existing patch/overlay workspaces rather than cloning a
 full state at each phase. The builder freezes after the staged quarantine
-transition and any required fallback re-audit. `CandidateTransaction` exposes
+transition without changing the audited model. `CandidateTransaction` exposes
 only an rvalue-qualified consuming commit. The builder retains a const view
 for existing focused tests.
 
@@ -78,12 +77,11 @@ and history mutation.
 
 | Scope / phase | Preserved evaluation order and references |
 | --- | --- |
-| Local search | Proposal construction/validity and nonmaterial shortcut remain in search; preflight evaluates trust then guard; objective evaluation uses previous and candidate-neighbor reevaluated best. |
+| Local search | Proposal construction/validity and nonmaterial shortcut remain in search; preflight evaluates trust then guard; objective acceptance uses previous; passing candidates update history with a candidate-neighbor best reference. |
 | Local polish | Solver retains its existing feasibility/trust checks; objective evaluation uses the accepted local endpoint and requires strict improvement. |
-| Fallback re-audit | Recompute trust norm, evaluate trust/guard, then previous/best objective gates; restart history from the attempt input. |
-| Boundary | Evaluate member previous/best gates in existing key order, then the combined objective. |
+| Boundary | Evaluate member previous gates in existing key order, then the combined objective. |
 | Boundary correction | Suspicious-polish guard, raw objective observation, member/combined evaluation, then strict improvement against the original correction reference. |
-| Cooperative rescue | Preserve tolerated local deterioration and best-history update rules, combined previous/best audit, and strict global improvement. |
+| Cooperative rescue | Preserve tolerated local deterioration; share local history/tie-break updates, combined previous/best audit, and strict global improvement. |
 | Global selection audit | Preserve the affected-sample union and complete-state previous/best audit; salvage order remains in the builder. |
 | Final polish | Validity, suspicious-polish guard, strict global improvement, then member non-regression against the base; strict operator recertification remains downstream on converged stops only. |
 

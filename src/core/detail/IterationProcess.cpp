@@ -55,7 +55,7 @@ bool UsesPolish(const PolishProvenance & provenance)
 std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
     const SuspiciousUpdateMask & rollback_atom_mask,
     const SuspiciousBlockActivity & block_activity,
-    const std::set<std::size_t> & probation_atom_index_set)
+    const std::set<std::size_t> & retry_atom_index_set)
 {
     std::vector<double> ridge_multiplier_list(rollback_atom_mask.size(), 1.0);
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
@@ -63,7 +63,7 @@ std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
         if (rollback_atom_mask.at(atom_index) != 0 ||
             !block_activity.HasActiveShape(atom_index) ||
             !block_activity.HasActiveOffset(atom_index) ||
-            probation_atom_index_set.contains(atom_index))
+            retry_atom_index_set.contains(atom_index))
         {
             ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
         }
@@ -114,7 +114,7 @@ struct IterationState
     TrustRegionStateSet trust_region_state{};
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
-    std::size_t phase_audit_domain_id{ 1 };
+    std::size_t objective_domain_revision{ 1 };
 };
 
 static void ValidateBlockActivitySize(
@@ -355,7 +355,7 @@ static void ResetIterationStateForPartition(
         BuildSecondStageModelSnapshot(context, iteration_state.accepted_state)
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
-    iteration_state.phase_audit_domain_id++;
+    iteration_state.objective_domain_revision++;
     const auto previous_objective_states{ context.best_trace ? iteration_state.cluster_objective_state : ClusterObjectiveStateMap{} };
     iteration_state.cluster_objective_state.clear();
     const auto objective_by_key{
@@ -510,7 +510,7 @@ static bool BeginFrozenBackgroundIteration(
         return true;
     }
     if (previous_background && previous_background->response_by_atom == background->response_by_atom) return false;
-    iteration_state.phase_audit_domain_id++;
+    iteration_state.objective_domain_revision++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
     const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
@@ -580,36 +580,36 @@ static IterationResult RunIteration(
 
     const auto quarantine_activity{
         iteration_state.quarantine_state.BeginIteration(
-            iteration_state.accepted_iteration_count)
+            iteration_state.objective_domain_revision)
     };
-    std::set<std::size_t> probation_atom_index_set;
-    for (const auto & target : iteration_state.quarantine_state.probation_target_list)
+    std::set<std::size_t> retry_atom_index_set;
+    for (const auto & target : iteration_state.quarantine_state.retry_target_list)
     {
-        probation_atom_index_set.insert(target.atom_index_list.begin(), target.atom_index_list.end());
+        retry_atom_index_set.insert(target.atom_index_list.begin(), target.atom_index_list.end());
     }
-    std::vector<ClusterKey> probation_key_list;
+    std::vector<ClusterKey> retry_key_list;
     for (const auto & key : cluster_key_list)
     {
         if (std::ranges::any_of(
                 key,
                 [&](const auto atom_index)
                 {
-                    return probation_atom_index_set.contains(atom_index);
+                    return retry_atom_index_set.contains(atom_index);
                 }))
         {
-            probation_key_list.emplace_back(key);
+            retry_key_list.emplace_back(key);
         }
     }
-    iteration_state.trust_region_state.ResetToMinimum(probation_key_list);
+    iteration_state.trust_region_state.ResetToMinimum(retry_key_list);
     const auto joint_offset_ridge_multiplier_list{
         BuildSuspiciousJointOffsetRidgeMultiplierList(
             iteration_state.rollback_atom_mask,
             quarantine_activity,
-            probation_atom_index_set)
+            retry_atom_index_set)
     };
     BeginTrustModelAudit(context, cluster_key_list);
     context.phase_audit = BeginPhaseAudit(context, options.quiet_mode, objective_domain,
-        previous_state, cluster_key_list, attempt_number, iteration_state.phase_audit_domain_id);
+        previous_state, cluster_key_list, attempt_number, iteration_state.objective_domain_revision);
     estimation_audit::Scope solver_audit_scope(context.phase_audit ? attempt_number : 0, "production");
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
@@ -661,7 +661,7 @@ static IterationResult RunIteration(
     builder.Select(candidate_inputs);
     auto transaction{ std::move(builder).Finish(candidate_inputs, iteration_state.quarantine_state,
         proposal_result.assessment_by_atom, proposal_result.health_by_key,
-        iteration_state.accepted_iteration_count + 1) };
+        proposal_result.fixed_point_operator, iteration_state.objective_domain_revision) };
     IterationResult result;
     const auto selection{ std::move(transaction).Commit(context, previous_state,
         iteration_state.accepted_state, iteration_state.previous_polish_provenance,
@@ -731,10 +731,6 @@ static IterationResult RunIteration(
         graph_topology,
         iteration_state,
         performance_counters) || background_partition_changed;
-    if (result.objective_domain_changed)
-    {
-        iteration_state.quarantine_state.force_probation = true;
-    }
     bool improved_best_audit{ false };
     bool improved_audit_baseline{ false };
     {
@@ -782,7 +778,7 @@ static IterationResult RunIteration(
             iteration_state.quarantine_state.state_by_target | std::views::values,
             [](const auto & state)
             {
-                return state.lifecycle != QuarantineLifecycle::Exhausted;
+                return state.lifecycle == QuarantineLifecycle::Active;
             })
     };
     if (result.objective_domain_changed || improved_audit_baseline ||
@@ -1120,7 +1116,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             iteration_state.accepted_iteration_count,
             iteration_state.quarantine_state.entered_target_count,
             iteration_state.quarantine_state.released_target_count,
-            iteration_state.quarantine_state.failed_probation_count,
+            iteration_state.quarantine_state.failed_retry_count,
             iteration_state.quarantine_state.TargetCount(),
             finalized_state);
     }
@@ -1144,7 +1140,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             options.quiet_mode,
             iteration_state.quarantine_state.entered_target_count,
             iteration_state.quarantine_state.released_target_count,
-            iteration_state.quarantine_state.failed_probation_count,
+            iteration_state.quarantine_state.failed_retry_count,
             iteration_state.quarantine_state.TargetCount(),
             iteration_state.best_audit_state,
             iteration_state.accepted_state);

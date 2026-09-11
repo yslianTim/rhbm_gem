@@ -820,38 +820,6 @@ void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
     selection.final_audit_objective.reset();
 }
 
-void CandidateTransactionBuilder::ReauditFallbackSelection(const CandidateSelectionInputs & inputs)
-{
-    auto & selection{ m_selection };
-    selection.cluster_objective_state = inputs.cluster_objective_state;
-    const auto accepted_keys{ selection.accepted_key_list };
-    for (const auto & key : accepted_keys)
-    {
-        auto patch{ FitStatePatch::FromState(selection.assembled_state, key) };
-        const CandidateEvaluationOverlay candidate_overlay{
-            inputs.context, inputs.residual_baseline, inputs.previous_state, patch
-        };
-        const auto & previous{ inputs.previous_objective_by_key.at(key) };
-        const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::FallbackReaudit,
-            LocalCandidateReference{key, inputs.partition.sample_id_list_by_key.at(key),
-                previous ? &*previous : nullptr, inputs.objective_domain,
-                selection.cluster_objective_state.at(key), {}, inputs.performance_counters,
-                "fallback-reaudit", &selection.block_activity, inputs.trust_region_state.GetRadius(key)}) };
-        const auto safe{ evaluation.accepted };
-        if (safe) selection.cluster_objective_state.at(key) = *evaluation.objective_state;
-        if (safe) patch.ApplyTo(selection.assembled_state);
-        else RejectSelectionKeys(inputs, { key }, false);
-    }
-    const auto previous_audit{ EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline) };
-    if (previous_audit.has_value())
-        AuditAndSalvageFinalSelection(inputs, *previous_audit);
-    else
-    {
-        const auto remaining_keys{ selection.accepted_key_list };
-        RejectSelectionKeys(inputs, remaining_keys, false);
-    }
-}
-
 void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     const CandidateSelectionInputs & inputs,
     const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key)

@@ -87,6 +87,7 @@ imply objective acceptance or final persistence approval.
 
 ```text
 validated S(k)
+  -> domain-aware Frozen target retry
   -> complete undamped joint per-atom offset endpoint
   -> complete undamped local-shape endpoint
   -> strict operator evidence F(S(k))
@@ -94,7 +95,8 @@ validated S(k)
   -> active-column joint polish
   -> boundary reconciliation and cooperative rescue
   -> complete-state global previous/best audit
-  -> trust-radius and quarantine/probation transition
+  -> stage next-iteration Active/Frozen state without modifying audited models
+  -> publish state, history, trust-radius and quarantine updates
   -> assembled validated S(k+1)
   -> production convergence certificate
   -> stop policy selects a base final state
