@@ -32,6 +32,7 @@ struct RHBMExecutionOptions
     bool quiet_mode{ false };
     int thread_size{ 1 };
     int max_iterations{ 100 };
+    // Beta MDPDE requires both squared beta change and relative variance change below this value.
     double tolerance{ 1.0e-5 };
     double data_weight_min{ 1.0e-8 };
     double member_weight_min{ 1.0e-2 };

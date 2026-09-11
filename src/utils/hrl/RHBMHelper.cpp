@@ -545,11 +545,13 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
 
         auto beta_in_previous_iter{ result.beta_mdpde };
         bool converged{ false };
+        double variance_relative_change{ std::numeric_limits<double>::infinity() };
         double audit_beta_change{ 0.0 }, audit_variance_change{ 0.0 }, audit_used_variance{ 0.0 };
         int audit_iterations{ 0 };
         const auto audit_start{ std::chrono::steady_clock::now() };
         for (int t = 0; t < options.max_iterations; t++)
         {
+            const auto variance_in_previous_iter{ result.sigma_square };
             if (estimation_audit::Enabled()) audit_used_variance = result.sigma_square;
             result.data_weight = CalculateDataWeight(
                 alpha_r,
@@ -576,7 +578,18 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
                 audit_variance_change = result.sigma_square - audit_used_variance;
                 audit_iterations = t + 1;
             }
-            if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance)
+            const bool valid_variances{
+                numeric_validation::IsFinitePositive(variance_in_previous_iter) &&
+                numeric_validation::IsFinitePositive(result.sigma_square) &&
+                variance_in_previous_iter != std::numeric_limits<double>::max() &&
+                result.sigma_square != std::numeric_limits<double>::max()
+            };
+            variance_relative_change = valid_variances
+                ? std::abs(result.sigma_square - variance_in_previous_iter) /
+                    std::max({ std::abs(result.sigma_square), std::abs(variance_in_previous_iter), options.data_weight_min })
+                : std::numeric_limits<double>::infinity();
+            if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance &&
+                variance_relative_change < options.tolerance)
             {
                 converged = true;
                 break;
@@ -614,6 +627,7 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
                     ",\"beta_squared_tolerance\":" + Number(options.tolerance) +
                     ",\"used_variance\":" + Number(audit_used_variance) + ",\"variance\":" + Number(result.sigma_square) +
                     ",\"last_beta_change\":" + Number(audit_beta_change) + ",\"last_variance_change\":" + Number(audit_variance_change) +
+                    ",\"last_variance_relative_change\":" + Number(variance_relative_change) +
                     ",\"used_weight_min\":" + Number(result.data_weight.diagonal().minCoeff()) +
                     ",\"used_weight_max\":" + Number(result.data_weight.diagonal().maxCoeff()) +
                     ",\"used_weight_mean\":" + Number(result.data_weight.diagonal().mean()) +

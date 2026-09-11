@@ -187,10 +187,14 @@ are `w=max(weight_min, exp(-alpha*e²/(2v)))` (alpha zero gives unit weights).
 Invalid variance uses the weight floor. Given these weights, beta is weighted
 least squares and `v_new=sum(w*e_new²)/(sum(w)-n*alpha*(1+alpha)^(-3/2))`.
 Nonpositive denominator and nonfinite variance follow the existing numerical
-fallback rules. The stopping check is **squared beta change** below the configured
-tolerance; it does not require a small variance update or refreshed-weight normal
-residual. Thus success status alone does not certify the coupled estimating
-system. Each call starts from OLS and its sample residual variance.
+fallback rules. Stopping requires both **squared beta change** and
+`abs(v_new-v_old)/max(abs(v_new),abs(v_old),data_weight_min)` below the configured
+tolerance. Invalid variances and the maximum-double fallback sentinel cannot
+satisfy this check. The optional `last_variance_relative_change` trace field
+records this stopping metric (null when unavailable), distinct from the
+refreshed-weight variance equation residual. A refreshed-weight normal residual
+is not a stopping gate, so success alone does not certify that residual is small.
+Each call starts from OLS and its sample residual variance.
 
 Audit uses `rho(u)=0.5*k²*log(1+(u/k)²)` with `k=1.345`, applied to residual divided
 by the frozen owner scale. Fit/tail weights additionally use owner atom fraction
