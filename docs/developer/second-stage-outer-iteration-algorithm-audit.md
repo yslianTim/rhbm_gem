@@ -17,6 +17,10 @@ not change `FitOptions`, command-line options, model persistence, convergence
 thresholds, candidate selection, stop precedence, or the production
 trajectory.
 
+The [retained P1 changes](second-stage-p1-ablation.md) limit final polish to
+converged stops with an independent radius; cooperative rescue and production
+Grow retain their baseline policies.
+
 ## Scope and canonical states
 
 The review covers the second-stage outer loop from a validated accepted state
@@ -93,8 +97,8 @@ validated S(k)
   -> assembled validated S(k+1)
   -> production convergence certificate
   -> stop policy selects a base final state
-  -> final uncut dependency polish candidate
-  -> strict or residual-non-regression persistence safety check
+  -> only converged and enabled: final uncut dependency polish at radius 1.0
+  -> strict operator persistence safety check; otherwise retain chosen base
   -> persist Gaussian and peeling state
 ```
 
@@ -155,16 +159,9 @@ nominal operator evidence, and residual p99 must all pass. Failure,
 incomplete evidence, or evaluation error retains the already converged base
 state.
 
-Non-convergence stop reasons use a residual non-regression policy. A strict
-candidate is always safe to apply. Otherwise, both the selected base state and
-polished candidate must have solver-qualified, complete,
-finite nominal operator evidence, and every candidate coordinate must satisfy
-`candidate_p99 <= max(base_p99, 1e-4)`. This comparison is coordinate-wise for
-log peak, log width, and per-atom offset. If the base is not comparable, only a
-strict candidate can pass. Any evaluation error, unavailable evidence, or
-residual regression retains the base state. Maximum residual stays diagnostic.
-The fallback does not resume the outer loop, increment accepted iterations, or
-change the original stop reason.
+Non-convergence stop reasons persist the existing selected base state directly.
+They do not run final dependency polish or operator recertification. The strict
+candidate check is the only final-polish persistence policy.
 
 ## Current diagnostic contract
 

@@ -188,6 +188,8 @@ struct BoundaryJointCorrectionResult
     std::size_t parameter_count{ 0 };
 };
 
+enum class JointCorrectionTrustReference { OuterPrevious, Endpoint };
+
 BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const SecondStageContext & context,
     const FitStateView & endpoint_state,
@@ -197,6 +199,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    std::string_view diagnostic_phase = "boundary-reconciliation");
+    std::string_view diagnostic_phase = "boundary-reconciliation",
+    JointCorrectionTrustReference trust_reference = JointCorrectionTrustReference::OuterPrevious);
 
 } // namespace rhbm_gem::core::detail

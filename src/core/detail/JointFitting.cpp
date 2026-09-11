@@ -1054,7 +1054,8 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    std::string_view diagnostic_phase)
+    std::string_view diagnostic_phase,
+    JointCorrectionTrustReference trust_reference)
 {
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
@@ -1152,7 +1153,8 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
         for (const auto atom_index : trust_region.key)
         {
             if (atom_index >= context.atom_list.size()) return result;
-            previous_model_list.emplace_back(endpoint_state.GetBaseModel(atom_index));
+            previous_model_list.emplace_back(trust_reference == JointCorrectionTrustReference::Endpoint ?
+                endpoint_state.GetModel(atom_index) : endpoint_state.GetBaseModel(atom_index));
         }
     }
 

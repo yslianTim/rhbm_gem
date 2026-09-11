@@ -68,19 +68,6 @@ std::string_view GetSecondStageStopReasonText(SecondStageStopReason reason)
     return "";
 }
 
-std::string_view GetFinalPolishCertificationPolicyText(
-    FinalPolishCertificationPolicy policy)
-{
-    switch (policy)
-    {
-    case FinalPolishCertificationPolicy::RequireResidualNonRegression:
-        return "non-regression";
-    case FinalPolishCertificationPolicy::RequireStrictFixedPoint:
-        return "strict-fixed-point";
-    }
-    throw std::invalid_argument("Unknown final polish certification policy.");
-}
-
 std::string_view GetFinalPolishResidualSafetyStatusText(
     FinalPolishResidualSafetyStatus status)
 {
@@ -90,8 +77,6 @@ std::string_view GetFinalPolishResidualSafetyStatusText(
         return "not-evaluated";
     case FinalPolishResidualSafetyStatus::AbsolutePassed:
         return "absolute-passed";
-    case FinalPolishResidualSafetyStatus::RelativePassed:
-        return "relative-passed";
     case FinalPolishResidualSafetyStatus::Failed:
         return "failed";
     case FinalPolishResidualSafetyStatus::Error:
@@ -1421,10 +1406,8 @@ void LogAdaptiveTopologyRebuild(
 void LogFinalDependencyPolish(
     bool quiet_mode,
     const FinalDependencyPolishResult & polish_result,
-    FinalPolishCertificationPolicy certification_policy,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
-    const ConvergenceAssessment * base_certificate,
     const ConvergenceAssessment * candidate_certificate)
 {
     if (quiet_mode) return;
@@ -1461,8 +1444,7 @@ void LogFinalDependencyPolish(
     }
     message
         << ", accepted=" << (polish_result.accepted ? "yes" : "no")
-        << ", residual-safety-policy="
-        << GetFinalPolishCertificationPolicyText(certification_policy)
+        << ", residual-safety-policy=strict-fixed-point"
         << ", residual-safety="
         << GetFinalPolishResidualSafetyStatusText(safety_status)
         << ", applied=" << (applied ? "yes" : "no");
@@ -1485,10 +1467,6 @@ void LogFinalDependencyPolish(
             message,
             diagnostics.operator_nominal_residual.maximum_list);
     };
-    if (base_certificate != nullptr)
-    {
-        append_certificate("base", *base_certificate);
-    }
     if (candidate_certificate != nullptr)
     {
         append_certificate("candidate", *candidate_certificate);

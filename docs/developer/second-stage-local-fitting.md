@@ -596,8 +596,8 @@ objective tolerances are never relaxed.
 ## Final uncut dependency polish
 
 After the existing stop policy selects the best-audit or latest-validated base
-state, but before peeling entries or atom models are written, the stage attempts
-one final dependency polish. Current clusters are first treated as indivisible
+state, but before peeling entries or atom models are written, only a `converged`
+stop with polish enabled attempts final dependency polish. Current clusters are first treated as indivisible
 DSU units. They are then merged using the complete
 `GraphTopology::sample_dependency_list`, without the weighted-edge threshold or
 100-atom cutoff. This retains every direct selected-target/selected-neighbor
@@ -612,10 +612,12 @@ independent physical-offset variable. The last validated frozen background is
 reused unchanged; merged components do not reassign samples to new background
 medians. Inactive coordinates decode from their own atom endpoint. Sparse
 weighted-ridge directions,
-robust weights, conditioning guards, and each original cluster's trust radius
-are reused from boundary correction. Up to the configured number of nonlinear
-rounds is attempted. A round linearizes at its latest endpoint, while every
-cumulative trust step is measured from the pre-polish base state.
+robust weights and conditioning guards are reused from boundary correction.
+Each member uses a final-polish-only trust radius of `1.0` on every round,
+independent of outer radius history. Up to the configured number of nonlinear
+rounds is attempted. A round linearizes at its latest endpoint, and each round
+measures its trust step from that endpoint. There is no additional cumulative
+trust cap from the pre-polish base state.
 
 Direction construction and candidate validation use the same selected snapshot
 and frozen background, so selected deltas, residuals, and the nonlinear
@@ -637,25 +639,11 @@ complete, and every operator-residual p99 is below `1e-4`. An unavailable,
 failed, or above-threshold certificate discards the polish and writes the
 already converged base state unchanged.
 
-For `quarantine`, `audit-patience`, `all-rejected-*`, and
-`maximum-iterations`, objective acceptance is also provisional. The candidate
-is applied immediately when it passes the same strict operator certificate.
-Otherwise, both base and candidate must have solver-qualified, complete,
-finite nominal operator evidence, and each candidate residual p99 must satisfy
-
-```text
-candidate_p99 <= max(base_p99, 1e-4)
-```
-
-independently for log peak, log width, and per-atom offset-to-peak ratio. If the base evidence
-cannot be evaluated, only a strict candidate can be applied. Evaluation error,
-unavailable evidence, or any coordinate regression retains the base state.
-Maximum residual remains diagnostic and is not a gate. An applied final polish
-updates the final audit and provenance but does not increment the outer
-accepted-iteration count or change the stop reason. The final-polish diagnostic
-distinguishes objective acceptance, the strict or non-regression policy,
-`absolute-passed`, `relative-passed`, `failed`, `error`, or `not-evaluated`
-safety status, base/candidate residual evidence, and actual application.
+For all non-convergence stops, the chosen base state is persisted directly,
+without polish or recertification. Maximum residual remains diagnostic. Applied
+polish updates audit and provenance without changing accepted iterations or the
+stop reason. Diagnostics report strict-fixed-point policy and absolute-passed,
+failed, error, or not-evaluated status, candidate evidence and actual application.
 
 ## Numerical defenses, partial active set, and quarantine
 

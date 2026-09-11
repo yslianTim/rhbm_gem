@@ -136,17 +136,10 @@ struct ConvergenceAssessment
     ConvergenceDiagnostics diagnostics{};
 };
 
-enum class FinalPolishCertificationPolicy
-{
-    RequireResidualNonRegression,
-    RequireStrictFixedPoint
-};
-
 enum class FinalPolishResidualSafetyStatus
 {
     NotEvaluated,
     AbsolutePassed,
-    RelativePassed,
     Failed,
     Error
 };

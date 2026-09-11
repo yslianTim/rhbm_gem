@@ -8,6 +8,9 @@ search factors, solver calls, objective references, stop precedence, or final
 persistence policy. No tests or test cases are added. Existing tests only adapt
 to moved internal declarations and the separated certificate measurements.
 
+The execution map includes the retained P1 final-polish changes. Cooperative
+rescue and production radius growth retain their original policies.
+
 ## Ownership and execution
 
 ```mermaid
@@ -26,9 +29,13 @@ flowchart TD
     K --> L{Any accepted clusters?}
     L -- no --> M[Retain previous model; preserve rejection lifecycle updates]
     L -- yes --> N[Certificate, topology scheduling and stop policy]
-    N --> O[Select final base; dependency polish and operator recertification]
-    M --> O
-    O --> P[Persist validated output]
+    N --> O{Converged and polish enabled?}
+    M --> P[Persist selected base]
+    O -- no --> P
+    O -- yes --> R[Final polish: radius 1.0 per round]
+    R --> S{Strict operator certificate passes?}
+    S -- no --> P
+    S -- yes --> T[Persist polished output]
     D -. evidence only .-> Q[PhaseAudit and TrustModelAudit]
     E -. evidence only .-> Q
     F -. evidence only .-> Q
@@ -72,7 +79,7 @@ thin compatibility adapter for existing focused tests, not a second validator.
 | Boundary correction | Suspicious-polish guard, raw objective observation, member/combined evaluation, then strict improvement against the original correction reference. |
 | Cooperative rescue | Preserve tolerated local deterioration and best-history update rules, combined previous/best audit, and strict global improvement. |
 | Global selection audit | Preserve the affected-sample union and complete-state previous/best audit; salvage order remains in the builder. |
-| Final polish | Validity, suspicious-polish guard, strict global improvement, then member non-regression against the base; strict/non-regression operator recertification remains downstream. |
+| Final polish | Validity, suspicious-polish guard, strict global improvement, then member non-regression against the base; strict operator recertification remains downstream on converged stops only. |
 
 Failures keep the existing short-circuit behavior. Proposal interpolation,
 search retry, rescue candidate retention, correction generation and salvage

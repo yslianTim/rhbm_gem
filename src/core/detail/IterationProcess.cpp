@@ -844,7 +844,6 @@ void ApplyFitState(
 struct FinalPolishResidualSafetyResult
 {
     FinalPolishResidualSafetyStatus status{ FinalPolishResidualSafetyStatus::NotEvaluated };
-    std::optional<ConvergenceAssessment> base{};
     std::optional<ConvergenceAssessment> candidate{};
 };
 
@@ -898,98 +897,6 @@ static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
     }
 }
 
-static bool HasComparableFinalPolishOperatorEvidence(const ConvergenceCertificate & certificate)
-{
-    const auto & percentile_list{
-        certificate.operator_nominal_p99
-    };
-    return certificate.solver_qualified && certificate.operator_complete &&
-        std::ranges::all_of(
-            percentile_list,
-            [](double value) { return std::isfinite(value); });
-}
-
-static bool IsFinalPolishResidualNonWorsening(
-    const ConvergenceCertificate & base_certificate,
-    const ConvergenceCertificate & candidate_certificate)
-{
-    if (!HasComparableFinalPolishOperatorEvidence(base_certificate) ||
-        !HasComparableFinalPolishOperatorEvidence(candidate_certificate))
-    {
-        return false;
-    }
-    const auto & base_percentile_list{
-        base_certificate.operator_nominal_p99
-    };
-    const auto & candidate_percentile_list{
-        candidate_certificate.operator_nominal_p99
-    };
-    for (std::size_t index = 0; index < base_percentile_list.size(); index++)
-    {
-        if (candidate_percentile_list.at(index) >
-            std::max(base_percentile_list.at(index), kTransformedChangeTolerance))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
-    const SecondStageContext & context,
-    const FitOptions & options,
-    IterationState & iteration_state,
-    const SuspiciousBlockActivity & final_block_activity,
-    const FitState & base_state,
-    const FitState & candidate_state,
-    FinalPolishCertificationPolicy policy)
-{
-    FinalPolishResidualSafetyResult result;
-    result.candidate = EvaluateFinalPolishCertificate(
-        context,
-        options,
-        iteration_state,
-        final_block_activity,
-        candidate_state);
-    if (!result.candidate.has_value())
-    {
-        result.status = FinalPolishResidualSafetyStatus::Error;
-        return result;
-    }
-    if (result.candidate->certificate.StrictOperatorPassed())
-    {
-        result.status = FinalPolishResidualSafetyStatus::AbsolutePassed;
-        return result;
-    }
-    if (policy == FinalPolishCertificationPolicy::RequireStrictFixedPoint)
-    {
-        result.status = FinalPolishResidualSafetyStatus::Failed;
-        return result;
-    }
-    if (!HasComparableFinalPolishOperatorEvidence(result.candidate->certificate))
-    {
-        result.status = FinalPolishResidualSafetyStatus::Failed;
-        return result;
-    }
-    result.base = EvaluateFinalPolishCertificate(
-        context,
-        options,
-        iteration_state,
-        final_block_activity,
-        base_state);
-    if (!result.base.has_value())
-    {
-        result.status = FinalPolishResidualSafetyStatus::Error;
-        return result;
-    }
-    result.status = IsFinalPolishResidualNonWorsening(
-            result.base->certificate,
-            result.candidate->certificate) ?
-        FinalPolishResidualSafetyStatus::RelativePassed :
-        FinalPolishResidualSafetyStatus::Failed;
-    return result;
-}
-
 static const FitState & FinalizeSecondStageState(
     ModelObject & model_object,
     const SecondStageContext & context,
@@ -997,7 +904,7 @@ static const FitState & FinalizeSecondStageState(
     const GraphTopology & graph_topology,
     IterationState & iteration_state,
     bool use_best_audit_state,
-    FinalPolishCertificationPolicy certification_policy,
+    SecondStageStopReason stop_reason,
     PerformanceCounters & performance_counters)
 {
     const auto final_uses_best_audit{
@@ -1008,6 +915,12 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.best_audit_state->state :
             iteration_state.accepted_state
     };
+    if (stop_reason != SecondStageStopReason::Converged ||
+        !options.enable_second_stage_dependency_polish)
+    {
+        ApplyFitState(model_object, context, final_state);
+        return final_state;
+    }
     const auto final_block_activity{
         iteration_state.quarantine_state.BuildFinalActivity()
     };
@@ -1019,7 +932,6 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.graph_partition,
             iteration_state.objective_domain,
             final_block_activity,
-            iteration_state.trust_region_state,
             final_state,
             iteration_state.boundary_joint_correction_workspace_by_key,
             performance_counters)
@@ -1027,29 +939,21 @@ static const FitState & FinalizeSecondStageState(
     FinalPolishResidualSafetyResult residual_safety;
     if (polish_result.accepted && polish_result.objective.has_value())
     {
-        residual_safety = EvaluateFinalPolishResidualSafety(
-            context,
-            options,
-            iteration_state,
-            final_block_activity,
-            final_state,
-            polish_result.state,
-            certification_policy);
+        residual_safety.candidate = EvaluateFinalPolishCertificate(
+            context, options, iteration_state, final_block_activity, polish_result.state);
+        residual_safety.status = !residual_safety.candidate ?
+            FinalPolishResidualSafetyStatus::Error :
+            residual_safety.candidate->certificate.StrictOperatorPassed() ?
+                FinalPolishResidualSafetyStatus::AbsolutePassed :
+                FinalPolishResidualSafetyStatus::Failed;
     }
     const auto polish_applied{
-        polish_result.accepted &&
-        polish_result.objective.has_value() &&
-        (residual_safety.status == FinalPolishResidualSafetyStatus::AbsolutePassed ||
-            residual_safety.status == FinalPolishResidualSafetyStatus::RelativePassed)
+        polish_result.accepted && polish_result.objective.has_value() &&
+        residual_safety.status == FinalPolishResidualSafetyStatus::AbsolutePassed
     };
     LogFinalDependencyPolish(
-        options.quiet_mode,
-        polish_result,
-        certification_policy,
-        residual_safety.status,
-        polish_applied,
-        residual_safety.base.has_value() ? &*residual_safety.base : nullptr,
-        residual_safety.candidate.has_value() ? &*residual_safety.candidate : nullptr);
+        options.quiet_mode, polish_result, residual_safety.status, polish_applied,
+        residual_safety.candidate ? &*residual_safety.candidate : nullptr);
     if (polish_applied)
     {
         if (final_uses_best_audit)
@@ -1205,9 +1109,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             graph_topology,
             iteration_state,
             use_best_audit_state,
-            converged ?
-                FinalPolishCertificationPolicy::RequireStrictFixedPoint :
-                FinalPolishCertificationPolicy::RequireResidualNonRegression,
+            terminal_result.stop_reason,
             performance_counters)
     };
     LogSecondStageAuditTerminal(

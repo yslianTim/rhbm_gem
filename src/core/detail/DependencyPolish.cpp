@@ -11,6 +11,9 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 namespace rhbm_gem::core::detail {
+namespace {
+constexpr double kFinalDependencyPolishTrustRadius{ 1.0 };
+}
 
 FinalDependencyPolishResult RunFinalDependencyPolish(
     const SecondStageContext & context,
@@ -19,7 +22,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & objective_domain,
     const SuspiciousBlockActivity & block_activity,
-    const TrustRegionStateSet & trust_region_state,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
     PerformanceCounters & performance_counters)
@@ -116,7 +118,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 {
                     trust_region_list.emplace_back(BoundaryJointTrustRegion{
                         key,
-                        trust_region_state.GetRadius(key)
+                        kFinalDependencyPolishTrustRadius
                     });
                 }
                 const BoundaryJointCorrectionWorkspaceKey workspace_key{
@@ -153,7 +155,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             ridge_multiplier_list,
                             trust_region_list,
                             solver,
-                            "final-dependency-polish")
+                            "final-dependency-polish",
+                            JointCorrectionTrustReference::Endpoint)
                     };
                     diagnostic.symbolic_analysis_count +=
                         solver.GetSymbolicAnalysisCount() -

@@ -20,7 +20,6 @@ struct SecondStageSeedSelectionRecord;
 struct ClusterCandidateDiagnostic;
 struct FinalDependencyPolishResult;
 enum class SecondStageStopReason;
-enum class FinalPolishCertificationPolicy;
 enum class FinalPolishResidualSafetyStatus;
 
 JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
@@ -198,10 +197,8 @@ void LogAdaptiveTopologyRebuild(
 void LogFinalDependencyPolish(
     bool quiet_mode,
     const FinalDependencyPolishResult & polish_result,
-    FinalPolishCertificationPolicy certification_policy,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
-    const ConvergenceAssessment * base_certificate = nullptr,
     const ConvergenceAssessment * candidate_certificate = nullptr);
 
 void LogSecondStageAuditTerminal(

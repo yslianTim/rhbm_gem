@@ -4213,9 +4213,6 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             base_snapshot,
             coupling_detail::BuildGraphClusterKeyList(partition))
     };
-    polish_detail::TrustRegionStateSet trust_region_state;
-    trust_region_state.Reconcile(
-        coupling_detail::BuildGraphClusterKeyList(partition));
     polish_detail::ClusterSolverWorkspaceMap solver_workspace_by_key;
     polish_detail::BoundaryJointCorrectionWorkspaceMap correction_workspace_by_key;
     polish_detail::PerformanceCounters performance_counters{
@@ -4238,7 +4235,6 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             partition,
             objective_domain,
             all_active,
-            trust_region_state,
             fixture.state,
             correction_workspace_by_key,
             performance_counters)

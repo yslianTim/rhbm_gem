@@ -9,8 +9,6 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
-class TrustRegionStateSet;
-
 struct FinalDependencyPolishDiagnostic
 {
     std::size_t component_count{ 0 };
@@ -55,7 +53,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & objective_domain,
     const SuspiciousBlockActivity & block_activity,
-    const TrustRegionStateSet & trust_region_state,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
     PerformanceCounters & performance_counters);
