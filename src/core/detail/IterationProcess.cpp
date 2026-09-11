@@ -115,6 +115,7 @@ struct IterationState
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
     std::size_t objective_domain_revision{ 1 };
+    std::size_t frozen_recovery_revision{ 1 };
 };
 
 static void ValidateBlockActivitySize(
@@ -493,11 +494,13 @@ static bool BeginFrozenBackgroundIteration(
         iteration_state.pending_topology.reset();
         ResetIterationStateForPartition(context, std::move(pending.partition),
             iteration_state, performance_counters);
+        iteration_state.frozen_recovery_revision++;
         graph_topology = std::move(pending.topology);
         LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         return true;
     }
     if (previous_background && previous_background->response_by_atom == background->response_by_atom) return false;
+    iteration_state.frozen_recovery_revision++;
     iteration_state.objective_domain_revision++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
@@ -540,7 +543,7 @@ static IterationResult RunIteration(
 
     const auto quarantine_activity{
         iteration_state.quarantine_state.BeginIteration(
-            iteration_state.objective_domain_revision)
+            iteration_state.frozen_recovery_revision)
     };
     std::set<std::size_t> retry_atom_index_set;
     for (const auto & target : iteration_state.quarantine_state.retry_target_list)
@@ -620,7 +623,7 @@ static IterationResult RunIteration(
     builder.Select(candidate_inputs);
     auto transaction{ std::move(builder).Finish(candidate_inputs, iteration_state.quarantine_state,
         proposal_result.assessment_by_atom, proposal_result.health_by_key,
-        proposal_result.fixed_point_operator, iteration_state.objective_domain_revision) };
+        proposal_result.fixed_point_operator, iteration_state.frozen_recovery_revision) };
     IterationResult result;
     const auto selection{ std::move(transaction).Commit(context, previous_state,
         iteration_state.accepted_state, iteration_state.previous_polish_provenance,

@@ -29,7 +29,7 @@ static void ApplyQuarantineTargetActivity(
     }
 }
 
-SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t domain_revision)
+SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t recovery_revision)
 {
     SuspiciousBlockActivity activity{
         SuspiciousUpdateMask(m_atom_count, 0),
@@ -40,9 +40,9 @@ SuspiciousBlockActivity QuarantineState::BeginIteration(std::size_t domain_revis
     for (auto & [target, state] : state_by_target)
     {
         if (state.lifecycle != QuarantineLifecycle::Frozen) continue;
-        if (domain_revision > state.last_domain_revision)
+        if (recovery_revision > state.last_recovery_revision)
         {
-            state.last_domain_revision = domain_revision;
+            state.last_recovery_revision = recovery_revision;
             retry_target_list.emplace_back(target);
         }
         else
@@ -176,7 +176,7 @@ bool QuarantineState::UpdateAfterIteration(
     const FixedPointOperatorEvidence & operator_evidence,
     const FitState & assembled_state,
     const FitState & previous_state,
-    std::size_t domain_revision)
+    std::size_t recovery_revision)
 {
     QuarantineFailureReasonMap failure_reason_by_target;
     for (const auto & [key, health] : health_by_key)
@@ -271,7 +271,7 @@ bool QuarantineState::UpdateAfterIteration(
             failure_reason_by_target,
             retry_target_list,
             successful_retry_target_list,
-            domain_revision,
+            recovery_revision,
             state_by_target)
     };
     entered_target_count += transition.entered_target_list.size();
@@ -297,7 +297,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
     const QuarantineFailureReasonMap & failure_reason_by_target,
     const std::vector<QuarantineTarget> & retry_target_list,
     const std::vector<QuarantineTarget> & successful_retry_target_list,
-    std::size_t domain_revision,
+    std::size_t recovery_revision,
     QuarantineFailureStateMap & state_by_target)
 {
     QuarantineStateTransition transition;
@@ -311,7 +311,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
         }
         else
         {
-            state.last_domain_revision = domain_revision;
+            state.last_recovery_revision = recovery_revision;
             transition.failed_retry_target_list.emplace_back(target);
         }
     }
@@ -340,7 +340,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
         if (state.stable_iteration_count >= kPersistentQuarantineFailureIterationLimit)
         {
             state.lifecycle = QuarantineLifecycle::Frozen;
-            state.last_domain_revision = domain_revision;
+            state.last_recovery_revision = recovery_revision;
             transition.entered_target_list.emplace_back(target);
         }
     }

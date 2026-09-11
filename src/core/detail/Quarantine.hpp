@@ -53,7 +53,7 @@ struct QuarantineFailureState
 {
     QuarantineFailureReason reason{};
     std::size_t stable_iteration_count{ 0 };
-    std::size_t last_domain_revision{ 0 };
+    std::size_t last_recovery_revision{ 0 };
     QuarantineLifecycle lifecycle{ QuarantineLifecycle::Active };
 };
 
@@ -70,7 +70,7 @@ QuarantineStateTransition UpdateQuarantineFailureState(
     const QuarantineFailureReasonMap & failure_reason_by_target,
     const std::vector<QuarantineTarget> & retry_target_list,
     const std::vector<QuarantineTarget> & successful_retry_target_list,
-    std::size_t domain_revision,
+    std::size_t recovery_revision,
     QuarantineFailureStateMap & state_by_target);
 
 struct QuarantineState
@@ -87,7 +87,7 @@ struct QuarantineState
     {
     }
 
-    SuspiciousBlockActivity BeginIteration(std::size_t domain_revision);
+    SuspiciousBlockActivity BeginIteration(std::size_t recovery_revision);
     SuspiciousBlockActivity BuildFinalActivity() const;
     bool UpdateAfterIteration(
         std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
@@ -98,7 +98,7 @@ struct QuarantineState
         const FixedPointOperatorEvidence & operator_evidence,
         const FitState & assembled_state,
         const FitState & previous_state,
-        std::size_t domain_revision);
+        std::size_t recovery_revision);
     std::size_t AtomCount() const;
     std::size_t TargetCount() const
     {

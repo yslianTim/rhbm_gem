@@ -5704,7 +5704,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
     audit_detail::QuarantineFailureStateMap state_by_target;
     const auto observe = [&](
         audit_detail::SuspiciousGaussianReason reason,
-        std::size_t domain_revision)
+        std::size_t recovery_revision)
     {
         return audit_detail::UpdateQuarantineFailureState(
             {
@@ -5718,7 +5718,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
             },
             {},
             {},
-            domain_revision,
+            recovery_revision,
             state_by_target);
     };
 
@@ -5733,13 +5733,13 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
         3).entered_target_list.empty());
     EXPECT_EQ(state_by_target.at(target).stable_iteration_count, 1U);
-    for (std::size_t domain_revision = 4;
-        domain_revision < 7;
-        domain_revision++)
+    for (std::size_t recovery_revision = 4;
+        recovery_revision < 7;
+        recovery_revision++)
     {
         EXPECT_TRUE(observe(
             audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation,
-            domain_revision).entered_target_list.empty());
+            recovery_revision).entered_target_list.empty());
     }
     const auto entered{
         observe(
@@ -5751,7 +5751,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
         state_by_target.at(target).lifecycle,
         audit_detail::QuarantineLifecycle::Frozen);
     EXPECT_EQ(
-        state_by_target.at(target).last_domain_revision,
+        state_by_target.at(target).last_recovery_revision,
         7U);
 
     const auto released{
@@ -5797,7 +5797,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentQuarantineReasonRequiresStableRe
                 state_by_target)
         };
         EXPECT_EQ(failed.failed_retry_target_list, (std::vector{ target }));
-        EXPECT_EQ(state_by_target.at(target).last_domain_revision, 9 + retry);
+        EXPECT_EQ(state_by_target.at(target).last_recovery_revision, 9 + retry);
     }
     EXPECT_EQ(
         state_by_target.at(target).lifecycle,

@@ -711,16 +711,19 @@ unresolved; they do not justify deleting polish or its recertification.
   `objective-exhausted` remains a search terminal diagnostic but is not quarantine
   evidence. On its own it breaks an Active target's failure streak; other guard,
   invalid, or solver hard failures in the same attempt still count.
-- Frozen targets record the last attempted objective-domain revision. The
-  revision advances on an applied partition/domain change or changed background
-  response, not on an unchanged rebuild or merely queued topology. Each new
+- Frozen targets record the last attempted Frozen-recovery revision, independent
+  of the objective-domain revision used by the phase observer. Recovery advances
+  on an applied partition/domain change or changed background response, not on an unchanged rebuild or merely queued topology. Each new
   revision permits one retry; retries are transient, not a third lifecycle.
   Background updates can consequently permit a retry every iteration.
+  The [revision separation audit](second-stage-recovery-revision-decoupling.md)
+  records the independent counter wiring and unchanged trigger policy. Objective
+  reevaluation itself does not schedule recovery.
 - Retry keys use minimum radius `0.0625` and `10x` ridge. Non-retrying Frozen
   masks retain priority; overlapping retry targets do not unlock coordinates
   still frozen by another target. No cooldown, attempt limit or Exhausted state
-  remains. Frozen targets awaiting a domain change do not hold audit patience
-  open as a scheduled recovery; active failure tracking and transitions still do.
+  remains. Frozen targets awaiting a recovery revision change do not hold audit
+  patience open as a scheduled recovery; active failure tracking and transitions still do.
 - Recovery needs no affecting failure and all required target coordinates active.
   It requires a finally accepted material change, or a complete, guard-safe,
   solver-qualified nonmaterial unrestricted endpoint. Missing evidence cannot

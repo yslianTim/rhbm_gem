@@ -106,6 +106,6 @@ public:
     void ReconcileSelectedBoundaries(const CandidateSelectionInputs & inputs);
     const CandidateSelection & View() const { return m_selection; }
     CandidateTransaction Finish(const CandidateSelectionInputs &, const QuarantineState &,
-        std::span<const SuspiciousGaussianAssessment>, const ClusterHealthMap &, const FixedPointOperatorEvidence &, std::size_t domain_revision) &&;
+        std::span<const SuspiciousGaussianAssessment>, const ClusterHealthMap &, const FixedPointOperatorEvidence &, std::size_t recovery_revision) &&;
 };
 } // namespace rhbm_gem::core::detail

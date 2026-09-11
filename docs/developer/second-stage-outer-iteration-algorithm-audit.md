@@ -191,6 +191,12 @@ but none applies a polish patch: four have no component and one solve reports
 no material change. Identical ON/OFF outputs therefore leave applied-path value
 unresolved; they do not justify deleting polish or its recertification.
 
+Objective-context revisions and Frozen-recovery revisions now have independent
+ownership. The [revision separation audit](second-stage-recovery-revision-decoupling.md)
+records their unchanged partition/background triggers: objective reevaluation
+does not itself schedule a Frozen retry. This separation does not change
+convergence blockers or the existing domain-retry diagnostic labels.
+
 ## Current diagnostic contract
 
 The current Debug trajectory is schema 10 and serializes the production

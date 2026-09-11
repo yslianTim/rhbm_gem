@@ -69,7 +69,7 @@ void CandidateTransactionBuilder::MaterializeSelection()
 CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectionInputs & inputs,
     const QuarantineState & quarantine, std::span<const SuspiciousGaussianAssessment> assessments,
     const ClusterHealthMap & health, const FixedPointOperatorEvidence & operator_evidence,
-    std::size_t domain_revision) &&
+    std::size_t recovery_revision) &&
 {
     // Quarantine publishes only next-iteration activity, never changes the audited model.
     const auto failure_mask{ BuildSuspiciousFailureAtomMask(m_selection.block_activity, assessments) };
@@ -80,7 +80,7 @@ CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectio
         m_selection.accepted_cluster_diagnostic_list, m_selection.rejected_cluster_diagnostic_list,
         m_selection.block_activity, assessments, health, operator_evidence,
         m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state,
-        inputs.previous_state, domain_revision) };
+        inputs.previous_state, recovery_revision) };
     ObservePhaseState(inputs.context, "final-selection",
             m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state);
     return CandidateTransaction(std::move(m_selection), std::move(next_quarantine), suspicious_count, transition);
