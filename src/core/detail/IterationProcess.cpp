@@ -1,3 +1,4 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/IterationProcess.hpp"
 
@@ -606,6 +607,7 @@ static IterationResult RunIteration(
     };
     context.phase_audit = BeginPhaseAudit(context, options.quiet_mode, objective_domain,
         previous_state, cluster_key_list, attempt_number, iteration_state.phase_audit_domain_id);
+    estimation_audit::Scope solver_audit_scope(context.phase_audit ? attempt_number : 0, "production");
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{

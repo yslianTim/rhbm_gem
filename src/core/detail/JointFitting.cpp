@@ -1,3 +1,4 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/JointFitting.hpp"
 
 #include "core/detail/GaussianModelOperations.hpp"
@@ -20,6 +21,35 @@
 namespace rhbm_gem::core::detail {
 
 namespace {
+
+void LogSurrogate(const algorithm::WeightedRidgeSystem & system, const Eigen::VectorXd & weight,
+    const Eigen::VectorXd & solution, double scale, double last_change, int iterations,
+    std::string_view phase, const ClusterKey & key, std::string_view status) noexcept
+{
+    if (!estimation_audit::Enabled()) return;
+    const auto start{ std::chrono::steady_clock::now() };
+    try
+    {
+        const Eigen::VectorXd residual{ system.design_matrix * solution - system.response };
+        const Eigen::VectorXd normal{ system.design_matrix.transpose() * weight.cwiseProduct(residual) +
+            system.ridge_diagonal.cwiseProduct(solution - system.previous_parameter) };
+        const Eigen::VectorXd rhs{ system.design_matrix.transpose() * weight.cwiseProduct(system.response) +
+            system.ridge_diagonal.cwiseProduct(system.previous_parameter) };
+        std::string keys{ "[" };
+        for (const auto atom : key) { if (keys.size() != 1) keys += ','; keys += std::to_string(atom); }
+        using estimation_audit::Number;
+        estimation_audit::Emit("weighted-ridge", "\"phase\":\"" + std::string(phase) + "\",\"status\":\"" +
+            std::string(status) + "\",\"key\":" + keys + "],\"rows\":" + std::to_string(system.response.size()) +
+            ",\"columns\":" + std::to_string(solution.size()) + ",\"scale\":" + Number(scale) +
+            ",\"iterations\":" + std::to_string(iterations) + ",\"last_change\":" + Number(last_change) +
+            ",\"weight_min\":" + Number(weight.minCoeff()) + ",\"weight_max\":" + Number(weight.maxCoeff()) +
+            ",\"weight_mean\":" + Number(weight.mean()) + ",\"ridge_min\":" + Number(system.ridge_diagonal.minCoeff()) +
+            ",\"ridge_max\":" + Number(system.ridge_diagonal.maxCoeff()) + ",\"anchor_norm\":" + Number(system.previous_parameter.norm()) +
+            ",\"normal_residual\":" + Number(normal.norm() / std::max(1.0, rhs.norm())) +
+            ",\"elapsed_ms\":" + Number(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()));
+    }
+    catch (...) { estimation_audit::Emit("weighted-ridge", "\"status\":\"diagnostic-unavailable\""); }
+}
 
 void LogConditioning(
     const JointFittingConditioning & conditioning,
@@ -563,6 +593,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         });
     }
 
+    double audit_scale{ 0.0 }, audit_change{ 0.0 };
     for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
     {
         const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
@@ -606,13 +637,18 @@ JointOffsetSolveResult EstimateJointOffsets(
                 offset,
                 kJointOffsetIrlsScaleFloor)
         };
+        if (estimation_audit::Enabled()) { audit_scale = residual_scale; audit_change = maximum_change; }
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
+            LogSurrogate(system, weight, offset, audit_scale, audit_change, iteration + 1,
+                diagnostic_phase, active_index_list, "converged");
             return report(JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) });
         }
     }
 
+    LogSurrogate(system, weight, offset, audit_scale, audit_change, kRobustLossMaximumIterations,
+        diagnostic_phase, active_index_list, "maximum-iterations");
     return report(JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) });
 }
 
@@ -886,6 +922,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         return std::nullopt;
     }
 
+    LogSurrogate(system, weight, direction, residual_scale, direction.norm(), 1, diagnostic_phase, key, "solved-surrogate");
     return direction;
 }
 

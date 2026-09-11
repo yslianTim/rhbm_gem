@@ -1,6 +1,8 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/IterationProposal.hpp"
 
 #include "core/detail/Diagnosis.hpp"
+#include "core/detail/PhaseAudit.hpp"
 
 #include <exception>
 #include <limits>
@@ -313,6 +315,7 @@ IterationProposalResult BuildIterationProposal(
         }
     }
 
+    if (context.phase_audit) context.phase_audit->CaptureIntermediate("post-joint-offset", current_model_snapshot.node);
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };
@@ -332,6 +335,8 @@ IterationProposalResult BuildIterationProposal(
     {
         try
         {
+            estimation_audit::Scope atom_scope(estimation_audit::current.attempt,
+                estimation_audit::current.source + "/shape", static_cast<long>(atom_index));
             refit_result_list.at(atom_index) =
                 FitAtomWithJointOffsetFallback(
                     context.atom_list.at(atom_index),

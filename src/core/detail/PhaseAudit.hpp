@@ -9,9 +9,25 @@
 
 namespace rhbm_gem::core::detail {
 
+struct CandidateSelectionInputs;
+
 // Observation only: snapshots are owned here; production workspaces are never used.
 class PhaseAudit
 {
+    struct BoundaryMember
+    {
+        ClusterKey key;
+        std::vector<SampleRef> samples;
+        std::optional<ObjectiveBreakdown> previous;
+        ClusterObjectiveState history;
+    };
+    struct BoundaryGates
+    {
+        std::vector<BoundaryMember> members;
+        ResidualBaseline residual_baseline;
+        FitState previous_state;
+        ObjectiveBreakdown improvement_reference;
+    };
     struct Event
     {
         std::string id, parent_id, stage, disposition, reason;
@@ -26,6 +42,7 @@ class PhaseAudit
     std::vector<ClusterKey> m_keys;
     std::size_t m_attempt, m_domain_id;
     std::vector<Event> m_events;
+    std::map<std::string, BoundaryGates> m_boundary_gates;
     std::map<ClusterKey, std::vector<Event>> m_worker_events;
     void MergeWorkers();
     std::mutex m_mutex;
@@ -42,6 +59,11 @@ public:
         std::string_view disposition = "observed", std::string_view reason = "",
         bool probe = false, bool recertify = true) noexcept;
     void CaptureState(std::string_view stage, const FitState &, bool probe = false) noexcept;
+    void CaptureCorrection(std::string_view stage, const ClusterKey &, const FitStateView &,
+        const FitStateView & parent, double factor, std::string_view disposition,
+        std::string_view reason, const CandidateSelectionInputs &, const std::vector<ClusterKey> &,
+        const ObjectiveBreakdown & improvement_reference) noexcept;
+    void CaptureIntermediate(std::string_view stage, const FittedGaussianSnapshot &) noexcept;
     void CaptureOperator(const FixedPointOperatorEvidence &) noexcept;
     void Missing(std::string_view stage, const ClusterKey &, std::string_view reason) noexcept;
     void CaptureSearchAssembly() noexcept;

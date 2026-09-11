@@ -23,8 +23,8 @@ python3 tools/second_stage_phase_audit.py build/phase-audit/run.log \
   --output-dir build/phase-audit/analysis
 ```
 
-The analyzer writes `candidates.json`, `attempts.json`, `counters.json`, and
-`report.md`. Keep external inputs and generated artifacts outside tracked source
+The analyzer writes `candidates.json`, `attempts.json`, `counters.json`,
+`direction_samples.json`, and `report.md`. Keep external inputs and generated artifacts outside tracked source
 files. The existing `tests/integration/fold_168_regression.py` runner can exercise
 the trace by wrapping `build_command` to set the returned command's verbosity to 4;
 leave its fixed template, baseline validation, and quality gates unchanged. Compare the same source with the CMake
@@ -69,19 +69,38 @@ full global evaluation, including contributions to other atoms' samples.
   also includes `production_operator`. No consistency conclusion is made for a
   round lacking reproducible, qualified evidence.
 - `direction_samples`: production damping interpolation at 1, 0.5, 0.125, 0.03125,
-  and 0.001. Only objectives are computed at additional sample points. These are
+  and 0.001. Boundary corrections on attempts 5–8 additionally include an isolated
+  `operator`, `delta_baseline`, and `member_gates`; alpha 1 reuses the event's
+  objective and operator. Other probes compute objectives only. These are
   observations, not a mathematical descent proof or a new acceptance search.
+- `member_gates`: all component members are evaluated, including those after a
+  failed member. Each record contains candidate, previous, stored-best, and
+  candidate-neighbor reevaluated best objectives, plus previous/best gate status,
+  tolerance, and margin. Previous objectives and best parameters are owned
+  snapshots from the correction event. Positive margin is remaining slack;
+  progress gates accept zero margin. Absent best history is `not-applicable`;
+  missing required evidence is `unavailable`, never a pass. The global strict
+  gate uses the correction's original improvement reference and requires positive
+  margin. These objective gates do not certify full production acceptance.
+
+The analyzer retains schema-1 compatibility: missing optional probe fields mean
+not measured. Its direction-sample comparisons report objective and p99 deltas
+against both parent and same-attempt baseline, using `R∞ = max(p99)` for the scalar
+residual. Joint improvement flags require reproduced baseline evidence and
+complete, solver-qualified operators at both comparison endpoints. The report
+places attempts 7–8 at alpha 0.5 first and retains every measured point and blocker.
 
 `Second-stage phase audit counters` records separate objective/sample evaluations,
 operator evaluations, unavailable/error counts, and evaluator elapsed milliseconds.
-The sample count is nominal full-domain work (an upper bound if an objective
-evaluation exits early). These do not increment production objective/solver counters. Production wall time
+The sample count is nominal full-domain work (an upper bound for member-only
+evaluations or early exits). Member and best-reference evaluations contribute to
+these diagnostic counts. These do not increment production objective/solver counters. Production wall time
 necessarily includes diagnostic overhead; capture/serialization and evaluation
 costs also affect observed timings. Compare operation counts and decisions, not
 identical timing values.
 
 Baseline and all requested main candidates receive isolated operator evaluations;
-backtracking intermediate points and direction samples receive objectives only.
+backtracking intermediate points and other direction samples receive objectives only.
 Each diagnostic operator uses the fixed input activity and ridge multipliers,
 a copied context, fresh workspaces, one solver thread, and disabled diagnostic
 trace. Debug logging already serializes production cluster execution; the option
@@ -101,3 +120,89 @@ objective/residual changes, assembly deterioration, and globally improving
 corrections rejected by gates. It cannot establish which objective should replace
 an existing one, or whether untested intermediate candidates pass production
 gates. Those require a separately reviewed optimization change.
+
+## Objective / fixed-point compatibility observations
+
+Attempts 5–8 also capture `post-joint-offset`; `unrestricted-proposal` remains the
+complete post-shape operator endpoint. This is observation-only, including on
+protected paths: an intermediate production state is not automatically a qualified
+unrestricted endpoint.
+
+`Second-stage solver audit: schema=1` records carry attempt, source, atom index
+(for shape solves), and kind. `production` sources observe actual solver inputs and
+outputs. Final-selection sources observe isolated operator evaluations at attempts
+5 and 8. A private thread-local scope in `utils/hrl/EstimationAudit.hpp` is enabled
+only by the trace; candidate-selection workers inherit owned scopes, and isolated
+operator solves use one thread. No public execution options or result types change.
+
+- Weighted-ridge records report the used MAD scale, weight summaries, ridge range,
+  anchor norm, rows/columns, final update and normalized normal-equation residual.
+  Their elapsed time measures the diagnostic calculation.
+- MDPDE records distinguish the last beta/variance update, the normal residual
+  with the actually used weights, and the residual after recomputing weights from
+  returned beta/variance. Recomputed weights and variance are never committed.
+  `elapsed_ms` includes the solve; `diagnostic_elapsed_ms` measures the additional
+  equation evaluation. Shape-support records preserve retained sample indices.
+- Normal residuals are divided by `max(1, ||right-hand side||₂)`. Variance equation
+  deltas are divided by the maximum magnitude of current/refreshed variance and
+  the configured weight floor. These are diagnostics, not new stopping criteria.
+
+`Second-stage compatibility audit: schema=1` adds direction and gradient records.
+Coordinates are log peak height, log width, and physical offset divided by the
+**fixed parent** peak height. Linear paths in these coordinates agree with the
+existing production damping path; they differ from the state-dependent offset
+ratio used to report the fixed-point certificate. Directions are infinity-norm
+normalized, and central differences use h=1e-3, 3e-4, 1e-4 without clipping invalid
+perturbations. A derivative is stable only when all slopes have the same sign,
+spread is at most 10% of maximum absolute slope, and each exceeds the roundoff
+estimate `32*epsilon*max(1, |J+|, |J-|)/h`. Uncertain derivatives are not zeros.
+
+Directions cover unrestricted proposals, local polish, assembled polish and
+boundary corrections. Full coordinate gradients are limited to final-selection
+on attempts 5 and 8. The analyzer writes `solver_audit.json`, `compatibility.json`
+and `compatibility.md`, retaining legacy-log support. Gradients rank reliable
+components alongside operator top atoms; they do not reuse the `1e-4` certificate
+threshold. Compatibility objective counts/time, extra operator counts/time and
+failures are separate counter fields; their work also contributes to total audit
+counts. Solver equation failures remain explicit records when available, and must
+not be interpreted as a successful nonlinear solve.
+
+### Definitions being compared
+
+Let `r` denote raw map residual, `X,y` a linear system, `D` the diagonal ridge,
+`c₀` the previous offset, and `H` peak height. Definitions follow the current
+implementations, not an assumed common optimizer objective.
+
+| Stage | Parameters and samples | Equation / scale / reference |
+|---|---|---|
+| Joint offset | Physical per-atom offsets; raw samples of active cluster targets; outside-cluster selected neighbors and frozen background enter RHS | Solve `(XᵀWX+D)c=XᵀWy+Dc₀`; each IRLS step uses Cauchy weights from the preceding residual and its MAD scale, floored at `1e-12`; ridge starts at `1e-3` times column squared norm with conditioning multipliers |
+| Shape MDPDE | Per-atom log response after subtracting neighbor and own offset response; retain positive responses inside fit range; `X=[1,-r_distance²/2]` | Beta solves `XᵀW(Xβ-y)=0`; weights and variance update together as below; trained alpha is fixed per atom |
+| Local polish | Log-height/log-width and physical-offset increments for a cluster, on the supplied affected samples; other parameters/background frozen | One linearized weighted-ridge direction `(AᵀWA+D)δ=AᵀWr`; anchor is zero increment; current residual MAD/Cauchy weights are frozen for this solve |
+| Boundary correction | Same increment coordinates on active interface/halo parameters and affected samples | Same frozen linearized surrogate; trust, suspicious-update checks and objective gates follow the direction solve |
+| Audit objective | Full candidate responses; frozen owner fit/tail masks, sample counts and scales | Sum of normalized Cauchy fit loss + `0.25` times tail loss + offset-excess penalty; no solver ridge term |
+| Certificate | Nominal selected-atom population in log-height/log-width/offset-to-peak ratio | Qualified complete `T(x)-x` and accepted movement must both have all coordinate p99 below `1e-4`, with no production blockers |
+
+For shape MDPDE, with residual `e=y-Xβ` and variance `v`, the implemented weights
+are `w=max(weight_min, exp(-alpha*e²/(2v)))` (alpha zero gives unit weights).
+Invalid variance uses the weight floor. Given these weights, beta is weighted
+least squares and `v_new=sum(w*e_new²)/(sum(w)-n*alpha*(1+alpha)^(-3/2))`.
+Nonpositive denominator and nonfinite variance follow the existing numerical
+fallback rules. The stopping check is **squared beta change** below the configured
+tolerance; it does not require a small variance update or refreshed-weight normal
+residual. Thus success status alone does not certify the coupled estimating
+system. Each call starts from OLS and its sample residual variance.
+
+Audit uses `rho(u)=0.5*k²*log(1+(u/k)²)` with `k=1.345`, applied to residual divided
+by the frozen owner scale. Fit/tail weights additionally use owner atom fraction
+and respective sample count. Its offset penalty is `0.01/N` times squared excess
+of the peak offset/signal ratio beyond the existing bound. This is not the
+moving-anchor ridge penalty in a solver surrogate.
+
+The complete operator composes joint offsets and local shape refits. Polish,
+backtracking, member gates and final selection are not part of that operator.
+The code therefore does not establish that `T(x)=x` implies audit stationarity,
+nor that lowering audit loss lowers the operator residual. Dynamic scales,
+log-response weighting, distinct samples/normalization, ridge anchoring and finite
+inner stopping must be separated before attributing a trajectory conflict to a
+single definition difference. A solved frozen surrogate is not proof that a
+fixed nonlinear objective was minimized.

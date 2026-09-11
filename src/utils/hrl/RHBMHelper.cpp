@@ -1,3 +1,4 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -544,8 +545,12 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
 
         auto beta_in_previous_iter{ result.beta_mdpde };
         bool converged{ false };
+        double audit_beta_change{ 0.0 }, audit_variance_change{ 0.0 }, audit_used_variance{ 0.0 };
+        int audit_iterations{ 0 };
+        const auto audit_start{ std::chrono::steady_clock::now() };
         for (int t = 0; t < options.max_iterations; t++)
         {
+            if (estimation_audit::Enabled()) audit_used_variance = result.sigma_square;
             result.data_weight = CalculateDataWeight(
                 alpha_r,
                 design_matrix,
@@ -565,6 +570,12 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
                 result.data_weight,
                 result.beta_mdpde
             );
+            if (estimation_audit::Enabled())
+            {
+                audit_beta_change = (result.beta_mdpde - beta_in_previous_iter).norm();
+                audit_variance_change = result.sigma_square - audit_used_variance;
+                audit_iterations = t + 1;
+            }
             if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance)
             {
                 converged = true;
@@ -581,6 +592,42 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
         if (result.sigma_square == std::numeric_limits<double>::max())
         {
             result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
+        }
+        if (estimation_audit::Enabled())
+        {
+            try
+            {
+                const auto diagnostic_start{ std::chrono::steady_clock::now() };
+                const auto refreshed{ CalculateDataWeight(alpha_r, design_matrix, response_vector,
+                    result.beta_mdpde, result.sigma_square, options.data_weight_min) };
+                const auto residual{ (design_matrix * result.beta_mdpde - response_vector).eval() };
+                const auto used_equation{ (design_matrix.transpose() * result.data_weight * residual).eval() };
+                const auto fresh_equation{ (design_matrix.transpose() * refreshed * residual).eval() };
+                const double used_scale{ std::max(1.0, (design_matrix.transpose() * result.data_weight * response_vector).norm()) };
+                const double fresh_scale{ std::max(1.0, (design_matrix.transpose() * refreshed * response_vector).norm()) };
+                const auto refreshed_variance{ CalculateDataVarianceSquare(alpha_r, design_matrix,
+                    response_vector, refreshed, result.beta_mdpde) };
+                using estimation_audit::Number;
+                estimation_audit::Emit("mdpde", "\"status\":" + std::to_string(static_cast<int>(result.status)) +
+                    ",\"rows\":" + std::to_string(data_size) + ",\"iterations\":" + std::to_string(audit_iterations) +
+                    ",\"alpha\":" + Number(alpha_r) + ",\"weight_floor\":" + Number(options.data_weight_min) +
+                    ",\"beta_squared_tolerance\":" + Number(options.tolerance) +
+                    ",\"used_variance\":" + Number(audit_used_variance) + ",\"variance\":" + Number(result.sigma_square) +
+                    ",\"last_beta_change\":" + Number(audit_beta_change) + ",\"last_variance_change\":" + Number(audit_variance_change) +
+                    ",\"used_weight_min\":" + Number(result.data_weight.diagonal().minCoeff()) +
+                    ",\"used_weight_max\":" + Number(result.data_weight.diagonal().maxCoeff()) +
+                    ",\"used_weight_mean\":" + Number(result.data_weight.diagonal().mean()) +
+                    ",\"used_normal_residual\":" + Number(used_equation.norm() / used_scale) +
+                    ",\"refreshed_normal_residual\":" + Number(fresh_equation.norm() / fresh_scale) +
+                    ",\"variance_equation_delta\":" + Number(refreshed_variance - result.sigma_square) +
+                    ",\"variance_equation_relative\":" + Number((refreshed_variance - result.sigma_square) /
+                        std::max({std::abs(refreshed_variance), std::abs(result.sigma_square), options.data_weight_min})) +
+                    ",\"diagnostic_elapsed_ms\":" + Number(std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - diagnostic_start).count()) +
+                    ",\"elapsed_ms\":" + Number(std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - audit_start).count()));
+            }
+            catch (...) { estimation_audit::Emit("mdpde", "\"status\":\"diagnostic-unavailable\""); }
         }
         return result;
     });

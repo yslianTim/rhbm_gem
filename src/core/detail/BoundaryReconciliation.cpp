@@ -403,9 +403,10 @@ static bool TryBoundaryJointCorrection(
             corrected_overlay.GetState());
     if (diagnostic.suspicious_candidate_atom_count != 0)
     {
-        if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+        if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureCorrection(
             diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
-            corrected_overlay.GetState(), &endpoint_state_view, correction_result.damping, "rejected", "suspicious", true);
+            corrected_overlay.GetState(), endpoint_state_view, correction_result.damping, "rejected", "suspicious",
+            inputs, component.key_list, improvement_reference_objective);
         record_performance(false);
         return false;
     }
@@ -440,11 +441,12 @@ static bool TryBoundaryJointCorrection(
             improvement_reference_objective.GetTotalObjective(),
             kObjectiveStrictTolerance)
     };
-    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+    if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureCorrection(
         diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
-        corrected_overlay.GetState(), &endpoint_state_view, correction_result.damping,
+        corrected_overlay.GetState(), endpoint_state_view, correction_result.damping,
         is_strict_improvement ? "accepted" : "rejected",
-        candidate_evaluation && !is_strict_improvement ? "strict-improvement" : (record ? record->outcome : ""), true);
+        candidate_evaluation && !is_strict_improvement ? "strict-improvement" : (record ? record->outcome : ""),
+        inputs, component.key_list, improvement_reference_objective);
     if (!is_strict_improvement)
     {
         if (record && candidate_evaluation)

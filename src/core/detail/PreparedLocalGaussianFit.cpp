@@ -1,3 +1,4 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 
 #include <cmath>
@@ -86,6 +87,7 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
     dataset.X = RHBMDesignMatrix::Zero(candidate_count, 2);
     dataset.y = RHBMResponseVector::Zero(candidate_count);
     Eigen::Index retained_count{ 0 };
+    std::string audit_indices{ "[" };
     for (std::size_t row = 0; row < m_row_list.size(); row++)
     {
         const auto & design_row{ m_row_list.at(row) };
@@ -100,11 +102,19 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
         };
         if (adjusted_response <= 0.0) continue;
         numeric_validation::RequireFinite(adjusted_response, "response", "Member dataset contains non-finite value.");
+        if (estimation_audit::Enabled())
+        {
+            if (audit_indices.size() != 1) audit_indices += ',';
+            audit_indices += std::to_string(design_row.source_sample_index);
+        }
         dataset.X.row(retained_count) = m_design_matrix.row(static_cast<Eigen::Index>(row));
         dataset.y(retained_count) = std::log(adjusted_response);
         retained_count++;
     }
 
+    if (estimation_audit::Enabled()) estimation_audit::Emit("shape-support",
+        "\"candidate_rows\":" + std::to_string(candidate_count) + ",\"retained_rows\":" +
+        std::to_string(retained_count) + ",\"sample_indices\":" + audit_indices + ']');
     if (retained_count == 0)
     {
         dataset.X = RHBMDesignMatrix::Zero(1, 2);

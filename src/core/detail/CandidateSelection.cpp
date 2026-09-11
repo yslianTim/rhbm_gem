@@ -1,3 +1,4 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/CandidateSelection.hpp"
 
@@ -1174,10 +1175,12 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
 
     std::vector<ClusterCandidateResult> result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> exception_list(cluster_key_list.size());
+    const auto audit_context{ estimation_audit::current };
     const auto select_candidate = [&](std::size_t position)
     {
         try
         {
+            estimation_audit::Scope audit_scope(audit_context.attempt, audit_context.source);
             const auto & key{ cluster_key_list.at(position) };
             result_list.at(position) = SelectClusterCandidate(
                 inputs,

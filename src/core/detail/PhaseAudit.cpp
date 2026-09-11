@@ -1,6 +1,8 @@
+#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 
 #include "core/detail/IterationProcess.hpp"
+#include "core/detail/Diagnosis.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -69,6 +71,52 @@ std::string Difference(const std::optional<ObjectiveBreakdown> & a,
 {
     return a && b ? Number(a->GetTotalObjective() - b->GetTotalObjective()) : "null";
 }
+struct GateAudit
+{
+    std::string status{ "unavailable" };
+    double tolerance{ std::numeric_limits<double>::quiet_NaN() };
+    double margin{ std::numeric_limits<double>::quiet_NaN() };
+    std::string Json() const
+    {
+        return "{\"status\":" + Quote(status) + ",\"tolerance\":" + Number(tolerance) +
+            ",\"margin\":" + Number(margin) + '}';
+    }
+};
+GateAudit EvaluateGate(const std::optional<ObjectiveBreakdown> & candidate,
+    const std::optional<ObjectiveBreakdown> & reference, bool strict = false)
+{
+    GateAudit gate;
+    if (!candidate || !reference) return gate;
+    const auto value{ candidate->GetTotalObjective() }, baseline{ reference->GetTotalObjective() };
+    gate.tolerance = CalculateObjectiveTolerance(baseline,
+        strict ? kObjectiveStrictTolerance : kObjectiveProgressTolerance);
+    gate.margin = baseline + (strict ? -gate.tolerance : gate.tolerance) - value;
+    gate.status = (strict ? IsBetterAuditObjective(value, baseline, kObjectiveStrictTolerance) :
+        !IsObjectiveDeteriorated(value, baseline, kObjectiveProgressTolerance)) ? "pass" : "fail";
+    return gate;
+}
+using AuditDirection = std::vector<Eigen::Vector3d>;
+std::optional<FittedGaussianSnapshot> PerturbAuditCoordinates(const FittedGaussianSnapshot & parent,
+    const AuditDirection & direction, double step)
+{
+    FittedGaussianSnapshot result;
+    result.reserve(parent.size());
+    for (std::size_t i = 0; i < parent.size(); i++)
+    {
+        const auto coordinates{ parent[i].ToTransformedCoordinates() };
+        if (!coordinates) return std::nullopt;
+        const auto peak{ std::exp((*coordinates)[0]) };
+        const GaussianModel3D::TransformedCoordinates shape{
+            (*coordinates)[0] + step * direction[i][0], (*coordinates)[1] + step * direction[i][1], 0.0 };
+        const auto model{ GaussianModel3D::FromTransformedCoordinates(shape) };
+        if (!model) return std::nullopt;
+        const auto candidate{ model->WithOffset(parent[i].GetOffset() + step * direction[i][2] * peak) };
+        if (!IsValidSecondStageGaussianModel(candidate)) return std::nullopt;
+        result.push_back(candidate);
+    }
+    return result;
+}
+
 struct OperatorAudit
 {
     std::string status{ "unavailable" }, reason;
@@ -207,6 +255,36 @@ void PhaseAudit::Capture(std::string_view stage, const ClusterKey & key, const F
     }
     catch (...) { m_capture_failures++; }
 }
+void PhaseAudit::CaptureIntermediate(std::string_view stage, const FittedGaussianSnapshot & state) noexcept
+{
+    if (m_attempt < 5 || m_attempt > 8) return;
+    try { Add(std::string(stage), {}, state, {}, 1.0, "observed", "", false, true); }
+    catch (...) { m_capture_failures++; }
+}
+
+void PhaseAudit::CaptureCorrection(std::string_view stage, const ClusterKey & key,
+    const FitStateView & state, const FitStateView & parent, double factor,
+    std::string_view disposition, std::string_view reason, const CandidateSelectionInputs & inputs,
+    const std::vector<ClusterKey> & member_keys, const ObjectiveBreakdown & improvement_reference) noexcept
+{
+    try
+    {
+        const auto id{ Add(std::string(stage), key, BuildSecondStageModelSnapshot(m_context, state).node,
+            BuildSecondStageModelSnapshot(m_context, parent).node, factor,
+            std::string(disposition), std::string(reason), true, true) };
+        if (stage != "boundary-correction" || m_attempt < 5 || m_attempt > 8) return;
+        BoundaryGates gates;
+        gates.residual_baseline = inputs.residual_baseline;
+        gates.previous_state = inputs.previous_state;
+        gates.improvement_reference = improvement_reference;
+        for (const auto & member : member_keys)
+            gates.members.push_back({ member, inputs.partition.sample_id_list_by_key.at(member),
+                inputs.previous_objective_by_key.at(member), inputs.cluster_objective_state.at(member) });
+        m_boundary_gates.emplace(id, std::move(gates));
+    }
+    catch (...) { m_capture_failures++; }
+}
+
 void PhaseAudit::CaptureState(std::string_view stage, const FitState & state, bool probe) noexcept
 {
     try
@@ -269,6 +347,9 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
 {
     const auto start{ std::chrono::steady_clock::now() };
     std::size_t objective_count{ 0 }, operator_count{ 0 }, failures{ m_capture_failures.load() };
+    std::size_t compatibility_objective_count{ 0 };
+    double compatibility_ms{ 0.0 }, compatibility_operator_ms{ 0.0 };
+    std::size_t compatibility_operator_count{ 0 }, compatibility_failures{ 0 };
     try
     {
         MergeWorkers();
@@ -286,16 +367,52 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
             }
             catch (...) { failures++; return std::nullopt; }
         };
-        for (const auto & event : m_events)
+        const auto differentiate = [&](const FittedGaussianSnapshot & parent, const AuditDirection & direction)
         {
-            objectives[event.id] = evaluate(event.state);
-            if (!event.recertify || event.state.empty()) continue;
+            std::vector<double> slopes, errors;
+            std::string samples{ "[" };
+            for (const double h : { 1.0e-3, 3.0e-4, 1.0e-4 })
+            {
+                std::optional<ObjectiveBreakdown> plus, minus;
+                if (const auto models = PerturbAuditCoordinates(parent, direction, h))
+                { compatibility_objective_count++; plus = evaluate(*models); }
+                if (const auto models = PerturbAuditCoordinates(parent, direction, -h))
+                { compatibility_objective_count++; minus = evaluate(*models); }
+                double slope{ std::numeric_limits<double>::quiet_NaN() }, error{ slope };
+                if (plus && minus)
+                {
+                    slope = (plus->GetTotalObjective() - minus->GetTotalObjective()) / (2.0 * h);
+                    error = 32.0 * std::numeric_limits<double>::epsilon() *
+                        std::max({1.0, std::abs(plus->GetTotalObjective()), std::abs(minus->GetTotalObjective())}) / h;
+                }
+                else failures++;
+                slopes.push_back(slope); errors.push_back(error);
+                if (samples.size() != 1) samples += ',';
+                samples += "{\"h\":" + Number(h) + ",\"plus\":" + Objective(plus) + ",\"minus\":" + Objective(minus) +
+                    ",\"slope\":" + Number(slope) + ",\"roundoff_bound\":" + Number(error) + '}';
+            }
+            const bool finite{ std::ranges::all_of(slopes, [](double v) { return std::isfinite(v); }) };
+            bool stable{ finite };
+            if (finite)
+            {
+                const auto max_abs{ std::max({std::abs(slopes[0]), std::abs(slopes[1]), std::abs(slopes[2])}) };
+                stable = *std::max_element(slopes.begin(), slopes.end()) - *std::min_element(slopes.begin(), slopes.end()) <= 0.1 * max_abs;
+                for (std::size_t i = 0; i < slopes.size(); i++)
+                    stable = stable && std::abs(slopes[i]) > errors[i] && slopes[i] * slopes[0] > 0.0;
+            }
+            return "{\"classification\":" + Quote(!finite ? "unavailable" : !stable ? "uncertain" : slopes[0] < 0.0 ? "descent" : "ascent") +
+                ",\"samples\":" + samples + "]}";
+        };
+        const auto evaluate_operator = [&](const FittedGaussianSnapshot & snapshot, const std::string & source = "")
+        {
+            OperatorAudit result;
+            estimation_audit::Scope diagnostic_scope(source.empty() ? 0 : m_attempt, source);
             operator_count++;
             try
             {
                 auto state{ m_baseline };
                 for (std::size_t i = 0; i < state.size(); i++)
-                    state[i].mdpde = GaussianModel3DWithUncertainty{ event.state.at(i), {} };
+                    state[i].mdpde = GaussianModel3DWithUncertainty{ snapshot.at(i), {} };
                 ClusterSolverWorkspaceMap workspaces;
                 for (const auto & key : m_keys) workspaces.try_emplace(key);
                 auto quiet_options{ options };
@@ -303,11 +420,78 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
                 quiet_options.thread_size = 1;
                 const auto proposal{ BuildIterationProposal(m_context, m_keys, state, quiet_options,
                     ridge, activity, workspaces, "phase-audit") };
-                operators[event.id] = Summarize(proposal, state, m_keys);
-                if (operators[event.id].status != "available") failures++;
+                result = Summarize(proposal, state, m_keys);
             }
-            catch (const std::exception & error) { operators[event.id].reason = error.what(); failures++; }
-            catch (...) { operators[event.id].reason = "operator-exception"; failures++; }
+            catch (const std::exception & error) { result.reason = error.what(); }
+            catch (...) { result.reason = "operator-exception"; }
+            if (result.status != "available") failures++;
+            return result;
+        };
+        const auto evaluate_gates = [&](const FittedGaussianSnapshot & snapshot, const BoundaryGates & gates,
+            const std::optional<ObjectiveBreakdown> & objective)
+        {
+            ClusterSolverWorkspaceMap workspaces;
+            BoundaryJointCorrectionWorkspaceMap boundary_workspaces;
+            PerformanceCounters counters(true, m_context, workspaces, boundary_workspaces);
+            std::string members{ "[" };
+            bool unavailable{ false }, failed{ false };
+            for (const auto & member : gates.members)
+            {
+                std::optional<ObjectiveBreakdown> candidate, best;
+                std::string reason;
+                try
+                {
+                    auto state{ gates.previous_state };
+                    ClusterKey all_atoms(state.size());
+                    std::iota(all_atoms.begin(), all_atoms.end(), 0);
+                    for (std::size_t i = 0; i < state.size(); i++)
+                        state[i].mdpde = GaussianModel3DWithUncertainty{ snapshot.at(i), {} };
+                    const auto patch{ FitStatePatch::FromState(state, all_atoms) };
+                    const CandidateEvaluationOverlay overlay{
+                        m_context, gates.residual_baseline, gates.previous_state, patch };
+                    objective_count++;
+                    candidate = EvaluateObjectiveContribution(overlay, member.key, member.samples, m_domain);
+                    if (member.history.best_objective)
+                    {
+                        objective_count++;
+                        best = EvaluateBestObjectiveReference(overlay, member.key, member.samples,
+                            m_domain, member.history, counters);
+                    }
+                }
+                catch (const std::exception & error) { reason = error.what(); }
+                catch (...) { reason = "member-exception"; }
+                const auto previous_gate{ EvaluateGate(candidate, member.previous) };
+                auto best_gate{ EvaluateGate(candidate, best) };
+                if (!member.history.best_objective) best_gate.status = "not-applicable";
+                const bool member_unavailable{ previous_gate.status == "unavailable" || best_gate.status == "unavailable" };
+                unavailable = unavailable || member_unavailable;
+                failed = failed || previous_gate.status == "fail" || best_gate.status == "fail";
+                if (member_unavailable) failures++;
+                if (members.size() != 1) members += ',';
+                members += "{\"key\":" + Array(member.key) + ",\"candidate\":" + Objective(candidate) +
+                    ",\"previous\":" + Objective(member.previous) + ",\"stored_best\":" + Objective(member.history.best_objective) +
+                    ",\"best\":" + Objective(best) + ",\"reference_environment\":\"sample-candidate\",\"previous_gate\":" +
+                    previous_gate.Json() + ",\"best_gate\":" + best_gate.Json() + ",\"reason\":" + Quote(reason) + '}';
+            }
+            return "{\"status\":" + Quote(unavailable ? "unavailable" : failed ? "fail" : "pass") +
+                ",\"members\":" + members + "],\"improvement_reference\":" + Objective(gates.improvement_reference) +
+                ",\"global_strict_improvement\":" + EvaluateGate(objective, gates.improvement_reference, true).Json() + '}';
+        };
+        for (const auto & event : m_events)
+        {
+            objectives[event.id] = evaluate(event.state);
+            if (event.recertify && !event.state.empty())
+            {
+                const auto before{ std::chrono::steady_clock::now() };
+                operators[event.id] = evaluate_operator(event.state,
+                    event.stage == "final-selection" && (m_attempt == 5 || m_attempt == 8) ? event.id : "");
+                if (event.stage == "post-joint-offset")
+                {
+                    compatibility_operator_count++;
+                    compatibility_operator_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - before).count();
+                    if (operators[event.id].status != "available") compatibility_failures++;
+                }
+            }
         }
         const auto baseline_id{ m_events.front().id };
         const auto production_audit{ Summarize(production, m_baseline, m_keys) };
@@ -335,12 +519,79 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
                     for (const auto alpha : { 1.0, 0.5, 0.125, 0.03125, 0.001 })
                     {
                         std::optional<ObjectiveBreakdown> sampled;
+                        const auto models{ alpha == 1.0 ? std::optional{ event.state } :
+                            BuildDampedModelList(parent_event->state, event.state, alpha) };
                         if (alpha == 1.0) sampled = objective;
-                        else if (const auto models = BuildDampedModelList(parent_event->state, event.state, alpha)) sampled = evaluate(*models);
+                        else if (models) sampled = evaluate(*models);
                         if (probes.size() != 1) probes += ',';
                         probes += "{\"alpha\":" + Number(alpha) + ",\"objective\":" + Objective(sampled) +
-                            ",\"delta_parent\":" + Difference(sampled, parent_objective) + '}';
+                            ",\"delta_parent\":" + Difference(sampled, parent_objective);
+                        if (const auto gates = m_boundary_gates.find(event.id); gates != m_boundary_gates.end())
+                        {
+                            OperatorAudit sampled_operator;
+                            if (models) sampled_operator = alpha == 1.0 ? operators.at(event.id) : evaluate_operator(*models);
+                            else { sampled_operator.reason = "damping-unavailable"; failures++; }
+                            probes += ",\"delta_baseline\":" + Difference(sampled, objectives.at(baseline_id)) +
+                                ",\"operator\":" + sampled_operator.Json() + ",\"member_gates\":" +
+                                evaluate_gates(models ? *models : FittedGaussianSnapshot{}, gates->second, sampled);
+                        }
+                        probes += '}';
                     }
+            }
+            if (m_attempt >= 5 && m_attempt <= 8 && !event.state.empty())
+            {
+                const auto compatibility_start{ std::chrono::steady_clock::now() };
+                const auto failures_before{ failures };
+                try
+                {
+                    const auto parent_event{ std::ranges::find(m_events, event.parent_id, &Event::id) };
+                    const bool directional{ event.stage == "unrestricted-proposal" || event.stage == "local-polish" ||
+                        event.stage == "assembly-after-polish" || event.stage == "boundary-correction" };
+                    if (directional && parent_event != m_events.end() && !parent_event->state.empty())
+                    {
+                        AuditDirection direction(event.state.size(), Eigen::Vector3d::Zero());
+                        double norm{ 0.0 };
+                        for (std::size_t i = 0; i < event.state.size(); i++)
+                        {
+                            const auto a{ parent_event->state[i].ToTransformedCoordinates() }, b{ event.state[i].ToTransformedCoordinates() };
+                            if (!a || !b) throw std::runtime_error("invalid-direction-coordinates");
+                            direction[i] = { (*b)[0] - (*a)[0], (*b)[1] - (*a)[1],
+                                (event.state[i].GetOffset() - parent_event->state[i].GetOffset()) / std::exp((*a)[0]) };
+                            norm = std::max(norm, direction[i].cwiseAbs().maxCoeff());
+                        }
+                        if (norm > 0.0 && std::isfinite(norm))
+                        {
+                            for (auto & delta : direction) delta /= norm;
+                            Logger::Log(LogLevel::Debug, "Second-stage compatibility audit: schema=1, payload={\"attempt\":" +
+                                std::to_string(m_attempt) + ",\"candidate_id\":" + Quote(event.id) + ",\"kind\":\"direction\",\"direction_norm\":" +
+                                Number(norm) + ",\"derivative\":" + differentiate(parent_event->state, direction) + '}');
+                        }
+                        else Logger::Log(LogLevel::Debug, "Second-stage compatibility audit: schema=1, payload={\"attempt\":" +
+                            std::to_string(m_attempt) + ",\"candidate_id\":" + Quote(event.id) + ",\"kind\":\"direction\",\"derivative\":{\"classification\":\"zero-direction\",\"samples\":[]}}");
+                    }
+                    if (event.stage == "final-selection" && (m_attempt == 5 || m_attempt == 8))
+                    {
+                        AuditDirection direction(event.state.size(), Eigen::Vector3d::Zero());
+                        for (std::size_t atom = 0; atom < event.state.size(); atom++)
+                            for (int coordinate = 0; coordinate < 3; coordinate++)
+                            {
+                                direction[atom][coordinate] = 1.0;
+                                const auto derivative{ differentiate(event.state, direction) };
+                                direction[atom][coordinate] = 0.0;
+                                Logger::Log(LogLevel::Debug, "Second-stage compatibility audit: schema=1, payload={\"attempt\":" +
+                                    std::to_string(m_attempt) + ",\"candidate_id\":" + Quote(event.id) + ",\"kind\":\"gradient\",\"atom_index\":" +
+                                    std::to_string(atom) + ",\"coordinate\":" + std::to_string(coordinate) + ",\"derivative\":" + derivative + '}');
+                            }
+                    }
+                }
+                catch (const std::exception & error)
+                {
+                    failures++;
+                    Logger::Log(LogLevel::Debug, "Second-stage compatibility audit: schema=1, payload={\"attempt\":" +
+                        std::to_string(m_attempt) + ",\"candidate_id\":" + Quote(event.id) + ",\"kind\":\"error\",\"reason\":" + Quote(error.what()) + '}');
+                }
+                compatibility_failures += failures - failures_before;
+                compatibility_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - compatibility_start).count();
             }
             const auto op{ operators.find(event.id) };
             const std::string line{ "Second-stage phase audit: schema=1, payload={\"attempt\":" + std::to_string(m_attempt) +
@@ -369,7 +620,11 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
     Logger::Log(LogLevel::Debug, "Second-stage phase audit counters: schema=1, payload={\"attempt\":" +
         std::to_string(m_attempt) + ",\"objective_evaluations\":" + std::to_string(objective_count) +
         ",\"objective_sample_evaluations\":" + std::to_string(objective_count * m_domain.unique_sample_count) +
-        ",\"operator_evaluations\":" + std::to_string(operator_count) + ",\"failures\":" +
+        ",\"compatibility_objective_evaluations\":" + std::to_string(compatibility_objective_count) +
+        ",\"compatibility_operator_evaluations\":" + std::to_string(compatibility_operator_count) +
+        ",\"compatibility_operator_ms\":" + Number(compatibility_operator_ms) +
+        ",\"compatibility_failures\":" + std::to_string(compatibility_failures) +
+        ",\"compatibility_ms\":" + Number(compatibility_ms) + ",\"operator_evaluations\":" + std::to_string(operator_count) + ",\"failures\":" +
         std::to_string(failures) + ",\"elapsed_ms\":" + Number(elapsed) + "}");
 }
 
