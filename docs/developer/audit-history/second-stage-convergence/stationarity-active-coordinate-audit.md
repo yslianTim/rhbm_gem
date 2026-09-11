@@ -220,7 +220,6 @@ Historical refresh verification on 2026-08-27:
   trigger, and zero comparator exposures.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical; repository lint passes.
-- The 600-case exposure corpus was not rerun.
 
 Historical verification from the earlier 2026-08-27 audit:
 

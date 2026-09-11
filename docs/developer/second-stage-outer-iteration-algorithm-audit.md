@@ -5,10 +5,13 @@
 This document is the current decision and evidence authority for the outer
 iteration implemented by `detail::RunSecondStageIterations`. The normative execution
 description remains in [Second-stage local fitting](second-stage-local-fitting.md).
-The four earlier audits are immutable historical records and are linked under
+The earlier audits retain historical design reasoning and are linked under
 [Historical provenance](#historical-provenance).
 
-The reviewed production baseline is
+The current structural P0 implementation and its focused-test validation
+are recorded in [Structural P0 result](#structural-p0-result-2026-09-11).
+
+The earlier per-atom-offset review baseline is
 `a4354e698e77398154009d231907ebf3ed4b1d52` (per-atom offsets). The audit consolidation and diagnostic cleanup do
 not change `FitOptions`, command-line options, model persistence, convergence
 thresholds, candidate selection, stop precedence, or the production
@@ -100,6 +103,12 @@ step tested in the current iteration and updates the next radius. Guard tests
 domain feasibility. Objective gates accept or reject candidates. None of
 these responsibilities substitutes for fixed-point evidence.
 
+Guard is feasibility-only: guard-only factor reduction does not request radius
+shrink. Radius growth requires boundary utilization of at least `0.8` and actual
+objective reduction larger than `1e-8 + 1e-3 * abs(previous)`. It does not use
+predicted reduction or rho. Objective-induced shrink and radius bounds retain
+their existing precedence and values.
+
 ## Authoritative production certificate
 
 `ConvergenceCertificate::ProductionConverged()` is the only production stop
@@ -134,8 +143,8 @@ production policy.
 | One atom has unavailable or non-finite offset evidence | Includes its offset only when active | Unavailable evidence makes the operator incomplete; non-finite residual fails the percentile test | Availability alone does not qualify a solver | Each nominal atom retains its own coordinate |
 | Objective domain or quarantine changes during the iteration | May still be small | May still be small | May still pass | Orthogonal blocker prevents a premature stop |
 
-No retained predicate is implied by the others. A zero-exposure corpus result
-is empirical evidence, not a mathematical redundancy proof.
+No retained predicate is implied by the others. Absence of observed failures
+is not a mathematical redundancy proof.
 
 ## Final dependency polish recertification
 
@@ -162,283 +171,46 @@ change the original stop reason.
 The current Debug trajectory is schema 10 and serializes the production
 certificate plus its active and nominal populations, p99 and maximum values,
 operator completeness, and four orthogonal blockers. Earlier trajectory
-schemas are not accepted by the current analyzer; frozen schema-9 baselines
-remain historical data.
-
-The P0 recertification below compares this exact HEAD with documentation and
-diagnostic/tooling changes only. Historical schema-9 measurements do not certify
-the current implementation.
+schemas are not accepted by the current analyzer.
 
 Frozen-IRLS predicted-reduction and rho instrumentation is not part of a
 normal or routine audit build. It is available only through the developer-only
 `RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT` build option and never controls the
 production trajectory. Its logs are consumed only by
-`analyze_trust_model_experiment.py`; the production corpus analyzer does not
-import or aggregate them.
+`analyze_trust_model_experiment.py`. The experiment remains diagnostic-only.
 
-## Historical evidence and retired experiments
+## Structural P0 result (2026-09-11)
 
-The frozen baseline expands the checked manifest to 600 deterministic cases.
-At `03cdb6ef`, all 600 cases completed with no safety regression, and the stop
-distribution was:
+The structural baseline is `c5417717154896e53d31a1d43910cde15e3f80f6`.
+No numerical policy or test expectation was relaxed.
+See [P0 structural refactoring](second-stage-p0-structure.md) for ownership,
+the flowchart and the per-path validation map.
 
-| Stop reason | Cases |
-| --- | ---: |
-| `converged` | 42 |
-| `audit-patience` | 372 |
-| `all-rejected-backtracking-exhausted` | 163 |
-| `maximum-iterations` | 23 |
+The implementation extracts phase/trust-model observation, separates p99
+certificate evidence from maximum/population diagnostics, centralizes typed
+candidate evaluation and publishes builder-owned selection through a consuming
+transaction. Existing tests only adapt to internal interface changes; no tests,
+test cases or test targets were added.
 
-The consolidation baseline records a manifest SHA-256 of
-`2b0d74c249a4723575696d98f99df9d3c449a30837adf8117aaf744145d0a87a`,
-case identity SHA-256 of
-`63985f81c5b188cfc9992742cad1f4b9418cc36c88b12398e5775a324289bd98`,
-and frozen truth SHA-256 of
-`04e3cda3b49857b2d5e4f63e973b2392dfe3095360974db988770e7468edd628`.
+The trust-enabled build passed 108/108 existing estimator defense tests,
+including quiet/trace neutrality. Repository lint and whitespace checks passed.
+Fold-168 was not run. Boundary/correction and fallback coverage relies on
+existing focused tests; those tests do not establish coverage of every branch.
 
 Historical all-selected, active-proposal, cluster/maximum, and
-production-maximum policies are retired. Accepted-only persistence is retained
-only as a targeted negative unit scenario: small accepted movement cannot
-declare convergence while the strict operator residual remains material.
-Frozen-IRLS/rho remains a separate diagnostic experiment because the observed
-coverage and action divergence did not justify a production controller.
-Coarse-to-fine factor refinement remains rejected on objective and truth
-outcomes. Fold-168 remains an optional quality regression, not convergence
-policy evidence.
-
-## P0 recertification acceptance
-
-The paired run must complete 600/600 cases on each side with identical manifest,
-case identities, seeds, and frozen truth. Safety, quality, and efficiency are
-reported independently; missing evidence cannot pass. Comparison schema 5 replaces
-the former combined blocking gate. Case summaries use schema 14, aggregates schema
-9, compact baselines schema 4; trajectory 10 and terminal 2 are unchanged.
-
-- **Safety:** zero failed cases, finite positive terminal shape parameters,
-  finite offsets/objectives, production certificate evidence for convergence,
-  and strict/non-regression final-polish persistence evidence.
-- **Quality:** every production semantic and normalized terminal-state digest,
-  stop reason, objective, transformed-truth RMSE, and accepted-iteration count
-  matches. Median/p90/p99 deltas supplement, never replace, per-case equality.
-- **Efficiency:** all elapsed times must be present and positive; median and p90
-  must both decrease to pass strict-speedup. Per-case deltas, p99, improvement
-  fraction, and family/topology strata are reported. Failure here does not revoke
-  safety/quality certification and a single timing pair is not a reliable speedup
-  study.
-
-Timing and schema-1 diagnostic records are excluded from production digests.
-No production convergence/solver/persistence policy is altered. The original
-baseline has no schema-1 diagnostic events; its absence is reported, not filled
-with zero conditioning failures. Existing baseline final-polish logs serialize
-residuals at limited precision: status plus rounded residual comparisons are
-checked, not represented as an independent full-precision re-solve.
-
-### Frozen truth provenance and coverage
-
-The checked manifest and case-identity hashes still match the historical compact
-baseline. Exact HEAD `a4354e6` emits frozen truth hash
-`4d67c57ed11ed3129b44ee275447b3c1b6693c03cfb7c5be6d2265608664933d`,
-which differs from the historical `04e3cda3...` hash. Historical per-case truth
-files are not present in this workspace; the old compact baseline is retained
-unchanged. This is an explicit historical-truth continuity gap, not a newly
-established equivalence with the old controller. Natural truth is itself produced
-by the HEAD's reference-estimation path, which has changed since that evidence.
-P0 freezes the exact HEAD outputs for both sides and verifies emitted candidate
-truth against them before computing metrics. Legacy topology labels such as
-`unbalanced-shared-groups` remain frozen case identities; they do not assert
-shared-offset or mixed-group invariants in the current implementation.
-
-Natural scenarios expose truth for the target atom only, while terminal output
-may also contain neighboring atoms. Truth RMSE keeps that existing target-truth
-population; terminal validity and terminal-state digests still cover all emitted
-atoms. Missing/duplicate target truth evidence fails; neighbors without truth do
-not silently acquire invented ground truth.
-
-### Replaying the HEAD pair
-
-Use a fresh `build/p0-replay` directory. Build both binaries before timing and run
-no other builds or tests during either corpus. The baseline source is exported
-from the exact commit; the candidate is the reviewed working tree. The default
-checked manifest is used, without a case filter. Both builds keep the trust-model
-experiment disabled.
-
-```sh
-mkdir -p build/p0-replay/baseline-source
-git archive a4354e698e77398154009d231907ebf3ed4b1d52 | tar -x -C build/p0-replay/baseline-source
-for p0_side in baseline candidate; do
-    p0_source=.
-    if [ "$p0_side" = baseline ]; then
-        p0_source=build/p0-replay/baseline-source
-    fi
-    cmake -S "$p0_source" -B "build/p0-replay/$p0_side-build" -G Ninja \
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON \
-        -DBUILD_PYTHON_BINDINGS=OFF -DRHBM_GEM_ENABLE_UMAP=OFF \
-        -DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON \
-        -DRHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=OFF \
-        -DRHBM_GEM_DEP_PROVIDER=SYSTEM
-    cmake --build "build/p0-replay/$p0_side-build" --target convergence_exposure_case_runner -j 4
-done
-python3 resources/tools/developer/run_convergence_exposure_corpus.py \
-    --executable build/p0-replay/baseline-build/bin/RHBM-GEM-CONVERGENCE-EXPOSURE \
-    --output-dir build/p0-replay/baseline --threads 1 --jobs 1
-python3 resources/tools/developer/run_convergence_exposure_corpus.py \
-    --executable build/p0-replay/candidate-build/bin/RHBM-GEM-CONVERGENCE-EXPOSURE \
-    --output-dir build/p0-replay/candidate \
-    --reference-truth-dir build/p0-replay/baseline --threads 1 --jobs 1
-```
-
-The comparison JSON contains `safety_gate`, `quality_gate`, and `efficiency_gate`.
-The runner exit status reports case execution/parsing failure; gate decisions
-must be read from that JSON. Per-case logs and schema-1 diagnostics, trajectory-10,
-terminal-2, and summary-14 artifacts remain under each run's `cases` directory.
-
-### P0 result (2026-09-07)
-
-**HEAD safety and trajectory-neutral quality recertification passed. Efficiency
-strict-speedup failed. Historical frozen-truth continuity is not certified.**
-The candidate adds diagnostics and audit tooling only; no numerical policy was
-changed. Both binaries used AppleClang 21, system dependencies, RelWithDebInfo,
-OpenMP AUTO, ROOT AUTO, UMAP OFF, and the trust-model experiment OFF. Each formal
-run used one estimator thread and one job, without overlapping builds/tests.
-
-| Gate / measurement | Result |
-| --- | --- |
-| Completed baseline / candidate | 600/600 / 600/600 |
-| Failed cases / safety regressions | 0 / 0 on both sides |
-| Safety gate | passed |
-| Quality gate | passed; 600/600 semantic and terminal digests match |
-| Per-case stop reason, objective, truth RMSE, accepted iterations | identical for all 600 |
-| Objective / truth RMSE / accepted-iteration delta median, p90, p99 | all zero |
-| Stop distribution | converged 54; audit-patience 289; all-rejected 165; maximum-iterations 92 |
-| Efficiency gate | failed |
-| Elapsed median, baseline → candidate | 0.170482 s → 0.174479 s (+2.34%) |
-| Elapsed p90, baseline → candidate | 0.733874 s → 0.756307 s (+3.06%) |
-| Elapsed p99, baseline → candidate | 1.738902 s → 1.723046 s (-0.91%) |
-| Cases with lower elapsed time | 259/600 (43.17%) |
-
-A single timing pair measures this audit execution, including additional Debug
-serialization; it does not establish a production speedup or isolate logging
-cost causally. Efficiency failure is retained independently of the two passing
-gates. Final-polish safety statuses were relative-passed 39, failed 297, and
-not-evaluated 264. Exactly the 39 relative passes were applied; the other 561
-cases retained their base state.
-
-Conditioning diagnostics cover 600/600 candidate cases. Counts below are system
-construction events, not distinct atoms or cases. Positive-ratio distributions
-exclude the explicitly counted zero failure sentinel. Full family/topology
-strata, p01/median/p90 distributions, actual ridge ranges, solve status counts,
-and active/nominal populations are in the machine-readable report.
-
-| Phase / solve | Events | Conditioning guard | Zero sentinel | Positive ratio minimum |
-| --- | ---: | ---: | ---: | ---: |
-| candidate-polish/joint-polish | 15523 | 4783 | 0 | 1.618397e-13 |
-| final-dependency-polish/joint-polish | 3475 | 1695 | 1282 | 1.618397e-13 |
-| final-recertification/joint-offset | 1733 | 2 | 0 | 3.697002e-09 |
-| outer-operator/joint-offset | 59691 | 8 | 0 | 9.348240e-10 |
-
-The outer operator reports 719,712 nominal atom observations across 19,685 events:
-508,817 shape endpoints were unavailable and zero offset endpoints were
-unavailable. These are repeated observations, not unique failing atoms. Offset
-solves nevertheless include 1,121 IRLS iteration-limit statuses; available
-finite offset evidence must not be confused with solver qualification. No
-boundary-reconciliation conditioning events were observed in this corpus; its
-absence is not proof that the path is unreachable.
-
-Validation passed the five core CTest groups (including estimator defense),
-corpus contract/smoke/determinism tests, repository lint, and whitespace checks.
-The corpus contract now has 11 tests, covering independent gates, missing and
-nonfinite evidence, duplicate/incomplete pairs, diagnostic neutrality, and
-target-only natural truth. Existing per-atom activity and logging-neutrality
-regressions were retained; conditioning zero-column/nonfinite/threshold-boundary
-coverage was added.
-
-Baseline logs were reanalyzed after correcting the zero-accepted-iteration
-safety check, without changing timing or numeric output. An initial candidate
-parser-debugging batch, including one interrupted case, is retained separately
-as `build/p0-recertification/candidate-preflight` and excluded from every gate
-and timing statistic. The formal candidate is a fresh uninterrupted 600-case run.
-
-- [Machine-readable P0 report](../../tests/benchmarks/per_atom_offset_recertification.json)
-  records implementation patch/source/binary/library hashes, build settings,
-  environment, artifact hashes, three gates, and diagnostic distributions.
-- [Per-atom certificate baseline](../../tests/benchmarks/per_atom_offset_certificate_baseline.json)
-  retains all 600 case identities and semantic/terminal digests. It does not
-  overwrite the historical certificate baseline.
-- Full logs, frozen truth, case summaries, diagnostics and comparisons remain in
-  `build/p0-recertification/baseline` and `build/p0-recertification/candidate`.
-  `build/p0-recertification/implementation.patch` captures the reviewed code/tool
-  changes against the exact source baseline; these build artifacts are local.
-
-## Historical recertification results
-
-The following measurements apply only to their explicitly named historical
-baselines. Their stop distributions are not acceptance targets for P0.
-
-### Cleanup recertification result (2026-08-28)
-
-The paired run used AppleClang 21, `RelWithDebInfo`, the checked manifest and
-truth, one estimator thread, sequential jobs, and an exported `03cdb6ef`
-baseline executable. All blocking conditions passed:
-
-| Gate | Result |
-| --- | ---: |
-| Baseline / candidate completed | `600/600` / `600/600` |
-| Failed cases | `0` / `0` |
-| Production semantic digest matches | `600/600` |
-| Normalized terminal-state digest matches | `600/600` |
-| Stop distribution match | exact |
-| Objective delta median / p90 | `0 / 0` |
-| Transformed-truth RMSE delta median / p90 | `0 / 0` |
-| Accepted-iteration delta median / p90 | `0 / 0` |
-| Safety regressions | `0` |
-| Elapsed median, baseline → candidate | `0.101151 s → 0.088944 s` |
-| Elapsed p90, baseline → candidate | `0.708533 s → 0.527565 s` |
-
-Timing is excluded from both semantic digests. With the experiment flag off,
-the trust-model data structures and calculations are not compiled. Schema 9
-contains maximum and tail diagnostics but no rho, comparator, exposure, or
-accepted-only persistence fields.
-
-### Non-converged final-polish residual safety result (2026-08-29)
-
-The paired comparison used `8e65fa41` as the baseline and the same checked
-600-case manifest, frozen truth, AppleClang 21 `RelWithDebInfo` build, one
-estimator thread, and four corpus jobs. Both sides completed 600/600 cases with
-zero failed cases and zero safety regressions. Production semantic digests
-matched 600/600, stop-reason distributions remained exactly `converged 42`,
-`audit-patience 372`, `all-rejected-backtracking-exhausted 163`, and
-`maximum-iterations 23`, and accepted-iteration delta median/p90 was `0/0`.
-
-The new safety result distribution was `relative-passed 11`, `failed 278`, and
-`not-evaluated 311`; no corpus candidate required the absolute-pass fallback.
-Every applied non-converged polish was one of the 11 relative passes, while all
-278 failed candidates retained their base state. Of those failures, 134 had an
-incomplete candidate operator and 144 had comparable evidence but regressed at
-least one residual coordinate; one incomplete case was also solver-unqualified.
-
-| Stop reason | Objective-accepted | Applied | Safety-rejected |
-| --- | ---: | ---: | ---: |
-| `all-rejected-backtracking-exhausted` | 104 | 8 | 96 |
-| `audit-patience` | 167 | 3 | 164 |
-| `maximum-iterations` | 18 | 0 | 18 |
-| `converged` | 0 | 0 | 0 |
-
-Terminal-state digests matched 322/600; the 278 intentional differences are
-exactly the objective-accepted polishes rejected by the new safety gate.
-Candidate-minus-baseline objective delta median/p90 was `0/0.160499662`, while
-truth-RMSE delta median/p90 remained `0/0`: truth RMSE improved in 241 changed
-cases and worsened in 37. The generic cleanup blocking gate reports failure
-because it requires trajectory-neutral terminal states and zero outcome deltas;
-those conditions do not apply to this intentional persistence-policy change.
+production-maximum policies are retired. Accepted-only persistence remains a
+targeted negative unit scenario: small accepted movement cannot declare
+convergence while the strict operator residual remains material. Geometric
+factor search remains the production policy; coarse-to-fine refinement is not
+part of that search. Fold-168 remains an optional quality regression.
 
 ## Historical provenance
 
-The following records preserve the original measurements and decisions in
+The following records preserve independent design reasoning and evidence in
 chronological order:
 
 1. [Convergence safeguard audit](audit-history/second-stage-convergence/convergence-safeguard-audit.md)
 2. [Stationarity and active-coordinate population audit](audit-history/second-stage-convergence/stationarity-active-coordinate-audit.md)
 3. [Counterfactual convergence continuation audit](audit-history/second-stage-convergence/counterfactual-convergence-continuation-audit.md)
-4. [Convergence exposure and counterfactual outcome audit](audit-history/second-stage-convergence/convergence-exposure-counterfactual-outcome-audit.md)
 
 The historical records are provenance, not current production specification.

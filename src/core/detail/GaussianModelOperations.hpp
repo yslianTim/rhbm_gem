@@ -68,6 +68,7 @@ TransformedChange CalculateTransformedChange(
 bool IsTransformedChangeMaterial(const TransformedChange & change, double minimum_change);
 TransformedChangeSummary SummarizeTransformedChanges(const std::vector<TransformedChange> & change_list);
 
+bool IsTransformedPercentileConverged(const TransformedChange & percentile_list);
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary);
 bool IsTrustRegionStepWithinRadius(double step_norm, double radius);
 

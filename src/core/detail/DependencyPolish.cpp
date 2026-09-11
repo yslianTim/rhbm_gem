@@ -1,12 +1,11 @@
 #include "core/detail/DependencyPolish.hpp"
 
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/CandidateEvaluation.hpp"
 #include "core/detail/Diagnosis.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <exception>
-#include <ranges>
 #include <utility>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -172,109 +171,14 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         base_state,
                         *correction_result.patch
                     };
-                    const auto has_invalid_model{
-                        std::ranges::any_of(
-                            component.atom_index_list,
-                            [&](const auto atom_index)
-                            {
-                                return !IsValidSecondStageGaussianModel(
-                                    candidate_overlay.GetState().GetModel(atom_index));
-                            })
-                    };
-                    if (has_invalid_model) break;
-
-                    const auto suspicious_atom_count{
-                        CountSuspiciousPolishAtoms(
-                            context,
-                            component.atom_index_list,
-                            endpoint_state_view,
-                            candidate_overlay.GetState())
-                    };
-                    diagnostic.suspicious_candidate_atom_count +=
-                        suspicious_atom_count;
-                    result.diagnostic.suspicious_candidate_atom_count +=
-                        suspicious_atom_count;
-                    if (suspicious_atom_count != 0) break;
-
-                    auto * record{ BeginJointCandidateDiagnostic(options.quiet_mode,
-                        diagnostic.objective_diagnostic_list, "final-polish", correction_result.damping, round + 1) };
-                    const auto candidate_objective{
-                        EvaluateObjectiveDelta(
-                            candidate_overlay,
-                            component.affected_sample_ref_list,
-                            objective_domain,
-                            *base_objective,
-                            performance_counters)
-                    };
-                    if (!candidate_objective.has_value() ||
-                        !IsBetterAuditObjective(
-                            candidate_objective->GetTotalObjective(),
-                            endpoint_objective.GetTotalObjective(),
-                            kObjectiveStrictTolerance))
-                    {
-                        if (record)
-                        {
-                            record->previous = endpoint_objective;
-                            record->candidate = candidate_objective;
-                            record->outcome = "members-not-evaluated-global-improvement-failed-or-unavailable";
-                        }
-                        break;
-                    }
-
-                    const auto member_guard_passed{
-                        std::ranges::all_of(
-                            component.key_list,
-                            [&](const auto & key)
-                            {
-                                const auto sample_iter{
-                                    partition.sample_id_list_by_key.find(key)
-                                };
-                                if (sample_iter ==
-                                    partition.sample_id_list_by_key.end())
-                                {
-                                    RecordJointMemberRejection(record, key, std::nullopt, std::nullopt, std::nullopt, false);
-                                    if (record) record->outcome = "member-samples-unavailable";
-                                    return false;
-                                }
-                                auto owned_sample_ref_list{ sample_iter->second };
-                                owned_sample_ref_list.erase(
-                                    std::remove_if(
-                                        owned_sample_ref_list.begin(),
-                                        owned_sample_ref_list.end(),
-                                        [&](const auto & sample_ref)
-                                        {
-                                            return sample_ref.atom_index >=
-                                                    objective_domain.owner_key_by_atom_index.size() ||
-                                                objective_domain.owner_key_by_atom_index.at(
-                                                    sample_ref.atom_index).empty();
-                                        }),
-                                    owned_sample_ref_list.end());
-                                const auto base_contribution{
-                                    EvaluateObjectiveContribution(
-                                        base_baseline,
-                                        key,
-                                        owned_sample_ref_list,
-                                        objective_domain)
-                                };
-                                const auto candidate_contribution{
-                                    EvaluateObjectiveContribution(
-                                        candidate_overlay,
-                                        key,
-                                        owned_sample_ref_list,
-                                        objective_domain)
-                                };
-                                const bool passed{ base_contribution.has_value() &&
-                                    candidate_contribution.has_value() &&
-                                    !IsObjectiveDeteriorated(
-                                        candidate_contribution->GetTotalObjective(),
-                                        base_contribution->GetTotalObjective(),
-                                        kObjectiveProgressTolerance) };
-                                if (!passed) RecordJointMemberRejection(record, key, base_contribution,
-                                    std::nullopt, candidate_contribution, false);
-                                return passed;
-                            })
-                    };
-                    if (!member_guard_passed) break;
+                    const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::FinalPolish,
+                        FinalPolishCandidateReference{component, partition, objective_domain,
+                            endpoint_state_view, *base_objective, endpoint_objective, performance_counters,
+                            options.quiet_mode, diagnostic.objective_diagnostic_list, correction_result.damping, round + 1}) };
+                    diagnostic.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
+                    result.diagnostic.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
+                    if (!evaluation.objective) break;
+                    const auto & candidate_objective{ evaluation.objective };
 
                     endpoint_patch = *correction_result.patch;
                     endpoint_objective = *candidate_objective;

@@ -6,10 +6,11 @@
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProposal.hpp"
 #include "core/detail/Quarantine.hpp"
-#include "core/detail/BoundaryReconciliation.hpp"
 #include "core/detail/DependencyPolish.hpp"
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/CandidateTransaction.hpp"
+#include "core/detail/TrustModelAudit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -128,13 +129,13 @@ static void ValidateBlockActivitySize(
     }
 }
 
-static ConvergenceCertificate SummarizeFixedPointOperator(
+static ConvergenceAssessment SummarizeFixedPointOperator(
     const FixedPointOperatorEvidence & evidence,
     const FitState & previous_state,
     const std::vector<std::size_t> & atom_index_list,
     std::string_view diagnostic_phase = "outer-operator")
 {
-    ConvergenceCertificate result;
+    ConvergenceAssessment result;
     const ActiveCoordinatePopulation operator_nominal_population{
         atom_index_list,
         atom_index_list
@@ -158,8 +159,9 @@ static ConvergenceCertificate SummarizeFixedPointOperator(
         }
         change_list.emplace_back(std::move(change));
     }
-    result.operator_nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
-    result.operator_complete = std::ranges::all_of(
+    result.diagnostics.operator_nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
+    result.certificate.operator_nominal_p99 = result.diagnostics.operator_nominal_residual.percentile_list;
+    result.certificate.operator_complete = std::ranges::all_of(
         atom_index_list,
         [&](const auto atom_index)
         {
@@ -549,7 +551,7 @@ static IterationResult RunIteration(
     // Prepare this attempt's frozen background, objectives, and active blocks.
     const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
         context, graph_topology, options, iteration_state, performance_counters) };
-    const auto & previous_state{ iteration_state.accepted_state };
+    auto previous_state{ std::move(iteration_state.accepted_state) };
     const auto & selected_atom_index_list{ iteration_state.selected_atom_index_list };
     const auto & graph_partition{ iteration_state.graph_partition };
     const auto cluster_key_list{ BuildGraphClusterKeyList(graph_partition) };
@@ -605,6 +607,7 @@ static IterationResult RunIteration(
             quarantine_activity,
             probation_atom_index_set)
     };
+    BeginTrustModelAudit(context, cluster_key_list);
     context.phase_audit = BeginPhaseAudit(context, options.quiet_mode, objective_domain,
         previous_state, cluster_key_list, attempt_number, iteration_state.phase_audit_domain_id);
     estimation_audit::Scope solver_audit_scope(context.phase_audit ? attempt_number : 0, "production");
@@ -623,11 +626,7 @@ static IterationResult RunIteration(
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();
 
-    if (context.phase_audit)
-    {
-        context.phase_audit->CaptureOperator(proposal_result.fixed_point_operator);
-        context.phase_audit->CaptureState("production-proposal", proposal_result.proposal_state, true);
-    }
+    ObservePhaseProposal(context, proposal_result);
     LogUnrestrictedOperatorAssessments(
         options.quiet_mode,
         proposal_result.assessment_by_atom,
@@ -658,54 +657,22 @@ static IterationResult RunIteration(
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
         .performance_counters = performance_counters
     };
-    auto selection{ SelectClusterCandidates(candidate_inputs) };
-    const auto iteration_failure_atom_mask{
-        BuildSuspiciousFailureAtomMask(
-            selection.block_activity,
-            proposal_result.assessment_by_atom)
-    };
-    const auto iteration_suspicious_atom_count{
-        static_cast<std::size_t>(std::ranges::count_if(
-            iteration_failure_atom_mask,
-            [](char value) { return value != 0; }))
-    };
-    const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
-
-    auto & assembled_state{ selection.assembled_state };
-    auto & assembled_polish_provenance{ selection.assembled_polish_provenance };
+    CandidateTransactionBuilder builder;
+    builder.Select(candidate_inputs);
+    auto transaction{ std::move(builder).Finish(candidate_inputs, iteration_state.quarantine_state,
+        proposal_result.assessment_by_atom, proposal_result.health_by_key,
+        iteration_state.accepted_iteration_count + 1) };
     IterationResult result;
-    // Quarantine transitions can change the assembled state and require a new audit.
-    const auto has_quarantine_transition{
-        iteration_state.quarantine_state.UpdateAfterIteration(
-            selection.accepted_cluster_diagnostic_list,
-            selection.rejected_cluster_diagnostic_list,
-            selection.block_activity,
-            proposal_result.assessment_by_atom,
-            proposal_result.health_by_key,
-            assembled_state,
-            previous_state,
-            iteration_state.previous_polish_provenance,
-            assembled_polish_provenance,
-            iteration_state.accepted_iteration_count + 1)
-    };
-    if (has_quarantine_transition)
-    {
-        selection.final_audit_objective.reset();
-        ReauditFallbackSelection(candidate_inputs, selection);
-    }
-    if (context.phase_audit)
-        context.phase_audit->CaptureState("final-selection",
-            selection.accepted_key_list.empty() ? previous_state : assembled_state);
-    // Publish audited history before the all-rejected exit, as on accepted attempts.
-    iteration_state.cluster_objective_state = std::move(selection.cluster_objective_state);
-    LogBestObjectivePublication(context, iteration_state.cluster_objective_state);
-    result.trust_region_update = iteration_state.trust_region_state.ApplyRadiusUpdates(
-        selection.grow_trust_region_key_list, selection.shrink_trust_region_key_list,
-        selection.rejected_key_list, selection.exhausted_key_list);
+    const auto selection{ std::move(transaction).Commit(context, previous_state,
+        iteration_state.accepted_state, iteration_state.previous_polish_provenance,
+        iteration_state.cluster_objective_state, iteration_state.quarantine_state,
+        iteration_state.trust_region_state, result) };
+    const auto & assembled_state{ iteration_state.accepted_state };
+    const auto & assembled_polish_provenance{ iteration_state.previous_polish_provenance };
     const auto assembled_uses_polish{ UsesPolish(assembled_polish_provenance) };
-    result.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
-    result.rejected_cluster_diagnostic_list = std::move(selection.rejected_cluster_diagnostic_list);
-    result.boundary_reconciliation_diagnostic_list = std::move(selection.boundary_reconciliation_diagnostic_list);
+    const auto iteration_suspicious_atom_count{ selection.suspicious_atom_count };
+    const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
+    const auto has_quarantine_transition{ selection.quarantine_transition };
     iteration_state.rollback_atom_mask = selection.block_activity.BuildCombinedFixedAtomMask();
     result.attempt_number = attempt_number;
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
@@ -713,12 +680,12 @@ static IterationResult RunIteration(
     result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
     result.polish_progress = selection.polish_progress;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
-    result.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
+    result.diagnostics.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
 
-    if (selection.accepted_key_list.empty())
+    if (!selection.accepted)
     {
-        if (context.phase_audit) context.phase_audit->Finish(options, joint_offset_ridge_multiplier_list,
-            quarantine_activity, proposal_result, previous_state);
+        ObservePhaseFinish(context, options, joint_offset_ridge_multiplier_list,
+            quarantine_activity, proposal_result, assembled_state);
         result.stop_reason = attempt_number >= kMaximumIterations ?
             SecondStageStopReason::AllRejectedAtMaximumIterations :
             SecondStageStopReason::AllRejectedBacktrackingExhausted;
@@ -737,16 +704,18 @@ static IterationResult RunIteration(
             previous_state,
             iteration_state.selected_atom_index_list)
     };
-    auto certificate{
+    auto assessment{
         SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             previous_state,
             iteration_state.selected_atom_index_list)
     };
-    certificate.accepted_active_movement = SummarizeActiveDofChanges(
+    auto & certificate{ assessment.certificate };
+    assessment.diagnostics.accepted_active_movement = SummarizeActiveDofChanges(
         assembled_state,
         previous_state,
         active_population);
+    certificate.accepted_active_p99 = assessment.diagnostics.accepted_active_movement.percentile_list;
     certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
         iteration_state.selected_atom_index_list,
         cluster_key_list,
@@ -828,12 +797,12 @@ static IterationResult RunIteration(
     }
 
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
-    result.transformed_change_percentile = certificate.accepted_active_movement.percentile_list;
+    result.diagnostics.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
+    result.transformed_change_percentile = certificate.accepted_active_p99;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
     certificate.suspicious_offset_fallback = has_suspicious_offset_fallback;
-    certificate.rejected_cluster = !selection.rejected_key_list.empty();
+    certificate.rejected_cluster = selection.rejected_cluster;
     if (certificate.ProductionConverged())
     {
         result.stop_reason = SecondStageStopReason::Converged;
@@ -843,13 +812,10 @@ static IterationResult RunIteration(
         result.stop_reason = SecondStageStopReason::AuditPatience;
     }
 
-    LogConvergenceSafeguardAudit(options.quiet_mode, result, certificate);
+    LogConvergenceSafeguardAudit(options.quiet_mode, result, certificate, assessment.diagnostics);
 
-    if (context.phase_audit) context.phase_audit->Finish(options, joint_offset_ridge_multiplier_list,
+    ObservePhaseFinish(context, options, joint_offset_ridge_multiplier_list,
         quarantine_activity, proposal_result, assembled_state);
-    // Commit the accepted state even when this attempt reaches a stopping condition.
-    iteration_state.accepted_state = std::move(assembled_state);
-    iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);
     return result;
 }
 
@@ -878,11 +844,11 @@ void ApplyFitState(
 struct FinalPolishResidualSafetyResult
 {
     FinalPolishResidualSafetyStatus status{ FinalPolishResidualSafetyStatus::NotEvaluated };
-    std::optional<ConvergenceCertificate> base{};
-    std::optional<ConvergenceCertificate> candidate{};
+    std::optional<ConvergenceAssessment> base{};
+    std::optional<ConvergenceAssessment> candidate{};
 };
 
-static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
+static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
     const SecondStageContext & context,
     const FitOptions & options,
     IterationState & iteration_state,
@@ -913,18 +879,18 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
                 iteration_state.solver_workspace_by_key,
                 "final-recertification")
         };
-        auto certificate{ SummarizeFixedPointOperator(
+        auto assessment{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             candidate_state,
             iteration_state.selected_atom_index_list,
             "final-recertification") };
-        certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
+        assessment.certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
             iteration_state.selected_atom_index_list,
             cluster_key_list,
             proposal_result.block_activity,
             proposal_result.local_refit_status_by_atom,
             proposal_result.health_by_key);
-        return certificate;
+        return assessment;
     }
     catch (...)
     {
@@ -935,7 +901,7 @@ static std::optional<ConvergenceCertificate> EvaluateFinalPolishCertificate(
 static bool HasComparableFinalPolishOperatorEvidence(const ConvergenceCertificate & certificate)
 {
     const auto & percentile_list{
-        certificate.operator_nominal_residual.percentile_list
+        certificate.operator_nominal_p99
     };
     return certificate.solver_qualified && certificate.operator_complete &&
         std::ranges::all_of(
@@ -953,10 +919,10 @@ static bool IsFinalPolishResidualNonWorsening(
         return false;
     }
     const auto & base_percentile_list{
-        base_certificate.operator_nominal_residual.percentile_list
+        base_certificate.operator_nominal_p99
     };
     const auto & candidate_percentile_list{
-        candidate_certificate.operator_nominal_residual.percentile_list
+        candidate_certificate.operator_nominal_p99
     };
     for (std::size_t index = 0; index < base_percentile_list.size(); index++)
     {
@@ -990,7 +956,7 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         result.status = FinalPolishResidualSafetyStatus::Error;
         return result;
     }
-    if (result.candidate->StrictOperatorPassed())
+    if (result.candidate->certificate.StrictOperatorPassed())
     {
         result.status = FinalPolishResidualSafetyStatus::AbsolutePassed;
         return result;
@@ -1000,7 +966,7 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         result.status = FinalPolishResidualSafetyStatus::Failed;
         return result;
     }
-    if (!HasComparableFinalPolishOperatorEvidence(*result.candidate))
+    if (!HasComparableFinalPolishOperatorEvidence(result.candidate->certificate))
     {
         result.status = FinalPolishResidualSafetyStatus::Failed;
         return result;
@@ -1017,8 +983,8 @@ static FinalPolishResidualSafetyResult EvaluateFinalPolishResidualSafety(
         return result;
     }
     result.status = IsFinalPolishResidualNonWorsening(
-            *result.base,
-            *result.candidate) ?
+            result.base->certificate,
+            result.candidate->certificate) ?
         FinalPolishResidualSafetyStatus::RelativePassed :
         FinalPolishResidualSafetyStatus::Failed;
     return result;
@@ -1197,9 +1163,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             LogAcceptedCandidateSearchDiagnostics(
                 options.quiet_mode,
                 terminal_result);
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-            LogTrustModelShadowDiagnostics(options.quiet_mode, terminal_result);
-#endif
+            LogTrustModelAudit(context, options.quiet_mode, terminal_result);
             LogRejectedClusterDiagnostics(
                 options.quiet_mode,
                 terminal_result.rejected_cluster_diagnostic_list);
@@ -1342,13 +1306,13 @@ double CalculateAdaptiveTopologyDrift(
 bool ConvergenceCertificate::StrictOperatorPassed() const
 {
     return solver_qualified && operator_complete &&
-        IsTransformedPercentileConverged(operator_nominal_residual);
+        IsTransformedPercentileConverged(operator_nominal_p99);
 }
 
 bool ConvergenceCertificate::ProductionConverged() const
 {
     return StrictOperatorPassed() &&
-        IsTransformedPercentileConverged(accepted_active_movement) &&
+        IsTransformedPercentileConverged(accepted_active_p99) &&
         !objective_domain_changed && !quarantine_transition &&
         !suspicious_offset_fallback && !rejected_cluster;
 }

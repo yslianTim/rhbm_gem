@@ -26,9 +26,14 @@ but no unselected model is persisted.
 This page specifies the current production algorithm. Earlier decisions and
 evidence are recorded in the
 [Second-stage outer-iteration algorithm audit](second-stage-outer-iteration-algorithm-audit.md).
-Earlier safeguard, population, continuation, and corpus reviews are immutable
+Earlier safeguard, population, and continuation reviews are
 historical records linked only from that audit; they do not override this
 page's current frozen-background contract.
+
+Implementation ownership and the unchanged per-path validation sequence are
+specified in [P0 structural refactoring](second-stage-p0-structure.md).
+Candidate selection now uses a private builder and one transaction publication;
+convergence decisions receive p99 evidence separately from diagnostic maxima.
 
 The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the
@@ -51,13 +56,16 @@ all second-stage services through candidate selection:
 | --- | --- |
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
-| `CandidateSelection` | Per-cluster candidate search, local joint polish, and trust-radius control |
+| `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
+| `CandidateEvaluation` | Typed candidate validation scopes, original gate ordering, and proposed history updates |
+| `CandidateTransaction` | Private selection builder, staged quarantine, and consuming publication of validated results |
 | `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage, and quarantine fallback re-audit |
-| `DependencyPolish` | Final uncut-component polish candidates and objective acceptance |
+| `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, and previous/best objective history |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
 | `Quarantine` | Failure tracking, probation, activity, and transition rollback |
-| `Diagnosis` | Progress and audit output, graph/objective diagnostics, and performance counters |
+| `Diagnosis` | Progress and certificate output, graph/objective diagnostics, and performance counters |
+| `PhaseAudit` / `TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
 
 `GaussianModelOperations`, `PreparedLocalGaussianFit`, `SecondStageFitting`,
 `CouplingGraph`, and `JointFitting` retain the underlying model operations,
@@ -65,15 +73,18 @@ prepared design, state/residual representation, graph construction, and solvers.
 The public Gaussian estimator workflow uses internal fitting-range constants;
 `FitOptions` does not expose radial bounds.
 
-`CandidateSelectionInputs` contains read-only algorithm inputs. Selection owns
-its working activity masks and cluster objective history and returns both in
-`CandidateSelection`. Solver workspaces and performance counters are the only
-mutable resources referenced by the inputs. Boundary helpers update this same
-selection instead of receiving a separate alias to its objective history.
-Quarantine fallback re-audit starts from the attempt's original history; the
-controller then publishes the audited history before the all-rejected exit.
-Convergence and rollback use the returned activity. The unrestricted operator
-evidence remains separate from these production restrictions.
+`CandidateSelectionInputs` contains read-only algorithm inputs. The private
+`CandidateTransactionBuilder` owns working activity, state, provenance and
+objective history; boundary operations are its private methods. Evaluators
+return values and proposed history updates without changing caller history.
+Solver workspaces, counters and observers remain mutable working resources.
+Quarantine is staged on a copy, and fallback re-audit starts from the attempt's
+original history. The builder then freezes a read-only `CandidateTransaction`.
+Its consuming commit publishes validated state, provenance, history, quarantine
+and radius actions, including the required rejection updates on all-rejected
+attempts. Convergence uses the committed candidate and the retained previous
+state. The unrestricted operator evidence remains separate from these
+production restrictions.
 
 `SecondStageContext::atom_list` is accessed directly. Model snapshots capture
 both the selected Gaussian models and the immutable background in effect when
@@ -84,11 +95,11 @@ snapshots, while accepted and best-audit states retain complete local results.
 Patch/view and residual-overlay representations continue to avoid full-state
 materialization during candidate evaluation.
 
-The progress field `proposal_maximum_transformed_change` measures the constrained
+The `IterationDiagnostics::proposal_maximum_transformed_change` field measures the constrained
 proposal's maximum movement. It is distinct from the nominal operator residual
-in `ConvergenceCertificate`; the existing progress label and audit schemas are
-unchanged. The corpus runner normalizes both legacy schema-1 terminal atoms
-(with chemical group) and current schema-2 atoms (without chemical group).
+in `ConvergenceCertificate`. Maximum/population measurements reside in
+`ConvergenceDiagnostics`; the existing progress label and audit schemas are
+unchanged.
 
 ## Model context and initialization
 
@@ -1079,7 +1090,7 @@ disabled UMAP/ROOT:
   empty-selected behavior are unchanged. `git diff --check` passed.
 
 The ROOT-disabled build retains existing unrelated painter warnings; those
-files were not changed. The paired 600-case corpus was not rerun. Only this
+files were not changed. Only this
 workspace-verification record was updated in the normative document; its
 algorithm description, the existing Notion algorithm page, and historical audit
 documents are unchanged.
@@ -1095,45 +1106,8 @@ ROOT; the trust-model experiment was tested both OFF and ON.
 - The six responsibility modules and diagnostic ownership described above are
   implemented. No public estimator options, numerical thresholds, stop rules,
   logging schemas, or persistence interfaces changed.
-- Both variants built `rhbm_tests` and `convergence_exposure_case_runner` and
-  passed the estimator, algorithm, math, HRL, corpus-tooling contract, exposure
-  smoke, and exposure determinism CTest entries (7/7 per variant).
+- Both variants built `rhbm_tests` and passed the estimator, algorithm, math,
+  and HRL CTest entries.
 - Repository lint and `git diff --check` passed. No test file or case was added:
-  the modified defense source retains 101 declared cases (including its
-  conditional experiment case), and the corpus contract retains seven cases.
-- The existing corpus terminal normalizer incorrectly required `group` for
-  schema-2 atom records. It now follows the schema accepted by the existing
-  log parser, preserving schema-1 group fields and omitting them for schema 2.
-  The existing parser/metrics test also checks normalization of both schemas.
-- The checked 600-case manifest was run before and after with one estimator
-  thread and four independent jobs. Both completed 600/600 with zero failed
-  cases and zero safety regressions. All 600 production-semantic digests,
-  terminal-state digests, full terminal summaries, and frozen-truth digests
-  matched exactly. Objective, truth metrics, and accepted iterations therefore
-  have zero per-case differences.
-- Both runs stopped with 54 converged, 289 audit-patience, 165 all-rejected
-  backtracking-exhausted, and 92 maximum-iteration cases.
-- The comparison tool's separate strict-speedup condition did not pass:
-  elapsed median was 0.895124 s before and 0.900958 s after, while p90 was
-  6.476624 s before and 6.308444 s after. Every behavioral comparison condition
-  passed. These runs overlapped other validation work and do not constitute a
-  controlled performance benchmark; this refactor makes no speedup claim.
-
-Pair summaries, logs, and the unchanged comparison-tool report are retained in
-`build/second-stage-refactor-baseline/corpus` and
-`build/second-stage-refactor-candidate/corpus`. Baseline revision, binary hashes,
-and execution settings are recorded in
-`build/second-stage-refactor-baseline/provenance.json`. Historical audit documents
-were not changed.
-
-
-## Per-atom P0 recertification (2026-09-07)
-
-The exact `a4354e698e77398154009d231907ebf3ed4b1d52` HEAD was paired against
-diagnostic/tooling-only changes on the full 600-case corpus. Safety and per-case
-quality/trajectory neutrality passed; the separate efficiency gate failed.
-Historical manifest/case identity hashes match, but historical frozen-truth
-continuity remains unverified. See the [authoritative P0 audit result](
-second-stage-outer-iteration-algorithm-audit.md#p0-result-2026-09-07) for
-per-atom availability/population/conditioning definitions, measurements,
-provenance, limitations, and replay commands.
+  the modified defense source retains 101 declared cases, including its
+  conditional experiment case.

@@ -315,7 +315,7 @@ IterationProposalResult BuildIterationProposal(
         }
     }
 
-    if (context.phase_audit) context.phase_audit->CaptureIntermediate("post-joint-offset", current_model_snapshot.node);
+    ObservePhaseIntermediate(context, current_model_snapshot.node);
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };

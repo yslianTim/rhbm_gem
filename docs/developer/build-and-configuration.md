@@ -337,9 +337,6 @@ cmake -S . -B build-trust-model \
   -DRHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON
 cmake --build build-trust-model --target tests_all -j
 
-# Run the production-only convergence corpus (no experiment flag required)
-cmake --build build --target convergence_exposure_corpus
-
 # Install Python module into <prefix>/<CMAKE_INSTALL_LIBDIR>/pythonX.Y/site-packages (default layout)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
 cmake --install build --prefix "$HOME/.local"

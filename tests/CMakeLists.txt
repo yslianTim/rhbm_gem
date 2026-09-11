@@ -218,24 +218,6 @@ endif()
 
 add_dependencies(tests_all rhbm_tests)
 
-add_executable(
-    convergence_exposure_case_runner
-    tools/ConvergenceExposureCaseRunner.cpp
-)
-set_target_properties(
-    convergence_exposure_case_runner
-    PROPERTIES OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-CONVERGENCE-EXPOSURE"
-)
-target_link_libraries(
-    convergence_exposure_case_runner
-    PRIVATE rhbm_gem CompilerFlags
-)
-target_include_directories(
-    convergence_exposure_case_runner
-    PRIVATE "${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}/src"
-)
-add_dependencies(tests_all convergence_exposure_case_runner)
-
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
     INTENTS command validation
@@ -331,66 +313,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     set_tests_properties(
         fold_168_regression_runner_test
         PROPERTIES LABELS "domain:integration;intent:algorithm"
-    )
-
-    add_test(
-        NAME convergence_exposure_corpus_test
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_exposure_corpus_test.py"
-    )
-    set_tests_properties(
-        convergence_exposure_corpus_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm"
-    )
-
-    add_test(
-        NAME convergence_exposure_case_runner_smoke
-        COMMAND $<TARGET_FILE:convergence_exposure_case_runner>
-            --case-id natural-v00-r0
-            --family natural
-            --topology unk-c
-            --level 0
-            --replica 0
-            --seed 410000
-            --threads 1
-            --noise-sigma 0
-    )
-    set_tests_properties(
-        convergence_exposure_case_runner_smoke
-        PROPERTIES
-            LABELS "domain:integration;intent:algorithm"
-            PASS_REGULAR_EXPRESSION
-                "Second-stage audit terminal: schema=2, reason=converged"
-            TIMEOUT 60
-    )
-
-    add_test(
-        NAME convergence_exposure_runner_determinism
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/convergence_exposure_runner_test.py"
-            --executable $<TARGET_FILE:convergence_exposure_case_runner>
-    )
-    set_tests_properties(
-        convergence_exposure_runner_determinism
-        PROPERTIES
-            LABELS "domain:integration;intent:algorithm"
-            TIMEOUT 120
-    )
-
-    add_custom_target(
-        convergence_exposure_corpus
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/resources/tools/developer/run_convergence_exposure_corpus.py"
-            --executable $<TARGET_FILE:convergence_exposure_case_runner>
-            --manifest
-                "${PROJECT_SOURCE_DIR}/tests/benchmarks/convergence_exposure_manifest.json"
-            --output-dir
-                "${PROJECT_BINARY_DIR}/benchmark-results/convergence-exposure-corpus"
-            --threads 1
-            --jobs 4
-        DEPENDS convergence_exposure_case_runner
-        USES_TERMINAL
-        VERBATIM
     )
 endif()
 

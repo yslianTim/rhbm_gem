@@ -23,6 +23,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/TrustModelAudit.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/Quarantine.hpp"
@@ -5060,7 +5061,9 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryRejectionRestoresBestParameterSnap
         provisional.best_parameters = audit_detail::FitStatePatch::FromState(candidate, key);
         provisional.best_objective = audit_detail::ObjectiveBreakdown{ 10.0, 0.0, 0.0 };
     }
-    audit_detail::ReconcileSelectedBoundaries(inputs, {}, selection);
+    audit_detail::CandidateTransactionBuilder builder(std::move(selection));
+    builder.ReconcileSelectedBoundaries(inputs, {});
+    selection = builder.View();
     EXPECT_TRUE(selection.accepted_key_list.empty());
     EXPECT_EQ(selection.rejected_key_list.size(), 2U);
     for (const auto & key : keys)
@@ -5209,8 +5212,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateKeepsAcceptedResidua
     const auto small{ make_summary(5.0e-5, 2.0e-3) };
     const auto large{ make_summary(2.0e-4, 2.0e-3) };
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_movement = small;
-    certificate.operator_nominal_residual = large;
+    certificate.accepted_active_p99 = small.percentile_list;
+    certificate.operator_nominal_p99 = large.percentile_list;
     certificate.solver_qualified = true;
     EXPECT_FALSE(certificate.ProductionConverged());
 }
@@ -5431,38 +5434,42 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     changes.at(2).fill(5.0e-5);
 
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_movement =
+    audit_detail::ConvergenceDiagnostics diagnostics;
+    diagnostics.accepted_active_movement =
         audit_detail::SummarizeActiveDofChanges(changes, accepted_population);
-    certificate.operator_nominal_residual =
+    certificate.accepted_active_p99 = diagnostics.accepted_active_movement.percentile_list;
+    diagnostics.operator_nominal_residual =
         audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    certificate.operator_nominal_p99 = diagnostics.operator_nominal_residual.percentile_list;
     certificate.solver_qualified = true;
 
     EXPECT_EQ(
-        certificate.accepted_active_movement.population_size_list.at(
+        diagnostics.accepted_active_movement.population_size_list.at(
             rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
         1U);
     EXPECT_EQ(
-        certificate.accepted_active_movement.population_size_list.at(
+        diagnostics.accepted_active_movement.population_size_list.at(
             rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
         1U);
     EXPECT_EQ(
-        certificate.operator_nominal_residual.population_size_list.at(
+        diagnostics.operator_nominal_residual.population_size_list.at(
             rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
         3U);
     EXPECT_EQ(
-        certificate.operator_nominal_residual.population_size_list.at(
+        diagnostics.operator_nominal_residual.population_size_list.at(
             rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
         3U);
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(
-        certificate.accepted_active_movement));
+        diagnostics.accepted_active_movement));
     EXPECT_FALSE(change_detail::IsTransformedPercentileConverged(
-        certificate.operator_nominal_residual));
+        diagnostics.operator_nominal_residual));
     EXPECT_FALSE(certificate.ProductionConverged());
 
     changes.at(0).fill(5.0e-5);
     changes.at(1).fill(5.0e-5);
-    certificate.operator_nominal_residual =
+    diagnostics.operator_nominal_residual =
         audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    certificate.operator_nominal_p99 = diagnostics.operator_nominal_residual.percentile_list;
     EXPECT_TRUE(certificate.ProductionConverged());
 }
 
@@ -5484,12 +5491,12 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateQualifiesIndependent
         2, change_detail::TransformedChange{});
 
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_movement =
-        audit_detail::SummarizeActiveDofChanges(changes, population);
+    certificate.accepted_active_p99 =
+        audit_detail::SummarizeActiveDofChanges(changes, population).percentile_list;
     const audit_detail::SuspiciousBlockActivity nominal{ { 0, 0 }, { 0, 0 }, { 0, 0 } };
     const auto nominal_population{ audit_detail::BuildActiveCoordinatePopulation(atom_index_list, nominal) };
-    certificate.operator_nominal_residual =
-        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    certificate.operator_nominal_p99 =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population).percentile_list;
     const std::vector<std::optional<rg::RHBMEstimationStatus>>
         local_refit_status_by_atom(2, rg::RHBMEstimationStatus::SUCCESS);
     audit_detail::ClusterHealthMap health_by_key;
@@ -5510,8 +5517,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateQualifiesIndependent
     EXPECT_TRUE(certificate.StrictOperatorPassed());
     EXPECT_TRUE(certificate.ProductionConverged());
     changes.at(1).at(rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = 2.0e-3;
-    certificate.operator_nominal_residual =
-        audit_detail::SummarizeActiveDofChanges(changes, nominal_population);
+    certificate.operator_nominal_p99 =
+        audit_detail::SummarizeActiveDofChanges(changes, nominal_population).percentile_list;
     EXPECT_FALSE(certificate.StrictOperatorPassed());
     EXPECT_FALSE(certificate.ProductionConverged());
 }
@@ -5528,12 +5535,14 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequire
     };
 
     audit_detail::ConvergenceCertificate certificate;
-    certificate.accepted_active_movement = make_summary(0.0, 0);
-    certificate.operator_nominal_residual = make_summary(5.0e-5, 4);
+    certificate.accepted_active_p99 =
+        make_summary(0.0, 0).percentile_list;
+    certificate.operator_nominal_p99 =
+        make_summary(5.0e-5, 4).percentile_list;
     certificate.solver_qualified = true;
 
     EXPECT_TRUE(change_detail::IsTransformedPercentileConverged(
-        certificate.accepted_active_movement));
+        certificate.accepted_active_p99));
     EXPECT_TRUE(certificate.StrictOperatorPassed());
     EXPECT_TRUE(certificate.ProductionConverged());
 

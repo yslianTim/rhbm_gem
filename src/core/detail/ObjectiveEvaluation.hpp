@@ -203,6 +203,8 @@ struct ClusterObjectiveState
 using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
 using ObjectiveByKey = std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
 
+std::size_t CountObjectiveSamples(const std::vector<SampleRef> &, const ObjectiveDomain &);
+
 ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot,

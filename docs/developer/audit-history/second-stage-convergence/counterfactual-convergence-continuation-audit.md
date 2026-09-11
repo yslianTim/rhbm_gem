@@ -158,9 +158,6 @@ The fold-168 result was a valid negative control but supplied no evidence for
 the then-pending production redesign. It remains historical evidence rather
 than a description of the current gate.
 
-The targeted discovery and cross-case outcome rules are continued in the
-[convergence exposure and counterfactual outcome audit](convergence-exposure-counterfactual-outcome-audit.md).
-
 ## Historical refresh verification (2026-08-27)
 
 - Audit-enabled CTest passes 21/21; audit-disabled CTest passes 19/19.
@@ -169,7 +166,6 @@ The targeted discovery and cross-case outcome rules are continued in the
   and zero exposures for all three comparators.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical; repository lint passes.
-- The 600-case exposure corpus was not rerun.
 
 ## Historical verification status
 

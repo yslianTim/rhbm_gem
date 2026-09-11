@@ -412,163 +412,6 @@ void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode)
     }
 }
 
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-namespace {
-
-std::string_view GetTrustModelPredictionStatusText(
-    TrustModelPredictionStatus status)
-{
-    switch (status)
-    {
-    case TrustModelPredictionStatus::Available: return "available";
-    case TrustModelPredictionStatus::NonmaterialStep: return "nonmaterial-step";
-    case TrustModelPredictionStatus::ObjectiveUnavailable: return "objective-unavailable";
-    case TrustModelPredictionStatus::ModelUnavailable: return "model-unavailable";
-    case TrustModelPredictionStatus::ResidualUnavailable: return "residual-unavailable";
-    case TrustModelPredictionStatus::Nonfinite: return "nonfinite";
-    case TrustModelPredictionStatus::NonpositivePrediction: return "nonpositive-prediction";
-    case TrustModelPredictionStatus::NonmaterialPrediction: return "nonmaterial-prediction";
-    }
-    return "model-unavailable";
-}
-
-std::string_view GetTrustModelCandidateSourceText(
-    TrustModelCandidateSource source)
-{
-    return source == TrustModelCandidateSource::Polish ? "polish" : "base";
-}
-
-std::string_view GetTrustModelTrialDispositionText(
-    TrustModelTrialDisposition disposition)
-{
-    return disposition == TrustModelTrialDisposition::Accepted ?
-        "accepted" : "objective-rejected";
-}
-
-std::string_view GetTrustRegionRadiusActionText(
-    TrustRegionRadiusAction action)
-{
-    switch (action)
-    {
-    case TrustRegionRadiusAction::Keep: return "keep";
-    case TrustRegionRadiusAction::Grow: return "grow";
-    case TrustRegionRadiusAction::Shrink: return "shrink";
-    }
-    return "keep";
-}
-
-void AppendTrustModelOptionalValue(
-    std::ostringstream & stream,
-    const std::optional<double> & value)
-{
-    if (value.has_value()) stream << *value;
-    else stream << "-";
-}
-
-} // namespace
-
-void LogTrustModelShadowDiagnostics(
-    bool quiet_mode,
-    const IterationResult & iteration_result)
-{
-    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
-    const auto log_records = [&](
-        const auto & diagnostic_list,
-        std::string_view disposition)
-    {
-        for (const auto & cluster_diagnostic : diagnostic_list)
-        {
-            const auto & funnel{ cluster_diagnostic.trust_model_candidate_funnel };
-            std::ostringstream funnel_message;
-            funnel_message
-                << "Trust-model funnel: schema=1"
-                << ", try=" << iteration_result.attempt_number
-                << ", acc=" << iteration_result.accepted_iteration_count
-                << ", atoms=" << cluster_diagnostic.key.size()
-                << ", key-first=" << cluster_diagnostic.key.front()
-                << ", key-last=" << cluster_diagnostic.key.back()
-                << ", disposition=" << disposition
-                << ", generated=" << funnel.generated_count
-                << ", invalid=" << funnel.invalid_count
-                << ", trust-skipped=" << funnel.trust_skipped_count
-                << ", guard-rejected=" << funnel.guard_rejected_count
-                << ", nonmaterial=" << funnel.nonmaterial_count
-                << ", objective-evaluated=" << funnel.objective_evaluated_count
-                << ", polish-objective-evaluated="
-                << funnel.polish_objective_evaluated_count;
-            Logger::Log(LogLevel::Debug, funnel_message.str());
-
-            for (const auto & diagnostic :
-                cluster_diagnostic.trust_model_shadow_trial_list)
-            {
-                std::ostringstream message;
-                message << std::scientific << std::setprecision(17)
-                    << "Trust-model shadow: schema=2"
-                    << ", try=" << iteration_result.attempt_number
-                    << ", acc=" << iteration_result.accepted_iteration_count
-                    << ", atoms=" << cluster_diagnostic.key.size()
-                    << ", key-first=" << cluster_diagnostic.key.front()
-                    << ", key-last=" << cluster_diagnostic.key.back()
-                    << ", disposition=" << disposition
-                    << ", boundary-touched=" << cluster_diagnostic.boundary_touched
-                    << ", boundary-rescued=" << cluster_diagnostic.boundary_rescued
-                    << ", readiness-eligible=" << diagnostic.readiness_eligible
-                    << ", final-local-candidate=" << diagnostic.final_local_candidate
-                    << ", status=" << GetTrustModelPredictionStatusText(diagnostic.status)
-                    << ", source=" << GetTrustModelCandidateSourceText(
-                        diagnostic.candidate_source)
-                    << ", search-pass=" << diagnostic.search_pass
-                    << ", trial=" << diagnostic.trial_number
-                    << ", factor=" << diagnostic.factor
-                    << ", trial-disposition=" << GetTrustModelTrialDispositionText(
-                        diagnostic.trial_disposition)
-                    << ", rejected-by-previous=" << diagnostic.rejected_by_previous
-                    << ", rejected-by-best=" << diagnostic.rejected_by_best
-                    << ", rejected-by-strict-polish="
-                    << diagnostic.rejected_by_strict_polish
-                    << ", step-norm=" << diagnostic.step_norm
-                    << ", actual-reduction=";
-                AppendTrustModelOptionalValue(message, diagnostic.actual_reduction);
-                message << ", polish-reduction=";
-                AppendTrustModelOptionalValue(message, diagnostic.polish_reduction);
-                message << ", predicted-residual-reduction=";
-                AppendTrustModelOptionalValue(
-                    message, diagnostic.predicted_residual_reduction);
-                message << ", predicted-penalty-reduction=";
-                AppendTrustModelOptionalValue(
-                    message, diagnostic.predicted_penalty_reduction);
-                message << ", predicted-reduction=";
-                AppendTrustModelOptionalValue(message, diagnostic.predicted_reduction);
-                message << ", rho=";
-                AppendTrustModelOptionalValue(message, diagnostic.rho);
-                message
-                    << ", boundary-utilization=" << diagnostic.boundary_utilization
-                    << ", current-action="
-                    << GetTrustRegionRadiusActionText(diagnostic.current_action)
-                    << ", shadow-action=";
-                if (diagnostic.shadow_action.has_value())
-                {
-                    message << GetTrustRegionRadiusActionText(
-                        *diagnostic.shadow_action);
-                }
-                else
-                {
-                    message << "suppressed";
-                }
-                message
-                    << ", objective-backtracked=" << diagnostic.objective_backtracked
-                    << ", unselected-dependencies=0"
-                    << ", elapsed-ms=" << diagnostic.elapsed_milliseconds;
-                Logger::Log(LogLevel::Debug, message.str());
-            }
-        }
-    };
-    Logger::FinishProgressLine();
-    log_records(iteration_result.accepted_cluster_diagnostic_list, "accepted");
-    log_records(iteration_result.rejected_cluster_diagnostic_list, "rejected");
-}
-#endif
-
 void LogRejectedClusterDiagnostics(
     bool quiet_mode,
     const std::vector<ClusterCandidateDiagnostic> & diagnostic_list)
@@ -1417,12 +1260,12 @@ void LogIterationProgress(
             std::to_string(iteration_result.polish_progress.rejected_count) + "/" +
             std::to_string(iteration_result.polish_progress.skipped_count),
         std::to_string(iteration_result.suspicious_atom_count),
-        (iteration_result.accepted_maximum_transformed_change.has_value() ?
+        (iteration_result.diagnostics.accepted_maximum_transformed_change.has_value() ?
             FormatProgressMaximum(
-                *iteration_result.accepted_maximum_transformed_change) :
+                *iteration_result.diagnostics.accepted_maximum_transformed_change) :
             std::string{ "-" }) + "/" +
             FormatProgressMaximum(
-                iteration_result.proposal_maximum_transformed_change)
+                iteration_result.diagnostics.proposal_maximum_transformed_change)
     };
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
@@ -1465,19 +1308,19 @@ void LogUnrestrictedOperatorAssessments(
 void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     const IterationResult & iteration_result,
-    const ConvergenceCertificate & certificate)
+    const ConvergenceCertificate & certificate,
+    const ConvergenceDiagnostics & diagnostics)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
 
     const auto & accepted_production_change{
-        certificate.accepted_active_movement
+        diagnostics.accepted_active_movement
     };
     const auto accepted_percentile_passed{
-        IsTransformedPercentileConverged(accepted_production_change)
+        IsTransformedPercentileConverged(certificate.accepted_active_p99)
     };
     const auto operator_percentile_passed{
-        IsTransformedPercentileConverged(
-            certificate.operator_nominal_residual)
+        IsTransformedPercentileConverged(certificate.operator_nominal_p99)
     };
     const auto blockers_clear{
         !certificate.objective_domain_changed &&
@@ -1502,7 +1345,7 @@ void LogConvergenceSafeguardAudit(
     message << ", operator-nominal-population=";
     AppendAuditPopulation(
         message,
-        certificate.operator_nominal_residual.population_size_list);
+        diagnostics.operator_nominal_residual.population_size_list);
     message
         << ", certificate[solver/accepted-p99/operator-complete/operator-p99/blockers/production]="
         << certificate.solver_qualified << "/"
@@ -1512,17 +1355,17 @@ void LogConvergenceSafeguardAudit(
         << blockers_clear << "/"
         << certificate.ProductionConverged()
         << ", accepted-active-p99=";
-    AppendAuditValues(message, accepted_production_change.percentile_list);
+    AppendAuditValues(message, certificate.accepted_active_p99);
     message << ", accepted-active-max=";
     AppendAuditValues(message, accepted_production_change.maximum_list);
     message << ", operator-nominal-residual-p99=";
     AppendAuditValues(
         message,
-        certificate.operator_nominal_residual.percentile_list);
+        certificate.operator_nominal_p99);
     message << ", operator-nominal-residual-max=";
     AppendAuditValues(
         message,
-        certificate.operator_nominal_residual.maximum_list);
+        diagnostics.operator_nominal_residual.maximum_list);
     message
         << ", blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
         << certificate.objective_domain_changed << "/"
@@ -1581,8 +1424,8 @@ void LogFinalDependencyPolish(
     FinalPolishCertificationPolicy certification_policy,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
-    const ConvergenceCertificate * base_certificate,
-    const ConvergenceCertificate * candidate_certificate)
+    const ConvergenceAssessment * base_certificate,
+    const ConvergenceAssessment * candidate_certificate)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
@@ -1625,8 +1468,10 @@ void LogFinalDependencyPolish(
         << ", applied=" << (applied ? "yes" : "no");
     const auto append_certificate = [&message](
         std::string_view prefix,
-        const ConvergenceCertificate & certificate)
+        const ConvergenceAssessment & assessment)
     {
+        const auto & certificate{ assessment.certificate };
+        const auto & diagnostics{ assessment.diagnostics };
         message << ", " << prefix << "-solver-qualified="
             << (certificate.solver_qualified ? "yes" : "no")
             << ", " << prefix << "-operator-complete="
@@ -1634,11 +1479,11 @@ void LogFinalDependencyPolish(
             << ", " << prefix << "-residual-p99=";
         AppendAuditValues(
             message,
-            certificate.operator_nominal_residual.percentile_list);
+            certificate.operator_nominal_p99);
         message << ", " << prefix << "-residual-max=";
         AppendAuditValues(
             message,
-            certificate.operator_nominal_residual.maximum_list);
+            diagnostics.operator_nominal_residual.maximum_list);
     };
     if (base_certificate != nullptr)
     {

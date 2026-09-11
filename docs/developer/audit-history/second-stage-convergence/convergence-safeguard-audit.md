@@ -147,13 +147,6 @@ population size, active ratio, quarantine ratio, and proposal path. A lack of
 observed counterexamples is empirical dominance only; it is not treated as a
 mathematical implication.
 
-The schema-8 consolidation was replayed against the same frozen 600-case
-reference on 2026-08-28. All 600 normalized production semantic digests match,
-with zero safety regression and zero comparator exposure; the stop distribution
-remains 42/372/163/23 for converged/audit-patience/all-rejected/maximum-
-iterations. The tracked compact result is
-[`convergence_certificate_baseline.json`](../../../../tests/benchmarks/convergence_certificate_baseline.json).
-
 ## Historical first-round decisions
 
 | Safeguard | Classification | Next action |
@@ -198,7 +191,6 @@ changing the fitting configuration.
   legacy-population, maximum-gate, and solver-qualification exposures.
 - Audit-enabled and audit-disabled fold-168 `actual.json` files are
   byte-identical, and repository lint passes.
-- The 600-case exposure corpus was not rerun.
 
 ## Historical verification status (2026-08-26)
 

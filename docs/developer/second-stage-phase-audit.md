@@ -6,6 +6,12 @@ context and model snapshots. Local workers write separate cluster buffers; the
 selection synchronization point merges them in cluster-key order. Isolated solver
 runs take place after production decisions, with fresh solver workspaces.
 
+Production phase notifications now delegate capture and event preparation to
+this observer. Trust-model trials and funnels have a separate `TrustModelAudit`
+collector and translation unit; neither collector is stored in candidate
+results. See [P0 structural refactoring](second-stage-p0-structure.md) for the
+transaction boundary and certificate/diagnostic ownership.
+
 ## Enable and analyze
 
 ```sh
@@ -210,3 +216,42 @@ log-response weighting, distinct samples/normalization, ridge anchoring and fini
 inner stopping must be separated before attributing a trajectory conflict to a
 single definition difference. A solved frozen surrogate is not proof that a
 fixed nonlinear objective was minimized.
+
+## Frozen-IRLS trust-model observation
+
+The independent `RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT` option enables this
+observation. It remains diagnostic-only and does not alter acceptance, radius
+actions, stopping, or persistence. Logs are read with
+`resources/tools/developer/analyze_trust_model_experiment.py`.
+
+The audit-enabled build records a developer-only frozen-IRLS directional
+prediction for every material base or polished trial that reaches the objective
+gate. For the complete outer-previous-to-trial step `p`, it computes:
+
+```text
+ared = J(previous) - J(candidate)
+r_lin = r_previous + J_r p
+pred = sum(0.5 * sample_coefficient * frozen_Cauchy_weight
+           * ((r_previous / scale)^2 - (r_lin / scale)^2))
+       + exact_offset_penalty_reduction
+rho = ared / pred
+```
+
+Fit samples use weight `1.0`, tail samples use `0.25`, and the production owner
+cluster normalization and fixed fit/tail scales are reused. `J_r p` includes
+selected targets and neighbours plus unselected contributors derived from
+selected-group medians. The ratio is unavailable unless `pred` is finite,
+positive, and larger than `1e-8 + 1e-3 * abs(J(previous))`.
+
+The record status is one of `available`, `nonmaterial-step`,
+`objective-unavailable`, `model-unavailable`, `residual-unavailable`,
+`nonfinite`, `nonpositive-prediction`, or `nonmaterial-prediction`. A reported
+counterfactual action uses rho bands at `0.25` and `0.75`, with `0.8` boundary
+utilization required for growth. Objective backtracking remains the first
+shrink rule, and unusable prediction falls back to the current actual-only
+action. Only the final locally accepted candidate may be action-ready.
+Boundary-reconciled, rescued, globally rejected, and non-final local records
+are suppressed from action comparison while remaining in coverage and
+calibration statistics. A separate funnel records generated, invalid,
+trust-skipped, guard-rejected, nonmaterial, base-objective, and polish-objective
+counts without evaluating a model before the objective gate.

@@ -269,7 +269,12 @@ TransformedChangeSummary SummarizeTransformedChanges(const std::vector<Transform
 
 bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
-    for (const auto value : summary.percentile_list)
+    return IsTransformedPercentileConverged(summary.percentile_list);
+}
+
+bool IsTransformedPercentileConverged(const TransformedChange & percentile_list)
+{
+    for (const auto value : percentile_list)
     {
         if (!std::isfinite(value) || value >= kTransformedChangeTolerance) return false;
     }

@@ -54,6 +54,12 @@ enum class SecondStageStopReason
 
 constexpr std::size_t kMaximumIterations{ 100 };
 
+struct IterationDiagnostics
+{
+    std::optional<double> accepted_maximum_transformed_change{};
+    double proposal_maximum_transformed_change{ 0.0 };
+};
+
 struct IterationResult
 {
     std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
@@ -67,8 +73,7 @@ struct IterationResult
     std::size_t quarantine_atom_count{ 0 };
     PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
-    std::optional<double> accepted_maximum_transformed_change{};
-    double proposal_maximum_transformed_change{ 0.0 };
+    IterationDiagnostics diagnostics{};
     SecondStageStopReason stop_reason{ SecondStageStopReason::None };
     bool objective_domain_changed{ false };
     TransformedChange transformed_change_percentile{};
@@ -106,8 +111,8 @@ SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
 
 struct ConvergenceCertificate
 {
-    TransformedChangeSummary accepted_active_movement{};
-    TransformedChangeSummary operator_nominal_residual{};
+    TransformedChange accepted_active_p99{};
+    TransformedChange operator_nominal_p99{};
     bool solver_qualified{ true };
     bool operator_complete{ true };
     bool objective_domain_changed{ false };
@@ -117,6 +122,18 @@ struct ConvergenceCertificate
 
     bool StrictOperatorPassed() const;
     bool ProductionConverged() const;
+};
+
+struct ConvergenceDiagnostics
+{
+    TransformedChangeSummary accepted_active_movement{};
+    TransformedChangeSummary operator_nominal_residual{};
+};
+
+struct ConvergenceAssessment
+{
+    ConvergenceCertificate certificate{};
+    ConvergenceDiagnostics diagnostics{};
 };
 
 enum class FinalPolishCertificationPolicy

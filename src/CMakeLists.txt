@@ -25,6 +25,8 @@ target_sources(rhbm_gem PRIVATE
     core/detail/SecondStageFitting.cpp
     core/detail/CouplingGraph.cpp
     core/detail/JointFitting.cpp
+    core/detail/CandidateEvaluation.cpp
+    core/detail/CandidateTransaction.cpp
     core/detail/CandidateSelection.cpp
     core/detail/ObjectiveEvaluation.cpp
     core/detail/SuspiciousUpdate.cpp
@@ -32,6 +34,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/Quarantine.cpp
     core/detail/BoundaryReconciliation.cpp
     core/detail/DependencyPolish.cpp
+    core/detail/TrustModelAudit.cpp
     core/detail/PhaseAudit.cpp
     core/detail/Diagnosis.cpp
     core/detail/IterationProcess.cpp

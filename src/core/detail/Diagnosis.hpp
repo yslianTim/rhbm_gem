@@ -14,6 +14,8 @@ namespace rhbm_gem::core::detail {
 
 struct IterationResult;
 struct ConvergenceCertificate;
+struct ConvergenceDiagnostics;
+struct ConvergenceAssessment;
 struct SecondStageSeedSelectionRecord;
 struct ClusterCandidateDiagnostic;
 struct FinalDependencyPolishResult;
@@ -156,12 +158,6 @@ void LogSecondStageSeedSelections(
     bool quiet_mode);
 void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode);
 
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-void LogTrustModelShadowDiagnostics(
-    bool quiet_mode,
-    const IterationResult & iteration_result);
-#endif
-
 void LogRejectedClusterDiagnostics(
     bool quiet_mode,
     const std::vector<ClusterCandidateDiagnostic> & diagnostic_list);
@@ -186,7 +182,8 @@ void LogUnrestrictedOperatorAssessments(
 void LogConvergenceSafeguardAudit(
     bool quiet_mode,
     const IterationResult & iteration_result,
-    const ConvergenceCertificate & certificate);
+    const ConvergenceCertificate & certificate,
+    const ConvergenceDiagnostics & diagnostics);
 
 void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
@@ -204,8 +201,8 @@ void LogFinalDependencyPolish(
     FinalPolishCertificationPolicy certification_policy,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
-    const ConvergenceCertificate * base_certificate = nullptr,
-    const ConvergenceCertificate * candidate_certificate = nullptr);
+    const ConvergenceAssessment * base_certificate = nullptr,
+    const ConvergenceAssessment * candidate_certificate = nullptr);
 
 void LogSecondStageAuditTerminal(
     bool quiet_mode,

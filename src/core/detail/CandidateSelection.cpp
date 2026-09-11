@@ -1,10 +1,10 @@
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
+#include "core/detail/TrustModelAudit.hpp"
 #include "core/detail/CandidateSelection.hpp"
-
-#include "core/detail/BoundaryReconciliation.hpp"
+#include "core/detail/CandidateTransaction.hpp"
+#include "core/detail/CandidateEvaluation.hpp"
 #include "core/detail/Diagnosis.hpp"
-
 #include "core/detail/GaussianModelOperations.hpp"
 
 #include <algorithm>
@@ -18,13 +18,10 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
 namespace rhbm_gem::core::detail {
-
 namespace {
-
 constexpr double kTrustRegionInitialRadius{ 1.0 };
 constexpr double kTrustRegionMinimumRadius{ 0.0625 };
 constexpr double kTrustRegionMaximumRadius{ 4.0 };
@@ -49,36 +46,8 @@ struct ClusterCandidateResult
     ObjectiveAttemptDiagnostic diagnostic{};
     PolishProgress polish_progress{};
     TrustRegionRadiusAction radius_action{ TrustRegionRadiusAction::Keep };
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    std::vector<TrustModelShadowDiagnostic> trust_model_shadow_trial_list{};
-    TrustModelCandidateFunnel trust_model_candidate_funnel{};
-#endif
-};
 
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-std::optional<double> EvaluateTrustModelResponseDirection(
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    double distance)
-{
-    const auto previous_coordinates{ previous_model.ToTransformedCoordinates() };
-    const auto candidate_coordinates{ candidate_model.ToTransformedCoordinates() };
-    if (!previous_coordinates.has_value() || !candidate_coordinates.has_value())
-    {
-        return std::nullopt;
-    }
-    const auto direction{ *candidate_coordinates - *previous_coordinates };
-    if (!direction.allFinite()) return std::nullopt;
-    if (direction.isZero()) return 0.0;
-    const auto invariants{ BuildTransformedModelInvariants(previous_model) };
-    if (!invariants.has_value()) return std::nullopt;
-    const auto jacobian{ EvaluateTransformedJacobian(*invariants, distance) };
-    if (!jacobian.has_value()) return std::nullopt;
-    const auto response_direction{ jacobian->dot(direction) };
-    return std::isfinite(response_direction) ?
-        std::optional<double>{ response_direction } : std::nullopt;
-}
-#endif
+};
 
 } // namespace
 
@@ -395,272 +364,6 @@ TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
         TrustRegionRadiusAction::Grow : TrustRegionRadiusAction::Keep;
 }
 
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-TrustRegionRadiusAction DetermineTrustModelShadowAction(
-    const TrustModelShadowDiagnostic & diagnostic)
-{
-    if (diagnostic.objective_backtracked)
-    {
-        return TrustRegionRadiusAction::Shrink;
-    }
-    if (diagnostic.status != TrustModelPredictionStatus::Available ||
-        !diagnostic.rho.has_value())
-    {
-        return diagnostic.current_action;
-    }
-    if (*diagnostic.rho < 0.25)
-    {
-        return TrustRegionRadiusAction::Shrink;
-    }
-    if (*diagnostic.rho > 0.75 &&
-        std::isfinite(diagnostic.boundary_utilization) &&
-        diagnostic.boundary_utilization >= 0.8)
-    {
-        return TrustRegionRadiusAction::Grow;
-    }
-    return TrustRegionRadiusAction::Keep;
-}
-
-TrustModelShadowDiagnostic EvaluateTrustModelShadow(
-    const SecondStageContext & context,
-    const ResidualBaseline & residual_baseline,
-    const FitState & previous_state,
-    const FitStatePatch & candidate_patch,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & objective_sample_ref_list,
-    const ObjectiveDomain & objective_domain,
-    const std::optional<ObjectiveBreakdown> & previous_objective,
-    const std::optional<ObjectiveBreakdown> & candidate_objective,
-    double trust_region_radius,
-    TrustRegionRadiusAction current_action,
-    TrustModelCandidateSource candidate_source,
-    bool objective_backtracked)
-{
-    TrustModelShadowDiagnostic result{
-        .candidate_source = candidate_source,
-        .current_action = current_action,
-        .objective_backtracked = objective_backtracked
-    };
-    if (!previous_objective.has_value() || !candidate_objective.has_value())
-    {
-        result.status = TrustModelPredictionStatus::ObjectiveUnavailable;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    const auto previous_objective_value{ previous_objective->GetTotalObjective() };
-    const auto candidate_objective_value{ candidate_objective->GetTotalObjective() };
-    if (!std::isfinite(previous_objective_value) ||
-        !std::isfinite(candidate_objective_value))
-    {
-        result.status = TrustModelPredictionStatus::Nonfinite;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    result.actual_reduction = previous_objective_value - candidate_objective_value;
-
-    const FitStateView candidate_state{ previous_state, candidate_patch };
-    std::vector<GaussianModel3D> previous_model_list;
-    std::vector<GaussianModel3D> candidate_model_list;
-    previous_model_list.reserve(key.size());
-    candidate_model_list.reserve(key.size());
-    for (const auto atom_index : key)
-    {
-        previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
-        candidate_model_list.emplace_back(candidate_state.GetModel(atom_index));
-    }
-    const auto step_norm{
-        CalculateModelTrustRegionStepNorm(previous_model_list, candidate_model_list)
-    };
-    if (!step_norm.has_value())
-    {
-        result.status = TrustModelPredictionStatus::ModelUnavailable;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    result.step_norm = *step_norm;
-    result.boundary_utilization =
-        std::isfinite(trust_region_radius) && trust_region_radius > 0.0 ?
-            *step_norm / trust_region_radius : 0.0;
-    if (*step_norm < kTransformedChangeTolerance)
-    {
-        result.status = TrustModelPredictionStatus::NonmaterialStep;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    if (objective_domain.active_atom_count == 0)
-    {
-        result.status = TrustModelPredictionStatus::ResidualUnavailable;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-
-    SecondStageModelSnapshot candidate_snapshot;
-    try
-    {
-        candidate_snapshot = BuildSecondStageModelSnapshot(context, candidate_state);
-    }
-    catch (const std::exception &)
-    {
-        result.status = TrustModelPredictionStatus::ModelUnavailable;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-
-    double predicted_residual_reduction{ 0.0 };
-    for (const auto & sample_ref : objective_sample_ref_list)
-    {
-        const auto & owner_key{
-            objective_domain.owner_key_by_atom_index.at(sample_ref.atom_index)
-        };
-        if (owner_key.empty()) continue;
-        const auto in_fit{
-            objective_domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
-        };
-        const auto in_tail{
-            objective_domain.tail_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
-        };
-        if (!in_fit && !in_tail) continue;
-        const auto owner_iter{ objective_domain.cluster_by_key.find(owner_key) };
-        const auto previous_residual{ residual_baseline(sample_ref) };
-        if (owner_iter == objective_domain.cluster_by_key.end() ||
-            !owner_iter->second.scale.has_value() ||
-            !previous_residual.has_value())
-        {
-            result.status = TrustModelPredictionStatus::ResidualUnavailable;
-            result.shadow_action = DetermineTrustModelShadowAction(result);
-            return result;
-        }
-        const auto & atom_context{ context.atom_list.at(sample_ref.atom_index) };
-        const auto target_direction{
-            EvaluateTrustModelResponseDirection(
-                residual_baseline.model_snapshot.node.at(sample_ref.atom_index),
-                candidate_snapshot.node.at(sample_ref.atom_index),
-                atom_context.raw_sampling_entries.at(sample_ref.sample_index)
-                    .point.distance)
-        };
-        if (!target_direction.has_value())
-        {
-            result.status = TrustModelPredictionStatus::ModelUnavailable;
-            result.shadow_action = DetermineTrustModelShadowAction(result);
-            return result;
-        }
-        double residual_direction{ -*target_direction };
-        for (const auto & neighbor : atom_context.Neighbors(sample_ref.sample_index))
-        {
-            const auto & previous_neighbor{
-                GetFitModel(residual_baseline.model_snapshot.node, neighbor.atom_index)
-            };
-            const auto & candidate_neighbor{
-                GetFitModel(candidate_snapshot.node, neighbor.atom_index)
-            };
-            const auto neighbor_direction{
-                EvaluateTrustModelResponseDirection(
-                    previous_neighbor,
-                    candidate_neighbor,
-                    neighbor.distance)
-            };
-            if (!neighbor_direction.has_value())
-            {
-                result.status = TrustModelPredictionStatus::ModelUnavailable;
-                result.shadow_action = DetermineTrustModelShadowAction(result);
-                return result;
-            }
-            residual_direction -= *neighbor_direction;
-        }
-        const auto linearized_residual{
-            previous_residual->residual + residual_direction
-        };
-        for (const bool is_fit_range : { true, false })
-        {
-            if (!(is_fit_range ? in_fit : in_tail)) continue;
-            const auto sample_count{ is_fit_range ?
-                owner_iter->second.fit_sample_ref_list.size() :
-                owner_iter->second.tail_sample_ref_list.size()
-            };
-            const auto scale{ is_fit_range ?
-                owner_iter->second.scale->fit : owner_iter->second.scale->tail
-            };
-            if (sample_count == 0 || !std::isfinite(scale) || scale <= 0.0)
-            {
-                result.status = TrustModelPredictionStatus::ResidualUnavailable;
-                result.shadow_action = DetermineTrustModelShadowAction(result);
-                return result;
-            }
-
-            const auto weight{
-                algorithm::CalculateCauchyWeight(
-                    previous_residual->residual,
-                    scale,
-                    kObjectiveRobustLossCutoffMultiplier)
-            };
-            const auto coefficient{
-                CalculateClusterAtomWeight(
-                    owner_iter->second.selected_atom_count,
-                    objective_domain.active_atom_count) /
-                static_cast<double>(sample_count)
-            };
-            const auto range_weight{ is_fit_range ? kFitRangeWeight : kTailValidationWeight };
-            const auto previous_normalized{ previous_residual->residual / scale };
-            const auto linearized_normalized{ linearized_residual / scale };
-            const auto contribution{
-                0.5 * range_weight * coefficient * weight *
-                (previous_normalized * previous_normalized -
-                    linearized_normalized * linearized_normalized)
-            };
-            if (!std::isfinite(contribution))
-            {
-                result.status = TrustModelPredictionStatus::Nonfinite;
-                result.shadow_action = DetermineTrustModelShadowAction(result);
-                return result;
-            }
-            predicted_residual_reduction += contribution;
-        }
-    }
-    result.predicted_residual_reduction = predicted_residual_reduction;
-    result.predicted_penalty_reduction =
-        previous_objective->offset_plausibility_penalty -
-        candidate_objective->offset_plausibility_penalty;
-    const auto predicted_reduction{
-        *result.predicted_residual_reduction +
-        *result.predicted_penalty_reduction
-    };
-    if (!std::isfinite(predicted_reduction) ||
-        !result.actual_reduction.has_value() ||
-        !std::isfinite(*result.actual_reduction))
-    {
-        result.status = TrustModelPredictionStatus::Nonfinite;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    result.predicted_reduction = predicted_reduction;
-    if (predicted_reduction <= 0.0)
-    {
-        result.status = TrustModelPredictionStatus::NonpositivePrediction;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    if (predicted_reduction <= CalculateObjectiveTolerance(
-            previous_objective_value,
-            kObjectiveProgressTolerance))
-    {
-        result.status = TrustModelPredictionStatus::NonmaterialPrediction;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    const auto rho{ *result.actual_reduction / predicted_reduction };
-    if (!std::isfinite(rho))
-    {
-        result.status = TrustModelPredictionStatus::Nonfinite;
-        result.shadow_action = DetermineTrustModelShadowAction(result);
-        return result;
-    }
-    result.status = TrustModelPredictionStatus::Available;
-    result.rho = rho;
-    result.shadow_action = DetermineTrustModelShadowAction(result);
-    return result;
-}
-#endif
-
 static ClusterCandidateResult SelectClusterCandidate(
     const CandidateSelectionInputs & inputs,
     const ClusterKey & key,
@@ -692,64 +395,10 @@ static ClusterCandidateResult SelectClusterCandidate(
     double best_rescue_objective{ std::numeric_limits<double>::infinity() };
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    std::optional<std::size_t> final_trust_model_trial_index;
-    std::size_t trust_model_search_pass{ 0 };
-    const auto record_trust_model_trial = [&]
-        (const FitStatePatch & patch,
-         const ObjectiveAttemptDiagnostic & diagnostic,
-         TrustModelCandidateSource source,
-         std::size_t search_pass,
-         std::size_t trial_number,
-         double factor,
-         bool accepted,
-         bool rejected_by_strict_polish)
-    {
-        const auto start{ std::chrono::steady_clock::now() };
-        auto shadow{ EvaluateTrustModelShadow(
-            context,
-            residual_baseline,
-            previous_state,
-            patch,
-            key,
-            objective_sample_ref_list,
-            objective_domain,
-            previous_objective_entry,
-            diagnostic.candidate_objective,
-            trust_region_radius,
-            TrustRegionRadiusAction::Keep,
-            source,
-            false) };
-        shadow.search_pass = search_pass;
-        shadow.trial_number = trial_number;
-        shadow.factor = factor;
-        shadow.trial_disposition = accepted ?
-            TrustModelTrialDisposition::Accepted :
-            TrustModelTrialDisposition::ObjectiveRejected;
-        shadow.rejected_by_previous = diagnostic.rejected_by_previous;
-        shadow.rejected_by_best = diagnostic.rejected_by_best;
-        shadow.rejected_by_strict_polish = rejected_by_strict_polish;
-        if (source == TrustModelCandidateSource::Polish &&
-            diagnostic.previous_objective.has_value() &&
-            diagnostic.candidate_objective.has_value())
-        {
-            shadow.polish_reduction =
-                diagnostic.previous_objective->GetTotalObjective() -
-                diagnostic.candidate_objective->GetTotalObjective();
-        }
-        shadow.shadow_action.reset();
-        shadow.elapsed_milliseconds =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start).count();
-        result.trust_model_shadow_trial_list.emplace_back(std::move(shadow));
-        return result.trust_model_shadow_trial_list.size() - 1;
-    };
-#endif
+    TrustModelTrialObserver observer(inputs, key, objective_sample_ref_list);
     for (;;)
     {
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-        trust_model_search_pass++;
-#endif
+        observer.BeginSearch();
         result.objective_state = previous_objective_state;
         result.diagnostic = ObjectiveAttemptDiagnostic{};
         result.diagnostic.trust_region_radius = trust_region_radius;
@@ -790,9 +439,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             factor >= std::numeric_limits<double>::epsilon(); factor *= 0.5)
         {
             result.diagnostic.trial_count++;
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-            result.trust_model_candidate_funnel.generated_count++;
-#endif
+            observer.Generated();
             auto proposal_result{
                 BuildAtomProposal(
                     previous_state,
@@ -803,9 +450,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.has_value())
             {
                 result.diagnostic.invalid_trial_count++;
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                result.trust_model_candidate_funnel.invalid_count++;
-#endif
+                observer.Invalid();
                 result.diagnostic.pre_objective_failure_reason =
                     PreObjectiveFailureReason::InvalidModel;
                 continue;
@@ -828,9 +473,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             if (maximum_change < kTransformedChangeTolerance)
             {
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                result.trust_model_candidate_funnel.nonmaterial_count++;
-#endif
+                observer.Nonmaterial();
                 if (factor == 1.0 && is_polish_eligible)
                 {
                     result.diagnostic.accepted_factor = 1.0;
@@ -840,32 +483,21 @@ static ClusterCandidateResult SelectClusterCandidate(
                 }
                 break;
             }
-            if (!IsTrustRegionStepWithinRadius(
-                    proposal.step_norm, trust_region_radius))
+            const auto preflight{ EvaluateCandidate(candidate_overlay, CandidateScope::LocalSearch,
+                CandidatePreflightReference{key, search_block_activity, proposal.step_norm, trust_region_radius}) };
+            if (preflight.failure_stage == CandidateFailureStage::Trust)
             {
                 result.diagnostic.trust_skipped_trial_count++;
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                result.trust_model_candidate_funnel.trust_skipped_count++;
-#endif
+                observer.TrustSkipped();
                 result.diagnostic.pre_objective_failure_reason =
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
             }
-            const auto guard_failure{
-                EvaluateClusterCandidateGuard(
-                    context,
-                    residual_baseline.model_snapshot,
-                    key,
-                    candidate_overlay.GetState(),
-                    search_block_activity)
-            };
-            if (guard_failure.has_value())
+            if (preflight.guard_failure)
             {
                 result.diagnostic.guard_rejected_trial_count++;
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                result.trust_model_candidate_funnel.guard_rejected_count++;
-#endif
-                last_guard_failure = guard_failure;
+                observer.GuardRejected();
+                last_guard_failure = preflight.guard_failure;
                 continue;
             }
             if (!first_objective_evaluated_factor.has_value())
@@ -886,33 +518,15 @@ static ClusterCandidateResult SelectClusterCandidate(
                 .objective_rejected_trial_count =
                     result.diagnostic.objective_rejected_trial_count
             };
-            const auto committed{ TryCommitClusterCandidate(
-                    candidate_overlay,
-                    key,
-                    objective_sample_ref_list,
-                    previous_objective,
-                    false,
-                    objective_domain,
-                    result.objective_state,
-                    trial_diagnostic,
-                    performance_counters) };
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-            result.trust_model_candidate_funnel.objective_evaluated_count++;
-            const auto trust_model_trial_index{ record_trust_model_trial(
-                proposal.patch,
-                trial_diagnostic,
-                TrustModelCandidateSource::Base,
-                trust_model_search_pass,
-                trial_diagnostic.trial_count,
-                factor,
-                committed,
-                false) };
-#endif
+            const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::LocalSearch,
+                LocalCandidateReference{key, objective_sample_ref_list, previous_objective,
+                    objective_domain, result.objective_state, trial_diagnostic, performance_counters}) };
+            trial_diagnostic = evaluation.diagnostic;
+            const auto committed{ evaluation.accepted };
+            if (committed) result.objective_state = *evaluation.objective_state;
+            observer.Trial(proposal.patch, trial_diagnostic, false, factor, committed);
             if (committed)
             {
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                final_trust_model_trial_index = trust_model_trial_index;
-#endif
                 result.diagnostic = std::move(trial_diagnostic);
                 result.accepted_patch = std::move(proposal.patch);
                 break;
@@ -943,7 +557,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             {
                 terminal_diagnostic_list.emplace_back(*last_guard_failure);
                 result.diagnostic.terminal_diagnostic_list = std::move(terminal_diagnostic_list);
-                if (context.phase_audit) context.phase_audit->Missing("local-search", key, "guard-failed");
+                ObservePhaseMissing(context, "local-search", key, "guard-failed");
                 return result;
             }
             const auto atom_index{ *last_guard_failure->guard_atom_index };
@@ -989,14 +603,14 @@ static ClusterCandidateResult SelectClusterCandidate(
             std::move(terminal_diagnostic_list);
         result.radius_action = TrustRegionRadiusAction::Keep;
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
-        if (context.phase_audit) context.phase_audit->Missing("local-search", key, "search-exhausted");
+        ObservePhaseMissing(context, "local-search", key, "search-exhausted");
         return result;
     }
     result.diagnostic.terminal_diagnostic_list =
         std::move(terminal_diagnostic_list);
 
     const FitStateView base_state_view{ previous_state, *result.accepted_patch };
-    if (context.phase_audit) context.phase_audit->Capture("local-search", key, base_state_view,
+    ObservePhaseCandidate(context, "local-search", key, base_state_view,
         nullptr, result.diagnostic.accepted_factor.value_or(1.0), "accepted");
     for (std::size_t position = 0; position < key.size(); position++)
     {
@@ -1027,7 +641,7 @@ static ClusterCandidateResult SelectClusterCandidate(
         if (!polished_candidate.has_value())
         {
             result.polish_progress.skipped_count = 1;
-            if (context.phase_audit) context.phase_audit->Missing("local-polish", key, "no-polish-proposal");
+            ObservePhaseMissing(context, "local-polish", key, "no-polish-proposal");
         }
         else
         {
@@ -1041,49 +655,23 @@ static ClusterCandidateResult SelectClusterCandidate(
                 previous_state,
                 polished_candidate->patch
             };
-            const auto polish_committed{ TryCommitClusterCandidate(
-                    polished_overlay,
-                    key,
-                    objective_sample_ref_list,
-                    result.diagnostic.candidate_objective.has_value() ?
-                        &*result.diagnostic.candidate_objective : nullptr,
-                    true,
-                    objective_domain,
-                    result.objective_state,
-                    polish_diagnostic,
-                    performance_counters, "local-polish") };
-            if (context.phase_audit) context.phase_audit->Capture("local-polish", key,
-                polished_overlay.GetState(), &base_state_view, polished_candidate->effective_damping,
-                polish_committed ? "accepted" : "rejected",
-                polish_committed ? "" : PhaseAuditRejectionReason(polish_diagnostic), true);
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-            result.trust_model_candidate_funnel.polish_objective_evaluated_count++;
-            const auto rejected_by_strict_polish{
-                !polish_committed &&
-                polish_diagnostic.candidate_objective.has_value() &&
-                polish_diagnostic.previous_objective.has_value() &&
-                !polish_diagnostic.rejected_by_previous &&
-                !polish_diagnostic.rejected_by_best
-            };
-            const auto trust_model_trial_index{ record_trust_model_trial(
-                polished_candidate->patch,
-                polish_diagnostic,
-                TrustModelCandidateSource::Polish,
-                trust_model_search_pass,
-                1,
-                polished_candidate->effective_damping,
-                polish_committed,
-                rejected_by_strict_polish) };
-#endif
+            const auto evaluation{ EvaluateCandidate(polished_overlay, CandidateScope::LocalPolish,
+                LocalCandidateReference{key, objective_sample_ref_list,
+                    result.diagnostic.candidate_objective ? &*result.diagnostic.candidate_objective : nullptr,
+                    objective_domain, result.objective_state, polish_diagnostic, performance_counters, "local-polish"}) };
+            polish_diagnostic = evaluation.diagnostic;
+            const auto polish_committed{ evaluation.accepted };
+            if (polish_committed) result.objective_state = *evaluation.objective_state;
+            ObservePhaseLocalPolish(context, key, polished_overlay.GetState(), base_state_view,
+                polished_candidate->effective_damping, polish_committed, polish_diagnostic);
+            observer.Trial(polished_candidate->patch, polish_diagnostic, true,
+                polished_candidate->effective_damping, polish_committed);
             if (!polish_committed)
             {
                 result.polish_progress.rejected_count = 1;
             }
             else
             {
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-                final_trust_model_trial_index = trust_model_trial_index;
-#endif
                 result.polish_progress.accepted_count = 1;
                 for (std::size_t position = 0; position < key.size(); position++)
                 {
@@ -1108,60 +696,11 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
         }
     }
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    if (final_trust_model_trial_index.has_value())
-    {
-        auto & final_shadow{
-            result.trust_model_shadow_trial_list.at(*final_trust_model_trial_index)
-        };
-        final_shadow.final_local_candidate = true;
-        final_shadow.readiness_eligible = true;
-        final_shadow.current_action = result.radius_action;
-        final_shadow.objective_backtracked =
-            first_objective_evaluated_factor.has_value() &&
-            result.diagnostic.accepted_factor.has_value() &&
-            *result.diagnostic.accepted_factor < *first_objective_evaluated_factor;
-        final_shadow.shadow_action = DetermineTrustModelShadowAction(final_shadow);
-    }
-#endif
+    observer.Finish(result.radius_action, first_objective_evaluated_factor, result.diagnostic);
     return result;
 }
 
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-static void FinalizeTrustModelShadowDisposition(CandidateSelection & selection)
-{
-    const auto update = [&](ClusterCandidateDiagnostic & diagnostic, bool accepted)
-    {
-        diagnostic.boundary_touched = std::ranges::any_of(
-            selection.boundary_reconciliation_diagnostic_list,
-            [&](const auto & boundary_diagnostic)
-            {
-                return ContainsClusterKey(
-                    boundary_diagnostic.key_list,
-                    diagnostic.key);
-            });
-        for (auto & shadow : diagnostic.trust_model_shadow_trial_list)
-        {
-            shadow.readiness_eligible =
-                shadow.final_local_candidate &&
-                accepted &&
-                !diagnostic.boundary_touched &&
-                !diagnostic.boundary_rescued;
-            if (!shadow.readiness_eligible) shadow.shadow_action.reset();
-        }
-    };
-    for (auto & diagnostic : selection.accepted_cluster_diagnostic_list)
-    {
-        update(diagnostic, true);
-    }
-    for (auto & diagnostic : selection.rejected_cluster_diagnostic_list)
-    {
-        update(diagnostic, false);
-    }
-}
-#endif
-
-CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inputs)
+void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs)
 {
     const auto candidate_phase_start{ std::chrono::steady_clock::now() };
     const auto & partition{ inputs.partition };
@@ -1218,12 +757,13 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
         if (exception) std::rethrow_exception(exception);
     }
 
-    CandidateSelection selection{
+    m_selection = CandidateSelection{
         .block_activity = inputs.block_activity,
         .cluster_objective_state = inputs.cluster_objective_state,
         .assembled_state = inputs.previous_state,
         .assembled_polish_provenance = inputs.previous_polish_provenance
     };
+    auto & selection{ m_selection };
     std::map<ClusterKey, FitStatePatch> rescue_patch_by_key;
     std::vector<ClusterKey> locally_polished_key_list;
     locally_polished_key_list.reserve(result_list.size());
@@ -1304,12 +844,7 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
             key,
             std::move(result.diagnostic)
         };
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-        cluster_diagnostic.trust_model_shadow_trial_list =
-            std::move(result.trust_model_shadow_trial_list);
-        cluster_diagnostic.trust_model_candidate_funnel =
-            result.trust_model_candidate_funnel;
-#endif
+
         if (!is_accepted)
         {
             selection.rejected_key_list.emplace_back(key);
@@ -1340,23 +875,17 @@ CandidateSelection SelectClusterCandidates(const CandidateSelectionInputs & inpu
     inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
     inputs.performance_counters.RecordFullStateMaterialization();
 
-    if (inputs.context.phase_audit)
-    {
-        inputs.context.phase_audit->CaptureSearchAssembly();
-        inputs.context.phase_audit->CaptureState("assembly-after-polish", selection.assembled_state, true);
-    }
-    ReconcileSelectedBoundaries(inputs, rescue_patch_by_key, selection);
-    if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureState("boundary-final", selection.assembled_state);
+    ObservePhaseSearchAssembly(inputs.context, selection.assembled_state);
+    ReconcileSelectedBoundaries(inputs, rescue_patch_by_key);
+    ObservePhaseState(inputs.context, "boundary-final", selection.assembled_state);
     for (const auto & key : locally_polished_key_list)
     {
         if (ContainsClusterKey(selection.accepted_key_list, key)) continue;
         selection.polish_progress.accepted_count--;
         selection.polish_progress.rejected_count++;
     }
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    FinalizeTrustModelShadowDisposition(selection);
-#endif
-    return selection;
+    FinalizeTrustModelAudit(inputs.context, selection);
+
 }
 
 } // namespace rhbm_gem::core::detail

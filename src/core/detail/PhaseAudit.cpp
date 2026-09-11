@@ -641,7 +641,7 @@ std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext & context, 
 #endif
     return {};
 }
-std::string_view PhaseAuditRejectionReason(const ObjectiveAttemptDiagnostic & diagnostic)
+[[maybe_unused]] static std::string_view PhaseAuditRejectionReason(const ObjectiveAttemptDiagnostic & diagnostic)
 {
     if (diagnostic.best_reference_unavailable) return "best-reference-unavailable";
     if (!diagnostic.candidate_objective) return "objective-unavailable";
@@ -649,4 +649,58 @@ std::string_view PhaseAuditRejectionReason(const ObjectiveAttemptDiagnostic & di
     if (diagnostic.rejected_by_best) return "best";
     return "strict-improvement";
 }
+
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
+void ObservePhaseMissing(const SecondStageContext & context, std::string_view stage, const ClusterKey & key, std::string_view reason) noexcept
+{
+    if (context.phase_audit) context.phase_audit->Missing(stage, key, reason);
+}
+void ObservePhaseState(const SecondStageContext & context, std::string_view stage, const FitState & state, bool probe) noexcept
+{
+    if (context.phase_audit) context.phase_audit->CaptureState(stage, state, probe);
+}
+void ObservePhaseCandidate(const SecondStageContext & context, std::string_view stage, const ClusterKey & key,
+    const FitStateView & state, const FitStateView * parent, double factor, std::string_view disposition,
+    std::string_view reason, bool probe, bool recertify) noexcept
+{
+    if (context.phase_audit) context.phase_audit->Capture(stage, key, state, parent, factor, disposition, reason, probe, recertify);
+}
+void ObservePhaseCorrection(const SecondStageContext & context, std::string_view stage, const ClusterKey & key,
+    const FitStateView & state, const FitStateView & parent, double factor, std::string_view disposition,
+    std::string_view reason, const CandidateSelectionInputs & inputs, const std::vector<ClusterKey> & keys,
+    const ObjectiveBreakdown & reference) noexcept
+{
+    if (context.phase_audit) context.phase_audit->CaptureCorrection(stage, key, state, parent, factor,
+        disposition, reason, inputs, keys, reference);
+}
+void ObservePhaseLocalPolish(const SecondStageContext & context, const ClusterKey & key,
+    const FitStateView & state, const FitStateView & parent, double factor, bool accepted,
+    const ObjectiveAttemptDiagnostic & diagnostic) noexcept
+{
+    if (context.phase_audit) context.phase_audit->Capture("local-polish", key, state, &parent, factor,
+        accepted ? "accepted" : "rejected", accepted ? "" : PhaseAuditRejectionReason(diagnostic), true);
+}
+void ObservePhaseSearchAssembly(const SecondStageContext & context, const FitState & state) noexcept
+{
+    if (!context.phase_audit) return;
+    context.phase_audit->CaptureSearchAssembly();
+    context.phase_audit->CaptureState("assembly-after-polish", state, true);
+}
+void ObservePhaseProposal(const SecondStageContext & context, const IterationProposalResult & proposal) noexcept
+{
+    if (!context.phase_audit) return;
+    context.phase_audit->CaptureOperator(proposal.fixed_point_operator);
+    context.phase_audit->CaptureState("production-proposal", proposal.proposal_state, true);
+}
+void ObservePhaseFinish(const SecondStageContext & context, const FitOptions & options, const std::vector<double> & ridge,
+    const SuspiciousBlockActivity & activity, const IterationProposalResult & proposal, const FitState & state) noexcept
+{
+    if (context.phase_audit) context.phase_audit->Finish(options, ridge, activity, proposal, state);
+}
+void ObservePhaseIntermediate(const SecondStageContext & context, const FittedGaussianSnapshot & snapshot) noexcept
+{
+    if (context.phase_audit) context.phase_audit->CaptureIntermediate("post-joint-offset", snapshot);
+}
+#endif
+
 } // namespace rhbm_gem::core::detail

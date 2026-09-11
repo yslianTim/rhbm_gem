@@ -1,4 +1,5 @@
 #include "core/detail/ObjectiveEvaluation.hpp"
+#include "core/detail/CandidateEvaluation.hpp"
 
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/FittingRanges.hpp"
@@ -16,12 +17,6 @@
 
 namespace rhbm_gem::core::detail {
 
-namespace {
-
-constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
-constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
-constexpr double kOffsetPeakRatioMax{ 1.0 };
-
 std::size_t CountObjectiveSamples(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
@@ -33,6 +28,12 @@ std::size_t CountObjectiveSamples(
                 domain.tail_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0);
     }));
 }
+
+namespace {
+
+constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
+constexpr double kOffsetPeakRatioMax{ 1.0 };
 
 template<typename ResidualEvaluator>
 std::optional<ObjectiveBreakdown> EvaluateResidualObjectiveContribution(
@@ -695,109 +696,13 @@ bool TryCommitClusterCandidate(
     PerformanceCounters & performance_counters,
     std::string_view source)
 {
-    const auto unique_sample_count{
-        domain.unique_sample_count
-    };
-    performance_counters.RecordObjectiveSampleEvaluation(
-        CountObjectiveSamples(objective_sample_ref_list, domain),
-        unique_sample_count);
-    const auto transformed_change_summary{
-        SummarizeTransformedChanges(
-            candidate_overlay.GetState(),
-            candidate_overlay.GetBaseline().model_snapshot.node,
-            key)
-    };
-    const auto maximum_transformed_change{ std::ranges::max(transformed_change_summary.maximum_list) };
-    const auto domain_iter{ domain.cluster_by_key.find(key) };
-    diagnostic.scale.reset();
-    if (domain_iter != domain.cluster_by_key.end())
-    {
-        diagnostic.fit_sample_count = domain_iter->second.fit_sample_ref_list.size();
-        diagnostic.tail_sample_count = domain_iter->second.tail_sample_ref_list.size();
-        diagnostic.scale = domain_iter->second.scale;
-    }
-    diagnostic.candidate_objective =
-        EvaluateObjectiveContribution(
-            candidate_overlay,
-            key,
-            objective_sample_ref_list,
-            domain);
-    diagnostic.previous_objective.reset();
-    if (previous_objective != nullptr)
-    {
-        diagnostic.previous_objective = *previous_objective;
-    }
-    diagnostic.stored_best_objective = objective_state.best_objective;
-    diagnostic.best_objective = EvaluateBestObjectiveReference(
-        candidate_overlay, key, objective_sample_ref_list, domain, objective_state, performance_counters);
-    diagnostic.best_reference_unavailable = objective_state.best_objective.has_value() &&
-        !diagnostic.best_objective.has_value();
-
-    if (!diagnostic.candidate_objective.has_value() || previous_objective == nullptr ||
-        diagnostic.best_reference_unavailable)
-    {
-        return false;
-    }
-    const auto candidate_objective_value{ diagnostic.candidate_objective->GetTotalObjective() };
-    const auto previous_objective_value{ previous_objective->GetTotalObjective() };
-    diagnostic.rejected_by_previous = IsObjectiveDeteriorated(
-        candidate_objective_value,
-        previous_objective_value,
-        kObjectiveProgressTolerance);
-    diagnostic.rejected_by_best = diagnostic.best_objective.has_value() &&
-        IsObjectiveDeteriorated(
-            candidate_objective_value,
-            diagnostic.best_objective->GetTotalObjective(),
-            kObjectiveProgressTolerance);
-    if (diagnostic.rejected_by_previous || diagnostic.rejected_by_best) return false;
-    if (requires_strict_improvement &&
-        !IsBetterAuditObjective(
-            candidate_objective_value,
-            previous_objective_value,
-            kObjectiveStrictTolerance))
-    {
-        return false;
-    }
-
-    auto is_better_than_best{ !diagnostic.best_objective.has_value() };
-    if (diagnostic.best_objective.has_value())
-    {
-        const auto best_objective_value{ diagnostic.best_objective->GetTotalObjective() };
-        if (IsBetterAuditObjective(
-                candidate_objective_value,
-                best_objective_value,
-                kObjectiveStrictTolerance))
-        {
-            is_better_than_best = true;
-        }
-        else if (IsBetterAuditObjective(
-                     best_objective_value,
-                     candidate_objective_value,
-                     kObjectiveStrictTolerance))
-        {
-            is_better_than_best = false;
-        }
-        else
-        {
-            is_better_than_best = maximum_transformed_change < objective_state.best_maximum_transformed_change;
-        }
-    }
-    if (is_better_than_best)
-    {
-        const auto before_step{ objective_state.best_maximum_transformed_change };
-        objective_state.best_objective = diagnostic.candidate_objective;
-        objective_state.best_parameters = CaptureClusterParameters(candidate_overlay.GetState(), key);
-        objective_state.best_maximum_transformed_change = maximum_transformed_change;
-        if (candidate_overlay.GetContext().best_trace)
-            CaptureBestObjectiveSource(candidate_overlay.GetContext(), key,
-                BuildSecondStageModelSnapshot(candidate_overlay.GetContext(), candidate_overlay.GetState()),
-                objective_sample_ref_list, objective_state, diagnostic.best_objective, before_step,
-                source, !diagnostic.best_objective ? "first-best" :
-                    (IsBetterAuditObjective(candidate_objective_value, diagnostic.best_objective->GetTotalObjective(),
-                        kObjectiveStrictTolerance) ? "strict-improvement" : "step-tie-break"),
-                diagnostic.trial_count, diagnostic.accepted_factor);
-    }
-    return true;
+    const auto evaluation{ EvaluateCandidate(candidate_overlay,
+        requires_strict_improvement ? CandidateScope::LocalPolish : CandidateScope::LocalSearch,
+        LocalCandidateReference{key, objective_sample_ref_list, previous_objective, domain,
+            objective_state, diagnostic, performance_counters, source}) };
+    diagnostic = evaluation.diagnostic;
+    if (evaluation.accepted) objective_state = *evaluation.objective_state;
+    return evaluation.accepted;
 }
 
 } // namespace rhbm_gem::core::detail

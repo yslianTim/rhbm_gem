@@ -1,5 +1,7 @@
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/BoundaryReconciliation.hpp"
+#include "core/detail/CandidateTransaction.hpp"
+#include "core/detail/CandidateEvaluation.hpp"
 
 #include "core/detail/Diagnosis.hpp"
 
@@ -38,12 +40,12 @@ static ClusterKey FlattenClusterKeyList(const std::vector<ClusterKey> & key_list
     return atom_index_list;
 }
 
-static void RejectSelectionKeys(
+void CandidateTransactionBuilder::RejectSelectionKeys(
     const CandidateSelectionInputs & inputs,
     const std::vector<ClusterKey> & key_list,
-    bool exhausted,
-    CandidateSelection & selection)
+    bool exhausted)
 {
+    auto & selection{ m_selection };
     for (const auto & key : key_list)
     {
         if (!ContainsClusterKey(selection.accepted_key_list, key)) continue;
@@ -81,14 +83,6 @@ static void RejectSelectionKeys(
         selection.exhausted_key_list.end());
 }
 
-struct BoundaryCandidateEvaluation
-{
-    ClusterObjectiveStateMap objective_state_by_key{};
-    ObjectiveBreakdown audit_objective{};
-    std::size_t locally_deteriorated_member_count{ 0 };
-    double maximum_local_deterioration{ 0.0 };
-};
-
 static FitStatePatch BuildSelectionPatch(
     const CandidateSelection & selection,
     const std::vector<ClusterKey> & key_list)
@@ -98,163 +92,8 @@ static FitStatePatch BuildSelectionPatch(
         FlattenClusterKeyList(key_list));
 }
 
-static std::optional<BoundaryCandidateEvaluation>
-EvaluateBoundaryComponentCandidate(
-    const CandidateSelectionInputs & inputs,
-    const BoundaryReconciliationComponent & component,
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const ObjectiveBreakdown * previous_audit_objective,
-    bool cooperative,
-    JointCandidateObjectiveDiagnostic * record)
-{
-    BoundaryCandidateEvaluation evaluation;
-    for (const auto & key : component.key_list)
-    {
-        auto objective_state{ inputs.cluster_objective_state.at(key) };
-        ObjectiveAttemptDiagnostic diagnostic;
-        if (record)
-        {
-            diagnostic.trial_count = record->candidate_number;
-            diagnostic.accepted_factor = record->factor;
-        }
-        const auto & previous_objective{ inputs.previous_objective_by_key.at(key) };
-        if (!cooperative)
-        {
-            if (!TryCommitClusterCandidate(
-                    candidate_overlay,
-                    key,
-                    inputs.partition.sample_id_list_by_key.at(key),
-                    previous_objective.has_value() ? &*previous_objective : nullptr,
-                    false,
-                    inputs.objective_domain,
-                    objective_state,
-                    diagnostic,
-                    inputs.performance_counters, record ? record->source : "boundary"))
-            {
-                if (record) record->stored_best = objective_state.best_objective;
-                RecordJointMemberRejection(record, key, diagnostic.previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, objective_state.best_objective.has_value());
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
-                return std::nullopt;
-            }
-        }
-        else
-        {
-            diagnostic.previous_objective = previous_objective;
-            diagnostic.stored_best_objective = objective_state.best_objective;
-            diagnostic.best_objective = EvaluateBestObjectiveReference(
-                candidate_overlay, key, inputs.partition.sample_id_list_by_key.at(key),
-                inputs.objective_domain, objective_state, inputs.performance_counters);
-            if (objective_state.best_objective && !diagnostic.best_objective)
-            {
-                if (record) record->stored_best = objective_state.best_objective;
-                RecordJointMemberRejection(record, key, previous_objective,
-                    diagnostic.best_objective, std::nullopt, false);
-                if (record) record->outcome = "best-reference-unavailable";
-                return std::nullopt;
-            }
-            diagnostic.candidate_objective = EvaluateObjectiveContribution(
-                candidate_overlay,
-                key,
-                inputs.partition.sample_id_list_by_key.at(key),
-                inputs.objective_domain);
-            if (!diagnostic.candidate_objective.has_value() || !previous_objective.has_value())
-            {
-                if (record) record->stored_best = objective_state.best_objective;
-                RecordJointMemberRejection(record, key, previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, false);
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
-                return std::nullopt;
-            }
-            const auto candidate_value{
-                diagnostic.candidate_objective->GetTotalObjective()
-            };
-            const auto previous_value{ previous_objective->GetTotalObjective() };
-            if (!std::isfinite(candidate_value) ||
-                IsObjectiveDeteriorated(
-                    candidate_value,
-                    previous_value,
-                    kObjectiveProgressTolerance))
-            {
-                if (record) record->stored_best = objective_state.best_objective;
-                RecordJointMemberRejection(record, key, previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, false);
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
-                return std::nullopt;
-            }
-            if (candidate_value > previous_value)
-            {
-                evaluation.locally_deteriorated_member_count++;
-                evaluation.maximum_local_deterioration = std::max(
-                    evaluation.maximum_local_deterioration,
-                    candidate_value - previous_value);
-            }
-            const auto improves_member{
-                IsBetterAuditObjective(
-                    candidate_value,
-                    previous_value,
-                    kObjectiveStrictTolerance)
-            };
-            if (improves_member &&
-                (!diagnostic.best_objective.has_value() ||
-                    IsBetterAuditObjective(
-                        candidate_value,
-                        diagnostic.best_objective->GetTotalObjective(),
-                        kObjectiveStrictTolerance)))
-            {
-                const auto before_step{ objective_state.best_maximum_transformed_change };
-                objective_state.best_objective = diagnostic.candidate_objective;
-                objective_state.best_parameters = CaptureClusterParameters(candidate_overlay.GetState(), key);
-                objective_state.best_maximum_transformed_change =
-                    std::ranges::max(
-                        SummarizeTransformedChanges(
-                            candidate_overlay.GetState(),
-                            candidate_overlay.GetBaseline().model_snapshot.node,
-                            key).maximum_list);
-                if (inputs.context.best_trace)
-                    CaptureBestObjectiveSource(inputs.context, key,
-                        BuildSecondStageModelSnapshot(inputs.context, candidate_overlay.GetState()),
-                        inputs.partition.sample_id_list_by_key.at(key), objective_state,
-                        diagnostic.best_objective, before_step, record ? record->source : "rescue",
-                        "strict-improvement", record ? record->candidate_number : 0, record ? record->factor : std::nullopt);
-            }
-        }
-        evaluation.objective_state_by_key.emplace(key, std::move(objective_state));
-    }
-    const auto * best_audit_objective{
-        cooperative && inputs.best_audit_state.has_value() ?
-            &inputs.best_audit_state->objective : nullptr
-    };
-    const auto audit_objective{ EvaluateCombinedObjective(
-        candidate_overlay,
-        component.affected_sample_ref_list,
-        inputs.objective_domain,
-        best_audit_objective,
-        previous_audit_objective,
-        inputs.performance_counters) };
-    if (!audit_objective.has_value())
-    {
-        if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
-        return std::nullopt;
-    }
-    if (cooperative &&
-        !IsBetterAuditObjective(
-            audit_objective->GetTotalObjective(),
-            previous_audit_objective->GetTotalObjective(),
-            kObjectiveStrictTolerance))
-    {
-        if (record) record->outcome = "members-passed-strict-improvement-failed";
-        return std::nullopt;
-    }
-    evaluation.audit_objective = *audit_objective;
-    return evaluation;
-}
-
 static void CommitBoundaryObjectiveState(
-    const BoundaryCandidateEvaluation & evaluation,
+    const CandidateEvaluation & evaluation,
     ClusterObjectiveStateMap & working_objective_state)
 {
     for (const auto & [key, objective_state] : evaluation.objective_state_by_key)
@@ -263,10 +102,10 @@ static void CommitBoundaryObjectiveState(
     }
 }
 
-static void RemoveTrustGrowthForKeys(
-    const std::vector<ClusterKey> & key_list,
-    CandidateSelection & selection)
+void CandidateTransactionBuilder::RemoveTrustGrowthForKeys(
+    const std::vector<ClusterKey> & key_list)
 {
+    auto & selection{ m_selection };
     for (const auto & key : key_list)
     {
         std::erase(selection.grow_trust_region_key_list, key);
@@ -292,15 +131,15 @@ static bool OverlayFitStatePatch(FitStatePatch & base_patch, const FitStatePatch
     return true;
 }
 
-static bool TryBoundaryJointCorrection(
+bool CandidateTransactionBuilder::TryBoundaryJointCorrection(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
     const ObjectiveBreakdown & previous_audit_objective,
     const ObjectiveBreakdown & improvement_reference_objective,
     const FitStatePatch & endpoint_patch,
-    CandidateSelection & selection,
     BoundaryComponentReconciliationDiagnostic & diagnostic)
 {
+    auto & selection{ m_selection };
     if (component.halo_atom_index_list.empty()) return false;
 
     std::vector<std::size_t> shape_active_atom_index_list;
@@ -395,53 +234,26 @@ static bool TryBoundaryJointCorrection(
         inputs.previous_state,
         corrected_component_patch
     };
-    diagnostic.suspicious_candidate_atom_count =
-        CountSuspiciousPolishAtoms(
-            inputs.context,
-            component.halo_atom_index_list,
-            endpoint_state_view,
-            corrected_overlay.GetState());
+    const auto correction_evaluation{ EvaluateCandidate(corrected_overlay,
+        diagnostic.is_rescue_attempt ? CandidateScope::CooperativeRescue : CandidateScope::Boundary,
+        BoundaryCorrectionReference{inputs, component, endpoint_state_view, previous_audit_objective,
+            improvement_reference_objective, diagnostic.objective_diagnostic_list, correction_result.damping}) };
+    diagnostic.suspicious_candidate_atom_count = correction_evaluation.suspicious_atom_count;
     if (diagnostic.suspicious_candidate_atom_count != 0)
     {
-        if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureCorrection(
+        ObservePhaseCorrection(inputs.context,
             diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
             corrected_overlay.GetState(), endpoint_state_view, correction_result.damping, "rejected", "suspicious",
             inputs, component.key_list, improvement_reference_objective);
         record_performance(false);
         return false;
     }
-    const auto raw_candidate_objective{
-        EvaluateObjectiveDelta(
-            corrected_overlay,
-            component.affected_sample_ref_list,
-            inputs.objective_domain,
-            previous_audit_objective,
-            inputs.performance_counters)
-    };
-    if (raw_candidate_objective.has_value())
-    {
-        diagnostic.joint_candidate_component_objective = raw_candidate_objective->GetTotalObjective();
-    }
-    auto * record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
-        diagnostic.objective_diagnostic_list,
-        diagnostic.is_rescue_attempt ? "rescue-joint-correction" : "joint-correction",
-        correction_result.damping) };
-    const auto candidate_evaluation{
-        EvaluateBoundaryComponentCandidate(
-            inputs,
-            component,
-            corrected_overlay,
-            &previous_audit_objective,
-            diagnostic.is_rescue_attempt, record)
-    };
-    const auto is_strict_improvement{
-        candidate_evaluation.has_value() &&
-        IsBetterAuditObjective(
-            candidate_evaluation->audit_objective.GetTotalObjective(),
-            improvement_reference_objective.GetTotalObjective(),
-            kObjectiveStrictTolerance)
-    };
-    if (inputs.context.phase_audit) inputs.context.phase_audit->CaptureCorrection(
+    if (correction_evaluation.raw_objective)
+        diagnostic.joint_candidate_component_objective = correction_evaluation.raw_objective->GetTotalObjective();
+    const auto & candidate_evaluation{ correction_evaluation.members };
+    auto * record{ correction_evaluation.record };
+    const auto is_strict_improvement{ correction_evaluation.accepted };
+    ObservePhaseCorrection(inputs.context,
         diagnostic.is_rescue_attempt ? "rescue-correction" : "boundary-correction", corrected_component_patch.atom_index_list,
         corrected_overlay.GetState(), endpoint_state_view, correction_result.damping,
         is_strict_improvement ? "accepted" : "rejected",
@@ -469,7 +281,7 @@ static bool TryBoundaryJointCorrection(
         }
     }
     CommitBoundaryObjectiveState(*candidate_evaluation, selection.cluster_objective_state);
-    RemoveTrustGrowthForKeys(component.key_list, selection);
+    RemoveTrustGrowthForKeys(component.key_list);
     diagnostic.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
     diagnostic.candidate_component_objective = candidate_evaluation->audit_objective.GetTotalObjective();
     diagnostic.locally_deteriorated_member_count = candidate_evaluation->locally_deteriorated_member_count;
@@ -478,21 +290,21 @@ static bool TryBoundaryJointCorrection(
     return true;
 }
 
-static bool TryBacktrackBoundaryComponent(
+bool CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
     const ObjectiveBreakdown * previous_audit_objective,
     const FitStatePatch & endpoint_patch,
-    CandidateSelection & selection,
     BoundaryComponentReconciliationDiagnostic & diagnostic)
 {
+    auto & selection{ m_selection };
     BacktrackingWorkspace backtracking_workspace{
         inputs.previous_state,
         endpoint_patch,
         kTransformedChangeTolerance
     };
     BacktrackingStep step;
-    std::optional<BoundaryCandidateEvaluation> accepted_evaluation;
+    std::optional<CandidateEvaluation> accepted_evaluation;
     for (step = backtracking_workspace.BuildNextCandidate();
         step.status == BacktrackingStepStatus::CandidateReady;
         step = backtracking_workspace.BuildNextCandidate())
@@ -507,13 +319,9 @@ static bool TryBacktrackBoundaryComponent(
         auto * record{ BeginJointCandidateDiagnostic(inputs.options.quiet_mode,
             diagnostic.objective_diagnostic_list,
             diagnostic.is_rescue_attempt ? "rescue-backtracking" : "backtracking", step.factor) };
-        accepted_evaluation = EvaluateBoundaryComponentCandidate(
-            inputs,
-            component,
-            candidate_overlay,
-            previous_audit_objective,
-            diagnostic.is_rescue_attempt, record);
-        if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+        accepted_evaluation = EvaluateCandidate(candidate_overlay, diagnostic.is_rescue_attempt ? CandidateScope::CooperativeRescue : CandidateScope::Boundary,
+            BoundaryCandidateReference{inputs, component, previous_audit_objective, record});
+        ObservePhaseCandidate(inputs.context,
             diagnostic.is_rescue_attempt ? "rescue-backtracking" : "boundary-backtracking", endpoint_patch.atom_index_list,
             candidate_overlay.GetState(), nullptr, step.factor, accepted_evaluation ? "accepted" : "rejected",
             record ? record->outcome : "", false, false);
@@ -544,12 +352,12 @@ static bool TryBacktrackBoundaryComponent(
     return true;
 }
 
-static void ReconcileBoundaryComponent(
+void CandidateTransactionBuilder::ReconcileBoundaryComponent(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
-    const ObjectiveBreakdown * previous_audit_objective,
-    CandidateSelection & selection)
+    const ObjectiveBreakdown * previous_audit_objective)
 {
+    auto & selection{ m_selection };
     BoundaryComponentReconciliationDiagnostic diagnostic;
     diagnostic.key_list = component.key_list;
     diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
@@ -571,13 +379,10 @@ static void ReconcileBoundaryComponent(
         diagnostic.objective_diagnostic_list,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "endpoint", 1.0) };
     const auto endpoint_evaluation{
-        EvaluateBoundaryComponentCandidate(
-            inputs,
-            component,
-            endpoint_overlay,
-            previous_audit_objective, false, endpoint_record)
+        EvaluateCandidate(endpoint_overlay, CandidateScope::Boundary,
+            BoundaryCandidateReference{inputs, component, previous_audit_objective, endpoint_record})
     };
-    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+    ObservePhaseCandidate(inputs.context,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
         endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
         endpoint_record ? endpoint_record->outcome : "");
@@ -591,7 +396,6 @@ static void ReconcileBoundaryComponent(
                 *previous_audit_objective,
                 endpoint_evaluation->audit_objective,
                 endpoint_patch,
-                selection,
                 diagnostic))
         {
             selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
@@ -612,7 +416,6 @@ static void ReconcileBoundaryComponent(
             *previous_audit_objective,
             *previous_audit_objective,
             endpoint_patch,
-            selection,
             diagnostic))
     {
         selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
@@ -624,29 +427,27 @@ static void ReconcileBoundaryComponent(
             component,
             previous_audit_objective,
             endpoint_patch,
-            selection,
             diagnostic))
     {
         RejectSelectionKeys(
             inputs,
             component.key_list,
-            diagnostic.exhausted,
-            selection);
+            diagnostic.exhausted);
         selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
         return;
     }
 
-    RemoveTrustGrowthForKeys(component.key_list, selection);
+    RemoveTrustGrowthForKeys(component.key_list);
     selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
 }
 
-static void PromoteBoundaryRescueKeys(
+void CandidateTransactionBuilder::PromoteBoundaryRescueKeys(
     const CandidateSelectionInputs & inputs,
     const std::vector<ClusterKey> & rescue_key_list,
     const FitStatePatch & endpoint_patch,
-    BoundaryComponentAcceptedSource accepted_source,
-    CandidateSelection & selection)
+    BoundaryComponentAcceptedSource accepted_source)
 {
+    auto & selection{ m_selection };
     const FitStateView endpoint_state{ inputs.previous_state, endpoint_patch };
     for (const auto & key : rescue_key_list)
     {
@@ -703,13 +504,13 @@ static void PromoteBoundaryRescueKeys(
         &ClusterCandidateDiagnostic::key);
 }
 
-static bool TryRescueBoundaryComponent(
+bool CandidateTransactionBuilder::TryRescueBoundaryComponent(
     const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component,
     const ObjectiveBreakdown & previous_audit_objective,
-    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key,
-    CandidateSelection & selection)
+    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key)
 {
+    auto & selection{ m_selection };
     std::vector<ClusterKey> rescue_key_list;
     for (const auto & key : component.key_list)
     {
@@ -751,14 +552,10 @@ static bool TryRescueBoundaryComponent(
         diagnostic.objective_diagnostic_list,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "endpoint", 1.0) };
     const auto endpoint_evaluation{
-        EvaluateBoundaryComponentCandidate(
-            inputs,
-            component,
-            endpoint_overlay,
-            &previous_audit_objective,
-            true, endpoint_record)
+        EvaluateCandidate(endpoint_overlay, CandidateScope::CooperativeRescue,
+            BoundaryCandidateReference{inputs, component, &previous_audit_objective, endpoint_record})
     };
-    if (inputs.context.phase_audit) inputs.context.phase_audit->Capture(
+    ObservePhaseCandidate(inputs.context,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
         endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
         endpoint_record ? endpoint_record->outcome : "");
@@ -772,7 +569,6 @@ static bool TryRescueBoundaryComponent(
                 previous_audit_objective,
                 endpoint_evaluation->audit_objective,
                 endpoint_patch,
-                selection,
                 diagnostic))
         {
             endpoint_patch.ApplyTo(selection.assembled_state);
@@ -793,7 +589,6 @@ static bool TryRescueBoundaryComponent(
             previous_audit_objective,
             previous_audit_objective,
             endpoint_patch,
-            selection,
             diagnostic))
     {
         TryBacktrackBoundaryComponent(
@@ -801,7 +596,6 @@ static bool TryRescueBoundaryComponent(
             component,
             &previous_audit_objective,
             endpoint_patch,
-            selection,
             diagnostic);
     }
 
@@ -819,8 +613,7 @@ static bool TryRescueBoundaryComponent(
             inputs,
             rescue_key_list,
             endpoint_patch,
-            diagnostic.accepted_source,
-            selection);
+            diagnostic.accepted_source);
     }
     inputs.performance_counters.RecordBoundaryRescue(
         diagnostic.accepted_source != BoundaryComponentAcceptedSource::None,
@@ -851,12 +644,12 @@ BuildExpandedBoundaryReconciliationComponents(
     return component_list;
 }
 
-static bool RescueRejectedBoundaryClusters(
+bool CandidateTransactionBuilder::RescueRejectedBoundaryClusters(
     const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown & previous_audit_objective,
-    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key,
-    CandidateSelection & selection)
+    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key)
 {
+    auto & selection{ m_selection };
     std::vector<ClusterKey> eligible_key_list;
     for (const auto & key : selection.accepted_key_list)
     {
@@ -883,8 +676,7 @@ static bool RescueRejectedBoundaryClusters(
             inputs,
             component,
             previous_audit_objective,
-            rescue_patch_by_key,
-            selection) || rescued_any;
+            rescue_patch_by_key) || rescued_any;
     }
     return rescued_any;
 }
@@ -910,20 +702,16 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     const auto * best_audit_objective{
         inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
     };
-    return EvaluateCombinedObjective(
-        candidate_overlay,
-        affected_sample_ref_list,
-        inputs.objective_domain,
-        best_audit_objective,
-        &previous_audit_objective,
-        inputs.performance_counters);
+    return EvaluateCandidate(candidate_overlay, CandidateScope::GlobalSelectionAudit,
+        GlobalCandidateReference{affected_sample_ref_list, inputs.objective_domain,
+            best_audit_objective, &previous_audit_objective, inputs.performance_counters});
 }
 
-static void MarkBoundaryDiagnosticRejected(
+void CandidateTransactionBuilder::MarkBoundaryDiagnosticRejected(
     const std::vector<ClusterKey> & key_list,
-    bool exhausted,
-    CandidateSelection & selection)
+    bool exhausted)
 {
+    auto & selection{ m_selection };
     auto iter{ std::ranges::find(
         selection.boundary_reconciliation_diagnostic_list | std::views::reverse,
         key_list,
@@ -934,11 +722,11 @@ static void MarkBoundaryDiagnosticRejected(
     iter->exhausted = exhausted;
 }
 
-static void AuditAndSalvageFinalSelection(
+void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
     const CandidateSelectionInputs & inputs,
-    const ObjectiveBreakdown & previous_audit_objective,
-    CandidateSelection & selection)
+    const ObjectiveBreakdown & previous_audit_objective)
 {
+    auto & selection{ m_selection };
     selection.final_audit_objective = EvaluateFinalSelectionAudit(
         inputs,
         previous_audit_objective,
@@ -1021,12 +809,11 @@ static void AuditAndSalvageFinalSelection(
     for (const auto & rejection_candidate : rejection_candidate_list)
     {
         const auto & key_list{ rejection_candidate.second };
-        MarkBoundaryDiagnosticRejected(key_list, false, selection);
+        MarkBoundaryDiagnosticRejected(key_list, false);
         RejectSelectionKeys(
             inputs,
             key_list,
-            false,
-            selection);
+            false);
         selection.final_audit_objective = EvaluateFinalSelectionAudit(
             inputs,
             previous_audit_objective,
@@ -1040,18 +827,18 @@ static void AuditAndSalvageFinalSelection(
         inputs.partition,
         remaining_key_list))
     {
-        MarkBoundaryDiagnosticRejected(component.key_list, true, selection);
+        MarkBoundaryDiagnosticRejected(component.key_list, true);
     }
     RejectSelectionKeys(
         inputs,
         remaining_key_list,
-        true,
-        selection);
+        true);
     selection.final_audit_objective.reset();
 }
 
-void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, CandidateSelection & selection)
+void CandidateTransactionBuilder::ReauditFallbackSelection(const CandidateSelectionInputs & inputs)
 {
+    auto & selection{ m_selection };
     selection.cluster_objective_state = inputs.cluster_objective_state;
     const auto accepted_keys{ selection.accepted_key_list };
     for (const auto & key : accepted_keys)
@@ -1060,43 +847,32 @@ void ReauditFallbackSelection(const CandidateSelectionInputs & inputs, Candidate
         const CandidateEvaluationOverlay candidate_overlay{
             inputs.context, inputs.residual_baseline, inputs.previous_state, patch
         };
-        std::vector<GaussianModel3D> previous_models;
-        std::vector<GaussianModel3D> candidate_models;
-        for (const auto node : key)
-        {
-            previous_models.emplace_back(inputs.previous_state.at(node).mdpde.GetModel());
-            candidate_models.emplace_back(candidate_overlay.GetState().GetModel(node));
-        }
-        const auto norm{ CalculateModelTrustRegionStepNorm(previous_models, candidate_models) };
-        bool safe{ norm.has_value() && IsTrustRegionStepWithinRadius(*norm, inputs.trust_region_state.GetRadius(key)) &&
-            !EvaluateClusterCandidateGuard(inputs.context, inputs.residual_baseline.model_snapshot,
-                key, candidate_overlay.GetState(), selection.block_activity).has_value() };
-        if (safe)
-        {
-            ObjectiveAttemptDiagnostic diagnostic;
-            const auto & previous{ inputs.previous_objective_by_key.at(key) };
-            safe = TryCommitClusterCandidate(candidate_overlay,
-                key, inputs.partition.sample_id_list_by_key.at(key), previous.has_value() ? &*previous : nullptr,
-                false, inputs.objective_domain, selection.cluster_objective_state.at(key), diagnostic, inputs.performance_counters, "fallback-reaudit");
-        }
+        const auto & previous{ inputs.previous_objective_by_key.at(key) };
+        const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::FallbackReaudit,
+            LocalCandidateReference{key, inputs.partition.sample_id_list_by_key.at(key),
+                previous ? &*previous : nullptr, inputs.objective_domain,
+                selection.cluster_objective_state.at(key), {}, inputs.performance_counters,
+                "fallback-reaudit", &selection.block_activity, inputs.trust_region_state.GetRadius(key)}) };
+        const auto safe{ evaluation.accepted };
+        if (safe) selection.cluster_objective_state.at(key) = *evaluation.objective_state;
         if (safe) patch.ApplyTo(selection.assembled_state);
-        else RejectSelectionKeys(inputs, { key }, false, selection);
+        else RejectSelectionKeys(inputs, { key }, false);
     }
     const auto previous_audit{ EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline) };
     if (previous_audit.has_value())
-        AuditAndSalvageFinalSelection(inputs, *previous_audit, selection);
+        AuditAndSalvageFinalSelection(inputs, *previous_audit);
     else
     {
         const auto remaining_keys{ selection.accepted_key_list };
-        RejectSelectionKeys(inputs, remaining_keys, false, selection);
+        RejectSelectionKeys(inputs, remaining_keys, false);
     }
 }
 
-void ReconcileSelectedBoundaries(
+void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     const CandidateSelectionInputs & inputs,
-    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key,
-    CandidateSelection & selection)
+    const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key)
 {
+    auto & selection{ m_selection };
     const auto boundary_component_list{
         BuildExpandedBoundaryReconciliationComponents(
             inputs,
@@ -1114,8 +890,7 @@ void ReconcileSelectedBoundaries(
                 inputs,
                 component,
                 previous_audit_objective.has_value() ?
-                    &*previous_audit_objective : nullptr,
-                    selection);
+                    &*previous_audit_objective : nullptr);
         }
         if (!previous_audit_objective.has_value())
         {
@@ -1123,15 +898,13 @@ void ReconcileSelectedBoundaries(
             RejectSelectionKeys(
                 inputs,
                 remaining_key_list,
-                true,
-                selection);
+                true);
         }
         else
         {
             AuditAndSalvageFinalSelection(
                 inputs,
-                *previous_audit_objective,
-                selection);
+                *previous_audit_objective);
         }
         const auto backtracked_component_count{
             std::ranges::count_if(
@@ -1164,13 +937,11 @@ void ReconcileSelectedBoundaries(
         RescueRejectedBoundaryClusters(
             inputs,
             *previous_audit_objective,
-            rescue_patch_by_key,
-            selection))
+            rescue_patch_by_key))
     {
         AuditAndSalvageFinalSelection(
             inputs,
-            *previous_audit_objective,
-            selection);
+            *previous_audit_objective);
     }
     if (previous_audit_objective.has_value() &&
         selection.final_audit_objective.has_value())

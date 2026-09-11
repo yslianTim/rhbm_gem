@@ -74,12 +74,6 @@ inputs and can be selected with `-R fold_168_simulation_regression` or
 `-L benchmark:external`; see the developer build guide for configuration.
 `RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON` builds the developer-only
 frozen-IRLS trust-model instrumentation and requires `BUILD_TESTING=ON`.
-`RHBM-GEM-CONVERGENCE-EXPOSURE` is a production-only corpus runner and does not
-require that experiment. Its smoke, schema/analyzer, and determinism checks are
-normal small CTest entries; the paired 600-case gate is deliberately excluded
-from CTest and is run with the `convergence_exposure_corpus` build target. Each
-case retains only the current run log, frozen truth, schema-10 trajectory,
-schema-2 terminal state, and schema-14 case summary and schema-1 diagnostics.
 
 Run repository guards and install consumer smoke (lint lane):
 
