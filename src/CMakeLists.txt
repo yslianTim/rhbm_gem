@@ -25,6 +25,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/SecondStageFitting.cpp
     core/detail/CouplingGraph.cpp
     core/detail/JointFitting.cpp
+    core/detail/ClusterHistoryObserver.cpp
     core/detail/CandidateEvaluation.cpp
     core/detail/CandidateTransaction.cpp
     core/detail/CandidateSelection.cpp

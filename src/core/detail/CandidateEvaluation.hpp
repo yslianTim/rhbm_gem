@@ -19,12 +19,10 @@ struct LocalCandidateEvaluation
 {
     bool accepted{ false };
     ObjectiveAttemptDiagnostic diagnostic{};
-    std::optional<ClusterObjectiveState> objective_state{};
 };
 
 struct BoundaryCandidateEvaluation
 {
-    ClusterObjectiveStateMap objective_state_by_key{};
     ObjectiveBreakdown audit_objective{};
     std::size_t locally_deteriorated_member_count{ 0 };
     double maximum_local_deterioration{ 0.0 };
@@ -52,10 +50,8 @@ struct LocalCandidateReference
     const std::vector<SampleRef> & samples;
     const ObjectiveBreakdown * previous;
     const ObjectiveDomain & domain;
-    const ClusterObjectiveState & history;
     ObjectiveAttemptDiagnostic diagnostic;
     PerformanceCounters & counters;
-    std::string_view source{ "local-candidate" };
 };
 
 struct BoundaryCandidateReference

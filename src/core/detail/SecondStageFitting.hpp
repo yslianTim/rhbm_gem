@@ -62,11 +62,13 @@ struct FrozenBackground
 struct BestObjectiveTraceEnvironment;
 class PhaseAudit;
 class TrustModelAudit;
+class ClusterHistoryObserver;
 
 struct SecondStageContext
 {
     std::vector<AtomContext> atom_list{};
     std::shared_ptr<BestObjectiveTraceEnvironment> best_trace{};
+    std::shared_ptr<ClusterHistoryObserver> cluster_history{};
     std::shared_ptr<PhaseAudit> phase_audit{};
     std::shared_ptr<TrustModelAudit> trust_model_audit{};
     std::shared_ptr<const FrozenBackground> frozen_background{};

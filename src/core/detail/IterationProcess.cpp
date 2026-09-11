@@ -1,3 +1,4 @@
+#include "core/detail/ClusterHistoryObserver.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/IterationProcess.hpp"
@@ -110,7 +111,6 @@ struct IterationState
     ObjectiveDomain objective_domain{};
     BestAuditState best_audit_state{};
     QuarantineState quarantine_state{};
-    ClusterObjectiveStateMap cluster_objective_state{};
     TrustRegionStateSet trust_region_state{};
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
@@ -356,21 +356,9 @@ static void ResetIterationStateForPartition(
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
     iteration_state.objective_domain_revision++;
-    const auto previous_objective_states{ context.best_trace ? iteration_state.cluster_objective_state : ClusterObjectiveStateMap{} };
-    iteration_state.cluster_objective_state.clear();
-    const auto objective_by_key{
-        BuildObjectiveByKey(partition, iteration_state.objective_domain, context, model_snapshot)
-    };
-    ReconcileClusterObjectiveState(
-        objective_by_key,
-        iteration_state.accepted_state,
-        iteration_state.cluster_objective_state);
-    for (auto & [key, state] : iteration_state.cluster_objective_state)
-    {
-        state.best_reset_reason = "partition-reset";
-        const auto prior{ previous_objective_states.find(key) };
-        if (prior != previous_objective_states.end()) state.reset_source = prior->second.best_source;
-    }
+    if (context.cluster_history)
+        context.cluster_history->ResetPartition(context, partition, iteration_state.objective_domain,
+            iteration_state.accepted_state);
     RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
@@ -513,29 +501,9 @@ static bool BeginFrozenBackgroundIteration(
     iteration_state.objective_domain_revision++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
-    const auto previous_objectives{ BuildObjectiveByKey(partition, iteration_state.objective_domain,
-        context, previous_snapshot) };
-    std::vector<char> changed_background_by_atom(context.atom_list.size(), 1);
-    if (previous_background)
-    {
-        for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
-            changed_background_by_atom.at(atom_index) =
-                previous_background->response_by_atom.at(atom_index) != background->response_by_atom.at(atom_index);
-    }
-    for (const auto & [key, sample_refs] : partition.sample_id_list_by_key)
-    {
-        const bool changed{ std::ranges::any_of(sample_refs,
-            [&](const auto & sample_ref) { return changed_background_by_atom.at(sample_ref.atom_index) != 0; }) };
-        if (changed)
-        {
-            const auto prior{ iteration_state.cluster_objective_state.at(key).best_source };
-            iteration_state.cluster_objective_state[key] = ClusterObjectiveState{
-                .best_objective = previous_objectives.at(key),
-                .best_parameters = FitStatePatch::FromState(iteration_state.accepted_state, key),
-                .best_reset_reason = "background-reset",
-                .reset_source = prior };
-        }
-    }
+    if (context.cluster_history)
+        context.cluster_history->ResetBackground(context, previous_background, partition,
+            iteration_state.objective_domain, iteration_state.accepted_state);
     RefreshBestAuditState(context, previous_snapshot, iteration_state);
     return false;
 }
@@ -565,17 +533,9 @@ static IterationResult RunIteration(
     const auto previous_objective_by_key{
         BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
-    ReconcileClusterObjectiveState(previous_objective_by_key, previous_state, iteration_state.cluster_objective_state);
-    BeginBestObjectiveTrace(context, options.quiet_mode, objective_domain,
-        attempt_number, iteration_state.accepted_iteration_count);
-    if (context.best_trace)
-        for (auto & [key, state] : iteration_state.cluster_objective_state)
-            if (state.best_objective && !state.best_source)
-                CaptureBestObjectiveSource(context, key, residual_baseline.model_snapshot,
-                    graph_partition.sample_id_list_by_key.at(key), state,
-                    state.reset_source ? state.reset_source->objective : std::nullopt,
-                    state.reset_source ? state.reset_source->step : 0.0,
-                    "iteration-baseline", state.best_reset_reason);
+    if (context.cluster_history)
+        context.cluster_history->BeginAttempt(context, previous_objective_by_key, previous_state,
+            graph_partition, objective_domain, attempt_number, iteration_state.accepted_iteration_count);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
     const auto quarantine_activity{
@@ -650,7 +610,6 @@ static IterationResult RunIteration(
         .ridge_multiplier_list = joint_offset_ridge_multiplier_list,
         .objective_domain = objective_domain,
         .previous_objective_by_key = previous_objective_by_key,
-        .cluster_objective_state = iteration_state.cluster_objective_state,
         .best_audit_state = iteration_state.best_audit_state,
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
@@ -665,7 +624,7 @@ static IterationResult RunIteration(
     IterationResult result;
     const auto selection{ std::move(transaction).Commit(context, previous_state,
         iteration_state.accepted_state, iteration_state.previous_polish_provenance,
-        iteration_state.cluster_objective_state, iteration_state.quarantine_state,
+        iteration_state.quarantine_state,
         iteration_state.trust_region_state, result) };
     const auto & assembled_state{ iteration_state.accepted_state };
     const auto & assembled_polish_provenance{ iteration_state.previous_polish_provenance };
@@ -1011,6 +970,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         context = std::move(initialization->context);
         initial_state = std::move(initialization->state);
     }
+    BeginClusterHistoryObserver(context, options.quiet_mode);
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };

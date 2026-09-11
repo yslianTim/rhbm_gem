@@ -1,3 +1,4 @@
+#include "core/detail/ClusterHistoryObserver.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
@@ -5,82 +6,13 @@
 #include <algorithm>
 #include <cmath>
 #include <ranges>
-#include <utility>
 
 namespace rhbm_gem::core::detail {
-
-static void UpdateClusterHistory(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const LocalCandidateReference & reference,
-    ClusterObjectiveState & objective_state,
-    ObjectiveAttemptDiagnostic & diagnostic)
-{
-    const auto & key{ reference.key };
-    const auto & objective_sample_ref_list{ reference.samples };
-    const auto source{ reference.source };
-    diagnostic.stored_best_objective = objective_state.best_objective;
-    diagnostic.best_objective.reset();
-    const bool history_complete{ objective_state.best_parameters.atom_index_list == key &&
-        objective_state.best_parameters.mdpde_list.size() == key.size() };
-    if (!objective_state.best_objective || history_complete)
-        diagnostic.best_objective = EvaluateBestObjectiveReference(candidate_overlay, key,
-            objective_sample_ref_list, reference.domain, objective_state, reference.counters);
-    diagnostic.best_reference_unavailable = objective_state.best_objective.has_value() &&
-        !diagnostic.best_objective.has_value();
-    if (diagnostic.best_reference_unavailable) return;
-    const auto candidate_objective_value{ diagnostic.candidate_objective->GetTotalObjective() };
-    const auto transformed_change_summary{
-        SummarizeTransformedChanges(
-            candidate_overlay.GetState(),
-            candidate_overlay.GetBaseline().model_snapshot.node,
-            key)
-    };
-    const auto maximum_transformed_change{ std::ranges::max(transformed_change_summary.maximum_list) };
-    auto is_better_than_best{ !diagnostic.best_objective.has_value() };
-    if (diagnostic.best_objective.has_value())
-    {
-        const auto best_objective_value{ diagnostic.best_objective->GetTotalObjective() };
-        if (IsBetterAuditObjective(
-                candidate_objective_value,
-                best_objective_value,
-                kObjectiveStrictTolerance))
-        {
-            is_better_than_best = true;
-        }
-        else if (IsBetterAuditObjective(
-                     best_objective_value,
-                     candidate_objective_value,
-                     kObjectiveStrictTolerance))
-        {
-            is_better_than_best = false;
-        }
-        else
-        {
-            is_better_than_best = maximum_transformed_change < objective_state.best_maximum_transformed_change;
-        }
-    }
-    if (is_better_than_best)
-    {
-        const auto before_step{ objective_state.best_maximum_transformed_change };
-        objective_state.best_objective = diagnostic.candidate_objective;
-        objective_state.best_parameters = CaptureClusterParameters(candidate_overlay.GetState(), key);
-        objective_state.best_maximum_transformed_change = maximum_transformed_change;
-        if (candidate_overlay.GetContext().best_trace)
-            CaptureBestObjectiveSource(candidate_overlay.GetContext(), key,
-                BuildSecondStageModelSnapshot(candidate_overlay.GetContext(), candidate_overlay.GetState()),
-                objective_sample_ref_list, objective_state, diagnostic.best_objective, before_step,
-                source, !diagnostic.best_objective ? "first-best" :
-                    (IsBetterAuditObjective(candidate_objective_value, diagnostic.best_objective->GetTotalObjective(),
-                        kObjectiveStrictTolerance) ? "strict-improvement" : "step-tie-break"),
-                diagnostic.trial_count, diagnostic.accepted_factor);
-    }
-}
 
 static bool EvaluateLocalObjective(
     const CandidateEvaluationOverlay & candidate_overlay,
     const LocalCandidateReference & reference,
     bool requires_strict_improvement,
-    ClusterObjectiveState & objective_state,
     ObjectiveAttemptDiagnostic & diagnostic)
 {
     const auto & key{ reference.key };
@@ -114,9 +46,6 @@ static bool EvaluateLocalObjective(
     {
         diagnostic.previous_objective = *previous_objective;
     }
-    diagnostic.stored_best_objective = objective_state.best_objective;
-    diagnostic.best_objective.reset();
-    diagnostic.best_reference_unavailable = false;
     if (!diagnostic.candidate_objective.has_value() || previous_objective == nullptr)
     {
         return false;
@@ -137,7 +66,6 @@ static bool EvaluateLocalObjective(
         return false;
     }
 
-    UpdateClusterHistory(candidate_overlay, reference, objective_state, diagnostic);
     return true;
 }
 
@@ -156,10 +84,8 @@ LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & ca
 {
     LocalCandidateEvaluation result;
     result.diagnostic = reference.diagnostic;
-    auto history{ reference.history };
     result.accepted = EvaluateLocalObjective(candidate_overlay, reference,
-        scope == CandidateScope::LocalPolish, history, result.diagnostic);
-    if (result.accepted) result.objective_state = std::move(history);
+        scope == CandidateScope::LocalPolish, result.diagnostic);
     return result;
 }
 
@@ -173,10 +99,18 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
     const bool cooperative{ scope == CandidateScope::CooperativeRescue };
     auto * record{ reference.record };
 
+    if (inputs.context.cluster_history) inputs.context.cluster_history->BeginBoundary(record);
+    const auto observe_member = [&](const ClusterKey & key, bool accepted,
+                                    const ObjectiveAttemptDiagnostic & diagnostic)
+    {
+        if (inputs.context.cluster_history)
+            inputs.context.cluster_history->BoundaryMember(candidate_overlay, key,
+                inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain,
+                accepted, diagnostic, record);
+    };
     BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
     {
-        auto objective_state{ inputs.cluster_objective_state.at(key) };
         ObjectiveAttemptDiagnostic diagnostic;
         if (record)
         {
@@ -189,23 +123,19 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
             const auto member{ EvaluateCandidate(candidate_overlay, CandidateScope::Boundary,
                 LocalCandidateReference{key, inputs.partition.sample_id_list_by_key.at(key),
                     previous_objective ? &*previous_objective : nullptr, inputs.objective_domain,
-                    objective_state, diagnostic, inputs.performance_counters, record ? record->source : "boundary"}) };
+                    diagnostic, inputs.performance_counters}) };
             diagnostic = member.diagnostic;
             if (!member.accepted)
             {
-                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, diagnostic.previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, false);
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
+                    std::nullopt, diagnostic.candidate_objective, false);
+                observe_member(key, false, diagnostic);
                 return std::nullopt;
             }
-            objective_state = *member.objective_state;
         }
         else
         {
             diagnostic.previous_objective = previous_objective;
-            diagnostic.stored_best_objective = objective_state.best_objective;
             diagnostic.candidate_objective = EvaluateObjectiveContribution(
                 candidate_overlay,
                 key,
@@ -213,11 +143,9 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
                 inputs.objective_domain);
             if (!diagnostic.candidate_objective.has_value() || !previous_objective.has_value())
             {
-                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, false);
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
+                    std::nullopt, diagnostic.candidate_objective, false);
+                observe_member(key, false, diagnostic);
                 return std::nullopt;
             }
             const auto candidate_value{
@@ -230,11 +158,9 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
                     previous_value,
                     kObjectiveProgressTolerance))
             {
-                if (record) record->stored_best = objective_state.best_objective;
                 RecordJointMemberRejection(record, key, previous_objective,
-                    diagnostic.best_objective, diagnostic.candidate_objective, false);
-                DiagnoseBestObjectiveComparison(record, candidate_overlay, key,
-                    inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain, objective_state);
+                    std::nullopt, diagnostic.candidate_objective, false);
+                observe_member(key, false, diagnostic);
                 return std::nullopt;
             }
             if (candidate_value > previous_value)
@@ -244,13 +170,8 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
                     evaluation.maximum_local_deterioration,
                     candidate_value - previous_value);
             }
-            UpdateClusterHistory(candidate_overlay,
-                LocalCandidateReference{key, inputs.partition.sample_id_list_by_key.at(key),
-                    &*previous_objective, inputs.objective_domain, objective_state, diagnostic,
-                    inputs.performance_counters, record ? record->source : "rescue"},
-                objective_state, diagnostic);
         }
-        evaluation.objective_state_by_key.emplace(key, std::move(objective_state));
+        observe_member(key, true, diagnostic);
     }
     const auto * best_audit_objective{
         cooperative && inputs.best_audit_state.has_value() ?

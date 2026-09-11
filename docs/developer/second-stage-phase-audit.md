@@ -8,7 +8,10 @@ runs take place after production decisions, with fresh solver workspaces.
 
 Production phase notifications now delegate capture and event preparation to
 this observer. Trust-model trials and funnels have a separate `TrustModelAudit`
-collector and translation unit; neither collector is stored in candidate
+collector and translation unit. Historical member references are read-only
+iteration-baseline snapshots from `ClusterHistoryObserver`; replay owns its copies
+and does not hold a live history observer. Missing history remains unavailable
+diagnostic evidence. Neither collector is stored in candidate
 results. See [P0 structural refactoring](second-stage-p0-structure.md) for the
 transaction boundary and certificate/diagnostic ownership.
 

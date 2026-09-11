@@ -5,10 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iterator>
 #include <ranges>
 #include <stdexcept>
-#include <utility>
 
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -622,65 +620,5 @@ void ReevaluateBestAuditState(
     else audit_state.reset();
 }
 
-void ReconcileClusterObjectiveState(
-    const ObjectiveByKey & previous_objective_by_key,
-    const FitState & accepted_state,
-    ClusterObjectiveStateMap & state_by_key)
-{
-    ClusterObjectiveStateMap next_state_by_key;
-    for (const auto & [key, previous_objective] : previous_objective_by_key)
-    {
-        auto state_iter{ state_by_key.find(key) };
-        if (state_iter != state_by_key.end())
-        {
-            next_state_by_key.emplace(key, std::move(state_iter->second));
-            continue;
-        }
-        next_state_by_key.emplace(
-            key,
-            ClusterObjectiveState{ .best_objective = previous_objective,
-                .best_parameters = FitStatePatch::FromState(accepted_state, key) });
-    }
-    state_by_key = std::move(next_state_by_key);
-}
-
-FitStatePatch CaptureClusterParameters(const FitStateView & state, const ClusterKey & key)
-{
-    FitStatePatch patch{ .atom_index_list = key };
-    patch.mdpde_list.reserve(key.size());
-    for (const auto atom : key) patch.mdpde_list.emplace_back(state.GetMdpde(atom));
-    return patch;
-}
-
-std::optional<ObjectiveBreakdown> EvaluateBestObjectiveReference(
-    const CandidateEvaluationOverlay & candidate,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & samples,
-    const ObjectiveDomain & domain,
-    const ClusterObjectiveState & state,
-    PerformanceCounters & performance_counters)
-{
-    if (!state.best_objective) return std::nullopt;
-    if (state.best_parameters.atom_index_list != key ||
-        state.best_parameters.mdpde_list.size() != key.size())
-    {
-        throw std::logic_error("Cluster best objective parameters are inconsistent.");
-    }
-    // Preserve every candidate neighbor; replace only this cluster's parameters.
-    ClusterKey merged_key;
-    std::ranges::set_union(candidate.GetState().GetOverrideAtomIndexList(), key,
-        std::back_inserter(merged_key));
-    auto patch{ CaptureClusterParameters(candidate.GetState(), merged_key) };
-    for (std::size_t i = 0; i < patch.atom_index_list.size(); i++)
-    {
-        if (const auto * best = state.best_parameters.Find(patch.atom_index_list.at(i)))
-            patch.mdpde_list.at(i) = *best;
-    }
-    const CandidateEvaluationOverlay reference{
-        candidate.GetContext(), candidate.GetBaseline(), candidate.GetState().GetBaseState(), patch };
-    performance_counters.RecordObjectiveSampleEvaluation(
-        CountObjectiveSamples(samples, domain), domain.unique_sample_count);
-    return EvaluateObjectiveContribution(reference, key, samples, domain);
-}
 
 } // namespace rhbm_gem::core::detail

@@ -206,6 +206,7 @@ PhaseAudit::PhaseAudit(const SecondStageContext & context, const ObjectiveDomain
     for (const auto & key : m_keys) m_worker_events.try_emplace(key);
     m_context.phase_audit.reset();
     m_context.best_trace.reset();
+    m_context.cluster_history.reset();
     Add("baseline", {}, BuildSecondStageModelSnapshot(m_context, baseline).node, {}, 1.0, "baseline", "", false, true);
 }
 std::string PhaseAudit::Add(std::string stage, ClusterKey key, FittedGaussianSnapshot state,
@@ -279,7 +280,7 @@ void PhaseAudit::CaptureCorrection(std::string_view stage, const ClusterKey & ke
         gates.improvement_reference = improvement_reference;
         for (const auto & member : member_keys)
             gates.members.push_back({ member, inputs.partition.sample_id_list_by_key.at(member),
-                inputs.previous_objective_by_key.at(member), inputs.cluster_objective_state.at(member) });
+                inputs.previous_objective_by_key.at(member), inputs.context.cluster_history ? inputs.context.cluster_history->BaselineSnapshot(member) : std::nullopt });
         m_boundary_gates.emplace(id, std::move(gates));
     }
     catch (...) { m_capture_failures++; }
@@ -430,9 +431,7 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
         const auto evaluate_gates = [&](const FittedGaussianSnapshot & snapshot, const BoundaryGates & gates,
             const std::optional<ObjectiveBreakdown> & objective)
         {
-            ClusterSolverWorkspaceMap workspaces;
-            BoundaryJointCorrectionWorkspaceMap boundary_workspaces;
-            PerformanceCounters counters(true, m_context, workspaces, boundary_workspaces);
+            ClusterHistoryCounters history_counters;
             std::string members{ "[" };
             bool unavailable{ false }, failed{ false };
             for (const auto & member : gates.members)
@@ -451,25 +450,25 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
                         m_context, gates.residual_baseline, gates.previous_state, patch };
                     objective_count++;
                     candidate = EvaluateObjectiveContribution(overlay, member.key, member.samples, m_domain);
-                    if (member.history.best_objective)
+                    if (member.history && member.history->best_objective)
                     {
                         objective_count++;
                         best = EvaluateBestObjectiveReference(overlay, member.key, member.samples,
-                            m_domain, member.history, counters);
+                            m_domain, *member.history, history_counters);
                     }
                 }
                 catch (const std::exception & error) { reason = error.what(); }
                 catch (...) { reason = "member-exception"; }
                 const auto previous_gate{ EvaluateGate(candidate, member.previous) };
                 auto best_gate{ EvaluateGate(candidate, best) };
-                if (!member.history.best_objective) best_gate.status = "not-applicable";
+                if (member.history && !member.history->best_objective) best_gate.status = "not-applicable";
                 const bool member_unavailable{ previous_gate.status == "unavailable" || best_gate.status == "unavailable" };
                 unavailable = unavailable || member_unavailable;
                 failed = failed || previous_gate.status == "fail" || best_gate.status == "fail";
                 if (member_unavailable) failures++;
                 if (members.size() != 1) members += ',';
                 members += "{\"key\":" + Array(member.key) + ",\"candidate\":" + Objective(candidate) +
-                    ",\"previous\":" + Objective(member.previous) + ",\"stored_best\":" + Objective(member.history.best_objective) +
+                    ",\"previous\":" + Objective(member.previous) + ",\"stored_best\":" + Objective(member.history ? member.history->best_objective : std::nullopt) +
                     ",\"best\":" + Objective(best) + ",\"reference_environment\":\"sample-candidate\",\"previous_gate\":" +
                     previous_gate.Json() + ",\"best_gate\":" + best_gate.Json() + ",\"reason\":" + Quote(reason) + '}';
             }

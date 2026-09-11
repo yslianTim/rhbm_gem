@@ -34,7 +34,7 @@ public:
     CandidateTransaction(const CandidateTransaction &) = delete;
     CandidateTransaction(CandidateTransaction &&) = default;
     CandidateCommitResult Commit(const SecondStageContext &, FitState & previous_state,
-        FitState & accepted_state, PolishProvenance &, ClusterObjectiveStateMap &,
+        FitState & accepted_state, PolishProvenance &,
         QuarantineState &, TrustRegionStateSet &, IterationResult &) &&;
 };
 

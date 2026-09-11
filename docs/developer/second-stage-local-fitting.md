@@ -57,13 +57,14 @@ all second-stage services through candidate selection:
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
-| `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results, original gate ordering, and proposed history updates |
+| `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
 | `CandidateTransaction` | Private selection builder, staged quarantine, and consuming publication of validated results |
 | `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |
-| `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, and previous/best objective history |
+| `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
+| `ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
 | `Diagnosis` | Progress and certificate output, graph/objective diagnostics, and performance counters |
 | `PhaseAudit` / `TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
 
@@ -74,15 +75,17 @@ The public Gaussian estimator workflow uses internal fitting-range constants;
 `FitOptions` does not expose radial bounds.
 
 `CandidateSelectionInputs` contains read-only algorithm inputs. The private
-`CandidateTransactionBuilder` owns working activity, state, provenance and
-objective history; boundary operations are its private methods. Evaluators
-return values and proposed history updates without changing caller history.
+`CandidateTransactionBuilder` owns working activity, state and provenance;
+boundary operations are its private methods. Evaluators return numerical decisions
+without accepting or returning per-cluster history. `ClusterHistoryObserver`
+receives decisions and maintains its own provisional history.
 Solver workspaces, counters and observers remain mutable working resources.
 Quarantine is staged on a copy and changes only next-iteration activity,
 without modifying the audited state or requiring fallback re-audit. The builder then freezes a read-only `CandidateTransaction`.
-Its consuming commit publishes validated state, provenance, history, quarantine
-and radius actions, including the required rejection updates on all-rejected
-attempts. Convergence uses the committed candidate and the retained previous
+Its consuming commit publishes validated state, provenance, quarantine
+and radius updates, including the required rejection updates on all-rejected
+attempts. Only after production publication does it notify the history observer
+to publish diagnostic provenance. Convergence uses the committed candidate and the retained previous
 state. The unrestricted operator evidence remains separate from these
 production restrictions.
 
@@ -427,20 +430,28 @@ normalization coefficient, so the local candidate-minus-previous difference
 matches the corresponding full-global difference when only that cluster
 changes.
 
-Candidate scoring uses a provisional copy of the cluster objective state. A
-rejected base, polish, candidate-search trial, or boundary-component candidate does not
-advance the previous or best references. The best objective and maximum
-transformed change are retained to break objective ties. Cluster best is not an
-acceptance gate: after the previous gate (and strict local-polish improvement),
-reevaluate stored parameters in the candidate neighbor environment for history.
-Unavailable historical evidence preserves the old history and disables its tie
-break, without rejecting the candidate. Local and rescue share this updater.
+Candidate scoring uses only production objective references. In non-quiet Debug
+runs, `ClusterHistoryObserver` separately retains provisional cluster history.
+After the previous gate (and strict local-polish improvement), it reevaluates
+stored parameters in the candidate neighbor environment. Objective and maximum
+transformed movement ties select a historical record, never a production candidate.
+Unavailable historical evidence preserves the old history without rejecting the
+candidate. Local and rescue observations share this updater. Component trials
+read iteration-baseline history; rejected trials do not publish their provisional
+updates. Rollback restores that baseline, including on all-rejected attempts.
+
+Info and quiet runs allocate no cluster history and do not reconstruct or score
+historical patches. Observer entry points contain exceptions and disable the
+observer for the rest of the run on failure, reporting unavailable diagnostics
+without changing the fitting outcome. Historical evaluations use observer-owned
+counters, so production objective-work counts exclude this diagnostic work.
+See [the dependency audit](second-stage-cluster-history-observer.md).
 
 At each background refresh, re-evaluate both the previous selected state and
 the retained global best under the new cache before comparing or choosing
-them. Reset each affected cluster's local best history to this attempt's
-previous baseline; do not compare historical numbers computed under another
-background. An unavailable retained-best objective discards that best entry.
+them. When enabled, the observer resets each affected cluster's local best
+history to this attempt's previous baseline; it does not compare historical
+numbers computed under another background. An unavailable retained-best objective discards that best entry.
 Background-only refresh does not rebuild the sampling domain or its fixed
 robust scales. Refresh itself is not an improvement: audit patience uses the
 candidate's strict improvement over the recomputed previous baseline, alongside
@@ -922,7 +933,7 @@ global failure before member checks. Local rejection summaries remain local:
 `rejected-by=none` does not imply that a later joint candidate passed.
 Member rejection records reuse the evaluated objectives. Debug mode additionally
 tracks cluster-best provenance and performs diagnostic-only reference comparisons;
-Info and quiet modes create no provenance snapshots or extra evaluations.
+Info and quiet modes create no per-cluster history, provenance snapshots or historical evaluations.
 
 `Cluster best source: schema=1` records best initialization, partition/background
 resets, candidate improvements, and step tie-break updates. IDs combine attempt,
@@ -931,8 +942,7 @@ order. Each record retains the effective model snapshot (including candidate
 overlays), shared immutable background/domain, and contribution sample refs.
 `predecessor` links updates and same-key resets. `retained` distinguishes provisional
 updates from the source finally published for the attempt; `Cluster best publication`
-identifies that source even when it originated in an earlier attempt. Copying or
-rolling back a cluster objective state also copies or restores its source.
+identifies that source even when it originated in an earlier attempt. The observer copies or restores its source when staging or rolling back history.
 
 When a joint member fails with a best reference, `Cluster best comparison: schema=1`
 links that source and reports stored, historically reproduced, and re-evaluated best
@@ -942,7 +952,7 @@ candidate's external models. A separate ordered decomposition substitutes curren
 domain/sample refs, then frozen background, then external models. These deltas are
 order-dependent diagnostics, not independent causal contributions. Original and
 re-evaluated gate results use the existing progress-tolerance helper; only the
-original gate participates in acceptance. Each record counts its additional
+previous objective gate participates in acceptance; historical comparisons remain diagnostic-only. Each record counts its additional
 objective and residual-sample evaluations separately from production counters.
 
 `Cluster best environment: schema=1` compares actual sample refs, ownership,

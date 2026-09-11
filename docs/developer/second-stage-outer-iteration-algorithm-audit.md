@@ -96,7 +96,8 @@ validated S(k)
   -> boundary reconciliation and cooperative rescue
   -> complete-state global previous/best audit
   -> stage next-iteration Active/Frozen state without modifying audited models
-  -> publish state, history, trust-radius and quarantine updates
+  -> publish state, trust-radius and quarantine updates
+  -> notify optional history observer to publish provenance
   -> assembled validated S(k+1)
   -> production convergence certificate
   -> stop policy selects a base final state
@@ -186,8 +187,14 @@ boolean shrink request. The experiment remains diagnostic-only.
 
 Local and shadow diagnostics no longer carry the fixed-false `rejected_by_best`
 field or its unreachable rejection branches. `best_reference_unavailable` remains
-active history-update evidence, not a rejection gate. Cluster history/tie-break,
-global-best acceptance and lifecycle diagnostic naming are unchanged.
+observer-only history-update evidence, not a rejection gate. Per-cluster history,
+its tie-break and provisional publication live in `ClusterHistoryObserver`; they
+are absent in Info/quiet runs and are not carried by production candidate or
+transaction types. The observer preserves Debug history schemas and contains
+failures without changing acceptance or stopping. Its objective evaluations no
+longer contribute to production work counters. Global-best acceptance and
+lifecycle diagnostic naming are unchanged. See the
+[cluster-history dependency audit](second-stage-cluster-history-observer.md).
 
 ## Structural P0 result (2026-09-11)
 

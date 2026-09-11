@@ -1,3 +1,4 @@
+#include "core/detail/ClusterHistoryObserver.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/CandidateTransaction.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
@@ -55,7 +56,7 @@ void CandidateTransactionBuilder::RejectSelectionKeys(
         std::erase(selection.accepted_key_list, key);
         selection.rejected_key_list.emplace_back(key);
         if (exhausted) selection.exhausted_key_list.emplace_back(key);
-        selection.cluster_objective_state.at(key) = inputs.cluster_objective_state.at(key);
+        if (inputs.context.cluster_history) inputs.context.cluster_history->Reject(key);
 
         const auto diagnostic_iter{
             std::ranges::find(
@@ -87,16 +88,6 @@ static FitStatePatch BuildSelectionPatch(
     return FitStatePatch::FromState(
         selection.assembled_state,
         FlattenClusterKeyList(key_list));
-}
-
-static void CommitBoundaryObjectiveState(
-    const BoundaryCandidateEvaluation & evaluation,
-    ClusterObjectiveStateMap & working_objective_state)
-{
-    for (const auto & [key, objective_state] : evaluation.objective_state_by_key)
-    {
-        working_objective_state.at(key) = objective_state;
-    }
 }
 
 static bool OverlayFitStatePatch(FitStatePatch & base_patch, const FitStatePatch & overlay_patch)
@@ -267,7 +258,7 @@ bool CandidateTransactionBuilder::TryBoundaryJointCorrection(
             selection.assembled_polish_provenance.at(atom_index) = 1;
         }
     }
-    CommitBoundaryObjectiveState(*candidate_evaluation, selection.cluster_objective_state);
+    if (inputs.context.cluster_history) inputs.context.cluster_history->AcceptBoundary(record ? record->history_observation : 0);
     diagnostic.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
     diagnostic.candidate_component_objective = candidate_evaluation->audit_objective.GetTotalObjective();
     diagnostic.locally_deteriorated_member_count = candidate_evaluation->locally_deteriorated_member_count;
@@ -291,6 +282,7 @@ bool CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     };
     BacktrackingStep step;
     std::optional<BoundaryCandidateEvaluation> accepted_evaluation;
+    std::size_t accepted_history_observation{ 0 };
     for (step = backtracking_workspace.BuildNextCandidate();
         step.status == BacktrackingStepStatus::CandidateReady;
         step = backtracking_workspace.BuildNextCandidate())
@@ -311,7 +303,11 @@ bool CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
             diagnostic.is_rescue_attempt ? "rescue-backtracking" : "boundary-backtracking", endpoint_patch.atom_index_list,
             candidate_overlay.GetState(), nullptr, step.factor, accepted_evaluation ? "accepted" : "rejected",
             record ? record->outcome : "", false, false);
-        if (accepted_evaluation.has_value()) break;
+        if (accepted_evaluation.has_value())
+        {
+            accepted_history_observation = record ? record->history_observation : 0;
+            break;
+        }
     }
     if (!accepted_evaluation.has_value())
     {
@@ -329,7 +325,7 @@ bool CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     {
         selection.assembled_polish_provenance.at(atom_index) = reconciled_provenance.at(atom_index);
     }
-    CommitBoundaryObjectiveState(*accepted_evaluation, selection.cluster_objective_state);
+    if (inputs.context.cluster_history) inputs.context.cluster_history->AcceptBoundary(accepted_history_observation);
     diagnostic.accepted_factor = step.factor;
     diagnostic.accepted_source = BoundaryComponentAcceptedSource::Backtracking;
     diagnostic.candidate_component_objective = accepted_evaluation->audit_objective.GetTotalObjective();
@@ -368,6 +364,7 @@ void CandidateTransactionBuilder::ReconcileBoundaryComponent(
         EvaluateCandidate(endpoint_overlay, CandidateScope::Boundary,
             BoundaryCandidateReference{inputs, component, previous_audit_objective, endpoint_record})
     };
+    const auto endpoint_history_observation{ endpoint_record ? endpoint_record->history_observation : 0 };
     ObservePhaseCandidate(inputs.context,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
         endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
@@ -387,7 +384,7 @@ void CandidateTransactionBuilder::ReconcileBoundaryComponent(
             selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
             return;
         }
-        CommitBoundaryObjectiveState(*endpoint_evaluation, selection.cluster_objective_state);
+        if (inputs.context.cluster_history) inputs.context.cluster_history->AcceptBoundary(endpoint_history_observation);
         diagnostic.accepted_factor = 1.0;
         diagnostic.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
         diagnostic.candidate_component_objective = endpoint_evaluation->audit_objective.GetTotalObjective();
@@ -539,6 +536,7 @@ bool CandidateTransactionBuilder::TryRescueBoundaryComponent(
         EvaluateCandidate(endpoint_overlay, CandidateScope::CooperativeRescue,
             BoundaryCandidateReference{inputs, component, &previous_audit_objective, endpoint_record})
     };
+    const auto endpoint_history_observation{ endpoint_record ? endpoint_record->history_observation : 0 };
     ObservePhaseCandidate(inputs.context,
         diagnostic.is_rescue_attempt ? "rescue-endpoint" : "boundary-endpoint", endpoint_patch.atom_index_list,
         endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
@@ -556,7 +554,7 @@ bool CandidateTransactionBuilder::TryRescueBoundaryComponent(
                 diagnostic))
         {
             endpoint_patch.ApplyTo(selection.assembled_state);
-            CommitBoundaryObjectiveState(*endpoint_evaluation, selection.cluster_objective_state);
+            if (inputs.context.cluster_history) inputs.context.cluster_history->AcceptBoundary(endpoint_history_observation);
             diagnostic.accepted_factor = 1.0;
             diagnostic.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
             diagnostic.candidate_component_objective =

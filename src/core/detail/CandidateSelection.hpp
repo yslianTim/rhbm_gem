@@ -146,7 +146,6 @@ struct BoundaryComponentReconciliationDiagnostic
 struct CandidateSelection
 {
     SuspiciousBlockActivity block_activity{};
-    ClusterObjectiveStateMap cluster_objective_state{};
     FitState assembled_state{};
     PolishProvenance assembled_polish_provenance{};
     std::vector<ClusterKey> accepted_key_list{};
@@ -176,7 +175,6 @@ struct CandidateSelectionInputs
     const std::vector<double> & ridge_multiplier_list;
     const ObjectiveDomain & objective_domain;
     const ObjectiveByKey & previous_objective_by_key;
-    const ClusterObjectiveStateMap & cluster_objective_state;
     const BestAuditState & best_audit_state;
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;

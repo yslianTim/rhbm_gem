@@ -1,3 +1,4 @@
+#include "core/detail/ClusterHistoryObserver.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/TrustModelAudit.hpp"
@@ -31,7 +32,6 @@ struct ClusterCandidateResult
     std::optional<FitStatePatch> accepted_patch{};
     std::optional<FitStatePatch> rescue_patch{};
     PolishProvenance polish_provenance{};
-    ClusterObjectiveState objective_state{};
     ObjectiveAttemptDiagnostic diagnostic{};
     PolishProgress polish_progress{};
     bool shrink_trust_region{ false };
@@ -337,7 +337,6 @@ static ClusterCandidateResult SelectClusterCandidate(
     const auto * previous_objective{
         previous_objective_entry.has_value() ? &*previous_objective_entry : nullptr
     };
-    const auto & previous_objective_state{ inputs.cluster_objective_state.at(key) };
     const auto trust_region_radius{ inputs.trust_region_state.GetRadius(key) };
     auto & performance_counters{ inputs.performance_counters };
     ClusterCandidateResult result;
@@ -356,7 +355,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     for (;;)
     {
         observer.BeginSearch();
-        result.objective_state = previous_objective_state;
+        if (context.cluster_history) context.cluster_history->BeginSearch(key);
         result.diagnostic = ObjectiveAttemptDiagnostic{};
         result.diagnostic.trust_region_radius = trust_region_radius;
         result.polish_progress = PolishProgress{};
@@ -477,10 +476,12 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::LocalSearch,
                 LocalCandidateReference{key, objective_sample_ref_list, previous_objective,
-                    objective_domain, result.objective_state, trial_diagnostic, performance_counters}) };
+                    objective_domain, trial_diagnostic, performance_counters}) };
             trial_diagnostic = evaluation.diagnostic;
             const auto committed{ evaluation.accepted };
-            if (committed) result.objective_state = *evaluation.objective_state;
+            if (context.cluster_history)
+                trial_diagnostic.history = context.cluster_history->Local(candidate_overlay, key,
+                    objective_sample_ref_list, objective_domain, "local-candidate", committed, trial_diagnostic);
             observer.Trial(proposal.patch, trial_diagnostic, false, factor, committed);
             if (committed)
             {
@@ -614,10 +615,12 @@ static ClusterCandidateResult SelectClusterCandidate(
             const auto evaluation{ EvaluateCandidate(polished_overlay, CandidateScope::LocalPolish,
                 LocalCandidateReference{key, objective_sample_ref_list,
                     result.diagnostic.candidate_objective ? &*result.diagnostic.candidate_objective : nullptr,
-                    objective_domain, result.objective_state, polish_diagnostic, performance_counters, "local-polish"}) };
+                    objective_domain, polish_diagnostic, performance_counters}) };
             polish_diagnostic = evaluation.diagnostic;
             const auto polish_committed{ evaluation.accepted };
-            if (polish_committed) result.objective_state = *evaluation.objective_state;
+            if (context.cluster_history)
+                polish_diagnostic.history = context.cluster_history->Local(polished_overlay, key,
+                    objective_sample_ref_list, objective_domain, "local-polish", polish_committed, polish_diagnostic);
             ObservePhaseLocalPolish(context, key, polished_overlay.GetState(), base_state_view,
                 polished_candidate->effective_damping, polish_committed, polish_diagnostic);
             observer.Trial(polished_candidate->patch, polish_diagnostic, true,
@@ -711,7 +714,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
 
     m_selection = CandidateSelection{
         .block_activity = inputs.block_activity,
-        .cluster_objective_state = inputs.cluster_objective_state,
         .assembled_state = inputs.previous_state,
         .assembled_polish_provenance = inputs.previous_polish_provenance
     };
@@ -756,7 +758,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         {
             locally_polished_key_list.emplace_back(key);
         }
-        selection.cluster_objective_state.at(key) = std::move(result.objective_state);
 
         const auto is_accepted{ result.accepted_patch.has_value() };
         if (!is_accepted)

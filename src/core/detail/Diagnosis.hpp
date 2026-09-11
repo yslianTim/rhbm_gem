@@ -37,21 +37,6 @@ void RecordJointMemberRejection(
     const std::optional<ObjectiveBreakdown> & candidate,
     bool best_checked);
 
-void BeginBestObjectiveTrace(
-    SecondStageContext & context, bool quiet_mode, const ObjectiveDomain & domain,
-    std::size_t attempt, std::size_t accepted_iteration);
-void CaptureBestObjectiveSource(
-    const SecondStageContext & context, const ClusterKey & key,
-    SecondStageModelSnapshot snapshot, const std::vector<SampleRef> & sample_refs,
-    ClusterObjectiveState & state, const std::optional<ObjectiveBreakdown> & before,
-    double before_step, std::string_view source, std::string_view reason,
-    std::size_t candidate_number = 0, std::optional<double> factor = std::nullopt);
-void LogBestObjectivePublication(const SecondStageContext & context, const ClusterObjectiveStateMap & states);
-void DiagnoseBestObjectiveComparison(
-    JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
-    const ClusterKey & key, const std::vector<SampleRef> & samples,
-    const ObjectiveDomain & domain, const ClusterObjectiveState & state);
-
 class PerformanceCounters
 {
     const bool m_quiet_mode;

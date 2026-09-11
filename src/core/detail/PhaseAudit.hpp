@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/detail/ClusterHistoryObserver.hpp"
+
 #include "core/detail/IterationProposal.hpp"
 #include "core/detail/ObjectiveEvaluation.hpp"
 
@@ -19,7 +21,7 @@ class PhaseAudit
         ClusterKey key;
         std::vector<SampleRef> samples;
         std::optional<ObjectiveBreakdown> previous;
-        ClusterObjectiveState history;
+        std::optional<ClusterObjectiveState> history;
     };
     struct BoundaryGates
     {

@@ -4,13 +4,13 @@
 #include "core/detail/SuspiciousUpdate.hpp"
 
 #include <map>
-#include <mutex>
 #include <string>
 #include <string_view>
 
 namespace rhbm_gem::core::detail {
 
 class PerformanceCounters;
+struct ClusterHistoryDiagnostic;
 
 inline constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
 inline constexpr double kFitRangeWeight{ 1.0 };
@@ -88,6 +88,7 @@ struct ObjectiveScale
 
 struct JointCandidateObjectiveDiagnostic
 {
+    std::size_t history_observation{ 0 };
     std::string_view source{};
     std::size_t round{ 0 };
     std::size_t candidate_number{ 0 };
@@ -113,9 +114,7 @@ struct ObjectiveAttemptDiagnostic
     std::size_t tail_sample_count{ 0 };
     std::optional<ObjectiveBreakdown> candidate_objective{};
     std::optional<ObjectiveBreakdown> previous_objective{};
-    std::optional<ObjectiveBreakdown> best_objective{};
-    std::optional<ObjectiveBreakdown> stored_best_objective{};
-    bool best_reference_unavailable{ false };
+    std::shared_ptr<const ClusterHistoryDiagnostic> history{};
     double trust_region_radius{ 0.0 };
     double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
@@ -164,42 +163,6 @@ struct ObjectiveDomain
     std::size_t tail_sample_count{ 0 };
 };
 
-struct BestObjectiveSource
-{
-    std::string id{}, predecessor_id{};
-    ClusterKey key{};
-    std::size_t attempt{ 0 }, accepted_iteration{ 0 }, sequence{ 0 }, candidate_number{ 0 };
-    std::string_view source{}, reason{};
-    std::optional<double> factor{};
-    std::optional<ObjectiveBreakdown> before{}, objective{};
-    double before_step{ 0.0 }, step{ 0.0 };
-    SecondStageModelSnapshot snapshot{};
-    std::shared_ptr<const ObjectiveDomain> domain{};
-    std::vector<SampleRef> sample_refs{};
-};
-
-struct BestObjectiveTraceEnvironment
-{
-    std::size_t attempt{ 0 }, accepted_iteration{ 0 };
-    std::shared_ptr<const ObjectiveDomain> domain{};
-    std::mutex mutex{};
-    std::map<ClusterKey, std::size_t> sequence_by_key{};
-    std::vector<std::shared_ptr<const BestObjectiveSource>> events{};
-};
-
-struct ClusterObjectiveState
-{
-    // Historical value for provenance; acceptance reevaluates best_parameters
-    // with the candidate neighbors and current objective domain.
-    std::optional<ObjectiveBreakdown> best_objective{};
-    double best_maximum_transformed_change{ 0.0 };
-    FitStatePatch best_parameters{};
-    std::shared_ptr<const BestObjectiveSource> best_source{};
-    std::string_view best_reset_reason{ "initialize" };
-    std::shared_ptr<const BestObjectiveSource> reset_source{};
-};
-
-using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
 using ObjectiveByKey = std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
 
 std::size_t CountObjectiveSamples(const std::vector<SampleRef> &, const ObjectiveDomain &);
@@ -241,21 +204,6 @@ void ReevaluateBestAuditState(
     const SecondStageContext & context,
     const ObjectiveDomain & domain,
     BestAuditState & audit_state);
-
-void ReconcileClusterObjectiveState(
-    const ObjectiveByKey & previous_objective_by_key,
-    const FitState & accepted_state,
-    ClusterObjectiveStateMap & state_by_key);
-
-FitStatePatch CaptureClusterParameters(const FitStateView & state, const ClusterKey & key);
-
-std::optional<ObjectiveBreakdown> EvaluateBestObjectiveReference(
-    const CandidateEvaluationOverlay & candidate,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & samples,
-    const ObjectiveDomain & domain,
-    const ClusterObjectiveState & state,
-    PerformanceCounters & performance_counters);
 
 std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const ResidualBaseline & evaluator,
