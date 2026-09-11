@@ -193,7 +193,8 @@ bool QuarantineState::UpdateAfterIteration(
             for (const auto & terminal : diagnostic.attempt.terminal_diagnostic_list)
             {
                 const auto reason{ terminal.reason };
-                if (reason == StabilizationTerminalReason::None) continue;
+                if (reason != StabilizationTerminalReason::GuardInfeasible &&
+                    reason != StabilizationTerminalReason::InvalidCandidate) continue;
                 const StabilizationTerminalFailure failure{ reason, terminal.guard_reason };
                 if (reason == StabilizationTerminalReason::GuardInfeasible &&
                     terminal.guard_atom_index.has_value() &&

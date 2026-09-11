@@ -106,6 +106,13 @@ validated S(k)
   -> persist Gaussian and peeling state
 ```
 
+Quarantine evidence is limited to solver hard failure, invalid candidate, and
+guard infeasibility. The `objective-exhausted` search diagnostic neither accrues
+freeze observations nor blocks domain-retry recovery; recovery still requires
+the existing active-coordinate and accepted-change or safe-endpoint evidence.
+See [the objective-exhaustion quarantine audit](second-stage-quarantine-objective-exhausted.md)
+for the policy change and verification limits.
+
 Validity establishes that a candidate can be represented. Trust limits the
 step tested in the current iteration and updates the next radius. Guard tests
 domain feasibility. Objective gates accept or reject candidates. None of

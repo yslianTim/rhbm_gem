@@ -695,10 +695,14 @@ failed, error, or not-evaluated status, candidate evidence and actual applicatio
   fixed atom offset does not prevent that atom's safe shape or other atoms'
   offsets from changing. The next attempt applies the `10x`
   suspicious ridge multiplier to affected nodes.
-- Active targets freeze after five consecutive observations of the same terminal
-  reason. Targets remain shape blocks, offset blocks or hard-failure clusters.
+- Active targets freeze after five consecutive observations of the same
+  quarantine failure reason: solver hard failure, invalid candidate, or guard
+  infeasibility. Targets remain shape blocks, offset blocks or hard-failure clusters.
   A changed reason or absent observation resets active tracking; a background
   refresh alone does not clear the consecutive-failure count.
+  `objective-exhausted` remains a search terminal diagnostic but is not quarantine
+  evidence. On its own it breaks an Active target's failure streak; other guard,
+  invalid, or solver hard failures in the same attempt still count.
 - Frozen targets record the last attempted objective-domain revision. The
   revision advances on an applied partition/domain change or changed background
   response, not on an unchanged rebuild or merely queued topology. Each new
@@ -713,6 +717,8 @@ failed, error, or not-evaluated status, candidate evidence and actual applicatio
   It requires a finally accepted material change, or a complete, guard-safe,
   solver-qualified nonmaterial unrestricted endpoint. Missing evidence cannot
   release a target. A failed retry records the revision and remains Frozen.
+  Objective exhaustion does not block recovery, but does not itself release a
+  Frozen target or bypass these domain-retry and endpoint requirements.
 - Newly Frozen targets affect only the next proposal. Lifecycle updates never
   rewrite the audited model/provenance, so quarantine fallback re-audit is removed.
   Immediate block isolation and solver fallback remain. Final activity still
