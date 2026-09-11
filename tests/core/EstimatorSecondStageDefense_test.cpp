@@ -23,12 +23,13 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointFitting.hpp"
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/CandidateEvaluation.hpp"
 #include "core/detail/TrustModelAudit.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/Quarantine.hpp"
 #include "core/detail/DependencyPolish.hpp"
-#include "core/detail/BoundaryReconciliation.hpp"
+#include "core/detail/CandidateTransaction.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -4936,8 +4937,13 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
             audit_detail::BeginBestObjectiveTrace(context, quiet, domain, 2, 1);
             auto trial_best{ best };
             audit_detail::ObjectiveAttemptDiagnostic diagnostic;
-            EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(unchanged, key, samples, &*current_objective,
-                false, domain, trial_best, diagnostic, counters, "test"));
+            const auto evaluation{ audit_detail::EvaluateCandidate(unchanged, audit_detail::CandidateScope::LocalSearch,
+                audit_detail::LocalCandidateReference{key, samples, &*current_objective, domain,
+                    trial_best, diagnostic, counters, "test"}) };
+            EXPECT_TRUE(evaluation.accepted);
+            diagnostic = evaluation.diagnostic;
+            ASSERT_TRUE(evaluation.objective_state);
+            if (evaluation.accepted) trial_best = *evaluation.objective_state;
             EXPECT_FALSE(diagnostic.rejected_by_best);
             ASSERT_TRUE(diagnostic.best_objective);
             EXPECT_NEAR(diagnostic.best_objective->GetTotalObjective(), current_objective->GetTotalObjective(), 1.0e-12);
@@ -4956,8 +4962,12 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     audit_detail::ObjectiveAttemptDiagnostic rejected;
     auto trial_best{ best };
     // Isolate the best gate by allowing the previous gate to pass.
-    EXPECT_FALSE(audit_detail::TryCommitClusterCandidate(worse_overlay, key, samples, &*worse_objective,
-        false, domain, trial_best, rejected, counters, "test"));
+    const auto worse_evaluation{ audit_detail::EvaluateCandidate(worse_overlay, audit_detail::CandidateScope::LocalSearch,
+        audit_detail::LocalCandidateReference{key, samples, &*worse_objective, domain,
+            trial_best, rejected, counters, "test"}) };
+    EXPECT_FALSE(worse_evaluation.accepted);
+    rejected = worse_evaluation.diagnostic;
+    EXPECT_FALSE(worse_evaluation.objective_state);
     EXPECT_TRUE(rejected.rejected_by_best);
     EXPECT_FALSE(rejected.rejected_by_previous);
     EXPECT_DOUBLE_EQ(trial_best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.0);
@@ -4967,8 +4977,12 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     EXPECT_THROW(audit_detail::EvaluateBestObjectiveReference(unchanged, key, samples, domain, missing, counters), std::logic_error);
     auto unavailable_domain{ domain };
     unavailable_domain.cluster_by_key.at(key).scale.reset();
-    EXPECT_FALSE(audit_detail::TryCommitClusterCandidate(unchanged, key, samples, &*current_objective,
-        false, unavailable_domain, trial_best, rejected, counters, "test"));
+    const auto unavailable_evaluation{ audit_detail::EvaluateCandidate(unchanged, audit_detail::CandidateScope::LocalSearch,
+        audit_detail::LocalCandidateReference{key, samples, &*current_objective, unavailable_domain,
+            trial_best, rejected, counters, "test"}) };
+    EXPECT_FALSE(unavailable_evaluation.accepted);
+    rejected = unavailable_evaluation.diagnostic;
+    EXPECT_FALSE(unavailable_evaluation.objective_state);
     EXPECT_TRUE(rejected.best_reference_unavailable);
 }
 
@@ -4990,8 +5004,13 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovemen
     const auto patch{ audit_detail::FitStatePatch::FromState(improved, key) };
     const audit_detail::CandidateEvaluationOverlay overlay{ fixture.context, baseline, fixture.state, patch };
     audit_detail::ObjectiveAttemptDiagnostic diagnostic;
-    EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(overlay, key, fixture.sample_ref_list, &*previous,
-        false, domain, best, diagnostic, counters, "test"));
+    const auto evaluation{ audit_detail::EvaluateCandidate(overlay, audit_detail::CandidateScope::LocalSearch,
+        audit_detail::LocalCandidateReference{key, fixture.sample_ref_list, &*previous, domain,
+            best, diagnostic, counters, "test"}) };
+    EXPECT_TRUE(evaluation.accepted);
+    diagnostic = evaluation.diagnostic;
+    ASSERT_TRUE(evaluation.objective_state);
+    if (evaluation.accepted) best = *evaluation.objective_state;
     EXPECT_LT(best.best_objective->GetTotalObjective(), previous->GetTotalObjective());
     EXPECT_DOUBLE_EQ(best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.4);
     EXPECT_GT(best.best_maximum_transformed_change, 0.0);
@@ -5001,8 +5020,13 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovemen
         improved_baseline, key, fixture.sample_ref_list, domain) };
     ASSERT_TRUE(improved_objective);
     const audit_detail::CandidateEvaluationOverlay tie{ fixture.context, improved_baseline, improved, patch };
-    EXPECT_TRUE(audit_detail::TryCommitClusterCandidate(tie, key, fixture.sample_ref_list, &*improved_objective,
-        false, domain, best, diagnostic, counters, "test"));
+    const auto tie_evaluation{ audit_detail::EvaluateCandidate(tie, audit_detail::CandidateScope::LocalSearch,
+        audit_detail::LocalCandidateReference{key, fixture.sample_ref_list, &*improved_objective, domain,
+            best, diagnostic, counters, "test"}) };
+    EXPECT_TRUE(tie_evaluation.accepted);
+    diagnostic = tie_evaluation.diagnostic;
+    ASSERT_TRUE(tie_evaluation.objective_state);
+    if (tie_evaluation.accepted) best = *tie_evaluation.objective_state;
     EXPECT_DOUBLE_EQ(best.best_maximum_transformed_change, 0.0);
     EXPECT_DOUBLE_EQ(best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.4);
 

@@ -294,16 +294,4 @@ std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
     const ObjectiveBreakdown * previous_objective,
     PerformanceCounters & performance_counters);
 
-bool TryCommitClusterCandidate(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & objective_sample_ref_list,
-    const ObjectiveBreakdown * previous_objective,
-    bool requires_strict_improvement,
-    const ObjectiveDomain & domain,
-    ClusterObjectiveState & objective_state,
-    ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters & performance_counters,
-    std::string_view source = "local-candidate");
-
 } // namespace rhbm_gem::core::detail

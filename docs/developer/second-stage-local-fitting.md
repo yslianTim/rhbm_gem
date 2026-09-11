@@ -57,7 +57,7 @@ all second-stage services through candidate selection:
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
-| `CandidateEvaluation` | Typed candidate validation scopes, original gate ordering, and proposed history updates |
+| `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results, original gate ordering, and proposed history updates |
 | `CandidateTransaction` | Private selection builder, staged quarantine, and consuming publication of validated results |
 | `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage, and quarantine fallback re-audit |
 | `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |

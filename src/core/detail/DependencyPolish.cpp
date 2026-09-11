@@ -174,7 +174,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         base_state,
                         *correction_result.patch
                     };
-                    const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::FinalPolish,
+                    const auto evaluation{ EvaluateCandidate(candidate_overlay,
                         FinalPolishCandidateReference{component, partition, objective_domain,
                             endpoint_state_view, *base_objective, endpoint_objective, performance_counters,
                             options.quiet_mode, diagnostic.objective_diagnostic_list, correction_result.damping, round + 1}) };

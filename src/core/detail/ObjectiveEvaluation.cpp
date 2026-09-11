@@ -1,5 +1,4 @@
 #include "core/detail/ObjectiveEvaluation.hpp"
-#include "core/detail/CandidateEvaluation.hpp"
 
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/FittingRanges.hpp"
@@ -682,27 +681,6 @@ std::optional<ObjectiveBreakdown> EvaluateBestObjectiveReference(
     performance_counters.RecordObjectiveSampleEvaluation(
         CountObjectiveSamples(samples, domain), domain.unique_sample_count);
     return EvaluateObjectiveContribution(reference, key, samples, domain);
-}
-
-bool TryCommitClusterCandidate(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const ClusterKey & key,
-    const std::vector<SampleRef> & objective_sample_ref_list,
-    const ObjectiveBreakdown * previous_objective,
-    bool requires_strict_improvement,
-    const ObjectiveDomain & domain,
-    ClusterObjectiveState & objective_state,
-    ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters & performance_counters,
-    std::string_view source)
-{
-    const auto evaluation{ EvaluateCandidate(candidate_overlay,
-        requires_strict_improvement ? CandidateScope::LocalPolish : CandidateScope::LocalSearch,
-        LocalCandidateReference{key, objective_sample_ref_list, previous_objective, domain,
-            objective_state, diagnostic, performance_counters, source}) };
-    diagnostic = evaluation.diagnostic;
-    if (evaluation.accepted) objective_state = *evaluation.objective_state;
-    return evaluation.accepted;
 }
 
 } // namespace rhbm_gem::core::detail

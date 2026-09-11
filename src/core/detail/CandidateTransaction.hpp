@@ -7,7 +7,6 @@
 
 namespace rhbm_gem::core::detail {
 struct IterationResult;
-struct CandidateEvaluation;
 
 struct CandidateCommitResult
 {
@@ -34,7 +33,6 @@ class CandidateTransaction
 public:
     CandidateTransaction(const CandidateTransaction &) = delete;
     CandidateTransaction(CandidateTransaction &&) = default;
-    const CandidateSelection & View() const { return m_selection; }
     CandidateCommitResult Commit(const SecondStageContext &, FitState & previous_state,
         FitState & accepted_state, PolishProvenance &, ClusterObjectiveStateMap &,
         QuarantineState &, TrustRegionStateSet &, IterationResult &) &&;

@@ -7,20 +7,23 @@ namespace rhbm_gem::core::detail {
 enum class CandidateScope
 {
     LocalSearch, LocalPolish, FallbackReaudit, Boundary,
-    CooperativeRescue, GlobalSelectionAudit, FinalPolish
+    CooperativeRescue
 };
 
 enum class CandidateFailureStage
 {
-    None, Trust, Guard, Objective
+    None, Trust, Guard
 };
 
-struct CandidateEvaluation
+struct LocalCandidateEvaluation
 {
     bool accepted{ false };
-    CandidateFailureStage failure_stage{ CandidateFailureStage::None };
     ObjectiveAttemptDiagnostic diagnostic{};
     std::optional<ClusterObjectiveState> objective_state{};
+};
+
+struct BoundaryCandidateEvaluation
+{
     ClusterObjectiveStateMap objective_state_by_key{};
     ObjectiveBreakdown audit_objective{};
     std::size_t locally_deteriorated_member_count{ 0 };
@@ -41,7 +44,7 @@ struct CandidatePreflightEvaluation
     std::optional<StabilizationTerminalDiagnostic> guard_failure{};
 };
 
-CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const CandidatePreflightReference &);
+CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const CandidatePreflightReference &);
 
 struct LocalCandidateReference
 {
@@ -80,7 +83,7 @@ struct BoundaryCorrectionEvaluation
 {
     std::size_t suspicious_atom_count{ 0 };
     std::optional<ObjectiveBreakdown> raw_objective{};
-    std::optional<CandidateEvaluation> members{};
+    std::optional<BoundaryCandidateEvaluation> members{};
     JointCandidateObjectiveDiagnostic * record{ nullptr };
     bool accepted{ false };
 };
@@ -117,9 +120,9 @@ struct FinalPolishCandidateEvaluation
     std::size_t suspicious_atom_count{ 0 };
 };
 
-CandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const LocalCandidateReference &);
-std::optional<CandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const BoundaryCandidateReference &);
-std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const GlobalCandidateReference &);
-FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const FinalPolishCandidateReference &);
+LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const LocalCandidateReference &);
+std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const BoundaryCandidateReference &);
+std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &);
+FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &);
 
 } // namespace rhbm_gem::core::detail

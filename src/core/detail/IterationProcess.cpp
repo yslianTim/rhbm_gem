@@ -956,37 +956,28 @@ static const FitState & FinalizeSecondStageState(
         residual_safety.candidate ? &*residual_safety.candidate : nullptr);
     if (polish_applied)
     {
-        if (final_uses_best_audit)
+        if (iteration_state.previous_polish_provenance.size() != context.atom_list.size())
         {
-            final_state = std::move(polish_result.state);
-            iteration_state.best_audit_state->objective = *polish_result.objective;
-            iteration_state.best_audit_state->uses_polish = true;
+            iteration_state.previous_polish_provenance.resize(context.atom_list.size(), 0);
         }
-        else
+        for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
         {
-            if (iteration_state.previous_polish_provenance.size() != context.atom_list.size())
+            if (IsTransformedChangeMaterial(
+                    CalculateTransformedChange(
+                        polish_result.state.at(atom_index).mdpde.GetModel(),
+                        final_state.at(atom_index).mdpde.GetModel()),
+                    kTransformedChangeTolerance))
             {
-                iteration_state.previous_polish_provenance.resize(context.atom_list.size(), 0);
+                iteration_state.previous_polish_provenance.at(atom_index) = 1;
             }
-            for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
-            {
-                if (IsTransformedChangeMaterial(
-                        CalculateTransformedChange(
-                            polish_result.state.at(atom_index).mdpde.GetModel(),
-                            final_state.at(atom_index).mdpde.GetModel()),
-                        kTransformedChangeTolerance))
-                {
-                    iteration_state.previous_polish_provenance.at(atom_index) = 1;
-                }
-            }
-            final_state = std::move(polish_result.state);
-            TryUpdateBestAuditState(
-                final_state,
-                true,
-                iteration_state.accepted_iteration_count,
-                *polish_result.objective,
-                iteration_state.best_audit_state);
         }
+        final_state = std::move(polish_result.state);
+        TryUpdateBestAuditState(
+            final_state,
+            true,
+            iteration_state.accepted_iteration_count,
+            *polish_result.objective,
+            iteration_state.best_audit_state);
     }
     ApplyFitState(model_object, context, final_state);
     return final_state;

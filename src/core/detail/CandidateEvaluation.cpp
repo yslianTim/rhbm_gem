@@ -129,7 +129,7 @@ static bool EvaluateLocalObjective(
 }
 
 CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
-    CandidateScope, const CandidatePreflightReference & reference)
+    const CandidatePreflightReference & reference)
 {
     if (!IsTrustRegionStepWithinRadius(reference.step_norm, reference.radius))
         return {CandidateFailureStage::Trust, {}};
@@ -138,10 +138,10 @@ CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
     return {failure ? CandidateFailureStage::Guard : CandidateFailureStage::None, failure};
 }
 
-CandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
+LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
     CandidateScope scope, const LocalCandidateReference & reference)
 {
-    CandidateEvaluation result;
+    LocalCandidateEvaluation result;
     result.diagnostic = reference.diagnostic;
     if (scope == CandidateScope::FallbackReaudit)
     {
@@ -155,14 +155,12 @@ CandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candida
         const auto norm{ CalculateModelTrustRegionStepNorm(previous_models, candidate_models) };
         if (!norm)
         {
-            result.failure_stage = CandidateFailureStage::Trust;
             return result;
         }
-        const auto preflight{ EvaluateCandidate(candidate_overlay, scope,
+        const auto preflight{ EvaluateCandidate(candidate_overlay,
             CandidatePreflightReference{reference.key, *reference.activity, *norm, reference.radius}) };
         if (preflight.failure_stage != CandidateFailureStage::None)
         {
-            result.failure_stage = preflight.failure_stage;
             return result;
         }
     }
@@ -170,11 +168,10 @@ CandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candida
     result.accepted = EvaluateLocalObjective(candidate_overlay, reference,
         scope == CandidateScope::LocalPolish, history, result.diagnostic);
     if (result.accepted) result.objective_state = std::move(history);
-    else result.failure_stage = CandidateFailureStage::Objective;
     return result;
 }
 
-std::optional<CandidateEvaluation> EvaluateCandidate(
+std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
     CandidateScope scope, const BoundaryCandidateReference & reference)
 {
@@ -184,7 +181,7 @@ std::optional<CandidateEvaluation> EvaluateCandidate(
     const bool cooperative{ scope == CandidateScope::CooperativeRescue };
     auto * record{ reference.record };
 
-    CandidateEvaluation evaluation;
+    BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
     {
         auto objective_state{ inputs.cluster_objective_state.at(key) };
@@ -324,7 +321,6 @@ std::optional<CandidateEvaluation> EvaluateCandidate(
         return std::nullopt;
     }
     evaluation.audit_objective = *audit_objective;
-    evaluation.accepted = true;
     return evaluation;
 }
 
@@ -348,14 +344,14 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
 }
 
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
-    CandidateScope, const GlobalCandidateReference & reference)
+    const GlobalCandidateReference & reference)
 {
     return EvaluateCombinedObjective(candidate, reference.samples, reference.domain,
         reference.best, reference.previous, reference.counters);
 }
 
 FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
-    CandidateScope, const FinalPolishCandidateReference & reference)
+    const FinalPolishCandidateReference & reference)
 {
     FinalPolishCandidateEvaluation evaluation;
     const auto & context{ candidate_overlay.GetContext() };

@@ -1,5 +1,4 @@
 #include "core/detail/PhaseAudit.hpp"
-#include "core/detail/BoundaryReconciliation.hpp"
 #include "core/detail/CandidateTransaction.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
 
@@ -7,7 +6,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -92,7 +90,7 @@ static FitStatePatch BuildSelectionPatch(
 }
 
 static void CommitBoundaryObjectiveState(
-    const CandidateEvaluation & evaluation,
+    const BoundaryCandidateEvaluation & evaluation,
     ClusterObjectiveStateMap & working_objective_state)
 {
     for (const auto & [key, objective_state] : evaluation.objective_state_by_key)
@@ -292,7 +290,7 @@ bool CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
         kTransformedChangeTolerance
     };
     BacktrackingStep step;
-    std::optional<CandidateEvaluation> accepted_evaluation;
+    std::optional<BoundaryCandidateEvaluation> accepted_evaluation;
     for (step = backtracking_workspace.BuildNextCandidate();
         step.status == BacktrackingStepStatus::CandidateReady;
         step = backtracking_workspace.BuildNextCandidate())
@@ -688,7 +686,7 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     const auto * best_audit_objective{
         inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
     };
-    return EvaluateCandidate(candidate_overlay, CandidateScope::GlobalSelectionAudit,
+    return EvaluateCandidate(candidate_overlay,
         GlobalCandidateReference{affected_sample_ref_list, inputs.objective_domain,
             best_audit_objective, &previous_audit_objective, inputs.performance_counters});
 }

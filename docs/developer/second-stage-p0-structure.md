@@ -48,7 +48,8 @@ orchestration outside the builder receives read-only results. It keeps one
 assembled state and existing patch/overlay workspaces rather than cloning a
 full state at each phase. The builder freezes after the staged quarantine
 transition and any required fallback re-audit. `CandidateTransaction` exposes
-only a const view and an rvalue-qualified consuming commit.
+only an rvalue-qualified consuming commit. The builder retains a const view
+for existing focused tests.
 
 Commit publishes candidate state/provenance, audited history, staged quarantine,
 and radius actions together. Rejection rolls back the affected model,
@@ -63,12 +64,17 @@ persistence/recertification boundary.
 
 ## Candidate evaluation map
 
-`EvaluateCandidate(candidate, scope, reference)` has typed reference overloads.
-They share the existing numerical primitives and return values; callers apply
-returned history only on acceptance. Scope selects existing behavior, not a
-configurable policy engine. Objective observers/counters remain separate from
-model and history mutation. The old `TryCommitClusterCandidate` entrypoint is a
-thin compatibility adapter for existing focused tests, not a second validator.
+`EvaluateCandidate` has typed reference overloads. Preflight, global audit and
+final polish use `(candidate, reference)`; local and boundary evaluation also
+receive a scope where it selects existing behavior. They share the existing
+numerical primitives, not a configurable policy engine.
+
+`LocalCandidateEvaluation` returns acceptance, diagnostics and a proposed single
+history update. `BoundaryCandidateEvaluation` returns member histories, audit
+objective and deterioration statistics; an empty optional denotes rejection.
+Callers apply returned history only on acceptance. Existing focused tests invoke
+the evaluator directly. Objective observers/counters remain separate from model
+and history mutation.
 
 | Scope / phase | Preserved evaluation order and references |
 | --- | --- |

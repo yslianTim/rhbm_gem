@@ -444,7 +444,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 }
                 break;
             }
-            const auto preflight{ EvaluateCandidate(candidate_overlay, CandidateScope::LocalSearch,
+            const auto preflight{ EvaluateCandidate(candidate_overlay,
                 CandidatePreflightReference{key, search_block_activity, proposal.step_norm, trust_region_radius}) };
             if (preflight.failure_stage == CandidateFailureStage::Trust)
             {
