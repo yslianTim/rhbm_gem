@@ -55,7 +55,6 @@ void CandidateTransactionBuilder::RejectSelectionKeys(
             selection.assembled_polish_provenance.at(atom_index) = inputs.previous_polish_provenance.at(atom_index);
         }
         std::erase(selection.accepted_key_list, key);
-        std::erase(selection.grow_trust_region_key_list, key);
         selection.rejected_key_list.emplace_back(key);
         if (exhausted) selection.exhausted_key_list.emplace_back(key);
         selection.cluster_objective_state.at(key) = inputs.cluster_objective_state.at(key);
@@ -99,16 +98,6 @@ static void CommitBoundaryObjectiveState(
     for (const auto & [key, objective_state] : evaluation.objective_state_by_key)
     {
         working_objective_state.at(key) = objective_state;
-    }
-}
-
-void CandidateTransactionBuilder::RemoveTrustGrowthForKeys(
-    const std::vector<ClusterKey> & key_list)
-{
-    auto & selection{ m_selection };
-    for (const auto & key : key_list)
-    {
-        std::erase(selection.grow_trust_region_key_list, key);
     }
 }
 
@@ -281,7 +270,6 @@ bool CandidateTransactionBuilder::TryBoundaryJointCorrection(
         }
     }
     CommitBoundaryObjectiveState(*candidate_evaluation, selection.cluster_objective_state);
-    RemoveTrustGrowthForKeys(component.key_list);
     diagnostic.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
     diagnostic.candidate_component_objective = candidate_evaluation->audit_objective.GetTotalObjective();
     diagnostic.locally_deteriorated_member_count = candidate_evaluation->locally_deteriorated_member_count;
@@ -437,7 +425,6 @@ void CandidateTransactionBuilder::ReconcileBoundaryComponent(
         return;
     }
 
-    RemoveTrustGrowthForKeys(component.key_list);
     selection.boundary_reconciliation_diagnostic_list.emplace_back(std::move(diagnostic));
 }
 
@@ -453,7 +440,6 @@ void CandidateTransactionBuilder::PromoteBoundaryRescueKeys(
     {
         std::erase(selection.rejected_key_list, key);
         std::erase(selection.exhausted_key_list, key);
-        std::erase(selection.grow_trust_region_key_list, key);
         if (!ContainsClusterKey(selection.accepted_key_list, key))
         {
             selection.accepted_key_list.emplace_back(key);

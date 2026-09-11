@@ -18,8 +18,9 @@ thresholds, candidate selection, stop precedence, or the production
 trajectory.
 
 The [retained P1 changes](second-stage-p1-ablation.md) limit final polish to
-converged stops with an independent radius; cooperative rescue and production
-Grow retain their baseline policies.
+converged stops with an independent radius. Cooperative rescue remains enabled;
+production uses Keep/Shrink only after the independent Grow ablation passed
+existing tests.
 
 ## Scope and canonical states
 
@@ -108,10 +109,9 @@ domain feasibility. Objective gates accept or reject candidates. None of
 these responsibilities substitutes for fixed-point evidence.
 
 Guard is feasibility-only: guard-only factor reduction does not request radius
-shrink. Radius growth requires boundary utilization of at least `0.8` and actual
-objective reduction larger than `1e-8 + 1e-3 * abs(previous)`. It does not use
-predicted reduction or rho. Objective-induced shrink and radius bounds retain
-their existing precedence and values.
+shrink. Existing keys use Keep or Shrink only, with factor `0.5` and minimum
+`0.0625`; new keys start at `1.0`. Final polish independently uses `1.0` relative
+to each round's endpoint. Rho shadow Grow remains diagnostic-only.
 
 ## Authoritative production certificate
 

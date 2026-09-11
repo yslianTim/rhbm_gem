@@ -1722,7 +1722,7 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         0.0);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
+TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesKeepsShrinksAndSaturates)
 {
     using Action = trust_detail::TrustRegionRadiusAction;
     trust_detail::ObjectiveAttemptDiagnostic accepted_diagnostic;
@@ -1744,7 +1744,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_EQ(
         trust_detail::DetermineAcceptedTrustRegionRadiusAction(
             0.5, accepted_diagnostic),
-        Action::Grow);
+        Action::Keep);
 
     accepted_diagnostic.accepted_factor = 0.25;
     EXPECT_EQ(
@@ -1756,14 +1756,14 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_EQ(
         trust_detail::DetermineAcceptedTrustRegionRadiusAction(
             0.5, accepted_diagnostic),
-        Action::Grow);
+        Action::Keep);
 
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
     trust_detail::TrustModelShadowDiagnostic shadow{
         .status = trust_detail::TrustModelPredictionStatus::Available,
         .rho = 0.20,
         .boundary_utilization = 1.0,
-        .current_action = Action::Grow
+        .current_action = Action::Keep
     };
     EXPECT_EQ(
         trust_detail::DetermineTrustModelShadowAction(shadow),
@@ -1787,10 +1787,10 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
         Action::Shrink);
     shadow.objective_backtracked = false;
     shadow.status = trust_detail::TrustModelPredictionStatus::NonmaterialPrediction;
-    shadow.current_action = Action::Grow;
+    shadow.current_action = Action::Keep;
     EXPECT_EQ(
         trust_detail::DetermineTrustModelShadowAction(shadow),
-        Action::Grow);
+        Action::Keep);
 #endif
 
     trust_detail::TrustRegionStateSet state;
@@ -1801,7 +1801,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     for (const auto expected : { 0.5, 0.25, 0.125, 0.0625 })
     {
         const auto update{
-            state.ApplyRadiusUpdates({}, { key }, {}, {})
+            state.ApplyRadiusUpdates({ key }, {}, {})
         };
         EXPECT_EQ(
             update.changed_key_list,
@@ -1810,15 +1810,15 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
         EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
     }
     const auto saturated{
-        state.ApplyRadiusUpdates({}, { key }, {}, {})
+        state.ApplyRadiusUpdates({ key }, {}, {})
     };
     EXPECT_TRUE(saturated.changed_key_list.empty());
     EXPECT_EQ(
         saturated.saturated_key_list,
         std::vector<trust_detail::ClusterKey>{ key });
 
-    state.ApplyRadiusUpdates({ key }, {}, {}, {});
-    EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
+    state.ApplyRadiusUpdates({}, {}, {});
+    EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.0625);
 
     const trust_detail::ClusterKey replacement_key{ 1 };
     state.Reconcile({ replacement_key });
@@ -2195,18 +2195,17 @@ TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalP
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
 {
     using Key = trust_detail::ClusterKey;
-    const Key grow_key{ 0 };
+    const Key keep_key{ 0 };
     const Key shrink_key{ 1 };
 
     trust_detail::TrustRegionStateSet state;
-    state.Reconcile({ grow_key, shrink_key });
+    state.Reconcile({ keep_key, shrink_key });
     const auto update{ state.ApplyRadiusUpdates(
-        { grow_key },
         {},
         { shrink_key },
         { shrink_key }) };
 
-    EXPECT_DOUBLE_EQ(state.GetRadius(grow_key), 2.0);
+    EXPECT_DOUBLE_EQ(state.GetRadius(keep_key), 1.0);
     EXPECT_DOUBLE_EQ(state.GetRadius(shrink_key), 1.0);
     EXPECT_TRUE(update.changed_key_list.empty());
     EXPECT_TRUE(update.saturated_key_list.empty());
@@ -2221,7 +2220,6 @@ TEST(EstimatorSecondStageDefenseTest, TerminalRejectionShrinksRadiusOncePerContr
     state.Reconcile({ first_key, second_key });
 
     const auto update{ state.ApplyRadiusUpdates(
-        {},
         {},
         { first_key, second_key },
         {}) };

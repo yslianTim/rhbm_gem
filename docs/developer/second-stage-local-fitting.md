@@ -449,7 +449,7 @@ All second-stage audit tolerances use:
 tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
 ```
 
-Progress, deterioration, and actual-reduction trust-growth comparisons use
+Progress and deterioration comparisons use
 `1e-8 + 1e-3 * abs(reference)`. Strict best, tie, and polish-improvement
 comparisons use `1e-10 + 1e-8 * abs(reference)`. Candidate comparisons against
 previous and best compute separate tolerances from their respective references.
@@ -488,26 +488,15 @@ loop, not a recursive candidate selection or a new outer attempt.
 
 The polish step is limited by the radius remaining after the accepted base
 movement. A rejected polish keeps the base candidate and is not backtracked.
-Radius updates use one controller entry point while preserving the validated
-baseline order: accepted objective-backtracking shrink, accepted growth, then
-retryable rejection shrink. The first guard-feasible factor that reaches the
-objective gate is the accepted-shrink reference. Guard-only factor reduction
-therefore does not shrink the radius; a later objective rejection followed by
-acceptance at a smaller factor does. Local terminal rejection remains
-retryable; an exhausted boundary or final-audit search keeps its radius because
-another shrink cannot produce a material candidate. An accepted cluster grows
-its radius only when the actual objective reduction exceeds the existing
-progress materiality tolerance (`1e-8 + 1e-3 * abs(previous)`), its step is
-within the outer 20% of the current radius, and no objective-backtracking
-shrink is already required. Guard-only backtracking does not suppress this
-independent growth rule. No radius update reruns the same validated state;
-updates remain isolated by cluster and clamp to `0.0625...4.0`.
-
-This remains an actual-reduction-aware transformed-step cap, not a model-based
-trust region: the production controller does not consume a predicted reduction
-or actual/predicted reduction ratio. Candidate acceptance and historical-best
-gates are unchanged; actual reduction only controls whether the next radius may
-grow.
+Radius updates apply accepted objective-backtracking shrink, then retryable
+rejection shrink. The first guard-feasible factor reaching the objective gate
+is the accepted-shrink reference. Guard-only factor reduction does not shrink
+the radius; later objective rejection followed by acceptance at a smaller factor
+does. Exhausted boundary or final-audit searches keep their radius. Existing
+keys never grow: accepted steps otherwise keep their radius. Shrink multiplies
+by `0.5` down to `0.0625`; newly introduced topology keys start at `1.0`.
+Cooperative rescue retains its existing acceptance and lifecycle policy.
+The production controller uses neither actual-reduction growth nor rho.
 
 A trust-model experiment build computes a developer-only frozen-IRLS
 directional model for every material base or joint-polish trial that reaches

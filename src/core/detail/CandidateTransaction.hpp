@@ -47,8 +47,6 @@ class CandidateTransactionBuilder
         const CandidateSelectionInputs & inputs,
         const std::vector<ClusterKey> & key_list,
         bool exhausted);
-    void RemoveTrustGrowthForKeys(
-        const std::vector<ClusterKey> & key_list);
     bool TryBoundaryJointCorrection(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,

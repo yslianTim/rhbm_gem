@@ -9,7 +9,7 @@ persistence policy. No tests or test cases are added. Existing tests only adapt
 to moved internal declarations and the separated certificate measurements.
 
 The execution map includes the retained P1 final-polish changes. Cooperative
-rescue and production radius growth retain their original policies.
+rescue retains its original policy; production radii use Keep/Shrink only.
 
 ## Ownership and execution
 

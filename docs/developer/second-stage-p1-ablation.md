@@ -1,4 +1,4 @@
-# P1 retained final-polish changes
+# P1 retained final-polish and radius changes
 
 The retained changes build on `6e7ac3c5f452812da8aeb1b1ae2497b5cd0143ec`:
 
@@ -9,17 +9,21 @@ The retained changes build on `6e7ac3c5f452812da8aeb1b1ae2497b5cd0143ec`:
    referenced to that round's endpoint rather than outer radius history.
    Ordinary boundary correction retains its outer-previous trust reference.
 
-The experimental removal of cooperative rescue and production Grow was reverted
-at the user's request. Both mechanisms and their existing test assertions are
-restored to the baseline. The rescue-removal experiment had failed the existing
-boundary intensity-scaling regression; its historical evidence remains in
-`build/p1-ablation` and does not describe the current implementation.
+3. Production radius updates use Keep or Shrink only. Shrink remains `0.5`,
+   with minimum `0.0625`; new topology keys start at `1.0`. Grow-key storage,
+   update branches and growth cancellation are removed. Rho shadow Grow remains
+   diagnostic-only and cannot update production state.
 
-After restoration, the full existing default CTest suite passes 16/16 groups,
-including the previously failing intensity-scaling case. No test cases were
-added and no numerical assertions or tolerances were weakened. The only retained
-test edit adapts the existing final-polish case to the internal interface change.
-Current validation logs are under `build/p1-restored`.
+Cooperative rescue remains enabled. The initial combined rescue/Grow removal
+failed the boundary intensity-scaling regression and was reverted. A subsequent
+independent Grow ablation, retaining rescue and both final-polish changes, passes
+the full existing default CTest suite: 16/16 groups, including intensity scaling.
+Historical combined-ablation evidence remains under `build/p1-ablation`;
+the current independent Grow validation is under `build/p1-grow-only`.
+
+No test cases were added or numerical tolerances weakened. Existing production
+Grow expectations now assert Keep, while Shrink, saturation, shadow Grow and
+rescue assertions remain. The final-polish case retains its interface adaptation.
 
 The [execution map](second-stage-p0-structure.md#ownership-and-execution) shows
 rescue and transaction publication followed by converged-only final polish.

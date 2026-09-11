@@ -25,7 +25,7 @@ struct TrustRegionRadiusUpdate
 enum class TrustRegionRadiusAction
 {
     Keep,
-    Grow,
+    Grow, // Diagnostic shadow action only; production never grows radii.
     Shrink
 };
 
@@ -38,7 +38,6 @@ public:
     double GetRadius(const ClusterKey & key) const;
     void ResetToMinimum(const std::vector<ClusterKey> & key_list);
     TrustRegionRadiusUpdate ApplyRadiusUpdates(
-        const std::vector<ClusterKey> & grow_key_list,
         const std::vector<ClusterKey> & accepted_shrink_key_list,
         const std::vector<ClusterKey> & rejected_key_list,
         const std::vector<ClusterKey> & exhausted_key_list);
@@ -159,7 +158,6 @@ struct CandidateSelection
     PolishProvenance assembled_polish_provenance{};
     std::vector<ClusterKey> accepted_key_list{};
     std::vector<ClusterKey> rejected_key_list{};
-    std::vector<ClusterKey> grow_trust_region_key_list{};
     std::vector<ClusterKey> shrink_trust_region_key_list{};
     std::vector<ClusterKey> exhausted_key_list{};
     std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};

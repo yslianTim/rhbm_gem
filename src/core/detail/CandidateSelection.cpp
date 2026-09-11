@@ -24,18 +24,7 @@ namespace rhbm_gem::core::detail {
 namespace {
 constexpr double kTrustRegionInitialRadius{ 1.0 };
 constexpr double kTrustRegionMinimumRadius{ 0.0625 };
-constexpr double kTrustRegionMaximumRadius{ 4.0 };
 constexpr double kTrustRegionShrinkFactor{ 0.5 };
-constexpr double kTrustRegionGrowthFactor{ 2.0 };
-constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
-
-bool IsTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
-{
-    return std::isfinite(step_norm) &&
-        std::isfinite(radius) &&
-        radius > 0.0 &&
-        step_norm >= kTrustRegionGrowthBoundaryRatio * radius;
-}
 
 struct ClusterCandidateResult
 {
@@ -91,7 +80,6 @@ void TrustRegionStateSet::ResetToMinimum(const std::vector<ClusterKey> & key_lis
 }
 
 TrustRegionRadiusUpdate TrustRegionStateSet::ApplyRadiusUpdates(
-    const std::vector<ClusterKey> & grow_key_list,
     const std::vector<ClusterKey> & accepted_shrink_key_list,
     const std::vector<ClusterKey> & rejected_key_list,
     const std::vector<ClusterKey> & exhausted_key_list)
@@ -119,18 +107,6 @@ TrustRegionRadiusUpdate TrustRegionStateSet::ApplyRadiusUpdates(
         }
     };
     shrink(accepted_shrink_key_list);
-    for (const auto & key : grow_key_list)
-    {
-        auto iter{ m_radius_by_key.find(key) };
-        if (iter == m_radius_by_key.end())
-        {
-            throw std::invalid_argument(
-                "Local fitting trust-region state is missing.");
-        }
-        iter->second = std::min(
-            kTrustRegionMaximumRadius,
-            iter->second * kTrustRegionGrowthFactor);
-    }
     std::vector<ClusterKey> retryable_key_list;
     for (const auto & key : rejected_key_list)
     {
@@ -336,20 +312,6 @@ static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const C
     return std::ranges::find(key_list, key) != key_list.end();
 }
 
-static bool ShouldGrowTrustRegion(
-    const ObjectiveAttemptDiagnostic & diagnostic)
-{
-    return diagnostic.candidate_objective.has_value() &&
-        diagnostic.previous_objective.has_value() &&
-        IsTrustRegionStepAtGrowthBoundary(
-            diagnostic.trust_region_step_norm,
-            diagnostic.trust_region_radius) &&
-        IsBetterAuditObjective(
-            diagnostic.candidate_objective->GetTotalObjective(),
-            diagnostic.previous_objective->GetTotalObjective(),
-            kObjectiveProgressTolerance);
-}
-
 TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic)
@@ -360,8 +322,7 @@ TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
     {
         return TrustRegionRadiusAction::Shrink;
     }
-    return ShouldGrowTrustRegion(diagnostic) ?
-        TrustRegionRadiusAction::Grow : TrustRegionRadiusAction::Keep;
+    return TrustRegionRadiusAction::Keep;
 }
 
 static ClusterCandidateResult SelectClusterCandidate(
@@ -688,11 +649,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     }
                 }
                 result.accepted_patch = std::move(polished_candidate->patch);
-                if (result.radius_action != TrustRegionRadiusAction::Shrink &&
-                    ShouldGrowTrustRegion(polish_diagnostic))
-                {
-                    result.radius_action = TrustRegionRadiusAction::Grow;
-                }
+
             }
         }
     }
@@ -854,11 +811,7 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         }
 
         selection.accepted_key_list.emplace_back(key);
-        if (result.radius_action == TrustRegionRadiusAction::Grow)
-        {
-            selection.grow_trust_region_key_list.emplace_back(key);
-        }
-        else if (result.radius_action == TrustRegionRadiusAction::Shrink)
+        if (result.radius_action == TrustRegionRadiusAction::Shrink)
         {
             selection.shrink_trust_region_key_list.emplace_back(key);
         }

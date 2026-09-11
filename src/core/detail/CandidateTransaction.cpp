@@ -41,7 +41,7 @@ CandidateCommitResult CandidateTransaction::Commit(const SecondStageContext & co
     history = std::move(m_selection.cluster_objective_state);
     LogBestObjectivePublication(context, history);
     result.trust_region_update = radii.ApplyRadiusUpdates(
-        m_selection.grow_trust_region_key_list, m_selection.shrink_trust_region_key_list,
+        m_selection.shrink_trust_region_key_list,
         m_selection.rejected_key_list, m_selection.exhausted_key_list);
     result.accepted_cluster_diagnostic_list = std::move(m_selection.accepted_cluster_diagnostic_list);
     result.rejected_cluster_diagnostic_list = std::move(m_selection.rejected_cluster_diagnostic_list);
