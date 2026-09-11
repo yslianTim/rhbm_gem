@@ -654,6 +654,12 @@ polish updates audit and provenance without changing accepted iterations or the
 stop reason. Diagnostics report strict-fixed-point policy and absolute-passed,
 failed, error, or not-evaluated status, candidate evidence and actual application.
 
+The [independent converged-only final-polish ablation](second-stage-final-polish-only-ablation.md)
+retains production polish. Existing data reaches five converged finalizations,
+but none applies a polish patch: four have no component and one solve reports
+no material change. Identical ON/OFF outputs therefore leave applied-path value
+unresolved; they do not justify deleting polish or its recertification.
+
 ## Numerical defenses, partial active set, and quarantine
 
 - Suspicious evaluation has offset-only and post-refit modes. Offset-only checks

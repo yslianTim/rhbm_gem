@@ -185,6 +185,12 @@ Non-convergence stop reasons persist the existing selected base state directly.
 They do not run final dependency polish or operator recertification. The strict
 candidate check is the only final-polish persistence policy.
 
+The [independent converged-only final-polish ablation](second-stage-final-polish-only-ablation.md)
+retains production polish. Existing data reaches five converged finalizations,
+but none applies a polish patch: four have no component and one solve reports
+no material change. Identical ON/OFF outputs therefore leave applied-path value
+unresolved; they do not justify deleting polish or its recertification.
+
 ## Current diagnostic contract
 
 The current Debug trajectory is schema 10 and serializes the production
