@@ -8,6 +8,64 @@
 
 namespace rhbm_gem::core::detail {
 
+CandidateTransactionBuilder::CandidateTransactionBuilder(CandidateSelection initial)
+    : m_selection(std::move(initial))
+{
+    for (const auto & key : m_selection.accepted_key_list)
+        m_candidate_by_key[key].selected = true;
+    for (const auto & key : m_selection.rejected_key_list)
+        m_candidate_by_key[key].rejection_order = m_next_rejection_order++;
+    for (const auto & key : m_selection.exhausted_key_list)
+        m_candidate_by_key[key].exhausted = true;
+    for (const auto & key : m_selection.shrink_trust_region_key_list)
+        m_candidate_by_key[key].shrink_trust_region = true;
+    for (auto & diagnostic : m_selection.accepted_cluster_diagnostic_list)
+        m_candidate_by_key[diagnostic.key].diagnostic = std::move(diagnostic);
+    for (auto & diagnostic : m_selection.rejected_cluster_diagnostic_list)
+        m_candidate_by_key[diagnostic.key].diagnostic = std::move(diagnostic);
+    m_selection.accepted_key_list.clear();
+    m_selection.rejected_key_list.clear();
+    m_selection.exhausted_key_list.clear();
+    m_selection.shrink_trust_region_key_list.clear();
+    m_selection.accepted_cluster_diagnostic_list.clear();
+    m_selection.rejected_cluster_diagnostic_list.clear();
+}
+
+std::vector<ClusterKey> CandidateTransactionBuilder::SelectedKeys() const
+{
+    std::vector<ClusterKey> keys;
+    for (const auto & [key, candidate] : m_candidate_by_key)
+        if (candidate.selected) keys.emplace_back(key);
+    return keys;
+}
+
+void CandidateTransactionBuilder::MaterializeSelection()
+{
+    // Classify once after component selection and global salvage. Preserve the
+    // historical rejection event order without moving diagnostics between lists.
+    std::vector<PendingCandidate *> rejected;
+    for (auto & [key, candidate] : m_candidate_by_key)
+    {
+        if (candidate.selected)
+        {
+            m_selection.accepted_key_list.emplace_back(key);
+            if (candidate.diagnostic)
+                m_selection.accepted_cluster_diagnostic_list.emplace_back(std::move(*candidate.diagnostic));
+        }
+        else
+        {
+            m_selection.rejected_key_list.emplace_back(key);
+            rejected.emplace_back(&candidate);
+        }
+        if (candidate.exhausted) m_selection.exhausted_key_list.emplace_back(key);
+        if (candidate.shrink_trust_region) m_selection.shrink_trust_region_key_list.emplace_back(key);
+    }
+    std::ranges::sort(rejected, {}, &PendingCandidate::rejection_order);
+    for (auto * candidate : rejected)
+        if (candidate->diagnostic)
+            m_selection.rejected_cluster_diagnostic_list.emplace_back(std::move(*candidate->diagnostic));
+}
+
 CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectionInputs & inputs,
     const QuarantineState & quarantine, std::span<const SuspiciousGaussianAssessment> assessments,
     const ClusterHealthMap & health, const FixedPointOperatorEvidence & operator_evidence,

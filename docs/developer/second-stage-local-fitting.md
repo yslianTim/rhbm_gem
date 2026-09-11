@@ -58,8 +58,8 @@ all second-stage services through candidate selection:
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
-| `CandidateTransaction` | Private selection builder, staged quarantine, and consuming publication of validated results |
-| `BoundaryReconciliation` | Boundary correction, backtracking, rescue, complete-selection audit/salvage |
+| `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
+| `BoundaryReconciliation` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
@@ -261,7 +261,8 @@ Each outer attempt performs the following sequence:
    objective; an unavailable or rejected correction falls through to the
    unchanged common-factor component backtracking. A failed component rolls back
    only its members, so unrelated components and remote singleton clusters remain
-   eligible for commit. Then build maximal eligible boundary components from the
+   eligible for commit. When this sweep has components, run its existing global
+   audit/salvage. Then build maximal eligible boundary components from the
    safe accepted state and the best finite objective-rejected proposal retained
    for each rejected cluster. Components containing at least one such proposal
    receive the same endpoint, active-column joint correction, and common-factor
@@ -271,7 +272,8 @@ Each outer attempt performs the following sequence:
    historical-best tolerance still applies. A failed correction retains a valid
    rescue endpoint, and any failed rescue atomically leaves the safe accepted
    state unchanged.
-9. Run the unchanged global previous/best audit on the complete assembled state.
+9. After cooperative acceptance, run the unchanged global previous/best audit on
+   the complete assembled state.
    If tolerance-level deterioration from independent reconciliation units causes
    aggregate rejection, remove non-improving units from worst to best until the
    first passing subset is found. If only strictly improving units remain but the
@@ -748,6 +750,14 @@ the last validated partition and frozen background instead. Background-only
 refresh leaves sampling-domain/scales/workspaces intact and adds no separate
 movement blocker. Scores from different backgrounds or domains are never
 compared directly.
+
+The current independent [rescue-only ablation](second-stage-rescue-only-ablation.md)
+finds a tradeoff on an existing fixture: rescue improves final raw response MSE,
+while disabling it improves the robust audit objective and saves one attempt.
+Both variants pass the existing tests. Rescue remains enabled; its evaluation
+now shares the normal component pipeline and result-application entry. Local
+outcomes stay provisional per key until final global salvage, after which the
+accepted/rejected lists are materialized once without a special promote step.
 
 ## Global audit and stopping
 

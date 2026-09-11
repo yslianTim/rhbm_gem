@@ -718,7 +718,8 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         .assembled_polish_provenance = inputs.previous_polish_provenance
     };
     auto & selection{ m_selection };
-    std::map<ClusterKey, FitStatePatch> rescue_patch_by_key;
+    m_candidate_by_key.clear();
+    m_next_rejection_order = 0;
     std::vector<ClusterKey> locally_polished_key_list;
     locally_polished_key_list.reserve(result_list.size());
     for (std::size_t position = 0; position < result_list.size(); position++)
@@ -760,13 +761,13 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         }
 
         const auto is_accepted{ result.accepted_patch.has_value() };
+        auto & pending{ m_candidate_by_key[key] };
+        pending.selected = is_accepted;
         if (!is_accepted)
         {
             if (result.rescue_patch.has_value())
             {
-                rescue_patch_by_key.emplace(
-                    key,
-                    std::move(*result.rescue_patch));
+                pending.cooperative_patch = std::move(result.rescue_patch);
             }
             else if (IsJointOffsetSolveHardFailure(
                 inputs.health_by_key.at(key).joint_offset_status))
@@ -793,26 +794,13 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
             }
         }
 
-        ClusterCandidateDiagnostic cluster_diagnostic{
-            key,
-            std::move(result.diagnostic)
-        };
-
+        pending.diagnostic = ClusterCandidateDiagnostic{ key, std::move(result.diagnostic) };
         if (!is_accepted)
         {
-            selection.rejected_key_list.emplace_back(key);
-            selection.rejected_cluster_diagnostic_list.emplace_back(
-                std::move(cluster_diagnostic));
+            pending.rejection_order = m_next_rejection_order++;
             continue;
         }
-
-        selection.accepted_key_list.emplace_back(key);
-        if (result.shrink_trust_region)
-        {
-            selection.shrink_trust_region_key_list.emplace_back(key);
-        }
-        selection.accepted_cluster_diagnostic_list.emplace_back(
-            std::move(cluster_diagnostic));
+        pending.shrink_trust_region = result.shrink_trust_region;
         result.accepted_patch->ApplyTo(selection.assembled_state);
         for (std::size_t key_position = 0;
             key_position < key.size(); key_position++)
@@ -825,7 +813,7 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
     inputs.performance_counters.RecordFullStateMaterialization();
 
     ObservePhaseSearchAssembly(inputs.context, selection.assembled_state);
-    ReconcileSelectedBoundaries(inputs, rescue_patch_by_key);
+    ReconcileSelectedBoundaries(inputs);
     ObservePhaseState(inputs.context, "boundary-final", selection.assembled_state);
     for (const auto & key : locally_polished_key_list)
     {

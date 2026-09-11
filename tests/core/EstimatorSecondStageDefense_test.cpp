@@ -5110,7 +5110,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryRejectionRestoresBestParameterSnap
         fixture.context.cluster_history->Local(overlay, key, fixture.sample_ref_list, domain, "test", true, diagnostic);
     }
     audit_detail::CandidateTransactionBuilder builder(std::move(selection));
-    builder.ReconcileSelectedBoundaries(inputs, {});
+    builder.ReconcileSelectedBoundaries(inputs);
     selection = builder.View();
     EXPECT_TRUE(selection.accepted_key_list.empty());
     EXPECT_EQ(selection.rejected_key_list.size(), 2U);

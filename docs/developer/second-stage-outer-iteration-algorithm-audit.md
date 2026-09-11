@@ -93,8 +93,11 @@ validated S(k)
   -> strict operator evidence F(S(k))
   -> geometric candidate factors: validity -> trust -> guard -> objective
   -> active-column joint polish
-  -> boundary reconciliation and cooperative rescue
-  -> complete-state global previous/best audit
+  -> ordinary components through the shared evaluator/apply entry
+  -> existing global audit/salvage
+  -> cooperative components through the same evaluator/apply entry
+  -> after cooperative acceptance: existing global audit/salvage
+  -> materialize final accepted/rejected classifications
   -> stage next-iteration Active/Frozen state without modifying audited models
   -> publish state, trust-radius and quarantine updates
   -> notify optional history observer to publish provenance
@@ -105,6 +108,13 @@ validated S(k)
   -> strict operator persistence safety check; otherwise retain chosen base
   -> persist Gaussian and peeling state
 ```
+
+The independent [rescue-only ablation](second-stage-rescue-only-ablation.md) at
+`ddc16505` passes existing tests both with and without rescue, but reveals opposing
+response-MSE and audit-objective/cost benefits. Rescue remains enabled and now
+shares normal component evaluation and result application, with provisional
+per-key outcomes classified after final salvage instead of a promote path. The earlier
+combined rescue/Grow result is not reused as independent evidence.
 
 Quarantine evidence is limited to solver hard failure, invalid candidate, and
 guard infeasibility. The `objective-exhausted` search diagnostic neither accrues

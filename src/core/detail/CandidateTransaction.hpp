@@ -7,6 +7,7 @@
 
 namespace rhbm_gem::core::detail {
 struct IterationResult;
+enum class CandidateScope;
 
 struct CandidateCommitResult
 {
@@ -40,42 +41,57 @@ public:
 
 class CandidateTransactionBuilder
 {
+    struct PendingCandidate
+    {
+        std::optional<ClusterCandidateDiagnostic> diagnostic{};
+        std::optional<FitStatePatch> cooperative_patch{};
+        bool selected{ false };
+        bool exhausted{ false };
+        bool shrink_trust_region{ false };
+        std::size_t rejection_order{ 0 };
+    };
+    struct ComponentCandidate
+    {
+        FitStatePatch patch{};
+        std::vector<std::pair<std::size_t, char>> provenance_updates{};
+        std::size_t history_observation{ 0 };
+    };
     CandidateSelection m_selection{};
+    std::map<ClusterKey, PendingCandidate> m_candidate_by_key{};
+    std::size_t m_next_rejection_order{ 0 };
+    std::vector<ClusterKey> SelectedKeys() const;
+    void MaterializeSelection();
+    void ApplyComponentCandidate(
+        const CandidateSelectionInputs &, const BoundaryReconciliationComponent &,
+        const FitStatePatch & endpoint_patch, ComponentCandidate,
+        BoundaryComponentAcceptedSource, CandidateScope);
     void RejectSelectionKeys(
         const CandidateSelectionInputs & inputs,
         const std::vector<ClusterKey> & key_list,
         bool exhausted);
-    bool TryBoundaryJointCorrection(
+    std::optional<ComponentCandidate> TryBoundaryJointCorrection(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown & previous_audit_objective,
         const ObjectiveBreakdown & improvement_reference_objective,
         const FitStatePatch & endpoint_patch,
-        BoundaryComponentReconciliationDiagnostic & diagnostic);
-    bool TryBacktrackBoundaryComponent(
+        BoundaryComponentReconciliationDiagnostic & diagnostic,
+        CandidateScope scope);
+    std::optional<ComponentCandidate> TryBacktrackBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown * previous_audit_objective,
         const FitStatePatch & endpoint_patch,
-        BoundaryComponentReconciliationDiagnostic & diagnostic);
-    void ReconcileBoundaryComponent(
+        BoundaryComponentReconciliationDiagnostic & diagnostic,
+        CandidateScope scope);
+    bool ReconcileBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
-        const ObjectiveBreakdown * previous_audit_objective);
-    void PromoteBoundaryRescueKeys(
+        const ObjectiveBreakdown * previous_audit_objective,
+        CandidateScope scope);
+    bool ReconcileCooperativeComponents(
         const CandidateSelectionInputs & inputs,
-        const std::vector<ClusterKey> & rescue_key_list,
-        const FitStatePatch & endpoint_patch,
-        BoundaryComponentAcceptedSource accepted_source);
-    bool TryRescueBoundaryComponent(
-        const CandidateSelectionInputs & inputs,
-        const BoundaryReconciliationComponent & component,
-        const ObjectiveBreakdown & previous_audit_objective,
-        const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key);
-    bool RescueRejectedBoundaryClusters(
-        const CandidateSelectionInputs & inputs,
-        const ObjectiveBreakdown & previous_audit_objective,
-        const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key);
+        const ObjectiveBreakdown & previous_audit_objective);
     void MarkBoundaryDiagnosticRejected(
         const std::vector<ClusterKey> & key_list,
         bool exhausted);
@@ -84,12 +100,10 @@ class CandidateTransactionBuilder
         const ObjectiveBreakdown & previous_audit_objective);
 public:
     CandidateTransactionBuilder() = default;
-    explicit CandidateTransactionBuilder(CandidateSelection initial) : m_selection(std::move(initial)) {}
+    explicit CandidateTransactionBuilder(CandidateSelection initial);
     CandidateTransactionBuilder(const CandidateTransactionBuilder &) = delete;
     void Select(const CandidateSelectionInputs &);
-    void ReconcileSelectedBoundaries(
-        const CandidateSelectionInputs & inputs,
-        const std::map<ClusterKey, FitStatePatch> & rescue_patch_by_key);
+    void ReconcileSelectedBoundaries(const CandidateSelectionInputs & inputs);
     const CandidateSelection & View() const { return m_selection; }
     CandidateTransaction Finish(const CandidateSelectionInputs &, const QuarantineState &,
         std::span<const SuspiciousGaussianAssessment>, const ClusterHealthMap &, const FixedPointOperatorEvidence &, std::size_t domain_revision) &&;
