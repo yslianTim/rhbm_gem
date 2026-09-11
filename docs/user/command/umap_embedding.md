@@ -63,7 +63,8 @@ also queries non-hydrogen neighbors. This feature always excludes hydrogen
 candidates and assumes an eligible neighbor exists.
 
 Each peeling ratio is
-`(raw sum - peeling sum) / raw sum` in its distance range. Each rank compares
+`(raw sum - peeling sum) / raw sum`, using samples with finite distances within
+its inclusive distance range. Each rank compares
 the current atom with all other selected atoms within an inclusive 2 Å radius,
 using second-stage amplitude, width, or offset. The largest value has rank 1;
 each rank is one plus the number of neighbors with a strictly larger value.

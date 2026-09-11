@@ -149,6 +149,7 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
     std::size_t raw_sample_count{ 0 };
     for (const auto & sample : GetRawSamplingEntries(false))
     {
+        if (!std::isfinite(sample.point.distance)) continue;
         if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
         raw_sum += sample.response;
         ++raw_sample_count;
@@ -157,6 +158,7 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
     std::size_t peeling_sample_count{ 0 };
     for (const auto & sample : GetPeelingSamplingEntries(false))
     {
+        if (!std::isfinite(sample.point.distance)) continue;
         if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
         peeling_sum += sample.response;
         ++peeling_sample_count;
