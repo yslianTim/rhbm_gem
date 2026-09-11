@@ -22,13 +22,6 @@ struct TrustRegionRadiusUpdate
     std::vector<ClusterKey> saturated_key_list{};
 };
 
-enum class TrustRegionRadiusAction
-{
-    Keep,
-    Grow, // Diagnostic shadow action only; production never grows radii.
-    Shrink
-};
-
 class TrustRegionStateSet
 {
     std::map<ClusterKey, double> m_radius_by_key{};
@@ -44,7 +37,7 @@ public:
 
 };
 
-TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
+bool ShouldShrinkAcceptedTrustRegionRadius(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic);
 

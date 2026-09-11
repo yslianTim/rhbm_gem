@@ -119,7 +119,6 @@ struct ObjectiveAttemptDiagnostic
     double trust_region_radius{ 0.0 };
     double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
-    bool rejected_by_best{ false };
     std::size_t trial_count{ 0 };
     std::size_t invalid_trial_count{ 0 };
     std::size_t trust_skipped_trial_count{ 0 };

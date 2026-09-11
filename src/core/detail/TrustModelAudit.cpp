@@ -393,7 +393,7 @@ void TrustModelAudit::Log(
             {
                 std::ostringstream message;
                 message << std::scientific << std::setprecision(17)
-                    << "Trust-model shadow: schema=2"
+                    << "Trust-model shadow: schema=3"
                     << ", try=" << iteration_result.attempt_number
                     << ", acc=" << iteration_result.accepted_iteration_count
                     << ", atoms=" << cluster_diagnostic.key.size()
@@ -413,7 +413,6 @@ void TrustModelAudit::Log(
                     << ", trial-disposition=" << GetTrustModelTrialDispositionText(
                         diagnostic.trial_disposition)
                     << ", rejected-by-previous=" << diagnostic.rejected_by_previous
-                    << ", rejected-by-best=" << diagnostic.rejected_by_best
                     << ", rejected-by-strict-polish="
                     << diagnostic.rejected_by_strict_polish
                     << ", step-norm=" << diagnostic.step_norm
@@ -484,9 +483,8 @@ void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
     shadow.factor = factor;
     shadow.trial_disposition = accepted ? TrustModelTrialDisposition::Accepted : TrustModelTrialDisposition::ObjectiveRejected;
     shadow.rejected_by_previous = diagnostic.rejected_by_previous;
-    shadow.rejected_by_best = diagnostic.rejected_by_best;
     shadow.rejected_by_strict_polish = polish && !accepted && diagnostic.candidate_objective &&
-        diagnostic.previous_objective && !diagnostic.rejected_by_previous && !diagnostic.rejected_by_best;
+        diagnostic.previous_objective && !diagnostic.rejected_by_previous;
     if (polish && diagnostic.previous_objective && diagnostic.candidate_objective)
         shadow.polish_reduction = diagnostic.previous_objective->GetTotalObjective() - diagnostic.candidate_objective->GetTotalObjective();
     shadow.shadow_action.reset();
@@ -495,14 +493,15 @@ void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
     if (accepted) final_trial = record.trials.size() - 1;
 }
 
-void TrustModelTrialObserver::Finish(TrustRegionRadiusAction action,
+void TrustModelTrialObserver::Finish(bool shrink_trust_region,
     std::optional<double> first_factor, const ObjectiveAttemptDiagnostic & diagnostic)
 {
     if (!final_trial) return;
     auto & shadow{ record.trials.at(*final_trial) };
     shadow.final_local_candidate = true;
     shadow.readiness_eligible = true;
-    shadow.current_action = action;
+    shadow.current_action = shrink_trust_region ?
+        TrustRegionRadiusAction::Shrink : TrustRegionRadiusAction::Keep;
     shadow.objective_backtracked = first_factor && diagnostic.accepted_factor && *diagnostic.accepted_factor < *first_factor;
     shadow.shadow_action = DetermineTrustModelShadowAction(shadow);
 }

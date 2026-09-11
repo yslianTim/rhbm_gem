@@ -117,7 +117,6 @@ static bool EvaluateLocalObjective(
     diagnostic.stored_best_objective = objective_state.best_objective;
     diagnostic.best_objective.reset();
     diagnostic.best_reference_unavailable = false;
-    diagnostic.rejected_by_best = false;
     if (!diagnostic.candidate_objective.has_value() || previous_objective == nullptr)
     {
         return false;

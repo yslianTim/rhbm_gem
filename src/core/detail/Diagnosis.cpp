@@ -513,17 +513,9 @@ void LogRejectedClusterDiagnostics(
         {
             message << "objective-unavailable";
         }
-        else if (diagnostic.rejected_by_previous && diagnostic.rejected_by_best)
-        {
-            message << "previous+best";
-        }
         else if (diagnostic.rejected_by_previous)
         {
             message << "previous";
-        }
-        else if (diagnostic.rejected_by_best)
-        {
-            message << "best";
         }
         else
         {

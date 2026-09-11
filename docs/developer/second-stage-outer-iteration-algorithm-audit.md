@@ -19,8 +19,8 @@ trajectory.
 
 The [retained P1 changes](second-stage-p1-ablation.md) limit final polish to
 converged stops with an independent radius. Cooperative rescue remains enabled;
-production uses Keep/Shrink only after the independent Grow ablation passed
-existing tests.
+production only requests Shrink after the independent Grow ablation passed
+existing tests; Keep is an implicit no-op.
 
 ## Scope and canonical states
 
@@ -111,8 +111,10 @@ domain feasibility. Objective gates accept or reject candidates. None of
 these responsibilities substitutes for fixed-point evidence.
 
 Guard is feasibility-only: guard-only factor reduction does not request radius
-shrink. Existing keys use Keep or Shrink only, with factor `0.5` and minimum
-`0.0625`; new keys start at `1.0`. Final polish independently uses `1.0` relative
+shrink. Local candidates record only whether to request Shrink; the transaction
+retains its shrink-key list and keys without a radius update implicitly Keep.
+Accepted shrink requests and retryable rejected keys retain their existing update
+order, with factor `0.5` and minimum `0.0625`; new keys start at `1.0`. Final polish independently uses `1.0` relative
 to each round's endpoint. Rho shadow Grow remains diagnostic-only.
 
 ## Authoritative production certificate
@@ -176,7 +178,16 @@ Frozen-IRLS predicted-reduction and rho instrumentation is not part of a
 normal or routine audit build. It is available only through the developer-only
 `RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT` build option and never controls the
 production trajectory. Its logs are consumed only by
-`analyze_trust_model_experiment.py`. The experiment remains diagnostic-only.
+`analyze_trust_model_experiment.py`. Shadow records use schema 3, which removes
+`rejected-by-best`; the analyzer also accepts historical schema 2. Funnel,
+phase-audit and analyzer-summary schemas are unchanged. Keep/Grow/Shrink actions
+exist only in the trust-model diagnostics; the production observer input is a
+boolean shrink request. The experiment remains diagnostic-only.
+
+Local and shadow diagnostics no longer carry the fixed-false `rejected_by_best`
+field or its unreachable rejection branches. `best_reference_unavailable` remains
+active history-update evidence, not a rejection gate. Cluster history/tie-break,
+global-best acceptance and lifecycle diagnostic naming are unchanged.
 
 ## Structural P0 result (2026-09-11)
 

@@ -36,7 +36,7 @@ def parse_log(text: str) -> dict[str, list[dict[str, str]]]:
             if fields.get("schema") == "1":
                 funnels.append(fields)
         if fields := _fields(line, TRIAL_MARKER):
-            if fields.get("schema") == "2":
+            if fields.get("schema") in {"2", "3"}:
                 trials.append(fields)
     return {"funnels": funnels, "trials": trials}
 

@@ -5,6 +5,13 @@
 namespace rhbm_gem::core::detail {
 struct IterationResult;
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+enum class TrustRegionRadiusAction
+{
+    Keep,
+    Grow, // Diagnostic shadow action only; production never grows radii.
+    Shrink
+};
+
 enum class TrustModelPredictionStatus
 {
     Available,
@@ -61,7 +68,6 @@ struct TrustModelShadowDiagnostic
     std::optional<TrustRegionRadiusAction> shadow_action{};
     bool objective_backtracked{ false };
     bool rejected_by_previous{ false };
-    bool rejected_by_best{ false };
     bool rejected_by_strict_polish{ false };
     bool final_local_candidate{ false };
     bool readiness_eligible{ false };
@@ -124,7 +130,7 @@ public:
     void TrustSkipped() { ++record.funnel.trust_skipped_count; }
     void GuardRejected() { ++record.funnel.guard_rejected_count; }
     void Trial(const FitStatePatch &, const ObjectiveAttemptDiagnostic &, bool polish, double factor, bool accepted);
-    void Finish(TrustRegionRadiusAction, std::optional<double>, const ObjectiveAttemptDiagnostic &);
+    void Finish(bool shrink_trust_region, std::optional<double>, const ObjectiveAttemptDiagnostic &);
 #else
 public:
     TrustModelTrialObserver(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &) {}
@@ -135,7 +141,7 @@ public:
     void TrustSkipped() {}
     void GuardRejected() {}
     void Trial(const FitStatePatch &, const ObjectiveAttemptDiagnostic &, bool, double, bool) {}
-    void Finish(TrustRegionRadiusAction, std::optional<double>, const ObjectiveAttemptDiagnostic &) {}
+    void Finish(bool, std::optional<double>, const ObjectiveAttemptDiagnostic &) {}
 #endif
 };
 

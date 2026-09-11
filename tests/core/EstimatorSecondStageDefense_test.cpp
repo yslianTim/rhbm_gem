@@ -1725,7 +1725,6 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesKeepsShrinksAndSaturates)
 {
-    using Action = trust_detail::TrustRegionRadiusAction;
     trust_detail::ObjectiveAttemptDiagnostic accepted_diagnostic;
     accepted_diagnostic.accepted_factor = 0.5;
     accepted_diagnostic.trust_region_radius = 1.0;
@@ -1735,31 +1734,28 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesKeepsShrinksAndS
     accepted_diagnostic.candidate_objective =
         trust_detail::BuildObjectiveBreakdown(1.999, 0.0, 0.0);
 
-    EXPECT_EQ(
-        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
-            0.5, accepted_diagnostic),
-        Action::Keep);
+    EXPECT_FALSE(
+        trust_detail::ShouldShrinkAcceptedTrustRegionRadius(
+            0.5, accepted_diagnostic));
 
     accepted_diagnostic.candidate_objective =
         trust_detail::BuildObjectiveBreakdown(1.997, 0.0, 0.0);
-    EXPECT_EQ(
-        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
-            0.5, accepted_diagnostic),
-        Action::Keep);
+    EXPECT_FALSE(
+        trust_detail::ShouldShrinkAcceptedTrustRegionRadius(
+            0.5, accepted_diagnostic));
 
     accepted_diagnostic.accepted_factor = 0.25;
-    EXPECT_EQ(
-        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
-            0.5, accepted_diagnostic),
-        Action::Shrink);
+    EXPECT_TRUE(
+        trust_detail::ShouldShrinkAcceptedTrustRegionRadius(
+            0.5, accepted_diagnostic));
 
     accepted_diagnostic.accepted_factor = 0.5;
-    EXPECT_EQ(
-        trust_detail::DetermineAcceptedTrustRegionRadiusAction(
-            0.5, accepted_diagnostic),
-        Action::Keep);
+    EXPECT_FALSE(
+        trust_detail::ShouldShrinkAcceptedTrustRegionRadius(
+            0.5, accepted_diagnostic));
 
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+    using Action = trust_detail::TrustRegionRadiusAction;
     trust_detail::TrustModelShadowDiagnostic shadow{
         .status = trust_detail::TrustModelPredictionStatus::Available,
         .rho = 0.20,
@@ -4944,7 +4940,6 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
             diagnostic = evaluation.diagnostic;
             ASSERT_TRUE(evaluation.objective_state);
             if (evaluation.accepted) trial_best = *evaluation.objective_state;
-            EXPECT_FALSE(diagnostic.rejected_by_best);
             ASSERT_TRUE(diagnostic.best_objective);
             EXPECT_NEAR(diagnostic.best_objective->GetTotalObjective(), current_objective->GetTotalObjective(), 1.0e-12);
             EXPECT_DOUBLE_EQ(trial_best.best_objective->GetTotalObjective(), best.best_objective->GetTotalObjective());
@@ -4969,7 +4964,6 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     rejected = worse_evaluation.diagnostic;
     ASSERT_TRUE(worse_evaluation.objective_state);
     if (worse_evaluation.accepted) trial_best = *worse_evaluation.objective_state;
-    EXPECT_FALSE(rejected.rejected_by_best);
     EXPECT_FALSE(rejected.rejected_by_previous);
     EXPECT_DOUBLE_EQ(trial_best.best_parameters.mdpde_list.front().GetModel().GetAmplitude(), 6.0);
 

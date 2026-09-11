@@ -34,7 +34,7 @@ struct ClusterCandidateResult
     ClusterObjectiveState objective_state{};
     ObjectiveAttemptDiagnostic diagnostic{};
     PolishProgress polish_progress{};
-    TrustRegionRadiusAction radius_action{ TrustRegionRadiusAction::Keep };
+    bool shrink_trust_region{ false };
 
 };
 
@@ -312,17 +312,13 @@ static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const C
     return std::ranges::find(key_list, key) != key_list.end();
 }
 
-TrustRegionRadiusAction DetermineAcceptedTrustRegionRadiusAction(
+bool ShouldShrinkAcceptedTrustRegionRadius(
     std::optional<double> first_objective_evaluated_factor,
     const ObjectiveAttemptDiagnostic & diagnostic)
 {
-    if (first_objective_evaluated_factor.has_value() &&
+    return first_objective_evaluated_factor.has_value() &&
         diagnostic.accepted_factor.has_value() &&
-        *diagnostic.accepted_factor < *first_objective_evaluated_factor)
-    {
-        return TrustRegionRadiusAction::Shrink;
-    }
-    return TrustRegionRadiusAction::Keep;
+        *diagnostic.accepted_factor < *first_objective_evaluated_factor;
 }
 
 static ClusterCandidateResult SelectClusterCandidate(
@@ -562,7 +558,6 @@ static ClusterCandidateResult SelectClusterCandidate(
         }
         result.diagnostic.terminal_diagnostic_list =
             std::move(terminal_diagnostic_list);
-        result.radius_action = TrustRegionRadiusAction::Keep;
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
         ObservePhaseMissing(context, "local-search", key, "search-exhausted");
         return result;
@@ -584,7 +579,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.polish_provenance.at(position) = 0;
         }
     }
-    result.radius_action = DetermineAcceptedTrustRegionRadiusAction(
+    result.shrink_trust_region = ShouldShrinkAcceptedTrustRegionRadius(
         first_objective_evaluated_factor,
         result.diagnostic);
     if (is_polish_eligible)
@@ -653,7 +648,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
         }
     }
-    observer.Finish(result.radius_action, first_objective_evaluated_factor, result.diagnostic);
+    observer.Finish(result.shrink_trust_region, first_objective_evaluated_factor, result.diagnostic);
     return result;
 }
 
@@ -811,7 +806,7 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         }
 
         selection.accepted_key_list.emplace_back(key);
-        if (result.radius_action == TrustRegionRadiusAction::Shrink)
+        if (result.shrink_trust_region)
         {
             selection.shrink_trust_region_key_list.emplace_back(key);
         }
