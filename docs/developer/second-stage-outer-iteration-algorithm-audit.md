@@ -197,6 +197,13 @@ records their unchanged partition/background triggers: objective reevaluation
 does not itself schedule a Frozen retry. This separation does not change
 convergence blockers or the existing domain-retry diagnostic labels.
 
+The [complete-state global-best-only shadow/ablation](second-stage-global-best-only-ablation.md)
+observes zero best-only rejections in 312 complete-state comparisons and 12
+cooperative global comparisons. OFF bypasses only the complete-state best gate;
+cooperative protection remains enabled. Identical terminal results without an
+actual best-only rejection leave release safety unmeasured, so production gates
+remain ON and global best retains all its existing responsibilities.
+
 ## Current diagnostic contract
 
 The current Debug trajectory is schema 10 and serializes the production

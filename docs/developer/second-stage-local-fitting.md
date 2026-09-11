@@ -660,6 +660,13 @@ but none applies a polish patch: four have no component and one solve reports
 no material change. Identical ON/OFF outputs therefore leave applied-path value
 unresolved; they do not justify deleting polish or its recertification.
 
+The [complete-state global-best-only shadow/ablation](second-stage-global-best-only-ablation.md)
+observes zero best-only rejections in 312 complete-state comparisons and 12
+cooperative global comparisons. OFF bypasses only the complete-state best gate;
+cooperative protection remains enabled. Identical terminal results without an
+actual best-only rejection leave release safety unmeasured, so production gates
+remain ON and global best retains all its existing responsibilities.
+
 ## Numerical defenses, partial active set, and quarantine
 
 - Suspicious evaluation has offset-only and post-refit modes. Offset-only checks
