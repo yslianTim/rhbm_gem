@@ -2,7 +2,7 @@
 #include "core/detail/IterationProposal.hpp"
 
 #include "core/detail/Diagnosis.hpp"
-#include "core/detail/PhaseAudit.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 
 #include <exception>
 #include <limits>

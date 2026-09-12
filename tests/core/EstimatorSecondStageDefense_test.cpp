@@ -4941,8 +4941,8 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
                 context.cluster_history->BeginAttempt(context, {{key, best.best_objective}}, historical,
                     partition, domain, 2, 1);
             audit_detail::ObjectiveAttemptDiagnostic diagnostic;
-            const auto evaluation{ audit_detail::EvaluateCandidate(unchanged, audit_detail::CandidateScope::LocalSearch,
-                audit_detail::LocalCandidateReference{key, samples, &*current_objective, domain,
+            const auto evaluation{ audit_detail::EvaluateCandidate(unchanged,
+                audit_detail::LocalCandidateReference{audit_detail::LocalObjectivePolicy::PreviousNonRegression, key, samples, &*current_objective, domain,
                     diagnostic, counters}) };
             EXPECT_TRUE(evaluation.accepted);
             diagnostic = evaluation.diagnostic;
@@ -4974,8 +4974,8 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     context.cluster_history->BeginAttempt(context, {{key, best.best_objective}}, historical,
         partition, domain, 2, 1);
     // A candidate passing the previous gate is no longer rejected by cluster history.
-    const auto worse_evaluation{ audit_detail::EvaluateCandidate(worse_overlay, audit_detail::CandidateScope::LocalSearch,
-        audit_detail::LocalCandidateReference{key, samples, &*worse_objective, domain,
+    const auto worse_evaluation{ audit_detail::EvaluateCandidate(worse_overlay,
+        audit_detail::LocalCandidateReference{audit_detail::LocalObjectivePolicy::PreviousNonRegression, key, samples, &*worse_objective, domain,
             rejected, counters}) };
     EXPECT_TRUE(worse_evaluation.accepted);
     rejected = worse_evaluation.diagnostic;
@@ -4991,8 +4991,8 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUsesCandidateNeighborsAndAllA
     EXPECT_THROW(audit_detail::EvaluateBestObjectiveReference(unchanged, key, samples, domain, missing, history_counters), std::logic_error);
     auto unavailable_domain{ domain };
     unavailable_domain.cluster_by_key.at(key).scale.reset();
-    const auto unavailable_evaluation{ audit_detail::EvaluateCandidate(unchanged, audit_detail::CandidateScope::LocalSearch,
-        audit_detail::LocalCandidateReference{key, samples, &*current_objective, unavailable_domain,
+    const auto unavailable_evaluation{ audit_detail::EvaluateCandidate(unchanged,
+        audit_detail::LocalCandidateReference{audit_detail::LocalObjectivePolicy::PreviousNonRegression, key, samples, &*current_objective, unavailable_domain,
             rejected, counters}) };
     EXPECT_FALSE(unavailable_evaluation.accepted);
     rejected = unavailable_evaluation.diagnostic;
@@ -5027,8 +5027,8 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovemen
     const auto patch{ audit_detail::FitStatePatch::FromState(improved, key) };
     const audit_detail::CandidateEvaluationOverlay overlay{ fixture.context, baseline, fixture.state, patch };
     audit_detail::ObjectiveAttemptDiagnostic diagnostic;
-    const auto evaluation{ audit_detail::EvaluateCandidate(overlay, audit_detail::CandidateScope::LocalSearch,
-        audit_detail::LocalCandidateReference{key, fixture.sample_ref_list, &*previous, domain,
+    const auto evaluation{ audit_detail::EvaluateCandidate(overlay,
+        audit_detail::LocalCandidateReference{audit_detail::LocalObjectivePolicy::PreviousNonRegression, key, fixture.sample_ref_list, &*previous, domain,
             diagnostic, counters}) };
     EXPECT_TRUE(evaluation.accepted);
     diagnostic = evaluation.diagnostic;
@@ -5045,8 +5045,8 @@ TEST(EstimatorSecondStageDefenseTest, BestReferenceUpdatesParametersOnImprovemen
         improved_baseline, key, fixture.sample_ref_list, domain) };
     ASSERT_TRUE(improved_objective);
     const audit_detail::CandidateEvaluationOverlay tie{ fixture.context, improved_baseline, improved, patch };
-    const auto tie_evaluation{ audit_detail::EvaluateCandidate(tie, audit_detail::CandidateScope::LocalSearch,
-        audit_detail::LocalCandidateReference{key, fixture.sample_ref_list, &*improved_objective, domain,
+    const auto tie_evaluation{ audit_detail::EvaluateCandidate(tie,
+        audit_detail::LocalCandidateReference{audit_detail::LocalObjectivePolicy::PreviousNonRegression, key, fixture.sample_ref_list, &*improved_objective, domain,
             diagnostic, counters}) };
     EXPECT_TRUE(tie_evaluation.accepted);
     diagnostic = tie_evaluation.diagnostic;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/CandidateSelection.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 
 namespace rhbm_gem::core::detail {
 struct IterationResult;
@@ -94,16 +95,19 @@ TrustModelShadowDiagnostic EvaluateTrustModelShadow(
     bool objective_backtracked);
 #endif
 
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+struct TrustModelTrialRecord
+{
+    std::vector<TrustModelShadowDiagnostic> trials{};
+    TrustModelCandidateFunnel funnel{};
+    bool boundary_touched{ false };
+};
+#endif
+
 class TrustModelAudit
 {
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    struct Record
-    {
-        std::vector<TrustModelShadowDiagnostic> trials{};
-        TrustModelCandidateFunnel funnel{};
-        bool boundary_touched{ false };
-    };
-    std::map<ClusterKey, Record> records;
+    std::map<ClusterKey, TrustModelTrialRecord> records;
     friend class TrustModelTrialObserver;
 public:
     explicit TrustModelAudit(const std::vector<ClusterKey> & keys);
@@ -112,46 +116,4 @@ public:
 #endif
 };
 
-class TrustModelTrialObserver
-{
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    const CandidateSelectionInputs & inputs;
-    const ClusterKey & key;
-    const std::vector<SampleRef> & samples;
-    TrustModelAudit::Record & record;
-    std::optional<std::size_t> final_trial{};
-    std::size_t search_pass{ 0 };
-public:
-    TrustModelTrialObserver(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &);
-    void BeginSearch() { ++search_pass; }
-    void Generated() { ++record.funnel.generated_count; }
-    void Invalid() { ++record.funnel.invalid_count; }
-    void Nonmaterial() { ++record.funnel.nonmaterial_count; }
-    void TrustSkipped() { ++record.funnel.trust_skipped_count; }
-    void GuardRejected() { ++record.funnel.guard_rejected_count; }
-    void Trial(const FitStatePatch &, const ObjectiveAttemptDiagnostic &, bool polish, double factor, bool accepted);
-    void Finish(bool shrink_trust_region, std::optional<double>, const ObjectiveAttemptDiagnostic &);
-#else
-public:
-    TrustModelTrialObserver(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &) {}
-    void BeginSearch() {}
-    void Generated() {}
-    void Invalid() {}
-    void Nonmaterial() {}
-    void TrustSkipped() {}
-    void GuardRejected() {}
-    void Trial(const FitStatePatch &, const ObjectiveAttemptDiagnostic &, bool, double, bool) {}
-    void Finish(bool, std::optional<double>, const ObjectiveAttemptDiagnostic &) {}
-#endif
-};
-
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-void BeginTrustModelAudit(SecondStageContext &, const std::vector<ClusterKey> &);
-void FinalizeTrustModelAudit(const SecondStageContext &, const CandidateSelection &);
-void LogTrustModelAudit(const SecondStageContext &, bool, const IterationResult &);
-#else
-inline void BeginTrustModelAudit(SecondStageContext &, const std::vector<ClusterKey> &) {}
-inline void FinalizeTrustModelAudit(const SecondStageContext &, const CandidateSelection &) {}
-inline void LogTrustModelAudit(const SecondStageContext &, bool, const IterationResult &) {}
-#endif
 } // namespace rhbm_gem::core::detail

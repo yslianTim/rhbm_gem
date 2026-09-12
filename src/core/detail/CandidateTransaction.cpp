@@ -1,8 +1,7 @@
-#include "core/detail/ClusterHistoryObserver.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 #include "core/detail/CandidateTransaction.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/Diagnosis.hpp"
-#include "core/detail/PhaseAudit.hpp"
 
 #include <algorithm>
 
@@ -105,7 +104,7 @@ CandidateCommitResult CandidateTransaction::Commit(const SecondStageContext & co
         provenance = std::move(m_selection.assembled_polish_provenance);
     }
     else accepted_state = std::move(previous_state);
-    if (context.cluster_history) context.cluster_history->Publish(context);
+    ObserveHistoryPublication(context);
     return {std::move(m_selection.block_activity), m_selection.final_audit_objective,
         m_selection.polish_progress, m_suspicious_atom_count, accepted,
         !m_selection.rejected_key_list.empty(), m_quarantine_transition};

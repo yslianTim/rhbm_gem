@@ -117,7 +117,7 @@ struct ConvergenceCertificate
     bool operator_complete{ true };
     bool objective_domain_changed{ false };
     bool quarantine_transition{ false };
-    bool suspicious_offset_fallback{ false };
+    bool suspicious_block_fallback{ false };
     bool rejected_cluster{ false };
 
     bool StrictOperatorPassed() const;

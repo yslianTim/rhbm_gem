@@ -167,8 +167,10 @@ The percentile predicate is coordinate-wise: the p99 for each of log peak,
 log width, and per-atom offset must pass independently. Solver qualification
 requires full, undamped, non-fallback active endpoints. Operator completeness and non-finite residuals fail
 closed. Orthogonal blockers cover
-objective-domain changes, quarantine transitions, suspicious offset fallback,
-and rejected clusters.
+objective-domain changes, quarantine transitions, suspicious block fallback,
+and rejected clusters. The internal `suspicious_block_fallback` includes shape
+and hard-failure evidence; the diagnostic label `suspicious-offset` is retained
+for schema compatibility.
 
 Maximum values remain diagnostic measurements and do not define a separate
 production policy.

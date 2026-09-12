@@ -35,10 +35,11 @@ flowchart TD
     R --> S{Strict operator certificate passes?}
     S -- no --> P
     S -- yes --> T[Persist polished output]
-    D -. evidence only .-> Q[PhaseAudit and TrustModelAudit]
+    D -. evidence only .-> Q[SecondStageObservation entry points]
     E -. evidence only .-> Q
     F -. evidence only .-> Q
     J -. evidence only .-> Q
+    Q -. delegates .-> V[ClusterHistoryObserver / PhaseAudit / TrustModelAudit]
 ```
 
 `CandidateTransactionBuilder` owns the only writable selection. Boundary,
@@ -63,17 +64,22 @@ persistence/recertification boundary.
 
 ## Candidate evaluation map
 
-`EvaluateCandidate` has typed reference overloads. Preflight, global audit and
-final polish use `(candidate, reference)`; local and boundary evaluation also
-receive a scope where it selects existing behavior. They share the existing
-numerical primitives, not a configurable policy engine.
+`EvaluateCandidate` uses `(candidate, reference)` throughout. Local references
+carry `LocalObjectivePolicy` (previous non-regression or strict reference
+improvement); boundary and correction references carry
+`BoundaryAcceptancePolicy` (ordinary or cooperative rescue). The local
+`objective_reference` is the previous objective for search and the accepted
+local base for polish. Global audit and final polish retain their dedicated
+references. These types share numerical primitives, not a configurable policy
+engine; boundary transaction methods only pass the boundary policy.
 
-`LocalCandidateEvaluation` returns acceptance, diagnostics and a proposed single
-history update. `BoundaryCandidateEvaluation` returns member histories, audit
-objective and deterioration statistics; an empty optional denotes rejection.
-Callers apply returned history only on acceptance. Existing focused tests invoke
-the evaluator directly. Objective observers/counters remain separate from model
-and history mutation.
+`LocalCandidateEvaluation` returns acceptance and numerical diagnostics; its
+caller requests the optional history payload through the observation interface.
+`BoundaryCandidateEvaluation` returns the audit objective and deterioration
+statistics; an empty optional denotes rejection. Boundary diagnostic records
+carry observation IDs, and callers publish only the selected observation.
+Existing focused tests invoke the evaluator directly. Correction reuses its raw
+objective evidence for combined acceptance, including an unavailable result.
 
 | Scope / phase | Preserved evaluation order and references |
 | --- | --- |
@@ -91,6 +97,19 @@ remain orchestration responsibilities. Maximum movement still controls
 nonmaterial search/backtracking, best-history ties and topology drift.
 
 ## Observation and certificate separation
+
+`SecondStageObservation.hpp` exposes lifecycle and candidate notifications
+without including the three observer implementation headers. Initialization,
+partition/background reset, attempt setup, local/member observations,
+accept/reject and publication remain at their original call sites. Context
+ownership, diagnostic payloads and history tokens are unchanged. Evidence used
+by radius, quarantine or rollback remains in production structures.
+
+The lightweight trust trial interface uses the existing preallocated per-key
+record; funnel and rho details stay in `TrustModelAudit`. Boundary diagnostic
+and phase event names are selected by the observation layer.
+`ProductionObservationScope` preserves the production solver-audit lifetime and
+thread-local context; worker scope propagation remains unchanged.
 
 `TrustModelAudit` owns per-key trials/funnels and frozen-IRLS/rho calculations in
 its own translation unit. Workers access preallocated, distinct key records;
@@ -111,6 +130,9 @@ p99, qualification/completeness and orthogonal blockers. The accompanying
 `IterationDiagnostics` owns reported proposal/accepted maximum movement.
 Percentile sampling and finite-value predicates are unchanged. Both production
 and final-polish logs still serialize the same measurements.
+The internal `suspicious_block_fallback` blocker includes shape and hard-failure
+evidence as well as offsets. The schema-10 `suspicious-offset` log label is a
+historical compatibility name and retains the same value and position.
 
 ## Validation
 
@@ -118,6 +140,13 @@ Use existing focused tests, the complete remaining CTest suite, repository lint,
 and whitespace checks. Existing tests exercise phase/trust diagnostic isolation
 and internal evaluator/transaction behavior; no new cases are added. Build/test
 logs remain under `build/p0-structure`.
+
+The policy/observation interface follow-up uses `1041f13b` as its baseline.
+Before and after the change, the existing `EstimatorSecondStageDefenseTest.*`
+suite passes 107 tests with both diagnostic switches OFF and 108 with both ON.
+The phase-only and trust-only library builds also pass. This focused matrix uses
+Debug builds with UMAP disabled; existing test edits only adapt evaluator calls
+and policy references, without changing assertions or adding cases.
 
 These checks establish evidence only within their existing coverage, not every
 fallback/correction branch or general numerical equivalence. Fold-168 remains

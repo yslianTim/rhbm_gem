@@ -1,6 +1,4 @@
-#include "core/detail/ClusterHistoryObserver.hpp"
-#include "utils/hrl/EstimationAudit.hpp"
-#include "core/detail/PhaseAudit.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 #include "core/detail/IterationProcess.hpp"
 
 #include "core/detail/FittingRanges.hpp"
@@ -11,7 +9,6 @@
 #include "core/detail/PreparedLocalGaussianFit.hpp"
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CandidateTransaction.hpp"
-#include "core/detail/TrustModelAudit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -357,9 +354,8 @@ static void ResetIterationStateForPartition(
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
     iteration_state.objective_domain_revision++;
-    if (context.cluster_history)
-        context.cluster_history->ResetPartition(context, partition, iteration_state.objective_domain,
-            iteration_state.accepted_state);
+    ObserveHistoryPartition(context, partition, iteration_state.objective_domain,
+        iteration_state.accepted_state);
     RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
     performance_counters.RecordSolverWorkspaceReset();
@@ -504,9 +500,8 @@ static bool BeginFrozenBackgroundIteration(
     iteration_state.objective_domain_revision++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
-    if (context.cluster_history)
-        context.cluster_history->ResetBackground(context, previous_background, partition,
-            iteration_state.objective_domain, iteration_state.accepted_state);
+    ObserveHistoryBackground(context, previous_background, partition,
+        iteration_state.objective_domain, iteration_state.accepted_state);
     RefreshBestAuditState(context, previous_snapshot, iteration_state);
     return false;
 }
@@ -536,9 +531,8 @@ static IterationResult RunIteration(
     const auto previous_objective_by_key{
         BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
-    if (context.cluster_history)
-        context.cluster_history->BeginAttempt(context, previous_objective_by_key, previous_state,
-            graph_partition, objective_domain, attempt_number, iteration_state.accepted_iteration_count);
+    ObserveHistoryAttempt(context, previous_objective_by_key, previous_state,
+        graph_partition, objective_domain, attempt_number, iteration_state.accepted_iteration_count);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
     const auto quarantine_activity{
@@ -571,9 +565,9 @@ static IterationResult RunIteration(
             retry_atom_index_set)
     };
     BeginTrustModelAudit(context, cluster_key_list);
-    context.phase_audit = BeginPhaseAudit(context, options.quiet_mode, objective_domain,
+    BeginPhaseObservation(context, options.quiet_mode, objective_domain,
         previous_state, cluster_key_list, attempt_number, iteration_state.objective_domain_revision);
-    estimation_audit::Scope solver_audit_scope(context.phase_audit ? attempt_number : 0, "production");
+    ProductionObservationScope solver_audit_scope(context, attempt_number);
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{
@@ -633,7 +627,7 @@ static IterationResult RunIteration(
     const auto & assembled_polish_provenance{ iteration_state.previous_polish_provenance };
     const auto assembled_uses_polish{ UsesPolish(assembled_polish_provenance) };
     const auto iteration_suspicious_atom_count{ selection.suspicious_atom_count };
-    const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
+    const auto has_suspicious_block_fallback{ iteration_suspicious_atom_count > 0 };
     const auto has_quarantine_transition{ selection.quarantine_transition };
     iteration_state.rollback_atom_mask = selection.block_activity.BuildCombinedFixedAtomMask();
     result.attempt_number = attempt_number;
@@ -759,7 +753,7 @@ static IterationResult RunIteration(
     result.transformed_change_percentile = certificate.accepted_active_p99;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
-    certificate.suspicious_offset_fallback = has_suspicious_offset_fallback;
+    certificate.suspicious_block_fallback = has_suspicious_block_fallback;
     certificate.rejected_cluster = selection.rejected_cluster;
     if (certificate.ProductionConverged())
     {
@@ -1166,7 +1160,7 @@ bool ConvergenceCertificate::ProductionConverged() const
     return StrictOperatorPassed() &&
         IsTransformedPercentileConverged(accepted_active_p99) &&
         !objective_domain_changed && !quarantine_transition &&
-        !suspicious_offset_fallback && !rejected_cluster;
+        !suspicious_block_fallback && !rejected_cluster;
 }
 
 SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(

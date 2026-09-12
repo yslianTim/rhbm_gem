@@ -1,4 +1,4 @@
-#include "core/detail/ClusterHistoryObserver.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
 #include "core/detail/Diagnosis.hpp"
 #include "core/detail/GaussianModelOperations.hpp"
@@ -12,12 +12,11 @@ namespace rhbm_gem::core::detail {
 static bool EvaluateLocalObjective(
     const CandidateEvaluationOverlay & candidate_overlay,
     const LocalCandidateReference & reference,
-    bool requires_strict_improvement,
     ObjectiveAttemptDiagnostic & diagnostic)
 {
     const auto & key{ reference.key };
     const auto & objective_sample_ref_list{ reference.samples };
-    const auto * previous_objective{ reference.previous };
+    const auto * previous_objective{ reference.objective_reference };
     const auto & domain{ reference.domain };
     auto & performance_counters{ reference.counters };
 
@@ -52,7 +51,7 @@ static bool EvaluateLocalObjective(
     }
     const auto candidate_objective_value{ diagnostic.candidate_objective->GetTotalObjective() };
     const auto previous_objective_value{ previous_objective->GetTotalObjective() };
-    if (requires_strict_improvement)
+    if (reference.policy == LocalObjectivePolicy::StrictReferenceImprovement)
     {
         const bool accepted{ std::isfinite(previous_objective_value) &&
             IsBetterAuditObjective(candidate_objective_value, previous_objective_value,
@@ -80,34 +79,32 @@ CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
 }
 
 LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
-    CandidateScope scope, const LocalCandidateReference & reference)
+    const LocalCandidateReference & reference)
 {
     LocalCandidateEvaluation result;
     result.diagnostic = reference.diagnostic;
-    result.accepted = EvaluateLocalObjective(candidate_overlay, reference,
-        scope == CandidateScope::LocalPolish, result.diagnostic);
+    result.accepted = EvaluateLocalObjective(candidate_overlay, reference, result.diagnostic);
     return result;
 }
 
 static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
-    CandidateScope scope, const BoundaryCandidateReference & reference,
+    const BoundaryCandidateReference & reference,
     const std::optional<ObjectiveBreakdown> * precomputed_objective)
 {
     const auto & inputs{ reference.inputs };
     const auto & component{ reference.component };
     const auto * previous_audit_objective{ reference.previous_audit };
-    const bool cooperative{ scope == CandidateScope::CooperativeRescue };
+    const bool cooperative{ reference.policy == BoundaryAcceptancePolicy::CooperativeRescue };
     auto * record{ reference.record };
 
-    if (inputs.context.cluster_history) inputs.context.cluster_history->BeginBoundary(record);
+    ObserveBoundaryHistory(inputs.context, record);
     const auto observe_member = [&](const ClusterKey & key, bool accepted,
                                     const ObjectiveAttemptDiagnostic & diagnostic)
     {
-        if (inputs.context.cluster_history)
-            inputs.context.cluster_history->BoundaryMember(candidate_overlay, key,
-                inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain,
-                accepted, diagnostic, record);
+        ObserveBoundaryMemberHistory(candidate_overlay, key,
+            inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain,
+            accepted, diagnostic, record);
     };
     BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
@@ -121,8 +118,8 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
         const auto & previous_objective{ inputs.previous_objective_by_key.at(key) };
         if (!cooperative)
         {
-            const auto member{ EvaluateCandidate(candidate_overlay, CandidateScope::Boundary,
-                LocalCandidateReference{key, inputs.partition.sample_id_list_by_key.at(key),
+            const auto member{ EvaluateCandidate(candidate_overlay,
+                LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, inputs.partition.sample_id_list_by_key.at(key),
                     previous_objective ? &*previous_objective : nullptr, inputs.objective_domain,
                     diagnostic, inputs.performance_counters}) };
             diagnostic = member.diagnostic;
@@ -221,13 +218,13 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
 
 std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
-    CandidateScope scope, const BoundaryCandidateReference & reference)
+    const BoundaryCandidateReference & reference)
 {
-    return EvaluateBoundaryCandidate(candidate_overlay, scope, reference, nullptr);
+    return EvaluateBoundaryCandidate(candidate_overlay, reference, nullptr);
 }
 
 BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
-    CandidateScope scope, const BoundaryCorrectionReference & reference)
+    const BoundaryCorrectionReference & reference)
 {
     BoundaryCorrectionEvaluation result;
     const auto & inputs{ reference.inputs };
@@ -237,9 +234,9 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
     result.raw_objective = EvaluateObjectiveDelta(candidate, reference.component.affected_sample_ref_list,
         inputs.objective_domain, reference.previous_audit, inputs.performance_counters);
     result.record = BeginJointCandidateDiagnostic(inputs.options.quiet_mode, reference.records,
-        scope == CandidateScope::CooperativeRescue ? "rescue-joint-correction" : "joint-correction", reference.damping);
-    result.members = EvaluateBoundaryCandidate(candidate, scope,
-        BoundaryCandidateReference{inputs, reference.component, &reference.previous_audit, result.record},
+        BoundaryDiagnosticName(reference.policy, BoundaryObservationStage::Correction), reference.damping);
+    result.members = EvaluateBoundaryCandidate(candidate,
+        BoundaryCandidateReference{reference.policy, inputs, reference.component, &reference.previous_audit, result.record},
         &result.raw_objective);
     result.accepted = result.members && IsBetterAuditObjective(result.members->audit_objective.GetTotalObjective(),
         reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance);

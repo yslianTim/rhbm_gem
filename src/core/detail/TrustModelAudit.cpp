@@ -467,6 +467,12 @@ TrustModelTrialObserver::TrustModelTrialObserver(const CandidateSelectionInputs 
     const ClusterKey & key, const std::vector<SampleRef> & samples)
     : inputs(inputs), key(key), samples(samples), record(inputs.context.trust_model_audit->records.at(key)) {}
 
+void TrustModelTrialObserver::Generated() { ++record.funnel.generated_count; }
+void TrustModelTrialObserver::Invalid() { ++record.funnel.invalid_count; }
+void TrustModelTrialObserver::Nonmaterial() { ++record.funnel.nonmaterial_count; }
+void TrustModelTrialObserver::TrustSkipped() { ++record.funnel.trust_skipped_count; }
+void TrustModelTrialObserver::GuardRejected() { ++record.funnel.guard_rejected_count; }
+
 void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
     const ObjectiveAttemptDiagnostic & diagnostic, bool polish, double factor, bool accepted)
 {

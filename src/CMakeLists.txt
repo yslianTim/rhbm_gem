@@ -23,6 +23,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/GaussianModelOperations.cpp
     core/detail/PreparedLocalGaussianFit.cpp
     core/detail/SecondStageFitting.cpp
+    core/detail/SecondStageObservation.cpp
     core/detail/CouplingGraph.cpp
     core/detail/JointFitting.cpp
     core/detail/ClusterHistoryObserver.cpp

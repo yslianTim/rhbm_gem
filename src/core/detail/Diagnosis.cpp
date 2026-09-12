@@ -1026,7 +1026,7 @@ void LogConvergenceSafeguardAudit(
     const auto blockers_clear{
         !certificate.objective_domain_changed &&
         !certificate.quarantine_transition &&
-        !certificate.suspicious_offset_fallback &&
+        !certificate.suspicious_block_fallback &&
         !certificate.rejected_cluster
     };
     const auto selected_atom_count{
@@ -1071,7 +1071,7 @@ void LogConvergenceSafeguardAudit(
         << ", blockers[objective-domain/quarantine-transition/suspicious-offset/rejected-cluster]="
         << certificate.objective_domain_changed << "/"
         << certificate.quarantine_transition << "/"
-        << certificate.suspicious_offset_fallback << "/"
+        << certificate.suspicious_block_fallback << "/"
         << certificate.rejected_cluster << ".";
     Logger::FinishProgressLine();
     Logger::Log(LogLevel::Debug, message.str());

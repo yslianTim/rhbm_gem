@@ -161,8 +161,8 @@ struct CandidateSelection
 
 struct CandidateSelectionInputs
 {
-    // Algorithm inputs stay unchanged; updated activity and objective history are
-    // returned in CandidateSelection. Only solver workspaces and counters mutate.
+    // Algorithm inputs stay unchanged; updated activity is returned in CandidateSelection.
+    // Solver workspaces, counters and observation state may mutate.
     const SecondStageContext & context;
     const FitOptions & options;
     const ResidualBaseline & residual_baseline;

@@ -4,10 +4,14 @@
 
 namespace rhbm_gem::core::detail {
 
-enum class CandidateScope
+enum class LocalObjectivePolicy
 {
-    LocalSearch, LocalPolish, Boundary,
-    CooperativeRescue
+    PreviousNonRegression, StrictReferenceImprovement
+};
+
+enum class BoundaryAcceptancePolicy
+{
+    Ordinary, CooperativeRescue
 };
 
 enum class CandidateFailureStage
@@ -46,9 +50,10 @@ CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
 
 struct LocalCandidateReference
 {
+    LocalObjectivePolicy policy;
     const ClusterKey & key;
     const std::vector<SampleRef> & samples;
-    const ObjectiveBreakdown * previous;
+    const ObjectiveBreakdown * objective_reference;
     const ObjectiveDomain & domain;
     ObjectiveAttemptDiagnostic diagnostic;
     PerformanceCounters & counters;
@@ -56,6 +61,7 @@ struct LocalCandidateReference
 
 struct BoundaryCandidateReference
 {
+    BoundaryAcceptancePolicy policy;
     const CandidateSelectionInputs & inputs;
     const BoundaryReconciliationComponent & component;
     const ObjectiveBreakdown * previous_audit;
@@ -64,6 +70,7 @@ struct BoundaryCandidateReference
 
 struct BoundaryCorrectionReference
 {
+    BoundaryAcceptancePolicy policy;
     const CandidateSelectionInputs & inputs;
     const BoundaryReconciliationComponent & component;
     const FitStateView & endpoint;
@@ -82,7 +89,7 @@ struct BoundaryCorrectionEvaluation
     bool accepted{ false };
 };
 
-BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const BoundaryCorrectionReference &);
+BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &);
 
 struct GlobalCandidateReference
 {
@@ -114,8 +121,8 @@ struct FinalPolishCandidateEvaluation
     std::size_t suspicious_atom_count{ 0 };
 };
 
-LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const LocalCandidateReference &);
-std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, CandidateScope, const BoundaryCandidateReference &);
+LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const LocalCandidateReference &);
+std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &);
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &);
 FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &);
 

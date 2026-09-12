@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/ClusterHistoryObserver.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 
 #include "core/detail/IterationProposal.hpp"
 #include "core/detail/ObjectiveEvaluation.hpp"
@@ -73,42 +74,6 @@ public:
         const SuspiciousBlockActivity &, const IterationProposalResult & production,
         const FitState & final_state) noexcept;
 };
-
-#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
-
-void ObservePhaseMissing(const SecondStageContext &, std::string_view, const ClusterKey &, std::string_view) noexcept;
-void ObservePhaseState(const SecondStageContext &, std::string_view, const FitState &, bool probe = false) noexcept;
-void ObservePhaseCandidate(const SecondStageContext &, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView * parent = nullptr, double factor = 1.0, std::string_view disposition = "observed",
-    std::string_view reason = "", bool probe = false, bool recertify = true) noexcept;
-void ObservePhaseCorrection(const SecondStageContext &, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, std::string_view, std::string_view, const CandidateSelectionInputs &,
-    const std::vector<ClusterKey> &, const ObjectiveBreakdown &) noexcept;
-void ObservePhaseLocalPolish(const SecondStageContext &, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, bool, const ObjectiveAttemptDiagnostic &) noexcept;
-void ObservePhaseSearchAssembly(const SecondStageContext &, const FitState &) noexcept;
-void ObservePhaseProposal(const SecondStageContext &, const IterationProposalResult &) noexcept;
-void ObservePhaseFinish(const SecondStageContext &, const FitOptions &, const std::vector<double> &,
-    const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept;
-void ObservePhaseIntermediate(const SecondStageContext &, const FittedGaussianSnapshot &) noexcept;
-#else
-
-inline void ObservePhaseMissing(const SecondStageContext &, std::string_view, const ClusterKey &, std::string_view) noexcept {}
-inline void ObservePhaseState(const SecondStageContext &, std::string_view, const FitState &, bool = false) noexcept {}
-inline void ObservePhaseCandidate(const SecondStageContext &, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView * = nullptr, double = 1.0, std::string_view = "observed",
-    std::string_view = "", bool = false, bool = true) noexcept {}
-inline void ObservePhaseCorrection(const SecondStageContext &, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, std::string_view, std::string_view, const CandidateSelectionInputs &,
-    const std::vector<ClusterKey> &, const ObjectiveBreakdown &) noexcept {}
-inline void ObservePhaseLocalPolish(const SecondStageContext &, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, bool, const ObjectiveAttemptDiagnostic &) noexcept {}
-inline void ObservePhaseSearchAssembly(const SecondStageContext &, const FitState &) noexcept {}
-inline void ObservePhaseProposal(const SecondStageContext &, const IterationProposalResult &) noexcept {}
-inline void ObservePhaseFinish(const SecondStageContext &, const FitOptions &, const std::vector<double> &,
-    const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept {}
-inline void ObservePhaseIntermediate(const SecondStageContext &, const FittedGaussianSnapshot &) noexcept {}
-#endif
 
 std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext &, bool quiet,
     const ObjectiveDomain &, const FitState &, const std::vector<ClusterKey> &,

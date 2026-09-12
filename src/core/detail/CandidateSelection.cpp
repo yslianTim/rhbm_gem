@@ -1,7 +1,6 @@
 #include "core/detail/ComponentAssembly.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
-#include "core/detail/PhaseAudit.hpp"
-#include "core/detail/TrustModelAudit.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CandidateTransaction.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
@@ -355,7 +354,7 @@ static ClusterCandidateResult SelectClusterCandidate(
     for (;;)
     {
         observer.BeginSearch();
-        if (context.cluster_history) context.cluster_history->BeginSearch(key);
+        ObserveHistorySearch(context, key);
         result.diagnostic = ObjectiveAttemptDiagnostic{};
         result.diagnostic.trust_region_radius = trust_region_radius;
         result.polish_progress = PolishProgress{};
@@ -474,14 +473,13 @@ static ClusterCandidateResult SelectClusterCandidate(
                 .objective_rejected_trial_count =
                     result.diagnostic.objective_rejected_trial_count
             };
-            const auto evaluation{ EvaluateCandidate(candidate_overlay, CandidateScope::LocalSearch,
-                LocalCandidateReference{key, objective_sample_ref_list, previous_objective,
+            const auto evaluation{ EvaluateCandidate(candidate_overlay,
+                LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, objective_sample_ref_list, previous_objective,
                     objective_domain, trial_diagnostic, performance_counters}) };
             trial_diagnostic = evaluation.diagnostic;
             const auto committed{ evaluation.accepted };
-            if (context.cluster_history)
-                trial_diagnostic.history = context.cluster_history->Local(candidate_overlay, key,
-                    objective_sample_ref_list, objective_domain, "local-candidate", committed, trial_diagnostic);
+            ObserveLocalHistory(candidate_overlay, key,
+                objective_sample_ref_list, objective_domain, "local-candidate", committed, trial_diagnostic);
             observer.Trial(proposal.patch, trial_diagnostic, false, factor, committed);
             if (committed)
             {
@@ -612,15 +610,14 @@ static ClusterCandidateResult SelectClusterCandidate(
                 previous_state,
                 polished_candidate->patch
             };
-            const auto evaluation{ EvaluateCandidate(polished_overlay, CandidateScope::LocalPolish,
-                LocalCandidateReference{key, objective_sample_ref_list,
+            const auto evaluation{ EvaluateCandidate(polished_overlay,
+                LocalCandidateReference{LocalObjectivePolicy::StrictReferenceImprovement, key, objective_sample_ref_list,
                     result.diagnostic.candidate_objective ? &*result.diagnostic.candidate_objective : nullptr,
                     objective_domain, polish_diagnostic, performance_counters}) };
             polish_diagnostic = evaluation.diagnostic;
             const auto polish_committed{ evaluation.accepted };
-            if (context.cluster_history)
-                polish_diagnostic.history = context.cluster_history->Local(polished_overlay, key,
-                    objective_sample_ref_list, objective_domain, "local-polish", polish_committed, polish_diagnostic);
+            ObserveLocalHistory(polished_overlay, key,
+                objective_sample_ref_list, objective_domain, "local-polish", polish_committed, polish_diagnostic);
             ObservePhaseLocalPolish(context, key, polished_overlay.GetState(), base_state_view,
                 polished_candidate->effective_damping, polish_committed, polish_diagnostic);
             observer.Trial(polished_candidate->patch, polish_diagnostic, true,

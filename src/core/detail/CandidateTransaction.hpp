@@ -7,7 +7,7 @@
 
 namespace rhbm_gem::core::detail {
 struct IterationResult;
-enum class CandidateScope;
+enum class BoundaryAcceptancePolicy;
 
 struct CandidateCommitResult
 {
@@ -64,7 +64,7 @@ class CandidateTransactionBuilder
     void ApplyComponentCandidate(
         const CandidateSelectionInputs &, const BoundaryReconciliationComponent &,
         const FitStatePatch & endpoint_patch, ComponentCandidate,
-        BoundaryComponentAcceptedSource, CandidateScope);
+        BoundaryComponentAcceptedSource, BoundaryAcceptancePolicy);
     void RejectSelectionKeys(
         const CandidateSelectionInputs & inputs,
         const std::vector<ClusterKey> & key_list,
@@ -76,19 +76,19 @@ class CandidateTransactionBuilder
         const ObjectiveBreakdown & improvement_reference_objective,
         const FitStatePatch & endpoint_patch,
         BoundaryComponentReconciliationDiagnostic & diagnostic,
-        CandidateScope scope);
+        BoundaryAcceptancePolicy policy);
     std::optional<ComponentCandidate> TryBacktrackBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown * previous_audit_objective,
         const FitStatePatch & endpoint_patch,
         BoundaryComponentReconciliationDiagnostic & diagnostic,
-        CandidateScope scope);
+        BoundaryAcceptancePolicy policy);
     bool ReconcileBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown * previous_audit_objective,
-        CandidateScope scope);
+        BoundaryAcceptancePolicy policy);
     bool ReconcileCooperativeComponents(
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective);
