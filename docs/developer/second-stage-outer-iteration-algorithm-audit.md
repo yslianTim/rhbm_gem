@@ -28,6 +28,15 @@ preserving outer and final-polish removal policies. Production trust state now
 stores levels `0..4`; the numerical radius sequence and public fitting options
 are unchanged.
 
+The [Frozen recovery background-trigger ablation](second-stage-background-trigger-ablation.md)
+compares any change, material target-local change and partition-only eligibility
+in isolated builds. Production retains any-change recovery; the experiment does
+not change recovery triggers in the production implementation. All ten existing
+CTest configurations passed (16/16 each), but the stronger thresholds shortened
+two runs and changed persisted peeling despite identical Gaussian parameters.
+Successful production release and applied-partition coverage remain absent;
+the result does not support switching production policy.
+
 ## Scope and canonical states
 
 The review covers the second-stage outer loop from a validated accepted state
