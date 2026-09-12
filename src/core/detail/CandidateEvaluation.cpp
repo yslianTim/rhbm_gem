@@ -52,21 +52,21 @@ static bool EvaluateLocalObjective(
     }
     const auto candidate_objective_value{ diagnostic.candidate_objective->GetTotalObjective() };
     const auto previous_objective_value{ previous_objective->GetTotalObjective() };
+    if (requires_strict_improvement)
+    {
+        const bool accepted{ std::isfinite(previous_objective_value) &&
+            IsBetterAuditObjective(candidate_objective_value, previous_objective_value,
+                kObjectiveStrictTolerance) };
+        // Strict improvement implies non-regression; retain the old rejection classification.
+        diagnostic.rejected_by_previous = !accepted && IsObjectiveDeteriorated(
+            candidate_objective_value, previous_objective_value, kObjectiveProgressTolerance);
+        return accepted;
+    }
     diagnostic.rejected_by_previous = IsObjectiveDeteriorated(
         candidate_objective_value,
         previous_objective_value,
         kObjectiveProgressTolerance);
-    if (diagnostic.rejected_by_previous) return false;
-    if (requires_strict_improvement &&
-        !IsBetterAuditObjective(
-            candidate_objective_value,
-            previous_objective_value,
-            kObjectiveStrictTolerance))
-    {
-        return false;
-    }
-
-    return true;
+    return !diagnostic.rejected_by_previous;
 }
 
 CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
@@ -89,9 +89,10 @@ LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & ca
     return result;
 }
 
-std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
+static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
-    CandidateScope scope, const BoundaryCandidateReference & reference)
+    CandidateScope scope, const BoundaryCandidateReference & reference,
+    const std::optional<ObjectiveBreakdown> * precomputed_objective)
 {
     const auto & inputs{ reference.inputs };
     const auto & component{ reference.component };
@@ -177,29 +178,52 @@ std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
         cooperative && inputs.best_audit_state.has_value() ?
             &inputs.best_audit_state->objective : nullptr
     };
-    const auto audit_objective{ EvaluateCombinedObjective(
-        candidate_overlay,
-        component.affected_sample_ref_list,
-        inputs.objective_domain,
-        best_audit_objective,
-        previous_audit_objective,
-        inputs.performance_counters) };
-    if (!audit_objective.has_value())
+    // A supplied empty optional is unavailable evidence, not a request to recompute.
+    const auto audit_objective{ precomputed_objective ? *precomputed_objective :
+        (previous_audit_objective ? EvaluateObjectiveDelta(candidate_overlay,
+            component.affected_sample_ref_list, inputs.objective_domain,
+            *previous_audit_objective, inputs.performance_counters) : std::nullopt) };
+    if (!audit_objective.has_value() || previous_audit_objective == nullptr)
     {
         if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
         return std::nullopt;
     }
-    if (cooperative &&
-        !IsBetterAuditObjective(
-            audit_objective->GetTotalObjective(),
-            previous_audit_objective->GetTotalObjective(),
-            kObjectiveStrictTolerance))
+    const auto candidate_value{ audit_objective->GetTotalObjective() };
+    const auto previous_value{ previous_audit_objective->GetTotalObjective() };
+    if (cooperative)
     {
-        if (record) record->outcome = "members-passed-strict-improvement-failed";
+        if (!std::isfinite(candidate_value) || !std::isfinite(previous_value) ||
+            (best_audit_objective && IsObjectiveDeteriorated(candidate_value,
+                best_audit_objective->GetTotalObjective(), kObjectiveProgressTolerance)))
+        {
+            if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+            return std::nullopt;
+        }
+        if (!IsBetterAuditObjective(candidate_value, previous_value, kObjectiveStrictTolerance))
+        {
+            // The previous bound is only needed to preserve the original failure reason.
+            if (record) record->outcome = IsObjectiveDeteriorated(
+                candidate_value, previous_value, kObjectiveProgressTolerance) ?
+                "members-passed-global-objective-rejected-or-unavailable" :
+                "members-passed-strict-improvement-failed";
+            return std::nullopt;
+        }
+    }
+    else if (!IsAuditObjectiveAcceptableForProgress(candidate_value, previous_value,
+        best_audit_objective, kObjectiveProgressTolerance))
+    {
+        if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
         return std::nullopt;
     }
     evaluation.audit_objective = *audit_objective;
     return evaluation;
+}
+
+std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
+    const CandidateEvaluationOverlay & candidate_overlay,
+    CandidateScope scope, const BoundaryCandidateReference & reference)
+{
+    return EvaluateBoundaryCandidate(candidate_overlay, scope, reference, nullptr);
 }
 
 BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
@@ -214,8 +238,9 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
         inputs.objective_domain, reference.previous_audit, inputs.performance_counters);
     result.record = BeginJointCandidateDiagnostic(inputs.options.quiet_mode, reference.records,
         scope == CandidateScope::CooperativeRescue ? "rescue-joint-correction" : "joint-correction", reference.damping);
-    result.members = EvaluateCandidate(candidate, scope,
-        BoundaryCandidateReference{inputs, reference.component, &reference.previous_audit, result.record});
+    result.members = EvaluateBoundaryCandidate(candidate, scope,
+        BoundaryCandidateReference{inputs, reference.component, &reference.previous_audit, result.record},
+        &result.raw_objective);
     result.accepted = result.members && IsBetterAuditObjective(result.members->audit_objective.GetTotalObjective(),
         reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance);
     return result;
