@@ -206,6 +206,14 @@ but none applies a polish patch: four have no component and one solve reports
 no material change. Identical ON/OFF outputs therefore leave applied-path value
 unresolved; they do not justify deleting polish or its recertification.
 
+The [production applied-case follow-up](second-stage-final-polish-production-evidence.md)
+searched 128 fixed workflow inputs without forced convergence: 15 entered final
+polish, none applied. The specified fold-168 baseline completed with 100 accepted
+iterations, failing its existing <=25 iteration gate while its quality metrics
+passed. Dependent data comparisons and removal were stopped at that baseline
+failure; the three-dataset zero-application condition has not been established.
+Production final polish and its public options remain unchanged.
+
 Objective-context revisions and Frozen-recovery revisions now have independent
 ownership. The [revision separation audit](second-stage-recovery-revision-decoupling.md)
 records their unchanged partition/background triggers: objective reevaluation
