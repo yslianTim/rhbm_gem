@@ -1,3 +1,4 @@
+#include "core/detail/ComponentAssembly.hpp"
 #include "core/detail/ClusterHistoryObserver.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/CandidateTransaction.hpp"
@@ -328,7 +329,8 @@ void CandidateTransactionBuilder::ApplyComponentCandidate(
     CandidateScope scope)
 {
     auto & selection{ m_selection };
-    candidate.patch.ApplyTo(selection.assembled_state);
+    const FitStatePatch * patch{ &candidate.patch };
+    ApplyComponentPatches(selection.assembled_state, { &patch, 1 });
     for (const auto & [atom_index, provenance] : candidate.provenance_updates)
         selection.assembled_polish_provenance.at(atom_index) = provenance;
     if (inputs.context.cluster_history)
@@ -542,27 +544,18 @@ void CandidateTransactionBuilder::MarkBoundaryDiagnosticRejected(
     iter->exhausted = exhausted;
 }
 
-void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
+static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCandidates(
     const CandidateSelectionInputs & inputs,
-    const ObjectiveBreakdown & previous_audit_objective)
+    const ObjectiveBreakdown & previous_audit_objective,
+    const CandidateSelection & selection,
+    const std::vector<ClusterKey> & selected_key_list)
 {
-    auto & selection{ m_selection };
-    selection.final_audit_objective = EvaluateFinalSelectionAudit(
-        inputs,
-        previous_audit_objective,
-        selection, SelectedKeys());
-    if (selection.final_audit_objective.has_value() ||
-        SelectedKeys().empty())
-    {
-        return;
-    }
-
     auto component_list{
         BuildExpandedBoundaryReconciliationComponents(
             inputs,
-            SelectedKeys())
+            selected_key_list)
     };
-    for (const auto & key : SelectedKeys())
+    for (const auto & key : selected_key_list)
     {
         if (std::ranges::any_of(
                 component_list,
@@ -626,20 +619,45 @@ void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
             return lhs.second < rhs.second;
         });
 
-    for (const auto & rejection_candidate : rejection_candidate_list)
+    return rejection_candidate_list;
+}
+
+void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
+    const CandidateSelectionInputs & inputs,
+    const ObjectiveBreakdown & previous_audit_objective)
+{
+    auto & selection{ m_selection };
+    std::vector<std::pair<double, std::vector<ClusterKey>>> rejection_candidate_list;
+    std::size_t rejection_position{ 0 };
+    const auto evaluate = [&]
     {
-        const auto & key_list{ rejection_candidate.second };
-        MarkBoundaryDiagnosticRejected(key_list, false);
-        RejectSelectionKeys(
-            inputs,
-            key_list,
-            false);
-        selection.final_audit_objective = EvaluateFinalSelectionAudit(
-            inputs,
-            previous_audit_objective,
-            selection, SelectedKeys());
-        if (selection.final_audit_objective.has_value()) return;
-    }
+        return EvaluateFinalSelectionAudit(
+            inputs, previous_audit_objective, selection, SelectedKeys());
+    };
+    selection.final_audit_objective = AuditAndSalvageComponents(
+        evaluate,
+        [&](const auto & objective)
+        {
+            return objective.has_value() || SelectedKeys().empty();
+        },
+        [&](const auto &) -> std::optional<std::size_t>
+        {
+            if (rejection_position == 0)
+            {
+                rejection_candidate_list = BuildRejectionCandidates(
+                    inputs, previous_audit_objective, selection, SelectedKeys());
+            }
+            if (rejection_position == rejection_candidate_list.size()) return std::nullopt;
+            return rejection_position++;
+        },
+        [&](std::size_t position)
+        {
+            const auto & key_list{ rejection_candidate_list.at(position).second };
+            MarkBoundaryDiagnosticRejected(key_list, false);
+            RejectSelectionKeys(inputs, key_list, false);
+            return evaluate();
+        });
+    if (selection.final_audit_objective.has_value() || SelectedKeys().empty()) return;
 
     const auto remaining_key_list{ SelectedKeys() };
     for (const auto & component : BuildBoundaryReconciliationComponents(

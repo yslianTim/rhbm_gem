@@ -60,7 +60,8 @@ all second-stage services through candidate selection:
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
 | `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
 | `BoundaryReconciliation` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
-| `DependencyPolish` | Final uncut-component candidate generation, assembly and salvage; validation delegates to `CandidateEvaluation` |
+| `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
+| `ComponentAssembly` | Ordered patch application and excluded-component trial assembly; shared audit/salvage loop with caller-owned evaluation and removal policy |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
@@ -509,8 +510,13 @@ rejection shrink. The first guard-feasible factor reaching the objective gate
 is the accepted-shrink reference. Guard-only factor reduction does not shrink
 the radius; later objective rejection followed by acceptance at a smaller factor
 does. Exhausted boundary or final-audit searches keep their radius. Existing
-keys never grow: accepted steps otherwise keep their radius. Shrink multiplies
-by `0.5` down to `0.0625`; newly introduced topology keys start at `1.0`.
+keys never grow: accepted steps otherwise keep their radius. The controller stores
+an unsigned shrink level, `0..4`, rather than a floating-point radius. `GetRadius`
+returns the exact table value `[1.0, 0.5, 0.25, 0.125, 0.0625]`. Shrink increments
+the level until 4, after which it reports saturation; minimum-radius recovery sets
+level 4 directly. Reconciliation preserves surviving keys, drops removed keys and
+starts new keys at level 0. Update ordering, repeated keys, exhausted-key exclusion,
+missing-key exceptions and changed/saturated reporting are unchanged.
 Cooperative rescue retains its existing acceptance and lifecycle policy.
 The production controller uses neither actual-reduction growth nor rho.
 
@@ -1140,3 +1146,25 @@ ROOT; the trust-model experiment was tested both OFF and ON.
 - Repository lint and `git diff --check` passed. No test file or case was added:
   the modified defense source retains 101 declared cases, including its
   conditional experiment case.
+
+## Shared component infrastructure
+
+Outer boundary and final uncut component builders share DSU participant merging
+and root-to-key collection in `CouplingGraph`. Their participant sources,
+minimum component sizes, halo expansion, selected-owner filtering and output
+ordering remain distinct.
+
+`ComponentAssembly` applies borrowed patches in input order, skipping null entries
+and an optional excluded position. Outer selection applies patches to its
+builder-owned state; final polish constructs complete states from its base and
+retained component patches. The module owns no selection, provenance, radius,
+quarantine or diagnostic state.
+
+Both stages use `AuditAndSalvageComponents` for the initial audit and repeated
+policy-selected removals. Outer keeps exact-delta scoring, worst-first ordering
+with lexical key tie-breaking, previous/best gates, and exhausted fallback.
+Final polish keeps full-state audits, best single-removal search on each round,
+first-position tie-breaking and strict improvement over the base. A selected
+final removal reuses its already computed objective, without an extra audit.
+Ordinary/cooperative sweep ordering and polished-state recertification are
+unchanged. See the [structure and validation record](second-stage-component-assembly.md).

@@ -24,7 +24,7 @@ struct TrustRegionRadiusUpdate
 
 class TrustRegionStateSet
 {
-    std::map<ClusterKey, double> m_radius_by_key{};
+    std::map<ClusterKey, unsigned int> m_shrink_level_by_key{};
 
 public:
     void Reconcile(const std::vector<ClusterKey> & key_list);

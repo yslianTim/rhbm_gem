@@ -1,3 +1,4 @@
+#include "core/detail/ComponentAssembly.hpp"
 #include "core/detail/DependencyPolish.hpp"
 
 #include "core/detail/CandidateSelection.hpp"
@@ -211,14 +212,13 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 std::chrono::steady_clock::now() - component_start).count();
     }
 
-    auto assembled_state{ base_state };
-    for (const auto & accepted_patch : accepted_patch_by_component)
+    std::vector<const FitStatePatch *> selected_patches;
+    selected_patches.reserve(accepted_patch_by_component.size());
+    for (const auto & patch : accepted_patch_by_component)
     {
-        if (accepted_patch.has_value())
-        {
-            accepted_patch->ApplyTo(assembled_state);
-        }
+        selected_patches.emplace_back(patch.has_value() ? &*patch : nullptr);
     }
+    auto assembled_state{ AssembleComponentState(base_state, selected_patches) };
     const auto evaluate_global_audit = [&](const FitState & state)
     {
         performance_counters.RecordFullStateMaterialization();
@@ -226,73 +226,75 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         return EvaluateAuditObjective(objective_domain, context, snapshot);
     };
 
-    auto assembled_objective{
-        accepted_component_count == 0 ?
-            base_objective : evaluate_global_audit(assembled_state)
-    };
-    while (base_objective.has_value() &&
-        accepted_component_count != 0 &&
-        (!assembled_objective.has_value() ||
-            !IsBetterAuditObjective(
-                assembled_objective->GetTotalObjective(),
-                base_objective->GetTotalObjective(),
-                kObjectiveStrictTolerance)))
+    struct ComponentRemoval
     {
-        std::optional<std::size_t> removal_position;
-        std::optional<ObjectiveBreakdown> best_removal_objective;
-        FitState best_removal_state;
-        for (std::size_t candidate_position = 0;
-            candidate_position < accepted_patch_by_component.size();
-            candidate_position++)
+        std::size_t position;
+        ObjectiveBreakdown objective;
+        FitState state;
+    };
+    auto assembled_objective{ AuditAndSalvageComponents(
+        [&]
         {
-            if (!accepted_patch_by_component.at(candidate_position).has_value())
+            return accepted_component_count == 0 ?
+                base_objective : evaluate_global_audit(assembled_state);
+        },
+        [&](const auto & objective)
+        {
+            return !base_objective.has_value() || accepted_component_count == 0 ||
+                (objective.has_value() && IsBetterAuditObjective(
+                    objective->GetTotalObjective(),
+                    base_objective->GetTotalObjective(),
+                    kObjectiveStrictTolerance));
+        },
+        [&](const auto & assembled_objective) -> std::optional<ComponentRemoval>
+        {
+            std::optional<std::size_t> removal_position;
+            std::optional<ObjectiveBreakdown> best_removal_objective;
+            FitState best_removal_state;
+            for (std::size_t candidate_position = 0;
+                candidate_position < accepted_patch_by_component.size();
+                candidate_position++)
             {
-                continue;
-            }
-            auto candidate_state{ base_state };
-            for (std::size_t patch_position = 0;
-                patch_position < accepted_patch_by_component.size();
-                patch_position++)
-            {
-                const auto & accepted_patch{
-                    accepted_patch_by_component.at(patch_position)
-                };
-                if (patch_position == candidate_position ||
-                    !accepted_patch.has_value())
+                if (!accepted_patch_by_component.at(candidate_position).has_value())
                 {
                     continue;
                 }
-                accepted_patch->ApplyTo(candidate_state);
+                auto candidate_state{
+                    AssembleComponentState(base_state, selected_patches, candidate_position)
+                };
+                const auto candidate_objective{
+                    evaluate_global_audit(candidate_state)
+                };
+                if (!candidate_objective.has_value() ||
+                    (assembled_objective.has_value() &&
+                        candidate_objective->GetTotalObjective() >=
+                            assembled_objective->GetTotalObjective()))
+                {
+                    continue;
+                }
+                if (!best_removal_objective.has_value() ||
+                    candidate_objective->GetTotalObjective() <
+                        best_removal_objective->GetTotalObjective())
+                {
+                    removal_position = candidate_position;
+                    best_removal_objective = candidate_objective;
+                    best_removal_state = std::move(candidate_state);
+                }
             }
-            const auto candidate_objective{
-                evaluate_global_audit(candidate_state)
+            if (!removal_position.has_value()) return std::nullopt;
+            return ComponentRemoval{
+                *removal_position, *best_removal_objective, std::move(best_removal_state)
             };
-            if (!candidate_objective.has_value() ||
-                (assembled_objective.has_value() &&
-                    candidate_objective->GetTotalObjective() >=
-                        assembled_objective->GetTotalObjective()))
-            {
-                continue;
-            }
-            if (!best_removal_objective.has_value() ||
-                candidate_objective->GetTotalObjective() <
-                    best_removal_objective->GetTotalObjective())
-            {
-                removal_position = candidate_position;
-                best_removal_objective = candidate_objective;
-                best_removal_state = std::move(candidate_state);
-            }
-        }
-        if (!removal_position.has_value()) break;
-        auto & removed_diagnostic{
-            result.diagnostic.component_list.at(*removal_position)
-        };
-        removed_diagnostic.accepted = false;
-        accepted_patch_by_component.at(*removal_position).reset();
-        accepted_component_count--;
-        assembled_state = std::move(best_removal_state);
-        assembled_objective = best_removal_objective;
-    }
+        },
+        [&](ComponentRemoval & removal) -> std::optional<ObjectiveBreakdown>
+        {
+            result.diagnostic.component_list.at(removal.position).accepted = false;
+            selected_patches.at(removal.position) = nullptr;
+            accepted_patch_by_component.at(removal.position).reset();
+            accepted_component_count--;
+            assembled_state = std::move(removal.state);
+            return removal.objective;
+        }) };
 
     if (base_objective.has_value() &&
         assembled_objective.has_value() &&

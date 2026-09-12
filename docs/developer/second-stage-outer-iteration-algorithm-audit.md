@@ -22,6 +22,12 @@ converged stops with an independent radius. Cooperative rescue remains enabled;
 production only requests Shrink after the independent Grow ablation passed
 existing tests; Keep is an implicit no-op.
 
+The [component infrastructure and shrink-level refactor](second-stage-component-assembly.md)
+shares component grouping, patch application and the audit/salvage loop while
+preserving outer and final-polish removal policies. Production trust state now
+stores levels `0..4`; the numerical radius sequence and public fitting options
+are unchanged.
+
 ## Scope and canonical states
 
 The review covers the second-stage outer loop from a validated accepted state

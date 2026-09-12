@@ -58,6 +58,32 @@ public:
     std::size_t ComponentSize(std::size_t index) { return m_component_size_list.at(Find(index)); }
 };
 
+void MergeComponentParticipants(
+    DisjointSet & component_set,
+    const std::vector<std::size_t> & participant_position_list)
+{
+    if (participant_position_list.empty()) return;
+    const auto first_position{ participant_position_list.front() };
+    for (std::size_t i = 1; i < participant_position_list.size(); i++)
+    {
+        component_set.Merge(first_position, participant_position_list.at(i));
+    }
+}
+
+std::map<std::size_t, std::vector<ClusterKey>> CollectComponentKeys(
+    DisjointSet & component_set,
+    const std::vector<ClusterKey> & key_list,
+    std::size_t minimum_key_count)
+{
+    std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
+    for (std::size_t position = 0; position < key_list.size(); position++)
+    {
+        if (component_set.ComponentSize(position) < minimum_key_count) continue;
+        key_list_by_root[component_set.Find(position)].emplace_back(key_list.at(position));
+    }
+    return key_list_by_root;
+}
+
 struct DisjointSetComponentSummary
 {
     std::size_t component_count{ 0 };
@@ -861,20 +887,12 @@ std::vector<BoundaryReconciliationComponent> BuildBoundaryReconciliationComponen
                 accepted_position_list.emplace_back(iter->second);
             }
         }
-        if (accepted_position_list.size() < 2) continue;
-        const auto first_position{ accepted_position_list.front() };
-        for (std::size_t i = 1; i < accepted_position_list.size(); i++)
-        {
-            component_set.Merge(first_position, accepted_position_list.at(i));
-        }
+        MergeComponentParticipants(component_set, accepted_position_list);
     }
 
-    std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
-    for (std::size_t position = 0; position < sorted_accepted_key_list.size(); position++)
-    {
-        if (component_set.ComponentSize(position) < 2) continue;
-        key_list_by_root[component_set.Find(position)].emplace_back(sorted_accepted_key_list.at(position));
-    }
+    auto key_list_by_root{
+        CollectComponentKeys(component_set, sorted_accepted_key_list, 2)
+    };
 
     std::vector<BoundaryReconciliationComponent> component_list;
     component_list.reserve(key_list_by_root.size());
@@ -1082,19 +1100,10 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
         participant_key_position_list.erase(
             std::ranges::unique(participant_key_position_list).begin(),
             participant_key_position_list.end());
-        if (participant_key_position_list.empty()) continue;
-        const auto first_position{ participant_key_position_list.front() };
-        for (std::size_t i = 1; i < participant_key_position_list.size(); i++)
-        {
-            component_set.Merge(first_position, participant_key_position_list.at(i));
-        }
+        MergeComponentParticipants(component_set, participant_key_position_list);
     }
 
-    std::map<std::size_t, std::vector<ClusterKey>> key_list_by_root;
-    for (std::size_t key_position = 0; key_position < key_list.size(); key_position++)
-    {
-        key_list_by_root[component_set.Find(key_position)].emplace_back(key_list.at(key_position));
-    }
+    auto key_list_by_root{ CollectComponentKeys(component_set, key_list, 1) };
 
     std::vector<DependencyPolishComponent> component_list;
     for (auto & component_key_list : key_list_by_root | std::views::values)

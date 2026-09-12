@@ -1,4 +1,4 @@
-#include "core/detail/ClusterHistoryObserver.hpp"
+#include "core/detail/ComponentAssembly.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/PhaseAudit.hpp"
 #include "core/detail/TrustModelAudit.hpp"
@@ -9,6 +9,7 @@
 #include "core/detail/GaussianModelOperations.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -23,9 +24,10 @@
 
 namespace rhbm_gem::core::detail {
 namespace {
-constexpr double kTrustRegionInitialRadius{ 1.0 };
-constexpr double kTrustRegionMinimumRadius{ 0.0625 };
-constexpr double kTrustRegionShrinkFactor{ 0.5 };
+constexpr std::array<double, 5> kTrustRegionRadiusByShrinkLevel{
+    1.0, 0.5, 0.25, 0.125, 0.0625
+};
+constexpr unsigned int kTrustRegionMaximumShrinkLevel{ 4 };
 
 struct ClusterCandidateResult
 {
@@ -43,39 +45,39 @@ struct ClusterCandidateResult
 void TrustRegionStateSet::Reconcile(
     const std::vector<ClusterKey> & key_list)
 {
-    std::map<ClusterKey, double> next_radius_by_key;
+    std::map<ClusterKey, unsigned int> next_shrink_level_by_key;
     for (const auto & key : key_list)
     {
-        const auto iter{ m_radius_by_key.find(key) };
-        next_radius_by_key.emplace(
+        const auto iter{ m_shrink_level_by_key.find(key) };
+        next_shrink_level_by_key.emplace(
             key,
-            iter == m_radius_by_key.end() ?
-                kTrustRegionInitialRadius : iter->second);
+            iter == m_shrink_level_by_key.end() ?
+                0U : iter->second);
     }
-    m_radius_by_key = std::move(next_radius_by_key);
+    m_shrink_level_by_key = std::move(next_shrink_level_by_key);
 }
 
 double TrustRegionStateSet::GetRadius(const ClusterKey & key) const
 {
-    const auto iter{ m_radius_by_key.find(key) };
-    if (iter == m_radius_by_key.end())
+    const auto iter{ m_shrink_level_by_key.find(key) };
+    if (iter == m_shrink_level_by_key.end())
     {
         throw std::invalid_argument(
             "Local fitting trust-region state is missing.");
     }
-    return iter->second;
+    return kTrustRegionRadiusByShrinkLevel.at(iter->second);
 }
 
 void TrustRegionStateSet::ResetToMinimum(const std::vector<ClusterKey> & key_list)
 {
     for (const auto & key : key_list)
     {
-        const auto iter{ m_radius_by_key.find(key) };
-        if (iter == m_radius_by_key.end())
+        const auto iter{ m_shrink_level_by_key.find(key) };
+        if (iter == m_shrink_level_by_key.end())
         {
             throw std::invalid_argument("Local fitting trust-region state is missing.");
         }
-        iter->second = kTrustRegionMinimumRadius;
+        iter->second = kTrustRegionMaximumShrinkLevel;
     }
 }
 
@@ -89,20 +91,18 @@ TrustRegionRadiusUpdate TrustRegionStateSet::ApplyRadiusUpdates(
     {
         for (const auto & key : key_list)
         {
-            auto iter{ m_radius_by_key.find(key) };
-            if (iter == m_radius_by_key.end())
+            auto iter{ m_shrink_level_by_key.find(key) };
+            if (iter == m_shrink_level_by_key.end())
             {
                 throw std::invalid_argument(
                     "Local fitting trust-region state is missing.");
             }
-            if (iter->second <= kTrustRegionMinimumRadius)
+            if (iter->second == kTrustRegionMaximumShrinkLevel)
             {
                 update.saturated_key_list.emplace_back(key);
                 continue;
             }
-            iter->second = std::max(
-                kTrustRegionMinimumRadius,
-                iter->second * kTrustRegionShrinkFactor);
+            iter->second++;
             update.changed_key_list.emplace_back(key);
         }
     };
@@ -801,7 +801,8 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
             continue;
         }
         pending.shrink_trust_region = result.shrink_trust_region;
-        result.accepted_patch->ApplyTo(selection.assembled_state);
+        const FitStatePatch * patch{ &*result.accepted_patch };
+        ApplyComponentPatches(selection.assembled_state, { &patch, 1 });
         for (std::size_t key_position = 0;
             key_position < key.size(); key_position++)
         {
