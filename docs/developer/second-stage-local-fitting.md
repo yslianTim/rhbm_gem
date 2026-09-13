@@ -30,9 +30,8 @@ Earlier safeguard, population, and continuation reviews are
 historical records linked only from that audit; they do not override this
 page's current frozen-background contract.
 
-Implementation ownership and the unchanged per-path validation sequence are
-specified in [P0 structural refactoring](second-stage-p0-structure.md).
-Candidate selection now uses a private builder and one transaction publication;
+Implementation ownership and candidate acceptance references are specified below.
+Candidate selection uses a private builder and one transaction publication;
 convergence decisions receive p99 evidence separately from diagnostic maxima.
 
 The stage keeps candidate states in memory and writes one validated final
@@ -90,6 +89,13 @@ to publish diagnostic provenance. Convergence uses the committed candidate and t
 state. The unrestricted operator evidence remains separate from these
 production restrictions.
 
+Rejection rolls back affected models and provenance without discarding
+rejection-driven radius shrink, fixed activity, failure evidence, or quarantine
+transitions. An all-rejected attempt restores the previous model and still
+publishes those lifecycle updates. Suspicious-failure evidence is sampled before
+quarantine publication. Observer publication follows production commit and does
+not supply a decision or undo production publication.
+
 `SecondStageContext::atom_list` is accessed directly. Model snapshots capture
 both the selected Gaussian models and the immutable background in effect when
 they are built. `BuildSecondStageModelSnapshot` accepts a full fit state, a
@@ -103,6 +109,48 @@ The `IterationDiagnostics::proposal_maximum_transformed_change` field measures t
 proposal's maximum movement. It is distinct from the nominal operator residual
 in `ConvergenceCertificate`. Maximum/population measurements reside in
 `ConvergenceDiagnostics`; the existing progress label and audit schemas are
+unchanged.
+
+### Candidate acceptance references
+
+`EvaluateCandidate` uses `(candidate, reference)`. Typed local and boundary
+policies share numerical primitives while retaining their own acceptance rules.
+Proposal construction, factor retry, correction generation, and salvage remain
+orchestration responsibilities; failures retain their short-circuit order.
+
+| Phase | Evaluation order and reference |
+| --- | --- |
+| Local search | Construction/validity and the nonmaterial shortcut precede trust, guard, and the previous-objective gate. Optional history evaluation follows the production decision. |
+| Local polish | Existing solver feasibility/trust checks, then strict objective improvement against the accepted local endpoint. |
+| Ordinary boundary | Member previous gates in existing key order, followed by the combined objective. |
+| Boundary correction | Suspicious-polish guard, raw objective evidence, member/combined acceptance, then strict improvement against the original correction reference. The raw evidence is reused, including when unavailable. |
+| Cooperative rescue | Tolerated member deterioration, combined previous/best acceptance, and strict global improvement. History cannot accept or reject a member. |
+| Global selection audit | Affected-sample union and complete-state previous/best gates, followed by the outer salvage policy. |
+| Final polish | Validity, suspicious-polish guard, strict global improvement, and member non-regression against the base. Converged finalization separately requires strict operator recertification. |
+
+### Shared component infrastructure
+
+Outer boundary and final uncut component builders share DSU participant merging
+and root-to-key collection in `CouplingGraph`. Their participant sources,
+minimum component sizes, halo expansion, selected-owner filtering and output
+ordering remain distinct. Outer boundary components require two accepted keys;
+final components may contain one multi-atom key.
+
+`ComponentAssembly` applies borrowed patches in input order, skipping null entries
+and an optional excluded position. Outer selection applies patches to its
+builder-owned state; final polish constructs complete states from its base and
+retained component patches. The module owns no selection, provenance, radius,
+quarantine or diagnostic state.
+
+Both stages use `AuditAndSalvageComponents` for the initial audit and repeated
+policy-selected removals. Outer considers units that do not independently
+strictly improve previous, with exact-delta scoring, unavailable evidence scored
+as infinity, worst-first ordering, lexical key tie-breaking, previous/best gates,
+and exhausted fallback. Final polish tries each accepted component for removal
+using full-state audits and selects the best available single removal each round,
+retaining first-position tie-breaking and strict improvement over the base. A selected
+final removal reuses its already computed objective, without an extra audit.
+Ordinary/cooperative sweep ordering and polished-state recertification are
 unchanged.
 
 ## Model context and initialization
@@ -349,6 +397,14 @@ zero. The nominal population includes all three coordinates of every selected
 atom, including fixed and quarantined atoms, and does not reuse the accepted
 active population.
 
+Shape and offset endpoint availability are tracked separately for each selected
+atom. A non-hard-failure, valid joint-offset model can supply an available soft
+endpoint without solver qualification. Missing shape evidence makes both shape
+residual coordinates infinite; missing offset evidence makes its coordinate
+infinite. `operator_complete` requires every nominal atom's availability masks;
+transformed finiteness and solver qualification are separate checks. The p99
+predicate applies independently to log peak, log width, and offset coordinates.
+
 Production uses full solver qualification: active local shape refits must
 report `SUCCESS`; each active atom offset requires its owning cluster's solve
 to report `Converged`. Both require a full undamped, non-fallback endpoint.
@@ -360,6 +416,14 @@ The logarithmic coordinates keep amplitude and width positive when a candidate
 is decoded. A candidate is invalid when its amplitude or width is not finite
 and positive, its offset is not finite, or its transformed coordinates cannot
 be decoded to a valid Gaussian model.
+
+Joint-offset and joint-polish conditioning normalize design columns and use
+LDLT `min(D)/max(D)` of the normalized Gram matrix as a conditioning proxy before
+ridge. A ratio at or below `1e-8` requires a ridge multiplier floor of `10`.
+Empty/invalid columns, failed factorization, and nonpositive/nonfinite pivots
+return the zero sentinel and require the guard. Other safeguards may increase
+the multiplier further. This proxy is neither a singular-value condition number
+nor an effective-rank certificate.
 
 ## Cluster objective
 
@@ -448,7 +512,7 @@ historical patches. Observer entry points contain exceptions and disable the
 observer for the rest of the run on failure, reporting unavailable diagnostics
 without changing the fitting outcome. Historical evaluations use observer-owned
 counters, so production objective-work counts exclude this diagnostic work.
-See [the dependency audit](second-stage-cluster-history-observer.md).
+See the [observer and diagnostic contract](second-stage-phase-audit.md#observer-and-diagnostic-contract).
 
 At each background refresh, re-evaluate both the previous selected state and
 the retained global best under the new cache before comparing or choosing
@@ -604,10 +668,6 @@ If all remaining units strictly improve the previous objective but cannot satisf
 the historical best gate, the complete remaining attempt is marked exhausted;
 objective tolerances are never relaxed.
 
-The attempted fixed-order atomic component replacement was withdrawn after two
-remote-cluster regressions with unavailable global baselines; see
-[P2 status and evidence](second-stage-p2-structure.md). Greedy salvage remains.
-
 ## Final uncut dependency polish
 
 After the existing stop policy selects the best-audit or latest-validated base
@@ -643,8 +703,12 @@ guards, and strict component-objective improvement. Solver or validation failure
 falls back only that component.
 
 Accepted component patches are assembled and subjected to a complete global
-audit. If it fails, exact full-audit deltas are used to remove the worst
-non-improving component patches. Unless the surviving state strictly improves
+audit. If it fails, each currently accepted component is tried as a single
+removal using a full-state audit. Choose the available removal with the lowest
+objective, requiring improvement over the assembled objective when available;
+ties retain the first traversal position. Repeat until the base-improvement
+gate passes or no improving removal remains. Reuse the chosen removal's already
+evaluated objective. Unless the surviving state strictly improves
 the pre-polish global objective, the complete polish is discarded and the base
 state is written unchanged. When the selected base state stopped by production
 convergence, an objective-accepted polish remains provisional until the strict
@@ -659,19 +723,6 @@ without polish or recertification. Maximum residual remains diagnostic. Applied
 polish updates audit and provenance without changing accepted iterations or the
 stop reason. Diagnostics report strict-fixed-point policy and absolute-passed,
 failed, error, or not-evaluated status, candidate evidence and actual application.
-
-The [independent converged-only final-polish ablation](second-stage-final-polish-only-ablation.md)
-retains production polish. Existing data reaches five converged finalizations,
-but none applies a polish patch: four have no component and one solve reports
-no material change. Identical ON/OFF outputs therefore leave applied-path value
-unresolved; they do not justify deleting polish or its recertification.
-
-The [complete-state global-best-only shadow/ablation](second-stage-global-best-only-ablation.md)
-observes zero best-only rejections in 312 complete-state comparisons and 12
-cooperative global comparisons. OFF bypasses only the complete-state best gate;
-cooperative protection remains enabled. Identical terminal results without an
-actual best-only rejection leave release safety unmeasured, so production gates
-remain ON and global best retains all its existing responsibilities.
 
 ## Numerical defenses, partial active set, and quarantine
 
@@ -729,9 +780,8 @@ remain ON and global best retains all its existing responsibilities.
   on an applied partition/domain change or changed background response, not on an unchanged rebuild or merely queued topology. Each new
   revision permits one retry; retries are transient, not a third lifecycle.
   Background updates can consequently permit a retry every iteration.
-  The [revision separation audit](second-stage-recovery-revision-decoupling.md)
-  records the independent counter wiring and unchanged trigger policy. Objective
-  reevaluation itself does not schedule recovery.
+  Objective reevaluation itself does not schedule recovery; the independent
+  revision ownership and triggers are specified below.
 - Retry keys use minimum radius `0.0625` and `10x` ridge. Non-retrying Frozen
   masks retain priority; overlapping retry targets do not unlock coordinates
   still frozen by another target. No cooldown, attempt limit or Exhausted state
@@ -753,6 +803,29 @@ remain ON and global best retains all its existing responsibilities.
   not-evaluated`; `objective-unavailable` is reserved for an objective that was
   actually attempted but could not be calculated.
 
+### Objective and Frozen-recovery revisions
+
+`objective_domain_revision` identifies the objective context, including for
+phase observation. `frozen_recovery_revision` independently schedules Frozen
+retries; it is never copied or derived from the objective revision. Each target's
+`last_recovery_revision` records freezing, retry initiation, and failed retry.
+Only the recovery revision is passed to quarantine retry and publication.
+
+| Event | Objective revision | Frozen-recovery revision |
+| --- | --- | --- |
+| Initialization | 1 | 1 |
+| Queued partition applied at the next attempt | +1 | +1 |
+| Same partition, changed `response_by_atom` | +1 | +1 |
+| Partition applied together with background change | +1 once | +1 once |
+| Same partition and exactly equal background response | Unchanged | Unchanged |
+| Topology merely queued | Unchanged | Unchanged |
+
+Objective reset owns the objective increment. Recovery advances explicitly after
+a successful partition reset, or in the background-change branch. Objective
+reevaluation alone is not a recovery event. Existing `domain-retry`/probation
+diagnostic labels refer to recovery scheduling; their names do not imply shared
+counter ownership.
+
 An accepted state's adaptive topology rebuild becomes the next hysteresis
 reference when applied. An unchanged partition retains objective scales,
 trust radii, and solver workspaces. A changed cluster/sample/boundary mapping is
@@ -773,13 +846,9 @@ refresh leaves sampling-domain/scales/workspaces intact and adds no separate
 movement blocker. Scores from different backgrounds or domains are never
 compared directly.
 
-The current independent [rescue-only ablation](second-stage-rescue-only-ablation.md)
-finds a tradeoff on an existing fixture: rescue improves final raw response MSE,
-while disabling it improves the robust audit objective and saves one attempt.
-Both variants pass the existing tests. Rescue remains enabled; its evaluation
-now shares the normal component pipeline and result-application entry. Local
-outcomes stay provisional per key until final global salvage, after which the
-accepted/rejected lists are materialized once without a special promote step.
+Rescue remains enabled and shares the normal component pipeline and
+result-application entry. Local outcomes stay provisional per key until final
+global salvage, after which accepted/rejected lists are materialized once.
 
 ## Global audit and stopping
 
@@ -799,6 +868,12 @@ unavailable endpoint makes the operator incomplete instead of substituting
 the previous state as a zero residual. `StrictOperatorPassed()` reuses the same certificate for converged
 final-polish certification without the accepted-movement or orthogonal-blocker
 terms.
+
+Orthogonal blockers cover objective-domain changes, quarantine transitions,
+suspicious block fallback, and rejected clusters. `suspicious_block_fallback`
+includes shape and hard-failure evidence as well as offsets. Maximum values are
+not certificate predicates; their uses in nonmaterial search/backtracking and
+topology drift remain independent of convergence.
 
 The stage stops on the first applicable condition:
 
@@ -1053,118 +1128,3 @@ the audit result and `final_state_source` identifies the state actually
 written.
 
 `quiet_mode` suppresses the second-stage informational logging.
-
-## Workspace verification (2026-09-04)
-
-The implementation baseline was the clean revision
-`b2c0bc5c9a64afea94d131939ee2b0eb437a9613`. The verified workspace is that
-revision plus the current uncommitted atom-cutoff statistics cleanup. The
-cutoff's completed atom union-find now supplies the component summary directly,
-without rebuilding connectivity from adjacency. The cutoff summary retains
-only its limit and cut-edge count; atom count and component statistics are read
-from the existing topology and formal summary. The 100-selected-atom limit,
-edge ordering, threshold/hysteresis behavior, frozen backgrounds, acceptance,
-convergence, persistence, and diagnostic formats are unchanged. Verification
-used AppleClang 21, RelWithDebInfo, system dependencies, OpenMP 5.1 AUTO, and
-disabled UMAP/ROOT:
-
-- `tests_all`, `rhbm_tests_core_estimator`, and `rhbm_tests_data_runtime` passed.
-- Full CTest passed all 18 entries, including convergence analyzer/runner,
-  fold-168 runner contracts, smoke, and serial/parallel determinism.
-- `lint_all`, including repository lint and install-consumer smoke, passed.
-- The developer-only trust-model experiment ON build passed the focused tests,
-  all 18 CTest entries, and lint/install-consumer smoke. Its defense suite
-  contains 101 cases. The experiment was restored to OFF, followed by a normal
-  rebuild, focused tests, full CTest, lint, and another numerical capture; the
-  normal defense suite contains 100 cases.
-- Source counts remain 729 `TEST`/`TEST_F` and 17 `TEST_P`. No repository test
-  file or case was added; the fold-168 runner retains its eight Python cases.
-- Existing graph tests cover 100/101-atom boundaries, isolated atoms, small
-  custom limits, strong-edge priority, equal-weight canonical tie-breaking,
-  edge/active-index permutations, complete internal edges, empty/invalid input,
-  capped binary fallback, post-cutoff hysteresis, and pre-cutoff sensitivity
-  versus post-cutoff component summaries. Existing cases now compare the single
-  component summary against actual partitions, including component count,
-  maximum size, ratio, and empty-graph zero values, and assert the exact stable
-  atom-cutoff log record.
-- A connected 101-atom chain plus two remote selected atoms verifies actual
-  cutoff and 101-atom boundary reconciliation, serial/parallel agreement,
-  unchanged intensity-scale tolerances, and remote-cluster improvement. The
-  chain uses slightly nonuniform spacing to avoid repeated-weight rounding ties;
-  the production weight comparisons and numerical tolerances are unchanged.
-  Uncut dependency components can exceed the 100-atom topology limit.
-- The shared-background fixture connects selected atoms through physical
-  sample coupling rather than matching residue labels. Relabeling selected and
-  unselected chain IDs, sequence IDs, and residue names while holding selection,
-  elements, geometry, samples, initial local state, and `alpha_r` fixed leaves
-  second-stage models, peeling, stop reasons, topology records, and convergence
-  evidence unchanged. The chemical-key independence coverage is retained.
-- Frozen backgrounds, shared contributors, fixed/quarantined median pools,
-  hydrogen exclusion, deduplication, best-audit rescoring, adaptive partitions,
-  final polish/peeling, unselected non-persistence, and full workflow regressions
-  passed.
-- Eighteen existing fixture configurations were captured before the change.
-  All 18 matched byte-for-byte afterward in OLS/MDPDE models, uncertainty,
-  peeling, completion/stop records, and convergence evidence, using hexadecimal
-  floating-point serialization. Initial coupling/cutoff, threshold-sensitivity,
-  adaptive-topology, and frozen-background records also matched exactly, as did
-  captured warnings. All 18 matched the clean baseline again after restoring
-  OFF. No fixture geometry was changed or configuration excluded, including the
-  shared-background and boundary fixtures changed in the preceding topology
-  revision. Timing and performance counters were not compared.
-- Fold-168 baseline/report schema remains 6, with 168 selected atoms, a 100-atom
-  limit, and at least two topology clusters. Input hashes, reference quality
-  metrics, quality tolerances, and the 25-accepted-iteration gate are unchanged.
-  Runner tests passed, including rejection of legacy residue logs and schema 5.
-  The external fold-168 benchmark was not run: its model/map inputs are not
-  configured in this workspace.
-- Reverse searches found no residue lookup, residue pre-merge, residue-count
-  cutoff, chemical keys, shared-offset merge, or group-median refit in the
-  second-stage production path. Public headers, fitting options, CLI, database
-  schema, selection flags, stage flow, third-stage estimators, and standalone
-  empty-selected behavior are unchanged. `git diff --check` passed.
-
-The ROOT-disabled build retains existing unrelated painter warnings; those
-files were not changed. Only this
-workspace-verification record was updated in the normative document; its
-algorithm description, the existing Notion algorithm page, and historical audit
-documents are unchanged.
-
-
-## Readability refactor verification (2026-09-06)
-
-The paired baseline is revision `a285a63a29ff134f346b3697743d5cd2ce0032a5`.
-Its executable and shared library were preserved before implementation. Both
-build variants used Debug, system dependencies, OpenMP AUTO (5.1), UMAP, and
-ROOT; the trust-model experiment was tested both OFF and ON.
-
-- The six responsibility modules and diagnostic ownership described above are
-  implemented. No public estimator options, numerical thresholds, stop rules,
-  logging schemas, or persistence interfaces changed.
-- Both variants built `rhbm_tests` and passed the estimator, algorithm, math,
-  and HRL CTest entries.
-- Repository lint and `git diff --check` passed. No test file or case was added:
-  the modified defense source retains 101 declared cases, including its
-  conditional experiment case.
-
-## Shared component infrastructure
-
-Outer boundary and final uncut component builders share DSU participant merging
-and root-to-key collection in `CouplingGraph`. Their participant sources,
-minimum component sizes, halo expansion, selected-owner filtering and output
-ordering remain distinct.
-
-`ComponentAssembly` applies borrowed patches in input order, skipping null entries
-and an optional excluded position. Outer selection applies patches to its
-builder-owned state; final polish constructs complete states from its base and
-retained component patches. The module owns no selection, provenance, radius,
-quarantine or diagnostic state.
-
-Both stages use `AuditAndSalvageComponents` for the initial audit and repeated
-policy-selected removals. Outer keeps exact-delta scoring, worst-first ordering
-with lexical key tie-breaking, previous/best gates, and exhausted fallback.
-Final polish keeps full-state audits, best single-removal search on each round,
-first-position tie-breaking and strict improvement over the base. A selected
-final removal reuses its already computed objective, without an extra audit.
-Ordinary/cooperative sweep ordering and polished-state recertification are
-unchanged. See the [structure and validation record](second-stage-component-assembly.md).

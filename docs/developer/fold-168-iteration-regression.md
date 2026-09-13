@@ -4,9 +4,16 @@ Investigation date: 2026-09-12. Production source was fixed at
 `6587542638d570685a11ef281aebd015d5eb8c06`.
 This investigation added only this report to the production tree; it did not modify
 production algorithms, the runner, tests, quality baselines, or tolerances.
-Raw evidence, isolated sources, builds, and per-iteration data are preserved in
-[`build/fold-168-regression-investigation/`](../../build/fold-168-regression-investigation/).
-That directory is not tracked by Git. Reproduction requires retaining it and the external inputs.
+Status: **unresolved**. The historical intervention below is not an implemented
+repair in the current production source. This documentation cleanup neither
+reruns the dataset nor changes its gates.
+
+Raw evidence, isolated sources, builds, and per-iteration data remain local under
+`build/fold-168-regression-investigation/`; see the
+[evidence index](second-stage-outer-iteration-algorithm-audit.md#evidence-index)
+for the inventory and availability limits. That directory is not tracked by Git.
+Git preserves the report text, not the raw evidence; the index is not a backup.
+Reproduction requires retaining the directory and the external inputs.
 The investigation completed 21 full dataset runs, covering the official runner,
 historical versions, instrumentation, and single-change interventions.
 `run-index.json` summarizes their results. Failed builds are retained separately

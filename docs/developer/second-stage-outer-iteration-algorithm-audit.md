@@ -1,294 +1,119 @@
-# Second-stage outer-iteration algorithm audit
+# Second-stage decisions and evidence
 
 ## Status and authority
 
-This document is the current decision and evidence authority for the outer
-iteration implemented by `detail::RunSecondStageIterations`. The normative execution
-description remains in [Second-stage local fitting](second-stage-local-fitting.md).
-The earlier audits retain historical design reasoning and are linked under
-[Historical provenance](#historical-provenance).
+Current decisions below are checked against production source **C**:
+`c174458294c1a328058f96bf37a2a21ae16c06a4` (`develop`). This documentation-only
+cleanup changes no numerical policy, public interface, build option, test,
+quality baseline, or tolerance and performs no new numerical experiment.
 
-The current structural P0 implementation and its focused-test validation
-are recorded in [Structural P0 result](#structural-p0-result-2026-09-11).
+- [Second-stage local fitting](second-stage-local-fitting.md) specifies current
+  execution, ownership, acceptance, recovery, and persistence contracts.
+- [Second-stage phase audit](second-stage-phase-audit.md) explains optional
+  observations, schemas, and diagnostic interpretation.
+- [fold-168 iteration regression](fold-168-iteration-regression.md) remains an
+  unresolved issue with its existing investigation and future repair proposal.
+- This page owns current decisions, evidence limits, and historical references.
+  Retired reports are available at fixed Git revisions, outside the current
+  reading path; they do not override the current specification.
 
-The earlier per-atom-offset review baseline is
-`a4354e698e77398154009d231907ebf3ed4b1d52` (per-atom offsets). The audit consolidation and diagnostic cleanup do
-not change `FitOptions`, command-line options, model persistence, convergence
-thresholds, candidate selection, stop precedence, or the production
-trajectory.
+## Decision table
 
-The [retained P1 changes](second-stage-p1-ablation.md) limit final polish to
-converged stops with an independent radius. Cooperative rescue remains enabled;
-production only requests Shrink after the independent Grow ablation passed
-existing tests; Keep is an implicit no-op.
+Every current decision applies to **C**. Evidence IDs link to the inventory below,
+which records each investigation's separate baseline. Reopening conditions are
+requirements for future work, not experiments or tests added by this cleanup.
 
-The [component infrastructure and shrink-level refactor](second-stage-component-assembly.md)
-shares component grouping, patch application and the audit/salvage loop while
-preserving outer and final-polish removal policies. Production trust state now
-stores levels `0..4`; the numerical radius sequence and public fitting options
-are unchanged.
+| Issue | Current decision | Applicable version | Reason | Evidence limits | Reopen when | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| Convergence certificate | Retain qualification, accepted active p99, complete nominal operator p99, and blockers. | C | Small accepted steps do not certify a fixed point; unavailable endpoints fail closed. | No retained predicate is proved implied by the others. Maximum is not a certificate predicate, but has other algorithm uses. | A proposed simplification addresses each protected failure mode and establishes redundancy. | [E0](#evidence-index) |
+| P0 and component ownership | Retain builder/consuming transaction and shared component helpers with separate outer/final removal policies. | C | Rejection preserves required lifecycle updates; shared assembly does not unify acceptance policy. | Focused comparisons do not cover every fallback, tie, or salvage branch or establish general numerical equivalence. | Ownership or publication changes require revisiting these contracts. | [E1, E4](#evidence-index) |
+| Cluster-history observer | Retain observation-only history; keep `best_audit_state` in production. | C | Diagnostic availability must not affect acceptance, radius, quarantine, stop, or persistence. | Extraction neutrality does not establish neutrality of earlier member-best gate removal. | A decision starts depending on observer data, or observer ownership changes. | [E5, E13](#evidence-index) |
+| Objective/recovery revisions | Keep independent ownership and existing partition/background triggers. | C | Objective reevaluation is not a retry event. | Captures lack applied partition changes and successful full-loop recovery; current trigger counts being equal does not make ownership interchangeable. | Revision ownership or trigger semantics change. | [E6](#evidence-index) |
+| P1 finalization and radius | Keep converged-only final polish at independent radius 1.0; production Shrink with implicit Keep, no Grow. | C | Independent Grow removal passed existing tests with rescue retained. | Combined rescue/Grow removal failed intensity scaling and was reverted; it is not independent rescue evidence. | A separate policy proposal supplies independent evidence for the changed mechanism. | [E2a, E2b](#evidence-index) |
+| Objective exhaustion | Exclude it from quarantine failure evidence; retain search rejection and other hard/invalid/guard evidence. | C | Search non-improvement alone is not freeze or recovery-failure evidence. | This was a numerical policy change: activity, patience timing, and later trajectories can change. Mixed-failure coverage is bounded. | New evidence warrants changing failure classification or recovery requirements. | [E7](#evidence-index) |
+| P2 acceptance changes | Fixed-order atomic component acceptance remains withdrawn; greedy salvage stays. Current member-best removal remains under investigation. | C | Unavailable global baselines caused healthy remote updates to be rejected in two existing regressions. | P2 was a numerical ablation. Its objective-revision retry wording and fixed-false rejection fields are superseded; fold-168 remains unresolved. | A replacement defines acceptance with unrelated missing objective evidence, or a separate member-best repair is validated. | [E3, E13](#evidence-index) |
+| Global-best gate | Production ON, including cooperative protection. | C | Historical-best and previous references need not imply the same decision. | Zero best-only rejection in 312 complete-state and 12 cooperative comparisons; OFF did not disable cooperative best. No released best-only candidate was observed. | Actual best-only release and retention consequences are evaluated; cooperative removal needs separate evidence. | [E10](#evidence-index) |
+| Final dependency polish | Retain enabled polish and strict operator recertification. | C | Applied-path value and removal safety remain unmeasured. | First round: five converged executions, zero applied. Follow-up: 128 inputs, 15 entries, zero applied; the specified three-dataset matrix stopped at fold-168's failing baseline. | The baseline is repaired and the specified dataset evidence/removal conditions are completed, with actual application distinguished from provenance. | [E8, E9](#evidence-index) |
+| Cooperative rescue | Retain enabled capability and shared component evaluation. | C | ON improves response MSE; OFF improves audit objective and uses one fewer attempt in the exposed fixture. | Accepted and retained rescue updates are observed; neither policy uniformly dominates. Passing tests do not prove redundancy. | A separate policy decision resolves the quality/objective/cost tradeoff with relevant evidence. | [E11](#evidence-index) |
+| Background-trigger policy | Retain any-change Frozen recovery. | C | Stronger thresholds changed termination and persisted peeling despite equal Gaussian parameters. | No successful production release or applied-partition coverage; reducing failed retries does not establish safe removal. | Evidence covers those missing paths and persisted-output quality. | [E12](#evidence-index) |
+| fold-168 | Unresolved; preserve the original <=25 iteration gate and all quality gates. | C; recorded run at E13 baseline | 100 accepted iterations, `maximum-iterations`; quality/atom-cutoff gates pass, iteration gate fails. | Historical member-best intervention is not a repair implemented in C. | A separately implemented repair passes both original iteration and quality gates with the validation described in the open report. | [E13](#evidence-index) |
 
-The [Frozen recovery background-trigger ablation](second-stage-background-trigger-ablation.md)
-compares any change, material target-local change and partition-only eligibility
-in isolated builds. Production retains any-change recovery; the experiment does
-not change recovery triggers in the production implementation. All ten existing
-CTest configurations passed (16/16 each), but the stronger thresholds shortened
-two runs and changed persisted peeling despite identical Gaussian parameters.
-Successful production release and applied-partition coverage remain absent;
-the result does not support switching production policy.
+## Unresolved fold-168 regression
 
-## Scope and canonical states
+The recorded boundary is adjacent commits `f50a742c` (11 accepted iterations)
+and `49d3516a` (100, best iteration 27). Restoring only the historical-best
+acceptance gates for local candidates and ordinary boundary members on the
+latter version, retaining its new quarantine policy and original stopping
+conditions, returns the run to 11 iterations with every original gate passing.
+This intervention supports a trajectory effect from member-best removal;
+it does not justify treating later observer extraction as the cause.
 
-The review covers the second-stage outer loop from a validated accepted state
-through proposal construction, candidate selection, post-processing,
-convergence, final dependency polish, and persistence. The statistical
-derivation of the local MDPDE estimator and the later group-fitting stage are
-outside this audit.
+The recorded current-source run at `6587542638d570685a11ef281aebd015d5eb8c06`
+also accepts 100 iterations. The CLI succeeds; the existing runner fails only
+`accepted_iterations <= 25`. No run at a newer source is claimed here. Patience
+can reset on improvement over the previous state without improving historical
+best; selecting iteration 27 earlier or relaxing the threshold is not a
+validated repair. Final-polish workload comparisons remain incomplete at this
+baseline failure. See the [open investigation](fold-168-iteration-regression.md)
+for the proposed independent repair, exact inputs, and subsequent validation.
 
-Three states must remain distinct:
+## Evidence index
 
-- `S(k)` is the previous validated accepted state.
-- `F(S(k))` is the complete, undamped joint-offset-to-local-shape operator
-  endpoint, including availability and solver evidence.
-- `S(k+1)` is the candidate that is actually accepted after the geometric
-  factor search, objective gates, joint polish, boundary reconciliation, and
-  rescue.
+Inventory date: **2026-09-13**. All historical report links below are pinned to
+**C**, which preserves their text before retirement. The baseline column refers
+to the investigation, not the revision used to retrieve the report. Numerical
+results remain those reported at their original baselines.
 
-Accepted movement is `T(S(k+1)) - T(S(k))`. The strict fixed-point residual is
-`T(F(S(k))) - T(S(k))`. `T` uses three transformed coordinates: log peak,
-log width, and per-atom physical offset normalized by peak.
+Local paths are relative to the repository root and intentionally use code
+format. **Local present / untracked** means the directory and listed key records
+were found in this workspace; it does not certify completeness, hashes, or
+reproducibility. **Local not found** means absent at the reported path in this
+workspace, not proved lost everywhere. No hashes or experiments were regenerated.
+Existing manifests are listed only as pointers.
 
-Accepted movement samples active optimization DOFs. Every shape-active atom
-contributes one log-peak and one log-width sample; every offset-active atom
-contributes one absolute offset-to-peak-ratio change sample. Fixed and quarantined coordinates do not
-dilute this population.
+Git preserves report text, not ignored raw evidence. This index is not a backup.
+Retain the local directories and external inputs for reproduction or transfer;
+this cleanup neither copies/uploads evidence nor deletes local artifacts.
 
-The operator residual instead samples the complete nominal-DOF population,
-including fixed and quarantined shapes and per-atom offsets. Missing or
-non-finite endpoint evidence makes the operator incomplete; it must never be
-replaced by the previous state to manufacture a zero residual.
+| ID / fixed report | Investigation baseline | Local artifact location | Key records / existing hash manifests | Availability on inventory date |
+| --- | --- | --- | --- | --- |
+| [E0 / Consolidated audit](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-outer-iteration-algorithm-audit.md) | a4354e698e77398154009d231907ebf3ed4b1d52 (earlier per-atom-offset review; later consolidation at C) | Not specified | Failure-mode/safeguard table and historical provenance in the fixed report. | No separate local artifact location specified. |
+| [E1 / P0](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-p0-structure.md) | c5417717154896e53d31a1d43910cde15e3f80f6; interface follow-up 1041f13b6eefcc81ed8f02f41f9e918a5acb9f85 | `build/p0-structure/` | Build/test logs referenced by the report; no individual filename specified. | Local not found; Git report remains available. |
+| [E2a / P1 combined removal](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-p1-ablation.md) | 6e7ac3c5f452812da8aeb1b1ae2497b5cd0143ec (report baseline) | `build/p1-ablation/` | Reverted combined-ablation evidence referenced by the report. | Local not found; Git report remains available. |
+| [E2b / P1 independent Grow](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-p1-ablation.md) | 6e7ac3c5f452812da8aeb1b1ae2497b5cd0143ec (report baseline) | `build/p1-grow-only/` | Independent Grow validation referenced by the report. | Local not found; Git report remains available. |
+| [E3 / P2](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-p2-structure.md) | f50a742cd5d8f3c64fa70cbc11436c7677ff0370 | `build/p2-structure/` | `report.md`, independent patches and failed-step evidence (reported, unavailable here). | Local not found; Git report remains available. |
+| [E4 / Component assembly](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-component-assembly.md) | ac9ca72ce0e5093abb8e2c97966c41644b494053 | `build/component-assembly/` | `comparison.json`, `source-verification.json` | Local present / untracked. |
+| [E5 / Cluster history](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-cluster-history-observer.md) | a58713d1d37fe326e55c1ccc5bc29928a45aae96 | `build/cluster-history/` | `report.md`, `trace-comparison.json` | Local present / untracked. |
+| [E6 / Revision separation](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-recovery-revision-decoupling.md) | e6296fdf604779f7259c99326de1258158df492a | `build/recovery-revision/` | `matrix.json`, `comparison.json`, `trace-comparison.json`, `source-verification.json` | Local present / untracked. |
+| [E7 / Objective exhaustion](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-quarantine-objective-exhausted.md) | d511c88fe80e0665a92f84a6ac13371a0b6635c5 | `build/quarantine-objective-exhausted/` | `report.md`, `behavior-comparison.json`, `trace-comparison.json` | Local present / untracked. |
+| [E8 / Final polish, first round](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-final-polish-only-ablation.md) | bf8840b0ea9cbc6f199518783896fb09c8462104 | `build/final-polish-only/` | `matrix.json`, `final-comparison.json`, `source-isolation.json` | Local present / untracked. |
+| [E9 / Final polish, follow-up](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-final-polish-production-evidence.md) | fb926a5be58f0ade7ffd855bba44cc84789e79f0 | `build/final-polish-production/` | `summary.json`, `baseline.json`, `case1-on-j4-trace-off/fold-report.json`, `artifact-manifest.json`, `object-hashes.json` | Local present / untracked. |
+| [E10 / Global-best](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-global-best-only-ablation.md) | 5174961e2373f97738ec8201666b643531c1bbf1 | `build/global-best-only/` | `best-analysis.json`, `exposure.json`, `comparison.json`, `source-isolation.json`, `capture-source-hashes.json` | Local present / untracked. |
+| [E11 / Rescue](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-rescue-only-ablation.md) | ddc165052a2bce5828829cfd04d43385c3671a50 | `build/rescue-only/` | `report.md`, `event-comparison.json`, `quality.py`, `applied-source-verification.json` | Local present / untracked. |
+| [E12 / Background trigger](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-background-trigger-ablation.md) | 277ab397be3b788da04f9d808464424a5fff57e2 | `build/background-trigger/` | `analysis.json`, `peeling-comparison.json`, `artifact-manifest.json`, `source-verification.json` | Local present / untracked. |
+| [E13 / fold-168 investigation](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/fold-168-iteration-regression.md) | 6587542638d570685a11ef281aebd015d5eb8c06 | `build/fold-168-regression-investigation/` | `run-index.json`, `65875426-official/report.json`, `65875426-official/actual.json`, `instrumentation-manifest.json`, `binary-hashes.json` | Local present / untracked. |
 
-## Per-atom availability and conditioning
+E13 retains the original input SHA-256 identities and reproduction commands in
+its report; `run-index.json` describes 21 full dataset runs, with failed builds
+kept separately. Neither that count nor directory existence implies a new
+validation of all raw data. E8 and E9 are separate rounds, not a pooled sample:
+five converged executions in E8 are not five unique cases, and E9's interrupted
+or unrun workloads have no application conclusion. E10's 12 cooperative
+comparisons cover endpoints/corrections, not 12 independent attempts.
 
-Each selected atom has independent shape and offset availability masks. Offset
-availability is set only for a non-hard-failure joint-offset result whose model
-passes validity checks. A soft failure may therefore supply an available endpoint
-without being solver-qualified. Shape and offset availability are independent;
-a missing shape sets both shape residual coordinates to infinity, and a missing
-offset sets its own residual to infinity. `operator_complete` is the conjunction
-of the masks for every nominal selected atom; transformed finiteness and solver
-qualification are separate requirements. Inactive atoms are not removed from this
-nominal population, and each coordinate has its own percentile population.
+The two dated verification sections removed from the current specification
+remain available as [Workspace verification (2026-09-04)](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-local-fitting.md#workspace-verification-2026-09-04) (baseline
+`b2c0bc5c9a64afea94d131939ee2b0eb437a9613` plus the then-uncommitted cleanup)
+and [Readability refactor verification (2026-09-06)](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/second-stage-local-fitting.md#readability-refactor-verification-2026-09-06) (paired baseline
+`a285a63a29ff134f346b3697743d5cd2ce0032a5`). Neither section specifies a local
+artifact directory, so raw-evidence availability is not established by this
+inventory. Their old test results are historical records, not current validation.
 
-Joint-offset and joint-polish conditioning normalize each design-matrix column,
-form the normalized Gram matrix, and use LDLT `min(D)/max(D)` as a conditioning
-proxy before ridge. A ratio at or below `1e-8` triggers a ridge multiplier floor
-of `10`. Empty/invalid columns, failed factorization, or nonpositive/nonfinite
-pivots return the existing zero sentinel and require the guard. This ratio is
-neither a singular-value condition number nor an effective-rank certificate.
-Other existing ridge safeguards may also increase multipliers; diagnostics report
-the actual minimum/maximum multipliers after all guards, not only the floor.
+### Earlier convergence provenance
 
-Schema-1 diagnostic records separately report conditioning, solve status, and
-per-atom availability. Phases distinguish outer operator, candidate polish,
-boundary reconciliation, final dependency polish, and final recertification.
-Offset status codes follow `JointOffsetSolveStatus` (0 converged; 1 system build
-failed; 2 empty; 3 initial solve failed; 4 IRLS solve failed; 5 objective
-deteriorated; 6 iteration limit). Hard-failure classification is recorded
-separately. Joint-polish solve records report `solved`/`failed`; this does not
-imply objective acceptance or final persistence approval.
-
-## End-to-end state machine
-
-```text
-validated S(k)
-  -> domain-aware Frozen target retry
-  -> complete undamped joint per-atom offset endpoint
-  -> complete undamped local-shape endpoint
-  -> strict operator evidence F(S(k))
-  -> geometric candidate factors: validity -> trust -> guard -> objective
-  -> active-column joint polish
-  -> ordinary components through the shared evaluator/apply entry
-  -> existing global audit/salvage
-  -> cooperative components through the same evaluator/apply entry
-  -> after cooperative acceptance: existing global audit/salvage
-  -> materialize final accepted/rejected classifications
-  -> stage next-iteration Active/Frozen state without modifying audited models
-  -> publish state, trust-radius and quarantine updates
-  -> notify optional history observer to publish provenance
-  -> assembled validated S(k+1)
-  -> production convergence certificate
-  -> stop policy selects a base final state
-  -> only converged and enabled: final uncut dependency polish at radius 1.0
-  -> strict operator persistence safety check; otherwise retain chosen base
-  -> persist Gaussian and peeling state
-```
-
-The independent [rescue-only ablation](second-stage-rescue-only-ablation.md) at
-`ddc16505` passes existing tests both with and without rescue, but reveals opposing
-response-MSE and audit-objective/cost benefits. Rescue remains enabled and now
-shares normal component evaluation and result application, with provisional
-per-key outcomes classified after final salvage instead of a promote path. The earlier
-combined rescue/Grow result is not reused as independent evidence.
-
-Quarantine evidence is limited to solver hard failure, invalid candidate, and
-guard infeasibility. The `objective-exhausted` search diagnostic neither accrues
-freeze observations nor blocks domain-retry recovery; recovery still requires
-the existing active-coordinate and accepted-change or safe-endpoint evidence.
-See [the objective-exhaustion quarantine audit](second-stage-quarantine-objective-exhausted.md)
-for the policy change and verification limits.
-
-Validity establishes that a candidate can be represented. Trust limits the
-step tested in the current iteration and updates the next radius. Guard tests
-domain feasibility. Objective gates accept or reject candidates. None of
-these responsibilities substitutes for fixed-point evidence.
-
-Guard is feasibility-only: guard-only factor reduction does not request radius
-shrink. Local candidates record only whether to request Shrink; the transaction
-retains its shrink-key list and keys without a radius update implicitly Keep.
-Accepted shrink requests and retryable rejected keys retain their existing update
-order, with factor `0.5` and minimum `0.0625`; new keys start at `1.0`. Final polish independently uses `1.0` relative
-to each round's endpoint. Rho shadow Grow remains diagnostic-only.
-
-## Authoritative production certificate
-
-`ConvergenceCertificate::ProductionConverged()` is the only production stop
-decision and requires all of the following:
-
-```text
-solver qualified
-&& accepted active-DOF p99 < 1e-4
-&& complete nominal-DOF operator
-&& nominal fixed-point residual p99 < 1e-4
-&& orthogonal blockers clear
-```
-
-The percentile predicate is coordinate-wise: the p99 for each of log peak,
-log width, and per-atom offset must pass independently. Solver qualification
-requires full, undamped, non-fallback active endpoints. Operator completeness and non-finite residuals fail
-closed. Orthogonal blockers cover
-objective-domain changes, quarantine transitions, suspicious block fallback,
-and rejected clusters. The internal `suspicious_block_fallback` includes shape
-and hard-failure evidence; the diagnostic label `suspicious-offset` is retained
-for schema compatibility.
-
-Maximum values remain diagnostic measurements and do not define a separate
-production policy.
-
-## Failure mode and safeguard coverage
-
-| Failure mode | Accepted p99 | Strict operator p99 | Qualification | Invariants / blockers |
-| --- | ---: | ---: | ---: | ---: |
-| Trust clipping or objective backtracking makes the committed step small while the full endpoint remains material | Detects the small committed step | Blocks the false fixed point | Provides endpoint quality | Records the limiting state |
-| Polish, reconciliation, or rescue moves the committed state after a small operator endpoint | Blocks convergence | Detects the small endpoint | Confirms the endpoint solve | Records post-processing blockers |
-| Soft solver failure, damping, or fallback produces small numerical movement | Observes movement only | Observes residual only | Blocks convergence | Preserves failure classification |
-| Fixed or quarantined coordinates hide an unavailable nominal endpoint | Excludes inactive DOFs by design | Fails closed on incomplete evidence | Reports restriction | Enforces population completeness |
-| One atom has unavailable or non-finite offset evidence | Includes its offset only when active | Unavailable evidence makes the operator incomplete; non-finite residual fails the percentile test | Availability alone does not qualify a solver | Each nominal atom retains its own coordinate |
-| Objective domain or quarantine changes during the iteration | May still be small | May still be small | May still pass | Orthogonal blocker prevents a premature stop |
-
-No retained predicate is implied by the others. Absence of observed failures
-is not a mathematical redundancy proof.
-
-## Final dependency polish recertification
-
-Final dependency polish is objective-accepted provisionally. On a `converged`
-path, a changed polished state is persisted only when a new certificate built
-at that state passes `StrictOperatorPassed()`: solver qualification, complete
-nominal operator evidence, and residual p99 must all pass. Failure,
-incomplete evidence, or evaluation error retains the already converged base
-state.
-
-Non-convergence stop reasons persist the existing selected base state directly.
-They do not run final dependency polish or operator recertification. The strict
-candidate check is the only final-polish persistence policy.
-
-The [independent converged-only final-polish ablation](second-stage-final-polish-only-ablation.md)
-retains production polish. Existing data reaches five converged finalizations,
-but none applies a polish patch: four have no component and one solve reports
-no material change. Identical ON/OFF outputs therefore leave applied-path value
-unresolved; they do not justify deleting polish or its recertification.
-
-The [production applied-case follow-up](second-stage-final-polish-production-evidence.md)
-searched 128 fixed workflow inputs without forced convergence: 15 entered final
-polish, none applied. The specified fold-168 baseline completed with 100 accepted
-iterations, failing its existing <=25 iteration gate while its quality metrics
-passed. Dependent data comparisons and removal were stopped at that baseline
-failure; the three-dataset zero-application condition has not been established.
-Production final polish and its public options remain unchanged.
-
-Objective-context revisions and Frozen-recovery revisions now have independent
-ownership. The [revision separation audit](second-stage-recovery-revision-decoupling.md)
-records their unchanged partition/background triggers: objective reevaluation
-does not itself schedule a Frozen retry. This separation does not change
-convergence blockers or the existing domain-retry diagnostic labels.
-
-The [complete-state global-best-only shadow/ablation](second-stage-global-best-only-ablation.md)
-observes zero best-only rejections in 312 complete-state comparisons and 12
-cooperative global comparisons. OFF bypasses only the complete-state best gate;
-cooperative protection remains enabled. Identical terminal results without an
-actual best-only rejection leave release safety unmeasured, so production gates
-remain ON and global best retains all its existing responsibilities.
-
-## Current diagnostic contract
-
-The current Debug trajectory is schema 10 and serializes the production
-certificate plus its active and nominal populations, p99 and maximum values,
-operator completeness, and four orthogonal blockers. Earlier trajectory
-schemas are not accepted by the current analyzer.
-
-Frozen-IRLS predicted-reduction and rho instrumentation is not part of a
-normal or routine audit build. It is available only through the developer-only
-`RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT` build option and never controls the
-production trajectory. Its logs are consumed only by
-`analyze_trust_model_experiment.py`. Shadow records use schema 3, which removes
-`rejected-by-best`; the analyzer also accepts historical schema 2. Funnel,
-phase-audit and analyzer-summary schemas are unchanged. Keep/Grow/Shrink actions
-exist only in the trust-model diagnostics; the production observer input is a
-boolean shrink request. The experiment remains diagnostic-only.
-
-Local and shadow diagnostics no longer carry the fixed-false `rejected_by_best`
-field or its unreachable rejection branches. `best_reference_unavailable` remains
-observer-only history-update evidence, not a rejection gate. Per-cluster history,
-its tie-break and provisional publication live in `ClusterHistoryObserver`; they
-are absent in Info/quiet runs and are not carried by production candidate or
-transaction types. The observer preserves Debug history schemas and contains
-failures without changing acceptance or stopping. Its objective evaluations no
-longer contribute to production work counters. Global-best acceptance and
-lifecycle diagnostic naming are unchanged. See the
-[cluster-history dependency audit](second-stage-cluster-history-observer.md).
-
-## Structural P0 result (2026-09-11)
-
-The structural baseline is `c5417717154896e53d31a1d43910cde15e3f80f6`.
-No numerical policy or test expectation was relaxed.
-See [P0 structural refactoring](second-stage-p0-structure.md) for ownership,
-the flowchart and the per-path validation map.
-
-The implementation extracts phase/trust-model observation, separates p99
-certificate evidence from maximum/population diagnostics, centralizes typed
-candidate evaluation and publishes builder-owned selection through a consuming
-transaction. Existing tests only adapt to internal interface changes; no tests,
-test cases or test targets were added.
-
-The trust-enabled build passed 108/108 existing estimator defense tests,
-including quiet/trace neutrality. Repository lint and whitespace checks passed.
-Fold-168 was not run. Boundary/correction and fallback coverage relies on
-existing focused tests; those tests do not establish coverage of every branch.
-
-Historical all-selected, active-proposal, cluster/maximum, and
-production-maximum policies are retired. Accepted-only persistence remains a
-targeted negative unit scenario: small accepted movement cannot declare
-convergence while the strict operator residual remains material. Geometric
-factor search remains the production policy; coarse-to-fine refinement is not
-part of that search. Fold-168 remains an optional quality regression.
-
-## Historical provenance
-
-The following records preserve independent design reasoning and evidence in
-chronological order:
+These three existing historical records remain in place and are not production
+specifications:
 
 1. [Convergence safeguard audit](audit-history/second-stage-convergence/convergence-safeguard-audit.md)
 2. [Stationarity and active-coordinate population audit](audit-history/second-stage-convergence/stationarity-active-coordinate-audit.md)
 3. [Counterfactual convergence continuation audit](audit-history/second-stage-convergence/counterfactual-convergence-continuation-audit.md)
-
-The historical records are provenance, not current production specification.

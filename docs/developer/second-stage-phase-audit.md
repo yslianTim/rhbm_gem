@@ -12,8 +12,59 @@ collector and translation unit. Historical member references are read-only
 iteration-baseline snapshots from `ClusterHistoryObserver`; replay owns its copies
 and does not hold a live history observer. Missing history remains unavailable
 diagnostic evidence. Neither collector is stored in candidate
-results. See [P0 structural refactoring](second-stage-p0-structure.md) for the
-transaction boundary and certificate/diagnostic ownership.
+results. See the [current state ownership](second-stage-local-fitting.md#implementation-responsibilities-and-state-ownership)
+for the transaction boundary and certificate/diagnostic ownership.
+
+## Observer and diagnostic contract
+
+`ClusterHistoryObserver` owns Debug history, tie-break records, provisional
+publication/rollback, and source IDs. It is created only for non-quiet Debug
+runs; Info/quiet runs allocate no history maps and do not score historical
+patches. Local workers use preallocated per-key entries. Component observations
+start from iteration-baseline history, and only selected observations publish.
+History selects retained diagnostic records, never production candidates.
+
+Production publishes state, provenance, quarantine, and radii before notifying
+the observer. Observer entry points contain exceptions; a failure disables
+further history work for that run and reports unavailable diagnostics without
+rejecting a candidate, rolling back production, or stopping estimation.
+History evaluations use observer-owned counters. A change in those counters is
+not evidence of a numerical trajectory change or a performance improvement.
+`best_reference_unavailable` is history-update evidence, not a rejection gate.
+
+`best_audit_state` remains production state for global-best acceptance, audit
+patience, and non-converged final-state selection. It is independent of optional
+cluster history. The earlier removal of member-best acceptance gates is a
+separate numerical policy change; observer isolation does not resolve the
+[open fold-168 regression](fold-168-iteration-regression.md).
+
+The current Debug trajectory uses schema 10. It serializes the production
+certificate, active/nominal populations, p99/maxima, operator completeness, and
+four orthogonal blockers. The current convergence analyzer rejects earlier
+trajectory schemas. The schema-compatible `suspicious-offset` label represents
+`suspicious_block_fallback`, which also includes shape and hard-failure evidence.
+
+Trust-model shadow records use schema 3, without the former fixed-false
+`rejected-by-best` field; `analyze_trust_model_experiment.py` also accepts
+historical schema 2. Funnel, phase-audit, and analyzer-summary schemas are
+unchanged. Keep/Grow/Shrink are diagnostic actions; production observation
+receives a boolean shrink request. Trust-model work requires its independent
+build flag, and disabled phase/trust entry points neither capture snapshots nor
+run diagnostic solvers.
+
+Schema-1 conditioning/solve records distinguish conditioning, solve status, and
+per-atom availability across outer operator, candidate polish, boundary
+reconciliation, final dependency polish, and final recertification. Offset
+status codes follow `JointOffsetSolveStatus`: 0 converged, 1 system build failed,
+2 empty, 3 initial solve failed, 4 IRLS solve failed, 5 objective deteriorated,
+6 iteration limit. Hard failure is recorded separately. Joint-polish
+`solved`/`failed` does not imply objective acceptance or persistence approval.
+Reported ridge multipliers include all guards, not just the conditioning floor.
+
+`final_uses_polish` records the persisted state's polish provenance, including
+outer accepted-state polish. It is not a final dependency-polish application
+counter. A `maximum-iterations` run may report it as true while making zero
+final dependency-polish calls; use the explicit final-polish application records.
 
 ## Enable and analyze
 
