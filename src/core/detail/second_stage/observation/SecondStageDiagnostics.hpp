@@ -1,13 +1,14 @@
-#include "core/detail/second_stage/JointFitting.hpp"
 #pragma once
 
-#include "core/detail/second_stage/CandidateState.hpp"
+#include "core/detail/second_stage/CandidateEvidence.hpp"
 
 #include <memory>
 #include <string>
 #include <string_view>
 
 namespace rhbm_gem::core::detail {
+
+enum class BoundaryJointCorrectionStatus;
 
 struct ClusterHistoryDiagnostic;
 

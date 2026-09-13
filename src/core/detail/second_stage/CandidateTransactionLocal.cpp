@@ -4,7 +4,7 @@
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 
 #include <algorithm>

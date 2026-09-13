@@ -37,9 +37,10 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/Quarantine.cpp
     core/detail/second_stage/CandidateTransactionBoundary.cpp
     core/detail/second_stage/DependencyPolish.cpp
-    core/detail/second_stage/observation/TrustModelAudit.cpp
-    core/detail/second_stage/observation/PhaseAudit.cpp
+    $<$<BOOL:${RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT}>:core/detail/second_stage/observation/TrustModelAudit.cpp>
+    $<$<BOOL:${RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE}>:core/detail/second_stage/observation/PhaseAudit.cpp>
     core/detail/second_stage/observation/SecondStageLogging.cpp
+    core/detail/second_stage/observation/PerformanceCounters.cpp
     core/detail/second_stage/ConvergenceCertificate.cpp
     core/detail/second_stage/IterationProcess.cpp
     core/MapSampler.cpp
@@ -144,13 +145,8 @@ rhbm_gem_apply_library_install_rpath(rhbm_gem)
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     target_compile_definitions(rhbm_gem PUBLIC RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
 endif()
-if(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE)
-    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE)
-endif()
-if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
-    target_compile_definitions(rhbm_gem PRIVATE
-        RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
-endif()
+rhbm_gem_apply_observation_definitions(rhbm_gem)
+
 install(
     TARGETS rhbm_gem rhbm_gem_dependencies
     EXPORT RHBM_GEMTargets

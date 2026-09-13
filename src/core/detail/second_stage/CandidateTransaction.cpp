@@ -1,6 +1,5 @@
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 
 #include <algorithm>
 

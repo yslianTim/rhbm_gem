@@ -203,9 +203,10 @@ target_include_directories(rhbm_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/src/data"
     "${PROJECT_SOURCE_DIR}/tests"
 )
-if(RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
-    target_compile_definitions(rhbm_tests PRIVATE
-        RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
+rhbm_gem_apply_observation_definitions(rhbm_tests)
+if(NOT RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE)
+    target_sources(rhbm_tests PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/core/detail/second_stage/observation/PhaseAudit.cpp")
 endif()
 
 add_dependencies(tests_all rhbm_tests)

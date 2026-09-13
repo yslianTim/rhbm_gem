@@ -1,6 +1,6 @@
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 
 #include <algorithm>

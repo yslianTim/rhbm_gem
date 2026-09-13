@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/second_stage/CandidateState.hpp"
+#include "core/detail/second_stage/CandidateEvidence.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
 namespace rhbm_gem::core::detail {

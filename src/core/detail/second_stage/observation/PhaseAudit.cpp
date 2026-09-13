@@ -3,7 +3,6 @@
 #include "core/detail/second_stage/observation/PhaseAudit.hpp"
 
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -625,19 +624,6 @@ void PhaseAudit::Finish(const FitOptions & options, const std::vector<double> & 
         std::to_string(failures) + ",\"elapsed_ms\":" + Number(elapsed) + "}");
 }
 
-std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext & context, bool quiet,
-    const ObjectiveDomain & domain, const FitState & baseline, const std::vector<ClusterKey> & keys,
-    std::size_t attempt, std::size_t domain_id) noexcept
-{
-#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
-    if (!quiet && Logger::GetLogLevel() >= LogLevel::Debug)
-        try { return std::make_shared<PhaseAudit>(context, domain, baseline, keys, attempt, domain_id); }
-        catch (...) { Logger::Log(LogLevel::Debug, "Second-stage phase audit error: capture initialization failed"); }
-#else
-    (void)context; (void)quiet; (void)domain; (void)baseline; (void)keys; (void)attempt; (void)domain_id;
-#endif
-    return {};
-}
 [[maybe_unused]] static std::string_view PhaseAuditRejectionReason(const CandidateDecisionEvidence & diagnostic)
 {
     if (!diagnostic.candidate_objective) return "objective-unavailable";

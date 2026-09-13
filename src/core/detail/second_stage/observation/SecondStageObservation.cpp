@@ -2,13 +2,80 @@
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
 #include "core/detail/second_stage/observation/PhaseAudit.hpp"
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#endif
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <cmath>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <algorithm>
 #include <ranges>
 
 namespace rhbm_gem::core::detail {
+
+std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext & context, bool quiet,
+    const ObjectiveDomain & domain, const FitState & baseline, const std::vector<ClusterKey> & keys,
+    std::size_t attempt, std::size_t domain_id) noexcept
+{
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
+    if (!quiet && Logger::GetLogLevel() >= LogLevel::Debug)
+        try { return std::make_shared<PhaseAudit>(context, domain, baseline, keys, attempt, domain_id); }
+        catch (...) { Logger::Log(LogLevel::Debug, "Second-stage phase audit error: capture initialization failed"); }
+#else
+    (void)context; (void)quiet; (void)domain; (void)baseline; (void)keys; (void)attempt; (void)domain_id;
+#endif
+    return {};
+}
+
+bool IsDebugLogLevelEnabled()
+{
+    return Logger::GetLogLevel() >= LogLevel::Debug;
+}
+
+void RecordJointMemberRejection(
+    JointCandidateObjectiveDiagnostic * record,
+    const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous,
+    const std::optional<ObjectiveBreakdown> & best,
+    const std::optional<ObjectiveBreakdown> & candidate,
+    bool best_checked)
+{
+    if (record == nullptr) return;
+    record->member_key = key;
+    record->previous = previous;
+    record->best = best;
+    record->candidate = candidate;
+    record->best_checked = best_checked;
+    if (best_checked && !best)
+        record->outcome = "best-reference-unavailable";
+    else if (!previous || !candidate)
+        record->outcome = "member-objective-unavailable";
+    else if (!std::isfinite(previous->GetTotalObjective()) ||
+        !std::isfinite(candidate->GetTotalObjective()) ||
+        (best_checked && best && !std::isfinite(best->GetTotalObjective())))
+        record->outcome = "member-objective-nonfinite";
+    else
+    {
+        const bool previous_failed{ IsObjectiveDeteriorated(candidate->GetTotalObjective(),
+            previous->GetTotalObjective(), kObjectiveProgressTolerance) };
+        const bool best_failed{ best_checked && best && IsObjectiveDeteriorated(
+            candidate->GetTotalObjective(), best->GetTotalObjective(), kObjectiveProgressTolerance) };
+        record->outcome = previous_failed ? (best_failed ? "previous+best" : "previous") :
+            (best_failed ? "best" : "member-check-failed");
+    }
+}
+
+JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
+    bool quiet_mode,
+    std::vector<JointCandidateObjectiveDiagnostic> & records,
+    std::string_view source,
+    std::optional<double> factor,
+    std::size_t round)
+{
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return nullptr;
+    return &records.emplace_back(JointCandidateObjectiveDiagnostic{
+        .source = source, .round = round, .candidate_number = records.size() + 1, .factor = factor });
+}
 
 void ObserveHistoryPartition(SecondStageObservationSession * observation, const SecondStageContext & context, const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain, const FitState & state) noexcept

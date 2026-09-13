@@ -61,7 +61,8 @@ all second-stage services through candidate selection:
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationResult.hpp` | Outer attempt summary and stop reasons |
 | `ConvergenceCertificate` | Active-coordinate summaries, solver qualification, and convergence certificate |
-| `CandidateState.hpp` | Candidate evidence, selection data, boundary decisions, polish progress, and trust-radius update records |
+| `CandidateEvidence.hpp` | Candidate decision evidence, pre-objective failure reasons, and boundary accepted sources |
+| `CandidateState.hpp` | Selection data, boundary decisions, polish progress, and trust-radius update records |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
@@ -72,9 +73,10 @@ all second-stage services through candidate selection:
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
-| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, and diagnostic payloads |
+| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, phase collector creation, and diagnostic payloads |
 | `observation/ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
-| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and performance counters |
+| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and read-only performance formatting |
+| `observation/PerformanceCounters` | Atomic counts, phase timings, and current/retired solver workspace totals; publishes once at scope exit |
 | `observation/PhaseAudit` / `observation/TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
 
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
@@ -84,7 +86,9 @@ state/residual representation and seed selection, graph construction and topolog
 drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
 convergence types and the outer attempt result have their own headers. Seed
 diagnostic records belong to `observation/SecondStageDiagnostics.hpp`.
-`CandidateState.hpp` owns candidate data and evidence. `CandidateTransaction.hpp`
+`CandidateEvidence.hpp` supplies diagnostics and candidate evaluation without
+including the complete selection. `CandidateState.hpp` owns selection data.
+`CandidateTransaction.hpp`
 owns trust-radius/backtracking control declarations and `CandidateSelectionInputs`;
 the transaction implementation is distributed across
 `CandidateTransaction.cpp`, `CandidateTransactionLocal.cpp`, and
@@ -98,6 +102,22 @@ without accepting or returning per-cluster history. `ClusterHistoryObserver`
 receives decisions and maintains its own provisional history.
 Solver workspaces, counters and observers remain mutable working resources.
 The observation pointer in `CandidateSelectionInputs` is non-owning.
+Diagnostic payloads forward-declare the boundary correction status rather than
+including the solver workspace definitions. Joint diagnostic creation and member
+rejection recording belong to `SecondStageObservation`; numeric callers include
+that interface and `PerformanceCounters` directly. Logging receives immutable
+counter data through `LogSecondStagePerformance`; the counter owner retains the
+quiet check, timing calculation, workspace references, and destruction point.
+
+The phase and trust options apply identical private compile definitions to the
+library and test target. Production compiles each collector implementation only
+when its option is enabled. `BeginPhaseAudit` remains an out-of-line observation
+factory in every build and returns an empty collector when phase auditing is off.
+With phase auditing off, tests compile `PhaseAudit.cpp` as a support source outside
+the GTest suite-discovery list, preserving direct collector tests. With it on,
+tests use the library implementation. These private definitions do not propagate
+to CLI or installed consumers; trust instrumentation still requires tests.
+
 `Finish` stages next-iteration quarantine without publishing it. Consuming `Commit`
 publishes quarantine, applies trust updates and copies keys, then publishes the
 accepted model/provenance (or restores the previous state when all candidates are

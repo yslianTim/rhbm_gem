@@ -29,6 +29,7 @@
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/TrustModelAudit.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/second_stage/Quarantine.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
@@ -347,6 +348,137 @@ audit_detail::SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdateForTest(
         audit_detail::BuildPreviousSuspiciousProfileBaseline(
             sample_entries, previous_model),
         audit_detail::SuspiciousUpdateMode::OffsetOnly).reason;
+}
+
+TEST(EstimatorSecondStageDefenseTest, PerformanceCountersRespectLogLevelQuietAndDestruction)
+{
+    const auto saved_level{ Logger::GetLogLevel() };
+    for (const auto level : { LogLevel::Info, LogLevel::Debug })
+    {
+        for (const bool quiet : { false, true })
+        {
+            for (const bool unwind : { false, true })
+            {
+                SCOPED_TRACE(::testing::Message() << static_cast<int>(level) << "/" << quiet << "/" << unwind);
+                audit_detail::SecondStageContext context;
+                audit_detail::ClusterSolverWorkspaceMap workspaces;
+                audit_detail::BoundaryJointCorrectionWorkspaceMap boundary_workspaces;
+                Logger::SetLogLevel(level);
+                testing::internal::CaptureStdout();
+                try
+                {
+                    audit_detail::PerformanceCounters counters{ quiet, context, workspaces, boundary_workspaces };
+                    counters.RecordFullStateMaterialization();
+                    const auto before_destruction{ testing::internal::GetCapturedStdout() };
+                    testing::internal::CaptureStdout();
+                    EXPECT_TRUE(before_destruction.empty());
+                    if (unwind) throw std::runtime_error("counter lifetime test");
+                }
+                catch (const std::runtime_error &)
+                {
+                }
+                const auto output{ testing::internal::GetCapturedStdout() };
+                if (quiet)
+                {
+                    EXPECT_TRUE(output.empty());
+                    continue;
+                }
+                const std::string heading{ " Second-Stage Local Fitting Performance :\n" };
+                EXPECT_EQ(output.find(heading), 0);
+                EXPECT_EQ(output.find(heading, heading.size()), std::string::npos);
+                EXPECT_NE(output.find(" - boundary_reconciliation_ms = 0.000\n"
+                    " - boundary_joint_correction_ms = 0.000\n"
+                    " - dependency_polish_ms = 0.000\n"
+                    " - iteration/candidate/topology/total_ms = 0.000/0.000/0.000/"), std::string::npos);
+                EXPECT_EQ(output.find("full_state_materializations = 1") != std::string::npos,
+                    level == LogLevel::Debug);
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+                EXPECT_EQ(output.find("Trust-model performance: schema=1") != std::string::npos,
+                    level == LogLevel::Debug);
+#else
+                EXPECT_EQ(output.find("Trust-model performance:"), std::string::npos);
+#endif
+            }
+        }
+    }
+    Logger::SetLogLevel(saved_level);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PerformanceCountersAccumulateParallelUpdatesAndRetiredWorkspaces)
+{
+    audit_detail::SecondStageContext context;
+    context.atom_list.resize(2);
+    context.atom_list[0].raw_sampling_entries.resize(2);
+    context.atom_list[1].raw_sampling_entries.resize(3);
+    audit_detail::ClusterSolverWorkspaceMap workspaces;
+    audit_detail::BoundaryJointCorrectionWorkspaceMap boundary_workspaces;
+    alg::WeightedRidgeSystem system;
+    system.design_matrix.resize(1, 1);
+    system.design_matrix.insert(0, 0) = 1.0;
+    system.response = Eigen::VectorXd::Ones(1);
+    system.previous_parameter = Eigen::VectorXd::Zero(1);
+    system.ridge_diagonal = Eigen::VectorXd::Ones(1);
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    {
+        audit_detail::PerformanceCounters counters{ false, context, workspaces, boundary_workspaces };
+        std::vector<std::future<void>> workers;
+        for (std::size_t worker = 0; worker < 4; worker++)
+        {
+            workers.push_back(std::async(std::launch::async, [&counters] {
+                for (std::size_t i = 0; i < 100; i++)
+                {
+                    counters.RecordFullStateMaterialization();
+                    counters.RecordGaussianCacheHits();
+                    counters.RecordGaussianCacheMisses();
+                    counters.RecordObjectiveSampleEvaluation(2, 5);
+                    counters.RecordObjectiveSampleEvaluation(7, 5);
+                }
+            }));
+        }
+        for (auto & worker : workers) worker.get();
+        for (std::size_t generation = 0; generation < 2; generation++)
+        {
+            auto & workspace{ workspaces[{ 0 }] };
+            EXPECT_TRUE(workspace.joint_offset.AnalyzePattern(system));
+            EXPECT_TRUE(workspace.joint_polish.AnalyzePattern(system));
+            EXPECT_TRUE(boundary_workspaces[{}].AnalyzePattern(system));
+            if (generation == 0)
+            {
+                counters.RecordSolverWorkspaceReset();
+                workspaces.clear();
+                boundary_workspaces.clear();
+            }
+        }
+        counters.RecordTopologyRebuild(1.25, true);
+        counters.RecordTopologyRebuild(2.5, false);
+        counters.RecordBoundaryReconciliation(3, 2, 1, 4.25);
+        counters.RecordBoundaryJointCorrection(true, 1.0);
+        counters.RecordBoundaryJointCorrection(false, 2.0);
+        counters.RecordBoundaryRescue(true, false);
+        counters.RecordBoundaryRescue(false, true);
+        counters.RecordBoundaryRescueExclusions(1, 2, 3);
+        counters.RecordDependencyPolish(3, 2, 1, 1, 5, 6, 7, 8.5);
+        counters.FinishIterationPhase(std::chrono::steady_clock::now());
+        counters.FinishCandidatePhase(std::chrono::steady_clock::now());
+    }
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_NE(output.find(" - boundary_reconciliation_ms = 4.250\n"
+        " - boundary_joint_correction_ms = 3.000\n"
+        " - dependency_polish_ms = 8.500\n"), std::string::npos);
+    EXPECT_NE(output.find("[Debug]  - full_state_materializations = 400\n"
+        " - gaussian_cache_hit/miss = 2000/2000\n"
+        " - objective_recomputed/reused_samples = 3600/1200\n"
+        " - solver_symbolic_analyses = 6\n"
+        " - topology_rebuilds/partition_changes = 2/1\n"
+        " - boundary_reconciliations/backtracked/rejected = 3/2/1\n"
+        " - boundary_joint_correction_attempts/accepted/fallback = 2/1/1\n"
+        " - boundary_rescues/accepted/fallback/rejected = 2/1/1/1\n"
+        " - boundary_rescue_exclusions_hard/invalid/no-objective = 1/2/3\n"
+        " - dependency_polish_components/attempted/accepted/fallback = 3/2/1/1\n"
+        " - dependency_polish_atoms/parameters/rounds = 5/6/7\n"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)
@@ -7029,6 +7161,20 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditQuietAndEnabledRunsPreserveFinal
     Logger::SetLogLevel(saved_level);
     EXPECT_EQ(quiet_output.find("Second-stage phase audit:"), std::string::npos);
     EXPECT_EQ(traced_output.find("Second-stage phase audit error:"), std::string::npos);
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
+    EXPECT_NE(traced_output.find("Second-stage phase audit:"), std::string::npos);
+#else
+    EXPECT_EQ(traced_output.find("Second-stage phase audit:"), std::string::npos);
+#endif
+    EXPECT_EQ(quiet_output.find("Trust-model funnel:"), std::string::npos);
+    EXPECT_EQ(quiet_output.find("Trust-model shadow:"), std::string::npos);
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+    EXPECT_NE(traced_output.find("Trust-model funnel:"), std::string::npos);
+    EXPECT_NE(traced_output.find("Trust-model shadow:"), std::string::npos);
+#else
+    EXPECT_EQ(traced_output.find("Trust-model funnel:"), std::string::npos);
+    EXPECT_EQ(traced_output.find("Trust-model shadow:"), std::string::npos);
+#endif
     const auto & quiet_atoms{ quiet_model->GetSelectedAtoms() };
     const auto & traced_atoms{ traced_model->GetSelectedAtoms() };
     ASSERT_EQ(quiet_atoms.size(), traced_atoms.size());

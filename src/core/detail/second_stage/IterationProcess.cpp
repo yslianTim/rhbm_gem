@@ -5,6 +5,7 @@
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/Quarantine.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"

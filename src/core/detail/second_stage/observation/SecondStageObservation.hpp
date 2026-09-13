@@ -10,6 +10,23 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
+bool IsDebugLogLevelEnabled();
+
+void RecordJointMemberRejection(
+    JointCandidateObjectiveDiagnostic * record,
+    const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous,
+    const std::optional<ObjectiveBreakdown> & best,
+    const std::optional<ObjectiveBreakdown> & candidate,
+    bool best_checked);
+
+JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
+    bool quiet_mode,
+    std::vector<JointCandidateObjectiveDiagnostic> & records,
+    std::string_view source,
+    std::optional<double> factor = std::nullopt,
+    std::size_t round = 0);
+
 struct BestObjectiveTraceEnvironment;
 class ClusterHistoryObserver;
 class PhaseAudit;
@@ -32,6 +49,7 @@ public:
 
 struct CandidateSelectionInputs;
 struct CandidateSelection;
+struct BoundaryComponentDecision;
 struct IterationResult;
 struct IterationProposalResult;
 struct TrustModelTrialRecord;
@@ -56,6 +74,10 @@ void ObserveBoundaryMemberHistory(SecondStageObservationSession * observation, c
 void ObserveBoundaryHistoryAccepted(SecondStageObservationSession * observation, std::size_t token) noexcept;
 void ObserveHistoryRejected(SecondStageObservationSession * observation, const ClusterKey &) noexcept;
 void ObserveHistoryPublication(SecondStageObservationSession * observation) noexcept;
+
+std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext &, bool quiet,
+    const ObjectiveDomain &, const FitState &, const std::vector<ClusterKey> &,
+    std::size_t attempt, std::size_t domain_id) noexcept;
 
 void BeginPhaseObservation(SecondStageObservationSession * observation, SecondStageContext &, bool quiet, const ObjectiveDomain &, const FitState &,
     const std::vector<ClusterKey> &, std::size_t attempt, std::size_t domain_id) noexcept;

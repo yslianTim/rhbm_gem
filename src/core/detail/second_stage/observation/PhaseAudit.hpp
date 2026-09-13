@@ -75,8 +75,4 @@ public:
         const FitState & final_state) noexcept;
 };
 
-std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext &, bool quiet,
-    const ObjectiveDomain &, const FitState &, const std::vector<ClusterKey> &,
-    std::size_t attempt, std::size_t domain_id) noexcept;
-
 } // namespace rhbm_gem::core::detail

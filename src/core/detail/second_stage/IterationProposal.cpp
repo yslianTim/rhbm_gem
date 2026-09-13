@@ -1,7 +1,6 @@
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 
-#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
 #include <exception>
