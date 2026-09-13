@@ -1,6 +1,5 @@
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
-#include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 
 #include <algorithm>
@@ -87,10 +86,11 @@ CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectio
 
 CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, FitState & accepted_state, PolishProvenance & provenance,
     QuarantineState & quarantine,
-    TrustRegionStateSet & radii, IterationResult & result, SecondStageObservationSession * observation) &&
+    TrustRegionStateSet & radii, SecondStageObservationSession * observation) &&
 {
     const bool accepted{ !m_selection.accepted_key_list.empty() };
     quarantine = std::move(m_quarantine);
+    CandidateCommitResult result;
     result.trust_region_update = radii.ApplyRadiusUpdates(
         m_selection.shrink_trust_region_key_list,
         m_selection.rejected_key_list, m_selection.exhausted_key_list);
@@ -103,8 +103,13 @@ CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, Fi
     }
     else accepted_state = std::move(previous_state);
     ObserveHistoryPublication(observation);
-    return {std::move(m_selection.block_activity), m_selection.final_audit_objective,
-        m_selection.polish_progress, m_suspicious_atom_count, accepted,
-        !m_selection.rejected_key_list.empty(), m_quarantine_transition};
+    result.block_activity = std::move(m_selection.block_activity);
+    result.final_audit_objective = m_selection.final_audit_objective;
+    result.polish_progress = m_selection.polish_progress;
+    result.suspicious_atom_count = m_suspicious_atom_count;
+    result.accepted = accepted;
+    result.rejected_cluster = !m_selection.rejected_key_list.empty();
+    result.quarantine_transition = m_quarantine_transition;
+    return result;
 }
 } // namespace rhbm_gem::core::detail

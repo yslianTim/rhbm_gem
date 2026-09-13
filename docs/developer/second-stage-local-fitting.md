@@ -59,6 +59,9 @@ all second-stage services through candidate selection:
 | Module in `src/core/detail/second_stage/` | Responsibility |
 | --- | --- |
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
+| `IterationResult.hpp` | Outer attempt summary and stop reasons |
+| `ConvergenceCertificate` | Active-coordinate summaries, solver qualification, and convergence certificate |
+| `CandidateState.hpp` | Candidate evidence, selection data, boundary decisions, polish progress, and trust-radius update records |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
@@ -67,7 +70,7 @@ all second-stage services through candidate selection:
 | `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
 | `ComponentAssembly` | Ordered patch application and excluded-component trial assembly; shared audit/salvage loop with caller-owned evaluation and removal policy |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
-| `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
+| `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
 | `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, and diagnostic payloads |
 | `observation/ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
@@ -77,9 +80,13 @@ all second-stage services through candidate selection:
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
 operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.
 `SecondStageState`, `CouplingGraph`, and `JointFitting` retain the second-stage
-state/residual representation, graph construction, and solvers.
-`CandidateSelection.hpp` retains its existing selection types and step-control
-declarations; the transaction implementation is distributed across
+state/residual representation and seed selection, graph construction and topology
+drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
+convergence types and the outer attempt result have their own headers. Seed
+diagnostic records belong to `observation/SecondStageDiagnostics.hpp`.
+`CandidateState.hpp` owns candidate data and evidence. `CandidateTransaction.hpp`
+owns trust-radius/backtracking control declarations and `CandidateSelectionInputs`;
+the transaction implementation is distributed across
 `CandidateTransaction.cpp`, `CandidateTransactionLocal.cpp`, and
 `CandidateTransactionBoundary.cpp`. The public Gaussian estimator workflow uses
 internal fitting-range constants; `FitOptions` does not expose radial bounds.
@@ -91,6 +98,12 @@ without accepting or returning per-cluster history. `ClusterHistoryObserver`
 receives decisions and maintains its own provisional history.
 Solver workspaces, counters and observers remain mutable working resources.
 The observation pointer in `CandidateSelectionInputs` is non-owning.
+`Finish` stages next-iteration quarantine without publishing it. Consuming `Commit`
+publishes quarantine, applies trust updates and copies keys, then publishes the
+accepted model/provenance (or restores the previous state when all candidates are
+rejected), and finally publishes history. It returns `CandidateCommitResult`;
+the runner moves the returned keys and trust updates into `IterationResult`.
+Transaction code does not depend on the outer result or entry header.
 `RunSecondStageIterations` owns a non-copyable `SecondStageObservationSession`;
 `SecondStageContext` contains only atom sampling/design data and the immutable
 frozen background. The session owns cluster history, best trace, phase and trust

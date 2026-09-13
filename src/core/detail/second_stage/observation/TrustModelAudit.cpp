@@ -1,5 +1,6 @@
 #include "core/detail/second_stage/observation/TrustModelAudit.hpp"
-#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/second_stage/IterationResult.hpp"
+#include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

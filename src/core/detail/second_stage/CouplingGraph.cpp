@@ -1143,4 +1143,19 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
     return component_list;
 }
 
+double CalculateAdaptiveTopologyDrift(
+    const FitState & accepted_state,
+    const FittedGaussianSnapshot & topology_reference_state,
+    const std::vector<std::size_t> & active_index_list)
+{
+    const auto drift_summary{
+        SummarizeTransformedChanges(
+            accepted_state,
+            topology_reference_state,
+            active_index_list)
+    };
+    return std::ranges::max(drift_summary.maximum_list);
+}
+
+
 } // namespace rhbm_gem::core::detail

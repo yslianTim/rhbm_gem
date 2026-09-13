@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
+#include "core/detail/second_stage/SuspiciousUpdate.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 
 namespace rhbm_gem::core {

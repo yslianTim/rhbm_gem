@@ -153,7 +153,7 @@ void LogAcceptedCandidateSearchDiagnostics(
     bool quiet_mode,
     const IterationObservation & iteration_result);
 
-ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count);
+ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count, std::size_t maximum_iterations);
 void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths);
 void LogIterationProgress(
     bool quiet_mode,

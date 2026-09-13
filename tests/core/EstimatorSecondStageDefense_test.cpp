@@ -1,3 +1,5 @@
+#include "core/detail/second_stage/ConvergenceCertificate.hpp"
+#include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include <gtest/gtest.h>
 
@@ -23,7 +25,7 @@
 #include "core/detail/second_stage/SecondStageState.hpp"
 #include "core/detail/second_stage/CouplingGraph.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/TrustModelAudit.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
@@ -5126,6 +5128,196 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryRejectionRestoresBestParameterSnap
         EXPECT_DOUBLE_EQ(restored.best_objective->GetTotalObjective(), history.at(key).best_objective->GetTotalObjective());
         ExpectGaussianModelsNear(restored.best_parameters.mdpde_list.front().GetModel(), models.at(key.front()), 0.0);
         ExpectGaussianModelsNear(selection.assembled_state.at(key.front()).mdpde.GetModel(), models.at(key.front()), 0.0);
+    }
+}
+
+
+TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAndMixedTransactions)
+{
+    using Commit = decltype(&audit_detail::CandidateTransaction::Commit);
+    static_assert(!std::is_copy_constructible_v<audit_detail::CandidateTransaction>);
+    static_assert(std::is_invocable_v<Commit, audit_detail::CandidateTransaction &&,
+        audit_detail::FitState &, audit_detail::FitState &, audit_detail::PolishProvenance &,
+        audit_detail::QuarantineState &, audit_detail::TrustRegionStateSet &,
+        audit_detail::SecondStageObservationSession *>);
+    static_assert(!std::is_invocable_v<Commit, audit_detail::CandidateTransaction &,
+        audit_detail::FitState &, audit_detail::FitState &, audit_detail::PolishProvenance &,
+        audit_detail::QuarantineState &, audit_detail::TrustRegionStateSet &,
+        audit_detail::SecondStageObservationSession *>);
+
+    for (const std::size_t accepted_count : { 0U, 1U, 2U })
+    for (const bool observe : { false, true })
+    {
+        SCOPED_TRACE(testing::Message() << "accepted=" << accepted_count << ", observation=" << observe);
+        const std::vector<rg::GaussianModel3D> models{ { 6.0, 0.5, 0.0 }, { 7.0, 0.6, 0.1 } };
+        auto fixture{ BuildJointPolishFixture(models, models) };
+        const auto original{ fixture.state };
+        const std::vector<audit_detail::ClusterKey> keys{ { 0 }, { 1 } };
+        const std::vector<audit_detail::ClusterKey> accepted_keys(keys.begin(), keys.begin() + static_cast<std::ptrdiff_t>(accepted_count));
+        const std::vector<audit_detail::ClusterKey> rejected_keys(keys.begin() + static_cast<std::ptrdiff_t>(accepted_count), keys.end());
+        audit_detail::CouplingGraphPartition partition;
+        for (const auto & key : keys) partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+        const auto baseline{ audit_detail::BuildResidualBaseline(fixture.context, fixture.state) };
+        const auto domain{ audit_detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, keys) };
+        const auto previous_objectives{ audit_detail::BuildObjectiveByKey(partition, domain, baseline) };
+        auto candidate{ fixture.state };
+        for (std::size_t atom = 0; atom < accepted_count; ++atom)
+        {
+            candidate.at(atom).alpha_r = 0.25;
+            candidate.at(atom).ols = rg::GaussianModel3DWithUncertainty{
+                rg::GaussianModel3D{ 8.0, 0.7, 0.2 }, rg::GaussianModel3DUncertainty{ 0.4, 0.5, 0.6 } };
+            candidate.at(atom).mdpde = rg::GaussianModel3DWithUncertainty{
+                models.at(atom), rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 } };
+        }
+        const audit_detail::PolishProvenance original_provenance{ 0, 1 };
+        auto provenance{ original_provenance };
+        auto candidate_provenance{ original_provenance };
+        for (std::size_t atom = 0; atom < accepted_count; ++atom) candidate_provenance.at(atom) = 1 - provenance.at(atom);
+        const audit_detail::SuspiciousBlockActivity activity{ { 1, 0 }, { 0, 0 }, { 0, 0 } };
+        std::vector<audit_detail::SuspiciousGaussianAssessment> assessments(2);
+        assessments.at(0).reason = audit_detail::SuspiciousGaussianReason::WidthGrowth;
+        const audit_detail::QuarantineTarget target{ audit_detail::QuarantineTargetKind::ShapeAtom, { 0 } };
+        const audit_detail::StabilizationTerminalFailure failure{
+            audit_detail::StabilizationTerminalReason::GuardInfeasible, audit_detail::SuspiciousGaussianReason::WidthGrowth };
+        audit_detail::QuarantineState quarantine(2);
+        quarantine.state_by_target[target] = { failure, audit_detail::kPersistentQuarantineFailureIterationLimit - 1, 0,
+            audit_detail::QuarantineLifecycle::Active };
+        audit_detail::TrustRegionStateSet trust;
+        trust.Reconcile(keys);
+        trust.ResetToMinimum({ keys.at(1) });
+        const std::vector<double> ridge(2, 1.0);
+        const audit_detail::ClusterHealthMap health;
+        const audit_detail::BestAuditState audit;
+        audit_detail::ClusterSolverWorkspaceMap workspaces;
+        audit_detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        audit_detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+        const auto options{ MakeSecondStageOptions() };
+        const auto saved_level{ Logger::GetLogLevel() };
+        Logger::SetLogLevel(LogLevel::Debug);
+        audit_detail::SecondStageObservationSession observation;
+        if (observe)
+        {
+            observation.cluster_history = std::make_shared<audit_detail::ClusterHistoryObserver>(observation);
+            observation.cluster_history->BeginAttempt(fixture.context, previous_objectives, fixture.state, partition, domain, 1, 0);
+        }
+        const audit_detail::CandidateSelectionInputs inputs{
+            fixture.context, options, baseline, partition, health, fixture.state, provenance,
+            candidate, activity, ridge, domain, previous_objectives, audit, trust, workspaces, corrections, counters,
+            observe ? &observation : nullptr };
+        audit_detail::CandidateSelection selection;
+        selection.block_activity = activity;
+        selection.assembled_state = candidate;
+        selection.assembled_polish_provenance = candidate_provenance;
+        selection.accepted_key_list = accepted_keys;
+        selection.rejected_key_list = rejected_keys;
+        selection.shrink_trust_region_key_list = accepted_keys;
+        if (accepted_count == 0) selection.exhausted_key_list = { keys.at(1) };
+        selection.final_audit_objective = audit_detail::ObjectiveBreakdown{ 1.0, 2.0, 3.0 };
+        selection.polish_progress = { 2, accepted_count, 2 - accepted_count, 0 };
+        for (std::size_t atom = keys.size(); atom-- > 0;)
+        {
+            audit_detail::ClusterCandidateDecision decision{ keys.at(atom), {} };
+            if (atom == 0) decision.evidence.terminal_evidence_list.push_back({
+                audit_detail::StabilizationTerminalReason::GuardInfeasible, 0,
+                audit_detail::SuspiciousUpdateMode::PostRefit, audit_detail::SuspiciousGaussianReason::WidthGrowth });
+            (atom < accepted_count ? selection.accepted_cluster_evidence_list : selection.rejected_cluster_evidence_list).push_back(decision);
+        }
+        // Use the existing builder path to materialize keys and preserve rejection event order.
+        audit_detail::CandidateTransactionBuilder builder(std::move(selection));
+        builder.ReconcileSelectedBoundaries(inputs);
+        ASSERT_EQ(builder.View().accepted_key_list, accepted_keys);
+        ASSERT_EQ(builder.View().rejected_key_list, rejected_keys);
+        audit_detail::FitState published{ MakeGaussianResult({ 99.0, 0.9, 0.9 }) };
+        testing::internal::CaptureStdout();
+        auto transaction{ std::move(builder).Finish(inputs, quarantine, assessments, health, {}, 0) };
+        const auto finish_output{ testing::internal::GetCapturedStdout() };
+        EXPECT_EQ(finish_output.find("Cluster best publication:"), std::string::npos);
+        EXPECT_EQ(quarantine.TargetCount(), 0U);
+        EXPECT_EQ(quarantine.state_by_target.at(target).stable_iteration_count, audit_detail::kPersistentQuarantineFailureIterationLimit - 1);
+        EXPECT_DOUBLE_EQ(trust.GetRadius(keys.at(0)), 1.0);
+        EXPECT_EQ(provenance, original_provenance);
+        EXPECT_EQ(published.size(), 1U);
+        EXPECT_DOUBLE_EQ(published.front().mdpde.GetModel().GetAmplitude(), 99.0);
+        EXPECT_EQ(fixture.state.size(), original.size());
+        testing::internal::CaptureStdout();
+        const auto committed{ std::move(transaction).Commit(fixture.state, published, provenance, quarantine, trust,
+            observe ? &observation : nullptr) };
+        const auto commit_output{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(saved_level);
+        EXPECT_EQ(commit_output.find("Cluster best publication:") != std::string::npos, observe);
+        EXPECT_EQ(committed.accepted_key_list, accepted_keys);
+        EXPECT_EQ(committed.rejected_key_list, rejected_keys);
+        EXPECT_EQ(committed.trust_region_update.changed_key_list, (std::vector<audit_detail::ClusterKey>{ keys.at(0) }));
+        EXPECT_EQ(committed.trust_region_update.saturated_key_list,
+            accepted_count == 0 ? std::vector<audit_detail::ClusterKey>{} : std::vector<audit_detail::ClusterKey>{ keys.at(1) });
+        EXPECT_DOUBLE_EQ(trust.GetRadius(keys.at(0)), 0.5);
+        EXPECT_DOUBLE_EQ(trust.GetRadius(keys.at(1)), 0.0625);
+        EXPECT_EQ(committed.accepted, accepted_count != 0);
+        EXPECT_EQ(committed.rejected_cluster, accepted_count != keys.size());
+        EXPECT_EQ(committed.suspicious_atom_count, 1U);
+        EXPECT_TRUE(committed.quarantine_transition);
+        EXPECT_EQ(quarantine.TargetCount(), 1U);
+        EXPECT_EQ(quarantine.entered_target_count, 1U);
+        EXPECT_EQ(quarantine.state_by_target.at(target).lifecycle, audit_detail::QuarantineLifecycle::Frozen);
+        EXPECT_EQ(committed.block_activity.shape_fixed_atom_mask, activity.shape_fixed_atom_mask);
+        EXPECT_EQ(committed.block_activity.offset_fixed_atom_mask, activity.offset_fixed_atom_mask);
+        EXPECT_EQ(committed.block_activity.hard_failure_atom_mask, activity.hard_failure_atom_mask);
+        ASSERT_TRUE(committed.final_audit_objective);
+        EXPECT_DOUBLE_EQ(committed.final_audit_objective->GetTotalObjective(), 4.5);
+        EXPECT_EQ(committed.polish_progress.eligible_count, 2U);
+        EXPECT_EQ(committed.polish_progress.accepted_count, accepted_count);
+        EXPECT_EQ(committed.polish_progress.rejected_count, 2 - accepted_count);
+        EXPECT_EQ(committed.polish_progress.skipped_count, 0U);
+        EXPECT_EQ(provenance, accepted_count ? candidate_provenance : original_provenance);
+        const auto & expected{ accepted_count ? candidate : original };
+        ASSERT_EQ(published.size(), expected.size());
+        for (std::size_t atom = 0; atom < expected.size(); ++atom)
+        {
+            EXPECT_DOUBLE_EQ(published.at(atom).alpha_r, expected.at(atom).alpha_r);
+            EXPECT_EQ(published.at(atom).fit_result.has_value(), expected.at(atom).fit_result.has_value());
+            for (const auto member : { &rg::LocalGaussianResult::ols, &rg::LocalGaussianResult::mdpde })
+            {
+                const auto & actual_model{ published.at(atom).*member };
+                const auto & expected_model{ expected.at(atom).*member };
+                ExpectGaussianModelsNear(actual_model.GetModel(), expected_model.GetModel(), 0.0);
+                EXPECT_DOUBLE_EQ(actual_model.GetStandardDeviationModel().GetAmplitude(), expected_model.GetStandardDeviationModel().GetAmplitude());
+                EXPECT_DOUBLE_EQ(actual_model.GetStandardDeviationModel().GetWidth(), expected_model.GetStandardDeviationModel().GetWidth());
+                EXPECT_DOUBLE_EQ(actual_model.GetStandardDeviationModel().GetOffset(), expected_model.GetStandardDeviationModel().GetOffset());
+            }
+        }
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, SuspiciousFailureMaskRequiresHardFailureOrSuspiciousFixedEndpoint)
+{
+    for (const char hard : std::array<char, 2>{ 0, 1 })
+    for (const char shape : std::array<char, 2>{ 0, 1 })
+    for (const char offset : std::array<char, 2>{ 0, 1 })
+    for (const bool suspicious : { false, true })
+    {
+        const audit_detail::SuspiciousBlockActivity activity{ { shape }, { offset }, { hard } };
+        const std::vector<audit_detail::SuspiciousGaussianAssessment> assessments{
+            { suspicious ? audit_detail::SuspiciousGaussianReason::WidthGrowth : audit_detail::SuspiciousGaussianReason::None } };
+        EXPECT_EQ(audit_detail::BuildSuspiciousFailureAtomMask(activity, assessments),
+            (audit_detail::SuspiciousUpdateMask{ static_cast<char>(hard || ((shape || offset) && suspicious)) }));
+    }
+    EXPECT_TRUE(audit_detail::BuildSuspiciousFailureAtomMask({}, {}).empty());
+    for (std::size_t mask = 0; mask < 3; ++mask)
+    for (const std::size_t wrong_size : { 0U, 2U })
+    {
+        audit_detail::SuspiciousBlockActivity activity{ { 0 }, { 0 }, { 0 } };
+        std::array<audit_detail::SuspiciousUpdateMask *, 3> masks{
+            &activity.shape_fixed_atom_mask, &activity.offset_fixed_atom_mask, &activity.hard_failure_atom_mask };
+        masks.at(mask)->resize(wrong_size);
+        try
+        {
+            audit_detail::BuildSuspiciousFailureAtomMask(activity, std::vector<audit_detail::SuspiciousGaussianAssessment>(1));
+            FAIL() << "Expected an inconsistent-size exception";
+        }
+        catch (const std::invalid_argument & error)
+        {
+            EXPECT_STREQ(error.what(), "Suspicious failure activity and assessment sizes are inconsistent.");
+        }
     }
 }
 

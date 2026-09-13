@@ -1,6 +1,6 @@
 #include "core/detail/second_stage/Quarantine.hpp"
 
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 
 #include <algorithm>

@@ -1,7 +1,8 @@
+#include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/second_stage/observation/PhaseAudit.hpp"
 
-#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/second_stage/ConvergenceCertificate.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

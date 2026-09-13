@@ -1,6 +1,7 @@
+#include "core/detail/second_stage/JointFitting.hpp"
 #pragma once
 
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 
 #include <memory>
 #include <string>
@@ -128,5 +129,13 @@ struct IterationObservation
     std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
     IterationDiagnostics diagnostics{};
 };
+
+struct SecondStageSeedSelectionRecord
+{
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3D original_model{};
+    GaussianModel3D selected_model{};
+};
+
 
 } // namespace rhbm_gem::core::detail

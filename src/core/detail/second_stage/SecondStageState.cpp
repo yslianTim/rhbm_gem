@@ -310,4 +310,29 @@ void SetLocalResultOffset(LocalGaussianResult & result, double offset)
     result.mdpde = WithPreservedUncertaintyOffset(result.mdpde, offset);
 }
 
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const GaussianModel3DWithUncertainty & local_mdpde,
+    const std::optional<GaussianModel3D> & global_median)
+{
+    if (IsValidSecondStageGaussianModel(local_mdpde.GetModel()))
+    {
+        return SecondStageSeedSelection{
+            SecondStageSeedSource::LocalMdpde,
+            local_mdpde
+        };
+    }
+    if (global_median.has_value() && IsValidSecondStageGaussianModel(*global_median))
+    {
+        return SecondStageSeedSelection{
+            SecondStageSeedSource::GlobalMedian,
+            GaussianModel3DWithUncertainty{
+                *global_median,
+                GaussianModel3DUncertainty{}
+            }
+        };
+    }
+    return std::nullopt;
+}
+
+
 } // namespace rhbm_gem::core::detail

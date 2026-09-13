@@ -99,4 +99,9 @@ std::size_t CountSuspiciousPolishAtoms(
     const FitStateView & endpoint_state,
     const FitStateView & candidate_state);
 
+SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
+    const SuspiciousBlockActivity & block_activity,
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom);
+
+
 } // namespace rhbm_gem::core::detail

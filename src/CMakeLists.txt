@@ -40,6 +40,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/observation/TrustModelAudit.cpp
     core/detail/second_stage/observation/PhaseAudit.cpp
     core/detail/second_stage/observation/SecondStageLogging.cpp
+    core/detail/second_stage/ConvergenceCertificate.cpp
     core/detail/second_stage/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp

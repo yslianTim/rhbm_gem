@@ -1,10 +1,11 @@
 #pragma once
 
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 
 namespace rhbm_gem::core::detail {
 
 class JointCandidateObservation;
+struct CandidateSelectionInputs;
 
 enum class LocalObjectivePolicy
 {

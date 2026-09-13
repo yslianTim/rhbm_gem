@@ -1,7 +1,7 @@
 #include "core/detail/second_stage/ComponentAssembly.hpp"
 #include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"

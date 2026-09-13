@@ -206,4 +206,12 @@ std::vector<DependencyPolishComponent> BuildUncutDependencyPolishComponents(
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & owner_key_by_atom_index);
 
+constexpr double kAdaptiveTopologyRebuildDriftThreshold{ 0.10 };
+
+double CalculateAdaptiveTopologyDrift(
+    const FitState & accepted_state,
+    const FittedGaussianSnapshot & topology_reference_state,
+    const std::vector<std::size_t> & active_index_list);
+
+
 } // namespace rhbm_gem::core::detail

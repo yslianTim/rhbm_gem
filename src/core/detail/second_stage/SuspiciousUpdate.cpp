@@ -582,4 +582,32 @@ std::size_t CountSuspiciousPolishAtoms(
     return suspicious_atom_count;
 }
 
+SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
+    const SuspiciousBlockActivity & block_activity,
+    std::span<const SuspiciousGaussianAssessment> assessment_by_atom)
+{
+    const auto atom_count{ assessment_by_atom.size() };
+    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
+        block_activity.offset_fixed_atom_mask.size() != atom_count ||
+        block_activity.hard_failure_atom_mask.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Suspicious failure activity and assessment sizes are inconsistent.");
+    }
+    SuspiciousUpdateMask result(atom_count, 0);
+    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
+    {
+        const auto has_fixed_endpoint{
+            block_activity.shape_fixed_atom_mask.at(atom_index) != 0 ||
+            block_activity.offset_fixed_atom_mask.at(atom_index) != 0
+        };
+        result.at(atom_index) =
+            block_activity.hard_failure_atom_mask.at(atom_index) != 0 ||
+            (has_fixed_endpoint &&
+                assessment_by_atom[atom_index].reason != SuspiciousGaussianReason::None) ? 1 : 0;
+    }
+    return result;
+}
+
+
 } // namespace rhbm_gem::core::detail

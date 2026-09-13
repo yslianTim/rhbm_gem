@@ -222,4 +222,21 @@ TransformedChangeSummary SummarizeTransformedChanges(
 
 void SetLocalResultOffset(LocalGaussianResult & result, double offset);
 
+enum class SecondStageSeedSource
+{
+    LocalMdpde,
+    GlobalMedian
+};
+
+struct SecondStageSeedSelection
+{
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3DWithUncertainty model{};
+};
+
+std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const GaussianModel3DWithUncertainty & local_mdpde,
+    const std::optional<GaussianModel3D> & global_median);
+
+
 } // namespace rhbm_gem::core::detail

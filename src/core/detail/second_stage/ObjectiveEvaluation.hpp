@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/detail/second_stage/CouplingGraph.hpp"
-#include "core/detail/second_stage/SuspiciousUpdate.hpp"
 
 #include <map>
 
@@ -70,30 +69,10 @@ public:
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
 };
 
-enum class PreObjectiveFailureReason
-{
-    None,
-    InvalidModel,
-    NoCandidateWithinTrustRegion
-};
-
 struct ObjectiveScale
 {
     double fit{ 0.0 };
     double tail{ 0.0 };
-};
-
-struct CandidateDecisionEvidence
-{
-    std::optional<double> accepted_factor{};
-    PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
-    std::optional<ObjectiveBreakdown> candidate_objective{};
-    std::optional<ObjectiveBreakdown> previous_objective{};
-    bool rejected_by_previous{ false };
-    std::size_t invalid_trial_count{ 0 };
-    std::size_t guard_rejected_trial_count{ 0 };
-    std::size_t objective_rejected_trial_count{ 0 };
-    std::vector<StabilizationTerminalEvidence> terminal_evidence_list{};
 };
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);

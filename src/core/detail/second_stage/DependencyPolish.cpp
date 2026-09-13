@@ -2,7 +2,7 @@
 #include "core/detail/second_stage/DependencyPolish.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 

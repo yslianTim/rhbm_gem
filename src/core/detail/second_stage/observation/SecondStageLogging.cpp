@@ -1,7 +1,8 @@
+#include "core/detail/second_stage/ConvergenceCertificate.hpp"
 #include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 
-#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
 
@@ -906,9 +907,9 @@ std::string FormatProgressRow(
 
 } // namespace
 
-ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count)
+ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count, std::size_t maximum_iterations)
 {
-    const auto maximum_iteration_text{ std::to_string(kMaximumIterations) };
+    const auto maximum_iteration_text{ std::to_string(maximum_iterations) };
     const auto maximum_atom_text{ std::to_string(atom_count) };
     const auto maximum_change_text{
         FormatProgressMaximum(std::numeric_limits<double>::max())

@@ -1,3 +1,5 @@
+#include "core/detail/second_stage/IterationResult.hpp"
+#include "core/detail/second_stage/ConvergenceCertificate.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 
@@ -7,18 +9,15 @@
 #include "core/detail/second_stage/Quarantine.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
-#include <cmath>
 #include <limits>
 #include <numeric>
 #include <ranges>
 #include <set>
-#include <span>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -40,7 +39,7 @@ constexpr std::size_t kAuditPatience{ 3 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
-constexpr double kConvergencePercentile{ 0.99 };
+constexpr std::size_t kMaximumIterations{ 100 };
 
 bool UsesPolish(const PolishProvenance & provenance)
 {
@@ -113,18 +112,6 @@ struct IterationState
     std::size_t objective_domain_revision{ 1 };
     std::size_t frozen_recovery_revision{ 1 };
 };
-
-static void ValidateBlockActivitySize(
-    std::size_t atom_count,
-    const SuspiciousBlockActivity & block_activity)
-{
-    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
-        block_activity.offset_fixed_atom_mask.size() != atom_count ||
-        block_activity.hard_failure_atom_mask.size() != atom_count)
-    {
-        throw std::invalid_argument("Active-coordinate convergence inputs are inconsistent.");
-    }
-}
 
 static ConvergenceAssessment SummarizeFixedPointOperator(
     const FixedPointOperatorEvidence & evidence,
@@ -608,10 +595,13 @@ static IterationResult RunIteration(
         proposal_result.assessment_by_atom, proposal_result.health_by_key,
         proposal_result.fixed_point_operator, iteration_state.frozen_recovery_revision) };
     IterationResult result;
-    const auto selection{ std::move(transaction).Commit(previous_state,
+    auto selection{ std::move(transaction).Commit(previous_state,
         iteration_state.accepted_state, iteration_state.previous_polish_provenance,
         iteration_state.quarantine_state,
-        iteration_state.trust_region_state, result, observation) };
+        iteration_state.trust_region_state, observation) };
+    result.accepted_key_list = std::move(selection.accepted_key_list);
+    result.rejected_key_list = std::move(selection.rejected_key_list);
+    result.trust_region_update = std::move(selection.trust_region_update);
     const auto & assembled_state{ iteration_state.accepted_state };
     const auto & assembled_polish_provenance{ iteration_state.previous_polish_provenance };
     const auto assembled_uses_polish{ UsesPolish(assembled_polish_provenance) };
@@ -977,7 +967,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         performance_counters.RecordFullStateMaterialization();
     }
     LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
-    const auto progress_column_widths{ BuildProgressColumnWidths(context.atom_list.size()) };
+    const auto progress_column_widths{ BuildProgressColumnWidths(context.atom_list.size(), kMaximumIterations) };
     LogProgressHeader(options.quiet_mode, progress_column_widths);
 
     const auto audit_comparison_objective_domain{ iteration_state.objective_domain };
@@ -1100,217 +1090,6 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         iteration_state.previous_polish_provenance,
         terminal_result.stop_reason,
         use_best_audit_state);
-}
-
-std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
-    const GaussianModel3DWithUncertainty & local_mdpde,
-    const std::optional<GaussianModel3D> & global_median)
-{
-    if (IsValidSecondStageGaussianModel(local_mdpde.GetModel()))
-    {
-        return SecondStageSeedSelection{
-            SecondStageSeedSource::LocalMdpde,
-            local_mdpde
-        };
-    }
-    if (global_median.has_value() && IsValidSecondStageGaussianModel(*global_median))
-    {
-        return SecondStageSeedSelection{
-            SecondStageSeedSource::GlobalMedian,
-            GaussianModel3DWithUncertainty{
-                *global_median,
-                GaussianModel3DUncertainty{}
-            }
-        };
-    }
-    return std::nullopt;
-}
-
-double CalculateAdaptiveTopologyDrift(
-    const FitState & accepted_state,
-    const FittedGaussianSnapshot & topology_reference_state,
-    const std::vector<std::size_t> & active_index_list)
-{
-    const auto drift_summary{
-        SummarizeTransformedChanges(
-            accepted_state,
-            topology_reference_state,
-            active_index_list)
-    };
-    return std::ranges::max(drift_summary.maximum_list);
-}
-
-bool ConvergenceCertificate::StrictOperatorPassed() const
-{
-    return solver_qualified && operator_complete &&
-        IsTransformedPercentileConverged(operator_nominal_p99);
-}
-
-bool ConvergenceCertificate::ProductionConverged() const
-{
-    return StrictOperatorPassed() &&
-        IsTransformedPercentileConverged(accepted_active_p99) &&
-        !objective_domain_changed && !quarantine_transition &&
-        !suspicious_block_fallback && !rejected_cluster;
-}
-
-SuspiciousUpdateMask BuildSuspiciousFailureAtomMask(
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom)
-{
-    const auto atom_count{ assessment_by_atom.size() };
-    if (block_activity.shape_fixed_atom_mask.size() != atom_count ||
-        block_activity.offset_fixed_atom_mask.size() != atom_count ||
-        block_activity.hard_failure_atom_mask.size() != atom_count)
-    {
-        throw std::invalid_argument(
-            "Suspicious failure activity and assessment sizes are inconsistent.");
-    }
-    SuspiciousUpdateMask result(atom_count, 0);
-    for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
-    {
-        const auto has_fixed_endpoint{
-            block_activity.shape_fixed_atom_mask.at(atom_index) != 0 ||
-            block_activity.offset_fixed_atom_mask.at(atom_index) != 0
-        };
-        result.at(atom_index) =
-            block_activity.hard_failure_atom_mask.at(atom_index) != 0 ||
-            (has_fixed_endpoint &&
-                assessment_by_atom[atom_index].reason != SuspiciousGaussianReason::None) ? 1 : 0;
-    }
-    return result;
-}
-
-ActiveCoordinatePopulation BuildActiveCoordinatePopulation(
-    const std::vector<std::size_t> & atom_index_list,
-    const SuspiciousBlockActivity & block_activity)
-{
-    ValidateBlockActivitySize(block_activity.shape_fixed_atom_mask.size(), block_activity);
-    ActiveCoordinatePopulation result;
-    for (const auto atom_index : atom_index_list)
-    {
-        if (block_activity.HasActiveShape(atom_index))
-        {
-            result.active_shape_atom_index_list.emplace_back(atom_index);
-        }
-        if (block_activity.HasActiveOffset(atom_index))
-        {
-            result.active_offset_atom_index_list.emplace_back(atom_index);
-        }
-    }
-    return result;
-}
-
-TransformedChangeSummary SummarizeActiveDofChanges(
-    const std::vector<TransformedChange> & change_list,
-    const ActiveCoordinatePopulation & population)
-{
-    std::array<std::vector<double>, GaussianModel3D::TransformedCoordinateSize()> parameter_change_lists;
-    for (const auto parameter_index : std::array<std::size_t, 2>{
-        GaussianModel3D::LogPeakHeightCoordinateIndex(),
-        GaussianModel3D::LogWidthCoordinateIndex() })
-    {
-        auto & values{ parameter_change_lists.at(parameter_index) };
-        values.reserve(population.active_shape_atom_index_list.size());
-        for (const auto atom_index : population.active_shape_atom_index_list)
-        {
-            if (atom_index >= change_list.size())
-            {
-                throw std::invalid_argument("Active-coordinate shape change input is inconsistent.");
-            }
-            values.emplace_back(change_list.at(atom_index).at(parameter_index));
-        }
-    }
-
-    auto & offset_change_list{
-        parameter_change_lists.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
-    };
-    offset_change_list.reserve(population.active_offset_atom_index_list.size());
-    for (const auto atom_index : population.active_offset_atom_index_list)
-    {
-        if (atom_index >= change_list.size())
-        {
-            throw std::invalid_argument("Active-coordinate offset change input is inconsistent.");
-        }
-        const auto value{
-            change_list.at(atom_index).at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex())
-        };
-        offset_change_list.emplace_back(
-            std::isfinite(value) ? std::abs(value) : std::numeric_limits<double>::infinity());
-    }
-
-    TransformedChangeSummary result;
-    for (std::size_t parameter_index = 0; parameter_index < parameter_change_lists.size(); parameter_index++)
-    {
-        const auto & values{ parameter_change_lists.at(parameter_index) };
-        result.population_size_list.at(parameter_index) = values.size();
-        result.percentile_list.at(parameter_index) = array_helper::ComputePercentile(values, kConvergencePercentile);
-        result.maximum_list.at(parameter_index) = values.empty() ? 0.0 : *std::ranges::max_element(values);
-    }
-    return result;
-}
-
-TransformedChangeSummary SummarizeActiveDofChanges(
-    const FitState & current_state,
-    const FitState & previous_state,
-    const ActiveCoordinatePopulation & population)
-{
-    if (current_state.size() != previous_state.size())
-    {
-        throw std::invalid_argument("Active-coordinate transformed state sizes are inconsistent.");
-    }
-    std::vector<TransformedChange> change_list;
-    change_list.reserve(current_state.size());
-    for (std::size_t atom_index = 0; atom_index < current_state.size(); atom_index++)
-    {
-        change_list.emplace_back(CalculateTransformedChange(
-            GetFitModel(current_state, atom_index),
-            GetFitModel(previous_state, atom_index)));
-    }
-    return SummarizeActiveDofChanges(change_list, population);
-}
-
-bool AreActiveCoordinatesSolverQualified(
-    const std::vector<std::size_t> & atom_index_list,
-    const std::vector<ClusterKey> & cluster_key_list,
-    const SuspiciousBlockActivity & block_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
-    const ClusterHealthMap & health_by_key)
-{
-    const auto atom_count{ block_activity.shape_fixed_atom_mask.size() };
-    ValidateBlockActivitySize(atom_count, block_activity);
-    if (local_refit_status_by_atom.size() != atom_count)
-    {
-        throw std::invalid_argument("Convergence audit qualification inputs are inconsistent.");
-    }
-
-    for (const auto atom_index : atom_index_list)
-    {
-        if (!block_activity.HasActiveShape(atom_index)) continue;
-        const auto & status{ local_refit_status_by_atom[atom_index] };
-        if (!status.has_value() || !IsLocalRefitStatusSolverQualified(*status))
-        {
-            return false;
-        }
-    }
-
-    for (const auto atom_index : atom_index_list)
-    {
-        if (!block_activity.HasActiveOffset(atom_index)) continue;
-        const auto owner{ std::ranges::find_if(cluster_key_list, [&](const auto & key)
-        {
-            return std::ranges::binary_search(key, atom_index);
-        }) };
-        if (owner == cluster_key_list.end()) return false;
-        const auto health_iter{ health_by_key.find(*owner) };
-        if (health_iter == health_by_key.end() ||
-            health_iter->second.joint_offset_status != JointOffsetSolveStatus::Converged)
-        {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 } // namespace rhbm_gem::core::detail
