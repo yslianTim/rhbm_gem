@@ -13,6 +13,8 @@
 
 namespace rhbm_gem::core::detail {
 
+class SecondStageObservationSession;
+
 namespace {
 
 struct LocalAtomRefitResult
@@ -162,7 +164,8 @@ IterationProposalResult BuildIterationProposal(
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    std::string_view diagnostic_phase)
+    std::string_view diagnostic_phase,
+    SecondStageObservationSession * observation)
 {
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
@@ -315,7 +318,7 @@ IterationProposalResult BuildIterationProposal(
         }
     }
 
-    ObservePhaseIntermediate(context, current_model_snapshot.node);
+    ObservePhaseIntermediate(observation, current_model_snapshot.node);
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };

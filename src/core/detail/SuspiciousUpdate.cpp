@@ -464,7 +464,7 @@ SuspiciousUpdateBaseline BuildPreviousSuspiciousProfileBaseline(
     };
 }
 
-std::optional<StabilizationTerminalDiagnostic>
+std::optional<StabilizationTerminalEvidence>
 EvaluateClusterCandidateGuard(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_snapshot,
@@ -483,7 +483,7 @@ EvaluateClusterCandidateGuard(
         };
         const auto & candidate_model{ candidate_state.GetModel(atom_index) };
         if (!IsValidSecondStageGaussianModel(candidate_model))
-            return StabilizationTerminalDiagnostic{ StabilizationTerminalReason::InvalidCandidate };
+            return StabilizationTerminalEvidence{ StabilizationTerminalReason::InvalidCandidate };
         if (block_activity.HasActiveOffset(atom_index))
         {
             const auto offset_assessment{
@@ -497,7 +497,7 @@ EvaluateClusterCandidateGuard(
             };
             if (offset_assessment.IsSuspicious())
             {
-                return StabilizationTerminalDiagnostic{
+                return StabilizationTerminalEvidence{
                     StabilizationTerminalReason::GuardInfeasible,
                     atom_index,
                     SuspiciousUpdateMode::OffsetOnly,
@@ -523,7 +523,7 @@ EvaluateClusterCandidateGuard(
         };
         if (shape_assessment.IsSuspicious())
         {
-            return StabilizationTerminalDiagnostic{
+            return StabilizationTerminalEvidence{
                 StabilizationTerminalReason::GuardInfeasible,
                 atom_index,
                 SuspiciousUpdateMode::PostRefit,

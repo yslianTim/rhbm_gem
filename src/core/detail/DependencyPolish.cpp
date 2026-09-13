@@ -1,5 +1,6 @@
 #include "core/detail/ComponentAssembly.hpp"
 #include "core/detail/DependencyPolish.hpp"
+#include "core/detail/SecondStageObservation.hpp"
 
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CandidateEvaluation.hpp"
@@ -25,9 +26,13 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const SuspiciousBlockActivity & block_activity,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    SecondStageObservationSession * observation)
 {
     FinalDependencyPolishResult result{ .state = base_state };
+    FinalDependencyPolishDiagnostic unobserved;
+    auto & report{ observation ? observation->final_polish : unobserved };
+    report = FinalDependencyPolishDiagnostic{};
     if (!options.enable_second_stage_dependency_polish) return result;
 
     const auto polish_start{ std::chrono::steady_clock::now() };
@@ -37,8 +42,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             partition,
             objective_domain.owner_key_by_atom_index)
     };
-    result.diagnostic.component_count = component_list.size();
-    result.diagnostic.component_list.reserve(component_list.size());
+    report.component_count = component_list.size();
+    report.component_list.reserve(component_list.size());
     const auto base_baseline{ BuildResidualBaseline(context, base_state) };
     performance_counters.RecordGaussianCacheMisses();
     const auto base_objective{
@@ -47,8 +52,8 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     if (base_objective.has_value())
     {
         result.objective = base_objective;
-        result.diagnostic.objective_before = base_objective->GetTotalObjective();
-        result.diagnostic.objective_after = base_objective->GetTotalObjective();
+        report.objective_before = base_objective->GetTotalObjective();
+        report.objective_after = base_objective->GetTotalObjective();
     }
 
     std::vector<std::optional<FitStatePatch>> accepted_patch_by_component(
@@ -77,10 +82,10 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         const auto parameter_count{
             2 * shape_active_index_list.size() + offset_active_index_list.size()
         };
-        result.diagnostic.atom_count += component.atom_index_list.size();
-        result.diagnostic.parameter_count += parameter_count;
+        report.atom_count += component.atom_index_list.size();
+        report.parameter_count += parameter_count;
         auto & diagnostic{
-            result.diagnostic.component_list.emplace_back(
+            report.component_list.emplace_back(
                 FinalDependencyPolishDiagnostic::Component{
                     .key_list = component.key_list,
                     .atom_count = component.atom_index_list.size(),
@@ -98,7 +103,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             continue;
         }
         diagnostic.objective_before = base_objective->GetTotalObjective();
-        result.diagnostic.attempted_component_count++;
+        report.attempted_component_count++;
 
         try
         {
@@ -106,12 +111,13 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 FitStatePatch::FromState(base_state, component.atom_index_list)
             };
             auto endpoint_objective{ *base_objective };
+            std::optional<ObjectiveBreakdown> improved_objective;
             const auto maximum_round_count{
                 options.second_stage_dependency_polish_max_iterations
             };
             if (maximum_round_count != 0)
             {
-                result.diagnostic.round_count++;
+                report.round_count++;
                 diagnostic.round_count++;
                 std::vector<BoundaryJointTrustRegion> trust_region_list;
                 trust_region_list.reserve(component.key_list.size());
@@ -136,7 +142,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 {
                     if (round != 0)
                     {
-                        result.diagnostic.round_count++;
+                        report.round_count++;
                         diagnostic.round_count++;
                     }
                     const FitStateView endpoint_state_view{
@@ -175,26 +181,28 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         base_state,
                         *correction_result.patch
                     };
+                    JointCandidateObservation trial(observation, options.quiet_mode, diagnostic.objective_diagnostic_list);
                     const auto evaluation{ EvaluateCandidate(candidate_overlay,
                         FinalPolishCandidateReference{component, partition, objective_domain,
                             endpoint_state_view, *base_objective, endpoint_objective, performance_counters,
-                            options.quiet_mode, diagnostic.objective_diagnostic_list, correction_result.damping, round + 1}) };
+                            correction_result.damping, round + 1}, &trial) };
                     diagnostic.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
-                    result.diagnostic.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
+                    report.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
                     if (!evaluation.objective) break;
                     const auto & candidate_objective{ evaluation.objective };
 
                     endpoint_patch = *correction_result.patch;
                     endpoint_objective = *candidate_objective;
+                    improved_objective = candidate_objective;
                     diagnostic.objective_after =
                         candidate_objective->GetTotalObjective();
                 }
             }
 
-            if (diagnostic.objective_after.has_value() &&
+            if (improved_objective.has_value() &&
                 IsBetterAuditObjective(
-                    *diagnostic.objective_after,
-                    *diagnostic.objective_before,
+                    improved_objective->GetTotalObjective(),
+                    base_objective->GetTotalObjective(),
                     kObjectiveStrictTolerance))
             {
                 diagnostic.accepted = true;
@@ -288,7 +296,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         },
         [&](ComponentRemoval & removal) -> std::optional<ObjectiveBreakdown>
         {
-            result.diagnostic.component_list.at(removal.position).accepted = false;
+            report.component_list.at(removal.position).accepted = false;
             selected_patches.at(removal.position) = nullptr;
             accepted_patch_by_component.at(removal.position).reset();
             accepted_component_count--;
@@ -307,31 +315,31 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         result.state = std::move(assembled_state);
         result.objective = assembled_objective;
         result.accepted = true;
-        result.diagnostic.objective_after =
+        report.objective_after =
             assembled_objective->GetTotalObjective();
     }
     else
     {
-        for (auto & diagnostic : result.diagnostic.component_list)
+        for (auto & diagnostic : report.component_list)
         {
             diagnostic.accepted = false;
         }
     }
-    result.diagnostic.accepted_component_count =
+    report.accepted_component_count =
         result.accepted ? accepted_component_count : 0;
-    result.diagnostic.elapsed_milliseconds =
+    report.elapsed_milliseconds =
         std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - polish_start).count();
     performance_counters.RecordDependencyPolish(
-        result.diagnostic.component_count,
-        result.diagnostic.attempted_component_count,
-        result.diagnostic.accepted_component_count,
-        result.diagnostic.component_count -
-            result.diagnostic.accepted_component_count,
-        result.diagnostic.atom_count,
-        result.diagnostic.parameter_count,
-        result.diagnostic.round_count,
-        result.diagnostic.elapsed_milliseconds);
+        report.component_count,
+        report.attempted_component_count,
+        report.accepted_component_count,
+        report.component_count -
+            report.accepted_component_count,
+        report.atom_count,
+        report.parameter_count,
+        report.round_count,
+        report.elapsed_milliseconds);
     return result;
 }
 

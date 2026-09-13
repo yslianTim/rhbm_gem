@@ -17,6 +17,25 @@ for the transaction boundary and certificate/diagnostic ownership.
 
 ## Observer and diagnostic contract
 
+`RunSecondStageIterations` owns a non-copyable `SecondStageObservationSession`
+separately from its numerical context. The session retains best trace, cluster
+history, phase/trust collectors, and iteration/final-polish sidecars. Each
+iteration's output survives until logging completes, then resets before the
+next attempt; cluster history retains its existing cross-attempt lifecycle.
+Candidate selection receives only a borrowed session pointer. Phase replay
+copies the numerical context and history snapshots without retaining the live
+session.
+
+`SecondStageDiagnostics` holds history payloads, formatted comparison lines,
+source IDs, observation tokens and output-only trial/sample/scale details.
+Decision evidence is copied into these records for output, never read back by
+production. Local worker records are allocated by key before parallel search;
+final accepted/rejected output follows the existing key/rejection-event order.
+Boundary scopes retain each trial's record index and publish the observation
+matching the selected source, including endpoint fallback after correction.
+Final-polish diagnostics likewise remain separate from its accepted state and
+objective. Existing progress labels and log schemas remain unchanged.
+
 `ClusterHistoryObserver` owns Debug history, tie-break records, provisional
 publication/rollback, and source IDs. It is created only for non-quiet Debug
 runs; Info/quiet runs allocate no history maps and do not score historical

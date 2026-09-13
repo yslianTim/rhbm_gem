@@ -1,10 +1,12 @@
 #pragma once
 
-#include "core/detail/ObjectiveEvaluation.hpp"
+#include "core/detail/SecondStageDiagnostics.hpp"
 #include <atomic>
 #include <mutex>
 
 namespace rhbm_gem::core::detail {
+
+class SecondStageObservationSession;
 
 struct ClusterHistoryDiagnostic
 {
@@ -70,23 +72,24 @@ std::optional<ObjectiveBreakdown> EvaluateBestObjectiveReference(
     ClusterHistoryCounters & counters);
 
 void BeginBestObjectiveTrace(
-    SecondStageContext & context, bool quiet_mode, const ObjectiveDomain & domain,
+    SecondStageObservationSession & session, bool quiet_mode, const ObjectiveDomain & domain,
     std::size_t attempt, std::size_t accepted_iteration);
 void CaptureBestObjectiveSource(
-    const SecondStageContext & context, const ClusterKey & key,
+    const SecondStageObservationSession & session, const ClusterKey & key,
     SecondStageModelSnapshot snapshot, const std::vector<SampleRef> & sample_refs,
     ClusterObjectiveState & state, const std::optional<ObjectiveBreakdown> & before,
     double before_step, std::string_view source, std::string_view reason,
     std::size_t candidate_number = 0, std::optional<double> factor = std::nullopt);
-void LogBestObjectivePublication(const SecondStageContext & context, const ClusterObjectiveStateMap & states);
+void LogBestObjectivePublication(const SecondStageObservationSession & session, const ClusterObjectiveStateMap & states);
 void DiagnoseBestObjectiveComparison(
-    JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
+    const SecondStageObservationSession & session, JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
     const ClusterKey & key, const std::vector<SampleRef> & samples,
     const ObjectiveDomain & domain, const ClusterObjectiveState & state);
 
 
 class ClusterHistoryObserver
 {
+    SecondStageObservationSession & m_session;
     std::atomic<bool> m_disabled{ false };
     ClusterObjectiveStateMap m_baseline, m_staged;
     std::map<std::size_t, ClusterObjectiveStateMap> m_boundary;
@@ -94,6 +97,7 @@ class ClusterHistoryObserver
     ClusterHistoryCounters m_counters;
     void Disable() noexcept;
 public:
+    explicit ClusterHistoryObserver(SecondStageObservationSession & session) : m_session(session) {}
     void BeginAttempt(SecondStageContext &, const ObjectiveByKey &, const FitState &,
         const CouplingGraphPartition &, const ObjectiveDomain &, std::size_t, std::size_t) noexcept;
     void ResetPartition(const SecondStageContext &, const CouplingGraphPartition &,
@@ -110,11 +114,11 @@ public:
         const ObjectiveAttemptDiagnostic &, JointCandidateObjectiveDiagnostic *) noexcept;
     void AcceptBoundary(std::size_t observation) noexcept;
     void Reject(const ClusterKey &) noexcept;
-    void Publish(const SecondStageContext &) noexcept;
+    void Publish() noexcept;
     std::optional<ClusterObjectiveState> Snapshot(const ClusterKey &) noexcept;
     std::optional<ClusterObjectiveState> BaselineSnapshot(const ClusterKey &) noexcept;
 };
 
-void BeginClusterHistoryObserver(SecondStageContext &, bool quiet) noexcept;
+void BeginClusterHistoryObserver(SecondStageObservationSession &, bool quiet) noexcept;
 
 } // namespace rhbm_gem::core::detail

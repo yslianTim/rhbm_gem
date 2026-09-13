@@ -358,7 +358,7 @@ void AppendTrustModelOptionalValue(
 
 void TrustModelAudit::Log(
     bool quiet_mode,
-    const IterationResult & iteration_result) const
+    const IterationResult & iteration_result, const IterationObservation & observation) const
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
     const auto log_records = [&](
@@ -453,8 +453,8 @@ void TrustModelAudit::Log(
         }
     };
     Logger::FinishProgressLine();
-    log_records(iteration_result.accepted_cluster_diagnostic_list, "accepted");
-    log_records(iteration_result.rejected_cluster_diagnostic_list, "rejected");
+    log_records(observation.accepted_cluster_diagnostic_list, "accepted");
+    log_records(observation.rejected_cluster_diagnostic_list, "rejected");
 }
 #endif
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
@@ -465,19 +465,20 @@ TrustModelAudit::TrustModelAudit(const std::vector<ClusterKey> & keys)
 
 TrustModelTrialObserver::TrustModelTrialObserver(const CandidateSelectionInputs & inputs,
     const ClusterKey & key, const std::vector<SampleRef> & samples)
-    : inputs(inputs), key(key), samples(samples), record(inputs.context.trust_model_audit->records.at(key)) {}
+    : inputs(inputs), key(key), samples(samples), record(inputs.observation && inputs.observation->trust_model_audit ? &inputs.observation->trust_model_audit->records.at(key) : nullptr) {}
 
-void TrustModelTrialObserver::Generated() { ++record.funnel.generated_count; }
-void TrustModelTrialObserver::Invalid() { ++record.funnel.invalid_count; }
-void TrustModelTrialObserver::Nonmaterial() { ++record.funnel.nonmaterial_count; }
-void TrustModelTrialObserver::TrustSkipped() { ++record.funnel.trust_skipped_count; }
-void TrustModelTrialObserver::GuardRejected() { ++record.funnel.guard_rejected_count; }
+void TrustModelTrialObserver::Generated() { ++trial_number; if (record) ++record->funnel.generated_count; }
+void TrustModelTrialObserver::Invalid() { if (record) ++record->funnel.invalid_count; }
+void TrustModelTrialObserver::Nonmaterial() { if (record) ++record->funnel.nonmaterial_count; }
+void TrustModelTrialObserver::TrustSkipped() { if (record) ++record->funnel.trust_skipped_count; }
+void TrustModelTrialObserver::GuardRejected() { if (record) ++record->funnel.guard_rejected_count; }
 
 void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
-    const ObjectiveAttemptDiagnostic & diagnostic, bool polish, double factor, bool accepted)
+    const CandidateDecisionEvidence & diagnostic, bool polish, double factor, bool accepted)
 {
-    if (polish) ++record.funnel.polish_objective_evaluated_count;
-    else ++record.funnel.objective_evaluated_count;
+    if (!record) return;
+    if (polish) ++record->funnel.polish_objective_evaluated_count;
+    else ++record->funnel.objective_evaluated_count;
     const auto start{ std::chrono::steady_clock::now() };
     auto shadow{ EvaluateTrustModelShadow(inputs.context, inputs.residual_baseline,
         inputs.previous_state, patch, key, samples, inputs.objective_domain,
@@ -485,7 +486,7 @@ void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
         inputs.trust_region_state.GetRadius(key), TrustRegionRadiusAction::Keep,
         polish ? TrustModelCandidateSource::Polish : TrustModelCandidateSource::Base, false) };
     shadow.search_pass = search_pass;
-    shadow.trial_number = polish ? 1 : diagnostic.trial_count;
+    shadow.trial_number = polish ? 1 : trial_number;
     shadow.factor = factor;
     shadow.trial_disposition = accepted ? TrustModelTrialDisposition::Accepted : TrustModelTrialDisposition::ObjectiveRejected;
     shadow.rejected_by_previous = diagnostic.rejected_by_previous;
@@ -495,15 +496,15 @@ void TrustModelTrialObserver::Trial(const FitStatePatch & patch,
         shadow.polish_reduction = diagnostic.previous_objective->GetTotalObjective() - diagnostic.candidate_objective->GetTotalObjective();
     shadow.shadow_action.reset();
     shadow.elapsed_milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-    record.trials.emplace_back(std::move(shadow));
-    if (accepted) final_trial = record.trials.size() - 1;
+    record->trials.emplace_back(std::move(shadow));
+    if (accepted) final_trial = record->trials.size() - 1;
 }
 
 void TrustModelTrialObserver::Finish(bool shrink_trust_region,
-    std::optional<double> first_factor, const ObjectiveAttemptDiagnostic & diagnostic)
+    std::optional<double> first_factor, const CandidateDecisionEvidence & diagnostic)
 {
-    if (!final_trial) return;
-    auto & shadow{ record.trials.at(*final_trial) };
+    if (!record || !final_trial) return;
+    auto & shadow{ record->trials.at(*final_trial) };
     shadow.final_local_candidate = true;
     shadow.readiness_eligible = true;
     shadow.current_action = shrink_trust_region ?
@@ -512,34 +513,36 @@ void TrustModelTrialObserver::Finish(bool shrink_trust_region,
     shadow.shadow_action = DetermineTrustModelShadowAction(shadow);
 }
 
-void TrustModelAudit::Finalize(const CandidateSelection & selection)
+void TrustModelAudit::Finalize(const CandidateSelection & selection, const IterationObservation & observation)
 {
-    const auto update = [&](const ClusterCandidateDiagnostic & diagnostic, bool accepted)
+    const auto update = [&](const ClusterKey & key, bool accepted)
     {
-        auto & observed{ records.at(diagnostic.key) };
-        observed.boundary_touched = std::ranges::any_of(selection.boundary_reconciliation_diagnostic_list,
-            [&](const auto & boundary) { return std::ranges::find(boundary.key_list, diagnostic.key) != boundary.key_list.end(); });
+        auto & observed{ records.at(key) };
+        observed.boundary_touched = std::ranges::any_of(selection.boundary_decision_list,
+            [&](const auto & boundary) { return std::ranges::find(boundary.key_list, key) != boundary.key_list.end(); });
+        const auto diagnostic{ observation.candidate_by_key.find(key) };
+        const bool boundary_rescued{ diagnostic != observation.candidate_by_key.end() && diagnostic->second.boundary_rescued };
         for (auto & shadow : observed.trials)
         {
-            shadow.readiness_eligible = shadow.final_local_candidate && accepted && !observed.boundary_touched && !diagnostic.boundary_rescued;
+            shadow.readiness_eligible = shadow.final_local_candidate && accepted && !observed.boundary_touched && !boundary_rescued;
             if (!shadow.readiness_eligible) shadow.shadow_action.reset();
         }
     };
-    for (const auto & diagnostic : selection.accepted_cluster_diagnostic_list) update(diagnostic, true);
-    for (const auto & diagnostic : selection.rejected_cluster_diagnostic_list) update(diagnostic, false);
+    for (const auto & key : selection.accepted_key_list) update(key, true);
+    for (const auto & key : selection.rejected_key_list) update(key, false);
 }
 
-void BeginTrustModelAudit(SecondStageContext & context, const std::vector<ClusterKey> & keys)
+void BeginTrustModelAudit(SecondStageObservationSession * observation, const std::vector<ClusterKey> & keys)
 {
-    context.trust_model_audit = std::make_shared<TrustModelAudit>(keys);
+    if (observation) observation->trust_model_audit = std::make_shared<TrustModelAudit>(keys);
 }
-void FinalizeTrustModelAudit(const SecondStageContext & context, const CandidateSelection & selection)
+void FinalizeTrustModelAudit(SecondStageObservationSession * observation, const CandidateSelection & selection)
 {
-    context.trust_model_audit->Finalize(selection);
+    if (observation && observation->trust_model_audit) observation->trust_model_audit->Finalize(selection, observation->iteration);
 }
-void LogTrustModelAudit(const SecondStageContext & context, bool quiet, const IterationResult & result)
+void LogTrustModelAudit(const SecondStageObservationSession * observation, bool quiet, const IterationResult & result)
 {
-    context.trust_model_audit->Log(quiet, result);
+    if (observation && observation->trust_model_audit) observation->trust_model_audit->Log(quiet, result, observation->iteration);
 }
 #endif
 } // namespace rhbm_gem::core::detail

@@ -4,6 +4,8 @@
 
 namespace rhbm_gem::core::detail {
 
+class JointCandidateObservation;
+
 enum class LocalObjectivePolicy
 {
     PreviousNonRegression, StrictReferenceImprovement
@@ -22,14 +24,12 @@ enum class CandidateFailureStage
 struct LocalCandidateEvaluation
 {
     bool accepted{ false };
-    ObjectiveAttemptDiagnostic diagnostic{};
+    CandidateDecisionEvidence evidence{};
 };
 
 struct BoundaryCandidateEvaluation
 {
     ObjectiveBreakdown audit_objective{};
-    std::size_t locally_deteriorated_member_count{ 0 };
-    double maximum_local_deterioration{ 0.0 };
 };
 
 struct CandidatePreflightReference
@@ -43,7 +43,7 @@ struct CandidatePreflightReference
 struct CandidatePreflightEvaluation
 {
     CandidateFailureStage failure_stage{ CandidateFailureStage::None };
-    std::optional<StabilizationTerminalDiagnostic> guard_failure{};
+    std::optional<StabilizationTerminalEvidence> guard_failure{};
 };
 
 CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const CandidatePreflightReference &);
@@ -55,7 +55,7 @@ struct LocalCandidateReference
     const std::vector<SampleRef> & samples;
     const ObjectiveBreakdown * objective_reference;
     const ObjectiveDomain & domain;
-    ObjectiveAttemptDiagnostic diagnostic;
+    CandidateDecisionEvidence evidence;
     PerformanceCounters & counters;
 };
 
@@ -65,7 +65,6 @@ struct BoundaryCandidateReference
     const CandidateSelectionInputs & inputs;
     const BoundaryReconciliationComponent & component;
     const ObjectiveBreakdown * previous_audit;
-    JointCandidateObjectiveDiagnostic * record;
 };
 
 struct BoundaryCorrectionReference
@@ -76,7 +75,6 @@ struct BoundaryCorrectionReference
     const FitStateView & endpoint;
     const ObjectiveBreakdown & previous_audit;
     const ObjectiveBreakdown & improvement;
-    std::vector<JointCandidateObjectiveDiagnostic> & records;
     double damping;
 };
 
@@ -85,11 +83,10 @@ struct BoundaryCorrectionEvaluation
     std::size_t suspicious_atom_count{ 0 };
     std::optional<ObjectiveBreakdown> raw_objective{};
     std::optional<BoundaryCandidateEvaluation> members{};
-    JointCandidateObjectiveDiagnostic * record{ nullptr };
     bool accepted{ false };
 };
 
-BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &);
+BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &, JointCandidateObservation * observation = nullptr);
 
 struct GlobalCandidateReference
 {
@@ -109,8 +106,6 @@ struct FinalPolishCandidateReference
     const ObjectiveBreakdown & base_objective;
     const ObjectiveBreakdown & endpoint_objective;
     PerformanceCounters & counters;
-    bool quiet;
-    std::vector<JointCandidateObjectiveDiagnostic> & records;
     double damping;
     std::size_t round;
 };
@@ -122,8 +117,8 @@ struct FinalPolishCandidateEvaluation
 };
 
 LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const LocalCandidateReference &);
-std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &);
+std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &, JointCandidateObservation * observation = nullptr);
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &);
-FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &);
+FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &, JointCandidateObservation * observation = nullptr);
 
 } // namespace rhbm_gem::core::detail

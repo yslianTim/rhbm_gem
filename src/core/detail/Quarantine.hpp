@@ -8,7 +8,7 @@
 
 namespace rhbm_gem::core::detail {
 
-struct ClusterCandidateDiagnostic;
+struct ClusterCandidateDecision;
 struct FixedPointOperatorEvidence;
 
 constexpr std::size_t kPersistentQuarantineFailureIterationLimit{ 5 };
@@ -90,8 +90,8 @@ struct QuarantineState
     SuspiciousBlockActivity BeginIteration(std::size_t recovery_revision);
     SuspiciousBlockActivity BuildFinalActivity() const;
     bool UpdateAfterIteration(
-        std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
-        std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
+        std::span<const ClusterCandidateDecision> accepted_evidence_list,
+        std::span<const ClusterCandidateDecision> rejected_evidence_list,
         const SuspiciousBlockActivity & block_activity,
         std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
         const ClusterHealthMap & health_by_key,

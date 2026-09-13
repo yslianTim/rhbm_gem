@@ -1,3 +1,4 @@
+#include "core/detail/SecondStageObservation.hpp"
 #include "core/detail/ClusterHistoryObserver.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
@@ -108,26 +109,26 @@ bool SameBestTraceModel(const GaussianModel3D & a, const GaussianModel3D & b)
 } // namespace
 
 void BeginBestObjectiveTrace(
-    SecondStageContext & context, bool quiet_mode, const ObjectiveDomain & domain,
+    SecondStageObservationSession & session, bool quiet_mode, const ObjectiveDomain & domain,
     std::size_t attempt, std::size_t accepted_iteration)
 {
-    context.best_trace.reset();
+    session.best_trace.reset();
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
-    context.best_trace = std::make_shared<BestObjectiveTraceEnvironment>();
-    context.best_trace->attempt = attempt;
-    context.best_trace->accepted_iteration = accepted_iteration;
-    context.best_trace->domain = std::make_shared<const ObjectiveDomain>(domain);
+    session.best_trace = std::make_shared<BestObjectiveTraceEnvironment>();
+    session.best_trace->attempt = attempt;
+    session.best_trace->accepted_iteration = accepted_iteration;
+    session.best_trace->domain = std::make_shared<const ObjectiveDomain>(domain);
 }
 
 void CaptureBestObjectiveSource(
-    const SecondStageContext & context, const ClusterKey & key,
+    const SecondStageObservationSession & session, const ClusterKey & key,
     SecondStageModelSnapshot snapshot, const std::vector<SampleRef> & sample_refs,
     ClusterObjectiveState & state, const std::optional<ObjectiveBreakdown> & before,
     double before_step, std::string_view source, std::string_view reason,
     std::size_t candidate_number, std::optional<double> factor)
 {
-    if (!context.best_trace) return;
-    auto & trace{ *context.best_trace };
+    if (!session.best_trace) return;
+    auto & trace{ *session.best_trace };
     auto event{ std::make_shared<BestObjectiveSource>() };
     event->key = key;
     const auto predecessor{ state.reset_source ? state.reset_source : state.best_source };
@@ -155,10 +156,10 @@ void CaptureBestObjectiveSource(
     trace.events.emplace_back(std::move(event));
 }
 
-void LogBestObjectivePublication(const SecondStageContext & context, const ClusterObjectiveStateMap & states)
+void LogBestObjectivePublication(const SecondStageObservationSession & session, const ClusterObjectiveStateMap & states)
 {
-    if (!context.best_trace) return;
-    auto events{ context.best_trace->events };
+    if (!session.best_trace) return;
+    auto events{ session.best_trace->events };
     std::ranges::sort(events, [](const auto & a, const auto & b)
     {
         return a->key == b->key ? a->sequence < b->sequence : a->key < b->key;
@@ -184,19 +185,19 @@ void LogBestObjectivePublication(const SecondStageContext & context, const Clust
     for (const auto & [key, state] : states)
     {
         std::ostringstream out;
-        out << "Cluster best publication: schema=1, try=" << context.best_trace->attempt
-            << ", acc-before=" << context.best_trace->accepted_iteration << ", key=" << BestTraceKey(key)
+        out << "Cluster best publication: schema=1, try=" << session.best_trace->attempt
+            << ", acc-before=" << session.best_trace->accepted_iteration << ", key=" << BestTraceKey(key)
             << ", best-source=" << (state.best_source ? state.best_source->id : "unavailable");
         Logger::Log(LogLevel::Debug, out.str());
     }
 }
 
 void DiagnoseBestObjectiveComparison(
-    JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
+    const SecondStageObservationSession & session, JointCandidateObjectiveDiagnostic * record, const CandidateEvaluationOverlay & candidate,
     const ClusterKey & key, const std::vector<SampleRef> & samples,
     const ObjectiveDomain & domain, const ClusterObjectiveState & state)
 {
-    if (!record || !candidate.GetContext().best_trace || !state.best_objective) return;
+    if (!record || !session.best_trace || !state.best_objective) return;
     if (!state.best_source)
     {
         record->best_comparison_lines.emplace_back("Cluster best comparison: schema=1, status=unavailable, diagnostic-only=yes");
@@ -348,6 +349,7 @@ void DiagnoseBestObjectiveComparison(
     record->best_comparison_lines.emplace_back(changes.str());
 }
 static void UpdateClusterHistory(
+    const SecondStageObservationSession & session,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & key, const std::vector<SampleRef> & samples,
     const ObjectiveDomain & domain, std::string_view source,
@@ -402,8 +404,8 @@ static void UpdateClusterHistory(
         objective_state.best_objective = diagnostic.candidate_objective;
         objective_state.best_parameters = CaptureClusterParameters(candidate_overlay.GetState(), key);
         objective_state.best_maximum_transformed_change = maximum_transformed_change;
-        if (candidate_overlay.GetContext().best_trace)
-            CaptureBestObjectiveSource(candidate_overlay.GetContext(), key,
+        if (session.best_trace)
+            CaptureBestObjectiveSource(session, key,
                 BuildSecondStageModelSnapshot(candidate_overlay.GetContext(), candidate_overlay.GetState()),
                 samples, objective_state, history.best_objective, before_step,
                 source, !history.best_objective ? "first-best" :
@@ -421,10 +423,10 @@ void ClusterHistoryObserver::Disable() noexcept
     catch (...) {}
 }
 
-void BeginClusterHistoryObserver(SecondStageContext & context, bool quiet) noexcept
+void BeginClusterHistoryObserver(SecondStageObservationSession & session, bool quiet) noexcept
 {
     if (quiet || Logger::GetLogLevel() < LogLevel::Debug) return;
-    try { context.cluster_history = std::make_shared<ClusterHistoryObserver>(); }
+    try { session.cluster_history = std::make_shared<ClusterHistoryObserver>(session); }
     catch (...) {}
 }
 
@@ -437,10 +439,10 @@ void ClusterHistoryObserver::BeginAttempt(SecondStageContext & context,
     try
     {
         ReconcileClusterObjectiveState(previous, state, m_staged);
-        BeginBestObjectiveTrace(context, false, domain, attempt, accepted_iteration);
+        BeginBestObjectiveTrace(m_session, false, domain, attempt, accepted_iteration);
         for (auto & [key, history] : m_staged)
             if (history.best_objective && !history.best_source)
-                CaptureBestObjectiveSource(context, key, BuildSecondStageModelSnapshot(context, state),
+                CaptureBestObjectiveSource(m_session, key, BuildSecondStageModelSnapshot(context, state),
                     partition.sample_id_list_by_key.at(key), history,
                     history.reset_source ? history.reset_source->objective : std::nullopt,
                     history.reset_source ? history.reset_source->step : 0.0,
@@ -519,7 +521,7 @@ std::shared_ptr<const ClusterHistoryDiagnostic> ClusterHistoryObserver::Local(
         auto payload{ std::make_shared<ClusterHistoryDiagnostic>() };
         auto & state{ m_staged.at(key) };
         payload->stored_best_objective = state.best_objective;
-        if (accepted) UpdateClusterHistory(candidate, key, samples, domain, source, m_counters,
+        if (accepted) UpdateClusterHistory(m_session, candidate, key, samples, domain, source, m_counters,
             state, diagnostic, *payload);
         return payload;
     }
@@ -550,14 +552,14 @@ void ClusterHistoryObserver::BoundaryMember(const CandidateEvaluationOverlay & c
         if (accepted)
         {
             ClusterHistoryDiagnostic payload;
-            UpdateClusterHistory(candidate, key, samples, domain, record->source, m_counters,
+            UpdateClusterHistory(m_session, candidate, key, samples, domain, record->source, m_counters,
                 state, diagnostic, payload);
             m_boundary.at(record->history_observation).emplace(key, std::move(state));
         }
         else
         {
             record->stored_best = state.best_objective;
-            DiagnoseBestObjectiveComparison(record, candidate, key, samples, domain, state);
+            DiagnoseBestObjectiveComparison(m_session, record, candidate, key, samples, domain, state);
         }
     }
     catch (...) { Disable(); }
@@ -578,10 +580,10 @@ void ClusterHistoryObserver::Reject(const ClusterKey & key) noexcept
     BeginSearch(key);
 }
 
-void ClusterHistoryObserver::Publish(const SecondStageContext & context) noexcept
+void ClusterHistoryObserver::Publish() noexcept
 {
     if (m_disabled) return;
-    try { LogBestObjectivePublication(context, m_staged); }
+    try { LogBestObjectivePublication(m_session, m_staged); }
     catch (...) { Disable(); }
 }
 

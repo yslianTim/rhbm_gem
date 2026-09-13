@@ -4,13 +4,10 @@
 #include "core/detail/SuspiciousUpdate.hpp"
 
 #include <map>
-#include <string>
-#include <string_view>
 
 namespace rhbm_gem::core::detail {
 
 class PerformanceCounters;
-struct ClusterHistoryDiagnostic;
 
 inline constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
 inline constexpr double kFitRangeWeight{ 1.0 };
@@ -86,44 +83,17 @@ struct ObjectiveScale
     double tail{ 0.0 };
 };
 
-struct JointCandidateObjectiveDiagnostic
-{
-    std::size_t history_observation{ 0 };
-    std::string_view source{};
-    std::size_t round{ 0 };
-    std::size_t candidate_number{ 0 };
-    std::optional<double> factor{};
-    ClusterKey member_key{};
-    std::optional<ObjectiveBreakdown> previous{};
-    std::optional<ObjectiveBreakdown> best{};
-    std::optional<ObjectiveBreakdown> candidate{};
-    std::optional<ObjectiveBreakdown> stored_best{};
-    bool best_checked{ false };
-    std::string_view outcome{ "accepted" };
-    std::string best_source_id{};
-    std::vector<std::string> best_comparison_lines{};
-};
-
-struct ObjectiveAttemptDiagnostic
+struct CandidateDecisionEvidence
 {
     std::optional<double> accepted_factor{};
     PreObjectiveFailureReason pre_objective_failure_reason{ PreObjectiveFailureReason::None };
-    std::optional<double> pre_objective_attempted_step_norm{};
-    std::optional<ObjectiveScale> scale{};
-    std::size_t fit_sample_count{ 0 };
-    std::size_t tail_sample_count{ 0 };
     std::optional<ObjectiveBreakdown> candidate_objective{};
     std::optional<ObjectiveBreakdown> previous_objective{};
-    std::shared_ptr<const ClusterHistoryDiagnostic> history{};
-    double trust_region_radius{ 0.0 };
-    double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
-    std::size_t trial_count{ 0 };
     std::size_t invalid_trial_count{ 0 };
-    std::size_t trust_skipped_trial_count{ 0 };
     std::size_t guard_rejected_trial_count{ 0 };
     std::size_t objective_rejected_trial_count{ 0 };
-    std::vector<StabilizationTerminalDiagnostic> terminal_diagnostic_list{};
+    std::vector<StabilizationTerminalEvidence> terminal_evidence_list{};
 };
 
 double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t active_atom_count);

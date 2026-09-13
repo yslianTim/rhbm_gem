@@ -39,7 +39,7 @@ public:
 
 bool ShouldShrinkAcceptedTrustRegionRadius(
     std::optional<double> first_objective_evaluated_factor,
-    const ObjectiveAttemptDiagnostic & diagnostic);
+    std::optional<double> accepted_factor);
 
 enum class BacktrackingStepStatus
 {
@@ -86,12 +86,10 @@ private:
 
 };
 
-struct ClusterCandidateDiagnostic
+struct ClusterCandidateDecision
 {
     ClusterKey key{};
-    ObjectiveAttemptDiagnostic attempt{};
-
-    bool boundary_rescued{ false };
+    CandidateDecisionEvidence evidence{};
 };
 
 struct PolishProgress
@@ -110,36 +108,11 @@ enum class BoundaryComponentAcceptedSource
     Backtracking
 };
 
-struct BoundaryComponentReconciliationDiagnostic
+struct BoundaryComponentDecision
 {
     std::vector<ClusterKey> key_list{};
-    std::size_t atom_count{ 0 };
-    std::size_t boundary_sample_count{ 0 };
-    std::size_t trial_count{ 1 };
     std::optional<double> accepted_factor{};
     BoundaryComponentAcceptedSource accepted_source{ BoundaryComponentAcceptedSource::None };
-    std::optional<BoundaryJointCorrectionStatus> joint_correction_status{};
-    std::size_t interface_atom_count{ 0 };
-    std::size_t shape_active_atom_count{ 0 };
-    std::size_t offset_active_atom_count{ 0 };
-    std::size_t suspicious_candidate_atom_count{ 0 };
-    std::size_t joint_parameter_count{ 0 };
-    std::optional<double> joint_damping{};
-    std::optional<double> maximum_normalized_trust_step{};
-    std::optional<double> previous_component_objective{};
-    std::optional<double> endpoint_component_objective{};
-    std::optional<double> joint_reference_component_objective{};
-    std::optional<double> joint_candidate_component_objective{};
-    std::optional<double> candidate_component_objective{};
-    std::size_t accepted_cluster_count{ 0 };
-    std::size_t rescue_candidate_cluster_count{ 0 };
-    std::size_t rescued_cluster_count{ 0 };
-    std::size_t locally_deteriorated_member_count{ 0 };
-    double maximum_local_deterioration{ 0.0 };
-    std::optional<double> component_improvement{};
-    std::optional<double> global_improvement{};
-    std::vector<JointCandidateObjectiveDiagnostic> objective_diagnostic_list{};
-    bool is_rescue_attempt{ false };
     bool exhausted{ false };
 };
 
@@ -152,12 +125,14 @@ struct CandidateSelection
     std::vector<ClusterKey> rejected_key_list{};
     std::vector<ClusterKey> shrink_trust_region_key_list{};
     std::vector<ClusterKey> exhausted_key_list{};
-    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
-    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
+    std::vector<ClusterCandidateDecision> accepted_cluster_evidence_list{};
+    std::vector<ClusterCandidateDecision> rejected_cluster_evidence_list{};
+    std::vector<BoundaryComponentDecision> boundary_decision_list{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
     PolishProgress polish_progress{};
 };
+
+class SecondStageObservationSession;
 
 struct CandidateSelectionInputs
 {
@@ -180,6 +155,7 @@ struct CandidateSelectionInputs
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
     BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
     PerformanceCounters & performance_counters;
+    SecondStageObservationSession * observation{ nullptr };
 };
 
 } // namespace rhbm_gem::core::detail

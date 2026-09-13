@@ -78,7 +78,7 @@ enum class StabilizationTerminalReason
     InvalidCandidate
 };
 
-struct StabilizationTerminalDiagnostic
+struct StabilizationTerminalEvidence
 {
     StabilizationTerminalReason reason{ StabilizationTerminalReason::None };
     std::optional<std::size_t> guard_atom_index{};
@@ -86,7 +86,7 @@ struct StabilizationTerminalDiagnostic
     std::optional<SuspiciousGaussianReason> guard_reason{};
 };
 
-std::optional<StabilizationTerminalDiagnostic> EvaluateClusterCandidateGuard(
+std::optional<StabilizationTerminalEvidence> EvaluateClusterCandidateGuard(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_snapshot,
     const ClusterKey & key,

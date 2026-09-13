@@ -54,18 +54,10 @@ enum class SecondStageStopReason
 
 constexpr std::size_t kMaximumIterations{ 100 };
 
-struct IterationDiagnostics
-{
-    std::optional<double> accepted_maximum_transformed_change{};
-    double proposal_maximum_transformed_change{ 0.0 };
-};
-
 struct IterationResult
 {
-    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
-    std::vector<BoundaryComponentReconciliationDiagnostic>
-        boundary_reconciliation_diagnostic_list{};
+    std::vector<ClusterKey> accepted_key_list{};
+    std::vector<ClusterKey> rejected_key_list{};
     TrustRegionRadiusUpdate trust_region_update{};
     std::size_t attempt_number{ 0 };
     std::size_t accepted_iteration_count{ 0 };
@@ -73,7 +65,6 @@ struct IterationResult
     std::size_t quarantine_atom_count{ 0 };
     PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
-    IterationDiagnostics diagnostics{};
     SecondStageStopReason stop_reason{ SecondStageStopReason::None };
     bool objective_domain_changed{ false };
     TransformedChange transformed_change_percentile{};

@@ -168,8 +168,8 @@ static bool IsGuardSafeNonMaterialSolverQualifiedEndpoint(
 }
 
 bool QuarantineState::UpdateAfterIteration(
-    std::span<const ClusterCandidateDiagnostic> accepted_diagnostic_list,
-    std::span<const ClusterCandidateDiagnostic> rejected_diagnostic_list,
+    std::span<const ClusterCandidateDecision> accepted_evidence_list,
+    std::span<const ClusterCandidateDecision> rejected_evidence_list,
     const SuspiciousBlockActivity & block_activity,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
     const ClusterHealthMap & health_by_key,
@@ -186,11 +186,11 @@ bool QuarantineState::UpdateAfterIteration(
             QuarantineTarget{ QuarantineTargetKind::HardFailureCluster, key },
             health.joint_offset_status);
     }
-    const auto append_terminal_observations = [&](const auto & diagnostic_list)
+    const auto append_terminal_evidence = [&](const auto & evidence_list)
     {
-        for (const auto & diagnostic : diagnostic_list)
+        for (const auto & decision : evidence_list)
         {
-            for (const auto & terminal : diagnostic.attempt.terminal_diagnostic_list)
+            for (const auto & terminal : decision.evidence.terminal_evidence_list)
             {
                 const auto reason{ terminal.reason };
                 if (reason != StabilizationTerminalReason::GuardInfeasible &&
@@ -224,14 +224,14 @@ bool QuarantineState::UpdateAfterIteration(
                 failure_reason_by_target.try_emplace(
                     QuarantineTarget{
                         QuarantineTargetKind::HardFailureCluster,
-                        diagnostic.key
+                        decision.key
                     },
                     failure);
             }
         }
     };
-    append_terminal_observations(accepted_diagnostic_list);
-    append_terminal_observations(rejected_diagnostic_list);
+    append_terminal_evidence(accepted_evidence_list);
+    append_terminal_evidence(rejected_evidence_list);
 
     std::vector<QuarantineTarget> successful_retry_target_list;
     for (const auto & target : retry_target_list)

@@ -18,16 +18,16 @@ CandidateTransactionBuilder::CandidateTransactionBuilder(CandidateSelection init
         m_candidate_by_key[key].exhausted = true;
     for (const auto & key : m_selection.shrink_trust_region_key_list)
         m_candidate_by_key[key].shrink_trust_region = true;
-    for (auto & diagnostic : m_selection.accepted_cluster_diagnostic_list)
-        m_candidate_by_key[diagnostic.key].diagnostic = std::move(diagnostic);
-    for (auto & diagnostic : m_selection.rejected_cluster_diagnostic_list)
-        m_candidate_by_key[diagnostic.key].diagnostic = std::move(diagnostic);
+    for (auto & decision : m_selection.accepted_cluster_evidence_list)
+        m_candidate_by_key[decision.key].evidence = std::move(decision);
+    for (auto & decision : m_selection.rejected_cluster_evidence_list)
+        m_candidate_by_key[decision.key].evidence = std::move(decision);
     m_selection.accepted_key_list.clear();
     m_selection.rejected_key_list.clear();
     m_selection.exhausted_key_list.clear();
     m_selection.shrink_trust_region_key_list.clear();
-    m_selection.accepted_cluster_diagnostic_list.clear();
-    m_selection.rejected_cluster_diagnostic_list.clear();
+    m_selection.accepted_cluster_evidence_list.clear();
+    m_selection.rejected_cluster_evidence_list.clear();
 }
 
 std::vector<ClusterKey> CandidateTransactionBuilder::SelectedKeys() const
@@ -41,15 +41,15 @@ std::vector<ClusterKey> CandidateTransactionBuilder::SelectedKeys() const
 void CandidateTransactionBuilder::MaterializeSelection()
 {
     // Classify once after component selection and global salvage. Preserve the
-    // historical rejection event order without moving diagnostics between lists.
+    // rejection event order used by terminal evidence and observation output.
     std::vector<PendingCandidate *> rejected;
     for (auto & [key, candidate] : m_candidate_by_key)
     {
         if (candidate.selected)
         {
             m_selection.accepted_key_list.emplace_back(key);
-            if (candidate.diagnostic)
-                m_selection.accepted_cluster_diagnostic_list.emplace_back(std::move(*candidate.diagnostic));
+            if (candidate.evidence)
+                m_selection.accepted_cluster_evidence_list.emplace_back(std::move(*candidate.evidence));
         }
         else
         {
@@ -61,8 +61,8 @@ void CandidateTransactionBuilder::MaterializeSelection()
     }
     std::ranges::sort(rejected, {}, &PendingCandidate::rejection_order);
     for (auto * candidate : rejected)
-        if (candidate->diagnostic)
-            m_selection.rejected_cluster_diagnostic_list.emplace_back(std::move(*candidate->diagnostic));
+        if (candidate->evidence)
+            m_selection.rejected_cluster_evidence_list.emplace_back(std::move(*candidate->evidence));
 }
 
 CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectionInputs & inputs,
@@ -76,35 +76,33 @@ CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectio
         [](char value) { return value != 0; })) };
     auto next_quarantine{ quarantine };
     const auto transition{ next_quarantine.UpdateAfterIteration(
-        m_selection.accepted_cluster_diagnostic_list, m_selection.rejected_cluster_diagnostic_list,
+        m_selection.accepted_cluster_evidence_list, m_selection.rejected_cluster_evidence_list,
         m_selection.block_activity, assessments, health, operator_evidence,
         m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state,
         inputs.previous_state, recovery_revision) };
-    ObservePhaseState(inputs.context, "final-selection",
+    ObservePhaseState(inputs.observation, "final-selection",
             m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state);
     return CandidateTransaction(std::move(m_selection), std::move(next_quarantine), suspicious_count, transition);
 }
 
-CandidateCommitResult CandidateTransaction::Commit(const SecondStageContext & context,
-    FitState & previous_state, FitState & accepted_state, PolishProvenance & provenance,
+CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, FitState & accepted_state, PolishProvenance & provenance,
     QuarantineState & quarantine,
-    TrustRegionStateSet & radii, IterationResult & result) &&
+    TrustRegionStateSet & radii, IterationResult & result, SecondStageObservationSession * observation) &&
 {
     const bool accepted{ !m_selection.accepted_key_list.empty() };
     quarantine = std::move(m_quarantine);
     result.trust_region_update = radii.ApplyRadiusUpdates(
         m_selection.shrink_trust_region_key_list,
         m_selection.rejected_key_list, m_selection.exhausted_key_list);
-    result.accepted_cluster_diagnostic_list = std::move(m_selection.accepted_cluster_diagnostic_list);
-    result.rejected_cluster_diagnostic_list = std::move(m_selection.rejected_cluster_diagnostic_list);
-    result.boundary_reconciliation_diagnostic_list = std::move(m_selection.boundary_reconciliation_diagnostic_list);
+    result.accepted_key_list = m_selection.accepted_key_list;
+    result.rejected_key_list = m_selection.rejected_key_list;
     if (accepted)
     {
         accepted_state = std::move(m_selection.assembled_state);
         provenance = std::move(m_selection.assembled_polish_provenance);
     }
     else accepted_state = std::move(previous_state);
-    ObserveHistoryPublication(context);
+    ObserveHistoryPublication(observation);
     return {std::move(m_selection.block_activity), m_selection.final_audit_objective,
         m_selection.polish_progress, m_suspicious_atom_count, accepted,
         !m_selection.rejected_key_list.empty(), m_quarantine_transition};

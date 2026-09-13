@@ -9,6 +9,8 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
+class SecondStageObservationSession;
+
 struct FixedPointOperatorEvidence
 {
     FittedGaussianSnapshot state{};
@@ -34,6 +36,7 @@ IterationProposalResult BuildIterationProposal(
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    std::string_view diagnostic_phase = "outer-operator");
+    std::string_view diagnostic_phase = "outer-operator",
+    SecondStageObservationSession * observation = nullptr);
 
 } // namespace rhbm_gem::core::detail

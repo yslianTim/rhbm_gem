@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/ObjectiveEvaluation.hpp"
+#include "core/detail/SecondStageDiagnostics.hpp"
 #include "core/detail/JointFitting.hpp"
 
 #include <array>
@@ -13,6 +13,7 @@
 namespace rhbm_gem::core::detail {
 
 struct IterationResult;
+struct FixedPointOperatorEvidence;
 struct ConvergenceCertificate;
 struct ConvergenceDiagnostics;
 struct ConvergenceAssessment;
@@ -150,15 +151,17 @@ void LogAllRejectedResolution(
     const IterationResult & iteration_result);
 void LogAcceptedCandidateSearchDiagnostics(
     bool quiet_mode,
-    const IterationResult & iteration_result);
+    const IterationObservation & iteration_result);
 
 ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count);
 void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths);
 void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
-    const IterationResult & iteration_result);
+    const IterationResult & iteration_result, const IterationDiagnostics & diagnostics);
 
+void LogOperatorAvailability(std::string_view phase, const FixedPointOperatorEvidence &,
+    const std::vector<std::size_t> & atom_index_list);
 void LogUnrestrictedOperatorAssessments(
     bool quiet_mode,
     std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
@@ -182,6 +185,7 @@ void LogAdaptiveTopologyRebuild(
 void LogFinalDependencyPolish(
     bool quiet_mode,
     const FinalDependencyPolishResult & polish_result,
+    const FinalDependencyPolishDiagnostic & diagnostic,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
     const ConvergenceAssessment * candidate_certificate = nullptr);

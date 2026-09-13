@@ -19,7 +19,6 @@
 #include <ranges>
 #include <set>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -166,22 +165,7 @@ static ConvergenceAssessment SummarizeFixedPointOperator(
             return evidence.shape_available_atom_mask.at(atom_index) != 0 &&
                 evidence.offset_available_atom_mask.at(atom_index) != 0;
         });
-    if (Logger::GetLogLevel() >= LogLevel::Debug)
-    {
-        std::size_t shape_unavailable{ 0 };
-        std::size_t offset_unavailable{ 0 };
-        for (const auto atom_index : atom_index_list)
-        {
-            shape_unavailable += evidence.shape_available_atom_mask.at(atom_index) == 0;
-            offset_unavailable += evidence.offset_available_atom_mask.at(atom_index) == 0;
-        }
-        std::ostringstream message;
-        message << "Second-stage availability: schema=1, phase=" << diagnostic_phase
-            << ", nominal-atoms=" << atom_index_list.size()
-            << ", shape-unavailable=" << shape_unavailable
-            << ", offset-unavailable=" << offset_unavailable << ".";
-        Logger::Log(LogLevel::Debug, message.str());
-    }
+    LogOperatorAvailability(diagnostic_phase, evidence, atom_index_list);
     return result;
 }
 
@@ -346,7 +330,8 @@ static void ResetIterationStateForPartition(
     const SecondStageContext & context,
     CouplingGraphPartition partition,
     IterationState & iteration_state,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    SecondStageObservationSession * observation)
 {
     const auto cluster_key_list{ BuildGraphClusterKeyList(partition) };
     const auto model_snapshot{
@@ -354,7 +339,7 @@ static void ResetIterationStateForPartition(
     };
     iteration_state.objective_domain = BuildObjectiveDomain(context, model_snapshot, cluster_key_list);
     iteration_state.objective_domain_revision++;
-    ObserveHistoryPartition(context, partition, iteration_state.objective_domain,
+    ObserveHistoryPartition(observation, context, partition, iteration_state.objective_domain,
         iteration_state.accepted_state);
     RefreshBestAuditState(context, model_snapshot, iteration_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
@@ -473,7 +458,8 @@ static bool BeginFrozenBackgroundIteration(
     GraphTopology & graph_topology,
     const FitOptions & options,
     IterationState & iteration_state,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    SecondStageObservationSession * observation)
 {
     const bool partition_changed{ iteration_state.pending_topology.has_value() };
     const auto & partition{ partition_changed ?
@@ -489,7 +475,7 @@ static bool BeginFrozenBackgroundIteration(
         auto pending{ std::move(*iteration_state.pending_topology) };
         iteration_state.pending_topology.reset();
         ResetIterationStateForPartition(context, std::move(pending.partition),
-            iteration_state, performance_counters);
+            iteration_state, performance_counters, observation);
         iteration_state.frozen_recovery_revision++;
         graph_topology = std::move(pending.topology);
         LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
@@ -500,7 +486,7 @@ static bool BeginFrozenBackgroundIteration(
     iteration_state.objective_domain_revision++;
 
     const auto previous_snapshot{ BuildSecondStageModelSnapshot(context, iteration_state.accepted_state) };
-    ObserveHistoryBackground(context, previous_background, partition,
+    ObserveHistoryBackground(observation, context, previous_background, partition,
         iteration_state.objective_domain, iteration_state.accepted_state);
     RefreshBestAuditState(context, previous_snapshot, iteration_state);
     return false;
@@ -512,11 +498,13 @@ static IterationResult RunIteration(
     const FitOptions & options,
     std::size_t attempt_number,
     IterationState & iteration_state,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    SecondStageObservationSession * observation)
 {
+    if (observation) observation->iteration = IterationObservation{};
     // Prepare this attempt's frozen background, objectives, and active blocks.
     const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
-        context, graph_topology, options, iteration_state, performance_counters) };
+        context, graph_topology, options, iteration_state, performance_counters, observation) };
     auto previous_state{ std::move(iteration_state.accepted_state) };
     const auto & selected_atom_index_list{ iteration_state.selected_atom_index_list };
     const auto & graph_partition{ iteration_state.graph_partition };
@@ -531,7 +519,7 @@ static IterationResult RunIteration(
     const auto previous_objective_by_key{
         BuildObjectiveByKey(graph_partition, objective_domain, residual_baseline)
     };
-    ObserveHistoryAttempt(context, previous_objective_by_key, previous_state,
+    ObserveHistoryAttempt(observation, context, previous_objective_by_key, previous_state,
         graph_partition, objective_domain, attempt_number, iteration_state.accepted_iteration_count);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
@@ -564,10 +552,10 @@ static IterationResult RunIteration(
             quarantine_activity,
             retry_atom_index_set)
     };
-    BeginTrustModelAudit(context, cluster_key_list);
-    BeginPhaseObservation(context, options.quiet_mode, objective_domain,
+    BeginTrustModelAudit(observation, cluster_key_list);
+    BeginPhaseObservation(observation, context, options.quiet_mode, objective_domain,
         previous_state, cluster_key_list, attempt_number, iteration_state.objective_domain_revision);
-    ProductionObservationScope solver_audit_scope(context, attempt_number);
+    ProductionObservationScope solver_audit_scope(observation, attempt_number);
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{
@@ -578,12 +566,12 @@ static IterationResult RunIteration(
             options,
             joint_offset_ridge_multiplier_list,
             quarantine_activity,
-            iteration_state.solver_workspace_by_key)
+            iteration_state.solver_workspace_by_key, "outer-operator", observation)
     };
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();
 
-    ObservePhaseProposal(context, proposal_result);
+    ObservePhaseProposal(observation, proposal_result);
     LogUnrestrictedOperatorAssessments(
         options.quiet_mode,
         proposal_result.assessment_by_atom,
@@ -611,7 +599,8 @@ static IterationResult RunIteration(
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
-        .performance_counters = performance_counters
+        .performance_counters = performance_counters,
+        .observation = observation
     };
     CandidateTransactionBuilder builder;
     builder.Select(candidate_inputs);
@@ -619,10 +608,10 @@ static IterationResult RunIteration(
         proposal_result.assessment_by_atom, proposal_result.health_by_key,
         proposal_result.fixed_point_operator, iteration_state.frozen_recovery_revision) };
     IterationResult result;
-    const auto selection{ std::move(transaction).Commit(context, previous_state,
+    const auto selection{ std::move(transaction).Commit(previous_state,
         iteration_state.accepted_state, iteration_state.previous_polish_provenance,
         iteration_state.quarantine_state,
-        iteration_state.trust_region_state, result) };
+        iteration_state.trust_region_state, result, observation) };
     const auto & assembled_state{ iteration_state.accepted_state };
     const auto & assembled_polish_provenance{ iteration_state.previous_polish_provenance };
     const auto assembled_uses_polish{ UsesPolish(assembled_polish_provenance) };
@@ -636,11 +625,11 @@ static IterationResult RunIteration(
     result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
     result.polish_progress = selection.polish_progress;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
-    result.diagnostics.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
+    if (observation) observation->iteration.diagnostics.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
 
     if (!selection.accepted)
     {
-        ObservePhaseFinish(context, options, joint_offset_ridge_multiplier_list,
+        ObservePhaseFinish(observation, options, joint_offset_ridge_multiplier_list,
             quarantine_activity, proposal_result, assembled_state);
         result.stop_reason = attempt_number >= kMaximumIterations ?
             SecondStageStopReason::AllRejectedAtMaximumIterations :
@@ -720,12 +709,12 @@ static IterationResult RunIteration(
     }
     const auto changed_rejected_trust_radius{
         std::ranges::any_of(
-            result.rejected_cluster_diagnostic_list,
-            [&](const auto & diagnostic)
+            result.rejected_key_list,
+            [&](const auto & key)
             {
                 return std::ranges::find(
                     result.trust_region_update.changed_key_list,
-                    diagnostic.key) !=
+                    key) !=
                     result.trust_region_update.changed_key_list.end();
             })
     };
@@ -749,7 +738,7 @@ static IterationResult RunIteration(
     }
 
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.diagnostics.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
+    if (observation) observation->iteration.diagnostics.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
     result.transformed_change_percentile = certificate.accepted_active_p99;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
@@ -766,7 +755,7 @@ static IterationResult RunIteration(
 
     LogConvergenceSafeguardAudit(options.quiet_mode, result, certificate, assessment.diagnostics);
 
-    ObservePhaseFinish(context, options, joint_offset_ridge_multiplier_list,
+    ObservePhaseFinish(observation, options, joint_offset_ridge_multiplier_list,
         quarantine_activity, proposal_result, assembled_state);
     return result;
 }
@@ -857,7 +846,8 @@ static const FitState & FinalizeSecondStageState(
     IterationState & iteration_state,
     bool use_best_audit_state,
     SecondStageStopReason stop_reason,
-    PerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters,
+    SecondStageObservationSession * observation)
 {
     const auto final_uses_best_audit{
         use_best_audit_state && iteration_state.best_audit_state.has_value()
@@ -886,7 +876,7 @@ static const FitState & FinalizeSecondStageState(
             final_block_activity,
             final_state,
             iteration_state.boundary_joint_correction_workspace_by_key,
-            performance_counters)
+            performance_counters, observation)
     };
     FinalPolishResidualSafetyResult residual_safety;
     if (polish_result.accepted && polish_result.objective.has_value())
@@ -904,7 +894,7 @@ static const FitState & FinalizeSecondStageState(
         residual_safety.status == FinalPolishResidualSafetyStatus::AbsolutePassed
     };
     LogFinalDependencyPolish(
-        options.quiet_mode, polish_result, residual_safety.status, polish_applied,
+        options.quiet_mode, polish_result, observation->final_polish, residual_safety.status, polish_applied,
         residual_safety.candidate ? &*residual_safety.candidate : nullptr);
     if (polish_applied)
     {
@@ -967,7 +957,8 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         context = std::move(initialization->context);
         initial_state = std::move(initialization->state);
     }
-    BeginClusterHistoryObserver(context, options.quiet_mode);
+    SecondStageObservationSession observation;
+    BeginClusterHistoryObserver(observation, options.quiet_mode);
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };
@@ -1007,18 +998,18 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
                 options,
                 iter + 1,
                 iteration_state,
-                performance_counters);
+                performance_counters, &observation);
             LogAcceptedCandidateSearchDiagnostics(
                 options.quiet_mode,
-                terminal_result);
-            LogTrustModelAudit(context, options.quiet_mode, terminal_result);
+                observation.iteration);
+            LogTrustModelAudit(&observation, options.quiet_mode, terminal_result);
             LogRejectedClusterDiagnostics(
                 options.quiet_mode,
-                terminal_result.rejected_cluster_diagnostic_list);
+                observation.iteration.rejected_cluster_diagnostic_list);
             LogIterationProgress(
                 options.quiet_mode,
                 progress_column_widths,
-                terminal_result);
+                terminal_result, observation.iteration.diagnostics);
 
             if (terminal_result.stop_reason == SecondStageStopReason::AllRejectedBacktrackingExhausted ||
                 terminal_result.stop_reason == SecondStageStopReason::AllRejectedAtMaximumIterations)
@@ -1054,7 +1045,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             iteration_state,
             use_best_audit_state,
             terminal_result.stop_reason,
-            performance_counters)
+            performance_counters, &observation)
     };
     LogSecondStageAuditTerminal(
         options.quiet_mode,

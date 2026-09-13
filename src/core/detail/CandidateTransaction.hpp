@@ -7,6 +7,7 @@
 
 namespace rhbm_gem::core::detail {
 struct IterationResult;
+class BoundaryObservationScope;
 enum class BoundaryAcceptancePolicy;
 
 struct CandidateCommitResult
@@ -34,16 +35,16 @@ class CandidateTransaction
 public:
     CandidateTransaction(const CandidateTransaction &) = delete;
     CandidateTransaction(CandidateTransaction &&) = default;
-    CandidateCommitResult Commit(const SecondStageContext &, FitState & previous_state,
+    CandidateCommitResult Commit(FitState & previous_state,
         FitState & accepted_state, PolishProvenance &,
-        QuarantineState &, TrustRegionStateSet &, IterationResult &) &&;
+        QuarantineState &, TrustRegionStateSet &, IterationResult &, SecondStageObservationSession * = nullptr) &&;
 };
 
 class CandidateTransactionBuilder
 {
     struct PendingCandidate
     {
-        std::optional<ClusterCandidateDiagnostic> diagnostic{};
+        std::optional<ClusterCandidateDecision> evidence{};
         std::optional<FitStatePatch> cooperative_patch{};
         bool selected{ false };
         bool exhausted{ false };
@@ -54,7 +55,6 @@ class CandidateTransactionBuilder
     {
         FitStatePatch patch{};
         std::vector<std::pair<std::size_t, char>> provenance_updates{};
-        std::size_t history_observation{ 0 };
     };
     CandidateSelection m_selection{};
     std::map<ClusterKey, PendingCandidate> m_candidate_by_key{};
@@ -75,15 +75,15 @@ class CandidateTransactionBuilder
         const ObjectiveBreakdown & previous_audit_objective,
         const ObjectiveBreakdown & improvement_reference_objective,
         const FitStatePatch & endpoint_patch,
-        BoundaryComponentReconciliationDiagnostic & diagnostic,
-        BoundaryAcceptancePolicy policy);
+        BoundaryComponentDecision & decision,
+        BoundaryObservationScope & observation, BoundaryAcceptancePolicy policy);
     std::optional<ComponentCandidate> TryBacktrackBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown * previous_audit_objective,
         const FitStatePatch & endpoint_patch,
-        BoundaryComponentReconciliationDiagnostic & diagnostic,
-        BoundaryAcceptancePolicy policy);
+        BoundaryComponentDecision & decision,
+        BoundaryObservationScope & observation, BoundaryAcceptancePolicy policy);
     bool ReconcileBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
@@ -92,7 +92,8 @@ class CandidateTransactionBuilder
     bool ReconcileCooperativeComponents(
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective);
-    void MarkBoundaryDiagnosticRejected(
+    void MarkBoundaryDecisionRejected(
+        SecondStageObservationSession *,
         const std::vector<ClusterKey> & key_list,
         bool exhausted);
     void AuditAndSalvageFinalSelection(

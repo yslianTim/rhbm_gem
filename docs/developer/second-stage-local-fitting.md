@@ -64,6 +64,7 @@ all second-stage services through candidate selection:
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
+| `SecondStageObservation` / `SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, and diagnostic payloads |
 | `ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
 | `Diagnosis` | Progress and certificate output, graph/objective diagnostics, and performance counters |
 | `PhaseAudit` / `TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
@@ -80,6 +81,30 @@ boundary operations are its private methods. Evaluators return numerical decisio
 without accepting or returning per-cluster history. `ClusterHistoryObserver`
 receives decisions and maintains its own provisional history.
 Solver workspaces, counters and observers remain mutable working resources.
+The observation pointer in `CandidateSelectionInputs` is non-owning.
+`RunSecondStageIterations` owns a non-copyable `SecondStageObservationSession`;
+`SecondStageContext` contains only atom sampling/design data and the immutable
+frozen background. The session owns cluster history, best trace, phase and trust
+collectors, and iteration/final-polish diagnostic sidecars. Numerical context
+copies used by phase replay therefore cannot retain production observers.
+
+`CandidateDecisionEvidence` contains objective references, factors, failure
+classification, and the invalid/guard/objective-rejection counts used by search
+control. `StabilizationTerminalEvidence` retains ordered guard/invalid/exhausted
+reasons and the affected atom/mode. Quarantine reads accepted evidence first,
+then rejected evidence in rejection-event order; objective exhaustion still
+does not constitute quarantine failure evidence. Accepted shrink compares the
+accepted factor with the first objective-evaluated factor directly.
+
+Candidate references and results contain no diagnostic records or history
+tokens. `CandidateSelection` retains keys, state/provenance, decision evidence,
+and lightweight boundary decisions. `IterationResult` retains accepted/rejected
+keys, radius updates, progress state and stop information; audit-patience reset
+uses rejected keys directly. History, output-only trial/sample/scale details,
+formatted comparison strings and source IDs live in observation sidecars.
+Optional boundary observation scopes keep endpoint/correction/backtracking
+record associations independently of numerical candidate results.
+
 Quarantine is staged on a copy and changes only next-iteration activity,
 without modifying the audited state or requiring fallback re-audit. The builder then freezes a read-only `CandidateTransaction`.
 Its consuming commit publishes validated state, provenance, quarantine
@@ -105,7 +130,7 @@ snapshots, while accepted and best-audit states retain complete local results.
 Patch/view and residual-overlay representations continue to avoid full-state
 materialization during candidate evaluation.
 
-The `IterationDiagnostics::proposal_maximum_transformed_change` field measures the constrained
+The session's `IterationDiagnostics::proposal_maximum_transformed_change` field measures the constrained
 proposal's maximum movement. It is distinct from the nominal operator residual
 in `ConvergenceCertificate`. Maximum/population measurements reside in
 `ConvergenceDiagnostics`; the existing progress label and audit schemas are
@@ -113,7 +138,8 @@ unchanged.
 
 ### Candidate acceptance references
 
-`EvaluateCandidate` uses `(candidate, reference)`. Typed local and boundary
+`EvaluateCandidate` uses `(candidate, reference)`, with a separate optional
+observation scope for boundary and final-polish records. Typed local and boundary
 policies share numerical primitives while retaining their own acceptance rules.
 Proposal construction, factor retry, correction generation, and salvage remain
 orchestration responsibilities; failures retain their short-circuit order.
@@ -152,6 +178,12 @@ retaining first-position tie-breaking and strict improvement over the base. A se
 final removal reuses its already computed objective, without an extra audit.
 Ordinary/cooperative sweep ordering and polished-state recertification are
 unchanged.
+
+`FinalDependencyPolishResult` contains only state, objective and acceptance.
+Component/trial details and timing live in the session's final-polish sidecar.
+Acceptance compares the last successfully improved numerical objective with
+the base objective; no successful update remains unavailable evidence. Neither
+component acceptance nor final recertification reads the diagnostic copy.
 
 ## Model context and initialization
 

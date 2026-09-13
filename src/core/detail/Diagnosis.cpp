@@ -2,6 +2,7 @@
 #include "core/detail/Diagnosis.hpp"
 
 #include "core/detail/IterationProcess.hpp"
+#include "core/detail/IterationProposal.hpp"
 #include "core/detail/DependencyPolish.hpp"
 
 #include <algorithm>
@@ -441,9 +442,9 @@ void LogRejectedClusterDiagnostics(
             << diagnostic.guard_rejected_trial_count << "/"
             << diagnostic.objective_rejected_trial_count
             << ", terminal = "
-            << (diagnostic.terminal_diagnostic_list.empty() ? "none" :
+            << (diagnostic.terminal_evidence_list.empty() ? "none" :
                 GetStabilizationTerminalReasonText(
-                    diagnostic.terminal_diagnostic_list.back().reason))
+                    diagnostic.terminal_evidence_list.back().reason))
             << ", trust radius/step norm = "
             << diagnostic.trust_region_radius << "/";
 
@@ -655,7 +656,7 @@ static void LogJointCandidateDiagnostics(
 
 void LogAcceptedCandidateSearchDiagnostics(
     bool quiet_mode,
-    const IterationResult & iteration_result)
+    const IterationObservation & iteration_result)
 {
     if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
     const auto has_local_search{
@@ -944,7 +945,7 @@ void LogProgressHeader(
 void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
-    const IterationResult & iteration_result)
+    const IterationResult & iteration_result, const IterationDiagnostics & diagnostics)
 {
     if (quiet_mode) return;
     const std::array<std::string, 6> cell_list{
@@ -953,22 +954,43 @@ void LogIterationProgress(
         std::to_string(iteration_result.active_atom_count) + "/" +
             std::to_string(iteration_result.quarantine_atom_count),
         std::to_string(
-            iteration_result.accepted_cluster_diagnostic_list.size()) + "/" +
+            iteration_result.accepted_key_list.size()) + "/" +
             std::to_string(
-                iteration_result.rejected_cluster_diagnostic_list.size()),
+                iteration_result.rejected_key_list.size()),
         std::to_string(iteration_result.polish_progress.eligible_count) + "/" +
             std::to_string(iteration_result.polish_progress.accepted_count) + "/" +
             std::to_string(iteration_result.polish_progress.rejected_count) + "/" +
             std::to_string(iteration_result.polish_progress.skipped_count),
         std::to_string(iteration_result.suspicious_atom_count),
-        (iteration_result.diagnostics.accepted_maximum_transformed_change.has_value() ?
+        (diagnostics.accepted_maximum_transformed_change.has_value() ?
             FormatProgressMaximum(
-                *iteration_result.diagnostics.accepted_maximum_transformed_change) :
+                *diagnostics.accepted_maximum_transformed_change) :
             std::string{ "-" }) + "/" +
             FormatProgressMaximum(
-                iteration_result.diagnostics.proposal_maximum_transformed_change)
+                diagnostics.proposal_maximum_transformed_change)
     };
     Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
+}
+
+void LogOperatorAvailability(std::string_view diagnostic_phase, const FixedPointOperatorEvidence & evidence,
+    const std::vector<std::size_t> & atom_index_list)
+{
+    if (Logger::GetLogLevel() >= LogLevel::Debug)
+    {
+        std::size_t shape_unavailable{ 0 };
+        std::size_t offset_unavailable{ 0 };
+        for (const auto atom_index : atom_index_list)
+        {
+            shape_unavailable += evidence.shape_available_atom_mask.at(atom_index) == 0;
+            offset_unavailable += evidence.offset_available_atom_mask.at(atom_index) == 0;
+        }
+        std::ostringstream message;
+        message << "Second-stage availability: schema=1, phase=" << diagnostic_phase
+            << ", nominal-atoms=" << atom_index_list.size()
+            << ", shape-unavailable=" << shape_unavailable
+            << ", offset-unavailable=" << offset_unavailable << ".";
+        Logger::Log(LogLevel::Debug, message.str());
+    }
 }
 
 void LogUnrestrictedOperatorAssessments(
@@ -1122,13 +1144,13 @@ void LogAdaptiveTopologyRebuild(
 void LogFinalDependencyPolish(
     bool quiet_mode,
     const FinalDependencyPolishResult & polish_result,
+    const FinalDependencyPolishDiagnostic & diagnostic,
     FinalPolishResidualSafetyStatus safety_status,
     bool applied,
     const ConvergenceAssessment * candidate_certificate)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
-    const auto & diagnostic{ polish_result.diagnostic };
     std::ostringstream message;
     message << std::scientific << std::setprecision(2)
         << "Final dependency polish: components/attempted/accepted/fallback="

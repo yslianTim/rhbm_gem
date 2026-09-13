@@ -111,8 +111,8 @@ class TrustModelAudit
     friend class TrustModelTrialObserver;
 public:
     explicit TrustModelAudit(const std::vector<ClusterKey> & keys);
-    void Finalize(const CandidateSelection & selection);
-    void Log(bool quiet_mode, const IterationResult & result) const;
+    void Finalize(const CandidateSelection & selection, const IterationObservation & observation);
+    void Log(bool quiet_mode, const IterationResult & result, const IterationObservation & observation) const;
 #endif
 };
 
