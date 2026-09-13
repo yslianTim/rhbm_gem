@@ -102,14 +102,6 @@ set(CORE_ESTIMATOR_TEST_SOURCES
     core/TestDataFactory_test.cpp
 )
 
-set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES)
-
-if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
-    list(APPEND CORE_COMMAND_TEST_SOURCES
-        ${RHBM_GEM_EXPERIMENTAL_TEST_SOURCES}
-    )
-endif()
-
 set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp

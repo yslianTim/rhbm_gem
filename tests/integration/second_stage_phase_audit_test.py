@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location('phase_audit', Path(__file__).resolve().parents[2] / 'tools/second_stage_phase_audit.py')
+spec = importlib.util.spec_from_file_location('phase_audit', Path(__file__).resolve().parents[2] / 'resources/tools/developer/second_stage_phase_audit.py')
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
 

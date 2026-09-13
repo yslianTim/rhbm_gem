@@ -89,7 +89,7 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 
 ## Internal fitting ranges
 
-Fitting ranges are internal constants in `src/core/detail/FittingRanges.hpp`.
+Fitting ranges are internal constants in `src/core/detail/gaussian_fit/FittingRanges.hpp`.
 Signal fitting and alpha training use `[0, 1.0]` Å; the second-stage tail
 objective uses `[1.2, 2.0]` Å. Both boundaries are inclusive. The two ranges
 are independent and may overlap or leave a gap when the constants are changed.

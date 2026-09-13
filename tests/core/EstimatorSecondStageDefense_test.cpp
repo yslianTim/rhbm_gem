@@ -1,4 +1,4 @@
-#include "core/detail/ClusterHistoryObserver.hpp"
+#include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -17,21 +17,20 @@
 #include <utility>
 #include <vector>
 
-#include "core/detail/GaussianModelOperations.hpp"
-#include "core/detail/PreparedLocalGaussianFit.hpp"
-#include "core/detail/PhaseAudit.hpp"
-#include "core/detail/SecondStageFitting.hpp"
-#include "core/detail/CouplingGraph.hpp"
-#include "core/detail/JointFitting.hpp"
-#include "core/detail/CandidateSelection.hpp"
-#include "core/detail/CandidateEvaluation.hpp"
-#include "core/detail/TrustModelAudit.hpp"
-#include "core/detail/Diagnosis.hpp"
-#include "core/detail/IterationProcess.hpp"
-#include "core/detail/Quarantine.hpp"
-#include "core/detail/DependencyPolish.hpp"
-#include "core/detail/CandidateTransaction.hpp"
-#include "core/detail/Diagnosis.hpp"
+#include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/detail/second_stage/observation/PhaseAudit.hpp"
+#include "core/detail/second_stage/SecondStageState.hpp"
+#include "core/detail/second_stage/CouplingGraph.hpp"
+#include "core/detail/second_stage/JointFitting.hpp"
+#include "core/detail/second_stage/CandidateSelection.hpp"
+#include "core/detail/second_stage/CandidateEvaluation.hpp"
+#include "core/detail/second_stage/observation/TrustModelAudit.hpp"
+#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
+#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/second_stage/Quarantine.hpp"
+#include "core/detail/second_stage/DependencyPolish.hpp"
+#include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>

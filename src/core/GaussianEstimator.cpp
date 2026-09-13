@@ -1,9 +1,9 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
-#include "core/detail/FittingRanges.hpp"
-#include "core/detail/GaussianModelOperations.hpp"
-#include "core/detail/IterationProcess.hpp"
-#include "core/detail/PreparedLocalGaussianFit.hpp"
+#include "core/detail/gaussian_fit/FittingRanges.hpp"
+#include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
+#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
 #include <array>

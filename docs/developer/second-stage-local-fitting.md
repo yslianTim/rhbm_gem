@@ -48,32 +48,41 @@ write. These settings intentionally have no command-line flags.
 
 ## Implementation responsibilities and state ownership
 
+Shared fitting support lives in `src/core/detail/gaussian_fit/`; second-stage
+implementation lives in `src/core/detail/second_stage/`, with observation and
+logging under its `observation/` subdirectory. All retain the existing
+`rhbm_gem::core::detail` namespace.
+
 The internal implementation follows the iteration sequence rather than exposing
 all second-stage services through candidate selection:
 
-| Module in `src/core/detail` | Responsibility |
+| Module in `src/core/detail/second_stage/` | Responsibility |
 | --- | --- |
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
-| `CandidateSelection` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
+| `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
 | `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
-| `BoundaryReconciliation` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
+| `CandidateTransactionBoundary.cpp` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
 | `ComponentAssembly` | Ordered patch application and excluded-component trial assembly; shared audit/salvage loop with caller-owned evaluation and removal policy |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
-| `SecondStageObservation` / `SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, and diagnostic payloads |
-| `ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
-| `Diagnosis` | Progress and certificate output, graph/objective diagnostics, and performance counters |
-| `PhaseAudit` / `TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
+| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, and diagnostic payloads |
+| `observation/ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
+| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and performance counters |
+| `observation/PhaseAudit` / `observation/TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
 
-`GaussianModelOperations`, `PreparedLocalGaussianFit`, `SecondStageFitting`,
-`CouplingGraph`, and `JointFitting` retain the underlying model operations,
-prepared design, state/residual representation, graph construction, and solvers.
-The public Gaussian estimator workflow uses internal fitting-range constants;
-`FitOptions` does not expose radial bounds.
+`GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
+operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.
+`SecondStageState`, `CouplingGraph`, and `JointFitting` retain the second-stage
+state/residual representation, graph construction, and solvers.
+`CandidateSelection.hpp` retains its existing selection types and step-control
+declarations; the transaction implementation is distributed across
+`CandidateTransaction.cpp`, `CandidateTransactionLocal.cpp`, and
+`CandidateTransactionBoundary.cpp`. The public Gaussian estimator workflow uses
+internal fitting-range constants; `FitOptions` does not expose radial bounds.
 
 `CandidateSelectionInputs` contains read-only algorithm inputs. The private
 `CandidateTransactionBuilder` owns working activity, state and provenance;
@@ -461,7 +470,7 @@ nor an effective-rank certificate.
 
 Every selected raw sample belongs to exactly one owner cluster: the cluster
 containing the sample's selected target atom. Unselected contributors never own
-objective rows. `src/core/detail/FittingRanges.hpp` defines three internal
+objective rows. `src/core/detail/gaussian_fit/FittingRanges.hpp` defines three internal
 constants: `kSignalDistanceMax = 1.0`, `kTailDistanceMin = 1.2`, and
 `kTailDistanceMax = 2.0`, in angstroms. The signal/fit domain is the inclusive
 `[0, kSignalDistanceMax]` interval; the tail objective domain independently uses

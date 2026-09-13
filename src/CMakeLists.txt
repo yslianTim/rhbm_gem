@@ -20,27 +20,27 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
     core/GaussianEstimator.cpp
-    core/detail/GaussianModelOperations.cpp
-    core/detail/PreparedLocalGaussianFit.cpp
-    core/detail/SecondStageFitting.cpp
-    core/detail/SecondStageObservation.cpp
-    core/detail/CouplingGraph.cpp
-    core/detail/JointFitting.cpp
-    core/detail/ClusterHistoryObserver.cpp
-    core/detail/CandidateEvaluation.cpp
-    core/detail/ComponentAssembly.cpp
-    core/detail/CandidateTransaction.cpp
-    core/detail/CandidateSelection.cpp
-    core/detail/ObjectiveEvaluation.cpp
-    core/detail/SuspiciousUpdate.cpp
-    core/detail/IterationProposal.cpp
-    core/detail/Quarantine.cpp
-    core/detail/BoundaryReconciliation.cpp
-    core/detail/DependencyPolish.cpp
-    core/detail/TrustModelAudit.cpp
-    core/detail/PhaseAudit.cpp
-    core/detail/Diagnosis.cpp
-    core/detail/IterationProcess.cpp
+    core/detail/gaussian_fit/GaussianModelOperations.cpp
+    core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
+    core/detail/second_stage/SecondStageState.cpp
+    core/detail/second_stage/observation/SecondStageObservation.cpp
+    core/detail/second_stage/CouplingGraph.cpp
+    core/detail/second_stage/JointFitting.cpp
+    core/detail/second_stage/observation/ClusterHistoryObserver.cpp
+    core/detail/second_stage/CandidateEvaluation.cpp
+    core/detail/second_stage/ComponentAssembly.cpp
+    core/detail/second_stage/CandidateTransaction.cpp
+    core/detail/second_stage/CandidateTransactionLocal.cpp
+    core/detail/second_stage/ObjectiveEvaluation.cpp
+    core/detail/second_stage/SuspiciousUpdate.cpp
+    core/detail/second_stage/IterationProposal.cpp
+    core/detail/second_stage/Quarantine.cpp
+    core/detail/second_stage/CandidateTransactionBoundary.cpp
+    core/detail/second_stage/DependencyPolish.cpp
+    core/detail/second_stage/observation/TrustModelAudit.cpp
+    core/detail/second_stage/observation/PhaseAudit.cpp
+    core/detail/second_stage/observation/SecondStageLogging.cpp
+    core/detail/second_stage/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp

@@ -98,7 +98,7 @@ FitOptions, or database fields were added. Use the project's existing dependency
 configuration when configuring a new build directory.
 
 ```sh
-python3 tools/second_stage_phase_audit.py build/phase-audit/run.log \
+python3 resources/tools/developer/second_stage_phase_audit.py build/phase-audit/run.log \
   --output-dir build/phase-audit/analysis
 ```
 

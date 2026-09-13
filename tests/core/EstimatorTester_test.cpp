@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "core/command/detail/LocalFittingFeatures.hpp"
-#include "core/detail/IterationProcess.hpp"
-#include "core/detail/FittingRanges.hpp"
-#include "core/detail/PreparedLocalGaussianFit.hpp"
+#include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/gaussian_fit/FittingRanges.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>

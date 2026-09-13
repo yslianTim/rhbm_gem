@@ -43,7 +43,7 @@ is subtracted from each sample before fitting the next amplitude and width.
 3. Build the member dataset from adjusted samples inside the inclusive
    `[0, kSignalDistanceMax]` range (currently `[0, 1.0]` Å) and with positive
    adjusted response. The upper bound is defined in
-   `src/core/detail/FittingRanges.hpp`, independently of the tail objective range.
+   `src/core/detail/gaussian_fit/FittingRanges.hpp`, independently of the tail objective range.
 4. Fit the two-parameter log-quadratic regression with
    `rhbm_helper::EstimateBetaMDPDE`.
 5. Decode OLS and MDPDE amplitude/width parameters and attach the fixed
