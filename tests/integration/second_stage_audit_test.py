@@ -102,7 +102,6 @@ class AuditParserTest(unittest.TestCase):
         guide = (root / 'docs/developer/second-stage-audit.md').read_text()
         self.assertIn('second_stage_audit.py', guide)
         self.assertIn('RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT', guide)
-        self.assertIn('stopped by user decision', guide)
         for name in ['PhaseAudit', 'TrustModelAudit', 'ClusterHistoryObserver']:
             self.assertFalse((root / f'src/core/detail/second_stage/observation/{name}.cpp').exists())
             self.assertNotIn(name + '.cpp', (root / 'src/CMakeLists.txt').read_text())

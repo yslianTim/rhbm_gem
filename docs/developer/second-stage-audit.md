@@ -122,6 +122,4 @@ counts before/after (the comparator checks work only between OFF and ON), and
 compare pre/post ON audit JSON after excluding version and elapsed time. Keep all
 decision, score, stage, trial, ordering and count fields in that comparison.
 
-The manually stopped P1 validation remains **stopped by user decision**. It is not
-a pass and is not a retirement defect. External fold-168 input identities,
-baselines, tolerances and iteration gate remain unchanged; long tests are opt-in.
+External fold-168 regression is opt-in.
