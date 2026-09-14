@@ -36,7 +36,7 @@ namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
-constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
+constexpr std::array<Spot, 5> kLocalMDPDESummarySpotList{
     Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
 };
 
@@ -47,40 +47,38 @@ struct GaussianModelParameterSamples
     std::vector<double> offset_list{};
 };
 
-std::string BuildGroupPriorSpotSummary(const ModelObject & model_object)
+std::string BuildLocalMDPDESpotSummary(const ModelObject & model_object)
 {
-    const auto analysis_view{ model_object.GetAnalysisView() };
     std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    for (const auto * atom : model_object.GetSelectedAtoms())
     {
-        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
-        if (atom_list.empty()) continue;
-
-        const auto spot{ atom_list.front()->GetSpot() };
+        const auto spot{ atom->GetSpot() };
         if (std::find(
-                kGroupPriorSummarySpotList.begin(),
-                kGroupPriorSummarySpotList.end(),
-                spot) == kGroupPriorSummarySpotList.end())
+                kLocalMDPDESummarySpotList.begin(),
+                kLocalMDPDESummarySpotList.end(),
+                spot) == kLocalMDPDESummarySpotList.end())
         {
             continue;
         }
-        const auto & prior{ analysis_view.GetAtomGroupPrior(group_key) };
+        const auto & local_mdpde{
+            AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(FittingStage::Second)
+        };
         auto & sample_list{ spot_sample_map[spot] };
-        sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
-        sample_list.width_list.emplace_back(prior.GetWidth());
-        sample_list.offset_list.emplace_back(prior.GetOffset());
+        sample_list.amplitude_list.emplace_back(local_mdpde.GetAmplitude());
+        sample_list.width_list.emplace_back(local_mdpde.GetWidth());
+        sample_list.offset_list.emplace_back(local_mdpde.GetOffset());
     }
 
     if (spot_sample_map.empty())
     {
-        return "Group fitting prior summary by Spot: no atom groups available.";
+        return "Second-stage local MDPDE summary by Spot: no matching selected atoms available.";
     }
 
     std::ostringstream summary;
-    summary << "Group fitting prior summary by Spot:\n"
+    summary << "Second-stage local MDPDE summary by Spot:\n"
         << "|---Spot---|------Amplitude------|--------Width--------|-------Offset--------|\n"
         << "|          |   mean   |   s.d.   |   mean   |   s.d.   |   mean   |   s.d.   |";
-    for (const auto spot : kGroupPriorSummarySpotList)
+    for (const auto spot : kLocalMDPDESummarySpotList)
     {
         const auto sample_iter{ spot_sample_map.find(spot) };
         if (sample_iter == spot_sample_map.end()) continue;
@@ -501,7 +499,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)
     {
-        Logger::Log(LogLevel::Info, BuildGroupPriorSpotSummary(model_object));
+        Logger::Log(LogLevel::Info, BuildLocalMDPDESpotSummary(model_object));
     }
 }
 
