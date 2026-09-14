@@ -20,6 +20,7 @@
 #include "core/detail/second_stage/JointFitting.hpp"
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 #include "core/detail/second_stage/SecondStageState.hpp"
+#include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/second_stage/observation/PhaseAudit.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
@@ -42,6 +43,66 @@ using second_stage_test::MakeGaussianResult;
 using second_stage_test::MakeSecondStageOptions;
 
 } // namespace
+
+TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPartition)
+{
+    const detail::ClusterKey existing_key{ 0 };
+    const detail::ClusterKey new_key{ 1 };
+    detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key.emplace(
+        existing_key,
+        std::vector<detail::SampleRef>{ { 0, 0 } });
+    partition.sample_id_list_by_key.emplace(
+        new_key,
+        std::vector<detail::SampleRef>{ { 1, 0 } });
+
+    const detail::ObjectiveBreakdown previous_breakdown{
+        1.0, 2.0, 0.0
+    };
+    const detail::ObjectiveBreakdown existing_best{
+        0.5, 0.5, 0.0
+    };
+    detail::ObjectiveByKey previous_objective_by_key;
+    previous_objective_by_key.emplace(existing_key, previous_breakdown);
+    previous_objective_by_key.emplace(new_key, previous_breakdown);
+
+    detail::ClusterObjectiveStateMap state_by_key;
+    state_by_key.emplace(
+        existing_key,
+        detail::ClusterObjectiveState{
+            existing_best,
+            0.25
+        });
+
+    const auto retained_source{ std::make_shared<detail::BestObjectiveSource>() };
+    retained_source->id = "retained-source";
+    state_by_key.at(existing_key).best_source = retained_source;
+    const detail::FitState accepted_state{
+        MakeGaussianResult({ 6.0, 0.5, 0.0 }), MakeGaussianResult({ 7.0, 0.5, 0.0 }) };
+    state_by_key.at(existing_key).best_parameters =
+        detail::FitStatePatch::FromState(accepted_state, existing_key);
+    detail::ReconcileClusterObjectiveState(
+        previous_objective_by_key,
+        accepted_state,
+        state_by_key);
+
+    EXPECT_EQ(state_by_key.at(existing_key).best_source, retained_source);
+    EXPECT_FALSE(state_by_key.at(new_key).best_source);
+    EXPECT_EQ(state_by_key.at(new_key).best_parameters.atom_index_list, new_key);
+    EXPECT_DOUBLE_EQ(state_by_key.at(new_key).best_parameters.mdpde_list.at(0).GetModel().GetAmplitude(), 7.0);
+    ASSERT_EQ(state_by_key.size(), 2U);
+    ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(existing_key).best_objective->GetTotalObjective(),
+        existing_best.GetTotalObjective());
+    ASSERT_TRUE(state_by_key.at(new_key).best_objective.has_value());
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(new_key).best_objective->GetTotalObjective(),
+        previous_breakdown.GetTotalObjective());
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(new_key).best_maximum_transformed_change,
+        0.0);
+}
 
 TEST(EstimatorSecondStageDefenseTest, PerformanceCountersRespectLogLevelQuietAndDestruction)
 {
@@ -173,6 +234,45 @@ TEST(EstimatorSecondStageDefenseTest, PerformanceCountersAccumulateParallelUpdat
         " - dependency_polish_components/attempted/accepted/fallback = 3/2/1/1\n"
         " - dependency_polish_atoms/parameters/rounds = 5/6/7\n"), std::string::npos);
 }
+
+#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
+TEST(EstimatorSecondStageDefenseTest, TrustModelShadowActionFollowsPredictionAndBacktracking)
+{
+    using Action = detail::TrustRegionRadiusAction;
+    detail::TrustModelShadowDiagnostic shadow{
+        .status = detail::TrustModelPredictionStatus::Available,
+        .rho = 0.20,
+        .boundary_utilization = 1.0,
+        .current_action = Action::Keep
+    };
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Shrink);
+    shadow.rho = 0.50;
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Keep);
+    shadow.rho = 0.90;
+    shadow.boundary_utilization = 0.79;
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Keep);
+    shadow.boundary_utilization = 0.80;
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Grow);
+    shadow.objective_backtracked = true;
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Shrink);
+    shadow.objective_backtracked = false;
+    shadow.status = detail::TrustModelPredictionStatus::NonmaterialPrediction;
+    shadow.current_action = Action::Keep;
+    EXPECT_EQ(
+        detail::DetermineTrustModelShadowAction(shadow),
+        Action::Keep);
+}
+#endif
 
 #ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
 TEST(EstimatorSecondStageDefenseTest, TrustModelShadowUsesFrozenIrlsDirectionalPrediction)
@@ -734,6 +834,43 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
     Logger::SetLogLevel(LogLevel::Info);
     EXPECT_FALSE(detail::BeginPhaseAudit(context, false, domain, baseline, keys, 1, 1));
     Logger::SetLogLevel(saved_level);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PhaseAuditKeepsProtectedOffsetQualificationUnavailable)
+{
+    const rg::GaussianModel3D model{ 6.0, 0.5, 0.0 };
+    auto fixture{ BuildJointPolishFixture({ model, model }, { model, model }) };
+    const detail::ClusterKey key{ 0, 1 };
+    const auto domain{ detail::BuildObjectiveDomain(fixture.context,
+        detail::BuildSecondStageModelSnapshot(fixture.context, fixture.state), { key }) };
+    detail::IterationProposalResult proposal;
+    proposal.fixed_point_operator = { { model, model }, { 1, 1 }, { 1, 1 } };
+    proposal.block_activity = { { 0, 0 }, { 0, 0 }, { 0, 0 } };
+    proposal.local_refit_status_by_atom.assign(2, rg::RHBMEstimationStatus::SUCCESS);
+    proposal.health_by_key.emplace(key, detail::ClusterHealth{ detail::JointOffsetSolveStatus::Converged });
+    for (const bool protected_offset : { false, true })
+    {
+        SCOPED_TRACE(protected_offset);
+        proposal.block_activity.offset_fixed_atom_mask[0] = protected_offset;
+        EXPECT_TRUE(detail::AreActiveCoordinatesSolverQualified(key, { key }, proposal.block_activity,
+            proposal.local_refit_status_by_atom, proposal.health_by_key));
+        detail::PhaseAudit collector(fixture.context, domain, fixture.state, { key }, 1, 1);
+        const auto saved_level{ Logger::GetLogLevel() };
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        collector.Finish(MakeSecondStageOptions(), { 1.0, 1.0 }, proposal.block_activity, proposal, fixture.state);
+        const auto output{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(saved_level);
+        const auto begin{ output.find("\"production_operator\":{") };
+        ASSERT_NE(begin, std::string::npos);
+        const auto audit{ output.substr(begin, output.find(",\"operator\":", begin) - begin) };
+        EXPECT_NE(audit.find(protected_offset ?
+            "\"status\":\"unavailable\",\"reason\":\"unrestricted-solver-qualification-unavailable\",\"complete\":true,\"solver_qualified\":false" :
+            "\"status\":\"available\",\"reason\":\"\",\"complete\":true,\"solver_qualified\":true"), std::string::npos);
+        EXPECT_NE(audit.find("\"p99\":[0,0,0],\"maximum\":[0,0,0]"), std::string::npos);
+        EXPECT_NE(audit.find("\"population\":[2,2,2]"), std::string::npos);
+        EXPECT_NE(audit.find("\"top_atoms\":[[{\"atom_index\":0,\"residual\":0},{\"atom_index\":1,\"residual\":0}]"), std::string::npos);
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, PhaseAuditQuietAndEnabledRunsPreserveFinalParameters)

@@ -1,10 +1,12 @@
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
+#include "core/detail/second_stage/IterationProposal.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
@@ -129,6 +131,46 @@ TransformedChangeSummary SummarizeActiveDofChanges(
             GetFitModel(previous_state, atom_index)));
     }
     return SummarizeActiveDofChanges(change_list, population);
+}
+
+FixedPointOperatorSummary SummarizeFixedPointOperator(
+    const FixedPointOperatorEvidence & evidence,
+    const FitState & previous_state,
+    const std::vector<std::size_t> & atom_index_list)
+{
+    FixedPointOperatorSummary result;
+    const ActiveCoordinatePopulation operator_nominal_population{
+        atom_index_list,
+        atom_index_list
+    };
+
+    auto & change_list{ result.change_list };
+    change_list.reserve(previous_state.size());
+    for (std::size_t atom_index = 0; atom_index < previous_state.size(); atom_index++)
+    {
+        auto change{ CalculateTransformedChange(
+            GetFitModel(evidence.state, atom_index),
+            GetFitModel(previous_state, atom_index)) };
+        if (evidence.shape_available_atom_mask.at(atom_index) == 0)
+        {
+            change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()) = std::numeric_limits<double>::infinity();
+            change.at(GaussianModel3D::LogWidthCoordinateIndex()) = std::numeric_limits<double>::infinity();
+        }
+        if (evidence.offset_available_atom_mask.at(atom_index) == 0)
+        {
+            change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = std::numeric_limits<double>::infinity();
+        }
+        change_list.emplace_back(std::move(change));
+    }
+    result.nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
+    result.operator_complete = std::ranges::all_of(
+        atom_index_list,
+        [&](const auto atom_index)
+        {
+            return evidence.shape_available_atom_mask.at(atom_index) != 0 &&
+                evidence.offset_available_atom_mask.at(atom_index) != 0;
+        });
+    return result;
 }
 
 bool AreActiveCoordinatesSolverQualified(

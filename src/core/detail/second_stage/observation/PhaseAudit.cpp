@@ -156,24 +156,10 @@ OperatorAudit Summarize(const IterationProposalResult & proposal, const FitState
     OperatorAudit result;
     ClusterKey population(state.size());
     std::iota(population.begin(), population.end(), 0);
-    const auto & evidence{ proposal.fixed_point_operator };
-    result.complete = true;
-    for (const auto atom : population)
-    {
-        auto change{ CalculateTransformedChange(evidence.state.at(atom), state.at(atom).mdpde.GetModel()) };
-        if (!evidence.shape_available_atom_mask.at(atom))
-        {
-            change[0] = change[1] = std::numeric_limits<double>::infinity();
-            result.complete = false;
-        }
-        if (!evidence.offset_available_atom_mask.at(atom))
-        {
-            change[2] = std::numeric_limits<double>::infinity();
-            result.complete = false;
-        }
-        result.changes.push_back(change);
-    }
-    result.summary = SummarizeActiveDofChanges(result.changes, { population, population });
+    auto summary{ SummarizeFixedPointOperator(proposal.fixed_point_operator, state, population) };
+    result.changes = std::move(summary.change_list);
+    result.summary = summary.nominal_residual;
+    result.complete = summary.operator_complete;
     const SuspiciousBlockActivity nominal_activity{ std::vector<char>(state.size(), 0),
         std::vector<char>(state.size(), 0), std::vector<char>(state.size(), 0) };
     result.qualified = AreActiveCoordinatesSolverQualified(population, keys, nominal_activity,

@@ -19,6 +19,7 @@
 #include "core/detail/second_stage/CouplingGraph.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
+#include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 #include "core/detail/second_stage/SecondStageState.hpp"
@@ -47,6 +48,7 @@ using second_stage_test::Distance;
 using second_stage_test::ExpectGaussianModelsNear;
 using second_stage_test::ExpectSelectedAtomEstimatesAreFinite;
 using second_stage_test::GetEstimateModel;
+using second_stage_test::MakeGaussianResult;
 using second_stage_test::MakeSecondStageOptions;
 
 void ExpectPeelingSamplingEntriesMatchFinalModels(
@@ -233,6 +235,79 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     EXPECT_NE(
         polish_result.state.at(0).mdpde.GetModel().GetAmplitude(),
         fixture.state.at(0).mdpde.GetModel().GetAmplitude());
+}
+
+TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryPreservesNominalPopulationAndPercentiles)
+{
+    const auto model{ rg::GaussianModel3D::FromTransformedCoordinates({ 0.0, 0.0, 0.0 }) };
+    ASSERT_TRUE(model);
+    const detail::FitState previous(3, MakeGaussianResult(*model));
+    detail::FixedPointOperatorEvidence evidence{ {}, { 1, 1, 1 }, { 1, 1, 1 } };
+    const std::array<detail::TransformedChange, 3> expected{
+        detail::TransformedChange{ 0.1, 0.2, 0.3 },
+        detail::TransformedChange{ 0.4, 0.5, 0.6 },
+        detail::TransformedChange{ 0.7, 0.8, 0.9 }
+    };
+    for (const auto & coordinates : expected)
+    {
+        const auto endpoint{ rg::GaussianModel3D::FromTransformedCoordinates(
+            { coordinates[0], coordinates[1], -coordinates[2] }) };
+        ASSERT_TRUE(endpoint);
+        evidence.state.push_back(*endpoint);
+    }
+
+    const auto summary{ detail::SummarizeFixedPointOperator(evidence, previous, { 2, 0 }) };
+    EXPECT_TRUE(summary.operator_complete);
+    ASSERT_EQ(summary.change_list.size(), 3U);
+    for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
+    {
+        for (std::size_t atom = 0; atom < 3; atom++)
+            EXPECT_NEAR(summary.change_list[atom][coordinate], expected[atom][coordinate], 1.0e-12);
+        EXPECT_EQ(summary.nominal_residual.population_size_list[coordinate], 2U);
+        EXPECT_NEAR(summary.nominal_residual.maximum_list[coordinate], expected[2][coordinate], 1.0e-12);
+        EXPECT_NEAR(summary.nominal_residual.percentile_list[coordinate],
+            0.01 * expected[0][coordinate] + 0.99 * expected[2][coordinate], 1.0e-12);
+    }
+    const auto empty{ detail::SummarizeFixedPointOperator(evidence, previous, {}) };
+    EXPECT_TRUE(empty.operator_complete);
+    EXPECT_EQ(empty.change_list, summary.change_list);
+    EXPECT_EQ(empty.nominal_residual.population_size_list, (std::array<std::size_t, 3>{ 0, 0, 0 }));
+    EXPECT_EQ(empty.nominal_residual.percentile_list, (detail::TransformedChange{}));
+    EXPECT_EQ(empty.nominal_residual.maximum_list, (detail::TransformedChange{}));
+}
+
+TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryKeepsAvailabilitySeparateFromFiniteResiduals)
+{
+    const rg::GaussianModel3D model{ 8.0, 0.5, 0.0 };
+    const detail::FitState previous(3, MakeGaussianResult(model));
+    detail::FixedPointOperatorEvidence evidence{ { model, model, model }, { 0, 1, 1 }, { 1, 0, 1 } };
+    const auto summary{ detail::SummarizeFixedPointOperator(evidence, previous, { 0, 1, 2 }) };
+    EXPECT_FALSE(summary.operator_complete);
+    EXPECT_TRUE(std::isinf(summary.change_list[0][0]));
+    EXPECT_TRUE(std::isinf(summary.change_list[0][1]));
+    EXPECT_DOUBLE_EQ(summary.change_list[0][2], 0.0);
+    EXPECT_DOUBLE_EQ(summary.change_list[1][0], 0.0);
+    EXPECT_DOUBLE_EQ(summary.change_list[1][1], 0.0);
+    EXPECT_TRUE(std::isinf(summary.change_list[1][2]));
+    for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
+    {
+        EXPECT_TRUE(std::isinf(summary.nominal_residual.percentile_list[coordinate]));
+        EXPECT_TRUE(std::isinf(summary.nominal_residual.maximum_list[coordinate]));
+        EXPECT_EQ(summary.nominal_residual.population_size_list[coordinate], 3U);
+    }
+    const auto subset{ detail::SummarizeFixedPointOperator(evidence, previous, { 2 }) };
+    EXPECT_TRUE(subset.operator_complete);
+    EXPECT_EQ(subset.nominal_residual.percentile_list, (detail::TransformedChange{}));
+    EXPECT_EQ(subset.change_list, summary.change_list);
+
+    evidence.state[2] = rg::GaussianModel3D{ std::numeric_limits<double>::infinity(), 0.5, 0.0 };
+    const auto nonfinite{ detail::SummarizeFixedPointOperator(evidence, previous, { 2 }) };
+    EXPECT_TRUE(nonfinite.operator_complete);
+    for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
+    {
+        EXPECT_TRUE(std::isinf(nonfinite.change_list[2][coordinate]));
+        EXPECT_TRUE(std::isinf(nonfinite.nominal_residual.percentile_list[coordinate]));
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceIgnoresHiddenMaximumTail)

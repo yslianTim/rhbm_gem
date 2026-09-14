@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <limits>
 #include <numeric>
 #include <ranges>
 #include <set>
@@ -113,49 +112,6 @@ struct IterationState
     std::size_t objective_domain_revision{ 1 };
     std::size_t frozen_recovery_revision{ 1 };
 };
-
-static ConvergenceAssessment SummarizeFixedPointOperator(
-    const FixedPointOperatorEvidence & evidence,
-    const FitState & previous_state,
-    const std::vector<std::size_t> & atom_index_list,
-    std::string_view diagnostic_phase = "outer-operator")
-{
-    ConvergenceAssessment result;
-    const ActiveCoordinatePopulation operator_nominal_population{
-        atom_index_list,
-        atom_index_list
-    };
-
-    std::vector<TransformedChange> change_list;
-    change_list.reserve(previous_state.size());
-    for (std::size_t atom_index = 0; atom_index < previous_state.size(); atom_index++)
-    {
-        auto change{ CalculateTransformedChange(
-            GetFitModel(evidence.state, atom_index),
-            GetFitModel(previous_state, atom_index)) };
-        if (evidence.shape_available_atom_mask.at(atom_index) == 0)
-        {
-            change.at(GaussianModel3D::LogPeakHeightCoordinateIndex()) = std::numeric_limits<double>::infinity();
-            change.at(GaussianModel3D::LogWidthCoordinateIndex()) = std::numeric_limits<double>::infinity();
-        }
-        if (evidence.offset_available_atom_mask.at(atom_index) == 0)
-        {
-            change.at(GaussianModel3D::OffsetToPeakRatioCoordinateIndex()) = std::numeric_limits<double>::infinity();
-        }
-        change_list.emplace_back(std::move(change));
-    }
-    result.diagnostics.operator_nominal_residual = SummarizeActiveDofChanges(change_list, operator_nominal_population);
-    result.certificate.operator_nominal_p99 = result.diagnostics.operator_nominal_residual.percentile_list;
-    result.certificate.operator_complete = std::ranges::all_of(
-        atom_index_list,
-        [&](const auto atom_index)
-        {
-            return evidence.shape_available_atom_mask.at(atom_index) != 0 &&
-                evidence.offset_available_atom_mask.at(atom_index) != 0;
-        });
-    LogOperatorAvailability(diagnostic_phase, evidence, atom_index_list);
-    return result;
-}
 
 static std::optional<SecondStageInitializationResult> BuildSecondStageInitialization(
     const ModelObject & model_object,
@@ -640,12 +596,18 @@ static IterationResult RunIteration(
             previous_state,
             iteration_state.selected_atom_index_list)
     };
-    auto assessment{
+    const auto operator_summary{
         SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             previous_state,
             iteration_state.selected_atom_index_list)
     };
+    ConvergenceAssessment assessment;
+    assessment.diagnostics.operator_nominal_residual = operator_summary.nominal_residual;
+    assessment.certificate.operator_nominal_p99 = operator_summary.nominal_residual.percentile_list;
+    assessment.certificate.operator_complete = operator_summary.operator_complete;
+    LogOperatorAvailability("outer-operator", proposal_result.fixed_point_operator,
+        iteration_state.selected_atom_index_list);
     auto & certificate{ assessment.certificate };
     assessment.diagnostics.accepted_active_movement = SummarizeActiveDofChanges(
         assembled_state,
@@ -810,11 +772,16 @@ static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
                 iteration_state.solver_workspace_by_key,
                 "final-recertification")
         };
-        auto assessment{ SummarizeFixedPointOperator(
+        const auto operator_summary{ SummarizeFixedPointOperator(
             proposal_result.fixed_point_operator,
             candidate_state,
-            iteration_state.selected_atom_index_list,
-            "final-recertification") };
+            iteration_state.selected_atom_index_list) };
+        ConvergenceAssessment assessment;
+        assessment.diagnostics.operator_nominal_residual = operator_summary.nominal_residual;
+        assessment.certificate.operator_nominal_p99 = operator_summary.nominal_residual.percentile_list;
+        assessment.certificate.operator_complete = operator_summary.operator_complete;
+        LogOperatorAvailability("final-recertification", proposal_result.fixed_point_operator,
+            iteration_state.selected_atom_index_list);
         assessment.certificate.solver_qualified = AreActiveCoordinatesSolverQualified(
             iteration_state.selected_atom_index_list,
             cluster_key_list,

@@ -235,8 +235,25 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
     const GlobalCandidateReference & reference)
 {
-    return EvaluateCombinedObjective(candidate, reference.samples, reference.domain,
-        reference.best, reference.previous, reference.counters);
+    if (reference.previous == nullptr) return std::nullopt;
+    const auto candidate_objective{
+        EvaluateObjectiveDelta(
+            candidate,
+            reference.samples,
+            reference.domain,
+            *reference.previous,
+            reference.counters)
+    };
+    if (!candidate_objective.has_value() ||
+        !IsAuditObjectiveAcceptableForProgress(
+            candidate_objective->GetTotalObjective(),
+            reference.previous->GetTotalObjective(),
+            reference.best,
+            kObjectiveProgressTolerance))
+    {
+        return std::nullopt;
+    }
+    return candidate_objective;
 }
 
 FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,

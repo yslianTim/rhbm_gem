@@ -97,13 +97,15 @@ Keep second-stage defense tests in the following behavior-based files under
 | `CandidateAcceptance_test.cpp` | Objectives and best references, trust radii, backtracking, transaction publication, boundary acceptance, and serial/parallel selection |
 | `Recovery_test.cpp` | Suspicious guards, failure masks, quarantine, fallback, ridge guards, and healthy remote clusters |
 | `ConvergenceAndFinalization_test.cpp` | Active-coordinate certificates, final dependency polish, persistence, and whole-run intensity scaling |
-| `Observation_test.cpp` | Performance counters, trust shadow diagnostics, logging, and phase audit neutrality |
+| `Observation_test.cpp` | Cluster-history lifecycle, performance counters, trust shadow diagnostics, logging, and phase audit neutrality |
 
 Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
 All seven files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
 `rhbm_tests_core_estimator` CTest group. Do not add per-file CTest groups using
-this shared suite filter: each would repeat the entire suite. Conditional trust
-assertions stay with their original case, even when it lives outside observation.
+this shared suite filter: each would repeat the entire suite. Pure trust-shadow
+policy assertions belong to independent observation cases under
+the original trust-experiment guard. Mixed cases that also verify production
+acceptance or rollback remain with the production behavior they exercise.
 
 Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
 namespace for fixture builders and assertions shared across these files. Keep

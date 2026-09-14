@@ -28,7 +28,6 @@
 #include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
-#include "core/detail/second_stage/observation/TrustModelAudit.hpp"
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -280,6 +279,110 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
         tolerance));
 }
 
+TEST(EstimatorSecondStageDefenseTest, GlobalCandidateRequiresPreviousAndAvailableDelta)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const detail::ClusterKey key{ 0 };
+    const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+    const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+    ASSERT_TRUE(previous);
+    const auto patch{ detail::FitStatePatch::FromState(fixture.state, key) };
+    const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+    detail::ClusterSolverWorkspaceMap workspaces;
+    detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    {
+        detail::PerformanceCounters counters{ false, fixture.context, workspaces, corrections };
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+            fixture.sample_ref_list, domain, nullptr, nullptr, counters }));
+    }
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(saved_level);
+    EXPECT_NE(output.find("objective_recomputed/reused_samples = 0/0"), std::string::npos);
+
+    domain.cluster_by_key.at(key).scale.reset();
+    detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        fixture.sample_ref_list, domain, nullptr, &*previous, counters }));
+}
+
+TEST(EstimatorSecondStageDefenseTest, GlobalCandidatePreservesGatesAndOverlappingFitTailDelta)
+{
+    for (const bool overlap : { false, true })
+    {
+        SCOPED_TRACE(overlap);
+        auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+        const detail::ClusterKey key{ 0 };
+        const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+        auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+        if (overlap)
+        {
+            auto & cluster{ domain.cluster_by_key.at(key) };
+            cluster.tail_sample_ref_list = { { 0, 0 } };
+            cluster.scale->tail = 2.0 * cluster.scale->fit;
+            domain.tail_sample_mask_by_atom[0][0] = 1;
+            domain.tail_sample_count = 1;
+        }
+        const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+        ASSERT_TRUE(previous);
+        detail::ClusterSolverWorkspaceMap workspaces;
+        detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+        const detail::FitState improved{ MakeGaussianResult({ 6.2, 0.5, 0.0 }) };
+        const auto patch{ detail::FitStatePatch::FromState(improved, key) };
+        const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+        const auto full{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(fixture.context, improved)) };
+        ASSERT_TRUE(full);
+        ASSERT_LT(full->GetTotalObjective(), previous->GetTotalObjective());
+        const auto accepted{ detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+            fixture.sample_ref_list, domain, nullptr, &*previous, counters }) };
+        ASSERT_TRUE(accepted);
+        EXPECT_NEAR(accepted->fit_range_residual_objective, full->fit_range_residual_objective, 1.0e-12);
+        EXPECT_NEAR(accepted->tail_validation_loss, full->tail_validation_loss, 1.0e-12);
+        EXPECT_NEAR(accepted->offset_plausibility_penalty, full->offset_plausibility_penalty, 1.0e-12);
+        EXPECT_TRUE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+            fixture.sample_ref_list, domain, &*previous, &*previous, counters }));
+        const detail::ObjectiveBreakdown best{ 0.0, 0.0, 0.0 };
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+            fixture.sample_ref_list, domain, &best, &*previous, counters }));
+
+        const detail::FitState worse{ MakeGaussianResult({ 20.0, 0.5, 0.0 }) };
+        const auto worse_patch{ detail::FitStatePatch::FromState(worse, key) };
+        const detail::CandidateEvaluationOverlay worse_candidate{ fixture.context, baseline, fixture.state, worse_patch };
+        EXPECT_FALSE(detail::EvaluateCandidate(worse_candidate, detail::GlobalCandidateReference{
+            fixture.sample_ref_list, domain, nullptr, &*previous, counters }));
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, GlobalCandidateKeepsInclusiveProgressTolerance)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    const auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { { 0 } }) };
+    const detail::FitStatePatch patch;
+    const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+    const std::vector<detail::SampleRef> samples;
+    detail::ClusterSolverWorkspaceMap workspaces;
+    detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    const detail::ObjectiveBreakdown best{ 2.0, 0.0, 0.0 };
+    // An empty delta preserves the supplied baseline exactly, isolating the global gate.
+    const detail::ObjectiveBreakdown boundary{ 2.0 + 1.0e-8 + 2.0e-3, 0.0, 0.0 };
+    const auto accepted{ detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        samples, domain, &best, &boundary, counters }) };
+    ASSERT_TRUE(accepted);
+    EXPECT_DOUBLE_EQ(accepted->GetTotalObjective(), boundary.GetTotalObjective());
+    const detail::ObjectiveBreakdown beyond{ boundary.GetTotalObjective() + 1.0e-9, 0.0, 0.0 };
+    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        samples, domain, &best, &beyond, counters }));
+    const detail::ObjectiveBreakdown nonfinite{ std::numeric_limits<double>::infinity(), 0.0, 0.0 };
+    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        samples, domain, nullptr, &nonfinite, counters }));
+}
+
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)
 {
     const auto objective{
@@ -344,133 +447,18 @@ TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
         5.0);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPartition)
+TEST(EstimatorSecondStageDefenseTest, AcceptedTrustRegionRadiusShrinksOnlyAfterObjectiveBacktracking)
 {
-    const detail::ClusterKey existing_key{ 0 };
-    const detail::ClusterKey new_key{ 1 };
-    detail::CouplingGraphPartition partition;
-    partition.sample_id_list_by_key.emplace(
-        existing_key,
-        std::vector<detail::SampleRef>{ { 0, 0 } });
-    partition.sample_id_list_by_key.emplace(
-        new_key,
-        std::vector<detail::SampleRef>{ { 1, 0 } });
-
-    const detail::ObjectiveBreakdown previous_breakdown{
-        1.0, 2.0, 0.0
-    };
-    const detail::ObjectiveBreakdown existing_best{
-        0.5, 0.5, 0.0
-    };
-    detail::ObjectiveByKey previous_objective_by_key;
-    previous_objective_by_key.emplace(existing_key, previous_breakdown);
-    previous_objective_by_key.emplace(new_key, previous_breakdown);
-
-    detail::ClusterObjectiveStateMap state_by_key;
-    state_by_key.emplace(
-        existing_key,
-        detail::ClusterObjectiveState{
-            existing_best,
-            0.25
-        });
-
-    const auto retained_source{ std::make_shared<detail::BestObjectiveSource>() };
-    retained_source->id = "retained-source";
-    state_by_key.at(existing_key).best_source = retained_source;
-    const detail::FitState accepted_state{
-        MakeGaussianResult({ 6.0, 0.5, 0.0 }), MakeGaussianResult({ 7.0, 0.5, 0.0 }) };
-    state_by_key.at(existing_key).best_parameters =
-        detail::FitStatePatch::FromState(accepted_state, existing_key);
-    detail::ReconcileClusterObjectiveState(
-        previous_objective_by_key,
-        accepted_state,
-        state_by_key);
-
-    EXPECT_EQ(state_by_key.at(existing_key).best_source, retained_source);
-    EXPECT_FALSE(state_by_key.at(new_key).best_source);
-    EXPECT_EQ(state_by_key.at(new_key).best_parameters.atom_index_list, new_key);
-    EXPECT_DOUBLE_EQ(state_by_key.at(new_key).best_parameters.mdpde_list.at(0).GetModel().GetAmplitude(), 7.0);
-    ASSERT_EQ(state_by_key.size(), 2U);
-    ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
-    EXPECT_DOUBLE_EQ(
-        state_by_key.at(existing_key).best_objective->GetTotalObjective(),
-        existing_best.GetTotalObjective());
-    ASSERT_TRUE(state_by_key.at(new_key).best_objective.has_value());
-    EXPECT_DOUBLE_EQ(
-        state_by_key.at(new_key).best_objective->GetTotalObjective(),
-        previous_breakdown.GetTotalObjective());
-    EXPECT_DOUBLE_EQ(
-        state_by_key.at(new_key).best_maximum_transformed_change,
-        0.0);
+    EXPECT_FALSE(detail::ShouldShrinkAcceptedTrustRegionRadius(0.5, 0.5));
+    EXPECT_TRUE(detail::ShouldShrinkAcceptedTrustRegionRadius(0.5, 0.25));
+    EXPECT_FALSE(detail::ShouldShrinkAcceptedTrustRegionRadius(0.5, 1.0));
+    EXPECT_FALSE(detail::ShouldShrinkAcceptedTrustRegionRadius(std::nullopt, 0.5));
+    EXPECT_FALSE(detail::ShouldShrinkAcceptedTrustRegionRadius(0.5, std::nullopt));
+    EXPECT_FALSE(detail::ShouldShrinkAcceptedTrustRegionRadius(std::nullopt, std::nullopt));
 }
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesKeepsShrinksAndSaturates)
 {
-    detail::ObjectiveAttemptDiagnostic accepted_diagnostic;
-    accepted_diagnostic.accepted_factor = 0.5;
-    accepted_diagnostic.trust_region_radius = 1.0;
-    accepted_diagnostic.trust_region_step_norm = 1.0;
-    accepted_diagnostic.previous_objective =
-        detail::BuildObjectiveBreakdown(2.0, 0.0, 0.0);
-    accepted_diagnostic.candidate_objective =
-        detail::BuildObjectiveBreakdown(1.999, 0.0, 0.0);
-
-    EXPECT_FALSE(
-        detail::ShouldShrinkAcceptedTrustRegionRadius(
-            0.5, accepted_diagnostic.accepted_factor));
-
-    accepted_diagnostic.candidate_objective =
-        detail::BuildObjectiveBreakdown(1.997, 0.0, 0.0);
-    EXPECT_FALSE(
-        detail::ShouldShrinkAcceptedTrustRegionRadius(
-            0.5, accepted_diagnostic.accepted_factor));
-
-    accepted_diagnostic.accepted_factor = 0.25;
-    EXPECT_TRUE(
-        detail::ShouldShrinkAcceptedTrustRegionRadius(
-            0.5, accepted_diagnostic.accepted_factor));
-
-    accepted_diagnostic.accepted_factor = 0.5;
-    EXPECT_FALSE(
-        detail::ShouldShrinkAcceptedTrustRegionRadius(
-            0.5, accepted_diagnostic.accepted_factor));
-
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    using Action = detail::TrustRegionRadiusAction;
-    detail::TrustModelShadowDiagnostic shadow{
-        .status = detail::TrustModelPredictionStatus::Available,
-        .rho = 0.20,
-        .boundary_utilization = 1.0,
-        .current_action = Action::Keep
-    };
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Shrink);
-    shadow.rho = 0.50;
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Keep);
-    shadow.rho = 0.90;
-    shadow.boundary_utilization = 0.79;
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Keep);
-    shadow.boundary_utilization = 0.80;
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Grow);
-    shadow.objective_backtracked = true;
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Shrink);
-    shadow.objective_backtracked = false;
-    shadow.status = detail::TrustModelPredictionStatus::NonmaterialPrediction;
-    shadow.current_action = Action::Keep;
-    EXPECT_EQ(
-        detail::DetermineTrustModelShadowAction(shadow),
-        Action::Keep);
-#endif
-
     detail::TrustRegionStateSet state;
     const detail::ClusterKey key{ 0 };
     state.Reconcile({ key });

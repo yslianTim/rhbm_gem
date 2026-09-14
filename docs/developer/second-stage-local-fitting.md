@@ -60,12 +60,12 @@ all second-stage services through candidate selection:
 | --- | --- |
 | `IterationProcess` | Initialization, frozen-background and pending-partition boundaries, convergence and stop decisions, final certification, and persistence |
 | `IterationResult.hpp` | Outer attempt summary and stop reasons |
-| `ConvergenceCertificate` | Active-coordinate summaries, solver qualification, and convergence certificate |
+| `ConvergenceCertificate` | Active-coordinate summaries, shared fixed-point operator evidence summaries, solver qualification, and convergence certificate |
 | `CandidateEvidence.hpp` | Candidate decision evidence, pre-objective failure reasons, and boundary accepted sources |
 | `CandidateState.hpp` | Selection data, boundary decisions, polish progress, and trust-radius update records |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
-| `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and original gate ordering; no history inputs or results |
+| `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and complete global candidate acceptance with original gate ordering; no history inputs or results |
 | `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
 | `CandidateTransactionBoundary.cpp` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
@@ -84,8 +84,11 @@ operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp
 `SecondStageState`, `CouplingGraph`, and `JointFitting` retain the second-stage
 state/residual representation and seed selection, graph construction and topology
 drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
-convergence types and the outer attempt result have their own headers. Seed
-diagnostic records belong to `observation/SecondStageDiagnostics.hpp`.
+convergence types and the outer attempt result have their own headers. Operator
+evidence summarization is shared with phase audit; each caller retains its own
+population and solver qualification policy. Availability logging stays at the
+runner call sites. Seed diagnostic records belong to
+`observation/SecondStageDiagnostics.hpp`.
 `CandidateEvidence.hpp` supplies diagnostics and candidate evaluation without
 including the complete selection. `CandidateState.hpp` owns selection data.
 `CandidateTransaction.hpp`
@@ -193,8 +196,49 @@ orchestration responsibilities; failures retain their short-circuit order.
 | Ordinary boundary | Member previous gates in existing key order, followed by the combined objective. |
 | Boundary correction | Suspicious-polish guard, raw objective evidence, member/combined acceptance, then strict improvement against the original correction reference. The raw evidence is reused, including when unavailable. |
 | Cooperative rescue | Tolerated member deterioration, combined previous/best acceptance, and strict global improvement. History cannot accept or reject a member. |
-| Global selection audit | Affected-sample union and complete-state previous/best gates, followed by the outer salvage policy. |
+| Global selection audit | When triggered by the [conditional selection audit](#conditional-selection-audit), affected-sample union and complete-state previous/best gates, followed by the outer salvage policy. |
 | Final polish | Validity, suspicious-polish guard, strict global improvement, and member non-regression against the base. Converged finalization separately requires strict operator recertification. |
+
+### Conditional selection audit
+
+These call conditions were checked against `develop` commit `7500a45eb2fc20ff9d04768789883ef4b1d2eb65`
+on 2026-09-14: [boundary reconciliation and audit/salvage](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/CandidateTransactionBoundary.cpp#L664)
+and [runner publication and post-commit scoring](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/IterationProcess.cpp#L599).
+This is production objective acceptance, separate from optional `PhaseAudit`
+observation. Making these calls unconditional would change the algorithm.
+
+`ReconcileSelectedBoundaries()` builds the ordinary boundary component list
+from the currently selected keys before reconciliation. Each component has at
+least two connected keys; remote singleton patches do not make the list
+nonempty. It then evaluates `previous_audit_objective` from the current domain
+and residual baseline, regardless of whether this component list is empty.
+
+| Ordinary component list | Previous audit objective | Before cooperative rescue | Cooperative rescue |
+| --- | --- | --- | --- |
+| Nonempty | Available | Run ordinary reconciliation, then call `AuditAndSalvageFinalSelection()`. | Attempt eligible components. |
+| Empty | Available | Skip ordinary reconciliation and the first audit/salvage call. | Still attempt eligible components. |
+| Nonempty | Unavailable | Run ordinary reconciliation, then reject all remaining selections as exhausted; do not call audit/salvage. | Skip. |
+| Empty | Unavailable | Skip ordinary reconciliation and the first audit/salvage call; this branch adds no global rejection. | Skip. |
+
+After that branch, the post-rescue audit/salvage call occurs only when previous is
+available and `ReconcileCooperativeComponents()` returns an accepted result.
+Rescue eligibility is independent of whether the ordinary component list was
+nonempty. An accepted rescue still has to survive this subsequent audit/salvage
+to be retained at commit.
+
+Whenever called, the selection audit covers the complete assembled state,
+including remote singleton patches, using the affected-sample union and the
+existing previous bound and retained global-best bound when a best exists.
+With no ordinary components and no accepted rescue, local selections can
+proceed to commit without a complete-selection acceptance gate.
+
+Calling audit/salvage does not guarantee an objective result: an empty selection
+returns no objective, including when salvage removes every selected unit. An
+unsalvageable remaining selection is rejected as exhausted and clears the
+result. Thus an absent `final_audit_objective` alone does not establish whether
+audit/salvage ran. After these conditional paths, `MaterializeSelection()`
+finalizes accepted/rejected lists once. The runner's subsequent objective
+reuse or recomputation is described in [Global audit and stopping](#global-audit-and-stopping).
 
 ### Shared component infrastructure
 
@@ -211,8 +255,9 @@ retained component patches. The module owns no selection, provenance, radius,
 quarantine or diagnostic state.
 
 Both stages use `AuditAndSalvageComponents` for the initial audit and repeated
-policy-selected removals. Outer considers units that do not independently
-strictly improve previous, with exact-delta scoring, unavailable evidence scored
+policy-selected removals, with outer calls governed by the
+[conditional selection audit](#conditional-selection-audit). Outer considers
+units that do not independently strictly improve previous, with exact-delta scoring, unavailable evidence scored
 as infinity, worst-first ordering, lexical key tie-breaking, previous/best gates,
 and exhausted fallback. Final polish tries each accepted component for removal
 using full-state audits and selects the best available single removal each round,
@@ -384,8 +429,11 @@ Each outer attempt performs the following sequence:
    objective; an unavailable or rejected correction falls through to the
    unchanged common-factor component backtracking. A failed component rolls back
    only its members, so unrelated components and remote singleton clusters remain
-   eligible for commit. When this sweep has components, run its existing global
-   audit/salvage. Then build maximal eligible boundary components from the
+   eligible for commit. When the ordinary component list is nonempty, run its
+   global audit/salvage only if the previous audit objective is available;
+   otherwise reject the remaining selections as exhausted. With previous
+   available, attempt cooperative rescue even if there were no ordinary
+   components. Build maximal eligible boundary components from the
    safe accepted state and the best finite objective-rejected proposal retained
    for each rejected cluster. Components containing at least one such proposal
    receive the same endpoint, active-column joint correction, and common-factor
@@ -395,8 +443,9 @@ Each outer attempt performs the following sequence:
    historical-best tolerance still applies. A failed correction retains a valid
    rescue endpoint, and any failed rescue atomically leaves the safe accepted
    state unchanged.
-9. After cooperative acceptance, run the unchanged global previous/best audit on
-   the complete assembled state.
+9. Only when previous is available and cooperative reconciliation accepts a
+   result, call global previous/best audit/salvage on the complete assembled
+   state. Both call sites follow the [conditional selection audit](#conditional-selection-audit).
    If tolerance-level deterioration from independent reconciliation units causes
    aggregate rejection, remove non-improving units from worst to best until the
    first passing subset is found. If only strictly improving units remain but the
@@ -405,7 +454,10 @@ Each outer attempt performs the following sequence:
 10. Stage Active/Frozen quarantine for the next iteration without changing
     the audited state. Publish quarantine and trust-radius updates together. An accepted state's adaptive rebuild can queue a
     new partition for the next attempt; pending changes block convergence.
-    Update the global best and audit patience using same-background scores.
+    For an accepted result, update the global best and audit patience using
+    same-background scores, reusing `final_audit_objective` or recomputing it
+    when absent. This post-commit scoring is not an acceptance gate; all-rejected
+    attempts return before it.
 
 Every response path uses the same frozen cache:
 
@@ -701,7 +753,9 @@ endpoints. A component-backtracked state does not grow its members' trust radii,
 and polish provenance is retained only for atoms with a material polished endpoint
 change.
 
-After this accepted-only pass, every rejected cluster that produced a finite
+After the accepted-only pass and its conditional audit/salvage, cooperative
+rescue runs only with an available previous audit objective, including when
+there were no ordinary components. Every rejected cluster that produced a finite
 objective proposal retains its lowest-objective trust-region patch in memory.
 The rejected proposals and safe accepted clusters form maximal eligible
 boundary components. Suspicious and hard-failure atoms are not removed from a
@@ -733,8 +787,9 @@ changed selected atom must pass the post-refit suspicious-profile guards.
 Failure keeps the exact endpoint. Accepted-only reconciliation and rejected
 cluster rescue use the same halo construction and correction path.
 
-After component reconciliation, the complete assembled state must still pass the
-unchanged global previous/best audit. On aggregate failure, independent components
+When the [conditional selection audit](#conditional-selection-audit) is triggered,
+the complete assembled state must pass the unchanged global previous/best gates.
+On aggregate failure, independent components
 and singleton clusters are scored by their exact global objective delta. Only
 non-improving units are removed, from worst delta to best, with the full audit
 recomputed after each removal. The first passing subset is committed atomically.
@@ -921,13 +976,30 @@ movement blocker. Scores from different backgrounds or domains are never
 compared directly.
 
 Rescue remains enabled and shares the normal component pipeline and
-result-application entry. Local outcomes stay provisional per key until final
-global salvage, after which accepted/rejected lists are materialized once.
+result-application entry. Local outcomes stay provisional per key through
+reconciliation and any triggered global salvage, after which accepted/rejected
+lists are materialized once.
 
 ## Global audit and stopping
 
 The global audit uses the fixed per-cluster fit/tail scales and retains the
 earliest state that improves the best objective beyond the strict tolerance.
+
+Pre-commit acceptance follows the [conditional selection audit](#conditional-selection-audit).
+After commit, an all-rejected attempt has already published quarantine and
+radius updates and retained the previous model; the runner returns its stop
+result before candidate scoring or best/patience updates. For an accepted
+result, it advances accepted progress and checks adaptive topology, then reuses
+`selection.final_audit_objective` when available. Otherwise it builds a snapshot
+of the committed assembled state and evaluates its audit objective in the
+current domain and frozen background.
+
+An available score is used to update retained best and to assess strict
+improvement over the same-background previous baseline for patience. If the
+score remains unavailable, neither improvement flag is set and the existing
+patience reset/increment rules still apply. This scoring does not reject or
+roll back the committed candidate and does not substitute for a pre-commit
+acceptance gate.
 
 One internal `ConvergenceCertificate` is the sole source of convergence truth.
 `ProductionConverged()` requires solver qualification, accepted active-DOF p99
@@ -1034,7 +1106,10 @@ IDs are sorted and deduplicated so a boundary sample is recomputed once. The
 boundary dependency and deterministic accepted/rescue-induced components
 are derived from the current partition and rebuilt with adaptive topology.
 Without a multi-cluster accepted or rescue component, candidate selection stays
-on the existing fast path.
+on the existing fast path. More precisely, the [conditional selection audit](#conditional-selection-audit)
+is skipped when the ordinary component list is empty and rescue accepts no
+result. A committed local selection can still require the runner's post-commit
+objective evaluation for best/patience tracking.
 
 Joint-offset, joint-polish, and boundary-correction solvers retain their sparse
 pattern analysis while its sparsity pattern is unchanged. Unselected background

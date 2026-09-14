@@ -555,35 +555,6 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
             previous_changed->offset_plausibility_penalty);
 }
 
-std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const std::vector<SampleRef> & affected_sample_ref_list,
-    const ObjectiveDomain & domain,
-    const ObjectiveBreakdown * best_objective,
-    const ObjectiveBreakdown * previous_objective,
-    PerformanceCounters & performance_counters)
-{
-    if (previous_objective == nullptr) return std::nullopt;
-    const auto candidate_objective{
-        EvaluateObjectiveDelta(
-            candidate_overlay,
-            affected_sample_ref_list,
-            domain,
-            *previous_objective,
-            performance_counters)
-    };
-    if (!candidate_objective.has_value() ||
-        !IsAuditObjectiveAcceptableForProgress(
-            candidate_objective->GetTotalObjective(),
-            previous_objective->GetTotalObjective(),
-            best_objective,
-            kObjectiveProgressTolerance))
-    {
-        return std::nullopt;
-    }
-    return candidate_objective;
-}
-
 bool TryUpdateBestAuditState(
     const FitState & candidate_state,
     bool candidate_uses_polish,

@@ -29,6 +29,20 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     const FitState & previous_state,
     const ActiveCoordinatePopulation & population);
 
+struct FixedPointOperatorEvidence;
+
+struct FixedPointOperatorSummary
+{
+    std::vector<TransformedChange> change_list{};
+    TransformedChangeSummary nominal_residual{};
+    bool operator_complete{ true };
+};
+
+FixedPointOperatorSummary SummarizeFixedPointOperator(
+    const FixedPointOperatorEvidence & evidence,
+    const FitState & previous_state,
+    const std::vector<std::size_t> & atom_index_list);
+
 struct ConvergenceCertificate
 {
     TransformedChange accepted_active_p99{};

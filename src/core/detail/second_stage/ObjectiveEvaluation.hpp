@@ -182,12 +182,4 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const ObjectiveBreakdown & baseline,
     PerformanceCounters & performance_counters);
 
-std::optional<ObjectiveBreakdown> EvaluateCombinedObjective(
-    const CandidateEvaluationOverlay & candidate_overlay,
-    const std::vector<SampleRef> & affected_sample_ref_list,
-    const ObjectiveDomain & domain,
-    const ObjectiveBreakdown * best_objective,
-    const ObjectiveBreakdown * previous_objective,
-    PerformanceCounters & performance_counters);
-
 } // namespace rhbm_gem::core::detail
