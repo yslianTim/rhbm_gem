@@ -235,11 +235,11 @@ TEST(SecondStageObservationTest, BoundaryMissingQuietAndEnabledObserverPreserveD
         detail::JointCandidateObservation trial(mode ? &session : nullptr,key);
         trial.BeginBoundary(reference.policy,detail::BoundaryObservationStage::Endpoint,1.0);
         BeginNumericalCapture();
-        const auto candidate=detail::EvaluateCandidate(overlay,reference,mode ? &trial : nullptr);
+        const auto candidate=detail::EvaluateBoundaryCandidate(overlay,reference,mode ? &trial : nullptr);
         const auto capture=EndNumericalCapture();
         ASSERT_TRUE(candidate);
-        if (mode==0) { work=capture.work; objective=candidate->audit_objective.GetTotalObjective(); }
-        else { EXPECT_EQ(capture.work,work); EXPECT_DOUBLE_EQ(candidate->audit_objective.GetTotalObjective(),objective); }
+        if (mode==0) { work=capture.work; objective=candidate->GetTotalObjective(); }
+        else { EXPECT_EQ(capture.work,work); EXPECT_DOUBLE_EQ(candidate->GetTotalObjective(),objective); }
     }
 }
 

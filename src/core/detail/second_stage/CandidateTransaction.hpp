@@ -190,9 +190,6 @@ class CandidateTransactionBuilder
     bool ReconcileCooperativeComponents(
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective);
-    void MarkBoundaryDecisionRejected(
-        const std::vector<ClusterKey> & key_list,
-        bool exhausted);
     void AuditAndSalvageFinalSelection(
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective, bool rescue_audit = false);

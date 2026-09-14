@@ -17,37 +17,11 @@ enum class BoundaryAcceptancePolicy
     Ordinary, CooperativeRescue
 };
 
-enum class CandidateFailureStage
-{
-    None, Trust, Guard
-};
-
 struct LocalCandidateEvaluation
 {
     bool accepted{ false };
     CandidateDecisionEvidence evidence{};
 };
-
-struct BoundaryCandidateEvaluation
-{
-    ObjectiveBreakdown audit_objective{};
-};
-
-struct CandidatePreflightReference
-{
-    const ClusterKey & key;
-    const SuspiciousBlockActivity & activity;
-    double step_norm;
-    double radius;
-};
-
-struct CandidatePreflightEvaluation
-{
-    CandidateFailureStage failure_stage{ CandidateFailureStage::None };
-    std::optional<StabilizationTerminalEvidence> guard_failure{};
-};
-
-CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const CandidatePreflightReference &);
 
 struct LocalCandidateReference
 {
@@ -87,15 +61,7 @@ struct BoundaryCorrectionReference
     double damping;
 };
 
-struct BoundaryCorrectionEvaluation
-{
-    std::size_t suspicious_atom_count{ 0 };
-    std::optional<ObjectiveBreakdown> raw_objective{};
-    std::optional<BoundaryCandidateEvaluation> members{};
-    bool accepted{ false };
-};
-
-BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &, JointCandidateObservation * observation = nullptr);
+bool EvaluateBoundaryCorrection(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &, JointCandidateObservation * observation = nullptr);
 
 struct GlobalCandidateReference
 {
@@ -128,7 +94,7 @@ struct FinalPolishCandidateEvaluation
 };
 
 LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const LocalCandidateReference &);
-std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &, JointCandidateObservation * observation = nullptr);
+std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &, JointCandidateObservation * observation = nullptr);
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &);
 FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &, JointCandidateObservation * observation = nullptr);
 

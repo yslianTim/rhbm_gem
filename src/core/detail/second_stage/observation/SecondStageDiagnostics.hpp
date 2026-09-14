@@ -51,7 +51,6 @@ struct IterationDiagnostics
     std::optional<double> accepted_maximum_transformed_change{};
     double proposal_maximum_transformed_change{ 0.0 };
 };
-struct IterationObservation { IterationDiagnostics diagnostics{}; };
 
 // Basic final progress is independent of the optional audit payload.
 struct FinalDependencyPolishDiagnostic

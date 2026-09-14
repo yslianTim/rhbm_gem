@@ -414,30 +414,30 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCandidateKeepsPolicyReferencesAndM
             .policy = policy, .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
             .previous_objective_by_key = previous_by_key, .best_audit = &best, .counters = counters,
             .component = component, .previous_audit = &*previous };
-        EXPECT_EQ(detail::EvaluateCandidate(candidate, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+        EXPECT_EQ(detail::EvaluateBoundaryCandidate(candidate, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
         reference.best_audit = &*previous;
-        const auto accepted{ detail::EvaluateCandidate(candidate, reference) };
+        const auto accepted{ detail::EvaluateBoundaryCandidate(candidate, reference) };
         ASSERT_TRUE(accepted);
         const auto full{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(fixture.context, improved)) };
         ASSERT_TRUE(full);
-        EXPECT_NEAR(accepted->audit_objective.GetTotalObjective(), full->GetTotalObjective(), 1.0e-12);
-        EXPECT_EQ(detail::EvaluateCandidate(unchanged, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+        EXPECT_NEAR(accepted->GetTotalObjective(), full->GetTotalObjective(), 1.0e-12);
+        EXPECT_EQ(detail::EvaluateBoundaryCandidate(unchanged, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
         reference.previous_audit = nullptr;
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         reference.previous_audit = &nonfinite;
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         reference.previous_audit = &*previous;
         const auto saved_member{ previous_by_key.at(key) };
         previous_by_key.at(key).reset();
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         previous_by_key.at(key) = nonfinite;
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         previous_by_key.at(key) = detail::ObjectiveBreakdown{ -1.0, 0.0, 0.0 };
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         previous_by_key.at(key) = saved_member;
         const auto saved_scale{ domain.cluster_by_key.at(key).scale };
         domain.cluster_by_key.at(key).scale.reset();
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
         domain.cluster_by_key.at(key).scale = saved_scale;
     }
 }
@@ -479,11 +479,8 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndS
                 .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
                 .component = component, .endpoint = endpoint, .previous_audit = audit,
                 .improvement = *previous, .damping = 1.0 };
-            const auto result{ detail::EvaluateCandidate(candidate, reference) };
-            EXPECT_EQ(result.suspicious_atom_count, 0U);
-            EXPECT_EQ(result.raw_objective.has_value(), !unavailable);
-            EXPECT_EQ(result.members.has_value(), !unavailable);
-            EXPECT_EQ(result.accepted, !unavailable);
+            const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference) };
+            EXPECT_EQ(result, !unavailable);
         }
         const auto output{ testing::internal::GetCapturedStdout() };
         // One delta, its two residual contributions, and the member contribution.
@@ -499,9 +496,8 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndS
         .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
         .component = component, .endpoint = endpoint, .previous_audit = *previous,
         .improvement = *objective, .damping = 0.5 };
-    const auto tied{ detail::EvaluateCandidate(candidate, tied_reference) };
-    EXPECT_TRUE(tied.members);
-    EXPECT_FALSE(tied.accepted);
+    const auto tied{ detail::EvaluateBoundaryCorrection(candidate, tied_reference) };
+    EXPECT_FALSE(tied);
     for (const auto [margin, expected] : { std::pair{1.0e-9, false}, std::pair{1.0e-6, true} })
     {
         const detail::ObjectiveBreakdown improvement{ objective->GetTotalObjective() + margin, 0.0, 0.0 };
@@ -511,9 +507,8 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndS
             .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
             .component = component, .endpoint = endpoint, .previous_audit = *previous,
             .improvement = improvement, .damping = 0.5 };
-        const auto result{ detail::EvaluateCandidate(candidate, reference) };
-        EXPECT_TRUE(result.members);
-        EXPECT_EQ(result.accepted, expected);
+        const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference) };
+        EXPECT_EQ(result, expected);
     }
 }
 
@@ -943,6 +938,67 @@ TEST(EstimatorSecondStageDefenseTest, LocalCandidateUsesOnlyPreviousAndRejectsUn
             detail::LocalCandidateReference{detail::LocalObjectivePolicy::PreviousNonRegression, key, fixture.sample_ref_list,
                 &*current, domain, evidence, counters}).accepted);
         domain.cluster_by_key.at(key).scale = saved_scale;
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, LocalSearchChecksTrustAndGuardBeforeStartingObjectiveBacktracking)
+{
+    const auto previous_model{ rg::GaussianModel3D::FromTransformedCoordinates({ 1.0, std::log(0.8), 0.0 }) };
+    const auto proposal_model{ rg::GaussianModel3D::FromTransformedCoordinates({ 1.0, std::log(0.8) + 0.6, 0.0 }) };
+    ASSERT_TRUE(previous_model);
+    ASSERT_TRUE(proposal_model);
+    for (const double target_factor : { 0.125, 0.04 })
+    {
+        SCOPED_TRACE(target_factor);
+        const auto target_model{ rg::GaussianModel3D::FromTransformedCoordinates(
+            { 1.0, std::log(0.8) + 0.6 * target_factor, 0.0 }) };
+        ASSERT_TRUE(target_model);
+        auto fixture{ BuildJointPolishFixture({ *previous_model }, { *target_model }) };
+        const detail::ClusterKey key{ 0 };
+        detail::CouplingGraphPartition partition;
+        partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+        const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+        const auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+        const auto previous{ detail::BuildObjectiveByKey(partition, domain, baseline) };
+        const detail::FitState proposal{ MakeGaussianResult(*proposal_model) };
+        const detail::PolishProvenance provenance{ 0 };
+        const detail::SuspiciousBlockActivity activity{ { 0 }, { 1 }, { 0 } };
+        const std::vector<double> ridge{ 1.0 };
+        const detail::ClusterHealthMap health{ { key, detail::ClusterHealth{ detail::JointOffsetSolveStatus::SystemBuildFailed } } };
+        const detail::BestAuditState audit;
+        detail::TrustRegionStateSet trust;
+        trust.Reconcile({ key });
+        detail::ClusterSolverWorkspaceMap workspaces;
+        workspaces.try_emplace(key);
+        detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+        const auto options{ MakeSecondStageOptions() };
+        const detail::CandidateSelectionInputs inputs{
+            fixture.context, options, baseline, partition, health, fixture.state, provenance,
+            proposal, activity, ridge, domain, previous, audit, trust, workspaces, corrections, counters };
+        detail::CandidateTransactionBuilder builder;
+        second_stage_test::BeginNumericalCapture();
+        builder.Select(inputs);
+        const auto capture{ second_stage_test::EndNumericalCapture() };
+        const auto & selection{ builder.View() };
+        ASSERT_EQ(selection.accepted_cluster_evidence_list.size(), 1U);
+        const auto & evidence{ selection.accepted_cluster_evidence_list.front().evidence };
+        ASSERT_TRUE(evidence.accepted_factor);
+        EXPECT_EQ(evidence.invalid_trial_count, 0U);
+        EXPECT_EQ(evidence.guard_rejected_trial_count, 2U);
+        EXPECT_TRUE(evidence.terminal_evidence_list.empty());
+        const bool objective_backtracked{ target_factor < 0.125 };
+        EXPECT_DOUBLE_EQ(*evidence.accepted_factor, objective_backtracked ? 0.0625 : 0.125);
+        EXPECT_EQ(evidence.objective_rejected_trial_count, objective_backtracked ? 1U : 0U);
+        EXPECT_EQ(selection.shrink_trust_region_key_list,
+            objective_backtracked ? std::vector<detail::ClusterKey>{ key } : std::vector<detail::ClusterKey>{});
+        // The factor-1 trial fails trust without building a guard snapshot. The
+        // factor-1/2 and factor-1/4 trials fail guard without evaluating the
+        // local objective. Each guard enters both snapshot overloads.
+        EXPECT_EQ(capture.work[static_cast<std::size_t>(second_stage_test::Work::Snapshot)],
+            objective_backtracked ? 8U : 6U);
+        EXPECT_EQ(capture.work[static_cast<std::size_t>(second_stage_test::Work::Objective)],
+            objective_backtracked ? 3U : 2U);
     }
 }
 

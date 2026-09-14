@@ -279,14 +279,11 @@ void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     double maximum_transformed_drift,
-    const GraphTopology & previous_topology,
-    const GraphTopology & rebuilt_topology,
     const CouplingGraphPartition & previous_partition,
     const CouplingGraphPartition & rebuilt_partition,
     bool partition_changed)
 {
     if (quiet_mode) return;
-    (void)previous_topology; (void)rebuilt_topology;
     Logger::FinishProgressLine();
     std::ostringstream message;
     message
@@ -313,8 +310,7 @@ void LogFinalDependencyPolish(
     const FinalDependencyPolishResult & polish_result,
     const FinalDependencyPolishDiagnostic & diagnostic,
     FinalPolishResidualSafetyStatus safety_status,
-    bool applied,
-    const ConvergenceAssessment * candidate_certificate)
+    bool applied)
 {
     if (quiet_mode) return;
     Logger::FinishProgressLine();
@@ -353,7 +349,6 @@ void LogFinalDependencyPolish(
         << ", residual-safety="
         << GetFinalPolishResidualSafetyStatusText(safety_status)
         << ", applied=" << (applied ? "yes" : "no");
-    (void)candidate_certificate;
     message
         << ", elapsed_ms=" << std::fixed << std::setprecision(3)
         << diagnostic.elapsed_milliseconds << ".";

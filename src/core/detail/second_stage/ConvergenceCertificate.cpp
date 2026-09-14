@@ -144,7 +144,7 @@ FixedPointOperatorSummary SummarizeFixedPointOperator(
         atom_index_list
     };
 
-    auto & change_list{ result.change_list };
+    std::vector<TransformedChange> change_list;
     change_list.reserve(previous_state.size());
     for (std::size_t atom_index = 0; atom_index < previous_state.size(); atom_index++)
     {

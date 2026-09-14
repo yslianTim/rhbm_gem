@@ -13,7 +13,6 @@ namespace rhbm_gem::core::detail {
 class SecondStageObservationSession;
 
 class PerformanceCounters;
-struct IterationObservation;
 struct IterationDiagnostics;
 struct FinalDependencyPolishDiagnostic;
 struct SuspiciousGaussianAssessment;
@@ -25,7 +24,6 @@ struct IterationResult;
 struct FixedPointOperatorEvidence;
 struct ConvergenceCertificate;
 struct ConvergenceDiagnostics;
-struct ConvergenceAssessment;
 struct SecondStageSeedSummary;
 struct FinalDependencyPolishResult;
 enum class SecondStageStopReason;
@@ -62,8 +60,6 @@ void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     double maximum_transformed_drift,
-    const GraphTopology & previous_topology,
-    const GraphTopology & rebuilt_topology,
     const CouplingGraphPartition & previous_partition,
     const CouplingGraphPartition & rebuilt_partition,
     bool partition_changed);
@@ -73,8 +69,7 @@ void LogFinalDependencyPolish(
     const FinalDependencyPolishResult & polish_result,
     const FinalDependencyPolishDiagnostic & diagnostic,
     FinalPolishResidualSafetyStatus safety_status,
-    bool applied,
-    const ConvergenceAssessment * candidate_certificate = nullptr);
+    bool applied);
 
 void LogQuarantineFallback(
     bool quiet_mode,

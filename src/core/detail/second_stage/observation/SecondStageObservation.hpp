@@ -21,8 +21,6 @@ struct QuarantineState;
 struct FinalDependencyPolishResult;
 enum class SecondStageStopReason;
 enum class BoundaryAcceptancePolicy;
-struct BoundaryCandidateEvaluation;
-struct BoundaryCorrectionEvaluation;
 
 // Scheduling uses the raw log level; never replace it with audit enablement.
 bool IsDebugLogLevelEnabled();
@@ -55,7 +53,7 @@ public:
     explicit SecondStageObservationSession(bool quiet = true, Writer writer = nullptr) noexcept;
     SecondStageObservationSession(const SecondStageObservationSession &) = delete;
     SecondStageObservationSession & operator=(const SecondStageObservationSession &) = delete;
-    IterationObservation iteration{};
+    IterationDiagnostics iteration{};
     FinalDependencyPolishDiagnostic final_polish{};
     Writer writer;
     bool Enabled() const noexcept { return m_enabled.load(std::memory_order_relaxed); }

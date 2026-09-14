@@ -259,11 +259,14 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryPreservesNominalP
 
     const auto summary{ detail::SummarizeFixedPointOperator(evidence, previous, { 2, 0 }) };
     EXPECT_TRUE(summary.operator_complete);
-    ASSERT_EQ(summary.change_list.size(), 3U);
     for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
     {
         for (std::size_t atom = 0; atom < 3; atom++)
-            EXPECT_NEAR(summary.change_list[atom][coordinate], expected[atom][coordinate], 1.0e-12);
+        {
+            const auto single{ detail::SummarizeFixedPointOperator(evidence, previous, { atom }) };
+            EXPECT_NEAR(single.nominal_residual.maximum_list[coordinate], expected[atom][coordinate], 1.0e-12);
+            EXPECT_NEAR(single.nominal_residual.percentile_list[coordinate], expected[atom][coordinate], 1.0e-12);
+        }
         EXPECT_EQ(summary.nominal_residual.population_size_list[coordinate], 2U);
         EXPECT_NEAR(summary.nominal_residual.maximum_list[coordinate], expected[2][coordinate], 1.0e-12);
         EXPECT_NEAR(summary.nominal_residual.percentile_list[coordinate],
@@ -271,7 +274,6 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryPreservesNominalP
     }
     const auto empty{ detail::SummarizeFixedPointOperator(evidence, previous, {}) };
     EXPECT_TRUE(empty.operator_complete);
-    EXPECT_EQ(empty.change_list, summary.change_list);
     EXPECT_EQ(empty.nominal_residual.population_size_list, (std::array<std::size_t, 3>{ 0, 0, 0 }));
     EXPECT_EQ(empty.nominal_residual.percentile_list, (detail::TransformedChange{}));
     EXPECT_EQ(empty.nominal_residual.maximum_list, (detail::TransformedChange{}));
@@ -284,12 +286,22 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryKeepsAvailability
     detail::FixedPointOperatorEvidence evidence{ { model, model, model }, { 0, 1, 1 }, { 1, 0, 1 } };
     const auto summary{ detail::SummarizeFixedPointOperator(evidence, previous, { 0, 1, 2 }) };
     EXPECT_FALSE(summary.operator_complete);
-    EXPECT_TRUE(std::isinf(summary.change_list[0][0]));
-    EXPECT_TRUE(std::isinf(summary.change_list[0][1]));
-    EXPECT_DOUBLE_EQ(summary.change_list[0][2], 0.0);
-    EXPECT_DOUBLE_EQ(summary.change_list[1][0], 0.0);
-    EXPECT_DOUBLE_EQ(summary.change_list[1][1], 0.0);
-    EXPECT_TRUE(std::isinf(summary.change_list[1][2]));
+    const auto missing_shape{ detail::SummarizeFixedPointOperator(evidence, previous, { 0 }) };
+    const auto missing_offset{ detail::SummarizeFixedPointOperator(evidence, previous, { 1 }) };
+    EXPECT_FALSE(missing_shape.operator_complete);
+    EXPECT_FALSE(missing_offset.operator_complete);
+    for (const auto & residual : { missing_shape.nominal_residual.maximum_list, missing_shape.nominal_residual.percentile_list })
+    {
+        EXPECT_TRUE(std::isinf(residual[0]));
+        EXPECT_TRUE(std::isinf(residual[1]));
+        EXPECT_DOUBLE_EQ(residual[2], 0.0);
+    }
+    for (const auto & residual : { missing_offset.nominal_residual.maximum_list, missing_offset.nominal_residual.percentile_list })
+    {
+        EXPECT_DOUBLE_EQ(residual[0], 0.0);
+        EXPECT_DOUBLE_EQ(residual[1], 0.0);
+        EXPECT_TRUE(std::isinf(residual[2]));
+    }
     for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
     {
         EXPECT_TRUE(std::isinf(summary.nominal_residual.percentile_list[coordinate]));
@@ -299,14 +311,14 @@ TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryKeepsAvailability
     const auto subset{ detail::SummarizeFixedPointOperator(evidence, previous, { 2 }) };
     EXPECT_TRUE(subset.operator_complete);
     EXPECT_EQ(subset.nominal_residual.percentile_list, (detail::TransformedChange{}));
-    EXPECT_EQ(subset.change_list, summary.change_list);
+    EXPECT_EQ(subset.nominal_residual.maximum_list, (detail::TransformedChange{}));
 
     evidence.state[2] = rg::GaussianModel3D{ std::numeric_limits<double>::infinity(), 0.5, 0.0 };
     const auto nonfinite{ detail::SummarizeFixedPointOperator(evidence, previous, { 2 }) };
     EXPECT_TRUE(nonfinite.operator_complete);
     for (std::size_t coordinate = 0; coordinate < 3; coordinate++)
     {
-        EXPECT_TRUE(std::isinf(nonfinite.change_list[2][coordinate]));
+        EXPECT_TRUE(std::isinf(nonfinite.nominal_residual.maximum_list[coordinate]));
         EXPECT_TRUE(std::isinf(nonfinite.nominal_residual.percentile_list[coordinate]));
     }
 }

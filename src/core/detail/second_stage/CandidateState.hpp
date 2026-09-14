@@ -31,7 +31,6 @@ struct PolishProgress
 
 struct BoundaryComponentDecision
 {
-    std::vector<ClusterKey> key_list{};
     std::optional<double> accepted_factor{};
     BoundaryComponentAcceptedSource accepted_source{ BoundaryComponentAcceptedSource::None };
     bool exhausted{ false };
@@ -48,7 +47,6 @@ struct CandidateSelection
     std::vector<ClusterKey> exhausted_key_list{};
     std::vector<ClusterCandidateDecision> accepted_cluster_evidence_list{};
     std::vector<ClusterCandidateDecision> rejected_cluster_evidence_list{};
-    std::vector<BoundaryComponentDecision> boundary_decision_list{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
     PolishProgress polish_progress{};
 };

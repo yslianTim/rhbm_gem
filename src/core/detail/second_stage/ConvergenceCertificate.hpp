@@ -33,7 +33,6 @@ struct FixedPointOperatorEvidence;
 
 struct FixedPointOperatorSummary
 {
-    std::vector<TransformedChange> change_list{};
     TransformedChangeSummary nominal_residual{};
     bool operator_complete{ true };
 };

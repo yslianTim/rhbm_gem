@@ -425,20 +425,20 @@ static ClusterCandidateResult SelectClusterCandidate(
                 }
                 break;
             }
-            const auto preflight{ EvaluateCandidate(candidate_overlay,
-                CandidatePreflightReference{key, search_block_activity, proposal.step_norm, trust_region_radius}) };
-            if (preflight.failure_stage == CandidateFailureStage::Trust)
+            if (!IsTrustRegionStepWithinRadius(proposal.step_norm, trust_region_radius))
             {
                 observation.TrustSkipped();
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
             }
-            if (preflight.guard_failure)
+            const auto guard_failure{ EvaluateClusterCandidateGuard(
+                context, residual_baseline.model_snapshot, key, candidate_overlay.GetState(), search_block_activity) };
+            if (guard_failure)
             {
                 result.evidence.guard_rejected_trial_count++;
                 observation.Failure(AuditCategory::Guard, "guard-rejected");
-                last_guard_failure = preflight.guard_failure;
+                last_guard_failure = guard_failure;
                 continue;
             }
             if (!first_objective_evaluated_factor.has_value())

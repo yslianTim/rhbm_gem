@@ -329,8 +329,6 @@ static bool TryRebuildAdaptiveTopology(
         options.quiet_mode,
         iteration_state.accepted_iteration_count,
         maximum_transformed_drift,
-        graph_topology,
-        rebuilt_topology,
         iteration_state.graph_partition,
         rebuilt_partition,
         partition_changed);
@@ -432,7 +430,7 @@ static IterationResult RunIteration(
     PerformanceCounters & performance_counters,
     SecondStageObservationSession * observation)
 {
-    if (observation) observation->iteration = IterationObservation{};
+    if (observation) observation->iteration = IterationDiagnostics{};
     const auto prior_revision{ iteration_state.objective_domain_revision };
     // Prepare this attempt's frozen background, objectives, and active blocks.
     const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
@@ -559,7 +557,7 @@ static IterationResult RunIteration(
     result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
     result.polish_progress = selection.polish_progress;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
-    if (observation) observation->iteration.diagnostics.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
+    if (observation) observation->iteration.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
 
     if (!selection.accepted)
     {
@@ -682,7 +680,7 @@ static IterationResult RunIteration(
     }
 
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    if (observation) observation->iteration.diagnostics.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
+    if (observation) observation->iteration.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
     result.transformed_change_percentile = certificate.accepted_active_p99;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
@@ -722,12 +720,6 @@ void ApplyFitState(
             std::move(adjusted_sampling_entries));
     }
 }
-
-struct FinalPolishResidualSafetyResult
-{
-    FinalPolishResidualSafetyStatus status{ FinalPolishResidualSafetyStatus::NotEvaluated };
-    std::optional<ConvergenceAssessment> candidate{};
-};
 
 static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
     const SecondStageContext & context,
@@ -828,37 +820,37 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.boundary_joint_correction_workspace_by_key,
             performance_counters, observation)
     };
-    FinalPolishResidualSafetyResult residual_safety;
+    auto safety_status{ FinalPolishResidualSafetyStatus::NotEvaluated };
+    std::optional<ConvergenceAssessment> candidate_certificate;
     if (polish_result.accepted && polish_result.objective.has_value())
     {
-        residual_safety.candidate = EvaluateFinalPolishCertificate(
+        candidate_certificate = EvaluateFinalPolishCertificate(
             context, options, iteration_state, final_block_activity, polish_result.state);
-        residual_safety.status = !residual_safety.candidate ?
+        safety_status = !candidate_certificate ?
             FinalPolishResidualSafetyStatus::Error :
-            residual_safety.candidate->certificate.StrictOperatorPassed() ?
+            candidate_certificate->certificate.StrictOperatorPassed() ?
                 FinalPolishResidualSafetyStatus::AbsolutePassed :
                 FinalPolishResidualSafetyStatus::Failed;
     }
     const auto polish_applied{
         polish_result.accepted && polish_result.objective.has_value() &&
-        residual_safety.status == FinalPolishResidualSafetyStatus::AbsolutePassed
+        safety_status == FinalPolishResidualSafetyStatus::AbsolutePassed
     };
     if (observation && observation->Enabled())
     {
         auto & audit = *observation->Audit();
         audit.polish_accepted = polish_result.accepted;
-        audit.polish_status = residual_safety.status;
+        audit.polish_status = safety_status;
         audit.polish_applied = polish_applied;
-        audit.polish_certificate = residual_safety.candidate;
+        audit.polish_certificate = candidate_certificate;
         if (polish_applied) audit.final_objective = polish_result.objective;
         observation->Record({ .stage=AuditStage::FinalCertification,
-            .category=polish_applied ? AuditCategory::None : (residual_safety.candidate ? AuditCategory::Rejected : AuditCategory::Unavailable),
+            .category=polish_applied ? AuditCategory::None : (candidate_certificate ? AuditCategory::Rejected : AuditCategory::Unavailable),
             .outcome=polish_applied ? "accepted" : "skipped", .reason=polish_applied ? "" : "polish-not-applied",
             .scope="global", .reference="final_polish_candidate" });
     }
     LogFinalDependencyPolish(
-        options.quiet_mode, polish_result, observation->final_polish, residual_safety.status, polish_applied,
-        residual_safety.candidate ? &*residual_safety.candidate : nullptr);
+        options.quiet_mode, polish_result, observation->final_polish, safety_status, polish_applied);
     if (polish_applied)
     {
         if (iteration_state.previous_polish_provenance.size() != context.atom_list.size())
@@ -967,7 +959,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             LogIterationProgress(
                 options.quiet_mode,
                 progress_column_widths,
-                terminal_result, observation.iteration.diagnostics);
+                terminal_result, observation.iteration);
 
             if (terminal_result.stop_reason == SecondStageStopReason::AllRejectedBacktrackingExhausted ||
                 terminal_result.stop_reason == SecondStageStopReason::AllRejectedAtMaximumIterations)

@@ -60,16 +60,6 @@ static bool EvaluateLocalObjective(
     return !evidence.rejected_by_previous;
 }
 
-CandidatePreflightEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
-    const CandidatePreflightReference & reference)
-{
-    if (!IsTrustRegionStepWithinRadius(reference.step_norm, reference.radius))
-        return {CandidateFailureStage::Trust, {}};
-    const auto failure{ EvaluateClusterCandidateGuard(candidate.GetContext(), candidate.GetBaseline().model_snapshot,
-        reference.key, candidate.GetState(), reference.activity) };
-    return {failure ? CandidateFailureStage::Guard : CandidateFailureStage::None, failure};
-}
-
 LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
     const LocalCandidateReference & reference)
 {
@@ -79,7 +69,7 @@ LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & ca
     return result;
 }
 
-static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
+static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
     const BoundaryCandidateReference & reference,
     const std::optional<ObjectiveBreakdown> * precomputed_objective,
@@ -93,7 +83,6 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
     {
         if (observation) observation->Member(key, accepted, evidence);
     };
-    BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
     {
         CandidateDecisionEvidence evidence;
@@ -188,33 +177,31 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
         return std::nullopt;
     }
     if (gate) observation->Gate(*gate);
-    evaluation.audit_objective = *audit_objective;
-    return evaluation;
+    return audit_objective;
 }
 
-std::optional<BoundaryCandidateEvaluation> EvaluateCandidate(
+std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
     const BoundaryCandidateReference & reference, JointCandidateObservation * observation)
 {
     return EvaluateBoundaryCandidate(candidate_overlay, reference, nullptr, observation);
 }
 
-BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
+bool EvaluateBoundaryCorrection(const CandidateEvaluationOverlay & candidate,
     const BoundaryCorrectionReference & reference, JointCandidateObservation * observation)
 {
     if (observation) observation->BeginBoundary(reference.policy, BoundaryObservationStage::Correction, reference.damping);
-    BoundaryCorrectionEvaluation result;
-    result.suspicious_atom_count = CountSuspiciousPolishAtoms(candidate.GetContext(),
-        reference.component.halo_atom_index_list, reference.endpoint, candidate.GetState());
-    if (result.suspicious_atom_count != 0)
+    const auto suspicious_atom_count{ CountSuspiciousPolishAtoms(candidate.GetContext(),
+        reference.component.halo_atom_index_list, reference.endpoint, candidate.GetState()) };
+    if (suspicious_atom_count != 0)
     {
         if (auto * record=observation ? observation->Record() : nullptr)
         { record->outcome="rejected"; record->category=AuditCategory::Guard; record->reason="suspicious"; }
-        return result;
+        return false;
     }
-    result.raw_objective = EvaluateObjectiveDelta(candidate, reference.component.affected_sample_ref_list,
-        reference.domain, reference.previous_audit, reference.counters);
-    result.members = EvaluateBoundaryCandidate(candidate,
+    const auto raw_objective{ EvaluateObjectiveDelta(candidate, reference.component.affected_sample_ref_list,
+        reference.domain, reference.previous_audit, reference.counters) };
+    const auto members{ EvaluateBoundaryCandidate(candidate,
         BoundaryCandidateReference{
             .policy = reference.policy,
             .samples_by_key = reference.samples_by_key,
@@ -224,17 +211,17 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
             .counters = reference.counters,
             .component = reference.component,
             .previous_audit = &reference.previous_audit},
-        &result.raw_objective, observation);
-    result.accepted = result.members && IsBetterAuditObjective(result.members->audit_objective.GetTotalObjective(),
-        reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance);
-    if (result.members && !result.accepted && observation && observation->Record())
+        &raw_objective, observation) };
+    const bool accepted{ members && IsBetterAuditObjective(members->GetTotalObjective(),
+        reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance) };
+    if (members && !accepted && observation && observation->Record())
     {
-        observation->Global(&reference.improvement, result.raw_objective, nullptr);
+        observation->Global(&reference.improvement, raw_objective, nullptr);
         observation->Gate({true, false, "strict-improvement"});
         observation->RejectStrictImprovement();
         if (auto * record=observation->Record()) record->reference="best_boundary_candidate";
     }
-    return result;
+    return accepted;
 }
 
 std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
