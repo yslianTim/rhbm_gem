@@ -7,6 +7,13 @@ class SecondStageObservationSession;
 
 class JointCandidateObservation;
 
+bool IsAuditObjectiveAcceptableForProgress(
+    double candidate,
+    double previous,
+    const ObjectiveBreakdown * best,
+    ObjectiveTolerance tolerance,
+    ObjectiveProgressGateEvidence * evidence = nullptr);
+
 enum class LocalObjectivePolicy
 {
     PreviousNonRegression, StrictReferenceImprovement
@@ -43,25 +50,7 @@ struct BoundaryCandidateReference
     const ObjectiveBreakdown * best_audit;
     PerformanceCounters & counters;
     const BoundaryReconciliationComponent & component;
-    const ObjectiveBreakdown * previous_audit;
 };
-
-struct BoundaryCorrectionReference
-{
-    BoundaryAcceptancePolicy policy;
-    const std::map<ClusterKey, std::vector<SampleRef>> & samples_by_key;
-    const ObjectiveDomain & domain;
-    const ObjectiveByKey & previous_objective_by_key;
-    const ObjectiveBreakdown * best_audit;
-    PerformanceCounters & counters;
-    const BoundaryReconciliationComponent & component;
-    const FitStateView & endpoint;
-    const ObjectiveBreakdown & previous_audit;
-    const ObjectiveBreakdown & improvement;
-    double damping;
-};
-
-bool EvaluateBoundaryCorrection(const CandidateEvaluationOverlay &, const BoundaryCorrectionReference &, JointCandidateObservation * observation = nullptr);
 
 struct GlobalCandidateReference
 {
@@ -70,8 +59,6 @@ struct GlobalCandidateReference
     const ObjectiveBreakdown * best;
     const ObjectiveBreakdown * previous;
     PerformanceCounters & counters;
-    SecondStageObservationSession * observation{ nullptr };
-    bool rescue_audit{ false };
 };
 
 struct FinalPolishCandidateReference
@@ -83,8 +70,6 @@ struct FinalPolishCandidateReference
     const ObjectiveBreakdown & base_objective;
     const ObjectiveBreakdown & endpoint_objective;
     PerformanceCounters & counters;
-    double damping;
-    std::size_t round;
 };
 
 struct FinalPolishCandidateEvaluation
@@ -93,9 +78,14 @@ struct FinalPolishCandidateEvaluation
     std::size_t suspicious_atom_count{ 0 };
 };
 
-LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const LocalCandidateReference &);
-std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &, JointCandidateObservation * observation = nullptr);
-std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &);
-FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &, JointCandidateObservation * observation = nullptr);
+LocalCandidateEvaluation EvaluateLocalCandidate(const CandidateEvaluationOverlay &, const LocalCandidateReference &);
+std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &,
+    const ObjectiveBreakdown * previous_audit, JointCandidateObservation * observation = nullptr);
+bool EvaluateBoundaryCorrection(const CandidateEvaluationOverlay &, const BoundaryCandidateReference &,
+    const FitStateView & endpoint, const ObjectiveBreakdown & previous_audit, const ObjectiveBreakdown & improvement,
+    JointCandidateObservation * observation = nullptr);
+std::optional<ObjectiveBreakdown> EvaluateGlobalCandidate(const CandidateEvaluationOverlay &, const GlobalCandidateReference &,
+    SecondStageObservationSession * observation = nullptr, bool rescue_audit = false);
+FinalPolishCandidateEvaluation EvaluateFinalPolishCandidate(const CandidateEvaluationOverlay &, const FinalPolishCandidateReference &, JointCandidateObservation * observation = nullptr);
 
 } // namespace rhbm_gem::core::detail

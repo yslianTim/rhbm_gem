@@ -711,7 +711,7 @@ void LogDecisionAuditIteration(SecondStageObservationSession & session, const It
     catch (...) { session.Disable(); }
 }
 void LogDecisionAuditTerminal(SecondStageObservationSession & session, std::string_view reason,
-    std::string_view source, const BestAuditState & best, const std::optional<ObjectiveBreakdown> & objective, const PerformanceCounters * counters) noexcept
+    std::string_view source, const BestAuditState & best, const PerformanceCounters * counters) noexcept
 {
     const auto * data=session.Audit(); if (!data) return;
     try
@@ -721,7 +721,7 @@ void LogDecisionAuditTerminal(SecondStageObservationSession & session, std::stri
         if (best) out << best->source_iteration; else out << "null";
         out << ",\"attempt\":" << data->attempt << ",\"objective_revision\":" << data->objective_revision
             << ",\"background_revision\":" << data->background_revision << ",\"partition_revision\":" << data->partition_revision
-            << ",\"objective\":"; JsonObjective(out,objective);
+            << ",\"objective\":"; JsonObjective(out,data->final_objective);
         out << ",\"objective_scope\":\"global_frozen_domain\",\"objective_reference\":\"final_state_last_background\",\"final_polish\":{\"attempted\":" << data->polish_attempted
             << ",\"objective_accepted\":" << data->polish_accepted << ",\"operator_certified\":";
         if (data->polish_certificate) out << (data->polish_status == FinalPolishResidualSafetyStatus::AbsolutePassed); else out << "null";

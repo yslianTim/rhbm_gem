@@ -3,6 +3,7 @@
 #include "support/SecondStageNumericalProbe.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
+#include "core/detail/second_stage/DependencyPolish.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
@@ -92,8 +93,8 @@ TEST(SecondStageObservationTest, SelectionExecutionAndMissingCertificateRemainEx
     LogScope logs; written.clear();
     detail::SecondStageObservationSession session(false,Write);
     session.BeginAttempt(1,1,1,false,false);
-    detail::ObserveSelectionAudit(&session,false,false,"unavailable","previous-objective-unavailable");
-    detail::ObserveSelectionAudit(&session,true,true,"empty_after_salvage","no-selection-remains",2);
+    session.ObserveSelectionAudit(false,false,"unavailable","previous-objective-unavailable");
+    session.ObserveSelectionAudit(true,true,"empty_after_salvage","no-selection-remains",2);
     detail::IterationResult result; result.attempt_number=1;
     result.stop_reason=detail::SecondStageStopReason::AllRejectedBacktrackingExhausted;
     detail::LogDecisionAuditIteration(session,result);
@@ -124,8 +125,8 @@ TEST(SecondStageObservationTest, GlobalGateRecordsActualReferencesAndDoesNotAddE
     for(bool observe:{false,true})
     {
         BeginNumericalCapture();
-        auto result=detail::EvaluateCandidate(overlay,detail::GlobalCandidateReference{
-            fixture.sample_ref_list,domain,&best,&*previous,counters,observe ? &session : nullptr,false});
+        auto result=detail::EvaluateGlobalCandidate(overlay,detail::GlobalCandidateReference{
+            fixture.sample_ref_list,domain,&best,&*previous,counters},observe ? &session : nullptr,false);
         const auto captured=EndNumericalCapture();
         EXPECT_FALSE(result);
         if(!observe) unobserved_work=captured.work; else EXPECT_EQ(captured.work,unobserved_work);
@@ -190,22 +191,19 @@ TEST(SecondStageObservationTest, LaterCorrectionDoesNotRelabelSelectedEndpoint)
     detail::JointCandidateObservation trial(&session,key);
     trial.BeginBoundary(detail::BoundaryAcceptancePolicy::Ordinary,detail::BoundaryObservationStage::Endpoint,1.0);
     trial.BeginBoundary(detail::BoundaryAcceptancePolicy::Ordinary,detail::BoundaryObservationStage::Correction,0.5);
-    if (auto * record=trial.Record()) {
-        record->outcome="rejected"; record->category=detail::AuditCategory::Guard;
-        record->reason="suspicious"; record->first_atom=3; record->atom_count=1;
-    }
+    trial.RejectMemberSamplesUnavailable({3});
     trial.BeginBoundary(detail::BoundaryAcceptancePolicy::Ordinary,detail::BoundaryObservationStage::Backtracking,0.25);
-    if (auto * record=trial.Record()) {
-        EXPECT_EQ(record->first_atom,2U); EXPECT_EQ(record->atom_count,2U);
-    }
+    trial.RejectSuspicious();
     trial.Flush();
     if (!session.Enabled()) return;
     const auto & batch=session.Audit()->batch;
     EXPECT_EQ(batch.stages[static_cast<std::size_t>(detail::AuditStage::BoundaryEndpoint)].accepted,1U);
     EXPECT_EQ(batch.stages[static_cast<std::size_t>(detail::AuditStage::BoundaryCorrection)].rejected,1U);
-    EXPECT_EQ(batch.stages[static_cast<std::size_t>(detail::AuditStage::BoundaryBacktracking)].accepted,1U);
-    ASSERT_EQ(batch.detail_count,1U);
+    EXPECT_EQ(batch.stages[static_cast<std::size_t>(detail::AuditStage::BoundaryBacktracking)].rejected,1U);
+    ASSERT_EQ(batch.detail_count,2U);
     EXPECT_EQ(batch.details[0].stage,detail::AuditStage::BoundaryCorrection);
+    EXPECT_EQ(batch.details[0].first_atom,3U); EXPECT_EQ(batch.details[0].atom_count,1U);
+    EXPECT_EQ(batch.details[1].first_atom,2U); EXPECT_EQ(batch.details[1].atom_count,2U);
 }
 
 TEST(SecondStageObservationTest, BoundaryMissingQuietAndEnabledObserverPreserveDecisionAndWork)
@@ -228,14 +226,14 @@ TEST(SecondStageObservationTest, BoundaryMissingQuietAndEnabledObserverPreserveD
     const detail::BoundaryCandidateReference reference{
         .policy=detail::BoundaryAcceptancePolicy::Ordinary,.samples_by_key=partition.sample_id_list_by_key,
         .domain=domain,.previous_objective_by_key=previous_by_key,.best_audit=nullptr,.counters=counters,
-        .component=component,.previous_audit=&*previous};
+        .component=component};
     std::array<std::size_t,4> work{}; double objective=0;
     for (int mode=0;mode<3;++mode) {
         detail::SecondStageObservationSession session(mode==1,Write);
         detail::JointCandidateObservation trial(mode ? &session : nullptr,key);
         trial.BeginBoundary(reference.policy,detail::BoundaryObservationStage::Endpoint,1.0);
         BeginNumericalCapture();
-        const auto candidate=detail::EvaluateBoundaryCandidate(overlay,reference,mode ? &trial : nullptr);
+        const auto candidate=detail::EvaluateBoundaryCandidate(overlay,reference,&*previous,mode ? &trial : nullptr);
         const auto capture=EndNumericalCapture();
         ASSERT_TRUE(candidate);
         if (mode==0) { work=capture.work; objective=candidate->GetTotalObjective(); }
@@ -248,17 +246,68 @@ TEST(SecondStageObservationTest, FinalPolishAcceptanceDoesNotImplyCertificationO
     LogScope logs; written.clear();
     detail::SecondStageObservationSession session(false,Write);
     if (!session.Enabled()) return;
-    auto & data=*session.Audit();
-    data.polish_attempted=true; data.polish_accepted=true;
-    data.polish_status=detail::FinalPolishResidualSafetyStatus::Failed;
-    data.polish_certificate.emplace();
-    data.polish_certificate->certificate.operator_complete=false;
-    detail::LogDecisionAuditTerminal(session,"converged","latest-validated",{},{});
+    session.ObserveFinalPolishAttempt();
+    detail::FinalDependencyPolishResult result; result.accepted=true;
+    detail::ConvergenceAssessment certificate; certificate.certificate.operator_complete=false;
+    session.ObserveFinalCertification(result,detail::FinalPolishResidualSafetyStatus::Failed,certificate,false);
+    detail::LogDecisionAuditTerminal(session,"converged","latest-validated",{});
     ASSERT_EQ(written.size(),1U);
     EXPECT_NE(written[0].find("\"objective_accepted\":true,\"operator_certified\":false"),std::string::npos);
     EXPECT_NE(written[0].find("\"applied\":false"),std::string::npos);
     EXPECT_EQ(written[0].find("accepted_active_p99"),std::string::npos);
     EXPECT_NE(written[0].find("\"value\":null,\"reason\":\"unavailable\""),std::string::npos);
+}
+
+TEST(SecondStageObservationTest, CorrectionKeepsGuardShortCircuitAndStrictImprovementReference)
+{
+    LogScope logs;
+    auto fixture=BuildJointPolishFixture({{6.0,0.5,0.0}},{{6.4,0.5,0.0}});
+    const detail::ClusterKey key{0};
+    detail::CouplingGraphPartition partition; partition.sample_id_list_by_key[key]=fixture.sample_ref_list;
+    const auto baseline=detail::BuildResidualBaseline(fixture.context,fixture.state);
+    const auto domain=detail::BuildObjectiveDomain(fixture.context,baseline.model_snapshot,{key});
+    const auto previous_by_key=detail::BuildObjectiveByKey(partition,domain,baseline);
+    const auto previous=detail::EvaluateAuditObjective(domain,baseline); ASSERT_TRUE(previous);
+    const detail::BoundaryReconciliationComponent component{.key_list={key},
+        .affected_sample_ref_list=fixture.sample_ref_list,.halo_atom_index_list=key};
+    const detail::FitStatePatch empty_patch;
+    const detail::FitStateView endpoint{fixture.state,empty_patch};
+    detail::ClusterSolverWorkspaceMap workspaces; detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    detail::PerformanceCounters counters(true,fixture.context,workspaces,corrections);
+    const detail::BoundaryCandidateReference reference{
+        .policy=detail::BoundaryAcceptancePolicy::Ordinary,.samples_by_key=partition.sample_id_list_by_key,
+        .domain=domain,.previous_objective_by_key=previous_by_key,.best_audit=nullptr,.counters=counters,.component=component};
+    for (bool suspicious : {false,true})
+    {
+        const detail::FitState state{MakeGaussianResult({6.2,suspicious ? 100.0 : 0.5,0.0})};
+        const auto patch=detail::FitStatePatch::FromState(state,key);
+        const detail::CandidateEvaluationOverlay overlay{fixture.context,baseline,fixture.state,patch};
+        const auto improvement=detail::EvaluateObjectiveDelta(overlay,fixture.sample_ref_list,domain,*previous,counters);
+        ASSERT_TRUE(improvement);
+        std::array<std::size_t,4> unobserved_work{};
+        for (int mode=0;mode<3;++mode)
+        {
+            detail::SecondStageObservationSession session(mode==1,Write);
+            detail::JointCandidateObservation trial(mode ? &session : nullptr,key);
+            trial.BeginBoundary(reference.policy,detail::BoundaryObservationStage::Correction,0.5);
+            BeginNumericalCapture();
+            EXPECT_FALSE(detail::EvaluateBoundaryCorrection(overlay,reference,endpoint,*previous,*improvement,
+                mode ? &trial : nullptr));
+            const auto capture=EndNumericalCapture();
+            EXPECT_EQ(capture.work[2],suspicious ? 0U : 4U);
+            if (mode==0) unobserved_work=capture.work; else EXPECT_EQ(capture.work,unobserved_work);
+            trial.Flush();
+            if (mode!=2 || !session.Enabled()) continue;
+            ASSERT_EQ(session.Audit()->batch.detail_count,1U);
+            const auto & event=session.Audit()->batch.details[0];
+            EXPECT_EQ(event.stage,detail::AuditStage::BoundaryCorrection);
+            EXPECT_EQ(event.trial,0U); EXPECT_EQ(event.factor,0.5);
+            EXPECT_EQ(event.reason,suspicious ? "suspicious" : "strict-improvement");
+            EXPECT_EQ(event.reference,suspicious ? "iteration_previous" : "best_boundary_candidate");
+            EXPECT_EQ(event.previous_checked,!suspicious); EXPECT_FALSE(event.best_checked);
+            if (!suspicious) EXPECT_DOUBLE_EQ(event.previous->GetTotalObjective(),improvement->GetTotalObjective());
+        }
+    }
 }
 
 TEST(SecondStageObservationTest, PerformanceRecordingStopsWithItsSession)
@@ -276,6 +325,61 @@ TEST(SecondStageObservationTest, PerformanceRecordingStopsWithItsSession)
     EXPECT_EQ(counters.AuditCounts(),(std::array<std::size_t,6>{}));
     detail::PerformanceCounters missing(false,context,workspaces,corrections);
     EXPECT_FALSE(missing.AuditEnabled());
+}
+
+TEST(SecondStageObservationTest, ScoresAndFinalizationKeepOriginalReferencesAndChosenState)
+{
+    LogScope logs;
+    detail::SecondStageObservationSession session(false,Write);
+    static_assert(std::is_same_v<decltype(session.Audit()), const detail::SecondStageAuditData *>);
+    session.BeginAttempt(1,1,1,false,false);
+    const detail::ObjectiveBreakdown previous{3.0,0,0}, candidate{2.0,0,0};
+    detail::ObjectiveBreakdown best{2.5,0,0};
+    session.ObserveScoreReferences(previous,&best);
+    session.ObserveCandidateScoreSource(true);
+    session.ObserveScores(previous,candidate,&best);
+    best.fit_range_residual_objective=1.0;
+    if (!session.Enabled()) { EXPECT_EQ(session.Audit(),nullptr); return; }
+    EXPECT_DOUBLE_EQ(session.Audit()->best->GetTotalObjective(),2.5);
+    EXPECT_EQ(session.Audit()->score_source,"selection_audit");
+    session.BeginFinalization(nullptr);
+    EXPECT_DOUBLE_EQ(session.Audit()->final_objective->GetTotalObjective(),2.0);
+    session.BeginFinalization(&best);
+    EXPECT_DOUBLE_EQ(session.Audit()->final_objective->GetTotalObjective(),1.0);
+
+    session.BeginAttempt(2,1,1,false,false);
+    session.ObserveScoreReferences(previous,&best);
+    session.ObserveCandidateScoreSource(false);
+    EXPECT_EQ(session.Audit()->score_source,"post_commit_evaluation");
+    detail::CandidateCommitResult rejected;
+    detail::TrustRegionStateSet radii;
+    session.ObserveCommit({},rejected,radii);
+    EXPECT_EQ(session.Audit()->score_source,"restored_previous");
+    EXPECT_DOUBLE_EQ(session.Audit()->candidate->GetTotalObjective(),3.0);
+    EXPECT_FALSE(session.Audit()->convergence);
+    session.BeginFinalization(nullptr);
+    for (const auto status : {detail::FinalPolishResidualSafetyStatus::NotEvaluated,
+        detail::FinalPolishResidualSafetyStatus::Error, detail::FinalPolishResidualSafetyStatus::Failed,
+        detail::FinalPolishResidualSafetyStatus::AbsolutePassed})
+    {
+        detail::FinalDependencyPolishResult result;
+        result.accepted=status!=detail::FinalPolishResidualSafetyStatus::NotEvaluated;
+        if (result.accepted) result.objective=candidate;
+        std::optional<detail::ConvergenceAssessment> certificate;
+        const bool applied=status==detail::FinalPolishResidualSafetyStatus::AbsolutePassed;
+        if (status==detail::FinalPolishResidualSafetyStatus::Failed || applied) certificate.emplace();
+        session.ObserveFinalPolishAttempt();
+        session.ObserveFinalCertification(result,status,certificate,applied);
+        EXPECT_EQ(session.Audit()->polish_status,status);
+        EXPECT_EQ(session.Audit()->polish_applied,applied);
+        EXPECT_EQ(session.Audit()->polish_certificate.has_value(),certificate.has_value());
+        EXPECT_DOUBLE_EQ(session.Audit()->final_objective->GetTotalObjective(),applied ? 2.0 : 3.0);
+    }
+    session.Disable();
+    EXPECT_NO_THROW(session.ObserveScores(previous,candidate,&best));
+    EXPECT_NO_THROW(session.BeginFinalization(&best));
+    EXPECT_NO_THROW(session.ObserveFinalPolishAttempt());
+    EXPECT_EQ(session.Audit(),nullptr);
 }
 
 TEST(SecondStageObservationTest, SelectionAuditReportsActualConditionalAndSalvageBranches)

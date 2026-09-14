@@ -111,6 +111,15 @@ class AuditParserTest(unittest.TestCase):
         self.assertIn('Second-Stage Local Fitting Summary', (root / 'src/core/detail/second_stage/observation/SecondStageLogging.cpp').read_text())
         self.assertIn('Local-fitting atom cutoff: atoms=', (root / 'src/core/detail/second_stage/observation/SecondStageLogging.cpp').read_text())
 
+    def test_numerical_sources_do_not_access_audit_payloads(self):
+        source_dir = SOURCE.parents[3] / 'src/core/detail/second_stage'
+        for source in source_dir.glob('*.cpp'):
+            with self.subTest(source=source.name):
+                text = source.read_text()
+                self.assertNotRegex(text, r'\b(?:AuditEvent|AuditBatch|AuditCategory|AuditStage|SecondStageAuditData)\b')
+                self.assertNotRegex(text, r'(?:\.|->)\s*(?:Audit|Record)\s*\(')
+                self.assertNotIn('RecordJointMemberRejection', text)
+
 
 
 if __name__ == '__main__':

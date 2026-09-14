@@ -99,6 +99,6 @@ void LogSecondStageSummary(
 void LogDecisionAuditStart(SecondStageObservationSession &, const FitOptions &) noexcept;
 void LogDecisionAuditIteration(SecondStageObservationSession &, const IterationResult &) noexcept;
 void LogDecisionAuditTerminal(SecondStageObservationSession &, std::string_view reason, std::string_view source,
-    const BestAuditState &, const std::optional<ObjectiveBreakdown> &, const PerformanceCounters * = nullptr) noexcept;
+    const BestAuditState &, const PerformanceCounters * = nullptr) noexcept;
 
 } // namespace rhbm_gem::core::detail

@@ -57,7 +57,7 @@ public:
     FinalDependencyPolishDiagnostic final_polish{};
     Writer writer;
     bool Enabled() const noexcept { return m_enabled.load(std::memory_order_relaxed); }
-    SecondStageAuditData * Audit() noexcept { return Enabled() ? m_audit.get() : nullptr; }
+    const SecondStageAuditData * Audit() const noexcept { return Enabled() ? m_audit.get() : nullptr; }
     void Disable() noexcept { m_enabled.store(false, std::memory_order_relaxed); }
     void Merge(const AuditBatch &) noexcept;
     void Record(AuditEvent) noexcept;
@@ -65,16 +65,27 @@ public:
     double ElapsedMilliseconds() const noexcept;
     void BeginAttempt(std::size_t attempt, std::size_t objective_revision, std::size_t recovery_revision,
         bool background_changed, bool partition_changed) noexcept;
+    void ObserveProposal(const IterationProposalResult &) noexcept;
+    void ObserveCommit(const CandidateSelection &, const CandidateCommitResult &, const TrustRegionStateSet &) noexcept;
+    void ObserveQuarantine(const QuarantineState &, const QuarantineState &) noexcept;
+    void ObserveRetries(const QuarantineState &) noexcept;
+    void ObserveSelectionAudit(bool rescue, bool executed,
+        std::string_view result, std::string_view reason, std::size_t removed = 0) noexcept;
+    void ObserveGlobalGate(bool rescue, const ObjectiveBreakdown *,
+        const std::optional<ObjectiveBreakdown> &, const ObjectiveBreakdown *, bool accepted,
+        const ObjectiveProgressGateEvidence & = {}) noexcept;
+    void ObserveScoreReferences(const std::optional<ObjectiveBreakdown> & previous, const ObjectiveBreakdown * best) noexcept;
+    void ObserveCandidateScoreSource(bool from_selection) noexcept;
+    void ObserveScores(const std::optional<ObjectiveBreakdown> & previous,
+        const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best) noexcept;
+    void ObserveConvergence(const ConvergenceAssessment &) noexcept;
+    void BeginFinalization(const ObjectiveBreakdown * selected_best) noexcept;
+    void ObserveFinalPolishAttempt() noexcept;
+    void ObserveFinalCertification(const FinalDependencyPolishResult &, FinalPolishResidualSafetyStatus,
+        const std::optional<ConvergenceAssessment> &, bool applied) noexcept;
+    void ObserveFinalPolishCorrectionFailure(std::span<const std::size_t> key, std::size_t round) noexcept;
+    void ObserveFinalPolishComponentFailure(std::span<const std::size_t> key) noexcept;
 };
-
-void ObserveProposal(SecondStageObservationSession *, const IterationProposalResult &) noexcept;
-void ObserveCommit(SecondStageObservationSession *, const CandidateSelection &, const CandidateCommitResult &, const TrustRegionStateSet &) noexcept;
-void ObserveQuarantine(SecondStageObservationSession *, const QuarantineState &, const QuarantineState &) noexcept;
-void ObserveSelectionAudit(SecondStageObservationSession *, bool rescue, bool executed,
-    std::string_view result, std::string_view reason, std::size_t removed = 0) noexcept;
-void ObserveGlobalGate(SecondStageObservationSession *, bool rescue, const ObjectiveBreakdown *,
-    const std::optional<ObjectiveBreakdown> &, const ObjectiveBreakdown *, bool accepted,
-    const ObjectiveProgressGateEvidence & = {}) noexcept;
 
 // Each local worker owns five detail slots; only the bounded merge takes a lock.
 class LocalSearchObservation
@@ -84,6 +95,7 @@ class LocalSearchObservation
     std::optional<AuditBatch> m_batch;
     double m_radius{ 0.0 };
     std::size_t m_trial{ 0 };
+    void Failure(AuditCategory, std::string_view reason) noexcept;
 public:
     LocalSearchObservation(const CandidateSelectionInputs &, const ClusterKey &) noexcept;
     ~LocalSearchObservation();
@@ -92,7 +104,8 @@ public:
     void TrustSkipped() noexcept;
     void Trial(const CandidateDecisionEvidence &, bool accepted, bool polish = false) noexcept;
     void Nonmaterial() noexcept;
-    void Failure(AuditCategory, std::string_view reason) noexcept;
+    void InvalidCandidate() noexcept;
+    void GuardRejected() noexcept;
 };
 
 enum class BoundaryObservationStage { Endpoint, Correction, Backtracking };
@@ -102,21 +115,29 @@ class JointCandidateObservation
     std::optional<AuditEvent> m_event;
     bool m_pending{ false };
     std::size_t m_first_atom{ 0 }, m_atom_count{ 0 };
+    AuditEvent * Record() noexcept;
+    void Begin(BoundaryObservationStage, std::string_view, double factor, std::size_t round) noexcept;
 public:
     explicit JointCandidateObservation(SecondStageObservationSession * session, std::span<const std::size_t> key = {}) noexcept;
     ~JointCandidateObservation();
-    void Begin(BoundaryObservationStage, std::string_view, double factor, std::size_t round = 0) noexcept;
-    AuditEvent * Record() noexcept;
+    bool IsRecording() const noexcept;
+    void BeginFinalPolish(double factor, std::size_t round) noexcept;
     void Flush() noexcept;
-    void BeginBoundary(BoundaryAcceptancePolicy, BoundaryObservationStage, double factor) noexcept;
+    void BeginBoundary(BoundaryAcceptancePolicy, BoundaryObservationStage, double factor, std::size_t trial = 0) noexcept;
     void Member(const ClusterKey &, bool accepted, const CandidateDecisionEvidence &) noexcept;
     void Gate(const ObjectiveProgressGateEvidence &) noexcept;
     void RejectGlobalObjective() noexcept;
     void RejectStrictImprovement() noexcept;
     void Global(const ObjectiveBreakdown *, const std::optional<ObjectiveBreakdown> &, const ObjectiveBreakdown *) noexcept;
+    void RejectInvalidModel() noexcept;
+    void RejectSuspicious() noexcept;
+    void RejectCorrectionUnavailable() noexcept;
+    void RejectBoundaryImprovement(const ObjectiveBreakdown &, const std::optional<ObjectiveBreakdown> &) noexcept;
+    void RejectPolishImprovement(const ObjectiveBreakdown &, const std::optional<ObjectiveBreakdown> &) noexcept;
+    void RejectMemberSamplesUnavailable(const ClusterKey &) noexcept;
+    void RejectPolishMember(const ClusterKey &, const std::optional<ObjectiveBreakdown> & previous,
+        const std::optional<ObjectiveBreakdown> & candidate) noexcept;
 };
-void RecordJointMemberRejection(AuditEvent *, const ClusterKey &, const std::optional<ObjectiveBreakdown> &,
-    const std::optional<ObjectiveBreakdown> &, const std::optional<ObjectiveBreakdown> &, bool best_checked) noexcept;
 
 class BoundaryObservationScope
 {

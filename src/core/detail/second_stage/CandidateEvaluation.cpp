@@ -9,6 +9,39 @@
 
 namespace rhbm_gem::core::detail {
 
+bool IsAuditObjectiveAcceptableForProgress(
+    double candidate,
+    double previous,
+    const ObjectiveBreakdown * best,
+    ObjectiveTolerance tolerance,
+    ObjectiveProgressGateEvidence * evidence)
+{
+    ValidateObjectiveTolerance(tolerance);
+    if (evidence) *evidence = {};
+    if (!std::isfinite(candidate) || !std::isfinite(previous))
+    {
+        if (evidence) evidence->reason = "objective-nonfinite";
+        return false;
+    }
+    if (evidence) evidence->previous_checked = true;
+    if (IsObjectiveDeteriorated(candidate, previous, tolerance))
+    {
+        if (evidence) evidence->reason = "previous-gate";
+        return false;
+    }
+    if (best != nullptr)
+    {
+        if (evidence) evidence->best_checked = true;
+        if (IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance))
+        {
+            if (evidence) evidence->reason = "best-gate";
+            return false;
+        }
+    }
+    if (evidence) evidence->reason = "";
+    return true;
+}
+
 static bool EvaluateLocalObjective(
     const CandidateEvaluationOverlay & candidate_overlay,
     const LocalCandidateReference & reference,
@@ -60,7 +93,7 @@ static bool EvaluateLocalObjective(
     return !evidence.rejected_by_previous;
 }
 
-LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
+LocalCandidateEvaluation EvaluateLocalCandidate(const CandidateEvaluationOverlay & candidate_overlay,
     const LocalCandidateReference & reference)
 {
     LocalCandidateEvaluation result;
@@ -72,11 +105,11 @@ LocalCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & ca
 static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
     const BoundaryCandidateReference & reference,
+    const ObjectiveBreakdown * previous_audit_objective,
     const std::optional<ObjectiveBreakdown> * precomputed_objective,
     JointCandidateObservation * observation)
 {
     const auto & component{ reference.component };
-    const auto * previous_audit_objective{ reference.previous_audit };
     const bool cooperative{ reference.policy == BoundaryAcceptancePolicy::CooperativeRescue };
     const auto observe_member = [&](const ClusterKey & key, bool accepted,
                                     const CandidateDecisionEvidence & evidence)
@@ -89,7 +122,7 @@ static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
         const auto & previous_objective{ reference.previous_objective_by_key.at(key) };
         if (!cooperative)
         {
-            const auto member{ EvaluateCandidate(candidate_overlay,
+            const auto member{ EvaluateLocalCandidate(candidate_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, reference.samples_by_key.at(key),
                     previous_objective ? &*previous_objective : nullptr, reference.domain,
                     evidence, reference.counters}) };
@@ -146,7 +179,7 @@ static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
     const auto candidate_value{ audit_objective->GetTotalObjective() };
     const auto previous_value{ previous_audit_objective->GetTotalObjective() };
     std::optional<ObjectiveProgressGateEvidence> gate;
-    if (observation && observation->Record()) gate.emplace();
+    if (observation && observation->IsRecording()) gate.emplace();
     if (cooperative)
     {
         if (!std::isfinite(candidate_value) || !std::isfinite(previous_value))
@@ -182,54 +215,40 @@ static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
 
 std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
-    const BoundaryCandidateReference & reference, JointCandidateObservation * observation)
+    const BoundaryCandidateReference & reference, const ObjectiveBreakdown * previous_audit, JointCandidateObservation * observation)
 {
-    return EvaluateBoundaryCandidate(candidate_overlay, reference, nullptr, observation);
+    return EvaluateBoundaryCandidate(candidate_overlay, reference, previous_audit, nullptr, observation);
 }
 
 bool EvaluateBoundaryCorrection(const CandidateEvaluationOverlay & candidate,
-    const BoundaryCorrectionReference & reference, JointCandidateObservation * observation)
+    const BoundaryCandidateReference & reference, const FitStateView & endpoint,
+    const ObjectiveBreakdown & previous_audit, const ObjectiveBreakdown & improvement, JointCandidateObservation * observation)
 {
-    if (observation) observation->BeginBoundary(reference.policy, BoundaryObservationStage::Correction, reference.damping);
     const auto suspicious_atom_count{ CountSuspiciousPolishAtoms(candidate.GetContext(),
-        reference.component.halo_atom_index_list, reference.endpoint, candidate.GetState()) };
+        reference.component.halo_atom_index_list, endpoint, candidate.GetState()) };
     if (suspicious_atom_count != 0)
     {
-        if (auto * record=observation ? observation->Record() : nullptr)
-        { record->outcome="rejected"; record->category=AuditCategory::Guard; record->reason="suspicious"; }
+        if (observation) observation->RejectSuspicious();
         return false;
     }
     const auto raw_objective{ EvaluateObjectiveDelta(candidate, reference.component.affected_sample_ref_list,
-        reference.domain, reference.previous_audit, reference.counters) };
+        reference.domain, previous_audit, reference.counters) };
     const auto members{ EvaluateBoundaryCandidate(candidate,
-        BoundaryCandidateReference{
-            .policy = reference.policy,
-            .samples_by_key = reference.samples_by_key,
-            .domain = reference.domain,
-            .previous_objective_by_key = reference.previous_objective_by_key,
-            .best_audit = reference.best_audit,
-            .counters = reference.counters,
-            .component = reference.component,
-            .previous_audit = &reference.previous_audit},
+        reference, &previous_audit,
         &raw_objective, observation) };
     const bool accepted{ members && IsBetterAuditObjective(members->GetTotalObjective(),
-        reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance) };
-    if (members && !accepted && observation && observation->Record())
-    {
-        observation->Global(&reference.improvement, raw_objective, nullptr);
-        observation->Gate({true, false, "strict-improvement"});
-        observation->RejectStrictImprovement();
-        if (auto * record=observation->Record()) record->reference="best_boundary_candidate";
-    }
+        improvement.GetTotalObjective(), kObjectiveStrictTolerance) };
+    if (members && !accepted && observation)
+        observation->RejectBoundaryImprovement(improvement, raw_objective);
     return accepted;
 }
 
-std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOverlay & candidate,
-    const GlobalCandidateReference & reference)
+std::optional<ObjectiveBreakdown> EvaluateGlobalCandidate(const CandidateEvaluationOverlay & candidate,
+    const GlobalCandidateReference & reference, SecondStageObservationSession * observation, bool rescue_audit)
 {
     if (reference.previous == nullptr)
     {
-        ObserveGlobalGate(reference.observation, reference.rescue_audit, nullptr, {}, reference.best, false);
+        if (observation) observation->ObserveGlobalGate(rescue_audit, nullptr, {}, reference.best, false);
         return std::nullopt;
     }
     const auto candidate_objective{
@@ -241,21 +260,19 @@ std::optional<ObjectiveBreakdown> EvaluateCandidate(const CandidateEvaluationOve
             reference.counters)
     };
     std::optional<ObjectiveProgressGateEvidence> gate;
-    if (reference.observation && reference.observation->Enabled()) gate.emplace();
+    if (observation && observation->Enabled()) gate.emplace();
     const bool accepted{ candidate_objective.has_value() &&
         IsAuditObjectiveAcceptableForProgress(candidate_objective->GetTotalObjective(),
             reference.previous->GetTotalObjective(), reference.best, kObjectiveProgressTolerance, gate ? &*gate : nullptr) };
-    if (gate) ObserveGlobalGate(reference.observation, reference.rescue_audit, reference.previous,
+    if (gate) observation->ObserveGlobalGate(rescue_audit, reference.previous,
         candidate_objective, reference.best, accepted, *gate);
     if (!accepted) return std::nullopt;
     return candidate_objective;
 }
 
-FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverlay & candidate_overlay,
+FinalPolishCandidateEvaluation EvaluateFinalPolishCandidate(const CandidateEvaluationOverlay & candidate_overlay,
     const FinalPolishCandidateReference & reference, JointCandidateObservation * observation)
 {
-    if (observation) observation->Begin(BoundaryObservationStage::Correction, "final-polish", reference.damping, reference.round);
-    auto * record{ observation ? observation->Record() : nullptr };
     FinalPolishCandidateEvaluation evaluation;
     const auto & context{ candidate_overlay.GetContext() };
     const auto & base_baseline{ candidate_overlay.GetBaseline() };
@@ -275,7 +292,7 @@ FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverla
     };
     if (has_invalid_model)
     {
-        if (record) { record->outcome="rejected"; record->category=AuditCategory::Invalid; record->reason="invalid-model"; }
+        if (observation) observation->RejectInvalidModel();
         return evaluation;
     }
 
@@ -289,7 +306,7 @@ FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverla
     evaluation.suspicious_atom_count = suspicious_atom_count;
     if (suspicious_atom_count != 0)
     {
-        if (record) { record->outcome="rejected"; record->category=AuditCategory::Guard; record->reason="suspicious"; }
+        if (observation) observation->RejectSuspicious();
         return evaluation;
     }
     const auto candidate_objective{
@@ -306,19 +323,11 @@ FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverla
             reference.endpoint_objective.GetTotalObjective(),
             kObjectiveStrictTolerance))
     {
-        if (record)
-        {
-            record->previous = reference.endpoint_objective;
-            record->candidate = candidate_objective;
-            record->previous_checked = candidate_objective.has_value();
-            record->outcome = "rejected";
-            record->category = candidate_objective ? AuditCategory::Rejected : AuditCategory::Unavailable;
-            record->reason = "global-improvement-failed-or-unavailable";
-        }
+        if (observation) observation->RejectPolishImprovement(reference.endpoint_objective, candidate_objective);
         return evaluation;
     }
 
-    if (record) { observation->Global(&reference.endpoint_objective, candidate_objective, nullptr); observation->Gate({true, false, ""}); }
+    if (observation && observation->IsRecording()) { observation->Global(&reference.endpoint_objective, candidate_objective, nullptr); observation->Gate({true, false, ""}); }
     const auto member_guard_passed{
         std::ranges::all_of(
             component.key_list,
@@ -330,8 +339,7 @@ FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverla
                 if (sample_iter ==
                     partition.sample_id_list_by_key.end())
                 {
-                    RecordJointMemberRejection(record, key, std::nullopt, std::nullopt, std::nullopt, false);
-                    if (record) record->reason = "member-samples-unavailable";
+                    if (observation) observation->RejectMemberSamplesUnavailable(key);
                     return false;
                 }
                 auto owned_sample_ref_list{ sample_iter->second };
@@ -367,8 +375,7 @@ FinalPolishCandidateEvaluation EvaluateCandidate(const CandidateEvaluationOverla
                         candidate_contribution->GetTotalObjective(),
                         base_contribution->GetTotalObjective(),
                         kObjectiveProgressTolerance) };
-                if (!passed) { RecordJointMemberRejection(record, key, base_contribution,
-                    std::nullopt, candidate_contribution, false); if (record) record->reference="final_polish_base"; }
+                if (!passed && observation) observation->RejectPolishMember(key, base_contribution, candidate_contribution);
                 return passed;
             })
     };

@@ -153,11 +153,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             BoundaryJointCorrectionStatus::CandidateReady ||
                         !correction_result.patch.has_value())
                     {
-                        if (observation && observation->Enabled())
-                            observation->Record({.stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
-                                .first_atom=component.atom_index_list.empty() ? 0 : component.atom_index_list.front(),
-                                .atom_count=component.atom_index_list.size(), .trial=round+1,
-                                .outcome="rejected", .reason="correction-unavailable"});
+                        if (observation) observation->ObserveFinalPolishCorrectionFailure(component.atom_index_list, round + 1);
                         break;
                     }
 
@@ -168,10 +164,10 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         *correction_result.patch
                     };
                     JointCandidateObservation trial(observation, component.atom_index_list);
-                    const auto evaluation{ EvaluateCandidate(candidate_overlay,
+                    trial.BeginFinalPolish(correction_result.damping, round + 1);
+                    const auto evaluation{ EvaluateFinalPolishCandidate(candidate_overlay,
                         FinalPolishCandidateReference{component, partition, objective_domain,
-                            endpoint_state_view, *base_objective, endpoint_objective, performance_counters,
-                            correction_result.damping, round + 1}, &trial) };
+                            endpoint_state_view, *base_objective, endpoint_objective, performance_counters}, &trial) };
 
                     report.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
                     if (!evaluation.objective) break;
@@ -196,10 +192,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         }
         catch (const std::exception &)
         {
-            if (observation && observation->Enabled())
-                observation->Record({.stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
-                    .first_atom=component.atom_index_list.empty() ? 0 : component.atom_index_list.front(),
-                    .atom_count=component.atom_index_list.size(), .outcome="rejected", .reason="component-failure"});
+            if (observation) observation->ObserveFinalPolishComponentFailure(component.atom_index_list);
         }
     }
 

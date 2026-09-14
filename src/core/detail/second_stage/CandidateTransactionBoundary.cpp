@@ -159,8 +159,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         !correction_result.patch.has_value())
     {
         observations.BeginTrial(BoundaryObservationStage::Correction, correction_result.damping);
-        if (auto * record=observation.Record())
-        { record->outcome="rejected"; record->category=AuditCategory::Solver; record->reason="correction-unavailable"; }
+        observation.RejectCorrectionUnavailable();
         record_performance();
         return std::nullopt;
     }
@@ -179,19 +178,17 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         inputs.previous_state,
         corrected_component_patch
     };
+    observation.BeginBoundary(policy, BoundaryObservationStage::Correction, correction_result.damping);
     const auto correction_accepted{ EvaluateBoundaryCorrection(corrected_overlay,
-        BoundaryCorrectionReference{
+        BoundaryCandidateReference{
             .policy = policy,
             .samples_by_key = inputs.partition.sample_id_list_by_key,
             .domain = inputs.objective_domain,
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
             .counters = inputs.performance_counters,
-            .component = component,
-            .endpoint = endpoint_state_view,
-            .previous_audit = previous_audit_objective,
-            .improvement = improvement_reference_objective,
-            .damping = correction_result.damping}, &observation) };
+            .component = component}, endpoint_state_view, previous_audit_objective,
+        improvement_reference_objective, &observation) };
     if (!correction_accepted)
     {
         record_performance();
@@ -254,8 +251,7 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
                 .previous_objective_by_key = inputs.previous_objective_by_key,
                 .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
                 .counters = inputs.performance_counters,
-                .component = component,
-                .previous_audit = previous_audit_objective}, &observation);
+                .component = component}, previous_audit_objective, &observation);
         if (accepted_evaluation.has_value())
         {
             break;
@@ -364,8 +360,7 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
             .counters = inputs.performance_counters,
-            .component = component,
-            .previous_audit = previous_audit_objective}, &observation) };
+            .component = component}, previous_audit_objective, &observation) };
 
     std::optional<ComponentCandidate> accepted;
     if (previous_audit_objective != nullptr)
@@ -456,9 +451,9 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     const auto * best_audit_objective{
         inputs.best_audit_state.has_value() ? &inputs.best_audit_state->objective : nullptr
     };
-    return EvaluateCandidate(candidate_overlay,
+    return EvaluateGlobalCandidate(candidate_overlay,
         GlobalCandidateReference{affected_sample_ref_list, inputs.objective_domain,
-            best_audit_objective, &previous_audit_objective, inputs.performance_counters, inputs.observation, rescue_audit});
+            best_audit_objective, &previous_audit_objective, inputs.performance_counters}, inputs.observation, rescue_audit);
 }
 
 static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCandidates(
@@ -578,11 +573,11 @@ void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
     if (selection.final_audit_objective.has_value() || SelectedKeys().empty())
     {
         const auto remaining{ SelectedKeys().size() };
-        ObserveSelectionAudit(inputs.observation, rescue_audit, true,
+        if (inputs.observation) inputs.observation->ObserveSelectionAudit(rescue_audit, true,
             remaining ? "passed" : "empty_after_salvage", remaining ? "" : "no-selection-remains", initial_count - remaining);
         return;
     }
-    ObserveSelectionAudit(inputs.observation, rescue_audit, true, "rejected", "salvage-failed", initial_count);
+    if (inputs.observation) inputs.observation->ObserveSelectionAudit(rescue_audit, true, "rejected", "salvage-failed", initial_count);
 
     const auto remaining_key_list{ SelectedKeys() };
     RejectSelectionKeys(
@@ -603,12 +598,8 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     const auto previous_audit_objective{
         EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
     };
-    if (inputs.observation && inputs.observation->Enabled())
-    {
-        auto & audit=*inputs.observation->Audit();
-        audit.previous=previous_audit_objective;
-        audit.best=inputs.best_audit_state ? std::optional{inputs.best_audit_state->objective} : std::nullopt;
-    }
+    if (inputs.observation) inputs.observation->ObserveScoreReferences(previous_audit_objective,
+        inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr);
     if (!boundary_component_list.empty())
     {
         const auto boundary_reconciliation_start{ std::chrono::steady_clock::now() };
@@ -622,7 +613,7 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
         }
         if (!previous_audit_objective.has_value())
         {
-            ObserveSelectionAudit(inputs.observation, false, false, "unavailable", "previous-objective-unavailable");
+            if (inputs.observation) inputs.observation->ObserveSelectionAudit(false, false, "unavailable", "previous-objective-unavailable");
             const auto remaining_key_list{ SelectedKeys() };
             RejectSelectionKeys(
                 inputs,
@@ -646,7 +637,7 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
             *previous_audit_objective, true);
     }
     if (!previous_audit_objective)
-        ObserveSelectionAudit(inputs.observation, true, false, "unavailable", "previous-objective-unavailable");
+        if (inputs.observation) inputs.observation->ObserveSelectionAudit(true, false, "unavailable", "previous-objective-unavailable");
     MaterializeSelection();
 }
 } // namespace rhbm_gem::core::detail

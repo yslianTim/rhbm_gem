@@ -6,6 +6,7 @@
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
+#include "core/detail/second_stage/DependencyPolish.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/IterationResult.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -106,8 +107,8 @@ double SecondStageObservationSession::ElapsedMilliseconds() const noexcept
 void SecondStageObservationSession::BeginAttempt(std::size_t attempt, std::size_t objective_revision,
     std::size_t recovery_revision, bool background_changed, bool partition_changed) noexcept
 {
-    auto * data = Audit();
-    if (!data) return;
+    if (!Enabled()) return;
+    auto * data = m_audit.get();
     const auto background = data->background_revision + static_cast<std::size_t>(background_changed || attempt == 1);
     const auto partition = data->partition_revision + static_cast<std::size_t>(partition_changed || attempt == 1);
     *data = SecondStageAuditData{};
@@ -121,9 +122,9 @@ void SecondStageObservationSession::BeginAttempt(std::size_t attempt, std::size_
         .outcome="changed", .reason="partition-applied"});
 }
 
-void ObserveProposal(SecondStageObservationSession * session, const IterationProposalResult & proposal) noexcept
+void SecondStageObservationSession::ObserveProposal(const IterationProposalResult & proposal) noexcept
 {
-    if (!session || !session->Enabled()) return;
+    if (!Enabled()) return;
     for (const auto & [key, health] : proposal.health_by_key)
     {
         AuditEvent event{ .stage=AuditStage::Proposal };
@@ -134,39 +135,39 @@ void ObserveProposal(SecondStageObservationSession * session, const IterationPro
             event.outcome = "rejected";
             event.reason = IsJointOffsetSolveHardFailure(health.joint_offset_status) ? "solver-hard-failure" : "solver-unqualified";
         }
-        session->Record(event);
+        Record(event);
     }
 }
-void ObserveCommit(SecondStageObservationSession * session, const CandidateSelection & selection,
+void SecondStageObservationSession::ObserveCommit(const CandidateSelection & selection,
     const CandidateCommitResult & result, const TrustRegionStateSet & radii) noexcept
 {
-    if (!session || !session->Enabled()) return;
-    if (!result.accepted) { session->Audit()->candidate=session->Audit()->previous; session->Audit()->score_source="restored_previous"; }
+    if (!Enabled()) return;
+    if (!result.accepted) { m_audit->candidate=m_audit->previous; m_audit->score_source="restored_previous"; }
     for (const auto & key : result.accepted_key_list)
     {
-        AuditEvent event{ .stage=AuditStage::Commit }; SetKey(event,key); session->Record(event);
+        AuditEvent event{ .stage=AuditStage::Commit }; SetKey(event,key); Record(event);
     }
     for (const auto & key : result.rejected_key_list)
     {
         AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Rejected, .outcome="rejected", .reason="final-selection-rejected" };
-        SetKey(event,key); session->Record(event);
+        SetKey(event,key); Record(event);
     }
     for (const auto & key : result.trust_region_update.changed_key_list)
     {
         AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Shrink, .outcome="changed", .reason="radius-shrunk" };
-        event.radius = radii.GetRadius(key); SetKey(event,key); session->Record(event);
+        event.radius = radii.GetRadius(key); SetKey(event,key); Record(event);
     }
     for (const auto & key : selection.exhausted_key_list)
     {
         AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Exhausted, .outcome="rejected", .reason="search-exhausted" };
-        SetKey(event,key); session->Record(event);
+        SetKey(event,key); Record(event);
     }
 }
-void ObserveQuarantine(SecondStageObservationSession * session, const QuarantineState & before,
+void SecondStageObservationSession::ObserveQuarantine(const QuarantineState & before,
     const QuarantineState & after) noexcept
 {
-    if (!session || !session->Enabled()) return;
-    auto * data = session->Audit();
+    if (!Enabled()) return;
+    auto * data = m_audit.get();
     data->entered += after.entered_target_count - before.entered_target_count;
     data->released += after.released_target_count - before.released_target_count;
     data->failed_retry += after.failed_retry_count - before.failed_retry_count;
@@ -177,34 +178,34 @@ void ObserveQuarantine(SecondStageObservationSession * session, const Quarantine
             (previous == before.state_by_target.end() || previous->second.lifecycle != QuarantineLifecycle::Frozen))
         {
             AuditEvent event{ .stage=AuditStage::Quarantine, .category=AuditCategory::Enter, .outcome="changed", .reason="quarantine-enter" };
-            SetKey(event,target.atom_index_list); session->Record(event);
+            SetKey(event,target.atom_index_list); Record(event);
         }
     }
     for (const auto & [target, state] : before.state_by_target)
         if (state.lifecycle == QuarantineLifecycle::Frozen && !after.state_by_target.contains(target))
         {
             AuditEvent event{ .stage=AuditStage::Quarantine, .category=AuditCategory::Release, .outcome="changed", .reason="quarantine-release" };
-            SetKey(event,target.atom_index_list); session->Record(event);
+            SetKey(event,target.atom_index_list); Record(event);
         }
 }
-void ObserveSelectionAudit(SecondStageObservationSession * session, bool rescue, bool executed,
+void SecondStageObservationSession::ObserveSelectionAudit(bool rescue, bool executed,
     std::string_view result, std::string_view reason, std::size_t removed) noexcept
 {
-    if (!session || !session->Enabled()) return;
-    auto & entry = session->Audit()->selection[rescue ? 1 : 0];
+    if (!Enabled()) return;
+    auto & entry = m_audit->selection[rescue ? 1 : 0];
     entry.executed = executed; entry.result = result; entry.reason = reason; entry.removed_clusters = removed;
     AuditEvent event{ .stage=rescue ? AuditStage::SelectionRescue : AuditStage::SelectionOrdinary,
         .category=removed ? AuditCategory::Salvage : (result == "unavailable" ? AuditCategory::Unavailable :
             (result == "rejected" || result == "empty_after_salvage" ? AuditCategory::Rejected : AuditCategory::None)),
         .outcome=result == "passed" ? "accepted" : (executed ? "rejected" : "skipped"), .reason=reason, .scope="global" };
-    session->Record(event);
+    Record(event);
 }
-void ObserveGlobalGate(SecondStageObservationSession * session, bool rescue, const ObjectiveBreakdown * previous,
+void SecondStageObservationSession::ObserveGlobalGate(bool rescue, const ObjectiveBreakdown * previous,
     const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best, bool accepted,
     const ObjectiveProgressGateEvidence & gate) noexcept
 {
-    if (!session || !session->Enabled()) return;
-    auto & entry = session->Audit()->selection[rescue ? 1 : 0];
+    if (!Enabled()) return;
+    auto & entry = m_audit->selection[rescue ? 1 : 0];
     ++entry.evaluations;
     entry.previous = previous ? std::optional{*previous} : std::nullopt;
     entry.candidate = candidate; entry.best = best ? std::optional{*best} : std::nullopt;
@@ -214,7 +215,81 @@ void ObserveGlobalGate(SecondStageObservationSession * session, bool rescue, con
         .reason=accepted ? "" : gate.reason,
         .scope="global", .previous=entry.previous, .candidate=candidate, .best=entry.best,
         .previous_checked=gate.previous_checked, .best_checked=gate.best_checked };
-    session->Record(event);
+    Record(event);
+}
+
+void SecondStageObservationSession::ObserveRetries(const QuarantineState & quarantine) noexcept
+{
+    if (!Enabled()) return;
+    m_audit->retried = quarantine.retry_target_list.size();
+    for (const auto & target : quarantine.retry_target_list)
+    {
+        AuditEvent event{ .stage=AuditStage::Quarantine, .category=AuditCategory::Retry,
+            .outcome="changed", .reason="quarantine-retry" };
+        SetKey(event,target.atom_index_list); Record(event);
+    }
+}
+void SecondStageObservationSession::ObserveScoreReferences(
+    const std::optional<ObjectiveBreakdown> & previous, const ObjectiveBreakdown * best) noexcept
+{
+    if (!Enabled()) return;
+    m_audit->previous = previous;
+    m_audit->best = best ? std::optional{*best} : std::nullopt;
+}
+void SecondStageObservationSession::ObserveCandidateScoreSource(bool from_selection) noexcept
+{
+    if (!Enabled()) return;
+    m_audit->score_source = from_selection ? "selection_audit" : "post_commit_evaluation";
+}
+void SecondStageObservationSession::ObserveScores(const std::optional<ObjectiveBreakdown> & previous,
+    const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best) noexcept
+{
+    if (!Enabled()) return;
+    ObserveScoreReferences(previous,best);
+    m_audit->candidate = candidate;
+}
+void SecondStageObservationSession::ObserveConvergence(const ConvergenceAssessment & assessment) noexcept
+{
+    if (Enabled()) m_audit->convergence = assessment;
+}
+void SecondStageObservationSession::BeginFinalization(const ObjectiveBreakdown * selected_best) noexcept
+{
+    if (!Enabled()) return;
+    m_audit->batch = AuditBatch{};
+    m_audit->final_objective = selected_best ? std::optional{*selected_best} : m_audit->candidate;
+}
+void SecondStageObservationSession::ObserveFinalPolishAttempt() noexcept
+{
+    if (Enabled()) m_audit->polish_attempted = true;
+}
+void SecondStageObservationSession::ObserveFinalCertification(const FinalDependencyPolishResult & result,
+    FinalPolishResidualSafetyStatus status, const std::optional<ConvergenceAssessment> & certificate, bool applied) noexcept
+{
+    if (!Enabled()) return;
+    m_audit->polish_accepted = result.accepted;
+    m_audit->polish_status = status;
+    m_audit->polish_applied = applied;
+    m_audit->polish_certificate = certificate;
+    if (applied) m_audit->final_objective = result.objective;
+    Record({ .stage=AuditStage::FinalCertification,
+        .category=applied ? AuditCategory::None : (certificate ? AuditCategory::Rejected : AuditCategory::Unavailable),
+        .outcome=applied ? "accepted" : "skipped", .reason=applied ? "" : "polish-not-applied",
+        .scope="global", .reference="final_polish_candidate" });
+}
+void SecondStageObservationSession::ObserveFinalPolishCorrectionFailure(
+    std::span<const std::size_t> key, std::size_t round) noexcept
+{
+    if (!Enabled()) return;
+    AuditEvent event{ .stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
+        .trial=round, .outcome="rejected", .reason="correction-unavailable" };
+    SetKey(event,key); Record(event);
+}
+void SecondStageObservationSession::ObserveFinalPolishComponentFailure(std::span<const std::size_t> key) noexcept
+{
+    if (!Enabled()) return;
+    AuditEvent event{ .stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
+        .outcome="rejected", .reason="component-failure" };
+    SetKey(event,key); Record(event);
 }
 
 LocalSearchObservation::LocalSearchObservation(const CandidateSelectionInputs & inputs, const ClusterKey & key) noexcept : m_session(inputs.observation), m_key(key)
@@ -229,6 +304,8 @@ void LocalSearchObservation::Failure(AuditCategory category, std::string_view re
     SetKey(event,m_key); m_batch->Add(event);
 }
 void LocalSearchObservation::TrustSkipped() noexcept { Failure(AuditCategory::Trust,"outside-radius"); }
+void LocalSearchObservation::InvalidCandidate() noexcept { Failure(AuditCategory::Invalid,"invalid-candidate"); }
+void LocalSearchObservation::GuardRejected() noexcept { Failure(AuditCategory::Guard,"guard-rejected"); }
 void LocalSearchObservation::Nonmaterial() noexcept
 {
     if (!m_batch) return;
@@ -253,7 +330,8 @@ void LocalSearchObservation::Trial(const CandidateDecisionEvidence & evidence,
 JointCandidateObservation::JointCandidateObservation(SecondStageObservationSession * session,
     std::span<const std::size_t> key) noexcept : m_session(session) { m_first_atom = key.empty() ? 0 : key.front(); m_atom_count = key.size(); }
 JointCandidateObservation::~JointCandidateObservation() { Flush(); }
-AuditEvent * JointCandidateObservation::Record() noexcept { return m_session && m_session->Enabled() && m_pending ? &*m_event : nullptr; }
+bool JointCandidateObservation::IsRecording() const noexcept { return m_session && m_session->Enabled() && m_pending; }
+AuditEvent * JointCandidateObservation::Record() noexcept { return IsRecording() ? &*m_event : nullptr; }
 void JointCandidateObservation::Flush() noexcept
 {
     if (auto * record = Record()) m_session->Record(*record);
@@ -270,13 +348,17 @@ void JointCandidateObservation::Begin(BoundaryObservationStage stage, std::strin
     m_event->scope = "global"; m_event->factor = factor; m_event->trial = round;
     m_pending = true;
 }
-void JointCandidateObservation::BeginBoundary(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage, double factor) noexcept
+void JointCandidateObservation::BeginFinalPolish(double factor, std::size_t round) noexcept
 {
-    Begin(stage,"boundary",factor);
+    Begin(BoundaryObservationStage::Correction,"final-polish",factor,round);
+}
+void JointCandidateObservation::BeginBoundary(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage, double factor, std::size_t trial) noexcept
+{
+    Begin(stage,"boundary",factor,trial);
     if (m_pending && policy == BoundaryAcceptancePolicy::CooperativeRescue)
         m_event->stage = static_cast<AuditStage>(static_cast<int>(AuditStage::RescueEndpoint) + static_cast<int>(stage));
 }
-void RecordJointMemberRejection(AuditEvent * record, const ClusterKey & key,
+static void RecordJointMemberRejection(AuditEvent * record, const ClusterKey & key,
     const std::optional<ObjectiveBreakdown> & previous, const std::optional<ObjectiveBreakdown> & best,
     const std::optional<ObjectiveBreakdown> & candidate, bool best_checked) noexcept
 {
@@ -318,13 +400,61 @@ void JointCandidateObservation::RejectStrictImprovement() noexcept
 {
     if (auto * record=Record()) { record->outcome="rejected"; record->category=AuditCategory::Rejected; record->reason="strict-improvement"; }
 }
+void JointCandidateObservation::RejectInvalidModel() noexcept
+{
+    if (auto * record=Record()) { record->outcome="rejected"; record->category=AuditCategory::Invalid; record->reason="invalid-model"; }
+}
+void JointCandidateObservation::RejectSuspicious() noexcept
+{
+    if (auto * record=Record()) { record->outcome="rejected"; record->category=AuditCategory::Guard; record->reason="suspicious"; }
+}
+void JointCandidateObservation::RejectCorrectionUnavailable() noexcept
+{
+    if (auto * record=Record()) { record->outcome="rejected"; record->category=AuditCategory::Solver; record->reason="correction-unavailable"; }
+}
+void JointCandidateObservation::RejectBoundaryImprovement(const ObjectiveBreakdown & improvement,
+    const std::optional<ObjectiveBreakdown> & candidate) noexcept
+{
+    if (!IsRecording()) return;
+    Global(&improvement,candidate,nullptr);
+    Gate({true,false,"strict-improvement"});
+    RejectStrictImprovement();
+    m_event->reference="best_boundary_candidate";
+}
+void JointCandidateObservation::RejectPolishImprovement(const ObjectiveBreakdown & endpoint,
+    const std::optional<ObjectiveBreakdown> & candidate) noexcept
+{
+    if (auto * record=Record())
+    {
+        record->previous=endpoint; record->candidate=candidate;
+        record->previous_checked=candidate.has_value(); record->outcome="rejected";
+        record->category=candidate ? AuditCategory::Rejected : AuditCategory::Unavailable;
+        record->reason="global-improvement-failed-or-unavailable";
+    }
+}
+void JointCandidateObservation::RejectMemberSamplesUnavailable(const ClusterKey & key) noexcept
+{
+    if (auto * record=Record())
+    {
+        RecordJointMemberRejection(record,key,{},{},{},false);
+        record->reason="member-samples-unavailable";
+    }
+}
+void JointCandidateObservation::RejectPolishMember(const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous, const std::optional<ObjectiveBreakdown> & candidate) noexcept
+{
+    if (auto * record=Record())
+    {
+        RecordJointMemberRejection(record,key,previous,{},candidate,false);
+        record->reference="final_polish_base";
+    }
+}
 BoundaryObservationScope::BoundaryObservationScope(const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component, BoundaryAcceptancePolicy policy) noexcept
     : m_session(inputs.observation), m_policy(policy), m_component(component), m_trials(inputs.observation, component.key_list.empty() ? std::span<const std::size_t>{} : std::span<const std::size_t>{component.key_list.front()}) {}
 void BoundaryObservationScope::BeginTrial(BoundaryObservationStage stage, double factor, std::size_t trial) noexcept
 {
-    m_trials.BeginBoundary(m_policy,stage,factor);
-    if (auto * record=m_trials.Record()) record->trial=trial;
+    m_trials.BeginBoundary(m_policy,stage,factor,trial);
 }
 void BoundaryObservationScope::Finish(const BoundaryComponentDecision & decision) noexcept
 {

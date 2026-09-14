@@ -307,7 +307,7 @@ double CalculateClusterAtomWeight(std::size_t cluster_atom_count, std::size_t ac
     return static_cast<double>(cluster_atom_count) / static_cast<double>(active_atom_count);
 }
 
-static void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
+void ValidateObjectiveTolerance(ObjectiveTolerance tolerance)
 {
     if (!std::isfinite(tolerance.absolute_tolerance) || tolerance.absolute_tolerance < 0.0 ||
         !std::isfinite(tolerance.relative_tolerance) || tolerance.relative_tolerance < 0.0)
@@ -360,39 +360,6 @@ bool IsBetterAuditObjective(double candidate, double best, ObjectiveTolerance to
     if (!std::isfinite(candidate)) return false;
     if (!std::isfinite(best)) return true;
     return candidate < best - CalculateObjectiveTolerance(best, tolerance);
-}
-
-bool IsAuditObjectiveAcceptableForProgress(
-    double candidate,
-    double previous,
-    const ObjectiveBreakdown * best,
-    ObjectiveTolerance tolerance,
-    ObjectiveProgressGateEvidence * evidence)
-{
-    ValidateObjectiveTolerance(tolerance);
-    if (evidence) *evidence = {};
-    if (!std::isfinite(candidate) || !std::isfinite(previous))
-    {
-        if (evidence) evidence->reason = "objective-nonfinite";
-        return false;
-    }
-    if (evidence) evidence->previous_checked = true;
-    if (IsObjectiveDeteriorated(candidate, previous, tolerance))
-    {
-        if (evidence) evidence->reason = "previous-gate";
-        return false;
-    }
-    if (best != nullptr)
-    {
-        if (evidence) evidence->best_checked = true;
-        if (IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance))
-        {
-            if (evidence) evidence->reason = "best-gate";
-            return false;
-        }
-    }
-    if (evidence) evidence->reason = "";
-    return true;
 }
 
 static std::optional<double> BuildFixedObjectiveScale(

@@ -38,6 +38,21 @@ disable extra recording for that run. No observation exception reaches the
 production failure/fallback path. A missing terminal record therefore means an
 incomplete diagnostic run, not evidence that fitting failed or succeeded.
 
+Candidate evaluation owns the previous/best progress gate; its actual checked
+references and reason are defined in `CandidateEvidence.hpp`. Objective evaluation
+owns scoring, tolerance validation and scalar comparisons. Boundary correction
+shares `BoundaryCandidateReference` and requires a non-null previous objective
+reference; ordinary boundary evaluation can receive a missing previous objective.
+An explicitly supplied unavailable delta remains unavailable and is never recomputed.
+
+The numerical caller starts correction/final-polish observation with the existing
+factor and trial/round number, then passes only numerical inputs to the candidate
+reference. Session operations capture scores before best-state updates, retries,
+convergence and final certification. Joint observers own rejection record fields
+and reference labels. `Audit()` is read-only, and writable joint records are private;
+logging and tests consume recorded evidence without changing it. Basic progress
+diagnostics and performance counters retain their existing responsibilities.
+
 The Logger line prefix is `Second-stage audit: schema=1, payload=` followed by
 strict JSON. Start records contain version, thread count and fitting settings once.
 Iteration records contain attempt/accepted counts, objective/recovery/background/
@@ -100,6 +115,12 @@ with `python3 tests/integration/second_stage_neutrality_test.py BASELINE OFF ON`
 threads and log level for baseline/OFF/ON comparisons. Tests also cover bounded
 parallel merges, actual gate ordering, skipped/unavailable/empty audit states and
 polish acceptance with failed certification.
+
+For responsibility-only refactors, capture fresh OFF and ON baselines at the
+pre-change commit. In addition to the existing comparator, require exact work
+counts before/after (the comparator checks work only between OFF and ON), and
+compare pre/post ON audit JSON after excluding version and elapsed time. Keep all
+decision, score, stage, trial, ordering and count fields in that comparison.
 
 The manually stopped P1 validation remains **stopped by user decision**. It is not
 a pass and is not a retirement defect. External fold-168 input identities,

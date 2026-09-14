@@ -5,9 +5,16 @@
 
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
+
+struct ObjectiveProgressGateEvidence
+{
+    bool previous_checked{ false }, best_checked{ false };
+    std::string_view reason{ "objective-unavailable" };
+};
 
 enum class PreObjectiveFailureReason
 {

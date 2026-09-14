@@ -279,6 +279,49 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
         tolerance));
 }
 
+TEST(EstimatorSecondStageDefenseTest, ProgressGateValidatesToleranceBeforeTouchingEvidence)
+{
+    const auto infinity{ std::numeric_limits<double>::infinity() };
+    const auto nan{ std::numeric_limits<double>::quiet_NaN() };
+    for (const auto invalid : { -1.0, infinity, nan })
+    for (const auto tolerance : { detail::ObjectiveTolerance{invalid, 0.0}, detail::ObjectiveTolerance{0.0, invalid} })
+    {
+        detail::ObjectiveProgressGateEvidence evidence{true, true, "untouched"};
+        EXPECT_THROW(detail::IsAuditObjectiveAcceptableForProgress(nan, nan, nullptr, tolerance, &evidence),
+            std::invalid_argument);
+        EXPECT_TRUE(evidence.previous_checked); EXPECT_TRUE(evidence.best_checked);
+        EXPECT_EQ(evidence.reason, "untouched");
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, ProgressGateEvidencePreservesShortCircuitAndResetsBetweenCalls)
+{
+    const auto tolerance{ detail::kObjectiveProgressTolerance };
+    const detail::ObjectiveBreakdown best{0.5, 0.0, 0.0};
+    detail::ObjectiveProgressGateEvidence evidence;
+    EXPECT_FALSE(detail::IsAuditObjectiveAcceptableForProgress(2.0, 1.0, &best, tolerance, &evidence));
+    EXPECT_TRUE(evidence.previous_checked); EXPECT_FALSE(evidence.best_checked);
+    EXPECT_EQ(evidence.reason, "previous-gate");
+    EXPECT_FALSE(detail::IsAuditObjectiveAcceptableForProgress(1.0, 1.0, &best, tolerance, &evidence));
+    EXPECT_TRUE(evidence.previous_checked); EXPECT_TRUE(evidence.best_checked);
+    EXPECT_EQ(evidence.reason, "best-gate");
+    EXPECT_TRUE(detail::IsAuditObjectiveAcceptableForProgress(1.0, 1.0, nullptr, tolerance, &evidence));
+    EXPECT_TRUE(evidence.previous_checked); EXPECT_FALSE(evidence.best_checked);
+    EXPECT_TRUE(evidence.reason.empty());
+    for (const auto nonfinite : { std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN() })
+    {
+        EXPECT_FALSE(detail::IsAuditObjectiveAcceptableForProgress(nonfinite, 1.0, &best, tolerance, &evidence));
+        EXPECT_FALSE(evidence.previous_checked); EXPECT_FALSE(evidence.best_checked);
+        EXPECT_EQ(evidence.reason, "objective-nonfinite");
+        EXPECT_FALSE(detail::IsAuditObjectiveAcceptableForProgress(1.0, nonfinite, &best, tolerance, &evidence));
+        EXPECT_FALSE(evidence.previous_checked); EXPECT_FALSE(evidence.best_checked);
+        const detail::ObjectiveBreakdown invalid_best{nonfinite, 0.0, 0.0};
+        EXPECT_FALSE(detail::IsAuditObjectiveAcceptableForProgress(1.0, 1.0, &invalid_best, tolerance, &evidence));
+        EXPECT_TRUE(evidence.previous_checked); EXPECT_TRUE(evidence.best_checked);
+        EXPECT_EQ(evidence.reason, "best-gate");
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, GlobalCandidateRequiresPreviousAndAvailableDelta)
 {
     auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
@@ -297,7 +340,7 @@ TEST(EstimatorSecondStageDefenseTest, GlobalCandidateRequiresPreviousAndAvailabl
     testing::internal::CaptureStdout();
     {
         detail::PerformanceCounters counters{ false, fixture.context, workspaces, corrections };
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        EXPECT_FALSE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
             fixture.sample_ref_list, domain, nullptr, nullptr, counters }));
     }
     const auto output{ testing::internal::GetCapturedStdout() };
@@ -306,7 +349,7 @@ TEST(EstimatorSecondStageDefenseTest, GlobalCandidateRequiresPreviousAndAvailabl
 
     domain.cluster_by_key.at(key).scale.reset();
     detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
-    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+    EXPECT_FALSE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
         fixture.sample_ref_list, domain, nullptr, &*previous, counters }));
 }
 
@@ -338,22 +381,22 @@ TEST(EstimatorSecondStageDefenseTest, GlobalCandidatePreservesGatesAndOverlappin
         const auto full{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(fixture.context, improved)) };
         ASSERT_TRUE(full);
         ASSERT_LT(full->GetTotalObjective(), previous->GetTotalObjective());
-        const auto accepted{ detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        const auto accepted{ detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
             fixture.sample_ref_list, domain, nullptr, &*previous, counters }) };
         ASSERT_TRUE(accepted);
         EXPECT_NEAR(accepted->fit_range_residual_objective, full->fit_range_residual_objective, 1.0e-12);
         EXPECT_NEAR(accepted->tail_validation_loss, full->tail_validation_loss, 1.0e-12);
         EXPECT_NEAR(accepted->offset_plausibility_penalty, full->offset_plausibility_penalty, 1.0e-12);
-        EXPECT_TRUE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        EXPECT_TRUE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
             fixture.sample_ref_list, domain, &*previous, &*previous, counters }));
         const detail::ObjectiveBreakdown best{ 0.0, 0.0, 0.0 };
-        EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+        EXPECT_FALSE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
             fixture.sample_ref_list, domain, &best, &*previous, counters }));
 
         const detail::FitState worse{ MakeGaussianResult({ 20.0, 0.5, 0.0 }) };
         const auto worse_patch{ detail::FitStatePatch::FromState(worse, key) };
         const detail::CandidateEvaluationOverlay worse_candidate{ fixture.context, baseline, fixture.state, worse_patch };
-        EXPECT_FALSE(detail::EvaluateCandidate(worse_candidate, detail::GlobalCandidateReference{
+        EXPECT_FALSE(detail::EvaluateGlobalCandidate(worse_candidate, detail::GlobalCandidateReference{
             fixture.sample_ref_list, domain, nullptr, &*previous, counters }));
     }
 }
@@ -372,15 +415,15 @@ TEST(EstimatorSecondStageDefenseTest, GlobalCandidateKeepsInclusiveProgressToler
     const detail::ObjectiveBreakdown best{ 2.0, 0.0, 0.0 };
     // An empty delta preserves the supplied baseline exactly, isolating the global gate.
     const detail::ObjectiveBreakdown boundary{ 2.0 + 1.0e-8 + 2.0e-3, 0.0, 0.0 };
-    const auto accepted{ detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+    const auto accepted{ detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
         samples, domain, &best, &boundary, counters }) };
     ASSERT_TRUE(accepted);
     EXPECT_DOUBLE_EQ(accepted->GetTotalObjective(), boundary.GetTotalObjective());
     const detail::ObjectiveBreakdown beyond{ boundary.GetTotalObjective() + 1.0e-9, 0.0, 0.0 };
-    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+    EXPECT_FALSE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
         samples, domain, &best, &beyond, counters }));
     const detail::ObjectiveBreakdown nonfinite{ std::numeric_limits<double>::infinity(), 0.0, 0.0 };
-    EXPECT_FALSE(detail::EvaluateCandidate(candidate, detail::GlobalCandidateReference{
+    EXPECT_FALSE(detail::EvaluateGlobalCandidate(candidate, detail::GlobalCandidateReference{
         samples, domain, nullptr, &nonfinite, counters }));
 }
 
@@ -413,31 +456,28 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCandidateKeepsPolicyReferencesAndM
         detail::BoundaryCandidateReference reference{
             .policy = policy, .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
             .previous_objective_by_key = previous_by_key, .best_audit = &best, .counters = counters,
-            .component = component, .previous_audit = &*previous };
-        EXPECT_EQ(detail::EvaluateBoundaryCandidate(candidate, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+            .component = component };
+        EXPECT_EQ(detail::EvaluateBoundaryCandidate(candidate, reference, &*previous).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
         reference.best_audit = &*previous;
-        const auto accepted{ detail::EvaluateBoundaryCandidate(candidate, reference) };
+        const auto accepted{ detail::EvaluateBoundaryCandidate(candidate, reference, &*previous) };
         ASSERT_TRUE(accepted);
         const auto full{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(fixture.context, improved)) };
         ASSERT_TRUE(full);
         EXPECT_NEAR(accepted->GetTotalObjective(), full->GetTotalObjective(), 1.0e-12);
-        EXPECT_EQ(detail::EvaluateBoundaryCandidate(unchanged, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
-        reference.previous_audit = nullptr;
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
-        reference.previous_audit = &nonfinite;
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
-        reference.previous_audit = &*previous;
+        EXPECT_EQ(detail::EvaluateBoundaryCandidate(unchanged, reference, &*previous).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, nullptr));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, &nonfinite));
         const auto saved_member{ previous_by_key.at(key) };
         previous_by_key.at(key).reset();
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, &*previous));
         previous_by_key.at(key) = nonfinite;
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, &*previous));
         previous_by_key.at(key) = detail::ObjectiveBreakdown{ -1.0, 0.0, 0.0 };
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, &*previous));
         previous_by_key.at(key) = saved_member;
         const auto saved_scale{ domain.cluster_by_key.at(key).scale };
         domain.cluster_by_key.at(key).scale.reset();
-        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference));
+        EXPECT_FALSE(detail::EvaluateBoundaryCandidate(candidate, reference, &*previous));
         domain.cluster_by_key.at(key).scale = saved_scale;
     }
 }
@@ -473,13 +513,12 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndS
             detail::PerformanceCounters counters{ false, fixture.context, workspaces, corrections };
             const detail::ObjectiveBreakdown audit{ unavailable ? std::numeric_limits<double>::infinity() :
                 previous->fit_range_residual_objective, previous->tail_validation_loss, previous->offset_plausibility_penalty };
-            const detail::BoundaryCorrectionReference reference{
+            const detail::BoundaryCandidateReference reference{
                 .policy = detail::BoundaryAcceptancePolicy::Ordinary,
                 .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
                 .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
-                .component = component, .endpoint = endpoint, .previous_audit = audit,
-                .improvement = *previous, .damping = 1.0 };
-            const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference) };
+                .component = component };
+            const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference, endpoint, audit, *previous) };
             EXPECT_EQ(result, !unavailable);
         }
         const auto output{ testing::internal::GetCapturedStdout() };
@@ -490,24 +529,22 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndS
     detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
     const auto objective{ detail::EvaluateObjectiveDelta(candidate, fixture.sample_ref_list, domain, *previous, counters) };
     ASSERT_TRUE(objective);
-    const detail::BoundaryCorrectionReference tied_reference{
+    const detail::BoundaryCandidateReference tied_reference{
         .policy = detail::BoundaryAcceptancePolicy::Ordinary,
         .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
         .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
-        .component = component, .endpoint = endpoint, .previous_audit = *previous,
-        .improvement = *objective, .damping = 0.5 };
-    const auto tied{ detail::EvaluateBoundaryCorrection(candidate, tied_reference) };
+        .component = component };
+    const auto tied{ detail::EvaluateBoundaryCorrection(candidate, tied_reference, endpoint, *previous, *objective) };
     EXPECT_FALSE(tied);
     for (const auto [margin, expected] : { std::pair{1.0e-9, false}, std::pair{1.0e-6, true} })
     {
         const detail::ObjectiveBreakdown improvement{ objective->GetTotalObjective() + margin, 0.0, 0.0 };
-        const detail::BoundaryCorrectionReference reference{
+        const detail::BoundaryCandidateReference reference{
             .policy = detail::BoundaryAcceptancePolicy::Ordinary,
             .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
             .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
-            .component = component, .endpoint = endpoint, .previous_audit = *previous,
-            .improvement = improvement, .damping = 0.5 };
-        const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference) };
+            .component = component };
+        const auto result{ detail::EvaluateBoundaryCorrection(candidate, reference, endpoint, *previous, improvement) };
         EXPECT_EQ(result, expected);
     }
 }
@@ -927,14 +964,14 @@ TEST(EstimatorSecondStageDefenseTest, LocalCandidateUsesOnlyPreviousAndRejectsUn
         const auto current{ detail::EvaluateObjectiveContribution(overlay, key, fixture.sample_ref_list, domain) };
         ASSERT_TRUE(current);
         detail::CandidateDecisionEvidence evidence;
-        const auto result{ detail::EvaluateCandidate(overlay,
+        const auto result{ detail::EvaluateLocalCandidate(overlay,
             detail::LocalCandidateReference{detail::LocalObjectivePolicy::PreviousNonRegression, key, fixture.sample_ref_list,
                 amplitude == 6.4 ? &*previous : &*current, domain, evidence, counters}) };
         EXPECT_TRUE(result.accepted);
         EXPECT_FALSE(result.evidence.rejected_by_previous);
         const auto saved_scale{ domain.cluster_by_key.at(key).scale };
         domain.cluster_by_key.at(key).scale.reset();
-        EXPECT_FALSE(detail::EvaluateCandidate(overlay,
+        EXPECT_FALSE(detail::EvaluateLocalCandidate(overlay,
             detail::LocalCandidateReference{detail::LocalObjectivePolicy::PreviousNonRegression, key, fixture.sample_ref_list,
                 &*current, domain, evidence, counters}).accepted);
         domain.cluster_by_key.at(key).scale = saved_scale;

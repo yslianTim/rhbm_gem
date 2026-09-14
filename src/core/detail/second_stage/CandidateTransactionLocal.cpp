@@ -395,7 +395,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.has_value())
             {
                 result.evidence.invalid_trial_count++;
-                observation.Failure(AuditCategory::Invalid, "invalid-candidate");
+                observation.InvalidCandidate();
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::InvalidModel;
                 continue;
@@ -437,7 +437,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (guard_failure)
             {
                 result.evidence.guard_rejected_trial_count++;
-                observation.Failure(AuditCategory::Guard, "guard-rejected");
+                observation.GuardRejected();
                 last_guard_failure = guard_failure;
                 continue;
             }
@@ -452,7 +452,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 .guard_rejected_trial_count = result.evidence.guard_rejected_trial_count,
                 .objective_rejected_trial_count = result.evidence.objective_rejected_trial_count
             };
-            const auto evaluation{ EvaluateCandidate(candidate_overlay,
+            const auto evaluation{ EvaluateLocalCandidate(candidate_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, objective_sample_ref_list, previous_objective,
                     objective_domain, trial_evidence, performance_counters}) };
             trial_evidence = evaluation.evidence;
@@ -580,7 +580,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 previous_state,
                 polished_candidate->patch
             };
-            const auto evaluation{ EvaluateCandidate(polished_overlay,
+            const auto evaluation{ EvaluateLocalCandidate(polished_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::StrictReferenceImprovement, key, objective_sample_ref_list,
                     result.evidence.candidate_objective ? &*result.evidence.candidate_objective : nullptr,
                     objective_domain, polish_evidence, performance_counters}) };

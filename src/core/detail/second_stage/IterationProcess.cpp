@@ -476,14 +476,7 @@ static IterationResult RunIteration(
         }
     }
     iteration_state.trust_region_state.ResetToMinimum(retry_key_list);
-    if (observation && observation->Enabled())
-    {
-        observation->Audit()->retried = iteration_state.quarantine_state.retry_target_list.size();
-        for (const auto & target : iteration_state.quarantine_state.retry_target_list)
-            observation->Record({ .stage=AuditStage::Quarantine, .category=AuditCategory::Retry,
-                .first_atom=target.atom_index_list.empty() ? 0 : target.atom_index_list.front(), .atom_count=target.atom_index_list.size(),
-                .outcome="changed", .reason="quarantine-retry" });
-    }
+    if (observation) observation->ObserveRetries(iteration_state.quarantine_state);
     const auto joint_offset_ridge_multiplier_list{
         BuildSuspiciousJointOffsetRidgeMultiplierList(
             iteration_state.rollback_atom_mask,
@@ -502,7 +495,7 @@ static IterationResult RunIteration(
             quarantine_activity,
             iteration_state.solver_workspace_by_key)
     };
-    ObserveProposal(observation, proposal_result);
+    if (observation) observation->ObserveProposal(proposal_result);
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();
 
@@ -614,8 +607,7 @@ static IterationResult RunIteration(
     bool improved_audit_baseline{ false };
     {
         auto candidate_audit_objective{ selection.final_audit_objective };
-        if (observation && observation->Enabled()) observation->Audit()->score_source =
-            candidate_audit_objective ? "selection_audit" : "post_commit_evaluation";
+        if (observation) observation->ObserveCandidateScoreSource(candidate_audit_objective.has_value());
         if (!candidate_audit_objective.has_value())
         {
             const auto candidate_model_snapshot{
@@ -628,12 +620,8 @@ static IterationResult RunIteration(
         if (candidate_audit_objective.has_value())
         {
             const auto previous_audit_objective{ EvaluateAuditObjective(objective_domain, residual_baseline) };
-            if (observation && observation->Enabled())
-            {
-                auto & audit = *observation->Audit();
-                audit.previous = previous_audit_objective; audit.candidate = candidate_audit_objective;
-                audit.best = iteration_state.best_audit_state ? std::optional{iteration_state.best_audit_state->objective} : std::nullopt;
-            }
+            if (observation) observation->ObserveScores(previous_audit_objective, candidate_audit_objective,
+                iteration_state.best_audit_state ? &iteration_state.best_audit_state->objective : nullptr);
             improved_audit_baseline = previous_audit_objective.has_value() && IsBetterAuditObjective(
                 candidate_audit_objective->GetTotalObjective(), previous_audit_objective->GetTotalObjective(),
                 kObjectiveStrictTolerance);
@@ -686,7 +674,7 @@ static IterationResult RunIteration(
     certificate.quarantine_transition = has_quarantine_transition;
     certificate.suspicious_block_fallback = has_suspicious_block_fallback;
     certificate.rejected_cluster = selection.rejected_cluster;
-    if (observation && observation->Enabled()) observation->Audit()->convergence = assessment;
+    if (observation) observation->ObserveConvergence(assessment);
     if (certificate.ProductionConverged())
     {
         result.stop_reason = SecondStageStopReason::Converged;
@@ -792,12 +780,8 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.best_audit_state->state :
             iteration_state.accepted_state
     };
-    if (observation && observation->Enabled())
-    {
-        auto & audit = *observation->Audit();
-        audit.batch = AuditBatch{};
-        audit.final_objective = final_uses_best_audit ? std::optional{iteration_state.best_audit_state->objective} : audit.candidate;
-    }
+    if (observation) observation->BeginFinalization(
+        final_uses_best_audit ? &iteration_state.best_audit_state->objective : nullptr);
     if (stop_reason != SecondStageStopReason::Converged ||
         !options.enable_second_stage_dependency_polish)
     {
@@ -807,7 +791,7 @@ static const FitState & FinalizeSecondStageState(
     const auto final_block_activity{
         iteration_state.quarantine_state.BuildFinalActivity()
     };
-    if (observation && observation->Enabled()) observation->Audit()->polish_attempted = true;
+    if (observation) observation->ObserveFinalPolishAttempt();
     auto polish_result{
         RunFinalDependencyPolish(
             context,
@@ -836,19 +820,8 @@ static const FitState & FinalizeSecondStageState(
         polish_result.accepted && polish_result.objective.has_value() &&
         safety_status == FinalPolishResidualSafetyStatus::AbsolutePassed
     };
-    if (observation && observation->Enabled())
-    {
-        auto & audit = *observation->Audit();
-        audit.polish_accepted = polish_result.accepted;
-        audit.polish_status = safety_status;
-        audit.polish_applied = polish_applied;
-        audit.polish_certificate = candidate_certificate;
-        if (polish_applied) audit.final_objective = polish_result.objective;
-        observation->Record({ .stage=AuditStage::FinalCertification,
-            .category=polish_applied ? AuditCategory::None : (candidate_certificate ? AuditCategory::Rejected : AuditCategory::Unavailable),
-            .outcome=polish_applied ? "accepted" : "skipped", .reason=polish_applied ? "" : "polish-not-applied",
-            .scope="global", .reference="final_polish_candidate" });
-    }
+    if (observation) observation->ObserveFinalCertification(polish_result, safety_status,
+        candidate_certificate, polish_applied);
     LogFinalDependencyPolish(
         options.quiet_mode, polish_result, observation->final_polish, safety_status, polish_applied);
     if (polish_applied)
@@ -999,7 +972,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
     if (observation.Enabled())
         LogDecisionAuditTerminal(observation, SecondStageStopReasonText(terminal_result.stop_reason),
             use_best_audit_state ? "best-audit" : "latest-validated", iteration_state.best_audit_state,
-            observation.Audit()->final_objective, &performance_counters);
+            &performance_counters);
 
     if ((terminal_result.stop_reason == SecondStageStopReason::Quarantine || converged) &&
         iteration_state.quarantine_state.TargetCount() != 0)
