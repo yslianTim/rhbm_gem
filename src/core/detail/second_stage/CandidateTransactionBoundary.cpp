@@ -17,11 +17,6 @@
 
 namespace rhbm_gem::core::detail {
 
-static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const ClusterKey & key)
-{
-    return std::ranges::find(key_list, key) != key_list.end();
-}
-
 static ClusterKey FlattenClusterKeyList(const std::vector<ClusterKey> & key_list)
 {
     ClusterKey atom_index_list;
@@ -552,7 +547,8 @@ static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCan
                 component_list,
                 [&](const auto & component)
                 {
-                    return ContainsClusterKey(component.key_list, key);
+                    return std::ranges::find(component.key_list, key) !=
+                        component.key_list.end();
                 }))
         {
             continue;

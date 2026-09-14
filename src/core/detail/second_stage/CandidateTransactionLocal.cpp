@@ -306,11 +306,6 @@ static std::optional<FitStateProposal> BuildAtomProposal(
     return proposal;
 }
 
-static bool ContainsClusterKey(const std::vector<ClusterKey> & key_list, const ClusterKey & key)
-{
-    return std::ranges::find(key_list, key) != key_list.end();
-}
-
 bool ShouldShrinkAcceptedTrustRegionRadius(
     std::optional<double> first_objective_evaluated_factor,
     std::optional<double> accepted_factor)
@@ -805,7 +800,8 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
     ObservePhaseState(inputs.observation, "boundary-final", selection.assembled_state);
     for (const auto & key : locally_polished_key_list)
     {
-        if (ContainsClusterKey(selection.accepted_key_list, key)) continue;
+        if (std::ranges::find(selection.accepted_key_list, key) !=
+            selection.accepted_key_list.end()) continue;
         selection.polish_progress.accepted_count--;
         selection.polish_progress.rejected_count++;
     }
