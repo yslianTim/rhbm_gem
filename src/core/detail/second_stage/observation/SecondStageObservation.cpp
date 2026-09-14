@@ -1,464 +1,341 @@
-#include "core/detail/second_stage/CandidateTransaction.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
-#include "core/detail/second_stage/CandidateEvaluation.hpp"
-#include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
-#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
-#include "core/detail/second_stage/observation/PhaseAudit.hpp"
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_AUDIT_FAULT(point) ((void)0)
 #endif
+#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
+#include "core/detail/second_stage/CandidateTransaction.hpp"
+#include "core/detail/second_stage/CandidateEvaluation.hpp"
+#include "core/detail/second_stage/IterationProposal.hpp"
+#include "core/detail/second_stage/IterationResult.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <cmath>
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <algorithm>
-#include <ranges>
+#include <cmath>
+#include <tuple>
 
 namespace rhbm_gem::core::detail {
-
-std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext & context, bool quiet,
-    const ObjectiveDomain & domain, const FitState & baseline, const std::vector<ClusterKey> & keys,
-    std::size_t attempt, std::size_t domain_id) noexcept
+namespace {
+bool Before(const AuditEvent & a, const AuditEvent & b) noexcept
 {
-#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
-    if (!quiet && Logger::GetLogLevel() >= LogLevel::Debug)
-        try { return std::make_shared<PhaseAudit>(context, domain, baseline, keys, attempt, domain_id); }
-        catch (...) { Logger::Log(LogLevel::Debug, "Second-stage phase audit error: capture initialization failed"); }
+    return std::tie(a.stage, a.first_atom, a.atom_count, a.trial, a.category, a.reason) <
+        std::tie(b.stage, b.first_atom, b.atom_count, b.trial, b.category, b.reason);
+}
+void KeepDetail(AuditBatch & batch, const AuditEvent & event) noexcept
+{
+    auto end = batch.details.begin() + static_cast<std::ptrdiff_t>(batch.detail_count);
+    auto position = std::lower_bound(batch.details.begin(), end, event, Before);
+    if (position == batch.details.end()) return;
+    if (batch.detail_count < kAuditDetailLimit) ++batch.detail_count;
+    end = batch.details.begin() + static_cast<std::ptrdiff_t>(batch.detail_count);
+    std::move_backward(position, end - 1, end);
+    *position = event;
+}
+void SetKey(AuditEvent & event, std::span<const std::size_t> key) noexcept
+{
+    event.first_atom = key.empty() ? 0 : key.front();
+    event.atom_count = key.size();
+}
+void DefaultWriter(std::string_view text) { Logger::Log(LogLevel::Debug, std::string(text)); }
+}
+
+void AuditBatch::Add(const AuditEvent & event) noexcept
+{
+    auto & count = stages[static_cast<std::size_t>(event.stage)];
+    ++count.total;
+    if (event.outcome == "accepted") ++count.accepted;
+    else if (event.outcome == "rejected") ++count.rejected;
+    else ++count.skipped;
+    if (event.category == AuditCategory::None) return;
+    ++categories[static_cast<std::size_t>(event.category)];
+    ++abnormal_count;
+    KeepDetail(*this, event);
+}
+void AuditBatch::Merge(const AuditBatch & other) noexcept
+{
+    for (std::size_t i = 0; i < stages.size(); ++i)
+    {
+        stages[i].total += other.stages[i].total;
+        stages[i].accepted += other.stages[i].accepted;
+        stages[i].rejected += other.stages[i].rejected;
+        stages[i].skipped += other.stages[i].skipped;
+    }
+    for (std::size_t i = 0; i < categories.size(); ++i) categories[i] += other.categories[i];
+    abnormal_count += other.abnormal_count;
+    for (std::size_t i = 0; i < other.detail_count; ++i) KeepDetail(*this, other.details[i]);
+}
+
+bool IsDebugLogLevelEnabled() { return Logger::GetLogLevel() >= LogLevel::Debug; }
+bool IsSecondStageAuditEnabled(bool quiet) noexcept
+{
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT
+    return !quiet && IsDebugLogLevelEnabled();
 #else
-    (void)context; (void)quiet; (void)domain; (void)baseline; (void)keys; (void)attempt; (void)domain_id;
+    (void)quiet;
+    return false;
 #endif
-    return {};
+}
+SecondStageObservationSession::SecondStageObservationSession(bool quiet, Writer output) noexcept
+    : writer(output ? output : DefaultWriter)
+{
+    if (!IsSecondStageAuditEnabled(quiet)) return;
+    try { RHBM_TEST_AUDIT_FAULT(Allocation); m_audit = std::make_unique<SecondStageAuditData>(); m_enabled = true; }
+    catch (...) { Disable(); }
+}
+void SecondStageObservationSession::Merge(const AuditBatch & batch) noexcept
+{
+    if (!Enabled()) return;
+    try { RHBM_TEST_AUDIT_FAULT(Collection); std::lock_guard lock(m_mutex); if (Enabled()) m_audit->batch.Merge(batch); }
+    catch (...) { Disable(); }
+}
+void SecondStageObservationSession::Record(AuditEvent event) noexcept
+{
+    if (!Enabled()) return;
+    AuditBatch batch;
+    batch.Add(event);
+    Merge(batch);
+}
+void SecondStageObservationSession::Write(std::string_view text) noexcept
+{
+    if (!Enabled()) return;
+    try { RHBM_TEST_AUDIT_FAULT(Writer); writer(text); } catch (...) { Disable(); }
+}
+double SecondStageObservationSession::ElapsedMilliseconds() const noexcept
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - m_start).count();
+}
+void SecondStageObservationSession::BeginAttempt(std::size_t attempt, std::size_t objective_revision,
+    std::size_t recovery_revision, bool background_changed, bool partition_changed) noexcept
+{
+    auto * data = Audit();
+    if (!data) return;
+    const auto background = data->background_revision + static_cast<std::size_t>(background_changed || attempt == 1);
+    const auto partition = data->partition_revision + static_cast<std::size_t>(partition_changed || attempt == 1);
+    *data = SecondStageAuditData{};
+    data->selection[1].reason = "no-accepted-rescue";
+    data->attempt = attempt;
+    data->objective_revision = objective_revision;
+    data->recovery_revision = recovery_revision;
+    data->background_revision = background;
+    data->partition_revision = partition;
+    if (partition_changed) Record({.stage=AuditStage::Partition, .category=AuditCategory::Partition,
+        .outcome="changed", .reason="partition-applied"});
 }
 
-bool IsDebugLogLevelEnabled()
+void ObserveProposal(SecondStageObservationSession * session, const IterationProposalResult & proposal) noexcept
 {
-    return Logger::GetLogLevel() >= LogLevel::Debug;
-}
-
-void RecordJointMemberRejection(
-    JointCandidateObjectiveDiagnostic * record,
-    const ClusterKey & key,
-    const std::optional<ObjectiveBreakdown> & previous,
-    const std::optional<ObjectiveBreakdown> & best,
-    const std::optional<ObjectiveBreakdown> & candidate,
-    bool best_checked)
-{
-    if (record == nullptr) return;
-    record->member_key = key;
-    record->previous = previous;
-    record->best = best;
-    record->candidate = candidate;
-    record->best_checked = best_checked;
-    if (best_checked && !best)
-        record->outcome = "best-reference-unavailable";
-    else if (!previous || !candidate)
-        record->outcome = "member-objective-unavailable";
-    else if (!std::isfinite(previous->GetTotalObjective()) ||
-        !std::isfinite(candidate->GetTotalObjective()) ||
-        (best_checked && best && !std::isfinite(best->GetTotalObjective())))
-        record->outcome = "member-objective-nonfinite";
-    else
+    if (!session || !session->Enabled()) return;
+    for (const auto & [key, health] : proposal.health_by_key)
     {
-        const bool previous_failed{ IsObjectiveDeteriorated(candidate->GetTotalObjective(),
-            previous->GetTotalObjective(), kObjectiveProgressTolerance) };
-        const bool best_failed{ best_checked && best && IsObjectiveDeteriorated(
-            candidate->GetTotalObjective(), best->GetTotalObjective(), kObjectiveProgressTolerance) };
-        record->outcome = previous_failed ? (best_failed ? "previous+best" : "previous") :
-            (best_failed ? "best" : "member-check-failed");
-    }
-}
-
-JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
-    bool quiet_mode,
-    std::vector<JointCandidateObjectiveDiagnostic> & records,
-    std::string_view source,
-    std::optional<double> factor,
-    std::size_t round)
-{
-    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return nullptr;
-    return &records.emplace_back(JointCandidateObjectiveDiagnostic{
-        .source = source, .round = round, .candidate_number = records.size() + 1, .factor = factor });
-}
-
-void ObserveHistoryPartition(SecondStageObservationSession * observation, const SecondStageContext & context, const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain, const FitState & state) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->ResetPartition(context, partition, domain, state);
-}
-
-void ObserveHistoryBackground(SecondStageObservationSession * observation, const SecondStageContext & context,
-    const std::shared_ptr<const FrozenBackground> & background, const CouplingGraphPartition & partition,
-    const ObjectiveDomain & domain, const FitState & state) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->ResetBackground(context, background, partition, domain, state);
-}
-
-void ObserveHistoryAttempt(SecondStageObservationSession * observation, SecondStageContext & context, const ObjectiveByKey & previous,
-    const FitState & state, const CouplingGraphPartition & partition, const ObjectiveDomain & domain,
-    std::size_t attempt, std::size_t accepted) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->BeginAttempt(context, previous, state, partition, domain, attempt, accepted);
-}
-
-void ObserveHistorySearch(SecondStageObservationSession * observation, const ClusterKey & key) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->BeginSearch(key);
-}
-
-void ObserveLocalHistory(SecondStageObservationSession * observation, const CandidateEvaluationOverlay & candidate, const ClusterKey & key,
-    const std::vector<SampleRef> & samples, const ObjectiveDomain & domain, std::string_view source,
-    bool accepted, ObjectiveAttemptDiagnostic & diagnostic) noexcept
-{
-    if (observation && observation->cluster_history)
-        diagnostic.history = observation->cluster_history->Local(
-            candidate, key, samples, domain, source, accepted, diagnostic);
-}
-
-void ObserveBoundaryHistoryAccepted(SecondStageObservationSession * observation, std::size_t token) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->AcceptBoundary(token);
-}
-
-void ObserveHistoryRejected(SecondStageObservationSession * observation, const ClusterKey & key) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->Reject(key);
-}
-
-void ObserveHistoryPublication(SecondStageObservationSession * observation) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->Publish();
-}
-
-void BeginPhaseObservation(SecondStageObservationSession * observation, SecondStageContext & context, bool quiet, const ObjectiveDomain & domain,
-    const FitState & state, const std::vector<ClusterKey> & keys, std::size_t attempt, std::size_t domain_id) noexcept
-{
-    if (observation) observation->phase_audit = BeginPhaseAudit(context, quiet, domain, state, keys, attempt, domain_id);
-}
-
-static std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
-{
-    const bool cooperative{ policy == BoundaryAcceptancePolicy::CooperativeRescue };
-    switch (stage)
-    {
-    case BoundaryObservationStage::Endpoint: return cooperative ? "rescue-endpoint" : "endpoint";
-    case BoundaryObservationStage::Correction: return cooperative ? "rescue-joint-correction" : "joint-correction";
-    case BoundaryObservationStage::Backtracking: return cooperative ? "rescue-backtracking" : "backtracking";
-    }
-    return {};
-}
-
-static std::string_view BoundaryPhaseName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
-{
-    const bool cooperative{ policy == BoundaryAcceptancePolicy::CooperativeRescue };
-    switch (stage)
-    {
-    case BoundaryObservationStage::Endpoint: return cooperative ? "rescue-endpoint" : "boundary-endpoint";
-    case BoundaryObservationStage::Correction: return cooperative ? "rescue-correction" : "boundary-correction";
-    case BoundaryObservationStage::Backtracking: return cooperative ? "rescue-backtracking" : "boundary-backtracking";
-    }
-    return {};
-}
-
-void JointCandidateObservation::Begin(BoundaryObservationStage stage, std::string_view source,
-    double factor, std::size_t round)
-{
-    m_current.reset();
-    if (!m_session) return;
-    if (BeginJointCandidateDiagnostic(m_quiet, m_records, source, factor, round))
-        m_current = m_records.size() - 1;
-    m_record_by_stage.at(static_cast<std::size_t>(stage)) = m_current;
-}
-
-JointCandidateObjectiveDiagnostic * JointCandidateObservation::Record()
-{
-    return m_current ? &m_records.at(*m_current) : nullptr;
-}
-
-void JointCandidateObservation::BeginBoundary(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage, double factor)
-{
-    Begin(stage, BoundaryDiagnosticName(policy, stage), factor);
-}
-
-void JointCandidateObservation::BeginMembers()
-{
-    auto * record{ Record() };
-    if (m_session && m_session->cluster_history) m_session->cluster_history->BeginBoundary(record);
-}
-
-void JointCandidateObservation::Member(const CandidateEvaluationOverlay & candidate, const ClusterKey & key,
-    const std::vector<SampleRef> & samples, const ObjectiveDomain & domain,
-    BoundaryAcceptancePolicy policy, bool accepted, const CandidateDecisionEvidence & evidence)
-{
-    auto * record{ Record() };
-    if (!accepted)
-        RecordJointMemberRejection(record, key, evidence.previous_objective, std::nullopt, evidence.candidate_objective, false);
-    else if (record && policy == BoundaryAcceptancePolicy::CooperativeRescue)
-    {
-        const auto candidate_value{ evidence.candidate_objective->GetTotalObjective() };
-        const auto previous_value{ evidence.previous_objective->GetTotalObjective() };
-        if (candidate_value > previous_value)
+        AuditEvent event{ .stage=AuditStage::Proposal };
+        SetKey(event, key);
+        if (!health.IsSolverQualified())
         {
-            record->locally_deteriorated_member_count++;
-            record->maximum_local_deterioration = std::max(record->maximum_local_deterioration, candidate_value - previous_value);
+            event.category = AuditCategory::Solver;
+            event.outcome = "rejected";
+            event.reason = IsJointOffsetSolveHardFailure(health.joint_offset_status) ? "solver-hard-failure" : "solver-unqualified";
+        }
+        session->Record(event);
+    }
+}
+void ObserveCommit(SecondStageObservationSession * session, const CandidateSelection & selection,
+    const CandidateCommitResult & result, const TrustRegionStateSet & radii) noexcept
+{
+    if (!session || !session->Enabled()) return;
+    if (!result.accepted) { session->Audit()->candidate=session->Audit()->previous; session->Audit()->score_source="restored_previous"; }
+    for (const auto & key : result.accepted_key_list)
+    {
+        AuditEvent event{ .stage=AuditStage::Commit }; SetKey(event,key); session->Record(event);
+    }
+    for (const auto & key : result.rejected_key_list)
+    {
+        AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Rejected, .outcome="rejected", .reason="final-selection-rejected" };
+        SetKey(event,key); session->Record(event);
+    }
+    for (const auto & key : result.trust_region_update.changed_key_list)
+    {
+        AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Shrink, .outcome="changed", .reason="radius-shrunk" };
+        event.radius = radii.GetRadius(key); SetKey(event,key); session->Record(event);
+    }
+    for (const auto & key : selection.exhausted_key_list)
+    {
+        AuditEvent event{ .stage=AuditStage::Commit, .category=AuditCategory::Exhausted, .outcome="rejected", .reason="search-exhausted" };
+        SetKey(event,key); session->Record(event);
+    }
+}
+void ObserveQuarantine(SecondStageObservationSession * session, const QuarantineState & before,
+    const QuarantineState & after) noexcept
+{
+    if (!session || !session->Enabled()) return;
+    auto * data = session->Audit();
+    data->entered += after.entered_target_count - before.entered_target_count;
+    data->released += after.released_target_count - before.released_target_count;
+    data->failed_retry += after.failed_retry_count - before.failed_retry_count;
+    for (const auto & [target, state] : after.state_by_target)
+    {
+        const auto previous = before.state_by_target.find(target);
+        if (state.lifecycle == QuarantineLifecycle::Frozen &&
+            (previous == before.state_by_target.end() || previous->second.lifecycle != QuarantineLifecycle::Frozen))
+        {
+            AuditEvent event{ .stage=AuditStage::Quarantine, .category=AuditCategory::Enter, .outcome="changed", .reason="quarantine-enter" };
+            SetKey(event,target.atom_index_list); session->Record(event);
         }
     }
-    // Keep history payload copying inside the original noexcept observation boundary.
-    [&]() noexcept
-    {
-        if (m_session && m_session->cluster_history)
+    for (const auto & [target, state] : before.state_by_target)
+        if (state.lifecycle == QuarantineLifecycle::Frozen && !after.state_by_target.contains(target))
         {
-            ObjectiveAttemptDiagnostic diagnostic;
-            static_cast<CandidateDecisionEvidence &>(diagnostic) = evidence;
-            if (record)
-            {
-                diagnostic.trial_count = record->candidate_number;
-                diagnostic.accepted_factor = record->factor;
-            }
-            m_session->cluster_history->BoundaryMember(candidate, key, samples, domain, accepted, diagnostic, record);
+            AuditEvent event{ .stage=AuditStage::Quarantine, .category=AuditCategory::Release, .outcome="changed", .reason="quarantine-release" };
+            SetKey(event,target.atom_index_list); session->Record(event);
         }
-    }();
 }
-
-void JointCandidateObservation::RejectGlobalObjective()
+void ObserveSelectionAudit(SecondStageObservationSession * session, bool rescue, bool executed,
+    std::string_view result, std::string_view reason, std::size_t removed) noexcept
 {
-    if (auto * record{ Record() }) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+    if (!session || !session->Enabled()) return;
+    auto & entry = session->Audit()->selection[rescue ? 1 : 0];
+    entry.executed = executed; entry.result = result; entry.reason = reason; entry.removed_clusters = removed;
+    AuditEvent event{ .stage=rescue ? AuditStage::SelectionRescue : AuditStage::SelectionOrdinary,
+        .category=removed ? AuditCategory::Salvage : (result == "unavailable" ? AuditCategory::Unavailable :
+            (result == "rejected" || result == "empty_after_salvage" ? AuditCategory::Rejected : AuditCategory::None)),
+        .outcome=result == "passed" ? "accepted" : (executed ? "rejected" : "skipped"), .reason=reason, .scope="global" };
+    session->Record(event);
 }
-
-void JointCandidateObservation::RejectStrictImprovement(double candidate, double previous)
+void ObserveGlobalGate(SecondStageObservationSession * session, bool rescue, const ObjectiveBreakdown * previous,
+    const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best, bool accepted,
+    const ObjectiveProgressGateEvidence & gate) noexcept
 {
-    if (auto * record{ Record() })
-        record->outcome = IsObjectiveDeteriorated(candidate, previous, kObjectiveProgressTolerance) ?
-            "members-passed-global-objective-rejected-or-unavailable" : "members-passed-strict-improvement-failed";
+    if (!session || !session->Enabled()) return;
+    auto & entry = session->Audit()->selection[rescue ? 1 : 0];
+    ++entry.evaluations;
+    entry.previous = previous ? std::optional{*previous} : std::nullopt;
+    entry.candidate = candidate; entry.best = best ? std::optional{*best} : std::nullopt;
+    AuditEvent event{ .stage=rescue ? AuditStage::SelectionRescue : AuditStage::SelectionOrdinary,
+        .category=accepted ? AuditCategory::None : (candidate && previous ? AuditCategory::Rejected : AuditCategory::Unavailable),
+        .trial=entry.evaluations, .outcome=accepted ? "accepted" : "rejected",
+        .reason=accepted ? "" : gate.reason,
+        .scope="global", .previous=entry.previous, .candidate=candidate, .best=entry.best,
+        .previous_checked=gate.previous_checked, .best_checked=gate.best_checked };
+    session->Record(event);
 }
 
-void JointCandidateObservation::Accept(BoundaryComponentAcceptedSource source,
-    BoundaryComponentReconciliationDiagnostic & diagnostic) noexcept
+LocalSearchObservation::LocalSearchObservation(const CandidateSelectionInputs & inputs, const ClusterKey & key) noexcept : m_session(inputs.observation), m_key(key)
 {
-    if (source == BoundaryComponentAcceptedSource::None) return;
-    const auto stage{ source == BoundaryComponentAcceptedSource::Endpoint ? BoundaryObservationStage::Endpoint :
-        source == BoundaryComponentAcceptedSource::JointCorrection ? BoundaryObservationStage::Correction :
-        BoundaryObservationStage::Backtracking };
-    const auto index{ m_record_by_stage.at(static_cast<std::size_t>(stage)) };
-    if (!index) return;
-    const auto & record{ m_records.at(*index) };
-    diagnostic.locally_deteriorated_member_count = record.locally_deteriorated_member_count;
-    diagnostic.maximum_local_deterioration = record.maximum_local_deterioration;
-    ObserveBoundaryHistoryAccepted(m_session, record.history_observation);
+    if (m_session && m_session->Enabled()) m_batch.emplace();
+}
+LocalSearchObservation::~LocalSearchObservation() { if (m_batch) m_session->Merge(*m_batch); }
+void LocalSearchObservation::Failure(AuditCategory category, std::string_view reason) noexcept
+{
+    if (!m_batch) return;
+    AuditEvent event{ .category=category, .trial=m_trial, .outcome="rejected", .reason=reason, .radius=m_radius };
+    SetKey(event,m_key); m_batch->Add(event);
+}
+void LocalSearchObservation::TrustSkipped() noexcept { Failure(AuditCategory::Trust,"outside-radius"); }
+void LocalSearchObservation::Nonmaterial() noexcept
+{
+    if (!m_batch) return;
+    AuditEvent event{ .trial=m_trial, .outcome="skipped", .reason="nonmaterial" }; SetKey(event,m_key); m_batch->Add(event);
+}
+void LocalSearchObservation::Trial(const CandidateDecisionEvidence & evidence,
+    bool accepted, bool polish) noexcept
+{
+    if (!m_batch) return;
+    AuditEvent event{ .stage=polish ? AuditStage::LocalPolish : AuditStage::LocalSearch,
+        .category=accepted ? AuditCategory::None : (evidence.candidate_objective && evidence.previous_objective ? AuditCategory::Rejected : AuditCategory::Unavailable),
+        .trial=m_trial, .outcome=accepted ? "accepted" : "rejected",
+        .reason=accepted ? "" : (evidence.rejected_by_previous ? "previous-gate" :
+            (evidence.candidate_objective && evidence.previous_objective ? "strict-improvement" : "objective-unavailable")),
+        .reference=polish ? "local_search_candidate" : "iteration_previous",
+        .previous=evidence.previous_objective, .candidate=evidence.candidate_objective,
+        .factor=evidence.accepted_factor, .radius=m_radius,
+        .previous_checked=evidence.previous_objective.has_value() && evidence.candidate_objective.has_value() };
+    SetKey(event,m_key); m_batch->Add(event);
 }
 
+JointCandidateObservation::JointCandidateObservation(SecondStageObservationSession * session,
+    std::span<const std::size_t> key) noexcept : m_session(session) { m_first_atom = key.empty() ? 0 : key.front(); m_atom_count = key.size(); }
+JointCandidateObservation::~JointCandidateObservation() { Flush(); }
+AuditEvent * JointCandidateObservation::Record() noexcept { return m_session && m_session->Enabled() && m_pending ? &*m_event : nullptr; }
+void JointCandidateObservation::Flush() noexcept
+{
+    if (auto * record = Record()) m_session->Record(*record);
+    m_pending = false;
+}
+void JointCandidateObservation::Begin(BoundaryObservationStage stage, std::string_view source, double factor, std::size_t round) noexcept
+{
+    Flush();
+    if (!m_session || !m_session->Enabled()) return;
+    m_event.emplace(); m_event->first_atom = m_first_atom; m_event->atom_count = m_atom_count;
+    m_event->stage = source == "final-polish" ? AuditStage::FinalPolish :
+        static_cast<AuditStage>(static_cast<int>(AuditStage::BoundaryEndpoint) + static_cast<int>(stage));
+    m_event->reference = source == "final-polish" ? "final_polish_endpoint" : "iteration_previous";
+    m_event->scope = "global"; m_event->factor = factor; m_event->trial = round;
+    m_pending = true;
+}
+void JointCandidateObservation::BeginBoundary(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage, double factor) noexcept
+{
+    Begin(stage,"boundary",factor);
+    if (m_pending && policy == BoundaryAcceptancePolicy::CooperativeRescue)
+        m_event->stage = static_cast<AuditStage>(static_cast<int>(AuditStage::RescueEndpoint) + static_cast<int>(stage));
+}
+void RecordJointMemberRejection(AuditEvent * record, const ClusterKey & key,
+    const std::optional<ObjectiveBreakdown> & previous, const std::optional<ObjectiveBreakdown> & best,
+    const std::optional<ObjectiveBreakdown> & candidate, bool best_checked) noexcept
+{
+    if (!record) return;
+    SetKey(*record,key); record->scope="cluster"; record->previous=previous; record->candidate=candidate; record->best=best;
+    record->previous_checked=previous.has_value() && candidate.has_value(); record->best_checked=best_checked;
+    record->outcome="rejected";
+    record->category=previous && candidate ? AuditCategory::Rejected : AuditCategory::Unavailable;
+    record->reason=previous && candidate ? "member-gate" : "member-objective-unavailable";
+}
+void JointCandidateObservation::Member(const ClusterKey & key, bool accepted,
+    const CandidateDecisionEvidence & evidence) noexcept
+{
+    if (!accepted) RecordJointMemberRejection(Record(),key,evidence.previous_objective,{},evidence.candidate_objective,false);
+}
+void JointCandidateObservation::Global(const ObjectiveBreakdown * previous,
+    const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best) noexcept
+{
+    if (auto * record = Record())
+    {
+        record->previous=previous ? std::optional{*previous} : std::nullopt;
+        record->candidate=candidate; record->best=best ? std::optional{*best} : std::nullopt;
+        record->previous_checked=false; record->best_checked=false;
+    }
+}
+void JointCandidateObservation::Gate(const ObjectiveProgressGateEvidence & gate) noexcept
+{
+    if (auto * record=Record()) { record->previous_checked=gate.previous_checked; record->best_checked=gate.best_checked; record->reason=gate.reason; }
+}
+void JointCandidateObservation::RejectGlobalObjective() noexcept
+{
+    if (auto * record=Record())
+    {
+        record->outcome="rejected"; record->category=record->candidate && record->previous ? AuditCategory::Rejected : AuditCategory::Unavailable;
+        if (record->reason.empty()) record->reason="global-objective-unavailable";
+    }
+}
+void JointCandidateObservation::RejectStrictImprovement() noexcept
+{
+    if (auto * record=Record()) { record->outcome="rejected"; record->category=AuditCategory::Rejected; record->reason="strict-improvement"; }
+}
 BoundaryObservationScope::BoundaryObservationScope(const CandidateSelectionInputs & inputs,
-    const BoundaryReconciliationComponent & component, BoundaryAcceptancePolicy policy,
-    const ObjectiveBreakdown * previous, std::size_t rescue_candidate_count)
-    : m_inputs(inputs), m_policy(policy),
-      m_diagnostic(inputs.observation ?
-        inputs.observation->iteration.boundary_reconciliation_diagnostic_list.emplace_back() : m_unobserved),
-      m_trials(inputs.observation, inputs.options.quiet_mode, m_diagnostic.objective_diagnostic_list)
+    const BoundaryReconciliationComponent & component, BoundaryAcceptancePolicy policy) noexcept
+    : m_session(inputs.observation), m_policy(policy), m_component(component), m_trials(inputs.observation, component.key_list.empty() ? std::span<const std::size_t>{} : std::span<const std::size_t>{component.key_list.front()}) {}
+void BoundaryObservationScope::BeginTrial(BoundaryObservationStage stage, double factor, std::size_t trial) noexcept
 {
-    m_diagnostic.key_list = component.key_list;
-    ClusterKey atoms;
-    for (const auto & key : component.key_list) atoms.insert(atoms.end(), key.begin(), key.end());
-    std::ranges::sort(atoms);
-    atoms.erase(std::ranges::unique(atoms).begin(), atoms.end());
-    m_diagnostic.atom_count = atoms.size();
-    m_diagnostic.boundary_sample_count = component.boundary_sample_count;
-    m_diagnostic.interface_atom_count = component.interface_atom_index_list.size();
-    m_diagnostic.shape_active_atom_count = component.halo_atom_index_list.size();
-    m_diagnostic.is_rescue_attempt = policy == BoundaryAcceptancePolicy::CooperativeRescue;
-    if (m_diagnostic.is_rescue_attempt)
-    {
-        m_diagnostic.accepted_cluster_count = component.key_list.size() - rescue_candidate_count;
-        m_diagnostic.rescue_candidate_cluster_count = rescue_candidate_count;
-    }
-    if (previous) m_diagnostic.previous_component_objective = previous->GetTotalObjective();
+    m_trials.BeginBoundary(m_policy,stage,factor);
+    if (auto * record=m_trials.Record()) record->trial=trial;
 }
-
-void BoundaryObservationScope::BeginTrial(BoundaryObservationStage stage, double factor, std::size_t trial_number)
+void BoundaryObservationScope::Finish(const BoundaryComponentDecision & decision) noexcept
 {
-    if (stage == BoundaryObservationStage::Backtracking) m_diagnostic.trial_count = trial_number;
-    m_trials.BeginBoundary(m_policy, stage, factor);
+    m_trials.Flush();
+    if (!m_session || !m_session->Enabled()) return;
+    AuditEvent event{ .stage=m_policy == BoundaryAcceptancePolicy::CooperativeRescue ? AuditStage::RescueEndpoint : AuditStage::BoundaryEndpoint,
+        .category=decision.accepted_source == BoundaryComponentAcceptedSource::None ? (decision.exhausted ? AuditCategory::Exhausted : AuditCategory::Rejected) :
+            (m_policy == BoundaryAcceptancePolicy::CooperativeRescue ? AuditCategory::Rescue : AuditCategory::None),
+        .outcome=decision.accepted_source == BoundaryComponentAcceptedSource::None ? "rejected" : "accepted",
+        .reason=decision.accepted_source == BoundaryComponentAcceptedSource::None ? (decision.exhausted ? "component-exhausted" : "component-rejected") : "component-selected",
+        .scope="component", .factor=decision.accepted_factor };
+    SetKey(event, m_component.key_list.empty() ? std::span<const std::size_t>{} : std::span<const std::size_t>{m_component.key_list.front()}); m_session->Record(event);
 }
-
-void BoundaryObservationScope::CandidateEvaluated(BoundaryObservationStage stage,
-    const FitStatePatch & patch, const FitStateView & state, double factor,
-    const std::optional<BoundaryCandidateEvaluation> & evaluation)
-{
-    const auto * record{ m_trials.Record() };
-    ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, stage), patch.atom_index_list,
-        state, nullptr, factor, evaluation ? "accepted" : "rejected", record ? record->outcome : "",
-        stage != BoundaryObservationStage::Backtracking);
-    if (stage == BoundaryObservationStage::Endpoint && evaluation)
-        m_diagnostic.endpoint_component_objective = evaluation->audit_objective.GetTotalObjective();
-}
-
-void BoundaryObservationScope::CorrectionActivity(std::size_t shape_count, std::size_t offset_count)
-{
-    m_diagnostic.shape_active_atom_count = shape_count;
-    m_diagnostic.offset_active_atom_count = offset_count;
-}
-
-void BoundaryObservationScope::BeginCorrectionSolve(const ObjectiveBreakdown & reference)
-{
-    m_diagnostic.joint_reference_component_objective = reference.GetTotalObjective();
-}
-
-void BoundaryObservationScope::CorrectionSolved(const BoundaryJointCorrectionResult & result)
-{
-    m_diagnostic.joint_correction_status = result.status;
-    m_diagnostic.joint_parameter_count = result.parameter_count;
-    if (result.status == BoundaryJointCorrectionStatus::CandidateReady)
-    {
-        m_diagnostic.joint_damping = result.damping;
-        m_diagnostic.maximum_normalized_trust_step = result.maximum_normalized_trust_step;
-    }
-}
-
-void BoundaryObservationScope::CorrectionEvaluated(const FitStatePatch & patch, const FitStateView & state,
-    const FitStateView & endpoint, double damping,
-    const BoundaryCorrectionEvaluation & evaluation)
-{
-    m_diagnostic.suspicious_candidate_atom_count = evaluation.suspicious_atom_count;
-    if (evaluation.suspicious_atom_count != 0)
-    {
-        ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
-            patch.atom_index_list, state, &endpoint, damping, "rejected", "suspicious");
-        return;
-    }
-    if (evaluation.raw_objective)
-        m_diagnostic.joint_candidate_component_objective = evaluation.raw_objective->GetTotalObjective();
-    auto * record{ m_trials.Record() };
-    ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
-        patch.atom_index_list, state, &endpoint, damping, evaluation.accepted ? "accepted" : "rejected",
-        evaluation.members && !evaluation.accepted ? "strict-improvement" : (record ? record->outcome : ""));
-    if (!evaluation.accepted && record && evaluation.members)
-        record->outcome = "members-passed-strict-improvement-failed";
-}
-
-void BoundaryObservationScope::AcceptedCandidate(const BoundaryCandidateEvaluation & evaluation)
-{
-    m_diagnostic.candidate_component_objective = evaluation.audit_objective.GetTotalObjective();
-}
-
-void BoundaryObservationScope::Accept(const BoundaryComponentDecision & decision)
-{
-    m_trials.Accept(decision.accepted_source, m_diagnostic);
-    if (m_diagnostic.is_rescue_attempt)
-        m_diagnostic.rescued_cluster_count = m_diagnostic.rescue_candidate_cluster_count;
-}
-
-void BoundaryObservationScope::Finish(const BoundaryComponentDecision & decision)
-{
-    m_diagnostic.accepted_source = decision.accepted_source;
-    m_diagnostic.accepted_factor = decision.accepted_factor;
-    m_diagnostic.exhausted = decision.exhausted;
-    if (m_diagnostic.is_rescue_attempt && decision.accepted_source != BoundaryComponentAcceptedSource::None &&
-        m_diagnostic.previous_component_objective && m_diagnostic.candidate_component_objective)
-        m_diagnostic.component_improvement = *m_diagnostic.previous_component_objective - *m_diagnostic.candidate_component_objective;
-}
-
-void ObserveBoundaryGlobalImprovement(SecondStageObservationSession * session, double improvement)
-{
-    if (!session) return;
-    for (auto & diagnostic : session->iteration.boundary_reconciliation_diagnostic_list)
-        if (diagnostic.is_rescue_attempt && diagnostic.accepted_source != BoundaryComponentAcceptedSource::None)
-            diagnostic.global_improvement = improvement;
-}
-
-void BeginCandidateObservation(const CandidateSelectionInputs & inputs, const std::vector<ClusterKey> & keys)
-{
-    if (!inputs.observation) return;
-    // Allocate entries before workers start; each key then has one writer.
-    auto & records{ inputs.observation->iteration.candidate_by_key };
-    records.clear();
-    if (inputs.options.quiet_mode || !IsDebugLogLevelEnabled()) return;
-    for (const auto & key : keys) records.emplace(key, ClusterCandidateDiagnostic{ .key = key });
-}
-
-void ObserveCandidateDecision(const CandidateSelectionInputs & inputs, const ClusterKey & key,
-    const CandidateDecisionEvidence & evidence)
-{
-    if (!inputs.observation) return;
-    auto & records{ inputs.observation->iteration.candidate_by_key };
-    const auto iter{ records.find(key) };
-    if (iter != records.end()) static_cast<CandidateDecisionEvidence &>(iter->second.attempt) = evidence;
-}
-
-void ObserveCandidateSelection(SecondStageObservationSession * session, const CandidateSelection & selection)
-{
-    if (!session) return;
-    auto & output{ session->iteration };
-    const auto append = [&](const auto & decisions, auto & records)
-    {
-        records.clear();
-        for (const auto & decision : decisions)
-        {
-            const auto iter{ output.candidate_by_key.find(decision.key) };
-            if (iter != output.candidate_by_key.end()) records.emplace_back(iter->second);
-        }
-    };
-    append(selection.accepted_cluster_evidence_list, output.accepted_cluster_diagnostic_list);
-    append(selection.rejected_cluster_evidence_list, output.rejected_cluster_diagnostic_list);
-}
-
-void ObserveBoundaryRescue(SecondStageObservationSession * session, const ClusterKey & key)
-{
-    if (!session) return;
-    const auto iter{ session->iteration.candidate_by_key.find(key) };
-    if (iter != session->iteration.candidate_by_key.end()) iter->second.boundary_rescued = true;
-}
-
-void ObserveBoundaryRejected(SecondStageObservationSession * session,
-    const std::vector<ClusterKey> & keys, bool exhausted)
-{
-    if (!session) return;
-    auto & records{ session->iteration.boundary_reconciliation_diagnostic_list };
-    const auto iter{ std::ranges::find(records | std::views::reverse, keys,
-        &BoundaryComponentReconciliationDiagnostic::key_list) };
-    if (iter == records.rend()) return;
-    iter->accepted_source = BoundaryComponentAcceptedSource::None;
-    iter->accepted_factor.reset();
-    iter->exhausted = exhausted;
-}
-
-LocalSearchObservation::LocalSearchObservation(const CandidateSelectionInputs & inputs,
-    const ClusterKey & key, const std::vector<SampleRef> & samples)
-    : m_inputs(inputs), m_key(key), m_samples(samples), m_diagnostic(nullptr)
-{
-    if (!inputs.observation) return;
-    const auto iter{ inputs.observation->iteration.candidate_by_key.find(key) };
-    if (iter != inputs.observation->iteration.candidate_by_key.end()) m_diagnostic = &iter->second.attempt;
-}
-
-void LocalSearchObservation::BeginSearch(double radius)
-{
-    ObserveHistorySearch(m_inputs.observation, m_key);
-    if (!m_diagnostic) return;
-    *m_diagnostic = ObjectiveAttemptDiagnostic{};
-    m_diagnostic->trust_region_radius = radius;
-}
-void LocalSearchObservation::Generated() { if (m_diagnostic) ++m_diagnostic->trial_count; }
-void LocalSearchObservation::Step(double norm)
-{
-    if (!m_diagnostic) return;
-    m_diagnostic->pre_objective_attempted_step_norm = norm;
-    m_diagnostic->trust_region_step_norm = norm;
-}
-void LocalSearchObservation::TrustSkipped() { if (m_diagnostic) ++m_diagnostic->trust_skipped_trial_count; }
-void LocalSearchObservation::Nonmaterial() { if (m_diagnostic) m_diagnostic->trust_region_step_norm = 0.0; }
-void LocalSearchObservation::Trial(const CandidateEvaluationOverlay & candidate,
-    const CandidateDecisionEvidence & evidence, bool accepted, bool polish)
-{
-    if (!m_diagnostic) return;
-    ObjectiveAttemptDiagnostic polish_diagnostic;
-    auto & diagnostic{ polish ? polish_diagnostic : *m_diagnostic };
-    static_cast<CandidateDecisionEvidence &>(diagnostic) = evidence;
-    diagnostic.pre_objective_attempted_step_norm.reset();
-    diagnostic.scale.reset();
-    const auto domain_iter{ m_inputs.objective_domain.cluster_by_key.find(m_key) };
-    if (domain_iter != m_inputs.objective_domain.cluster_by_key.end())
-    {
-        diagnostic.fit_sample_count = domain_iter->second.fit_sample_ref_list.size();
-        diagnostic.tail_sample_count = domain_iter->second.tail_sample_ref_list.size();
-        diagnostic.scale = domain_iter->second.scale;
-    }
-    ObserveLocalHistory(m_inputs.observation, candidate, m_key, m_samples, m_inputs.objective_domain,
-        polish ? "local-polish" : "local-candidate", accepted, diagnostic);
-}
-
 } // namespace rhbm_gem::core::detail

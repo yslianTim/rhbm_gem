@@ -1,3 +1,9 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_WORK(kind) ((void)0)
+#define RHBM_TEST_BACKGROUND(value) ((void)0)
+#endif
 #include "core/detail/second_stage/SecondStageState.hpp"
 
 #include <algorithm>
@@ -99,6 +105,7 @@ std::shared_ptr<const FrozenBackground> BuildFrozenBackground(
             if (!std::isfinite(responses.at(sample_index))) return nullptr;
         }
     }
+    RHBM_TEST_BACKGROUND(*background);
     return background;
 }
 
@@ -164,6 +171,7 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     FittedGaussianSnapshot node_snapshot)
 {
+    RHBM_TEST_WORK(Snapshot);
     if (node_snapshot.size() != context.atom_list.size())
     {
         throw std::invalid_argument("Second-stage node snapshot size is inconsistent.");
@@ -175,6 +183,7 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     const FitState & state)
 {
+    RHBM_TEST_WORK(Snapshot);
     return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshotImpl(state));
 }
 
@@ -182,6 +191,7 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageContext & context,
     const FitStateView & state)
 {
+    RHBM_TEST_WORK(Snapshot);
     return BuildSecondStageModelSnapshot(context, BuildFittedGaussianSnapshotImpl(state));
 }
 

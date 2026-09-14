@@ -94,9 +94,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
-    algorithm::WeightedRidgeSolver & reusable_solver,
-    bool log_debug_diagnostics,
-    std::string_view diagnostic_phase = "outer-operator");
+    algorithm::WeightedRidgeSolver & reusable_solver);
 
 class JointPolishParameterization
 {
@@ -199,7 +197,6 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    std::string_view diagnostic_phase = "boundary-reconciliation",
     JointCorrectionTrustReference trust_reference = JointCorrectionTrustReference::OuterPrevious);
 
 } // namespace rhbm_gem::core::detail

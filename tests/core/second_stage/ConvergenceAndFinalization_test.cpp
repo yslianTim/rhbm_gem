@@ -1,3 +1,4 @@
+#include "support/SecondStageNumericalProbe.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -223,12 +224,12 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     EXPECT_LT(
         *observation.final_polish.objective_after,
         *observation.final_polish.objective_before);
-    ASSERT_EQ(observation.final_polish.component_list.size(), 1U);
-    EXPECT_GE(observation.final_polish.component_list.front().round_count, 1U);
+    ASSERT_EQ(observation.final_polish.component_count, 1U);
+    EXPECT_GE(observation.final_polish.round_count, 1U);
     EXPECT_LE(
-        observation.final_polish.component_list.front().round_count,
+        observation.final_polish.round_count,
         options.second_stage_dependency_polish_max_iterations);
-    EXPECT_EQ(observation.final_polish.component_list.front().parameter_count, 6U);
+    EXPECT_EQ(observation.final_polish.parameter_count, 6U);
     EXPECT_NE(
         polish_result.state.at(0).mdpde.GetModel().GetOffset(),
         polish_result.state.at(1).mdpde.GetModel().GetOffset());
@@ -769,29 +770,12 @@ TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsets
     const auto run_logged = [](rg::ModelObject & model)
     {
         auto options{ MakeSecondStageOptions() };
-        options.quiet_mode = false;
-        const auto previous_level{ Logger::GetLogLevel() };
-        Logger::SetLogLevel(LogLevel::Debug);
-        testing::internal::CaptureStdout();
         model.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
+        second_stage_test::BeginNumericalCapture();
         detail::RunSecondStageIterations(model, options);
-        const auto output{ testing::internal::GetCapturedStdout() };
-        Logger::SetLogLevel(previous_level);
-        std::vector<std::string> evidence;
-        std::istringstream lines{ output };
-        std::string line;
-        while (std::getline(lines, line))
-        {
-            for (const std::string marker : {
-                "Convergence safeguard audit:", "Second-stage audit terminal:",
-                "Second-stage audit terminal atom:" })
-            {
-                const auto position{ line.find(marker) };
-                if (position != std::string::npos) evidence.emplace_back(line.substr(position));
-            }
-        }
-        EXPECT_FALSE(evidence.empty());
-        return evidence;
+        const auto capture{ second_stage_test::EndNumericalCapture() };
+        EXPECT_FALSE(capture.commits.empty());
+        return capture.commits;
     };
     const auto original_trace{ run_logged(*original) };
     EXPECT_EQ(original_trace, run_logged(*relabeled));

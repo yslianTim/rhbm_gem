@@ -174,14 +174,6 @@ void ValidateBuildOptions(const CouplingGraphOptions & options)
         throw std::invalid_argument(
             "Local fitting coupling maximum atom count must be positive.");
     }
-    for (const auto minimum_weight : options.sensitivity_minimum_weight_list)
-    {
-        if (!std::isfinite(minimum_weight) || minimum_weight < 0.0 || minimum_weight > 1.0)
-        {
-            throw std::invalid_argument(
-                "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
-        }
-    }
 }
 
 double FrobeniusNorm(const Eigen::Matrix3d & matrix)
@@ -210,109 +202,6 @@ void SortGraphWeightedEdges(std::vector<GraphWeightedEdge> & weighted_edge_list)
 
 } // namespace
 
-std::vector<CouplingGraphSummary::ThresholdSensitivity>
-CouplingGraphBuilder::BuildThresholdSensitivity(
-    const std::vector<GraphWeightedEdge> & weighted_edge_list,
-    const std::vector<double> & minimum_weight_list) const
-{
-    std::vector<CouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
-    sensitivity_list.reserve(minimum_weight_list.size());
-    if (minimum_weight_list.empty()) return sensitivity_list;
-
-    struct ThresholdEntry
-    {
-        double minimum_weight{ 0.0 };
-        std::size_t original_index{ 0 };
-    };
-
-    std::vector<ThresholdEntry> threshold_entry_list;
-    threshold_entry_list.reserve(minimum_weight_list.size());
-    for (std::size_t index = 0; index < minimum_weight_list.size(); index++)
-    {
-        threshold_entry_list.emplace_back(
-            ThresholdEntry{ minimum_weight_list.at(index), index });
-    }
-    std::sort(
-        threshold_entry_list.begin(),
-        threshold_entry_list.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            if (lhs.minimum_weight != rhs.minimum_weight)
-            {
-                return lhs.minimum_weight > rhs.minimum_weight;
-            }
-            return lhs.original_index < rhs.original_index;
-        });
-
-    std::vector<double> threshold_list;
-    std::vector<std::size_t> bucket_index_by_original_index(minimum_weight_list.size());
-    for (const auto & entry : threshold_entry_list)
-    {
-        if (threshold_list.empty() || threshold_list.back() != entry.minimum_weight)
-        {
-            threshold_list.emplace_back(entry.minimum_weight);
-        }
-        bucket_index_by_original_index.at(entry.original_index) = threshold_list.size() - 1;
-    }
-
-    std::vector<std::vector<std::size_t>> edge_index_list_by_bucket(threshold_list.size());
-    for (std::size_t edge_index = 0; edge_index < weighted_edge_list.size(); edge_index++)
-    {
-        const auto bucket_iter{ std::lower_bound(
-            threshold_list.begin(),
-            threshold_list.end(),
-            weighted_edge_list.at(edge_index).weight,
-            [](const double threshold, const double weight)
-            {
-                return threshold > weight;
-            }) };
-        if (bucket_iter == threshold_list.end()) continue;
-        edge_index_list_by_bucket.at(
-            static_cast<std::size_t>(bucket_iter - threshold_list.begin()))
-            .emplace_back(edge_index);
-    }
-
-    struct ThresholdSnapshot
-    {
-        std::size_t retained_edge_count{ 0 };
-        DisjointSetComponentSummary component_summary{};
-    };
-    std::vector<ThresholdSnapshot> snapshot_list(threshold_list.size());
-    DisjointSet component_set{ m_atom_count };
-    std::size_t retained_edge_count{ 0 };
-    for (std::size_t bucket_index = 0; bucket_index < threshold_list.size(); bucket_index++)
-    {
-        for (const auto edge_index : edge_index_list_by_bucket.at(bucket_index))
-        {
-            const auto & weighted_edge{ weighted_edge_list.at(edge_index) };
-            component_set.Merge(weighted_edge.left_atom_index, weighted_edge.right_atom_index);
-        }
-        retained_edge_count += edge_index_list_by_bucket.at(bucket_index).size();
-        snapshot_list.at(bucket_index) = ThresholdSnapshot{
-            retained_edge_count,
-            SummarizeDisjointSetComponents(component_set, m_atom_count)
-        };
-    }
-
-    for (std::size_t original_index = 0; original_index < minimum_weight_list.size(); original_index++)
-    {
-        const auto & snapshot{
-            snapshot_list.at(bucket_index_by_original_index.at(original_index))
-        };
-        sensitivity_list.emplace_back(
-            CouplingGraphSummary::ThresholdSensitivity{
-                minimum_weight_list.at(original_index),
-                snapshot.retained_edge_count,
-                weighted_edge_list.size() - snapshot.retained_edge_count,
-                snapshot.component_summary.component_count,
-                snapshot.component_summary.maximum_component_size,
-                m_atom_count == 0 ? 0.0 :
-                    static_cast<double>(snapshot.component_summary.maximum_component_size) /
-                    static_cast<double>(m_atom_count)
-            });
-    }
-    return sensitivity_list;
-}
 
 GraphTopology CouplingGraphBuilder::BuildFromWeights(
     const std::vector<GraphWeightedEdge> & weighted_edge_list,
@@ -500,9 +389,6 @@ GraphTopology CouplingGraphBuilder::BuildWeightedOrBinary(
     SortGraphWeightedEdges(weighted_edge_list);
     auto topology{ BuildFromWeights(weighted_edge_list, options, previous_topology) };
     topology.summary.uses_weighted_graph = true;
-    topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
-        weighted_edge_list,
-        options.sensitivity_minimum_weight_list);
     return topology;
 }
 

@@ -35,15 +35,6 @@ struct GraphSampleDependency
 
 struct CouplingGraphSummary
 {
-    struct ThresholdSensitivity
-    {
-        double minimum_weight{ 0.0 };
-        std::size_t retained_edge_count{ 0 };
-        std::size_t cut_edge_count{ 0 };
-        std::size_t component_count{ 0 };
-        std::size_t maximum_component_size{ 0 };
-        double maximum_component_ratio{ 0.0 };
-    };
 
     bool uses_weighted_graph{ false };
     std::size_t candidate_edge_count{ 0 };
@@ -52,7 +43,6 @@ struct CouplingGraphSummary
     double weight_median{ 0.0 };
     double weight_percentile_95{ 0.0 };
     double weight_maximum{ 0.0 };
-    std::vector<ThresholdSensitivity> threshold_sensitivity_list{};
     // The requested threshold, retained for diagnostics when fallback occurs.
     double configured_minimum_weight{ 0.0 };
     std::size_t component_count{ 0 };
@@ -77,9 +67,6 @@ struct CouplingGraphOptions
 {
     double minimum_weight{ 0.05 };
     std::optional<double> retained_edge_minimum_weight{};
-    std::vector<double> sensitivity_minimum_weight_list{
-        0.05, 0.075, 0.10, 0.15, 0.20, 0.30
-    };
     std::size_t maximum_atom_count{ 100 };
 };
 
@@ -156,9 +143,6 @@ public:
         const GraphTopology * previous_topology = nullptr);
 
 private:
-    std::vector<CouplingGraphSummary::ThresholdSensitivity> BuildThresholdSensitivity(
-        const std::vector<GraphWeightedEdge> & weighted_edge_list,
-        const std::vector<double> & minimum_weight_list) const;
 
     GraphTopology BuildFromWeights(
         const std::vector<GraphWeightedEdge> & weighted_edge_list,

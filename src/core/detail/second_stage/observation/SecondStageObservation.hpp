@@ -1,227 +1,137 @@
 #pragma once
 
 #include "core/detail/second_stage/observation/SecondStageDiagnostics.hpp"
-#include <array>
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <span>
 
-namespace rhbm_gem::core {
-struct FitOptions;
-}
-
+namespace rhbm_gem::core { struct FitOptions; }
 namespace rhbm_gem::core::detail {
 
-bool IsDebugLogLevelEnabled();
-
-void RecordJointMemberRejection(
-    JointCandidateObjectiveDiagnostic * record,
-    const ClusterKey & key,
-    const std::optional<ObjectiveBreakdown> & previous,
-    const std::optional<ObjectiveBreakdown> & best,
-    const std::optional<ObjectiveBreakdown> & candidate,
-    bool best_checked);
-
-JointCandidateObjectiveDiagnostic * BeginJointCandidateDiagnostic(
-    bool quiet_mode,
-    std::vector<JointCandidateObjectiveDiagnostic> & records,
-    std::string_view source,
-    std::optional<double> factor = std::nullopt,
-    std::size_t round = 0);
-
-struct BestObjectiveTraceEnvironment;
-class ClusterHistoryObserver;
-class PhaseAudit;
-class TrustModelAudit;
-
-class SecondStageObservationSession
-{
-public:
-    std::shared_ptr<BestObjectiveTraceEnvironment> best_trace{};
-    std::shared_ptr<ClusterHistoryObserver> cluster_history{};
-    std::shared_ptr<PhaseAudit> phase_audit{};
-    std::shared_ptr<TrustModelAudit> trust_model_audit{};
-    IterationObservation iteration{};
-    FinalDependencyPolishDiagnostic final_polish{};
-
-    SecondStageObservationSession() = default;
-    SecondStageObservationSession(const SecondStageObservationSession &) = delete;
-    SecondStageObservationSession & operator=(const SecondStageObservationSession &) = delete;
-};
-
+class TrustRegionStateSet;
 struct CandidateSelectionInputs;
 struct CandidateSelection;
+struct CandidateCommitResult;
 struct BoundaryComponentDecision;
 struct IterationResult;
 struct IterationProposalResult;
-struct TrustModelTrialRecord;
+struct QuarantineState;
+struct FinalDependencyPolishResult;
+enum class SecondStageStopReason;
 enum class BoundaryAcceptancePolicy;
 struct BoundaryCandidateEvaluation;
 struct BoundaryCorrectionEvaluation;
-struct BoundaryJointCorrectionResult;
 
-// Observation entry points preserve the existing lifecycle and never choose candidates.
-void BeginClusterHistoryObserver(SecondStageObservationSession &, bool quiet) noexcept;
-void ObserveHistoryPartition(SecondStageObservationSession * observation, const SecondStageContext &, const CouplingGraphPartition &,
-    const ObjectiveDomain &, const FitState &) noexcept;
-void ObserveHistoryBackground(SecondStageObservationSession * observation, const SecondStageContext &, const std::shared_ptr<const FrozenBackground> &,
-    const CouplingGraphPartition &, const ObjectiveDomain &, const FitState &) noexcept;
-void ObserveHistoryAttempt(SecondStageObservationSession * observation, SecondStageContext &, const ObjectiveByKey &, const FitState &,
-    const CouplingGraphPartition &, const ObjectiveDomain &, std::size_t attempt, std::size_t accepted) noexcept;
-void ObserveHistorySearch(SecondStageObservationSession * observation, const ClusterKey &) noexcept;
-void ObserveLocalHistory(SecondStageObservationSession * observation, const CandidateEvaluationOverlay &, const ClusterKey &,
-    const std::vector<SampleRef> &, const ObjectiveDomain &, std::string_view source,
-    bool accepted, ObjectiveAttemptDiagnostic &) noexcept;
-void ObserveBoundaryHistoryAccepted(SecondStageObservationSession * observation, std::size_t token) noexcept;
-void ObserveHistoryRejected(SecondStageObservationSession * observation, const ClusterKey &) noexcept;
-void ObserveHistoryPublication(SecondStageObservationSession * observation) noexcept;
+// Scheduling uses the raw log level; never replace it with audit enablement.
+bool IsDebugLogLevelEnabled();
+bool IsSecondStageAuditEnabled(bool quiet) noexcept;
 
-std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext &, bool quiet,
-    const ObjectiveDomain &, const FitState &, const std::vector<ClusterKey> &,
-    std::size_t attempt, std::size_t domain_id) noexcept;
+struct SecondStageAuditData
+{
+    AuditBatch batch{};
+    bool polish_attempted{ false }, polish_accepted{ false }, polish_applied{ false };
+    FinalPolishResidualSafetyStatus polish_status{ FinalPolishResidualSafetyStatus::NotEvaluated };
+    std::optional<ConvergenceAssessment> polish_certificate{};
+    std::optional<ObjectiveBreakdown> final_objective{};
+    std::array<SelectionAuditDiagnostic, 2> selection{};
+    std::optional<ConvergenceAssessment> convergence{};
+    std::optional<ObjectiveBreakdown> previous{}, candidate{}, best{};
+    std::string_view score_source{ "not_evaluated" };
+    std::size_t attempt{ 0 }, objective_revision{ 0 }, recovery_revision{ 0 };
+    std::size_t background_revision{ 0 }, partition_revision{ 0 };
+    std::size_t entered{ 0 }, retried{ 0 }, released{ 0 }, failed_retry{ 0 };
+};
 
-void BeginPhaseObservation(SecondStageObservationSession * observation, SecondStageContext &, bool quiet, const ObjectiveDomain &, const FitState &,
-    const std::vector<ClusterKey> &, std::size_t attempt, std::size_t domain_id) noexcept;
+class SecondStageObservationSession
+{
+    std::unique_ptr<SecondStageAuditData> m_audit;
+    std::atomic<bool> m_enabled{ false };
+    std::mutex m_mutex;
+    std::chrono::steady_clock::time_point m_start{ std::chrono::steady_clock::now() };
+public:
+    using Writer = void (*)(std::string_view);
+    explicit SecondStageObservationSession(bool quiet = true, Writer writer = nullptr) noexcept;
+    SecondStageObservationSession(const SecondStageObservationSession &) = delete;
+    SecondStageObservationSession & operator=(const SecondStageObservationSession &) = delete;
+    IterationObservation iteration{};
+    FinalDependencyPolishDiagnostic final_polish{};
+    Writer writer;
+    bool Enabled() const noexcept { return m_enabled.load(std::memory_order_relaxed); }
+    SecondStageAuditData * Audit() noexcept { return Enabled() ? m_audit.get() : nullptr; }
+    void Disable() noexcept { m_enabled.store(false, std::memory_order_relaxed); }
+    void Merge(const AuditBatch &) noexcept;
+    void Record(AuditEvent) noexcept;
+    void Write(std::string_view) noexcept;
+    double ElapsedMilliseconds() const noexcept;
+    void BeginAttempt(std::size_t attempt, std::size_t objective_revision, std::size_t recovery_revision,
+        bool background_changed, bool partition_changed) noexcept;
+};
+
+void ObserveProposal(SecondStageObservationSession *, const IterationProposalResult &) noexcept;
+void ObserveCommit(SecondStageObservationSession *, const CandidateSelection &, const CandidateCommitResult &, const TrustRegionStateSet &) noexcept;
+void ObserveQuarantine(SecondStageObservationSession *, const QuarantineState &, const QuarantineState &) noexcept;
+void ObserveSelectionAudit(SecondStageObservationSession *, bool rescue, bool executed,
+    std::string_view result, std::string_view reason, std::size_t removed = 0) noexcept;
+void ObserveGlobalGate(SecondStageObservationSession *, bool rescue, const ObjectiveBreakdown *,
+    const std::optional<ObjectiveBreakdown> &, const ObjectiveBreakdown *, bool accepted,
+    const ObjectiveProgressGateEvidence & = {}) noexcept;
+
+// Each local worker owns five detail slots; only the bounded merge takes a lock.
+class LocalSearchObservation
+{
+    SecondStageObservationSession * m_session;
+    const ClusterKey & m_key;
+    std::optional<AuditBatch> m_batch;
+    double m_radius{ 0.0 };
+    std::size_t m_trial{ 0 };
+public:
+    LocalSearchObservation(const CandidateSelectionInputs &, const ClusterKey &) noexcept;
+    ~LocalSearchObservation();
+    void BeginSearch(double radius) noexcept { if (m_batch) m_radius = radius; }
+    void Generated() noexcept { if (m_batch) ++m_trial; }
+    void TrustSkipped() noexcept;
+    void Trial(const CandidateDecisionEvidence &, bool accepted, bool polish = false) noexcept;
+    void Nonmaterial() noexcept;
+    void Failure(AuditCategory, std::string_view reason) noexcept;
+};
 
 enum class BoundaryObservationStage { Endpoint, Correction, Backtracking };
-
-// Record indices and history publication tokens never enter numerical results.
 class JointCandidateObservation
 {
     SecondStageObservationSession * m_session;
-    bool m_quiet;
-    std::vector<JointCandidateObjectiveDiagnostic> & m_records;
-    std::optional<std::size_t> m_current{};
-    std::array<std::optional<std::size_t>, 3> m_record_by_stage{};
+    std::optional<AuditEvent> m_event;
+    bool m_pending{ false };
+    std::size_t m_first_atom{ 0 }, m_atom_count{ 0 };
 public:
-    JointCandidateObservation(SecondStageObservationSession * session, bool quiet,
-        std::vector<JointCandidateObjectiveDiagnostic> & records)
-        : m_session(session), m_quiet(quiet), m_records(records) {}
-    void Begin(BoundaryObservationStage, std::string_view, double factor, std::size_t round = 0);
-    JointCandidateObjectiveDiagnostic * Record();
-    void BeginBoundary(BoundaryAcceptancePolicy, BoundaryObservationStage, double factor);
-    void BeginMembers();
-    void Member(const CandidateEvaluationOverlay &, const ClusterKey &, const std::vector<SampleRef> &,
-        const ObjectiveDomain &, BoundaryAcceptancePolicy, bool accepted, const CandidateDecisionEvidence &);
-    void RejectGlobalObjective();
-    void RejectStrictImprovement(double candidate, double previous);
-    void Accept(BoundaryComponentAcceptedSource, BoundaryComponentReconciliationDiagnostic &) noexcept;
+    explicit JointCandidateObservation(SecondStageObservationSession * session, std::span<const std::size_t> key = {}) noexcept;
+    ~JointCandidateObservation();
+    void Begin(BoundaryObservationStage, std::string_view, double factor, std::size_t round = 0) noexcept;
+    AuditEvent * Record() noexcept;
+    void Flush() noexcept;
+    void BeginBoundary(BoundaryAcceptancePolicy, BoundaryObservationStage, double factor) noexcept;
+    void Member(const ClusterKey &, bool accepted, const CandidateDecisionEvidence &) noexcept;
+    void Gate(const ObjectiveProgressGateEvidence &) noexcept;
+    void RejectGlobalObjective() noexcept;
+    void RejectStrictImprovement() noexcept;
+    void Global(const ObjectiveBreakdown *, const std::optional<ObjectiveBreakdown> &, const ObjectiveBreakdown *) noexcept;
 };
+void RecordJointMemberRejection(AuditEvent *, const ClusterKey &, const std::optional<ObjectiveBreakdown> &,
+    const std::optional<ObjectiveBreakdown> &, const std::optional<ObjectiveBreakdown> &, bool best_checked) noexcept;
 
 class BoundaryObservationScope
 {
-    const CandidateSelectionInputs & m_inputs;
+    SecondStageObservationSession * m_session;
     BoundaryAcceptancePolicy m_policy;
-    BoundaryComponentReconciliationDiagnostic m_unobserved{};
-    BoundaryComponentReconciliationDiagnostic & m_diagnostic;
+    const BoundaryReconciliationComponent & m_component;
     JointCandidateObservation m_trials;
 public:
     BoundaryObservationScope(const CandidateSelectionInputs &, const BoundaryReconciliationComponent &,
-        BoundaryAcceptancePolicy, const ObjectiveBreakdown * previous, std::size_t rescue_candidate_count);
-    JointCandidateObservation & Trials() { return m_trials; }
-    void BeginTrial(BoundaryObservationStage, double factor, std::size_t trial_number = 1);
-    void CandidateEvaluated(BoundaryObservationStage, const FitStatePatch &, const FitStateView &,
-        double factor, const std::optional<BoundaryCandidateEvaluation> &);
-    void CorrectionActivity(std::size_t shape_count, std::size_t offset_count);
-    void BeginCorrectionSolve(const ObjectiveBreakdown & reference);
-    void CorrectionSolved(const BoundaryJointCorrectionResult &);
-    void CorrectionEvaluated(const FitStatePatch &, const FitStateView &, const FitStateView & endpoint,
-        double damping, const BoundaryCorrectionEvaluation &);
-    void AcceptedCandidate(const BoundaryCandidateEvaluation &);
-    void Accept(const BoundaryComponentDecision &);
-    void Finish(const BoundaryComponentDecision &);
+        BoundaryAcceptancePolicy) noexcept;
+    JointCandidateObservation & Trials() noexcept { return m_trials; }
+    void BeginTrial(BoundaryObservationStage, double factor, std::size_t trial_number = 1) noexcept;
+    void Finish(const BoundaryComponentDecision &) noexcept;
 };
-
-void BeginCandidateObservation(const CandidateSelectionInputs &, const std::vector<ClusterKey> &);
-void ObserveCandidateDecision(const CandidateSelectionInputs &, const ClusterKey &, const CandidateDecisionEvidence &);
-void ObserveCandidateSelection(SecondStageObservationSession *, const CandidateSelection &);
-void ObserveBoundaryRescue(SecondStageObservationSession *, const ClusterKey &);
-void ObserveBoundaryGlobalImprovement(SecondStageObservationSession *, double improvement);
-void ObserveBoundaryRejected(SecondStageObservationSession *, const std::vector<ClusterKey> &, bool exhausted);
-
-class LocalSearchObservation
-{
-    const CandidateSelectionInputs & m_inputs;
-    const ClusterKey & m_key;
-    const std::vector<SampleRef> & m_samples;
-    ObjectiveAttemptDiagnostic * m_diagnostic;
-public:
-    LocalSearchObservation(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &);
-    void BeginSearch(double radius);
-    void Generated();
-    void Step(double norm);
-    void TrustSkipped();
-    void Trial(const CandidateEvaluationOverlay &, const CandidateDecisionEvidence &, bool accepted, bool polish = false);
-    void Nonmaterial();
-};
-
-class TrustModelTrialObserver
-{
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-    const CandidateSelectionInputs & inputs;
-    const ClusterKey & key;
-    const std::vector<SampleRef> & samples;
-    TrustModelTrialRecord * record;
-    std::optional<std::size_t> final_trial{};
-    std::size_t search_pass{ 0 };
-    std::size_t trial_number{ 0 };
-public:
-    TrustModelTrialObserver(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &);
-    void BeginSearch() { ++search_pass; trial_number = 0; }
-    void Generated();
-    void Invalid();
-    void Nonmaterial();
-    void TrustSkipped();
-    void GuardRejected();
-    void Trial(const FitStatePatch &, const CandidateDecisionEvidence &, bool polish, double factor, bool accepted);
-    void Finish(bool shrink_trust_region, std::optional<double>, const CandidateDecisionEvidence &);
-#else
-public:
-    TrustModelTrialObserver(const CandidateSelectionInputs &, const ClusterKey &, const std::vector<SampleRef> &) {}
-    void BeginSearch() {}
-    void Generated() {}
-    void Invalid() {}
-    void Nonmaterial() {}
-    void TrustSkipped() {}
-    void GuardRejected() {}
-    void Trial(const FitStatePatch &, const CandidateDecisionEvidence &, bool, double, bool) {}
-    void Finish(bool, std::optional<double>, const CandidateDecisionEvidence &) {}
-#endif
-};
-
-#ifdef RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT
-void BeginTrustModelAudit(SecondStageObservationSession *, const std::vector<ClusterKey> &);
-void FinalizeTrustModelAudit(SecondStageObservationSession *, const CandidateSelection &);
-void LogTrustModelAudit(const SecondStageObservationSession *, bool, const IterationResult &);
-#else
-inline void BeginTrustModelAudit(SecondStageObservationSession *, const std::vector<ClusterKey> &) {}
-inline void FinalizeTrustModelAudit(SecondStageObservationSession *, const CandidateSelection &) {}
-inline void LogTrustModelAudit(const SecondStageObservationSession *, bool, const IterationResult &) {}
-#endif
-
-#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
-
-void ObservePhaseMissing(SecondStageObservationSession * observation, std::string_view, const ClusterKey &, std::string_view) noexcept;
-void ObservePhaseState(SecondStageObservationSession * observation, std::string_view, const FitState &) noexcept;
-void ObservePhaseCandidate(SecondStageObservationSession * observation, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView * parent = nullptr, double factor = 1.0, std::string_view disposition = "observed",
-    std::string_view reason = "", bool recertify = true) noexcept;
-void ObservePhaseLocalPolish(SecondStageObservationSession * observation, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, bool, const CandidateDecisionEvidence &) noexcept;
-void ObservePhaseSearchAssembly(SecondStageObservationSession * observation, const FitState &) noexcept;
-void ObservePhaseProposal(SecondStageObservationSession * observation, const IterationProposalResult &) noexcept;
-void ObservePhaseFinish(SecondStageObservationSession * observation, const FitOptions &, const std::vector<double> &,
-    const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept;
-#else
-
-inline void ObservePhaseMissing(SecondStageObservationSession *, std::string_view, const ClusterKey &, std::string_view) noexcept {}
-inline void ObservePhaseState(SecondStageObservationSession *, std::string_view, const FitState &) noexcept {}
-inline void ObservePhaseCandidate(SecondStageObservationSession *, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView * = nullptr, double = 1.0, std::string_view = "observed",
-    std::string_view = "", bool = true) noexcept {}
-inline void ObservePhaseLocalPolish(SecondStageObservationSession *, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, bool, const CandidateDecisionEvidence &) noexcept {}
-inline void ObservePhaseSearchAssembly(SecondStageObservationSession *, const FitState &) noexcept {}
-inline void ObservePhaseProposal(SecondStageObservationSession *, const IterationProposalResult &) noexcept {}
-inline void ObservePhaseFinish(SecondStageObservationSession *, const FitOptions &, const std::vector<double> &,
-    const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept {}
-#endif
 
 } // namespace rhbm_gem::core::detail

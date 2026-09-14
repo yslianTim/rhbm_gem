@@ -160,7 +160,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorPreservesIndividualRid
     }
     alg::WeightedRidgeSolver solver;
     const auto result{ detail::EstimateJointOffsets(
-        fixture.first, { 0, 1 }, fixture.second, { 1.0, 1.0 }, solver, false) };
+        fixture.first, { 0, 1 }, fixture.second, { 1.0, 1.0 }, solver) };
     ASSERT_EQ(result.status, detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(result.offset.size(), 2);
     EXPECT_NEAR(result.offset(0), 1.0, 1.0e-10);
@@ -191,9 +191,9 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumn
     }
     alg::WeightedRidgeSolver solver;
     const auto original{ detail::EstimateJointOffsets(
-        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
+        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver) };
     const auto reordered{ detail::EstimateJointOffsets(
-        fixture.first, { 1, 2, 0 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
+        fixture.first, { 1, 2, 0 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver) };
     ASSERT_EQ(original.status, detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(reordered.status, detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(original.offset.size(), 3);
@@ -206,7 +206,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumn
         std::ranges::reverse(atom.neighbor_atom_sample_list);
     }
     const auto reversed_neighbors{ detail::EstimateJointOffsets(
-        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver, false) };
+        fixture.first, { 0, 1, 2 }, fixture.second, { 1.0, 2.0, 4.0, 9.0 }, solver) };
     ASSERT_EQ(reversed_neighbors.status, original.status);
     ASSERT_EQ(reversed_neighbors.offset.size(), original.offset.size());
     for (Eigen::Index column = 0; column < original.offset.size(); column++)
@@ -276,8 +276,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorFitsIndependentAtomOff
             { 0, 1 },
             fixture.second,
             { 1.0, 1.0 },
-            solver,
-            false)
+            solver)
     };
 
     EXPECT_EQ(
@@ -291,7 +290,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorFitsIndependentAtomOff
     {
         const auto clamped{ detail::EstimateJointOffsets(
             fixture.first, { 0, 1 }, fixture.second,
-            { multiplier, multiplier }, solver, false) };
+            { multiplier, multiplier }, solver) };
         ASSERT_EQ(clamped.status, result.status);
         ASSERT_EQ(clamped.offset.size(), result.offset.size());
         EXPECT_DOUBLE_EQ(clamped.offset(0), result.offset(0));
@@ -316,8 +315,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundI
             { 0, 1 },
             fixture.second,
             { 1.0, 1.0 },
-            solver,
-            false)
+            solver)
     };
 
     EXPECT_EQ(
@@ -342,7 +340,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsFrozenBackgroundI
     fixture.second = detail::BuildSecondStageModelSnapshot(fixture.first, state);
     rg::algorithm::WeightedRidgeSolver background_solver;
     const auto with_background{ detail::EstimateJointOffsets(fixture.first, { 0, 1 },
-        fixture.second, { 1.0, 1.0 }, background_solver, false) };
+        fixture.second, { 1.0, 1.0 }, background_solver) };
     ASSERT_EQ(with_background.status, detail::JointOffsetSolveStatus::Converged);
     ASSERT_EQ(with_background.offset.size(), 2);
     EXPECT_NEAR(with_background.offset(0), result.offset(0), 1.0e-12);
@@ -366,8 +364,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { 0 },
             empty_fixture.second,
             { 1.0 },
-            empty_solver,
-            false)
+            empty_solver)
     };
     EXPECT_EQ(
         empty_result.status,
@@ -389,8 +386,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { 0 },
             invalid_fixture.second,
             { 1.0 },
-            invalid_solver,
-            false)
+            invalid_solver)
     };
     EXPECT_EQ(
         invalid_result.status,
@@ -403,7 +399,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
     negligible_basis_fixture.first.atom_list.at(0).raw_sampling_entries.front().point.distance = 1.0e20;
     const auto negligible_basis_result{ detail::EstimateJointOffsets(
         negligible_basis_fixture.first, { 0 }, negligible_basis_fixture.second,
-        { 1.0 }, empty_solver, false) };
+        { 1.0 }, empty_solver) };
     EXPECT_EQ(negligible_basis_result.status, detail::JointOffsetSolveStatus::EmptySystem);
     ASSERT_EQ(negligible_basis_result.offset.size(), 1);
     EXPECT_DOUBLE_EQ(negligible_basis_result.offset(0), 2.0);
@@ -418,7 +414,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
         const auto non_finite_neighbor_result{ detail::EstimateJointOffsets(
             non_finite_neighbor_fixture.first,
             active_neighbor ? detail::ClusterKey{ 0, 1 } : detail::ClusterKey{ 0 },
-            non_finite_neighbor_fixture.second, { 1.0, 1.0 }, invalid_solver, false) };
+            non_finite_neighbor_fixture.second, { 1.0, 1.0 }, invalid_solver) };
         EXPECT_EQ(non_finite_neighbor_result.status, detail::JointOffsetSolveStatus::SystemBuildFailed);
         ASSERT_EQ(non_finite_neighbor_result.offset.size(), active_neighbor ? 2 : 1);
         EXPECT_DOUBLE_EQ(non_finite_neighbor_result.offset(0), 2.0);

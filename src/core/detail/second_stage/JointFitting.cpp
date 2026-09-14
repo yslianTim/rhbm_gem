@@ -1,3 +1,8 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_WORK(kind) ((void)0)
+#endif
 #include "core/detail/second_stage/JointFitting.hpp"
 
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
@@ -14,31 +19,10 @@
 
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem::core::detail {
-
 namespace {
-
-void LogConditioning(
-    const JointFittingConditioning & conditioning,
-    const Eigen::VectorXd & ridge_multiplier,
-    std::string_view solve,
-    std::string_view phase)
-{
-    if (phase == "phase-audit" || Logger::GetLogLevel() < LogLevel::Debug) return;
-    std::ostringstream message;
-    message << std::scientific << std::setprecision(17)
-        << "Second-stage conditioning: schema=1, solve=" << solve
-        << ", phase=" << phase
-        << ", columns=" << ridge_multiplier.size()
-        << ", pivot-ratio=" << conditioning.pivot_ratio
-        << ", guard=" << conditioning.guard_required
-        << ", ridge-min=" << ridge_multiplier.minCoeff()
-        << ", ridge-max=" << ridge_multiplier.maxCoeff() << ".";
-    Logger::Log(LogLevel::Debug, message.str());
-}
 
 constexpr int kRobustLossMaximumIterations{ 50 };
 constexpr double kJointFittingRobustLossCutoffMultiplier{ 1.345 };
@@ -70,7 +54,6 @@ bool HasMaterialJointFittingChange(
     }
     return false;
 }
-
 } // namespace
 
 std::optional<std::vector<GaussianModel3D>>
@@ -253,9 +236,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
-    const Eigen::VectorXd & previous_offset,
-    bool log_debug_diagnostics,
-    std::string_view diagnostic_phase)
+    const Eigen::VectorXd & previous_offset)
 {
     const auto column_count{ previous_offset.size() };
     std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_atom_index;
@@ -422,21 +403,7 @@ static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     {
         ridge_multiplier_by_column.array() = ridge_multiplier_by_column.array().max(
             kJointFittingConditioningRidgeMultiplier);
-        if (log_debug_diagnostics)
-        {
-            std::ostringstream message;
-            message
-                << std::scientific << std::setprecision(2)
-                << "Joint offset conditioning guard: columns = "
-                << column_count
-                << ", normalized LDLT pivot ratio = "
-                << conditioning.pivot_ratio
-                << ", proactive ridge multiplier = "
-                << kJointFittingConditioningRidgeMultiplier << ".";
-            Logger::Log(LogLevel::Debug, message.str());
-        }
     }
-    LogConditioning(conditioning, ridge_multiplier_by_column, "joint-offset", diagnostic_phase);
     system.previous_parameter = previous_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
@@ -494,22 +461,9 @@ JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
-    algorithm::WeightedRidgeSolver & reusable_solver,
-    bool log_debug_diagnostics,
-    std::string_view diagnostic_phase)
+    algorithm::WeightedRidgeSolver & reusable_solver)
 {
-    const auto report = [&](JointOffsetSolveResult result)
-    {
-        if (diagnostic_phase != "phase-audit" && Logger::GetLogLevel() >= LogLevel::Debug)
-        {
-            std::ostringstream message;
-            message << "Second-stage solve: schema=1, solve=joint-offset, phase="
-                << diagnostic_phase << ", status=" << static_cast<int>(result.status)
-                << ", hard-failure=" << IsJointOffsetSolveHardFailure(result.status) << ".";
-            Logger::Log(LogLevel::Debug, message.str());
-        }
-        return result;
-    };
+    RHBM_TEST_WORK(Solver);
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
@@ -521,10 +475,10 @@ JointOffsetSolveResult EstimateJointOffsets(
     }
     if (previous_offset.size() == 0 || !previous_offset.allFinite())
     {
-        return report(JointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::SystemBuildFailed,
             previous_offset
-        });
+        };
     }
     algorithm::WeightedRidgeSystem system;
     try
@@ -534,33 +488,31 @@ JointOffsetSolveResult EstimateJointOffsets(
             active_index_list,
             model_snapshot,
             ridge_multiplier_list,
-            previous_offset,
-            log_debug_diagnostics,
-            diagnostic_phase);
+            previous_offset);
     }
     catch (const std::runtime_error &)
     {
-        return report(JointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::SystemBuildFailed,
             previous_offset
-        });
+        };
     }
     if (system.response.size() == 0)
     {
-        return report(JointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::EmptySystem,
             previous_offset
-        });
+        };
     }
 
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
     Eigen::VectorXd offset;
     if (!reusable_solver.Solve(system, weight, offset))
     {
-        return report(JointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::InitialSolveFailed,
             previous_offset
-        });
+        };
     }
 
     for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
@@ -583,10 +535,10 @@ JointOffsetSolveResult EstimateJointOffsets(
         Eigen::VectorXd updated_offset;
         if (!reusable_solver.Solve(system, weight, updated_offset))
         {
-            return report(JointOffsetSolveResult{
+            return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
                 previous_offset
-            });
+            };
         }
         const auto current_objective{
             CalculateWeightedRidgeSurrogateObjective(system, weight, offset)
@@ -596,9 +548,9 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
         if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
         {
-            return report(JointOffsetSolveResult{
+            return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
-                offset });
+                offset };
         }
         const auto maximum_change{
             algorithm::CalculateMaximumNormalizedVectorChange(
@@ -609,11 +561,11 @@ JointOffsetSolveResult EstimateJointOffsets(
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
-            return report(JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) });
+            return JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) };
         }
     }
 
-    return report(JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) });
+    return JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) };
 }
 
 std::optional<JointPolishParameterization> JointPolishParameterization::Build(
@@ -696,8 +648,7 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const std::vector<double> & ridge_multiplier_list,
     const JointPolishParameterization & parameterization,
     const std::vector<GaussianModel3D> & seed_model_list,
-    algorithm::WeightedRidgeSolver & reusable_solver,
-    std::string_view diagnostic_phase)
+    algorithm::WeightedRidgeSolver & reusable_solver)
 {
     if (key.empty() || sample_ref_list.empty() ||
         parameterization.AtomCount() != key.size() ||
@@ -856,7 +807,6 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 ridge_multiplier_by_column(column_index));
     }
 
-    LogConditioning(conditioning, ridge_multiplier_by_column, "joint-polish", diagnostic_phase);
     const auto residual_scale{
         std::max(
             array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
@@ -874,13 +824,6 @@ static std::optional<Eigen::VectorXd> BuildJointPolishDirection(
 
     Eigen::VectorXd direction;
     const auto solved{ reusable_solver.Solve(system, weight, direction) };
-    if (Logger::GetLogLevel() >= LogLevel::Debug)
-    {
-        std::ostringstream message;
-        message << "Second-stage solve: schema=1, solve=joint-polish, phase="
-            << diagnostic_phase << ", status=" << (solved ? "solved" : "failed") << ".";
-        Logger::Log(LogLevel::Debug, message.str());
-    }
     if (!solved)
     {
         return std::nullopt;
@@ -898,6 +841,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
     algorithm::WeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
 {
+    RHBM_TEST_WORK(Solver);
     std::vector<GaussianModel3D> outer_previous_model_list;
     std::vector<GaussianModel3D> base_model_list;
     outer_previous_model_list.reserve(key.size());
@@ -932,8 +876,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
             ridge_multiplier_list,
             *parameterization,
             *seed_model_list,
-            reusable_solver,
-            "candidate-polish")
+            reusable_solver)
     };
     if (!direction.has_value()) return std::nullopt;
 
@@ -1017,9 +960,9 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<BoundaryJointTrustRegion> & trust_region_list,
     algorithm::WeightedRidgeSolver & reusable_solver,
-    std::string_view diagnostic_phase,
     JointCorrectionTrustReference trust_reference)
 {
+    RHBM_TEST_WORK(Solver);
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
         sample_ref_list.empty() ||
@@ -1091,8 +1034,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
             ridge_multiplier_list,
             *parameterization,
             *seed_model_list,
-            reusable_solver,
-            diagnostic_phase)
+            reusable_solver)
     };
     if (!direction.has_value())
     {
@@ -1218,5 +1160,4 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     result.status = BoundaryJointCorrectionStatus::TrustRegionUnavailable;
     return result;
 }
-
 } // namespace rhbm_gem::core::detail

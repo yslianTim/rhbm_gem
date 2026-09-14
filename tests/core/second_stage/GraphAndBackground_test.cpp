@@ -1,3 +1,4 @@
+#include "support/SecondStageNumericalProbe.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -381,7 +382,6 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
 
     const auto topology{ builder.BuildTopology() };
     EXPECT_FALSE(topology.summary.uses_weighted_graph);
-    EXPECT_TRUE(topology.summary.threshold_sensitivity_list.empty());
     ASSERT_EQ(topology.sample_dependency_list.size(), 1U);
     EXPECT_EQ(
         topology.sample_dependency_list.front().contributor_atom_index_list,
@@ -512,7 +512,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphAdaptiveHysteresisAddsAndRemo
     EXPECT_FALSE(HasCouplingNeighbor(removed, 0, 1));
 }
 
-TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphKeepsFormalEdgesAndAtomCutoff)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     detail::CouplingGraphBuilder builder{ 7 };
@@ -538,9 +538,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
             { { right_index, self_scale * unit } });
     }
 
-    const std::vector<double> threshold_list{ 0.05, 0.075, 0.10, 0.15, 0.20, 0.30 };
     detail::CouplingGraphOptions options;
-    options.sensitivity_minimum_weight_list = threshold_list;
     options.maximum_atom_count = 1;
     const auto topology{
         builder.BuildTopology(options)
@@ -554,37 +552,14 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
         EXPECT_EQ(edge.left_atom_index, 2 * edge_index);
         EXPECT_EQ(edge.right_atom_index, 2 * edge_index + 1);
     }
-    ASSERT_EQ(topology.summary.threshold_sensitivity_list.size(), threshold_list.size());
-
-    const std::array<std::size_t, 6> retained_edge_count_list{ 3, 2, 2, 1, 1, 0 };
-    for (std::size_t i = 0; i < threshold_list.size(); i++)
-    {
-        const auto & sensitivity{ topology.summary.threshold_sensitivity_list.at(i) };
-        const auto retained_edge_count{ retained_edge_count_list.at(i) };
-        EXPECT_DOUBLE_EQ(sensitivity.minimum_weight, threshold_list.at(i));
-        EXPECT_EQ(sensitivity.retained_edge_count, retained_edge_count);
-        EXPECT_EQ(sensitivity.cut_edge_count, 3U - retained_edge_count);
-        EXPECT_EQ(sensitivity.component_count, 7U - retained_edge_count);
-        EXPECT_EQ(sensitivity.maximum_component_size, retained_edge_count == 0 ? 1U : 2U);
-        EXPECT_NEAR(
-            sensitivity.maximum_component_ratio,
-            static_cast<double>(sensitivity.maximum_component_size) / 7.0,
-            1.0e-12);
-    }
-
-    const auto & formal_threshold{ topology.summary.threshold_sensitivity_list.front() };
-    EXPECT_EQ(formal_threshold.retained_edge_count, topology.summary.retained_edge_count);
-    EXPECT_EQ(
-        topology.summary.candidate_edge_count - formal_threshold.retained_edge_count,
-        topology.summary.cut_edge_count);
+    EXPECT_EQ(topology.summary.retained_edge_count, 3U);
+    EXPECT_EQ(topology.summary.cut_edge_count, 0U);
     const auto formal_partition{
         detail::BuildGraphPartition(
             topology,
             { 0, 1, 2, 3, 4, 5, 6 })
     };
-    EXPECT_EQ(formal_threshold.component_count, 4U);
     EXPECT_EQ(formal_partition.sample_id_list_by_key.size(), 7U);
-    EXPECT_EQ(formal_threshold.maximum_component_size, 2U);
     EXPECT_EQ(topology.summary.component_count, 7U);
     EXPECT_EQ(topology.summary.maximum_component_size, 1U);
     EXPECT_EQ(topology.atom_cutoff_summary.cut_edge_count, 3U);
@@ -1027,12 +1002,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
         { 0, 0 },
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
     detail::CouplingGraphOptions fallback_options;
-    fallback_options.sensitivity_minimum_weight_list = { 0.05, 0.10 };
     const auto binary_topology{
         builder.BuildTopology(fallback_options)
     };
     EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
-    EXPECT_TRUE(binary_topology.summary.threshold_sensitivity_list.empty());
     const auto binary_partition{
         detail::BuildGraphPartition(
             binary_topology,
@@ -1174,7 +1147,9 @@ TEST(
             options.thread_size = 1;
             options.quiet_mode = false;
             logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
+            second_stage_test::BeginNumericalCapture();
             detail::RunSecondStageIterations(*logged, options);
+            const auto captured{ second_stage_test::EndNumericalCapture() };
             const auto output{ testing::internal::GetCapturedStdout() };
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
@@ -1217,8 +1192,7 @@ TEST(
             };
             EXPECT_EQ(audit_records(output), audit_records(alternate_output));
             EXPECT_EQ(audit_records(output), audit_records(relabeled_output));
-            if (!shared_cluster && !shared_contributor)
-                EXPECT_NE(output.find("reason=background-reset"), std::string::npos);
+
             EXPECT_NE(output.find(shared_cluster ?
                 "initial components/max atoms/ratio = 1/2/1.00" :
                 "initial components/max atoms/ratio = 2/1/0.50"), std::string::npos);
@@ -1228,44 +1202,15 @@ TEST(
             }
             std::array<std::optional<rg::GaussianModel3D>, 2> first_background;
             std::array<std::optional<rg::GaussianModel3D>, 2> last_background;
-            const auto terminal_position{ output.find("Second-stage audit terminal:") };
-            ASSERT_NE(terminal_position, std::string::npos);
-            const auto attempt_count{
-                std::stoull(output.substr(output.find(", try=", terminal_position) + 6)) };
-            EXPECT_GT(attempt_count, 1U);
-            const auto first_iteration_end{ output.find("Convergence safeguard audit:") };
-            ASSERT_NE(first_iteration_end, std::string::npos);
-            std::array<std::size_t, 2> background_count{};
-            std::array<std::size_t, 2> first_iteration_background_count{};
-            const std::string marker{ "Second-stage frozen background: target=" };
-            std::size_t position{ 0 };
-            while ((position = output.find(marker, position)) != std::string::npos)
-            {
-                position += marker.size();
-                const auto target{ static_cast<std::size_t>(std::stoi(output.substr(position)) - 1) };
-                ASSERT_LT(target, 2U);
-                background_count.at(target)++;
-                if (position < first_iteration_end) first_iteration_background_count.at(target)++;
-                const auto parameter_begin{ output.find("A/W/C=", position) + 6 };
-                auto parameters{ output.substr(parameter_begin, output.find(",", parameter_begin) - parameter_begin) };
-                std::replace(parameters.begin(), parameters.end(), '/', ' ');
-                std::istringstream values{ parameters };
-                double amplitude{ 0.0 }, width{ 0.0 }, offset{ 0.0 };
-                ASSERT_TRUE(static_cast<bool>(values >> amplitude >> width >> offset));
-                last_background.at(target) = rg::GaussianModel3D{ amplitude, width, offset };
-                if (target == 1)
-                {
-                    ASSERT_TRUE(last_background.at(0).has_value());
-                    ExpectGaussianModelsNear(*last_background.at(0), *last_background.at(1), 0.0);
-                }
-                if (!first_background.at(target).has_value()) first_background.at(target) = last_background.at(target);
-            }
+            ASSERT_GT(captured.backgrounds.size(), 1U);
             for (std::size_t target = 0; target < 2; target++)
             {
-                ASSERT_TRUE(first_background.at(target).has_value());
-                ASSERT_TRUE(last_background.at(target).has_value());
-                EXPECT_EQ(first_iteration_background_count.at(target), 1U);
-                EXPECT_EQ(background_count.at(target), attempt_count);
+                const auto & first{ captured.backgrounds.front().at(target) };
+                const auto & last{ captured.backgrounds.back().at(target) };
+                first_background.at(target) = rg::GaussianModel3D{first[0], first[1], first[2]};
+                last_background.at(target) = rg::GaussianModel3D{last[0], last[1], last[2]};
+                for (const auto & background : captured.backgrounds)
+                    EXPECT_EQ(background.at(0), background.at(1));
                 const auto expected_initial{
                     *detail::BuildGaussianParameterMedian({ scaled_seeds[0], scaled_seeds[1] }) };
                 ExpectGaussianModelsNear(*first_background.at(target), expected_initial, 1.0e-12 * scale);

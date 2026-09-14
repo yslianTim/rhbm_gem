@@ -1,3 +1,8 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_WORK(kind) ((void)0)
+#endif
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <cmath>
@@ -125,6 +130,7 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     int thread_size,
     const GaussianModel3D & offset_model) const
 {
+    RHBM_TEST_WORK(Solver);
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     auto dataset{ BuildDataset(sample_response_list, offset_model) };
     const auto result{

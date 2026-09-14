@@ -73,11 +73,9 @@ all second-stage services through candidate selection:
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
-| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Run-owned observation session, per-attempt sidecars, candidate history association, phase collector creation, and diagnostic payloads |
-| `observation/ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
+| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Passive session, bounded worker buffers, actual gate and lifecycle evidence, scalar progress diagnostics |
 | `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and read-only performance formatting |
 | `observation/PerformanceCounters` | Atomic counts, phase timings, and current/retired solver workspace totals; publishes once at scope exit |
-| `observation/PhaseAudit` / `observation/TrustModelAudit` | Observation-only phase snapshots, isolated operator replay, frozen-IRLS/rho trials and serialization |
 
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
 operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.
@@ -85,9 +83,8 @@ operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp
 state/residual representation and seed selection, graph construction and topology
 drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
 convergence types and the outer attempt result have their own headers. Operator
-evidence summarization is shared with phase audit; each caller retains its own
-population and solver qualification policy. Availability logging stays at the
-runner call sites. Seed diagnostic records belong to
+evidence summarization serves production convergence and final certification.
+Observation copies the resulting certificate without replaying the operator. Seed diagnostic records belong to
 `observation/SecondStageDiagnostics.hpp`.
 `CandidateEvidence.hpp` supplies diagnostics and candidate evaluation without
 including the complete selection. `CandidateState.hpp` owns selection data.
@@ -101,8 +98,8 @@ internal fitting-range constants; `FitOptions` does not expose radial bounds.
 `CandidateSelectionInputs` contains read-only algorithm inputs. The private
 `CandidateTransactionBuilder` owns working activity, state and provenance;
 boundary operations are its private methods. Evaluators return numerical decisions
-without accepting or returning per-cluster history. `ClusterHistoryObserver`
-receives decisions and maintains its own provisional history.
+without accepting or returning per-cluster history. Observation receives actual
+decisions without a decision return value.
 Solver workspaces, counters and observers remain mutable working resources.
 The observation pointer in `CandidateSelectionInputs` is non-owning.
 Boundary candidate and correction references borrow only the per-key samples,
@@ -113,41 +110,30 @@ overlay; evaluators do not include the transaction header or receive solver,
 proposal, provenance, or observation-session state. An unavailable precomputed
 correction objective is reused as unavailable evidence, never recomputed.
 
-`BoundaryObservationScope` assembles ordinary/rescue component, solver, endpoint,
-correction, and backtracking diagnostics and phase events. `JointCandidateObservation`
-owns member-history recording, outcome text, and stage-specific history tokens.
-Numerical callers retain acceptance, state/provenance application, and performance
-accounting. Suspicious corrections do not create trial records; correction
-strict-improvement phase capture precedes the diagnostic outcome update. Selecting
-an endpoint after a rejected correction publishes the endpoint history token.
-Quiet mode and missing sessions do not affect numerical decisions.
-Diagnostic payloads forward-declare the boundary correction status rather than
-including the solver workspace definitions. Joint diagnostic creation and member
-rejection recording belong to `SecondStageObservation`; numeric callers include
-that interface and `PerformanceCounters` directly. Logging receives immutable
-counter data through `LogSecondStagePerformance`; the counter owner retains the
-quiet check, timing calculation, workspace references, and destruction point.
+`BoundaryObservationScope` and `JointCandidateObservation` record actual endpoint,
+correction, backtracking and rescue outcomes. Each event records the gate at its
+original decision point; a later rejected correction cannot change an earlier
+endpoint record. Workers keep at most five abnormal details and merge in fixed
+stage/key/trial order. Counters retain all outcomes. Quiet mode and missing
+sessions do not affect numerical decisions.
 
-The phase and trust options apply identical private compile definitions to the
-library and test target. Production compiles each collector implementation only
-when its option is enabled. `BeginPhaseAudit` remains an out-of-line observation
-factory in every build and returns an empty collector when phase auditing is off.
-With phase auditing off, tests compile `PhaseAudit.cpp` as a support source outside
-the GTest suite-discovery list, preserving direct collector tests. With it on,
-tests use the library implementation. These private definitions do not propagate
-to CLI or installed consumers; trust instrumentation still requires tests.
+`RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` applies the same private definition to the
+library and tests through one helper. ON does not require testing. Extra payloads
+exist only in enabled, non-quiet Debug sessions. Allocation, collection and writer
+failures disable extra recording for that session without entering numerical
+fallback branches. Debug's existing solver scheduling condition is independent
+of this option. See the [audit contract](second-stage-audit.md).
 
 `Finish` stages next-iteration quarantine without publishing it. Consuming `Commit`
 publishes quarantine, applies trust updates and copies keys, then publishes the
 accepted model/provenance (or restores the previous state when all candidates are
-rejected), and finally publishes history. It returns `CandidateCommitResult`;
+rejected), and finally records the committed outcome. It returns `CandidateCommitResult`;
 the runner moves the returned keys and trust updates into `IterationResult`.
 Transaction code does not depend on the outer result or entry header.
 `RunSecondStageIterations` owns a non-copyable `SecondStageObservationSession`;
 `SecondStageContext` contains only atom sampling/design data and the immutable
-frozen background. The session owns cluster history, best trace, phase and trust
-collectors, and iteration/final-polish diagnostic sidecars. Numerical context
-copies used by phase replay therefore cannot retain production observers.
+frozen background. The session owns a bounded audit payload and scalar
+iteration/final-polish progress summaries. It owns no models or replay snapshots.
 
 `CandidateDecisionEvidence` contains objective references, factors, failure
 classification, and the invalid/guard/objective-rejection counts used by search
@@ -161,8 +147,7 @@ Candidate references and results contain no diagnostic records or history
 tokens. `CandidateSelection` retains keys, state/provenance, decision evidence,
 and lightweight boundary decisions. `IterationResult` retains accepted/rejected
 keys, radius updates, progress state and stop information; audit-patience reset
-uses rejected keys directly. History, output-only trial/sample/scale details,
-formatted comparison strings and source IDs live in observation sidecars.
+uses rejected keys directly. Bounded output-only event records live in observation sidecars.
 Optional boundary observation scopes keep endpoint/correction/backtracking
 record associations independently of numerical candidate results.
 
@@ -170,8 +155,7 @@ Quarantine is staged on a copy and changes only next-iteration activity,
 without modifying the audited state or requiring fallback re-audit. The builder then freezes a read-only `CandidateTransaction`.
 Its consuming commit publishes validated state, provenance, quarantine
 and radius updates, including the required rejection updates on all-rejected
-attempts. Only after production publication does it notify the history observer
-to publish diagnostic provenance. Convergence uses the committed candidate and the retained previous
+attempts. Only after production publication does it record the commit outcome. Convergence uses the committed candidate and the retained previous
 state. The unrestricted operator evidence remains separate from these
 production restrictions.
 
@@ -207,11 +191,11 @@ orchestration responsibilities; failures retain their short-circuit order.
 
 | Phase | Evaluation order and reference |
 | --- | --- |
-| Local search | Construction/validity and the nonmaterial shortcut precede trust, guard, and the previous-objective gate. Optional history evaluation follows the production decision. |
+| Local search | Construction/validity and the nonmaterial shortcut precede trust, guard, and the previous-objective gate. Passive observation follows the production decision. |
 | Local polish | Existing solver feasibility/trust checks, then strict objective improvement against the accepted local endpoint. |
 | Ordinary boundary | Member previous gates in existing key order, followed by the combined objective. |
 | Boundary correction | Suspicious-polish guard, raw objective evidence, member/combined acceptance, then strict improvement against the original correction reference. The raw evidence is reused, including when unavailable. |
-| Cooperative rescue | Tolerated member deterioration, combined previous/best acceptance, and strict global improvement. History cannot accept or reject a member. |
+| Cooperative rescue | Tolerated member deterioration, combined previous/best acceptance, and strict global improvement. |
 | Global selection audit | When triggered by the [conditional selection audit](#conditional-selection-audit), affected-sample union and complete-state previous/best gates, followed by the outer salvage policy. |
 | Final polish | Validity, suspicious-polish guard, strict global improvement, and member non-regression against the base. Converged finalization separately requires strict operator recertification. |
 
@@ -220,7 +204,7 @@ orchestration responsibilities; failures retain their short-circuit order.
 These call conditions were checked against `develop` commit `7500a45eb2fc20ff9d04768789883ef4b1d2eb65`
 on 2026-09-14: [boundary reconciliation and audit/salvage](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/CandidateTransactionBoundary.cpp#L664)
 and [runner publication and post-commit scoring](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/IterationProcess.cpp#L599).
-This is production objective acceptance, separate from optional `PhaseAudit`
+This is production objective acceptance, separate from optional decision-recording
 observation. Making these calls unconditional would change the algorithm.
 
 `ReconcileSelectedBoundaries()` builds the ordinary boundary component list
@@ -418,7 +402,7 @@ Each outer attempt performs the following sequence:
 6. Search one geometric factor sequence `1, 1/2, 1/4, ...` for each cluster.
    Each factor constructs selected log-shape and per-atom physical-offset
    coordinates, skips candidates outside the trust radius, applies offset-only
-   and post-refit feasibility guards, and then the previous objective gate. Cluster best is history/tie-break only.
+   and post-refit feasibility guards, and then the previous objective gate.
    The frozen background is unchanged at every factor. Guard never damps, trust
    never accepts, and the objective gate never chooses a second independent
    factor. If every material factor is guard-infeasible, deactivate the terminal
@@ -639,28 +623,14 @@ normalization coefficient, so the local candidate-minus-previous difference
 matches the corresponding full-global difference when only that cluster
 changes.
 
-Candidate scoring uses only production objective references. In non-quiet Debug
-runs, `ClusterHistoryObserver` separately retains provisional cluster history.
-After the previous gate (and strict local-polish improvement), it reevaluates
-stored parameters in the candidate neighbor environment. Objective and maximum
-transformed movement ties select a historical record, never a production candidate.
-Unavailable historical evidence preserves the old history without rejecting the
-candidate. Local and rescue observations share this updater. Component trials
-read iteration-baseline history; rejected trials do not publish their provisional
-updates. Rollback restores that baseline, including on all-rejected attempts.
-
-Info and quiet runs allocate no cluster history and do not reconstruct or score
-historical patches. Observer entry points contain exceptions and disable the
-observer for the rest of the run on failure, reporting unavailable diagnostics
-without changing the fitting outcome. Historical evaluations use observer-owned
-counters, so production objective-work counts exclude this diagnostic work.
-See the [observer and diagnostic contract](second-stage-phase-audit.md#observer-and-diagnostic-contract).
+Candidate scoring uses only production objective references. Extra observation
+copies existing evidence; it performs no historical re-evaluation or snapshot
+retention. The production global `best_audit_state` remains part of acceptance,
+patience and final-state selection. See the [audit contract](second-stage-audit.md).
 
 At each background refresh, re-evaluate both the previous selected state and
 the retained global best under the new cache before comparing or choosing
-them. When enabled, the observer resets each affected cluster's local best
-history to this attempt's previous baseline; it does not compare historical
-numbers computed under another background. An unavailable retained-best objective discards that best entry.
+them. An unavailable retained-best objective discards that best entry.
 Background-only refresh does not rebuild the sampling domain or its fixed
 robust scales. Refresh itself is not an improvement: audit patience uses the
 candidate's strict improvement over the recomputed previous baseline, alongside
@@ -674,8 +644,7 @@ tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
 
 Progress and deterioration comparisons use
 `1e-8 + 1e-3 * abs(reference)`. Strict best, tie, and polish-improvement
-comparisons use `1e-10 + 1e-8 * abs(reference)`. Global gate comparisons against previous and best retain separate tolerances;
-cluster best comparisons only update history.
+comparisons use `1e-10 + 1e-8 * abs(reference)`. Global gate comparisons against previous and best retain their existing tolerances.
 The joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
@@ -698,7 +667,7 @@ There is no median projection before trust evaluation.
 Each cluster owns one factor sequence. Every trial first constructs the
 log-shape/individual-physical-offset candidate, then checks validity, trust
 admissibility, guard feasibility, and the previous objective gate in that
-order. Cluster-best history is evaluated only after acceptance gates pass. Trust-inadmissible trials do not run guard or objective evaluation.
+order. Trust-inadmissible trials do not run guard or objective evaluation.
 Search stops when the largest transformed change is below
 `kTransformedChangeTolerance`; the first passing material trial is committed
 with endpoint uncertainty and its factor is recorded. Rejected trials do not
@@ -726,36 +695,6 @@ missing-key exceptions and changed/saturated reporting are unchanged.
 Cooperative rescue retains its existing acceptance and lifecycle policy.
 The production controller uses neither actual-reduction growth nor rho.
 
-A trust-model experiment build computes a developer-only frozen-IRLS
-directional model for every material base or joint-polish trial that reaches
-the objective gate,
-including locally accepted and objective-rejected candidates. It freezes Cauchy
-weights and objective scales at the outer previous state, applies the existing
-transformed response Jacobian to the complete previous-to-candidate step, and
-includes selected target and selected-neighbor deltas. The frozen unselected
-background is already included in the baseline residual and has no derivative
-or candidate delta. The residual surrogate uses the production fit/tail
-sample coefficients and the exact previous-to-candidate offset-plausibility
-penalty change. A ratio is emitted only when predicted reduction exceeds the
-same progress materiality tolerance and both reductions are finite. Polish rho
-uses the complete outer-previous-to-polished step; improvement relative to the
-accepted base candidate is recorded separately.
-
-The shadow status distinguishes `available`, `nonmaterial-step`,
-`objective-unavailable`, `model-unavailable`, `residual-unavailable`,
-`nonfinite`, `nonpositive-prediction`, and `nonmaterial-prediction`. Its
-shadow action preserves objective-backtracking shrink precedence,
-falls back to the current actual-only action when prediction is unusable, uses
-rho bands `0.25` and `0.75`, and requires at least `0.8` boundary utilization
-for shadow growth. Only the final locally accepted candidate can become
-action-ready. Boundary-reconciled, rescued, globally rejected, and non-final
-trial records remain available for coverage and calibration but are suppressed
-from action comparison. Pre-objective validity, trust, guard, and nonmaterial
-outcomes are counted in a separate candidate funnel without running the model.
-None of these calculations run unless
-`RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON`, and no shadow result is
-applied to candidate acceptance, radius updates, convergence, or output state.
-
 Accepted clusters are first connected only when they both affect the same boundary
 sample. Each multi-cluster component
 first revalidates the factor-`1.0` assembled endpoint against every member's local
@@ -781,8 +720,7 @@ whose objective is slightly worse than its previous value, but only within the
 normal progress tolerance. The endpoint or its joint/backtracked replacement
 must strictly improve the component audit, and the tentatively assembled state
 must then strictly improve the previous global audit without violating the
-global historical-best tolerance. Member historical bests use the same
-history/tie-break updater as local candidates and do not independently veto rescue. Successful rescue
+global historical-best tolerance. Successful rescue
 promotes the rejected members without trust-radius growth or shrink. Failed
 rescue is transactional: every component member retains its safe state.
 
@@ -1169,115 +1107,23 @@ values in `dMax A/F`.
 | `Suspicious` | Atoms with at least one shape, offset, or hard-failure block fixed in this attempt |
 | `dMax A/F` | Maximum transformed change in the accepted/fixed-point operator state; accepted is `-` on an all-rejected attempt |
 
-Objective-domain startup diagnostics report selected-target weights, cluster and unique
-fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
-diagnostics use `fit/tail-weighted/offset/total` order and also report raw tail
-loss, weights, sample counts, fixed scales, unified trial dispositions, and the
-accepted factor. Accepted local factors are logged at debug level.
-Each multi-cluster unit emits a distinct `Boundary-component reconciliation`
-record with its cluster, atom, and boundary-sample counts plus trials, factor,
-accepted/rejected, exhausted status, accepted source, previous/endpoint/final
-component objectives, locally deteriorated member count, and maximum local
-deterioration. Rescue records also include component and final assembled-global
-improvements. An attempted correction also emits
-`Boundary-interface joint correction` with its
-direct-interface/shape-active/offset-active/parameter counts, suspicious count,
-solver status,
-damping, maximum normalized trust step, strict-improvement reference/candidate
-objectives, acceptance result, and endpoint-fallback outcome. An all-rejected
-debug record reports unified trial dispositions, terminal category, radius
-action, and stop classification. Operator-assessment debug records report each
-affected atom's reason, margin, and fixed shape/offset/hard block. Completion
-warnings report cumulative quarantine
-entries, releases, failed domain retries, and unresolved targets. The existing
-probation counter positions retain their schema and now count domain retries. Convergence
-and summary messages finish the active progress line before normal line output.
-Joint-candidate member guards emit `Joint candidate objective rejection: schema=1`
-Debug records alongside their component summary. Each record identifies the
-candidate source (endpoint, joint correction, backtracking, rescue variants, or
-final polish), component keys, evaluation sequence, factor, and polish round.
-Only the first failing member is recorded; evaluation retains its existing
-short-circuit order. Full member keys use internal selected-atom indexes.
-Previous/best/candidate objectives use fit/tail-weighted/offset/total order,
-with `max_digits10` precision. Enabled member gates report the reference,
-candidate-minus-reference delta, absolute/relative tolerance, calculated
-`tolerance`, and inclusive upper bound `reference + tolerance`. The tolerance
-is `absolute + relative * abs(reference)` using `kObjectiveProgressTolerance`.
-Best gates are `not-checked` in cooperative rescue and final polish; absent
-values are `unavailable`. Member failure outcomes distinguish previous, best,
-both, missing evidence, and nonfinite evidence. Records with `member=none`
-distinguish a downstream global failure after member checks from a final-polish
-global failure before member checks. Local rejection summaries remain local:
-`rejected-by=none` does not imply that a later joint candidate passed.
-Member rejection records reuse the evaluated objectives. Debug mode additionally
-tracks cluster-best provenance and performs diagnostic-only reference comparisons;
-Info and quiet modes create no per-cluster history, provenance snapshots or historical evaluations.
+Objective-domain startup reports weights and scalar sample/cluster counts.
+Warnings report cumulative quarantine entries, releases, failed retries and
+unresolved targets. Progress, necessary warnings, final summary and basic timings
+remain available without extra audit payloads.
 
-`Cluster best source: schema=1` records best initialization, partition/background
-resets, candidate improvements, and step tie-break updates. IDs combine attempt,
-full cluster key, and per-key update sequence, independent of worker completion
-order. Each record retains the effective model snapshot (including candidate
-overlays), shared immutable background/domain, and contribution sample refs.
-`predecessor` links updates and same-key resets. `retained` distinguishes provisional
-updates from the source finally published for the attempt; `Cluster best publication`
-identifies that source even when it originated in an earlier attempt. The observer copies or restores its source when staging or rolling back history.
+Enabled, non-quiet Debug sessions emit `Second-stage audit: schema=1, payload={...}`.
+There is one start record, one summary per attempt, and one terminal record.
+Only actual production evidence is recorded; no solver/operator replay, historical
+model scoring, complete snapshots, atom dump, or alternate coupling threshold scan
+remains. Each attempt and finalization retain at most five abnormal details at
+collection time, with complete category totals and omission counts.
+See [Second-stage audit](second-stage-audit.md) for fields, references, failure
+isolation, parser usage and verification tiers.
 
-When a joint member fails with a best reference, `Cluster best comparison: schema=1`
-links that source and reports stored, historically reproduced, and re-evaluated best
-objectives in fit/tail-weighted/offset/total order. Re-evaluation holds historical
-member parameters fixed and substitutes either the current previous-state or actual
-candidate's external models. A separate ordered decomposition substitutes current
-domain/sample refs, then frozen background, then external models. These deltas are
-order-dependent diagnostics, not independent causal contributions. Original and
-re-evaluated gate results use the existing progress-tolerance helper; only the
-previous objective gate participates in acceptance; historical comparisons remain diagnostic-only. Each record counts its additional
-objective and residual-sample evaluations separately from production counters.
-
-`Cluster best environment: schema=1` compares actual sample refs, ownership,
-fit/tail masks, scales, normalization counts, and background responses. It lists
-historical/previous/candidate parameters for the member and changed contributors
-of those samples. Historical model/domain/background snapshots are immutable;
-re-evaluation uses an independent sparse residual baseline and does not change the
-live context, solver caches, best values, or convergence decisions. All numeric
-records use `max_digits10`. Missing provenance is `unavailable`; incompatible keys
-or snapshots are `not-comparable`.
-
-Frozen-background debug diagnostics report the selected target serial,
-global-median amplitude/width/offset, and effective background sample count.
-No second-stage diagnostic reports a chemical group. Contributor-refit, hard-edge,
-and hard-closure-overflow diagnostics have been removed. The developer-only
-trust shadow retains its legacy `unselected-dependencies=0` trace field.
-
-The current convergence trace is schema 10. It serializes only try/accepted
-iteration and atom/quarantine counts, active and nominal populations,
-accepted/operator p99 and maximum, the six-bit production certificate, and
-the four orthogonal blockers. The current analyzer accepts only schema 10;
-frozen schema-9 baselines remain historical data. Atom audit records separately
-use schema 2 with serial/amplitude/width/offset and no `group` field. The analyzer
-also reads legacy atom schema 1, where `group` remains required; it never inserts
-a synthetic group into schema-2 records.
-
-Adaptive rebuild diagnostics use a distinct
-`Adaptive local-fitting topology rebuild` record so the one-time initial
-coupling and atom-cutoff summaries remain one-time initial records. The cutoff
-record uses `Local-fitting atom cutoff: atoms=N, limit=100, clusters=C,
-max-atoms=M, cutoff-edges=E.` and counts selected atoms only. Threshold-sensitivity
-summaries describe pre-cutoff connectivity; the formal component summary
-describes post-cutoff connectivity. Each adaptive rebuild record reports the
-accepted iteration, drift or interval trigger, maximum drift, old/new cluster
-and boundary-sample counts, added/removed adjacency edges, and whether the
-partition changed and is pending. The rebuild record reports no immediate
-objective-domain reset; a distinct objective-domain log records application
-at the next iteration boundary. Non-quiet runs also show a
-`Rebuild local-fitting coupling topology` percentage progress bar with the
-same sample-based work accounting as the initial topology build.
-
-Finalization emits a separate `Final dependency polish` record with aggregate
-component, atom, parameter, round, acceptance/fallback, objective-before/after,
-residual-safety policy/status, application, base/candidate solver and operator
-evidence, residual p99/maximum, and elapsed-time values. Debug logging adds one
-record per component, including symbolic-analysis and suspicious-candidate
-counts. These records are emitted before the existing stable final summary.
+The one-time atom-cutoff text remains `Local-fitting atom cutoff: atoms=N,
+limit=100, clusters=C, max-atoms=M, cutoff-edges=E.` and counts selected atoms only.
+Formal graph thresholds, hysteresis, binary fallback and cutoff are unchanged.
 
 Non-quiet runs end with this summary format:
 

@@ -1,119 +1,49 @@
 #pragma once
 
 #include "core/detail/second_stage/CandidateEvidence.hpp"
+#include "core/detail/second_stage/ConvergenceCertificate.hpp"
 
-#include <memory>
-#include <string>
+#include <array>
 #include <string_view>
 
 namespace rhbm_gem::core::detail {
 
-enum class BoundaryJointCorrectionStatus;
+constexpr std::size_t kAuditDetailLimit{ 5 };
+enum class AuditStage { Proposal, LocalSearch, LocalPolish, BoundaryEndpoint, BoundaryCorrection,
+    BoundaryBacktracking, RescueEndpoint, RescueCorrection, RescueBacktracking,
+    SelectionOrdinary, SelectionRescue, Commit, Quarantine, Partition, FinalPolish, FinalCertification, Count };
+enum class AuditCategory { None, Rejected, Unavailable, Invalid, Guard, Trust, Solver,
+    Exhausted, Shrink, Enter, Retry, Release, Salvage, Rescue, Partition, Count };
 
-struct ClusterHistoryDiagnostic;
-
-struct JointCandidateObjectiveDiagnostic
+// Fixed-size evidence only: no model, sample, history, or candidate ownership.
+struct AuditEvent
 {
-    std::size_t history_observation{ 0 };
-    std::size_t locally_deteriorated_member_count{ 0 };
-    double maximum_local_deterioration{ 0.0 };
-    std::string_view source{};
-    std::size_t round{ 0 };
-    std::size_t candidate_number{ 0 };
-    std::optional<double> factor{};
-    ClusterKey member_key{};
-    std::optional<ObjectiveBreakdown> previous{};
-    std::optional<ObjectiveBreakdown> best{};
-    std::optional<ObjectiveBreakdown> candidate{};
-    std::optional<ObjectiveBreakdown> stored_best{};
-    bool best_checked{ false };
-    std::string_view outcome{ "accepted" };
-    std::string best_source_id{};
-    std::vector<std::string> best_comparison_lines{};
+    AuditStage stage{ AuditStage::LocalSearch };
+    AuditCategory category{ AuditCategory::None };
+    std::size_t first_atom{ 0 }, atom_count{ 0 }, trial{ 0 };
+    std::string_view outcome{ "accepted" }, reason{}, scope{ "cluster" }, reference{ "iteration_previous" };
+    std::optional<ObjectiveBreakdown> previous{}, candidate{}, best{};
+    std::optional<double> factor{}, radius{};
+    bool previous_checked{ false }, best_checked{ false };
 };
 
-// Numerical evidence is copied here for output; production never reads this copy.
-struct ObjectiveAttemptDiagnostic : CandidateDecisionEvidence
+struct AuditStageCount { std::size_t total{ 0 }, accepted{ 0 }, rejected{ 0 }, skipped{ 0 }; };
+struct AuditBatch
 {
-    std::optional<double> pre_objective_attempted_step_norm{};
-    std::optional<ObjectiveScale> scale{};
-    std::size_t fit_sample_count{ 0 };
-    std::size_t tail_sample_count{ 0 };
-    std::shared_ptr<const ClusterHistoryDiagnostic> history{};
-    double trust_region_radius{ 0.0 };
-    double trust_region_step_norm{ 0.0 };
-    std::size_t trial_count{ 0 };
-    std::size_t trust_skipped_trial_count{ 0 };
+    std::array<AuditStageCount, static_cast<std::size_t>(AuditStage::Count)> stages{};
+    std::array<std::size_t, static_cast<std::size_t>(AuditCategory::Count)> categories{};
+    std::array<AuditEvent, kAuditDetailLimit> details{};
+    std::size_t detail_count{ 0 }, abnormal_count{ 0 };
+    void Add(const AuditEvent &) noexcept;
+    void Merge(const AuditBatch &) noexcept;
 };
 
-struct ClusterCandidateDiagnostic
+struct SelectionAuditDiagnostic
 {
-    ClusterKey key{};
-    ObjectiveAttemptDiagnostic attempt{};
-
-    bool boundary_rescued{ false };
-};
-
-struct BoundaryComponentReconciliationDiagnostic
-{
-    std::vector<ClusterKey> key_list{};
-    std::size_t atom_count{ 0 };
-    std::size_t boundary_sample_count{ 0 };
-    std::size_t trial_count{ 1 };
-    std::optional<double> accepted_factor{};
-    BoundaryComponentAcceptedSource accepted_source{ BoundaryComponentAcceptedSource::None };
-    std::optional<BoundaryJointCorrectionStatus> joint_correction_status{};
-    std::size_t interface_atom_count{ 0 };
-    std::size_t shape_active_atom_count{ 0 };
-    std::size_t offset_active_atom_count{ 0 };
-    std::size_t suspicious_candidate_atom_count{ 0 };
-    std::size_t joint_parameter_count{ 0 };
-    std::optional<double> joint_damping{};
-    std::optional<double> maximum_normalized_trust_step{};
-    std::optional<double> previous_component_objective{};
-    std::optional<double> endpoint_component_objective{};
-    std::optional<double> joint_reference_component_objective{};
-    std::optional<double> joint_candidate_component_objective{};
-    std::optional<double> candidate_component_objective{};
-    std::size_t accepted_cluster_count{ 0 };
-    std::size_t rescue_candidate_cluster_count{ 0 };
-    std::size_t rescued_cluster_count{ 0 };
-    std::size_t locally_deteriorated_member_count{ 0 };
-    double maximum_local_deterioration{ 0.0 };
-    std::optional<double> component_improvement{};
-    std::optional<double> global_improvement{};
-    std::vector<JointCandidateObjectiveDiagnostic> objective_diagnostic_list{};
-    bool is_rescue_attempt{ false };
-    bool exhausted{ false };
-};
-
-struct FinalDependencyPolishDiagnostic
-{
-    std::size_t component_count{ 0 };
-    std::size_t attempted_component_count{ 0 };
-    std::size_t accepted_component_count{ 0 };
-    std::size_t atom_count{ 0 };
-    std::size_t parameter_count{ 0 };
-    std::size_t round_count{ 0 };
-    std::size_t suspicious_candidate_atom_count{ 0 };
-    std::optional<double> objective_before{};
-    std::optional<double> objective_after{};
-    double elapsed_milliseconds{ 0.0 };
-    struct Component
-    {
-        std::vector<ClusterKey> key_list{};
-        std::size_t atom_count{ 0 };
-        std::size_t parameter_count{ 0 };
-        std::size_t round_count{ 0 };
-        std::size_t suspicious_candidate_atom_count{ 0 };
-        std::size_t symbolic_analysis_count{ 0 };
-        std::optional<double> objective_before{};
-        std::optional<double> objective_after{};
-        double elapsed_milliseconds{ 0.0 };
-        std::vector<JointCandidateObjectiveDiagnostic> objective_diagnostic_list{};
-        bool accepted{ false };
-    };
-    std::vector<Component> component_list{};
+    bool executed{ false };
+    std::string_view result{ "skipped" }, reason{ "no-ordinary-components" };
+    std::size_t evaluations{ 0 }, removed_clusters{ 0 };
+    std::optional<ObjectiveBreakdown> previous{}, candidate{}, best{};
 };
 
 struct IterationDiagnostics
@@ -121,22 +51,17 @@ struct IterationDiagnostics
     std::optional<double> accepted_maximum_transformed_change{};
     double proposal_maximum_transformed_change{ 0.0 };
 };
+struct IterationObservation { IterationDiagnostics diagnostics{}; };
 
-struct IterationObservation
+// Basic final progress is independent of the optional audit payload.
+struct FinalDependencyPolishDiagnostic
 {
-    std::map<ClusterKey, ClusterCandidateDiagnostic> candidate_by_key{};
-    std::vector<ClusterCandidateDiagnostic> accepted_cluster_diagnostic_list{};
-    std::vector<ClusterCandidateDiagnostic> rejected_cluster_diagnostic_list{};
-    std::vector<BoundaryComponentReconciliationDiagnostic> boundary_reconciliation_diagnostic_list{};
-    IterationDiagnostics diagnostics{};
+    std::size_t component_count{ 0 }, attempted_component_count{ 0 }, accepted_component_count{ 0 };
+    std::size_t atom_count{ 0 }, parameter_count{ 0 }, round_count{ 0 }, suspicious_candidate_atom_count{ 0 };
+    std::optional<double> objective_before{}, objective_after{};
+    double elapsed_milliseconds{ 0.0 };
 };
 
-struct SecondStageSeedSelectionRecord
-{
-    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
-    GaussianModel3D original_model{};
-    GaussianModel3D selected_model{};
-};
-
+struct SecondStageSeedSummary { std::size_t local_mdpde{ 0 }, global_median{ 0 }; };
 
 } // namespace rhbm_gem::core::detail

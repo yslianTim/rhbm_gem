@@ -3,6 +3,7 @@
 #include "core/detail/second_stage/CandidateEvidence.hpp"
 
 namespace rhbm_gem::core::detail {
+class SecondStageObservationSession;
 
 class JointCandidateObservation;
 
@@ -103,6 +104,8 @@ struct GlobalCandidateReference
     const ObjectiveBreakdown * best;
     const ObjectiveBreakdown * previous;
     PerformanceCounters & counters;
+    SecondStageObservationSession * observation{ nullptr };
+    bool rescue_audit{ false };
 };
 
 struct FinalPolishCandidateReference

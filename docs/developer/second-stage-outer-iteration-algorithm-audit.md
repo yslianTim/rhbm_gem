@@ -2,14 +2,15 @@
 
 ## Status and authority
 
-Current decisions below are checked against production source **C**:
-`c174458294c1a328058f96bf37a2a21ae16c06a4` (`develop`). This documentation-only
-cleanup changes no numerical policy, public interface, build option, test,
-quality baseline, or tolerance and performs no new numerical experiment.
+The historical numerical-policy inventory below was checked against source **C**:
+`c174458294c1a328058f96bf37a2a21ae16c06a4`. The current passive-observation retirement is documented in the
+[audit guide](second-stage-audit.md); historical experiments below are not new
+validation. Research collectors and alternate threshold scans are retired while
+the numerical policies and unresolved regression gates below remain in force.
 
 - [Second-stage local fitting](second-stage-local-fitting.md) specifies current
   execution, ownership, acceptance, recovery, and persistence contracts.
-- [Second-stage phase audit](second-stage-phase-audit.md) explains optional
+- [Second-stage decision audit](second-stage-audit.md) explains optional
   observations, schemas, and diagnostic interpretation.
 - [fold-168 iteration regression](fold-168-iteration-regression.md) remains an
   unresolved issue with its existing investigation and future repair proposal.

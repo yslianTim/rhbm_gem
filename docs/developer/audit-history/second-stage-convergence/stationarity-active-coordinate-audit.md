@@ -163,6 +163,9 @@ they define the production DOF population and exposure strata.
 
 Aggregate a captured Debug log with:
 
+The commands below are historical. The retired analyzer is available at the
+[matching report revision](https://github.com/yslianTim/rhbm_gem/blob/8e65fa418a556f1249867ab0ba92a8ce71e0c18f/resources/tools/developer/analyze_convergence_audit.py).
+
 ```bash
 python3 resources/tools/developer/analyze_convergence_audit.py run.log
 python3 resources/tools/developer/analyze_convergence_audit.py \

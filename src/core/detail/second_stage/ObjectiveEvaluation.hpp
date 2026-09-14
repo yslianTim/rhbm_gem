@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 #include "core/detail/second_stage/CouplingGraph.hpp"
 
 #include <map>
@@ -84,11 +86,18 @@ std::optional<ObjectiveBreakdown> BuildObjectiveBreakdown(
 
 bool IsBetterAuditObjective(double candidate, double best, ObjectiveTolerance tolerance);
 
+struct ObjectiveProgressGateEvidence
+{
+    bool previous_checked{ false }, best_checked{ false };
+    std::string_view reason{ "objective-unavailable" };
+};
+
 bool IsAuditObjectiveAcceptableForProgress(
     double candidate,
     double previous,
     const ObjectiveBreakdown * best,
-    ObjectiveTolerance tolerance);
+    ObjectiveTolerance tolerance,
+    ObjectiveProgressGateEvidence * evidence = nullptr);
 
 struct ObjectiveClusterDomain
 {

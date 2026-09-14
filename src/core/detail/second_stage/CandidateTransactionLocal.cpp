@@ -35,9 +35,7 @@ struct ClusterCandidateResult
     CandidateDecisionEvidence evidence{};
     PolishProgress polish_progress{};
     bool shrink_trust_region{ false };
-
 };
-
 } // namespace
 
 void TrustRegionStateSet::Reconcile(
@@ -344,11 +342,10 @@ static ClusterCandidateResult SelectClusterCandidate(
     double best_rescue_objective{ std::numeric_limits<double>::infinity() };
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
-    TrustModelTrialObserver observer(inputs, key, objective_sample_ref_list);
-    LocalSearchObservation observation(inputs, key, objective_sample_ref_list);
+
+    LocalSearchObservation observation(inputs, key);
     for (;;)
     {
-        observer.BeginSearch();
         observation.BeginSearch(trust_region_radius);
         result.evidence = CandidateDecisionEvidence{};
         result.polish_progress = PolishProgress{};
@@ -388,7 +385,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             factor >= std::numeric_limits<double>::epsilon(); factor *= 0.5)
         {
             observation.Generated();
-            observer.Generated();
             auto proposal_result{
                 BuildAtomProposal(
                     previous_state,
@@ -399,13 +395,12 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.has_value())
             {
                 result.evidence.invalid_trial_count++;
-                observer.Invalid();
+                observation.Failure(AuditCategory::Invalid, "invalid-candidate");
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::InvalidModel;
                 continue;
             }
             auto proposal{ std::move(*proposal_result) };
-            observation.Step(proposal.step_norm);
             const CandidateEvaluationOverlay candidate_overlay{
                 context,
                 residual_baseline,
@@ -421,7 +416,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             if (maximum_change < kTransformedChangeTolerance)
             {
-                observer.Nonmaterial();
                 if (factor == 1.0 && is_polish_eligible)
                 {
                     result.evidence.accepted_factor = 1.0;
@@ -436,7 +430,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (preflight.failure_stage == CandidateFailureStage::Trust)
             {
                 observation.TrustSkipped();
-                observer.TrustSkipped();
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
@@ -444,7 +437,7 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (preflight.guard_failure)
             {
                 result.evidence.guard_rejected_trial_count++;
-                observer.GuardRejected();
+                observation.Failure(AuditCategory::Guard, "guard-rejected");
                 last_guard_failure = preflight.guard_failure;
                 continue;
             }
@@ -464,8 +457,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain, trial_evidence, performance_counters}) };
             trial_evidence = evaluation.evidence;
             const auto committed{ evaluation.accepted };
-            observation.Trial(candidate_overlay, trial_evidence, committed);
-            observer.Trial(proposal.patch, trial_evidence, false, factor, committed);
+            observation.Trial(trial_evidence, committed);
             if (committed)
             {
                 result.evidence = std::move(trial_evidence);
@@ -498,7 +490,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             {
                 terminal_evidence_list.emplace_back(*last_guard_failure);
                 result.evidence.terminal_evidence_list = std::move(terminal_evidence_list);
-                ObservePhaseMissing(inputs.observation, "local-search", key, "guard-failed");
                 return result;
             }
             const auto atom_index{ *last_guard_failure->guard_atom_index };
@@ -543,15 +534,12 @@ static ClusterCandidateResult SelectClusterCandidate(
         result.evidence.terminal_evidence_list =
             std::move(terminal_evidence_list);
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
-        ObservePhaseMissing(inputs.observation, "local-search", key, "search-exhausted");
         return result;
     }
     result.evidence.terminal_evidence_list =
         std::move(terminal_evidence_list);
 
     const FitStateView base_state_view{ previous_state, *result.accepted_patch };
-    ObservePhaseCandidate(inputs.observation, "local-search", key, base_state_view,
-        nullptr, result.evidence.accepted_factor.value_or(1.0), "accepted");
     for (std::size_t position = 0; position < key.size(); position++)
     {
         if (IsTransformedChangeMaterial(
@@ -581,7 +569,6 @@ static ClusterCandidateResult SelectClusterCandidate(
         if (!polished_candidate.has_value())
         {
             result.polish_progress.skipped_count = 1;
-            ObservePhaseMissing(inputs.observation, "local-polish", key, "no-polish-proposal");
         }
         else
         {
@@ -599,11 +586,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain, polish_evidence, performance_counters}) };
             polish_evidence = evaluation.evidence;
             const auto polish_committed{ evaluation.accepted };
-            observation.Trial(polished_overlay, polish_evidence, polish_committed, true);
-            ObservePhaseLocalPolish(inputs.observation, key, polished_overlay.GetState(), base_state_view,
-                polished_candidate->effective_damping, polish_committed, polish_evidence);
-            observer.Trial(polished_candidate->patch, polish_evidence, true,
-                polished_candidate->effective_damping, polish_committed);
+            observation.Trial(polish_evidence, polish_committed, true);
             if (!polish_committed)
             {
                 result.polish_progress.rejected_count = 1;
@@ -626,11 +609,9 @@ static ClusterCandidateResult SelectClusterCandidate(
                     }
                 }
                 result.accepted_patch = std::move(polished_candidate->patch);
-
             }
         }
     }
-    observer.Finish(result.shrink_trust_region, first_objective_evaluated_factor, result.evidence);
     return result;
 }
 
@@ -640,7 +621,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
     const auto & partition{ inputs.partition };
     auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
     const auto cluster_key_list{ BuildGraphClusterKeyList(partition) };
-    BeginCandidateObservation(inputs, cluster_key_list);
     // Validate workspace coverage before any parallel solver mutates state.
     for (const auto & key : cluster_key_list)
     {
@@ -747,32 +727,8 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
             {
                 pending.cooperative_patch = std::move(result.rescue_patch);
             }
-            else if (IsJointOffsetSolveHardFailure(
-                inputs.health_by_key.at(key).joint_offset_status))
-            {
-                inputs.performance_counters.RecordBoundaryRescueExclusions(
-                    1,
-                    0,
-                    0);
-            }
-            else if (result.evidence.pre_objective_failure_reason !=
-                PreObjectiveFailureReason::None)
-            {
-                inputs.performance_counters.RecordBoundaryRescueExclusions(
-                    0,
-                    1,
-                    0);
-            }
-            else
-            {
-                inputs.performance_counters.RecordBoundaryRescueExclusions(
-                    0,
-                    0,
-                    1);
-            }
         }
 
-        ObserveCandidateDecision(inputs, key, result.evidence);
         pending.evidence = ClusterCandidateDecision{ key, std::move(result.evidence) };
         if (!is_accepted)
         {
@@ -792,9 +748,7 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
     inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
     inputs.performance_counters.RecordFullStateMaterialization();
 
-    ObservePhaseSearchAssembly(inputs.observation, selection.assembled_state);
     ReconcileSelectedBoundaries(inputs);
-    ObservePhaseState(inputs.observation, "boundary-final", selection.assembled_state);
     for (const auto & key : locally_polished_key_list)
     {
         if (std::ranges::find(selection.accepted_key_list, key) !=
@@ -802,9 +756,5 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         selection.polish_progress.accepted_count--;
         selection.polish_progress.rejected_count++;
     }
-    ObserveCandidateSelection(inputs.observation, selection);
-    FinalizeTrustModelAudit(inputs.observation, selection);
-
 }
-
 } // namespace rhbm_gem::core::detail

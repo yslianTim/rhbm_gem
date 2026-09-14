@@ -33,7 +33,6 @@ IterationProposalResult BuildIterationProposal(
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
-    ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    std::string_view diagnostic_phase = "outer-operator");
+    ClusterSolverWorkspaceMap & solver_workspace_by_key);
 
 } // namespace rhbm_gem::core::detail

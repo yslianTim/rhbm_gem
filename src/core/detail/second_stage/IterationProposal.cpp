@@ -1,3 +1,8 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_WORK(kind) ((void)0)
+#endif
 #include "core/detail/second_stage/IterationProposal.hpp"
 
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
@@ -159,14 +164,13 @@ IterationProposalResult BuildIterationProposal(
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
-    ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    std::string_view diagnostic_phase)
+    ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
+    RHBM_TEST_WORK(Operator);
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
     };
     const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
-    const auto log_debug_diagnostics{ !options.quiet_mode && is_debug_logging_enabled };
     std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
@@ -179,9 +183,7 @@ IterationProposalResult BuildIterationProposal(
                 current_model_snapshot,
                 ridge_multiplier_list,
                 solver_workspace_by_key.at(
-                    cluster_key_list.at(cluster_position)).joint_offset,
-                log_debug_diagnostics,
-                diagnostic_phase);
+                    cluster_key_list.at(cluster_position)).joint_offset);
         }
         catch (...)
         {

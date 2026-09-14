@@ -1,5 +1,6 @@
 add_library(rhbm_gem)
 target_compile_features(rhbm_gem PUBLIC cxx_std_20)
+target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_AUDIT_VERSION="${PROJECT_VERSION}")
 
 set(RHBM_GEM_COMMAND_SOURCES
     core/command/detail/LocalFittingFeatures.cpp
@@ -26,7 +27,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/observation/SecondStageObservation.cpp
     core/detail/second_stage/CouplingGraph.cpp
     core/detail/second_stage/JointFitting.cpp
-    core/detail/second_stage/observation/ClusterHistoryObserver.cpp
     core/detail/second_stage/CandidateEvaluation.cpp
     core/detail/second_stage/ComponentAssembly.cpp
     core/detail/second_stage/CandidateTransaction.cpp
@@ -37,8 +37,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/Quarantine.cpp
     core/detail/second_stage/CandidateTransactionBoundary.cpp
     core/detail/second_stage/DependencyPolish.cpp
-    $<$<BOOL:${RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT}>:core/detail/second_stage/observation/TrustModelAudit.cpp>
-    $<$<BOOL:${RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE}>:core/detail/second_stage/observation/PhaseAudit.cpp>
     core/detail/second_stage/observation/SecondStageLogging.cpp
     core/detail/second_stage/observation/PerformanceCounters.cpp
     core/detail/second_stage/ConvergenceCertificate.cpp
@@ -177,4 +175,10 @@ install(
 
 if(BUILD_PYTHON_BINDINGS)
     add_subdirectory(python)
+endif()
+
+if(BUILD_TESTING)
+    target_sources(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/SecondStageNumericalProbe.cpp")
+    target_include_directories(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 endif()

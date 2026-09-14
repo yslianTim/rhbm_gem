@@ -8,7 +8,9 @@
 #include <string_view>
 #include <vector>
 
+namespace rhbm_gem::core { struct FitOptions; }
 namespace rhbm_gem::core::detail {
+class SecondStageObservationSession;
 
 class PerformanceCounters;
 struct IterationObservation;
@@ -24,10 +26,10 @@ struct FixedPointOperatorEvidence;
 struct ConvergenceCertificate;
 struct ConvergenceDiagnostics;
 struct ConvergenceAssessment;
-struct SecondStageSeedSelectionRecord;
-struct ClusterCandidateDiagnostic;
+struct SecondStageSeedSummary;
 struct FinalDependencyPolishResult;
 enum class SecondStageStopReason;
+std::string_view SecondStageStopReasonText(SecondStageStopReason);
 enum class FinalPolishResidualSafetyStatus;
 
 void LogObjectiveDomain(
@@ -44,19 +46,9 @@ void LogSecondStageInitializationFailure(bool quiet_mode);
 void LogNoSelectedAtoms(bool quiet_mode);
 
 void LogSecondStageSeedSelections(
-    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
+    const SecondStageSeedSummary & selection_record_list,
     bool quiet_mode);
-void LogFrozenBackground(const SecondStageContext & context, bool quiet_mode);
 
-void LogRejectedClusterDiagnostics(
-    bool quiet_mode,
-    const std::vector<ClusterCandidateDiagnostic> & diagnostic_list);
-void LogAllRejectedResolution(
-    bool quiet_mode,
-    const IterationResult & iteration_result);
-void LogAcceptedCandidateSearchDiagnostics(
-    bool quiet_mode,
-    const IterationObservation & iteration_result);
 
 ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count, std::size_t maximum_iterations);
 void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths);
@@ -65,17 +57,6 @@ void LogIterationProgress(
     const ProgressColumnWidths & column_widths,
     const IterationResult & iteration_result, const IterationDiagnostics & diagnostics);
 
-void LogOperatorAvailability(std::string_view phase, const FixedPointOperatorEvidence &,
-    const std::vector<std::size_t> & atom_index_list);
-void LogUnrestrictedOperatorAssessments(
-    bool quiet_mode,
-    std::span<const SuspiciousGaussianAssessment> assessment_by_atom,
-    const SuspiciousBlockActivity & block_activity);
-void LogConvergenceSafeguardAudit(
-    bool quiet_mode,
-    const IterationResult & iteration_result,
-    const ConvergenceCertificate & certificate,
-    const ConvergenceDiagnostics & diagnostics);
 
 void LogAdaptiveTopologyRebuild(
     bool quiet_mode,
@@ -95,34 +76,23 @@ void LogFinalDependencyPolish(
     bool applied,
     const ConvergenceAssessment * candidate_certificate = nullptr);
 
-void LogSecondStageAuditTerminal(
-    bool quiet_mode,
-    const SecondStageContext & context,
-    SecondStageStopReason reason,
-    std::size_t attempt_number,
-    std::size_t accepted_iteration_count,
-    const FitState & finalized_state,
-    const ObjectiveDomain & comparison_objective_domain);
 void LogQuarantineFallback(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     std::size_t entered_target_count,
     std::size_t released_target_count,
     std::size_t failed_probation_count,
-    std::size_t unresolved_target_count,
-    const FitState & finalized_state);
+    std::size_t unresolved_target_count);
 void LogConverged(
     bool quiet_mode,
-    const IterationResult & iteration_result,
-    const FitState & finalized_state);
+    const IterationResult & iteration_result);
 void LogMaximumIterations(
     bool quiet_mode,
     std::size_t entered_target_count,
     std::size_t released_target_count,
     std::size_t failed_probation_count,
     std::size_t unresolved_target_count,
-    const BestAuditState & best_audit_state,
-    const FitState & latest_state);
+    const BestAuditState & best_audit_state);
 void LogSecondStageSummary(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
@@ -130,5 +100,10 @@ void LogSecondStageSummary(
     const PolishProvenance & latest_polish_provenance,
     SecondStageStopReason stop_reason,
     bool final_uses_best_audit);
+
+void LogDecisionAuditStart(SecondStageObservationSession &, const FitOptions &) noexcept;
+void LogDecisionAuditIteration(SecondStageObservationSession &, const IterationResult &) noexcept;
+void LogDecisionAuditTerminal(SecondStageObservationSession &, std::string_view reason, std::string_view source,
+    const BestAuditState &, const std::optional<ObjectiveBreakdown> &, const PerformanceCounters * = nullptr) noexcept;
 
 } // namespace rhbm_gem::core::detail

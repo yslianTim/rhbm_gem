@@ -162,7 +162,7 @@ class CandidateTransactionBuilder
     void ApplyComponentCandidate(
         const CandidateSelectionInputs &, const BoundaryReconciliationComponent &,
         const FitStatePatch & endpoint_patch, ComponentCandidate,
-        BoundaryComponentAcceptedSource, BoundaryAcceptancePolicy);
+        BoundaryComponentAcceptedSource);
     void RejectSelectionKeys(
         const CandidateSelectionInputs & inputs,
         const std::vector<ClusterKey> & key_list,
@@ -191,12 +191,11 @@ class CandidateTransactionBuilder
         const CandidateSelectionInputs & inputs,
         const ObjectiveBreakdown & previous_audit_objective);
     void MarkBoundaryDecisionRejected(
-        SecondStageObservationSession *,
         const std::vector<ClusterKey> & key_list,
         bool exhausted);
     void AuditAndSalvageFinalSelection(
         const CandidateSelectionInputs & inputs,
-        const ObjectiveBreakdown & previous_audit_objective);
+        const ObjectiveBreakdown & previous_audit_objective, bool rescue_audit = false);
 public:
     CandidateTransactionBuilder() = default;
     explicit CandidateTransactionBuilder(CandidateSelection initial);

@@ -43,7 +43,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             objective_domain.owner_key_by_atom_index)
     };
     report.component_count = component_list.size();
-    report.component_list.reserve(component_list.size());
     const auto base_baseline{ BuildResidualBaseline(context, base_state) };
     performance_counters.RecordGaussianCacheMisses();
     const auto base_objective{
@@ -84,25 +83,13 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         };
         report.atom_count += component.atom_index_list.size();
         report.parameter_count += parameter_count;
-        auto & diagnostic{
-            report.component_list.emplace_back(
-                FinalDependencyPolishDiagnostic::Component{
-                    .key_list = component.key_list,
-                    .atom_count = component.atom_index_list.size(),
-                    .parameter_count = parameter_count
-                })
-        };
         if (!base_objective.has_value()) continue;
 
-        const auto component_start{ std::chrono::steady_clock::now() };
         if (shape_active_index_list.empty() && offset_active_index_list.empty())
         {
-            diagnostic.elapsed_milliseconds =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - component_start).count();
             continue;
         }
-        diagnostic.objective_before = base_objective->GetTotalObjective();
+
         report.attempted_component_count++;
 
         try
@@ -118,7 +105,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             if (maximum_round_count != 0)
             {
                 report.round_count++;
-                diagnostic.round_count++;
+
                 std::vector<BoundaryJointTrustRegion> trust_region_list;
                 trust_region_list.reserve(component.key_list.size());
                 for (const auto & key : component.key_list)
@@ -143,15 +130,12 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     if (round != 0)
                     {
                         report.round_count++;
-                        diagnostic.round_count++;
                     }
                     const FitStateView endpoint_state_view{
                         base_state,
                         endpoint_patch
                     };
-                    const auto symbolic_analysis_count_before{
-                        solver.GetSymbolicAnalysisCount()
-                    };
+
                     const auto correction_result{
                         BuildBoundaryJointCorrection(
                             context,
@@ -162,31 +146,33 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             ridge_multiplier_list,
                             trust_region_list,
                             solver,
-                            "final-dependency-polish",
                             JointCorrectionTrustReference::Endpoint)
                     };
-                    diagnostic.symbolic_analysis_count +=
-                        solver.GetSymbolicAnalysisCount() -
-                        symbolic_analysis_count_before;
+
                     if (correction_result.status !=
                             BoundaryJointCorrectionStatus::CandidateReady ||
                         !correction_result.patch.has_value())
                     {
+                        if (observation && observation->Enabled())
+                            observation->Record({.stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
+                                .first_atom=component.atom_index_list.empty() ? 0 : component.atom_index_list.front(),
+                                .atom_count=component.atom_index_list.size(), .trial=round+1,
+                                .outcome="rejected", .reason="correction-unavailable"});
                         break;
                     }
-                    diagnostic.parameter_count = correction_result.parameter_count;
+
                     const CandidateEvaluationOverlay candidate_overlay{
                         context,
                         base_baseline,
                         base_state,
                         *correction_result.patch
                     };
-                    JointCandidateObservation trial(observation, options.quiet_mode, diagnostic.objective_diagnostic_list);
+                    JointCandidateObservation trial(observation, component.atom_index_list);
                     const auto evaluation{ EvaluateCandidate(candidate_overlay,
                         FinalPolishCandidateReference{component, partition, objective_domain,
                             endpoint_state_view, *base_objective, endpoint_objective, performance_counters,
                             correction_result.damping, round + 1}, &trial) };
-                    diagnostic.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
+
                     report.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
                     if (!evaluation.objective) break;
                     const auto & candidate_objective{ evaluation.objective };
@@ -194,8 +180,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     endpoint_patch = *correction_result.patch;
                     endpoint_objective = *candidate_objective;
                     improved_objective = candidate_objective;
-                    diagnostic.objective_after =
-                        candidate_objective->GetTotalObjective();
                 }
             }
 
@@ -205,7 +189,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     base_objective->GetTotalObjective(),
                     kObjectiveStrictTolerance))
             {
-                diagnostic.accepted = true;
                 accepted_patch_by_component.at(component_position) =
                     std::move(endpoint_patch);
                 accepted_component_count++;
@@ -213,11 +196,11 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         }
         catch (const std::exception &)
         {
-            diagnostic.accepted = false;
+            if (observation && observation->Enabled())
+                observation->Record({.stage=AuditStage::FinalPolish, .category=AuditCategory::Solver,
+                    .first_atom=component.atom_index_list.empty() ? 0 : component.atom_index_list.front(),
+                    .atom_count=component.atom_index_list.size(), .outcome="rejected", .reason="component-failure"});
         }
-        diagnostic.elapsed_milliseconds =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - component_start).count();
     }
 
     std::vector<const FitStatePatch *> selected_patches;
@@ -296,7 +279,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         },
         [&](ComponentRemoval & removal) -> std::optional<ObjectiveBreakdown>
         {
-            report.component_list.at(removal.position).accepted = false;
             selected_patches.at(removal.position) = nullptr;
             accepted_patch_by_component.at(removal.position).reset();
             accepted_component_count--;
@@ -318,29 +300,13 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         report.objective_after =
             assembled_objective->GetTotalObjective();
     }
-    else
-    {
-        for (auto & diagnostic : report.component_list)
-        {
-            diagnostic.accepted = false;
-        }
-    }
     report.accepted_component_count =
         result.accepted ? accepted_component_count : 0;
     report.elapsed_milliseconds =
         std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - polish_start).count();
     performance_counters.RecordDependencyPolish(
-        report.component_count,
-        report.attempted_component_count,
-        report.accepted_component_count,
-        report.component_count -
-            report.accepted_component_count,
-        report.atom_count,
-        report.parameter_count,
-        report.round_count,
         report.elapsed_milliseconds);
     return result;
 }
-
 } // namespace rhbm_gem::core::detail

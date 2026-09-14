@@ -73,8 +73,8 @@ The 168-atom simulation regression is intentionally excluded unless configured
 with `RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON`. It uses hash-verified external
 inputs and can be selected with `-R fold_168_simulation_regression` or
 `-L benchmark:external`; see the developer build guide for configuration.
-`RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT=ON` builds the developer-only
-frozen-IRLS trust-model instrumentation and requires `BUILD_TESTING=ON`.
+`RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT=ON` enables passive decision records. It also
+works without tests; see the [audit guide](../docs/developer/second-stage-audit.md).
 
 Run repository guards and install consumer smoke (lint lane):
 
@@ -97,19 +97,18 @@ Keep second-stage defense tests in the following behavior-based files under
 | `CandidateAcceptance_test.cpp` | Objectives and best references, trust radii, backtracking, transaction publication, boundary acceptance, and serial/parallel selection |
 | `Recovery_test.cpp` | Suspicious guards, failure masks, quarantine, fallback, ridge guards, and healthy remote clusters |
 | `ConvergenceAndFinalization_test.cpp` | Active-coordinate certificates, final dependency polish, persistence, and whole-run intensity scaling |
-| `Observation_test.cpp` | Cluster-history lifecycle, performance counters, trust shadow diagnostics, logging, and phase audit neutrality |
+| `Observation_test.cpp` | Bounded passive recording, actual gate references, failure isolation and basic logging |
 
 Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
-All seven files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
+All second-stage files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
 `rhbm_tests_core_estimator` CTest group. Do not add per-file CTest groups using
-this shared suite filter: each would repeat the entire suite. Pure trust-shadow
-policy assertions belong to independent observation cases under
-the original trust-experiment guard. Mixed cases that also verify production
+this shared suite filter: each would repeat the entire suite. Research-only
+assertions have been removed. Mixed cases that also verify production
 acceptance or rollback remain with the production behavior they exercise.
 
 Boundary reference tests cover ordinary/rescue gates, unavailable evidence and
 single correction-delta evaluation. Observation tests exercise suspicious
-correction early exits, strict rejection, stage-specific history publication after
+correction early exits, strict rejection, stage identity after
 later trials, and quiet/missing-session neutrality. Keep these cases in the
 existing acceptance and observation files.
 
@@ -121,13 +120,14 @@ do not share mutable fixtures. Use `detail` for `rhbm_gem::core::detail` through
 these tests. `EstimatorTester_test.cpp` retains its workflow tests and fixtures.
 
 Compile the support implementation directly into `rhbm_tests`, outside the
-suite-discovery source lists. Keep both observation options consistent with the
-library; direct phase collector tests still compile `PhaseAudit.cpp` into the
-test target when production phase auditing is disabled. Phase cases cover schema 2,
-whole frozen-domain objectives, qualified operator replay, and objective-only
-backtracking. Attempts 4, 5, 8, and 9 verify that no retired sampling or solver
-probes run. The phase parser rejects older schemas and emits only candidate,
-attempt, counter, and phase reports.
+suite-discovery source lists. One helper keeps the library and private-header
+tests consistent for `RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT`. No retired collector is
+compiled in either configuration. `Observation_test.cpp` covers five-detail bounds,
+deterministic worker merging, gate references and failure isolation.
+`NumericalAuditNeutrality_test.cpp` emits small comparison records with actual
+work counts independent of the observer. `second_stage_audit_test.py` covers the
+single schema and output/documentation contracts. Text/parser changes do not
+require external numerical datasets; see the audit guide's verification tiers.
 
 ### General placement
 

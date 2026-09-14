@@ -1,3 +1,8 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_COMMIT(result, quarantine, radii) ((void)0)
+#endif
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 
@@ -78,8 +83,7 @@ CandidateTransaction CandidateTransactionBuilder::Finish(const CandidateSelectio
         m_selection.block_activity, assessments, health, operator_evidence,
         m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state,
         inputs.previous_state, recovery_revision) };
-    ObservePhaseState(inputs.observation, "final-selection",
-            m_selection.accepted_key_list.empty() ? inputs.previous_state : m_selection.assembled_state);
+    ObserveQuarantine(inputs.observation, quarantine, next_quarantine);
     return CandidateTransaction(std::move(m_selection), std::move(next_quarantine), suspicious_count, transition);
 }
 
@@ -101,7 +105,6 @@ CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, Fi
         provenance = std::move(m_selection.assembled_polish_provenance);
     }
     else accepted_state = std::move(previous_state);
-    ObserveHistoryPublication(observation);
     result.block_activity = std::move(m_selection.block_activity);
     result.final_audit_objective = m_selection.final_audit_objective;
     result.polish_progress = m_selection.polish_progress;
@@ -109,6 +112,8 @@ CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, Fi
     result.accepted = accepted;
     result.rejected_cluster = !m_selection.rejected_key_list.empty();
     result.quarantine_transition = m_quarantine_transition;
+    ObserveCommit(observation, m_selection, result, radii);
+    RHBM_TEST_COMMIT(result, quarantine, radii);
     return result;
 }
 } // namespace rhbm_gem::core::detail

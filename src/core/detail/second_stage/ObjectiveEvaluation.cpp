@@ -1,3 +1,8 @@
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SecondStageNumericalProbe.hpp"
+#else
+#define RHBM_TEST_WORK(kind) ((void)0)
+#endif
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
@@ -147,6 +152,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
+    RHBM_TEST_WORK(Objective);
     const auto residual_contribution{
         EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
     };
@@ -167,6 +173,7 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     const State & state,
     const Evaluator & evaluator)
 {
+    RHBM_TEST_WORK(Objective);
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
@@ -359,13 +366,33 @@ bool IsAuditObjectiveAcceptableForProgress(
     double candidate,
     double previous,
     const ObjectiveBreakdown * best,
-    ObjectiveTolerance tolerance)
+    ObjectiveTolerance tolerance,
+    ObjectiveProgressGateEvidence * evidence)
 {
     ValidateObjectiveTolerance(tolerance);
-    if (!std::isfinite(candidate) || !std::isfinite(previous)) return false;
-    return !IsObjectiveDeteriorated(candidate, previous, tolerance) &&
-        (best == nullptr ||
-            !IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance));
+    if (evidence) *evidence = {};
+    if (!std::isfinite(candidate) || !std::isfinite(previous))
+    {
+        if (evidence) evidence->reason = "objective-nonfinite";
+        return false;
+    }
+    if (evidence) evidence->previous_checked = true;
+    if (IsObjectiveDeteriorated(candidate, previous, tolerance))
+    {
+        if (evidence) evidence->reason = "previous-gate";
+        return false;
+    }
+    if (best != nullptr)
+    {
+        if (evidence) evidence->best_checked = true;
+        if (IsObjectiveDeteriorated(candidate, best->GetTotalObjective(), tolerance))
+        {
+            if (evidence) evidence->reason = "best-gate";
+            return false;
+        }
+    }
+    if (evidence) evidence->reason = "";
+    return true;
 }
 
 static std::optional<double> BuildFixedObjectiveScale(
@@ -521,6 +548,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const ObjectiveBreakdown & baseline,
     PerformanceCounters & performance_counters)
 {
+    RHBM_TEST_WORK(Objective);
     const auto & changed_key{
         candidate_overlay.GetState().GetOverrideAtomIndexList()
     };
