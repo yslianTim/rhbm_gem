@@ -415,8 +415,17 @@ TEST(SecondStageObservationTest, SelectionAuditReportsActualConditionalAndSalvag
         selected.assembled_state=fixture.state; selected.assembled_polish_provenance=provenance;
         selected.accepted_key_list=keys;
         detail::CandidateTransactionBuilder builder(std::move(selected));
+        BeginNumericalCapture();
         builder.ReconcileSelectedBoundaries(inputs);
+        const auto capture=EndNumericalCapture();
         EXPECT_EQ(builder.View().accepted_key_list.empty(),mode==2 || mode==3);
+        if (mode==1 || mode==3) {
+            // Previous audit + two member objectives + boundary and selection
+            // deltas. Each delta includes two contribution evaluations. Only a
+            // failed selection adds the ranking delta; empty selection adds none.
+            EXPECT_EQ(capture.work[static_cast<std::size_t>(Work::Objective)],mode==1 ? 9U : 12U);
+            EXPECT_EQ(builder.View().final_audit_objective.has_value(),mode==1);
+        }
         if (!session.Enabled()) continue;
         const auto & ordinary=session.Audit()->selection[0];
         EXPECT_EQ(ordinary.executed,mode==1 || mode==3);

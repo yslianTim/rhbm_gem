@@ -238,6 +238,60 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
         fixture.state.at(0).mdpde.GetModel().GetAmplitude());
 }
 
+TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishReusesBaseObjectiveWithoutAcceptedComponents)
+{
+    for (const bool objective_available : { true, false })
+    {
+        SCOPED_TRACE(objective_available);
+        const std::vector<rg::GaussianModel3D> models{ { 6.0, 0.55, 0.0 }, { 4.5, 0.70, 0.0 } };
+        auto fixture{ BuildJointPolishFixture(models, models) };
+        detail::GraphTopology topology;
+        topology.adjacency_list.resize(2);
+        for (const auto & sample : fixture.sample_ref_list)
+        {
+            topology.sample_dependency_list.push_back({ sample, { 0, 1 } });
+        }
+        const auto partition{ detail::BuildGraphPartition(topology, { 0, 1 }) };
+        const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+        auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot,
+            detail::BuildGraphClusterKeyList(partition)) };
+        if (!objective_available) domain.cluster_by_key.begin()->second.scale.reset();
+        const auto base_objective{ detail::EvaluateAuditObjective(domain, baseline) };
+        ASSERT_EQ(base_objective.has_value(), objective_available);
+        detail::ClusterSolverWorkspaceMap solvers;
+        detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        detail::PerformanceCounters counters{ true, fixture.context, solvers, corrections };
+        detail::SecondStageObservationSession observation;
+        const detail::SuspiciousBlockActivity fixed{ { 1, 1 }, { 1, 1 }, { 0, 0 } };
+
+        second_stage_test::BeginNumericalCapture();
+        const auto result{ detail::RunFinalDependencyPolish(fixture.context, MakeSecondStageOptions(),
+            topology, partition, domain, fixed, fixture.state, corrections, counters, &observation) };
+        const auto capture{ second_stage_test::EndNumericalCapture() };
+
+        // Only the base baseline and its objective are evaluated. Assembly with
+        // no accepted patches must not trigger a second global audit or solve.
+        EXPECT_EQ(capture.work, (std::array<std::size_t, 4>{ 0, 0, 1, 2 }));
+        EXPECT_FALSE(result.accepted);
+        EXPECT_EQ(observation.final_polish.component_count, 1U);
+        EXPECT_EQ(observation.final_polish.attempted_component_count, 0U);
+        EXPECT_EQ(observation.final_polish.accepted_component_count, 0U);
+        ASSERT_EQ(result.objective.has_value(), objective_available);
+        if (base_objective)
+        {
+            EXPECT_DOUBLE_EQ(result.objective->fit_range_residual_objective, base_objective->fit_range_residual_objective);
+            EXPECT_DOUBLE_EQ(result.objective->tail_validation_loss, base_objective->tail_validation_loss);
+            EXPECT_DOUBLE_EQ(result.objective->offset_plausibility_penalty, base_objective->offset_plausibility_penalty);
+        }
+        ASSERT_EQ(result.state.size(), fixture.state.size());
+        for (std::size_t atom = 0; atom < result.state.size(); ++atom)
+        {
+            ExpectGaussianModelsNear(result.state.at(atom).mdpde.GetModel(), fixture.state.at(atom).mdpde.GetModel(), 0.0);
+            ExpectGaussianModelsNear(result.state.at(atom).ols.GetModel(), fixture.state.at(atom).ols.GetModel(), 0.0);
+        }
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, FixedPointOperatorSummaryPreservesNominalPopulationAndPercentiles)
 {
     const auto model{ rg::GaussianModel3D::FromTransformedCoordinates({ 0.0, 0.0, 0.0 }) };

@@ -541,35 +541,23 @@ void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
 {
     auto & selection{ m_selection };
     const auto initial_count{ SelectedKeys().size() };
-    std::vector<std::pair<double, std::vector<ClusterKey>>> rejection_candidate_list;
-    std::size_t rejection_position{ 0 };
     const auto evaluate = [&]
     {
         return EvaluateFinalSelectionAudit(
             inputs, previous_audit_objective, selection, SelectedKeys(), rescue_audit);
     };
-    selection.final_audit_objective = AuditAndSalvageComponents(
-        evaluate,
-        [&](const auto & objective)
+    selection.final_audit_objective = evaluate();
+    if (!selection.final_audit_objective.has_value() && !SelectedKeys().empty())
+    {
+        const auto rejection_candidate_list{ BuildRejectionCandidates(
+            inputs, previous_audit_objective, selection, SelectedKeys()) };
+        for (const auto & candidate : rejection_candidate_list)
         {
-            return objective.has_value() || SelectedKeys().empty();
-        },
-        [&](const auto &) -> std::optional<std::size_t>
-        {
-            if (rejection_position == 0)
-            {
-                rejection_candidate_list = BuildRejectionCandidates(
-                    inputs, previous_audit_objective, selection, SelectedKeys());
-            }
-            if (rejection_position == rejection_candidate_list.size()) return std::nullopt;
-            return rejection_position++;
-        },
-        [&](std::size_t position)
-        {
-            const auto & key_list{ rejection_candidate_list.at(position).second };
-            RejectSelectionKeys(inputs, key_list, false);
-            return evaluate();
-        });
+            RejectSelectionKeys(inputs, candidate.second, false);
+            selection.final_audit_objective = evaluate();
+            if (selection.final_audit_objective.has_value() || SelectedKeys().empty()) break;
+        }
+    }
     if (selection.final_audit_objective.has_value() || SelectedKeys().empty())
     {
         const auto remaining{ SelectedKeys().size() };

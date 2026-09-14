@@ -69,7 +69,7 @@ all second-stage services through candidate selection:
 | `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
 | `CandidateTransactionBoundary.cpp` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
-| `ComponentAssembly` | Ordered patch application and excluded-component trial assembly; shared audit/salvage loop with caller-owned evaluation and removal policy |
+| `ComponentAssembly` | Ordered patch application and excluded-component trial assembly |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
@@ -254,15 +254,17 @@ builder-owned state; final polish constructs complete states from its base and
 retained component patches. The module owns no selection, provenance, radius,
 quarantine or diagnostic state.
 
-Both stages use `AuditAndSalvageComponents` for the initial audit and repeated
-policy-selected removals, with outer calls governed by the
-[conditional selection audit](#conditional-selection-audit). Outer considers
-units that do not independently strictly improve previous, with exact-delta scoring, unavailable evidence scored
-as infinity, worst-first ordering, lexical key tie-breaking, previous/best gates,
-and exhausted fallback. Final polish tries each accepted component for removal
+Each stage owns its audit and removal loop directly, with outer calls governed by
+the [conditional selection audit](#conditional-selection-audit). Only a failed
+initial audit with a nonempty selection builds the outer rejection ranking, once.
+Outer considers units that do not independently strictly improve previous, with
+exact-delta scoring, unavailable evidence scored as infinity, worst-first ordering,
+lexical key tie-breaking, previous/best gates, and exhausted fallback. It audits
+after each removal and stops when accepted or empty. Final polish tries each accepted component for removal
 using full-state audits and selects the best available single removal each round,
 retaining first-position tie-breaking and strict improvement over the base. A selected
 final removal reuses its already computed objective, without an extra audit.
+With no accepted components, final polish reuses the base objective.
 Ordinary/cooperative sweep ordering and polished-state recertification are
 unchanged.
 
