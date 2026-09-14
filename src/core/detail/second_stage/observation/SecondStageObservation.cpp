@@ -111,28 +111,6 @@ void ObserveLocalHistory(SecondStageObservationSession * observation, const Cand
             candidate, key, samples, domain, source, accepted, diagnostic);
 }
 
-void ObserveBoundaryHistory(SecondStageObservationSession * observation, JointCandidateObjectiveDiagnostic * record) noexcept
-{
-    if (observation && observation->cluster_history) observation->cluster_history->BeginBoundary(record);
-}
-
-void ObserveBoundaryMemberHistory(SecondStageObservationSession * observation, const CandidateEvaluationOverlay & candidate, const ClusterKey & key,
-    const std::vector<SampleRef> & samples, const ObjectiveDomain & domain, bool accepted,
-    const CandidateDecisionEvidence & evidence, JointCandidateObjectiveDiagnostic * record) noexcept
-{
-    if (observation && observation->cluster_history)
-    {
-        ObjectiveAttemptDiagnostic diagnostic;
-        static_cast<CandidateDecisionEvidence &>(diagnostic) = evidence;
-        if (record)
-        {
-            diagnostic.trial_count = record->candidate_number;
-            diagnostic.accepted_factor = record->factor;
-        }
-        observation->cluster_history->BoundaryMember(candidate, key, samples, domain, accepted, diagnostic, record);
-    }
-}
-
 void ObserveBoundaryHistoryAccepted(SecondStageObservationSession * observation, std::size_t token) noexcept
 {
     if (observation && observation->cluster_history) observation->cluster_history->AcceptBoundary(token);
@@ -157,7 +135,7 @@ void BeginPhaseObservation(SecondStageObservationSession * observation, SecondSt
 ProductionObservationScope::ProductionObservationScope(const SecondStageObservationSession * observation, std::size_t attempt)
     : m_scope(observation && observation->phase_audit ? attempt : 0, "production") {}
 
-std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
+static std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
 {
     const bool cooperative{ policy == BoundaryAcceptancePolicy::CooperativeRescue };
     switch (stage)
@@ -169,7 +147,7 @@ std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy policy, Boundar
     return {};
 }
 
-std::string_view BoundaryPhaseName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
+static std::string_view BoundaryPhaseName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
 {
     const bool cooperative{ policy == BoundaryAcceptancePolicy::CooperativeRescue };
     switch (stage)
@@ -196,6 +174,63 @@ JointCandidateObjectiveDiagnostic * JointCandidateObservation::Record()
     return m_current ? &m_records.at(*m_current) : nullptr;
 }
 
+void JointCandidateObservation::BeginBoundary(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage, double factor)
+{
+    Begin(stage, BoundaryDiagnosticName(policy, stage), factor);
+}
+
+void JointCandidateObservation::BeginMembers()
+{
+    auto * record{ Record() };
+    if (m_session && m_session->cluster_history) m_session->cluster_history->BeginBoundary(record);
+}
+
+void JointCandidateObservation::Member(const CandidateEvaluationOverlay & candidate, const ClusterKey & key,
+    const std::vector<SampleRef> & samples, const ObjectiveDomain & domain,
+    BoundaryAcceptancePolicy policy, bool accepted, const CandidateDecisionEvidence & evidence)
+{
+    auto * record{ Record() };
+    if (!accepted)
+        RecordJointMemberRejection(record, key, evidence.previous_objective, std::nullopt, evidence.candidate_objective, false);
+    else if (record && policy == BoundaryAcceptancePolicy::CooperativeRescue)
+    {
+        const auto candidate_value{ evidence.candidate_objective->GetTotalObjective() };
+        const auto previous_value{ evidence.previous_objective->GetTotalObjective() };
+        if (candidate_value > previous_value)
+        {
+            record->locally_deteriorated_member_count++;
+            record->maximum_local_deterioration = std::max(record->maximum_local_deterioration, candidate_value - previous_value);
+        }
+    }
+    // Keep history payload copying inside the original noexcept observation boundary.
+    [&]() noexcept
+    {
+        if (m_session && m_session->cluster_history)
+        {
+            ObjectiveAttemptDiagnostic diagnostic;
+            static_cast<CandidateDecisionEvidence &>(diagnostic) = evidence;
+            if (record)
+            {
+                diagnostic.trial_count = record->candidate_number;
+                diagnostic.accepted_factor = record->factor;
+            }
+            m_session->cluster_history->BoundaryMember(candidate, key, samples, domain, accepted, diagnostic, record);
+        }
+    }();
+}
+
+void JointCandidateObservation::RejectGlobalObjective()
+{
+    if (auto * record{ Record() }) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+}
+
+void JointCandidateObservation::RejectStrictImprovement(double candidate, double previous)
+{
+    if (auto * record{ Record() })
+        record->outcome = IsObjectiveDeteriorated(candidate, previous, kObjectiveProgressTolerance) ?
+            "members-passed-global-objective-rejected-or-unavailable" : "members-passed-strict-improvement-failed";
+}
+
 void JointCandidateObservation::Accept(BoundaryComponentAcceptedSource source,
     BoundaryComponentReconciliationDiagnostic & diagnostic) noexcept
 {
@@ -212,12 +247,103 @@ void JointCandidateObservation::Accept(BoundaryComponentAcceptedSource source,
 }
 
 BoundaryObservationScope::BoundaryObservationScope(const CandidateSelectionInputs & inputs,
-    const BoundaryReconciliationComponent & component)
-    : m_diagnostic(inputs.observation ?
+    const BoundaryReconciliationComponent & component, BoundaryAcceptancePolicy policy,
+    const ObjectiveBreakdown * previous, std::size_t rescue_candidate_count)
+    : m_inputs(inputs), m_component(component), m_policy(policy),
+      m_diagnostic(inputs.observation ?
         inputs.observation->iteration.boundary_reconciliation_diagnostic_list.emplace_back() : m_unobserved),
       m_trials(inputs.observation, inputs.options.quiet_mode, m_diagnostic.objective_diagnostic_list)
 {
     m_diagnostic.key_list = component.key_list;
+    ClusterKey atoms;
+    for (const auto & key : component.key_list) atoms.insert(atoms.end(), key.begin(), key.end());
+    std::ranges::sort(atoms);
+    atoms.erase(std::ranges::unique(atoms).begin(), atoms.end());
+    m_diagnostic.atom_count = atoms.size();
+    m_diagnostic.boundary_sample_count = component.boundary_sample_count;
+    m_diagnostic.interface_atom_count = component.interface_atom_index_list.size();
+    m_diagnostic.shape_active_atom_count = component.halo_atom_index_list.size();
+    m_diagnostic.is_rescue_attempt = policy == BoundaryAcceptancePolicy::CooperativeRescue;
+    if (m_diagnostic.is_rescue_attempt)
+    {
+        m_diagnostic.accepted_cluster_count = component.key_list.size() - rescue_candidate_count;
+        m_diagnostic.rescue_candidate_cluster_count = rescue_candidate_count;
+    }
+    if (previous) m_diagnostic.previous_component_objective = previous->GetTotalObjective();
+}
+
+void BoundaryObservationScope::BeginTrial(BoundaryObservationStage stage, double factor, std::size_t trial_number)
+{
+    if (stage == BoundaryObservationStage::Backtracking) m_diagnostic.trial_count = trial_number;
+    m_trials.BeginBoundary(m_policy, stage, factor);
+}
+
+void BoundaryObservationScope::CandidateEvaluated(BoundaryObservationStage stage,
+    const FitStatePatch & patch, const FitStateView & state, double factor,
+    const std::optional<BoundaryCandidateEvaluation> & evaluation)
+{
+    const auto * record{ m_trials.Record() };
+    ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, stage), patch.atom_index_list,
+        state, nullptr, factor, evaluation ? "accepted" : "rejected", record ? record->outcome : "",
+        false, stage != BoundaryObservationStage::Backtracking);
+    if (stage == BoundaryObservationStage::Endpoint && evaluation)
+        m_diagnostic.endpoint_component_objective = evaluation->audit_objective.GetTotalObjective();
+}
+
+void BoundaryObservationScope::CorrectionActivity(std::size_t shape_count, std::size_t offset_count)
+{
+    m_diagnostic.shape_active_atom_count = shape_count;
+    m_diagnostic.offset_active_atom_count = offset_count;
+}
+
+void BoundaryObservationScope::BeginCorrectionSolve(const ObjectiveBreakdown & reference)
+{
+    m_diagnostic.joint_reference_component_objective = reference.GetTotalObjective();
+}
+
+void BoundaryObservationScope::CorrectionSolved(const BoundaryJointCorrectionResult & result)
+{
+    m_diagnostic.joint_correction_status = result.status;
+    m_diagnostic.joint_parameter_count = result.parameter_count;
+    if (result.status == BoundaryJointCorrectionStatus::CandidateReady)
+    {
+        m_diagnostic.joint_damping = result.damping;
+        m_diagnostic.maximum_normalized_trust_step = result.maximum_normalized_trust_step;
+    }
+}
+
+void BoundaryObservationScope::CorrectionEvaluated(const FitStatePatch & patch, const FitStateView & state,
+    const FitStateView & endpoint, double damping, const ObjectiveBreakdown & reference,
+    const BoundaryCorrectionEvaluation & evaluation)
+{
+    m_diagnostic.suspicious_candidate_atom_count = evaluation.suspicious_atom_count;
+    if (evaluation.suspicious_atom_count != 0)
+    {
+        ObservePhaseCorrection(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
+            patch.atom_index_list, state, endpoint, damping, "rejected", "suspicious", m_inputs, m_component.key_list, reference);
+        return;
+    }
+    if (evaluation.raw_objective)
+        m_diagnostic.joint_candidate_component_objective = evaluation.raw_objective->GetTotalObjective();
+    auto * record{ m_trials.Record() };
+    ObservePhaseCorrection(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
+        patch.atom_index_list, state, endpoint, damping, evaluation.accepted ? "accepted" : "rejected",
+        evaluation.members && !evaluation.accepted ? "strict-improvement" : (record ? record->outcome : ""),
+        m_inputs, m_component.key_list, reference);
+    if (!evaluation.accepted && record && evaluation.members)
+        record->outcome = "members-passed-strict-improvement-failed";
+}
+
+void BoundaryObservationScope::AcceptedCandidate(const BoundaryCandidateEvaluation & evaluation)
+{
+    m_diagnostic.candidate_component_objective = evaluation.audit_objective.GetTotalObjective();
+}
+
+void BoundaryObservationScope::Accept(const BoundaryComponentDecision & decision)
+{
+    m_trials.Accept(decision.accepted_source, m_diagnostic);
+    if (m_diagnostic.is_rescue_attempt)
+        m_diagnostic.rescued_cluster_count = m_diagnostic.rescue_candidate_cluster_count;
 }
 
 void BoundaryObservationScope::Finish(const BoundaryComponentDecision & decision)

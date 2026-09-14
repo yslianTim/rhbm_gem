@@ -383,6 +383,138 @@ TEST(EstimatorSecondStageDefenseTest, GlobalCandidateKeepsInclusiveProgressToler
         samples, domain, nullptr, &nonfinite, counters }));
 }
 
+TEST(EstimatorSecondStageDefenseTest, BoundaryCandidateKeepsPolicyReferencesAndMissingEvidence)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const detail::ClusterKey key{ 0 };
+    detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+    const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+    auto previous_by_key{ detail::BuildObjectiveByKey(partition, domain, baseline) };
+    const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+    ASSERT_TRUE(previous);
+    const detail::BoundaryReconciliationComponent component{ .key_list = { key },
+        .affected_sample_ref_list = fixture.sample_ref_list, .halo_atom_index_list = key };
+    detail::ClusterSolverWorkspaceMap workspaces;
+    detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    const detail::FitState improved{ MakeGaussianResult({ 6.2, 0.5, 0.0 }) };
+    const auto patch{ detail::FitStatePatch::FromState(improved, key) };
+    const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+    const detail::FitStatePatch unchanged_patch;
+    const detail::CandidateEvaluationOverlay unchanged{ fixture.context, baseline, fixture.state, unchanged_patch };
+    const detail::ObjectiveBreakdown best{ 0.0, 0.0, 0.0 };
+    const detail::ObjectiveBreakdown nonfinite{ std::numeric_limits<double>::infinity(), 0.0, 0.0 };
+    for (const auto policy : { detail::BoundaryAcceptancePolicy::Ordinary, detail::BoundaryAcceptancePolicy::CooperativeRescue })
+    {
+        SCOPED_TRACE(static_cast<int>(policy));
+        detail::BoundaryCandidateReference reference{
+            .policy = policy, .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
+            .previous_objective_by_key = previous_by_key, .best_audit = &best, .counters = counters,
+            .component = component, .previous_audit = &*previous };
+        EXPECT_EQ(detail::EvaluateCandidate(candidate, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+        reference.best_audit = &*previous;
+        const auto accepted{ detail::EvaluateCandidate(candidate, reference) };
+        ASSERT_TRUE(accepted);
+        const auto full{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(fixture.context, improved)) };
+        ASSERT_TRUE(full);
+        EXPECT_NEAR(accepted->audit_objective.GetTotalObjective(), full->GetTotalObjective(), 1.0e-12);
+        EXPECT_EQ(detail::EvaluateCandidate(unchanged, reference).has_value(), policy == detail::BoundaryAcceptancePolicy::Ordinary);
+        reference.previous_audit = nullptr;
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        reference.previous_audit = &nonfinite;
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        reference.previous_audit = &*previous;
+        const auto saved_member{ previous_by_key.at(key) };
+        previous_by_key.at(key).reset();
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        previous_by_key.at(key) = nonfinite;
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        previous_by_key.at(key) = detail::ObjectiveBreakdown{ -1.0, 0.0, 0.0 };
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        previous_by_key.at(key) = saved_member;
+        const auto saved_scale{ domain.cluster_by_key.at(key).scale };
+        domain.cluster_by_key.at(key).scale.reset();
+        EXPECT_FALSE(detail::EvaluateCandidate(candidate, reference));
+        domain.cluster_by_key.at(key).scale = saved_scale;
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryCorrectionKeepsStrictReferenceAndSingleDeltaEvaluation)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const detail::ClusterKey key{ 0 };
+    detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+    const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    const auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+    const auto previous_by_key{ detail::BuildObjectiveByKey(partition, domain, baseline) };
+    const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+    ASSERT_TRUE(previous);
+    const detail::BoundaryReconciliationComponent component{ .key_list = { key },
+        .affected_sample_ref_list = fixture.sample_ref_list, .halo_atom_index_list = key };
+    const detail::FitState improved{ MakeGaussianResult({ 6.2, 0.5, 0.0 }) };
+    const auto patch{ detail::FitStatePatch::FromState(improved, key) };
+    const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+    const detail::FitStatePatch empty_patch;
+    const detail::FitStateView endpoint{ fixture.state, empty_patch };
+    detail::ClusterSolverWorkspaceMap workspaces;
+    detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    for (const bool unavailable : { false, true })
+    {
+        SCOPED_TRACE(unavailable);
+        testing::internal::CaptureStdout();
+        {
+            detail::PerformanceCounters counters{ false, fixture.context, workspaces, corrections };
+            const detail::ObjectiveBreakdown audit{ unavailable ? std::numeric_limits<double>::infinity() :
+                previous->fit_range_residual_objective, previous->tail_validation_loss, previous->offset_plausibility_penalty };
+            const detail::BoundaryCorrectionReference reference{
+                .policy = detail::BoundaryAcceptancePolicy::Ordinary,
+                .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
+                .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+                .component = component, .endpoint = endpoint, .previous_audit = audit,
+                .improvement = *previous, .damping = 1.0 };
+            const auto result{ detail::EvaluateCandidate(candidate, reference) };
+            EXPECT_EQ(result.suspicious_atom_count, 0U);
+            EXPECT_EQ(result.raw_objective.has_value(), !unavailable);
+            EXPECT_EQ(result.members.has_value(), !unavailable);
+            EXPECT_EQ(result.accepted, !unavailable);
+        }
+        const auto output{ testing::internal::GetCapturedStdout() };
+        const auto sample_count{ 2 * detail::CountObjectiveSamples(fixture.sample_ref_list, domain) };
+        EXPECT_NE(output.find("objective_recomputed/reused_samples = " + std::to_string(sample_count) + "/0"), std::string::npos);
+    }
+    Logger::SetLogLevel(saved_level);
+    detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    const auto objective{ detail::EvaluateObjectiveDelta(candidate, fixture.sample_ref_list, domain, *previous, counters) };
+    ASSERT_TRUE(objective);
+    const detail::BoundaryCorrectionReference tied_reference{
+        .policy = detail::BoundaryAcceptancePolicy::Ordinary,
+        .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
+        .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+        .component = component, .endpoint = endpoint, .previous_audit = *previous,
+        .improvement = *objective, .damping = 0.5 };
+    const auto tied{ detail::EvaluateCandidate(candidate, tied_reference) };
+    EXPECT_TRUE(tied.members);
+    EXPECT_FALSE(tied.accepted);
+    for (const auto [margin, expected] : { std::pair{1.0e-9, false}, std::pair{1.0e-6, true} })
+    {
+        const detail::ObjectiveBreakdown improvement{ objective->GetTotalObjective() + margin, 0.0, 0.0 };
+        const detail::BoundaryCorrectionReference reference{
+            .policy = detail::BoundaryAcceptancePolicy::Ordinary,
+            .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
+            .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+            .component = component, .endpoint = endpoint, .previous_audit = *previous,
+            .improvement = improvement, .damping = 0.5 };
+        const auto result{ detail::EvaluateCandidate(candidate, reference) };
+        EXPECT_TRUE(result.members);
+        EXPECT_EQ(result.accepted, expected);
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)
 {
     const auto objective{

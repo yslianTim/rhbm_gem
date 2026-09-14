@@ -15,6 +15,8 @@
 #include "support/SecondStageTestSupport.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
+#include "core/detail/second_stage/CandidateEvaluation.hpp"
+#include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
@@ -916,4 +918,223 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditQuietAndEnabledRunsPreserveFinal
         EXPECT_DOUBLE_EQ(a.GetWidth(), b.GetWidth());
         EXPECT_DOUBLE_EQ(a.GetOffset(), b.GetOffset());
     }
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryObservationPublishesSelectedStageAfterLaterTrials)
+{
+    using Source = detail::BoundaryComponentAcceptedSource;
+    using Stage = detail::BoundaryObservationStage;
+    for (const auto source : { Source::Endpoint, Source::JointCorrection, Source::Backtracking })
+    {
+        SCOPED_TRACE(static_cast<int>(source));
+        auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+        const detail::ClusterKey key{ 0 };
+        detail::CouplingGraphPartition partition;
+        partition.sample_id_list_by_key[key] = fixture.sample_ref_list;
+        const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+        const auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+        const auto previous_by_key{ detail::BuildObjectiveByKey(partition, domain, baseline) };
+        const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+        ASSERT_TRUE(previous);
+        const detail::BoundaryReconciliationComponent component{ .key_list = { key },
+            .affected_sample_ref_list = fixture.sample_ref_list, .interface_atom_index_list = key,
+            .halo_atom_index_list = key, .boundary_sample_count = 1 };
+        const detail::PolishProvenance provenance(1, 0);
+        const detail::SuspiciousBlockActivity activity{ { 0 }, { 0 }, { 0 } };
+        const std::vector<double> ridge(1, 1.0);
+        const detail::ClusterHealthMap health;
+        const detail::BestAuditState best;
+        detail::TrustRegionStateSet trust;
+        trust.Reconcile({ key });
+        detail::ClusterSolverWorkspaceMap workspaces;
+        detail::BoundaryJointCorrectionWorkspaceMap corrections;
+        detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+        auto options{ MakeSecondStageOptions() };
+        options.quiet_mode = false;
+        detail::SecondStageObservationSession session;
+        const detail::CandidateSelectionInputs inputs{
+            fixture.context, options, baseline, partition, health, fixture.state, provenance,
+            fixture.state, activity, ridge, domain, previous_by_key, best, trust, workspaces, corrections, counters, &session };
+        const auto saved_level{ Logger::GetLogLevel() };
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        session.cluster_history = std::make_shared<detail::ClusterHistoryObserver>(session);
+        session.cluster_history->BeginAttempt(fixture.context, previous_by_key, fixture.state, partition, domain, 1, 0);
+        detail::BeginPhaseObservation(&session, fixture.context, false, domain, fixture.state, { key }, 1, 1);
+        detail::BoundaryObservationScope scope(inputs, component, detail::BoundaryAcceptancePolicy::CooperativeRescue, &*previous, 1);
+        auto & trials{ scope.Trials() };
+        auto & diagnostic{ session.iteration.boundary_reconciliation_diagnostic_list.front() };
+        const detail::BoundaryCandidateReference reference{
+            .policy = detail::BoundaryAcceptancePolicy::CooperativeRescue,
+            .samples_by_key = partition.sample_id_list_by_key, .domain = domain,
+            .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+            .component = component, .previous_audit = &*previous };
+        const detail::FitState endpoint_state{ MakeGaussianResult({ 6.1, 0.5, 0.0 }) };
+        const auto endpoint_patch{ detail::FitStatePatch::FromState(endpoint_state, key) };
+        const detail::CandidateEvaluationOverlay endpoint{ fixture.context, baseline, fixture.state, endpoint_patch };
+        scope.BeginTrial(Stage::Endpoint, 1.0);
+        const auto endpoint_evaluation{ detail::EvaluateCandidate(endpoint, reference, &trials) };
+        scope.CandidateEvaluated(Stage::Endpoint, endpoint_patch, endpoint.GetState(), 1.0, endpoint_evaluation);
+        EXPECT_TRUE(endpoint_evaluation);
+        EXPECT_EQ(diagnostic.objective_diagnostic_list.size(), 1U);
+        const auto endpoint_token{ diagnostic.objective_diagnostic_list.front().history_observation };
+
+        const detail::FitState suspicious_state{ MakeGaussianResult({ 6.0, 2.0, 0.0 }) };
+        const auto suspicious_patch{ detail::FitStatePatch::FromState(suspicious_state, key) };
+        const detail::CandidateEvaluationOverlay suspicious{ fixture.context, baseline, fixture.state, suspicious_patch };
+        const detail::BoundaryCorrectionReference suspicious_reference{
+            .policy = reference.policy, .samples_by_key = reference.samples_by_key, .domain = domain,
+            .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+            .component = component, .endpoint = endpoint.GetState(), .previous_audit = *previous,
+            .improvement = *previous, .damping = 0.5 };
+        const auto suspicious_evaluation{ detail::EvaluateCandidate(suspicious, suspicious_reference, &trials) };
+        scope.CorrectionEvaluated(suspicious_patch, suspicious.GetState(), endpoint.GetState(), 0.5, *previous, suspicious_evaluation);
+        EXPECT_GT(suspicious_evaluation.suspicious_atom_count, 0U);
+        EXPECT_FALSE(suspicious_evaluation.accepted);
+        EXPECT_EQ(diagnostic.objective_diagnostic_list.size(), 1U);
+        EXPECT_EQ(diagnostic.objective_diagnostic_list.front().history_observation, endpoint_token);
+        EXPECT_EQ(diagnostic.objective_diagnostic_list.front().outcome, "accepted");
+
+        const detail::FitState corrected_state{ MakeGaussianResult({ 6.2, 0.5, 0.0 }) };
+        const auto corrected_patch{ detail::FitStatePatch::FromState(corrected_state, key) };
+        const detail::CandidateEvaluationOverlay corrected{ fixture.context, baseline, fixture.state, corrected_patch };
+        const auto corrected_objective{ detail::EvaluateObjectiveDelta(corrected, fixture.sample_ref_list, domain, *previous, counters) };
+        const auto improvement{ source == Source::Endpoint ? *corrected_objective : *previous };
+        scope.CorrectionActivity(1, 1);
+        scope.BeginCorrectionSolve(improvement);
+        scope.CorrectionSolved({ .status = detail::BoundaryJointCorrectionStatus::CandidateReady,
+            .patch = corrected_patch, .damping = 0.5, .maximum_normalized_trust_step = 0.25, .parameter_count = 3 });
+        const detail::BoundaryCorrectionReference correction_reference{
+            .policy = reference.policy, .samples_by_key = reference.samples_by_key, .domain = domain,
+            .previous_objective_by_key = previous_by_key, .best_audit = nullptr, .counters = counters,
+            .component = component, .endpoint = endpoint.GetState(), .previous_audit = *previous,
+            .improvement = improvement, .damping = 0.5 };
+        const auto correction_evaluation{ detail::EvaluateCandidate(corrected, correction_reference, &trials) };
+        scope.CorrectionEvaluated(corrected_patch, corrected.GetState(), endpoint.GetState(), 0.5, improvement, correction_evaluation);
+        EXPECT_TRUE(correction_evaluation.members);
+        EXPECT_EQ(correction_evaluation.accepted, source != Source::Endpoint);
+        EXPECT_EQ(diagnostic.objective_diagnostic_list.at(1).outcome,
+            source == Source::Endpoint ? "members-passed-strict-improvement-failed" : "accepted");
+        EXPECT_EQ(diagnostic.joint_damping, 0.5);
+        EXPECT_EQ(diagnostic.joint_parameter_count, 3U);
+        EXPECT_EQ(diagnostic.maximum_normalized_trust_step, 0.25);
+
+        std::optional<detail::BoundaryCandidateEvaluation> backtracking_evaluation;
+        for (std::size_t trial = 1; trial <= 2; ++trial)
+        {
+            const detail::FitState state{ MakeGaussianResult({ trial == 1 ? 6.25 : 6.3, 0.5, 0.0 }) };
+            const auto patch{ detail::FitStatePatch::FromState(state, key) };
+            const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+            const auto factor{ trial == 1 ? 0.5 : 0.25 };
+            scope.BeginTrial(Stage::Backtracking, factor, trial);
+            backtracking_evaluation = detail::EvaluateCandidate(candidate, reference, &trials);
+            scope.CandidateEvaluated(Stage::Backtracking, patch, candidate.GetState(), factor, backtracking_evaluation);
+        }
+        const detail::BoundaryComponentDecision decision{ .key_list = { key },
+            .accepted_factor = source == Source::Endpoint ? std::optional<double>{1.0} :
+                source == Source::Backtracking ? std::optional<double>{0.25} : std::nullopt,
+            .accepted_source = source };
+        scope.AcceptedCandidate(source == Source::Endpoint ? *endpoint_evaluation :
+            source == Source::JointCorrection ? *correction_evaluation.members : *backtracking_evaluation);
+        scope.Accept(decision);
+        scope.Finish(decision);
+        session.cluster_history->Publish();
+        const auto published{ session.cluster_history->Snapshot(key) };
+        if (session.phase_audit)
+        {
+            workspaces.try_emplace(key);
+            const auto proposal{ detail::BuildIterationProposal(fixture.context, { key }, fixture.state,
+                options, ridge, activity, workspaces) };
+            session.phase_audit->Finish(options, ridge, activity, proposal, fixture.state);
+        }
+        const auto output{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(saved_level);
+        EXPECT_FALSE(::testing::Test::HasFailure()) << output;
+        ASSERT_TRUE(published);
+        EXPECT_DOUBLE_EQ(published->best_parameters.mdpde_list.front().GetModel().GetAmplitude(),
+            source == Source::Endpoint ? 6.1 : source == Source::JointCorrection ? 6.2 : 6.3);
+        EXPECT_EQ(diagnostic.accepted_source, source);
+        EXPECT_EQ(diagnostic.accepted_factor, decision.accepted_factor);
+        EXPECT_EQ(diagnostic.rescued_cluster_count, 1U);
+        EXPECT_EQ(diagnostic.trial_count, 2U);
+        ASSERT_EQ(diagnostic.objective_diagnostic_list.size(), 4U);
+        for (std::size_t i = 0; i < 4; ++i)
+        {
+            EXPECT_EQ(diagnostic.objective_diagnostic_list[i].candidate_number, i + 1);
+            EXPECT_NE(diagnostic.objective_diagnostic_list[i].history_observation, 0U);
+        }
+        EXPECT_NE(output.find("Cluster best publication: schema=1"), std::string::npos);
+#ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
+        const auto endpoint_event{ output.find("\"stage\":\"rescue-endpoint\"") };
+        const auto suspicious_event{ output.find("\"disposition\":\"rejected\",\"reason\":\"suspicious\"") };
+        const auto correction_event{ output.find(source == Source::Endpoint ?
+            "\"disposition\":\"rejected\",\"reason\":\"strict-improvement\"" :
+            "\"stage\":\"rescue-correction\"", suspicious_event + 1) };
+        const auto backtracking_event{ output.find("\"stage\":\"rescue-backtracking\"") };
+        // PhaseAudit retains its stage-sorted output; both corrections still reference the earlier endpoint capture.
+        EXPECT_LT(backtracking_event, suspicious_event);
+        EXPECT_LT(suspicious_event, correction_event);
+        EXPECT_LT(correction_event, endpoint_event);
+        ASSERT_NE(endpoint_event, std::string::npos);
+        ASSERT_NE(backtracking_event, std::string::npos);
+        EXPECT_NE(output.find("\"candidate_id\":\"1/rescue-correction/[0]/1\",\"parent_id\":\"1/rescue-endpoint/[0]/1\""), std::string::npos);
+        EXPECT_NE(output.find("\"candidate_id\":\"1/rescue-correction/[0]/2\",\"parent_id\":\"1/rescue-endpoint/[0]/1\""), std::string::npos);
+        const auto backtracking_line{ output.substr(backtracking_event, output.find('\n', backtracking_event) - backtracking_event) };
+        EXPECT_NE(backtracking_line.find("\"operator\":null"), std::string::npos);
+        EXPECT_EQ(output.find("Second-stage phase audit error:"), std::string::npos);
+#endif
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, BoundaryObservationQuietAndMissingSessionPreserveEvaluation)
+{
+    auto fixture{ BuildJointPolishFixture({ { 6.0, 0.5, 0.0 } }, { { 6.4, 0.5, 0.0 } }) };
+    const detail::ClusterKey key{ 0 };
+    const auto baseline{ detail::BuildResidualBaseline(fixture.context, fixture.state) };
+    const auto domain{ detail::BuildObjectiveDomain(fixture.context, baseline.model_snapshot, { key }) };
+    detail::ObjectiveByKey previous_by_key{ { key, detail::EvaluateObjectiveContribution(baseline, key, fixture.sample_ref_list, domain) } };
+    const std::map<detail::ClusterKey, std::vector<detail::SampleRef>> samples{ { key, fixture.sample_ref_list } };
+    const auto previous{ detail::EvaluateAuditObjective(domain, baseline) };
+    ASSERT_TRUE(previous);
+    const detail::BoundaryReconciliationComponent component{ .key_list = { key }, .affected_sample_ref_list = fixture.sample_ref_list };
+    const detail::FitState improved{ MakeGaussianResult({ 6.2, 0.5, 0.0 }) };
+    const auto patch{ detail::FitStatePatch::FromState(improved, key) };
+    const detail::CandidateEvaluationOverlay candidate{ fixture.context, baseline, fixture.state, patch };
+    const auto member_objective{ detail::EvaluateObjectiveContribution(candidate, key, fixture.sample_ref_list, domain) };
+    ASSERT_TRUE(member_objective);
+    // A tolerated member increase is diagnostic only; rescue still strictly improves the full audit.
+    previous_by_key.at(key) = detail::ObjectiveBreakdown{ member_objective->GetTotalObjective() - 1.0e-4, 0.0, 0.0 };
+    detail::ClusterSolverWorkspaceMap workspaces;
+    detail::BoundaryJointCorrectionWorkspaceMap corrections;
+    detail::PerformanceCounters counters{ true, fixture.context, workspaces, corrections };
+    detail::SecondStageObservationSession session;
+    const auto saved_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    for (const auto policy : { detail::BoundaryAcceptancePolicy::Ordinary, detail::BoundaryAcceptancePolicy::CooperativeRescue })
+    {
+        const detail::BoundaryCandidateReference reference{
+            .policy = policy, .samples_by_key = samples, .domain = domain, .previous_objective_by_key = previous_by_key,
+            .best_audit = nullptr, .counters = counters, .component = component, .previous_audit = &*previous };
+        const auto unobserved{ detail::EvaluateCandidate(candidate, reference) };
+        EXPECT_TRUE(unobserved);
+        for (const bool quiet : { false, true })
+            for (const bool enabled : { false, true })
+            {
+                std::vector<detail::JointCandidateObjectiveDiagnostic> records;
+                detail::JointCandidateObservation trials(enabled ? &session : nullptr, quiet, records);
+                trials.BeginBoundary(policy, detail::BoundaryObservationStage::Endpoint, 1.0);
+                const auto observed{ detail::EvaluateCandidate(candidate, reference, &trials) };
+                EXPECT_EQ(observed.has_value(), unobserved.has_value());
+                if (observed && unobserved)
+                    EXPECT_DOUBLE_EQ(observed->audit_objective.GetTotalObjective(), unobserved->audit_objective.GetTotalObjective());
+                EXPECT_EQ(records.size(), enabled && !quiet ? 1U : 0U);
+                if (!records.empty())
+                {
+                    const bool rescue{ policy == detail::BoundaryAcceptancePolicy::CooperativeRescue };
+                    EXPECT_EQ(records.front().locally_deteriorated_member_count, rescue ? 1U : 0U);
+                    EXPECT_NEAR(records.front().maximum_local_deterioration, rescue ? 1.0e-4 : 0.0, 1.0e-14);
+                }
+            }
+    }
+    Logger::SetLogLevel(saved_level);
 }

@@ -54,6 +54,9 @@ struct IterationResult;
 struct IterationProposalResult;
 struct TrustModelTrialRecord;
 enum class BoundaryAcceptancePolicy;
+struct BoundaryCandidateEvaluation;
+struct BoundaryCorrectionEvaluation;
+struct BoundaryJointCorrectionResult;
 
 // Observation entry points preserve the existing lifecycle and never choose candidates.
 void BeginClusterHistoryObserver(SecondStageObservationSession &, bool quiet) noexcept;
@@ -67,10 +70,6 @@ void ObserveHistorySearch(SecondStageObservationSession * observation, const Clu
 void ObserveLocalHistory(SecondStageObservationSession * observation, const CandidateEvaluationOverlay &, const ClusterKey &,
     const std::vector<SampleRef> &, const ObjectiveDomain &, std::string_view source,
     bool accepted, ObjectiveAttemptDiagnostic &) noexcept;
-void ObserveBoundaryHistory(SecondStageObservationSession * observation, JointCandidateObjectiveDiagnostic *) noexcept;
-void ObserveBoundaryMemberHistory(SecondStageObservationSession * observation, const CandidateEvaluationOverlay &, const ClusterKey &,
-    const std::vector<SampleRef> &, const ObjectiveDomain &, bool accepted,
-    const CandidateDecisionEvidence &, JointCandidateObjectiveDiagnostic *) noexcept;
 void ObserveBoundaryHistoryAccepted(SecondStageObservationSession * observation, std::size_t token) noexcept;
 void ObserveHistoryRejected(SecondStageObservationSession * observation, const ClusterKey &) noexcept;
 void ObserveHistoryPublication(SecondStageObservationSession * observation) noexcept;
@@ -92,8 +91,6 @@ public:
 };
 
 enum class BoundaryObservationStage { Endpoint, Correction, Backtracking };
-std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy, BoundaryObservationStage) noexcept;
-std::string_view BoundaryPhaseName(BoundaryAcceptancePolicy, BoundaryObservationStage) noexcept;
 
 // Record indices and history publication tokens never enter numerical results.
 class JointCandidateObservation
@@ -109,18 +106,37 @@ public:
         : m_session(session), m_quiet(quiet), m_records(records) {}
     void Begin(BoundaryObservationStage, std::string_view, double factor, std::size_t round = 0);
     JointCandidateObjectiveDiagnostic * Record();
+    void BeginBoundary(BoundaryAcceptancePolicy, BoundaryObservationStage, double factor);
+    void BeginMembers();
+    void Member(const CandidateEvaluationOverlay &, const ClusterKey &, const std::vector<SampleRef> &,
+        const ObjectiveDomain &, BoundaryAcceptancePolicy, bool accepted, const CandidateDecisionEvidence &);
+    void RejectGlobalObjective();
+    void RejectStrictImprovement(double candidate, double previous);
     void Accept(BoundaryComponentAcceptedSource, BoundaryComponentReconciliationDiagnostic &) noexcept;
 };
 
 class BoundaryObservationScope
 {
+    const CandidateSelectionInputs & m_inputs;
+    const BoundaryReconciliationComponent & m_component;
+    BoundaryAcceptancePolicy m_policy;
     BoundaryComponentReconciliationDiagnostic m_unobserved{};
     BoundaryComponentReconciliationDiagnostic & m_diagnostic;
     JointCandidateObservation m_trials;
 public:
-    BoundaryObservationScope(const CandidateSelectionInputs &, const BoundaryReconciliationComponent &);
-    BoundaryComponentReconciliationDiagnostic & Diagnostic() { return m_diagnostic; }
+    BoundaryObservationScope(const CandidateSelectionInputs &, const BoundaryReconciliationComponent &,
+        BoundaryAcceptancePolicy, const ObjectiveBreakdown * previous, std::size_t rescue_candidate_count);
     JointCandidateObservation & Trials() { return m_trials; }
+    void BeginTrial(BoundaryObservationStage, double factor, std::size_t trial_number = 1);
+    void CandidateEvaluated(BoundaryObservationStage, const FitStatePatch &, const FitStateView &,
+        double factor, const std::optional<BoundaryCandidateEvaluation> &);
+    void CorrectionActivity(std::size_t shape_count, std::size_t offset_count);
+    void BeginCorrectionSolve(const ObjectiveBreakdown & reference);
+    void CorrectionSolved(const BoundaryJointCorrectionResult &);
+    void CorrectionEvaluated(const FitStatePatch &, const FitStateView &, const FitStateView & endpoint,
+        double damping, const ObjectiveBreakdown & reference, const BoundaryCorrectionEvaluation &);
+    void AcceptedCandidate(const BoundaryCandidateEvaluation &);
+    void Accept(const BoundaryComponentDecision &);
     void Finish(const BoundaryComponentDecision &);
 };
 

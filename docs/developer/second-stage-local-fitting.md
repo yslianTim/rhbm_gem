@@ -105,6 +105,22 @@ without accepting or returning per-cluster history. `ClusterHistoryObserver`
 receives decisions and maintains its own provisional history.
 Solver workspaces, counters and observers remain mutable working resources.
 The observation pointer in `CandidateSelectionInputs` is non-owning.
+Boundary candidate and correction references borrow only the per-key samples,
+objective domain, previous member objectives, optional best objective, component,
+reference objectives, and performance counters. Correction also borrows its
+endpoint and strict-improvement reference. Context comes from the candidate
+overlay; evaluators do not include the transaction header or receive solver,
+proposal, provenance, or observation-session state. An unavailable precomputed
+correction objective is reused as unavailable evidence, never recomputed.
+
+`BoundaryObservationScope` assembles ordinary/rescue component, solver, endpoint,
+correction, and backtracking diagnostics and phase events. `JointCandidateObservation`
+owns member-history recording, outcome text, and stage-specific history tokens.
+Numerical callers retain acceptance, state/provenance application, and performance
+accounting. Suspicious corrections do not create trial records; correction
+strict-improvement phase capture precedes the diagnostic outcome update. Selecting
+an endpoint after a rejected correction publishes the endpoint history token.
+Quiet mode and missing sessions do not affect numerical decisions.
 Diagnostic payloads forward-declare the boundary correction status rather than
 including the solver workspace definitions. Joint diagnostic creation and member
 rejection recording belong to `SecondStageObservation`; numeric callers include

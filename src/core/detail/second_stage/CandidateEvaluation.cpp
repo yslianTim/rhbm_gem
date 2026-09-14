@@ -1,6 +1,5 @@
-#include "core/detail/second_stage/CandidateTransaction.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
+#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -86,36 +85,30 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
     const std::optional<ObjectiveBreakdown> * precomputed_objective,
     JointCandidateObservation * observation)
 {
-    const auto & inputs{ reference.inputs };
     const auto & component{ reference.component };
     const auto * previous_audit_objective{ reference.previous_audit };
     const bool cooperative{ reference.policy == BoundaryAcceptancePolicy::CooperativeRescue };
-    auto * record{ observation ? observation->Record() : nullptr };
-
-    ObserveBoundaryHistory(inputs.observation, record);
+    if (observation) observation->BeginMembers();
     const auto observe_member = [&](const ClusterKey & key, bool accepted,
                                     const CandidateDecisionEvidence & evidence)
     {
-        ObserveBoundaryMemberHistory(inputs.observation, candidate_overlay, key,
-            inputs.partition.sample_id_list_by_key.at(key), inputs.objective_domain,
-            accepted, evidence, record);
+        if (observation) observation->Member(candidate_overlay, key,
+            reference.samples_by_key.at(key), reference.domain, reference.policy, accepted, evidence);
     };
     BoundaryCandidateEvaluation evaluation;
     for (const auto & key : component.key_list)
     {
         CandidateDecisionEvidence evidence;
-        const auto & previous_objective{ inputs.previous_objective_by_key.at(key) };
+        const auto & previous_objective{ reference.previous_objective_by_key.at(key) };
         if (!cooperative)
         {
             const auto member{ EvaluateCandidate(candidate_overlay,
-                LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, inputs.partition.sample_id_list_by_key.at(key),
-                    previous_objective ? &*previous_objective : nullptr, inputs.objective_domain,
-                    evidence, inputs.performance_counters}) };
+                LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, reference.samples_by_key.at(key),
+                    previous_objective ? &*previous_objective : nullptr, reference.domain,
+                    evidence, reference.counters}) };
             evidence = member.evidence;
             if (!member.accepted)
             {
-                RecordJointMemberRejection(record, key, evidence.previous_objective,
-                    std::nullopt, evidence.candidate_objective, false);
                 observe_member(key, false, evidence);
                 return std::nullopt;
             }
@@ -126,12 +119,10 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
             evidence.candidate_objective = EvaluateObjectiveContribution(
                 candidate_overlay,
                 key,
-                inputs.partition.sample_id_list_by_key.at(key),
-                inputs.objective_domain);
+                reference.samples_by_key.at(key),
+                reference.domain);
             if (!evidence.candidate_objective.has_value() || !previous_objective.has_value())
             {
-                RecordJointMemberRejection(record, key, previous_objective,
-                    std::nullopt, evidence.candidate_objective, false);
                 observe_member(key, false, evidence);
                 return std::nullopt;
             }
@@ -145,33 +136,23 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
                     previous_value,
                     kObjectiveProgressTolerance))
             {
-                RecordJointMemberRejection(record, key, previous_objective,
-                    std::nullopt, evidence.candidate_objective, false);
                 observe_member(key, false, evidence);
                 return std::nullopt;
-            }
-            if (record && candidate_value > previous_value)
-            {
-                record->locally_deteriorated_member_count++;
-                record->maximum_local_deterioration = std::max(
-                    record->maximum_local_deterioration,
-                    candidate_value - previous_value);
             }
         }
         observe_member(key, true, evidence);
     }
     const auto * best_audit_objective{
-        cooperative && inputs.best_audit_state.has_value() ?
-            &inputs.best_audit_state->objective : nullptr
+        cooperative ? reference.best_audit : nullptr
     };
     // A supplied empty optional is unavailable evidence, not a request to recompute.
     const auto audit_objective{ precomputed_objective ? *precomputed_objective :
         (previous_audit_objective ? EvaluateObjectiveDelta(candidate_overlay,
-            component.affected_sample_ref_list, inputs.objective_domain,
-            *previous_audit_objective, inputs.performance_counters) : std::nullopt) };
+            component.affected_sample_ref_list, reference.domain,
+            *previous_audit_objective, reference.counters) : std::nullopt) };
     if (!audit_objective.has_value() || previous_audit_objective == nullptr)
     {
-        if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+        if (observation) observation->RejectGlobalObjective();
         return std::nullopt;
     }
     const auto candidate_value{ audit_objective->GetTotalObjective() };
@@ -182,23 +163,19 @@ static std::optional<BoundaryCandidateEvaluation> EvaluateBoundaryCandidate(
             (best_audit_objective && IsObjectiveDeteriorated(candidate_value,
                 best_audit_objective->GetTotalObjective(), kObjectiveProgressTolerance)))
         {
-            if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+            if (observation) observation->RejectGlobalObjective();
             return std::nullopt;
         }
         if (!IsBetterAuditObjective(candidate_value, previous_value, kObjectiveStrictTolerance))
         {
-            // The previous bound is only needed to preserve the original failure reason.
-            if (record) record->outcome = IsObjectiveDeteriorated(
-                candidate_value, previous_value, kObjectiveProgressTolerance) ?
-                "members-passed-global-objective-rejected-or-unavailable" :
-                "members-passed-strict-improvement-failed";
+            if (observation) observation->RejectStrictImprovement(candidate_value, previous_value);
             return std::nullopt;
         }
     }
     else if (!IsAuditObjectiveAcceptableForProgress(candidate_value, previous_value,
         best_audit_objective, kObjectiveProgressTolerance))
     {
-        if (record) record->outcome = "members-passed-global-objective-rejected-or-unavailable";
+        if (observation) observation->RejectGlobalObjective();
         return std::nullopt;
     }
     evaluation.audit_objective = *audit_objective;
@@ -216,16 +193,22 @@ BoundaryCorrectionEvaluation EvaluateCandidate(const CandidateEvaluationOverlay 
     const BoundaryCorrectionReference & reference, JointCandidateObservation * observation)
 {
     BoundaryCorrectionEvaluation result;
-    const auto & inputs{ reference.inputs };
-    result.suspicious_atom_count = CountSuspiciousPolishAtoms(inputs.context,
+    result.suspicious_atom_count = CountSuspiciousPolishAtoms(candidate.GetContext(),
         reference.component.halo_atom_index_list, reference.endpoint, candidate.GetState());
     if (result.suspicious_atom_count != 0) return result;
     result.raw_objective = EvaluateObjectiveDelta(candidate, reference.component.affected_sample_ref_list,
-        inputs.objective_domain, reference.previous_audit, inputs.performance_counters);
-    if (observation) observation->Begin(BoundaryObservationStage::Correction,
-        BoundaryDiagnosticName(reference.policy, BoundaryObservationStage::Correction), reference.damping);
+        reference.domain, reference.previous_audit, reference.counters);
+    if (observation) observation->BeginBoundary(reference.policy, BoundaryObservationStage::Correction, reference.damping);
     result.members = EvaluateBoundaryCandidate(candidate,
-        BoundaryCandidateReference{reference.policy, inputs, reference.component, &reference.previous_audit},
+        BoundaryCandidateReference{
+            .policy = reference.policy,
+            .samples_by_key = reference.samples_by_key,
+            .domain = reference.domain,
+            .previous_objective_by_key = reference.previous_objective_by_key,
+            .best_audit = reference.best_audit,
+            .counters = reference.counters,
+            .component = reference.component,
+            .previous_audit = &reference.previous_audit},
         &result.raw_objective, observation);
     result.accepted = result.members && IsBetterAuditObjective(result.members->audit_objective.GetTotalObjective(),
         reference.improvement.GetTotalObjective(), kObjectiveStrictTolerance);

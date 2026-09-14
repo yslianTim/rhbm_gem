@@ -94,7 +94,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     BoundaryComponentDecision & decision,
     BoundaryObservationScope & observations, BoundaryAcceptancePolicy policy)
 {
-    auto & diagnostic{ observations.Diagnostic() };
     auto & observation{ observations.Trials() };
     auto & selection{ m_selection };
     if (component.halo_atom_index_list.empty()) return std::nullopt;
@@ -120,8 +119,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     {
         return std::nullopt;
     }
-    diagnostic.shape_active_atom_count = shape_active_atom_index_list.size();
-    diagnostic.offset_active_atom_count = offset_active_atom_index_list.size();
+    observations.CorrectionActivity(shape_active_atom_index_list.size(), offset_active_atom_index_list.size());
     const FitStateView endpoint_state_view{
         inputs.previous_state,
         endpoint_patch
@@ -151,7 +149,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start_time).count());
     };
-    diagnostic.joint_reference_component_objective = improvement_reference_objective.GetTotalObjective();
+    observations.BeginCorrectionSolve(improvement_reference_objective);
     auto correction_result{
         BuildBoundaryJointCorrection(
             inputs.context,
@@ -163,13 +161,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             trust_region_list,
             solver)
     };
-    diagnostic.joint_correction_status = correction_result.status;
-    diagnostic.joint_parameter_count = correction_result.parameter_count;
-    if (correction_result.status == BoundaryJointCorrectionStatus::CandidateReady)
-    {
-        diagnostic.joint_damping = correction_result.damping;
-        diagnostic.maximum_normalized_trust_step = correction_result.maximum_normalized_trust_step;
-    }
+    observations.CorrectionSolved(correction_result);
     if (correction_result.status != BoundaryJointCorrectionStatus::CandidateReady ||
         !correction_result.patch.has_value())
     {
@@ -192,33 +184,22 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         corrected_component_patch
     };
     const auto correction_evaluation{ EvaluateCandidate(corrected_overlay,
-        BoundaryCorrectionReference{policy, inputs, component, endpoint_state_view, previous_audit_objective,
-            improvement_reference_objective, correction_result.damping}, &observation) };
-    diagnostic.suspicious_candidate_atom_count = correction_evaluation.suspicious_atom_count;
-    if (correction_evaluation.suspicious_atom_count != 0)
+        BoundaryCorrectionReference{
+            .policy = policy,
+            .samples_by_key = inputs.partition.sample_id_list_by_key,
+            .domain = inputs.objective_domain,
+            .previous_objective_by_key = inputs.previous_objective_by_key,
+            .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
+            .counters = inputs.performance_counters,
+            .component = component,
+            .endpoint = endpoint_state_view,
+            .previous_audit = previous_audit_objective,
+            .improvement = improvement_reference_objective,
+            .damping = correction_result.damping}, &observation) };
+    observations.CorrectionEvaluated(corrected_component_patch, corrected_overlay.GetState(), endpoint_state_view,
+        correction_result.damping, improvement_reference_objective, correction_evaluation);
+    if (!correction_evaluation.accepted)
     {
-        ObservePhaseCorrection(inputs.observation,
-            BoundaryPhaseName(policy, BoundaryObservationStage::Correction), corrected_component_patch.atom_index_list,
-            corrected_overlay.GetState(), endpoint_state_view, correction_result.damping, "rejected", "suspicious",
-            inputs, component.key_list, improvement_reference_objective);
-        record_performance(false);
-        return std::nullopt;
-    }
-    if (correction_evaluation.raw_objective)
-        diagnostic.joint_candidate_component_objective = correction_evaluation.raw_objective->GetTotalObjective();
-    const auto & candidate_evaluation{ correction_evaluation.members };
-    auto * record{ observation.Record() };
-    const auto is_strict_improvement{ correction_evaluation.accepted };
-    ObservePhaseCorrection(inputs.observation,
-        BoundaryPhaseName(policy, BoundaryObservationStage::Correction), corrected_component_patch.atom_index_list,
-        corrected_overlay.GetState(), endpoint_state_view, correction_result.damping,
-        is_strict_improvement ? "accepted" : "rejected",
-        candidate_evaluation && !is_strict_improvement ? "strict-improvement" : (record ? record->outcome : ""),
-        inputs, component.key_list, improvement_reference_objective);
-    if (!is_strict_improvement)
-    {
-        if (record && candidate_evaluation)
-            record->outcome = "members-passed-strict-improvement-failed";
         record_performance(false);
         return std::nullopt;
     }
@@ -238,7 +219,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         }
     }
     decision.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
-    diagnostic.candidate_component_objective = candidate_evaluation->audit_objective.GetTotalObjective();
+    observations.AcceptedCandidate(*correction_evaluation.members);
     record_performance(true);
     return candidate;
 }
@@ -252,7 +233,6 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     BoundaryComponentDecision & decision,
     BoundaryObservationScope & observations, BoundaryAcceptancePolicy policy)
 {
-    auto & diagnostic{ observations.Diagnostic() };
     auto & observation{ observations.Trials() };
     auto & selection{ m_selection };
     BacktrackingWorkspace backtracking_workspace{
@@ -266,22 +246,25 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
         step.status == BacktrackingStepStatus::CandidateReady;
         step = backtracking_workspace.BuildNextCandidate())
     {
-        diagnostic.trial_count = step.trial_number;
         const CandidateEvaluationOverlay candidate_overlay{
             inputs.context,
             inputs.residual_baseline,
             inputs.previous_state,
             backtracking_workspace.GetCandidatePatch()
         };
-        observation.Begin(BoundaryObservationStage::Backtracking,
-            BoundaryDiagnosticName(policy, BoundaryObservationStage::Backtracking), step.factor);
-        auto * record{ observation.Record() };
+        observations.BeginTrial(BoundaryObservationStage::Backtracking, step.factor, step.trial_number);
         accepted_evaluation = EvaluateCandidate(candidate_overlay,
-            BoundaryCandidateReference{policy, inputs, component, previous_audit_objective}, &observation);
-        ObservePhaseCandidate(inputs.observation,
-            BoundaryPhaseName(policy, BoundaryObservationStage::Backtracking), endpoint_patch.atom_index_list,
-            candidate_overlay.GetState(), nullptr, step.factor, accepted_evaluation ? "accepted" : "rejected",
-            record ? record->outcome : "", false, false);
+            BoundaryCandidateReference{
+                .policy = policy,
+                .samples_by_key = inputs.partition.sample_id_list_by_key,
+                .domain = inputs.objective_domain,
+                .previous_objective_by_key = inputs.previous_objective_by_key,
+                .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
+                .counters = inputs.performance_counters,
+                .component = component,
+                .previous_audit = previous_audit_objective}, &observation);
+        observations.CandidateEvaluated(BoundaryObservationStage::Backtracking, endpoint_patch,
+            candidate_overlay.GetState(), step.factor, accepted_evaluation);
         if (accepted_evaluation.has_value())
         {
             break;
@@ -305,7 +288,7 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     }
     decision.accepted_factor = step.factor;
     decision.accepted_source = BoundaryComponentAcceptedSource::Backtracking;
-    diagnostic.candidate_component_objective = accepted_evaluation->audit_objective.GetTotalObjective();
+    observations.AcceptedCandidate(*accepted_evaluation);
     return candidate;
 }
 
@@ -373,21 +356,8 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     }
 
     BoundaryComponentDecision decision{ .key_list = component.key_list };
-    BoundaryObservationScope observations(inputs, component);
-    auto & diagnostic{ observations.Diagnostic() };
+    BoundaryObservationScope observations(inputs, component, policy, previous_audit_objective, cooperative_key_list.size());
     auto & observation{ observations.Trials() };
-    diagnostic.atom_count = FlattenClusterKeyList(component.key_list).size();
-    diagnostic.boundary_sample_count = component.boundary_sample_count;
-    diagnostic.interface_atom_count = component.interface_atom_index_list.size();
-    diagnostic.shape_active_atom_count = component.halo_atom_index_list.size();
-    diagnostic.is_rescue_attempt = cooperative;
-    if (cooperative)
-    {
-        diagnostic.accepted_cluster_count = component.key_list.size() - cooperative_key_list.size();
-        diagnostic.rescue_candidate_cluster_count = cooperative_key_list.size();
-    }
-    if (previous_audit_objective != nullptr)
-        diagnostic.previous_component_objective = previous_audit_objective->GetTotalObjective();
 
     auto endpoint_patch{ BuildSelectionPatch(selection, component.key_list) };
     for (const auto & key : cooperative_key_list)
@@ -398,18 +368,20 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     const CandidateEvaluationOverlay endpoint_overlay{
         inputs.context, inputs.residual_baseline, inputs.previous_state, endpoint_patch
     };
-    observation.Begin(BoundaryObservationStage::Endpoint, BoundaryDiagnosticName(policy, BoundaryObservationStage::Endpoint), 1.0);
-    auto * endpoint_record{ observation.Record() };
+    observations.BeginTrial(BoundaryObservationStage::Endpoint, 1.0);
     const auto endpoint_evaluation{ EvaluateCandidate(endpoint_overlay,
-        BoundaryCandidateReference{policy, inputs, component, previous_audit_objective}, &observation) };
-    ObservePhaseCandidate(inputs.observation,
-        BoundaryPhaseName(policy, BoundaryObservationStage::Endpoint), endpoint_patch.atom_index_list,
-        endpoint_overlay.GetState(), nullptr, 1.0, endpoint_evaluation ? "accepted" : "rejected",
-        endpoint_record ? endpoint_record->outcome : "");
+        BoundaryCandidateReference{
+            .policy = policy,
+            .samples_by_key = inputs.partition.sample_id_list_by_key,
+            .domain = inputs.objective_domain,
+            .previous_objective_by_key = inputs.previous_objective_by_key,
+            .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
+            .counters = inputs.performance_counters,
+            .component = component,
+            .previous_audit = previous_audit_objective}, &observation) };
+    observations.CandidateEvaluated(BoundaryObservationStage::Endpoint, endpoint_patch, endpoint_overlay.GetState(), 1.0, endpoint_evaluation);
 
     std::optional<ComponentCandidate> accepted;
-    if (endpoint_evaluation)
-        diagnostic.endpoint_component_objective = endpoint_evaluation->audit_objective.GetTotalObjective();
     if (previous_audit_objective != nullptr)
     {
         accepted = TryBoundaryJointCorrection(inputs, component, *previous_audit_objective,
@@ -421,7 +393,7 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
         accepted = ComponentCandidate{ .patch = endpoint_patch };
         decision.accepted_factor = 1.0;
         decision.accepted_source = BoundaryComponentAcceptedSource::Endpoint;
-        diagnostic.candidate_component_objective = endpoint_evaluation->audit_objective.GetTotalObjective();
+        observations.AcceptedCandidate(*endpoint_evaluation);
     }
     if (!accepted)
         accepted = TryBacktrackBoundaryComponent(inputs, component, previous_audit_objective,
@@ -430,11 +402,7 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     {
         ApplyComponentCandidate(inputs, component, endpoint_patch, std::move(*accepted),
             decision.accepted_source, policy);
-        observation.Accept(decision.accepted_source, diagnostic);
-        if (cooperative)
-        {
-            diagnostic.rescued_cluster_count = cooperative_key_list.size();
-        }
+        observations.Accept(decision);
     }
     else if (!cooperative)
         RejectSelectionKeys(inputs, component.key_list, decision.exhausted);

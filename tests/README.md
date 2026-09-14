@@ -107,6 +107,12 @@ policy assertions belong to independent observation cases under
 the original trust-experiment guard. Mixed cases that also verify production
 acceptance or rollback remain with the production behavior they exercise.
 
+Boundary reference tests cover ordinary/rescue gates, unavailable evidence and
+single correction-delta evaluation. Observation tests exercise suspicious
+correction early exits, strict rejection, stage-specific history publication after
+later trials, and quiet/missing-session neutrality. Keep these cases in the
+existing acceptance and observation files.
+
 Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
 namespace for fixture builders and assertions shared across these files. Keep
 single-file helpers in that file's anonymous namespace and support-only helpers

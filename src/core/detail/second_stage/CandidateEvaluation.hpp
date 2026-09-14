@@ -5,7 +5,6 @@
 namespace rhbm_gem::core::detail {
 
 class JointCandidateObservation;
-struct CandidateSelectionInputs;
 
 enum class LocalObjectivePolicy
 {
@@ -63,7 +62,11 @@ struct LocalCandidateReference
 struct BoundaryCandidateReference
 {
     BoundaryAcceptancePolicy policy;
-    const CandidateSelectionInputs & inputs;
+    const std::map<ClusterKey, std::vector<SampleRef>> & samples_by_key;
+    const ObjectiveDomain & domain;
+    const ObjectiveByKey & previous_objective_by_key;
+    const ObjectiveBreakdown * best_audit;
+    PerformanceCounters & counters;
     const BoundaryReconciliationComponent & component;
     const ObjectiveBreakdown * previous_audit;
 };
@@ -71,7 +74,11 @@ struct BoundaryCandidateReference
 struct BoundaryCorrectionReference
 {
     BoundaryAcceptancePolicy policy;
-    const CandidateSelectionInputs & inputs;
+    const std::map<ClusterKey, std::vector<SampleRef>> & samples_by_key;
+    const ObjectiveDomain & domain;
+    const ObjectiveByKey & previous_objective_by_key;
+    const ObjectiveBreakdown * best_audit;
+    PerformanceCounters & counters;
     const BoundaryReconciliationComponent & component;
     const FitStateView & endpoint;
     const ObjectiveBreakdown & previous_audit;
