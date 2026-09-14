@@ -97,7 +97,13 @@ set(CORE_QSCORE_TEST_SOURCES
 )
 
 set(CORE_ESTIMATOR_TEST_SOURCES
-    core/EstimatorSecondStageDefense_test.cpp
+    core/second_stage/GraphAndBackground_test.cpp
+    core/second_stage/SeedAndState_test.cpp
+    core/second_stage/SolverAndProposal_test.cpp
+    core/second_stage/CandidateAcceptance_test.cpp
+    core/second_stage/Recovery_test.cpp
+    core/second_stage/ConvergenceAndFinalization_test.cpp
+    core/second_stage/Observation_test.cpp
     core/EstimatorTester_test.cpp
     core/TestDataFactory_test.cpp
 )
@@ -188,6 +194,7 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
 )
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
+target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
 )

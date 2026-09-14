@@ -11,6 +11,7 @@ This project uses a two-axis test organization model:
 | --- | --- | --- |
 | `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
+| `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and observation |
 | `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
@@ -82,6 +83,41 @@ cmake --build build --target lint_repo
 ```
 
 ## Adding New Tests
+
+### Second-stage fitting
+
+Keep second-stage defense tests in the following behavior-based files under
+`tests/core/second_stage/`:
+
+| File | Responsibility |
+| --- | --- |
+| `GraphAndBackground_test.cpp` | Graphs, partitions, topology drift, physical halos, uncut component construction, frozen backgrounds, and residual overlays |
+| `SeedAndState_test.cpp` | Seed selection and fallback, Gaussian medians, transformed coordinates, damping, and extrapolation |
+| `SolverAndProposal_test.cpp` | Conditioning, solver health, joint offsets, Jacobians, refits, and joint polish/correction proposals |
+| `CandidateAcceptance_test.cpp` | Objectives and best references, trust radii, backtracking, transaction publication, boundary acceptance, and serial/parallel selection |
+| `Recovery_test.cpp` | Suspicious guards, failure masks, quarantine, fallback, ridge guards, and healthy remote clusters |
+| `ConvergenceAndFinalization_test.cpp` | Active-coordinate certificates, final dependency polish, persistence, and whole-run intensity scaling |
+| `Observation_test.cpp` | Performance counters, trust shadow diagnostics, logging, and phase audit neutrality |
+
+Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
+All seven files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
+`rhbm_tests_core_estimator` CTest group. Do not add per-file CTest groups using
+this shared suite filter: each would repeat the entire suite. Conditional trust
+assertions stay with their original case, even when it lives outside observation.
+
+Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
+namespace for fixture builders and assertions shared across these files. Keep
+single-file helpers in that file's anonymous namespace and support-only helpers
+private to the support implementation. Build fresh model/solver state per case;
+do not share mutable fixtures. Use `detail` for `rhbm_gem::core::detail` throughout
+these tests. `EstimatorTester_test.cpp` retains its workflow tests and fixtures.
+
+Compile the support implementation directly into `rhbm_tests`, outside the
+suite-discovery source lists. Keep both observation options consistent with the
+library; direct phase collector tests still compile `PhaseAudit.cpp` into the
+test target when production phase auditing is disabled.
+
+### General placement
 
 - Place new tests in the matching domain directory.
 - For `tests/core/command/`, prefer extending the existing grouped files:
