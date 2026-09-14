@@ -499,7 +499,6 @@ static IterationResult RunIteration(
     BeginTrustModelAudit(observation, cluster_key_list);
     BeginPhaseObservation(observation, context, options.quiet_mode, objective_domain,
         previous_state, cluster_key_list, attempt_number, iteration_state.objective_domain_revision);
-    ProductionObservationScope solver_audit_scope(observation, attempt_number);
     // Build a constrained proposal while retaining unrestricted operator evidence.
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{
@@ -510,7 +509,7 @@ static IterationResult RunIteration(
             options,
             joint_offset_ridge_multiplier_list,
             quarantine_activity,
-            iteration_state.solver_workspace_by_key, "outer-operator", observation)
+            iteration_state.solver_workspace_by_key, "outer-operator")
     };
     performance_counters.FinishIterationPhase(iteration_phase_start);
     performance_counters.RecordGaussianCacheHits();

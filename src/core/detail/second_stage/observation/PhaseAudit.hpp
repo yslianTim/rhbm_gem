@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/detail/second_stage/observation/ClusterHistoryObserver.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
 #include "core/detail/second_stage/IterationProposal.hpp"
@@ -12,32 +11,16 @@
 
 namespace rhbm_gem::core::detail {
 
-struct CandidateSelectionInputs;
-
 // Observation only: snapshots are owned here; production workspaces are never used.
 class PhaseAudit
 {
-    struct BoundaryMember
-    {
-        ClusterKey key;
-        std::vector<SampleRef> samples;
-        std::optional<ObjectiveBreakdown> previous;
-        std::optional<ClusterObjectiveState> history;
-    };
-    struct BoundaryGates
-    {
-        std::vector<BoundaryMember> members;
-        ResidualBaseline residual_baseline;
-        FitState previous_state;
-        ObjectiveBreakdown improvement_reference;
-    };
     struct Event
     {
         std::string id, parent_id, stage, disposition, reason;
         ClusterKey key;
         FittedGaussianSnapshot state;
         double factor{ 1.0 };
-        bool probe{ false }, recertify{ true };
+        bool recertify{ true };
     };
     SecondStageContext m_context;
     ObjectiveDomain m_domain;
@@ -45,14 +28,13 @@ class PhaseAudit
     std::vector<ClusterKey> m_keys;
     std::size_t m_attempt, m_domain_id;
     std::vector<Event> m_events;
-    std::map<std::string, BoundaryGates> m_boundary_gates;
     std::map<ClusterKey, std::vector<Event>> m_worker_events;
     void MergeWorkers();
     std::mutex m_mutex;
     std::atomic<std::size_t> m_capture_failures{ 0 };
-    std::string Add(std::string stage, ClusterKey key, FittedGaussianSnapshot state,
+    void Add(std::string stage, ClusterKey key, FittedGaussianSnapshot state,
         FittedGaussianSnapshot parent, double factor, std::string disposition,
-        std::string reason, bool probe, bool recertify);
+        std::string reason, bool recertify);
 
 public:
     PhaseAudit(const SecondStageContext &, const ObjectiveDomain &, const FitState &,
@@ -60,13 +42,8 @@ public:
     void Capture(std::string_view stage, const ClusterKey &, const FitStateView &,
         const FitStateView * parent = nullptr, double factor = 1.0,
         std::string_view disposition = "observed", std::string_view reason = "",
-        bool probe = false, bool recertify = true) noexcept;
-    void CaptureState(std::string_view stage, const FitState &, bool probe = false) noexcept;
-    void CaptureCorrection(std::string_view stage, const ClusterKey &, const FitStateView &,
-        const FitStateView & parent, double factor, std::string_view disposition,
-        std::string_view reason, const CandidateSelectionInputs &, const std::vector<ClusterKey> &,
-        const ObjectiveBreakdown & improvement_reference) noexcept;
-    void CaptureIntermediate(std::string_view stage, const FittedGaussianSnapshot &) noexcept;
+        bool recertify = true) noexcept;
+    void CaptureState(std::string_view stage, const FitState &) noexcept;
     void CaptureOperator(const FixedPointOperatorEvidence &) noexcept;
     void Missing(std::string_view stage, const ClusterKey &, std::string_view reason) noexcept;
     void CaptureSearchAssembly() noexcept;

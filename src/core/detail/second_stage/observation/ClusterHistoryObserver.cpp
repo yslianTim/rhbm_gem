@@ -587,13 +587,6 @@ void ClusterHistoryObserver::Publish() noexcept
     catch (...) { Disable(); }
 }
 
-std::optional<ClusterObjectiveState> ClusterHistoryObserver::BaselineSnapshot(const ClusterKey & key) noexcept
-{
-    if (m_disabled) return std::nullopt;
-    try { return m_baseline.at(key); }
-    catch (...) { Disable(); return std::nullopt; }
-}
-
 std::optional<ClusterObjectiveState> ClusterHistoryObserver::Snapshot(const ClusterKey & key) noexcept
 {
     if (m_disabled) return std::nullopt;

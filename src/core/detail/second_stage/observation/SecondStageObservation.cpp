@@ -132,9 +132,6 @@ void BeginPhaseObservation(SecondStageObservationSession * observation, SecondSt
     if (observation) observation->phase_audit = BeginPhaseAudit(context, quiet, domain, state, keys, attempt, domain_id);
 }
 
-ProductionObservationScope::ProductionObservationScope(const SecondStageObservationSession * observation, std::size_t attempt)
-    : m_scope(observation && observation->phase_audit ? attempt : 0, "production") {}
-
 static std::string_view BoundaryDiagnosticName(BoundaryAcceptancePolicy policy, BoundaryObservationStage stage) noexcept
 {
     const bool cooperative{ policy == BoundaryAcceptancePolicy::CooperativeRescue };
@@ -249,7 +246,7 @@ void JointCandidateObservation::Accept(BoundaryComponentAcceptedSource source,
 BoundaryObservationScope::BoundaryObservationScope(const CandidateSelectionInputs & inputs,
     const BoundaryReconciliationComponent & component, BoundaryAcceptancePolicy policy,
     const ObjectiveBreakdown * previous, std::size_t rescue_candidate_count)
-    : m_inputs(inputs), m_component(component), m_policy(policy),
+    : m_inputs(inputs), m_policy(policy),
       m_diagnostic(inputs.observation ?
         inputs.observation->iteration.boundary_reconciliation_diagnostic_list.emplace_back() : m_unobserved),
       m_trials(inputs.observation, inputs.options.quiet_mode, m_diagnostic.objective_diagnostic_list)
@@ -285,7 +282,7 @@ void BoundaryObservationScope::CandidateEvaluated(BoundaryObservationStage stage
     const auto * record{ m_trials.Record() };
     ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, stage), patch.atom_index_list,
         state, nullptr, factor, evaluation ? "accepted" : "rejected", record ? record->outcome : "",
-        false, stage != BoundaryObservationStage::Backtracking);
+        stage != BoundaryObservationStage::Backtracking);
     if (stage == BoundaryObservationStage::Endpoint && evaluation)
         m_diagnostic.endpoint_component_objective = evaluation->audit_objective.GetTotalObjective();
 }
@@ -313,23 +310,22 @@ void BoundaryObservationScope::CorrectionSolved(const BoundaryJointCorrectionRes
 }
 
 void BoundaryObservationScope::CorrectionEvaluated(const FitStatePatch & patch, const FitStateView & state,
-    const FitStateView & endpoint, double damping, const ObjectiveBreakdown & reference,
+    const FitStateView & endpoint, double damping,
     const BoundaryCorrectionEvaluation & evaluation)
 {
     m_diagnostic.suspicious_candidate_atom_count = evaluation.suspicious_atom_count;
     if (evaluation.suspicious_atom_count != 0)
     {
-        ObservePhaseCorrection(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
-            patch.atom_index_list, state, endpoint, damping, "rejected", "suspicious", m_inputs, m_component.key_list, reference);
+        ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
+            patch.atom_index_list, state, &endpoint, damping, "rejected", "suspicious");
         return;
     }
     if (evaluation.raw_objective)
         m_diagnostic.joint_candidate_component_objective = evaluation.raw_objective->GetTotalObjective();
     auto * record{ m_trials.Record() };
-    ObservePhaseCorrection(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
-        patch.atom_index_list, state, endpoint, damping, evaluation.accepted ? "accepted" : "rejected",
-        evaluation.members && !evaluation.accepted ? "strict-improvement" : (record ? record->outcome : ""),
-        m_inputs, m_component.key_list, reference);
+    ObservePhaseCandidate(m_inputs.observation, BoundaryPhaseName(m_policy, BoundaryObservationStage::Correction),
+        patch.atom_index_list, state, &endpoint, damping, evaluation.accepted ? "accepted" : "rejected",
+        evaluation.members && !evaluation.accepted ? "strict-improvement" : (record ? record->outcome : ""));
     if (!evaluation.accepted && record && evaluation.members)
         record->outcome = "members-passed-strict-improvement-failed";
 }

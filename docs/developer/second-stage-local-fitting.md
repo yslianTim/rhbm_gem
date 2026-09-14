@@ -77,7 +77,7 @@ all second-stage services through candidate selection:
 | `observation/ClusterHistoryObserver` | Debug-only per-cluster historical references, tie-break, provisional publication/rollback and provenance; isolated from production decisions |
 | `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and read-only performance formatting |
 | `observation/PerformanceCounters` | Atomic counts, phase timings, and current/retired solver workspace totals; publishes once at scope exit |
-| `observation/PhaseAudit` / `observation/TrustModelAudit` | Observation-only snapshots, isolated probes, frozen-IRLS/rho trials and serialization |
+| `observation/PhaseAudit` / `observation/TrustModelAudit` | Observation-only phase snapshots, isolated operator replay, frozen-IRLS/rho trials and serialization |
 
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
 operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.

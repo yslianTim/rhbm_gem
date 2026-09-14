@@ -722,8 +722,8 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
     const auto saved_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Debug);
     detail::PhaseAudit collector(context, domain, baseline, keys, 6, 12);
-    collector.Capture("local-polish", { 0, 2 }, view, nullptr, 1.0, "rejected", "best", true);
-    collector.CaptureState("assembly-after-polish", candidate, true);
+    collector.Capture("local-polish", { 0, 2 }, view, nullptr, 1.0, "rejected", "best");
+    collector.CaptureState("assembly-after-polish", candidate);
     collector.Missing("local-search", { 2 }, "search-exhausted");
     auto incomplete{ production.fixed_point_operator };
     incomplete.shape_available_atom_mask[0] = 0;
@@ -751,7 +751,6 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
         EXPECT_NEAR(std::stod(output.substr(value_begin + field.size() + 3)), value, 1e-12);
     }
     EXPECT_NE(output.find("\"disposition\":\"rejected\",\"reason\":\"best\",\"final_retained\":false"), std::string::npos);
-    EXPECT_NE(output.find("\"alpha\":0.001"), std::string::npos);
     // Independently rerun T(candidate), then compare its residual (not the candidate movement).
     detail::ClusterSolverWorkspaceMap candidate_workspaces;
     for (const auto & key : keys) candidate_workspaces.try_emplace(key);
@@ -772,21 +771,6 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
         EXPECT_NEAR(std::stod(output.substr(residual_position), &consumed), expected_residual.percentile_list[coordinate], 1e-12);
         residual_position += consumed + 1;
     }
-    auto half{ baseline };
-    for (std::size_t i = 0; i < half.size(); i++)
-    {
-        const auto a{ baseline[i].mdpde.GetModel() }, b{ candidate[i].mdpde.GetModel() };
-        half[i] = MakeGaussianResult({ std::sqrt(a.GetAmplitude() * b.GetAmplitude()),
-            std::sqrt(a.GetWidth() * b.GetWidth()), 0.5 * (a.GetOffset() + b.GetOffset()) });
-    }
-    const auto half_objective{ detail::EvaluateAuditObjective(domain, detail::BuildResidualBaseline(context, half)) };
-    ASSERT_TRUE(half_objective);
-    const auto half_position{ output.find("\"alpha\":0.5", polish_position) };
-    ASSERT_NE(half_position, std::string::npos);
-    const auto half_total{ output.find("\"total\":", half_position) };
-    ASSERT_NE(half_total, std::string::npos);
-    EXPECT_NEAR(std::stod(output.substr(half_total + 8)), half_objective->GetTotalObjective(), 1e-12);
-
     EXPECT_NE(output.find("search-exhausted"), std::string::npos);
     EXPECT_NE(output.find("incomplete-production-operator"), std::string::npos);
     EXPECT_NE(output.find("\"population\":[3,3,3]"), std::string::npos);
@@ -800,7 +784,7 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
             const auto worker_patch{ detail::FitStatePatch::FromState(candidate, key) };
             const detail::FitStateView worker_view{ baseline, worker_patch };
             workers.Capture("local-search", key, worker_view, nullptr, 1.0, "accepted");
-            workers.Capture("local-polish", key, worker_view, &worker_view, 1.0, "rejected", "strict-improvement", true);
+            workers.Capture("local-polish", key, worker_view, &worker_view, 1.0, "rejected", "strict-improvement");
         };
         if (parallel)
         {
@@ -836,6 +820,50 @@ TEST(EstimatorSecondStageDefenseTest, PhaseAuditSnapshotsUseWholeFrozenDomainAnd
     Logger::SetLogLevel(LogLevel::Info);
     EXPECT_FALSE(detail::BeginPhaseAudit(context, false, domain, baseline, keys, 1, 1));
     Logger::SetLogLevel(saved_level);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PhaseAuditRetiredProbesDoNotRunAtHistoricalAttempts)
+{
+    const rg::GaussianModel3D model{ 6.0, 0.5, 0.0 };
+    auto fixture{ BuildJointPolishFixture({ model }, { model }) };
+    const detail::ClusterKey key{ 0 };
+    const auto domain{ detail::BuildObjectiveDomain(fixture.context,
+        detail::BuildSecondStageModelSnapshot(fixture.context, fixture.state), { key }) };
+    const detail::SuspiciousBlockActivity activity{ { 0 }, { 0 }, { 0 } };
+    detail::ClusterSolverWorkspaceMap workspaces;
+    workspaces.try_emplace(key);
+    const auto options{ MakeSecondStageOptions() };
+    const auto production{ detail::BuildIterationProposal(fixture.context, { key }, fixture.state,
+        options, { 1.0 }, activity, workspaces) };
+    const detail::FitStatePatch empty;
+    const detail::FitStateView view{ fixture.state, empty };
+    const auto saved_level{ Logger::GetLogLevel() };
+    for (const std::size_t attempt : { 4U, 5U, 8U, 9U })
+    {
+        SCOPED_TRACE(attempt);
+        detail::PhaseAudit collector(fixture.context, domain, fixture.state, { key }, attempt, 1);
+        collector.Capture("boundary-correction", key, view, &view, 0.5, "rejected", "strict-improvement");
+        collector.Capture("boundary-backtracking", key, view, &view, 0.25, "accepted", "", false);
+        collector.CaptureState("final-selection", fixture.state);
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        collector.Finish(options, { 1.0 }, activity, production, fixture.state);
+        const auto output{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(saved_level);
+        EXPECT_NE(output.find("Second-stage phase audit: schema=2"), std::string::npos);
+        EXPECT_NE(output.find("Second-stage phase audit counters: schema=2"), std::string::npos);
+        EXPECT_NE(output.find("\"objective_evaluations\":4,"), std::string::npos);
+        EXPECT_NE(output.find("\"operator_evaluations\":3,"), std::string::npos);
+        EXPECT_NE(output.find("\"factor\":0.5,\"disposition\":\"rejected\",\"reason\":\"strict-improvement\""), std::string::npos);
+        EXPECT_NE(output.find("\"parent_id\":\"" + std::to_string(attempt) + "/baseline/[]/1\""), std::string::npos);
+        const auto backtracking{ output.find("\"stage\":\"boundary-backtracking\"") };
+        ASSERT_NE(backtracking, std::string::npos);
+        const auto line{ output.substr(backtracking, output.find('\n', backtracking) - backtracking) };
+        EXPECT_NE(line.find("\"operator\":null"), std::string::npos);
+        for (const auto retired : { "direction_samples", "compatibility_", "post-joint-offset",
+            "Second-stage solver audit:", "Second-stage compatibility audit:", "Second-stage phase audit error:" })
+            EXPECT_EQ(output.find(retired), std::string::npos) << retired;
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, PhaseAuditKeepsProtectedOffsetQualificationUnavailable)
@@ -988,7 +1016,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryObservationPublishesSelectedStageA
             .component = component, .endpoint = endpoint.GetState(), .previous_audit = *previous,
             .improvement = *previous, .damping = 0.5 };
         const auto suspicious_evaluation{ detail::EvaluateCandidate(suspicious, suspicious_reference, &trials) };
-        scope.CorrectionEvaluated(suspicious_patch, suspicious.GetState(), endpoint.GetState(), 0.5, *previous, suspicious_evaluation);
+        scope.CorrectionEvaluated(suspicious_patch, suspicious.GetState(), endpoint.GetState(), 0.5, suspicious_evaluation);
         EXPECT_GT(suspicious_evaluation.suspicious_atom_count, 0U);
         EXPECT_FALSE(suspicious_evaluation.accepted);
         EXPECT_EQ(diagnostic.objective_diagnostic_list.size(), 1U);
@@ -1010,7 +1038,7 @@ TEST(EstimatorSecondStageDefenseTest, BoundaryObservationPublishesSelectedStageA
             .component = component, .endpoint = endpoint.GetState(), .previous_audit = *previous,
             .improvement = improvement, .damping = 0.5 };
         const auto correction_evaluation{ detail::EvaluateCandidate(corrected, correction_reference, &trials) };
-        scope.CorrectionEvaluated(corrected_patch, corrected.GetState(), endpoint.GetState(), 0.5, improvement, correction_evaluation);
+        scope.CorrectionEvaluated(corrected_patch, corrected.GetState(), endpoint.GetState(), 0.5, correction_evaluation);
         EXPECT_TRUE(correction_evaluation.members);
         EXPECT_EQ(correction_evaluation.accepted, source != Source::Endpoint);
         EXPECT_EQ(diagnostic.objective_diagnostic_list.at(1).outcome,

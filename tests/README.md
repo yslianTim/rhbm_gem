@@ -123,7 +123,11 @@ these tests. `EstimatorTester_test.cpp` retains its workflow tests and fixtures.
 Compile the support implementation directly into `rhbm_tests`, outside the
 suite-discovery source lists. Keep both observation options consistent with the
 library; direct phase collector tests still compile `PhaseAudit.cpp` into the
-test target when production phase auditing is disabled.
+test target when production phase auditing is disabled. Phase cases cover schema 2,
+whole frozen-domain objectives, qualified operator replay, and objective-only
+backtracking. Attempts 4, 5, 8, and 9 verify that no retired sampling or solver
+probes run. The phase parser rejects older schemas and emits only candidate,
+attempt, counter, and phase reports.
 
 ### General placement
 

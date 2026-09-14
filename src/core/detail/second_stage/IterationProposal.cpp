@@ -1,4 +1,3 @@
-#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
@@ -11,8 +10,6 @@
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
 namespace rhbm_gem::core::detail {
-
-class SecondStageObservationSession;
 
 namespace {
 
@@ -163,8 +160,7 @@ IterationProposalResult BuildIterationProposal(
     const std::vector<double> & ridge_multiplier_list,
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key,
-    std::string_view diagnostic_phase,
-    SecondStageObservationSession * observation)
+    std::string_view diagnostic_phase)
 {
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
@@ -317,7 +313,6 @@ IterationProposalResult BuildIterationProposal(
         }
     }
 
-    ObservePhaseIntermediate(observation, current_model_snapshot.node);
     const auto refit_response_cache{
         BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };
@@ -337,8 +332,6 @@ IterationProposalResult BuildIterationProposal(
     {
         try
         {
-            estimation_audit::Scope atom_scope(estimation_audit::current.attempt,
-                estimation_audit::current.source + "/shape", static_cast<long>(atom_index));
             refit_result_list.at(atom_index) =
                 FitAtomWithJointOffsetFallback(
                     context.atom_list.at(atom_index),

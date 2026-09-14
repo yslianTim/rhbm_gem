@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/detail/second_stage/observation/SecondStageDiagnostics.hpp"
-#include "utils/hrl/EstimationAudit.hpp"
 #include <array>
 
 namespace rhbm_gem::core {
@@ -81,15 +80,6 @@ std::shared_ptr<PhaseAudit> BeginPhaseAudit(const SecondStageContext &, bool qui
 void BeginPhaseObservation(SecondStageObservationSession * observation, SecondStageContext &, bool quiet, const ObjectiveDomain &, const FitState &,
     const std::vector<ClusterKey> &, std::size_t attempt, std::size_t domain_id) noexcept;
 
-class ProductionObservationScope
-{
-    estimation_audit::Scope m_scope;
-public:
-    ProductionObservationScope(const SecondStageObservationSession *, std::size_t attempt);
-    ProductionObservationScope(const ProductionObservationScope &) = delete;
-    ProductionObservationScope & operator=(const ProductionObservationScope &) = delete;
-};
-
 enum class BoundaryObservationStage { Endpoint, Correction, Backtracking };
 
 // Record indices and history publication tokens never enter numerical results.
@@ -118,7 +108,6 @@ public:
 class BoundaryObservationScope
 {
     const CandidateSelectionInputs & m_inputs;
-    const BoundaryReconciliationComponent & m_component;
     BoundaryAcceptancePolicy m_policy;
     BoundaryComponentReconciliationDiagnostic m_unobserved{};
     BoundaryComponentReconciliationDiagnostic & m_diagnostic;
@@ -134,7 +123,7 @@ public:
     void BeginCorrectionSolve(const ObjectiveBreakdown & reference);
     void CorrectionSolved(const BoundaryJointCorrectionResult &);
     void CorrectionEvaluated(const FitStatePatch &, const FitStateView &, const FitStateView & endpoint,
-        double damping, const ObjectiveBreakdown & reference, const BoundaryCorrectionEvaluation &);
+        double damping, const BoundaryCorrectionEvaluation &);
     void AcceptedCandidate(const BoundaryCandidateEvaluation &);
     void Accept(const BoundaryComponentDecision &);
     void Finish(const BoundaryComponentDecision &);
@@ -210,37 +199,29 @@ inline void LogTrustModelAudit(const SecondStageObservationSession *, bool, cons
 #ifdef RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE
 
 void ObservePhaseMissing(SecondStageObservationSession * observation, std::string_view, const ClusterKey &, std::string_view) noexcept;
-void ObservePhaseState(SecondStageObservationSession * observation, std::string_view, const FitState &, bool probe = false) noexcept;
+void ObservePhaseState(SecondStageObservationSession * observation, std::string_view, const FitState &) noexcept;
 void ObservePhaseCandidate(SecondStageObservationSession * observation, std::string_view, const ClusterKey &, const FitStateView &,
     const FitStateView * parent = nullptr, double factor = 1.0, std::string_view disposition = "observed",
-    std::string_view reason = "", bool probe = false, bool recertify = true) noexcept;
-void ObservePhaseCorrection(SecondStageObservationSession * observation, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, std::string_view, std::string_view, const CandidateSelectionInputs &,
-    const std::vector<ClusterKey> &, const ObjectiveBreakdown &) noexcept;
+    std::string_view reason = "", bool recertify = true) noexcept;
 void ObservePhaseLocalPolish(SecondStageObservationSession * observation, const ClusterKey &, const FitStateView &,
     const FitStateView &, double, bool, const CandidateDecisionEvidence &) noexcept;
 void ObservePhaseSearchAssembly(SecondStageObservationSession * observation, const FitState &) noexcept;
 void ObservePhaseProposal(SecondStageObservationSession * observation, const IterationProposalResult &) noexcept;
 void ObservePhaseFinish(SecondStageObservationSession * observation, const FitOptions &, const std::vector<double> &,
     const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept;
-void ObservePhaseIntermediate(SecondStageObservationSession * observation, const FittedGaussianSnapshot &) noexcept;
 #else
 
 inline void ObservePhaseMissing(SecondStageObservationSession *, std::string_view, const ClusterKey &, std::string_view) noexcept {}
-inline void ObservePhaseState(SecondStageObservationSession *, std::string_view, const FitState &, bool = false) noexcept {}
+inline void ObservePhaseState(SecondStageObservationSession *, std::string_view, const FitState &) noexcept {}
 inline void ObservePhaseCandidate(SecondStageObservationSession *, std::string_view, const ClusterKey &, const FitStateView &,
     const FitStateView * = nullptr, double = 1.0, std::string_view = "observed",
-    std::string_view = "", bool = false, bool = true) noexcept {}
-inline void ObservePhaseCorrection(SecondStageObservationSession *, std::string_view, const ClusterKey &, const FitStateView &,
-    const FitStateView &, double, std::string_view, std::string_view, const CandidateSelectionInputs &,
-    const std::vector<ClusterKey> &, const ObjectiveBreakdown &) noexcept {}
+    std::string_view = "", bool = true) noexcept {}
 inline void ObservePhaseLocalPolish(SecondStageObservationSession *, const ClusterKey &, const FitStateView &,
     const FitStateView &, double, bool, const CandidateDecisionEvidence &) noexcept {}
 inline void ObservePhaseSearchAssembly(SecondStageObservationSession *, const FitState &) noexcept {}
 inline void ObservePhaseProposal(SecondStageObservationSession *, const IterationProposalResult &) noexcept {}
 inline void ObservePhaseFinish(SecondStageObservationSession *, const FitOptions &, const std::vector<double> &,
     const SuspiciousBlockActivity &, const IterationProposalResult &, const FitState &) noexcept {}
-inline void ObservePhaseIntermediate(SecondStageObservationSession *, const FittedGaussianSnapshot &) noexcept {}
 #endif
 
 } // namespace rhbm_gem::core::detail

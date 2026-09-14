@@ -116,7 +116,6 @@ public:
     void Reject(const ClusterKey &) noexcept;
     void Publish() noexcept;
     std::optional<ClusterObjectiveState> Snapshot(const ClusterKey &) noexcept;
-    std::optional<ClusterObjectiveState> BaselineSnapshot(const ClusterKey &) noexcept;
 };
 
 void BeginClusterHistoryObserver(SecondStageObservationSession &, bool quiet) noexcept;

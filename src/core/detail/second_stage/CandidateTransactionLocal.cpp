@@ -1,5 +1,4 @@
 #include "core/detail/second_stage/ComponentAssembly.hpp"
-#include "utils/hrl/EstimationAudit.hpp"
 #include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
@@ -650,12 +649,10 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
 
     std::vector<ClusterCandidateResult> result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> exception_list(cluster_key_list.size());
-    const auto audit_context{ estimation_audit::current };
     const auto select_candidate = [&](std::size_t position)
     {
         try
         {
-            estimation_audit::Scope audit_scope(audit_context.attempt, audit_context.source);
             const auto & key{ cluster_key_list.at(position) };
             result_list.at(position) = SelectClusterCandidate(
                 inputs,

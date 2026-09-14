@@ -197,7 +197,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             .improvement = improvement_reference_objective,
             .damping = correction_result.damping}, &observation) };
     observations.CorrectionEvaluated(corrected_component_patch, corrected_overlay.GetState(), endpoint_state_view,
-        correction_result.damping, improvement_reference_objective, correction_evaluation);
+        correction_result.damping, correction_evaluation);
     if (!correction_evaluation.accepted)
     {
         record_performance(false);

@@ -25,7 +25,7 @@ Ownership rules:
 
 ## Developer Scripts
 
-- [`resources/tools/developer/second_stage_phase_audit.py`](/resources/tools/developer/second_stage_phase_audit.py): parse second-stage phase audit logs and write candidate, solver, and compatibility reports; see the [phase audit guide](/docs/developer/second-stage-phase-audit.md).
+- [`resources/tools/developer/second_stage_phase_audit.py`](/resources/tools/developer/second_stage_phase_audit.py): parse second-stage phase audit schema 2 logs and write candidate, attempt, counter, and phase reports; see the [phase audit guide](/docs/developer/second-stage-phase-audit.md).
 - [`resources/tools/developer/command_scaffold.py`](/resources/tools/developer/command_scaffold.py): generate a new command/binding/test/doc scaffold.
   - add `--wire` to also update `CommandSystem.hpp`, `CommandSystem.cpp`, and the command source CMake list.
   - add `--wire --strict` to fail-fast if command-registry update fails.
