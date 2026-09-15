@@ -103,6 +103,7 @@ set(CORE_ESTIMATOR_TEST_SOURCES
     core/second_stage/SolverAndProposal_test.cpp
     core/second_stage/CandidateAcceptance_test.cpp
     core/second_stage/Recovery_test.cpp
+    core/second_stage/ProductionFitting_test.cpp
     core/second_stage/ConvergenceAndFinalization_test.cpp
     core/second_stage/Observation_test.cpp
     core/second_stage/NumericalAuditNeutrality_test.cpp

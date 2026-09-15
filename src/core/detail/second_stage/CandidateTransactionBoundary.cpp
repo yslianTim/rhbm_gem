@@ -187,7 +187,7 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
             .counters = inputs.performance_counters,
-            .component = component}, endpoint_state_view, previous_audit_objective,
+            .component = component, .member_best = inputs.member_best}, endpoint_state_view, previous_audit_objective,
         improvement_reference_objective, &observation) };
     if (!correction_accepted)
     {
@@ -251,7 +251,7 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
                 .previous_objective_by_key = inputs.previous_objective_by_key,
                 .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
                 .counters = inputs.performance_counters,
-                .component = component}, previous_audit_objective, &observation);
+                .component = component, .member_best = inputs.member_best}, previous_audit_objective, &observation);
         if (accepted_evaluation.has_value())
         {
             break;
@@ -360,7 +360,7 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
             .counters = inputs.performance_counters,
-            .component = component}, previous_audit_objective, &observation) };
+            .component = component, .member_best = inputs.member_best}, previous_audit_objective, &observation) };
 
     std::optional<ComponentCandidate> accepted;
     if (previous_audit_objective != nullptr)

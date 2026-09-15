@@ -139,6 +139,9 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
             dataset,
             RHBMExecutionOptions{ .thread_size = thread_size })
     };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CaptureShapeFailure(dataset, alpha_r, RHBMExecutionOptions{ .thread_size = thread_size }, result);
+#endif
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 

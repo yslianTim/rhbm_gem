@@ -30,6 +30,8 @@ struct CandidateDecisionEvidence
     std::optional<ObjectiveBreakdown> candidate_objective{};
     std::optional<ObjectiveBreakdown> previous_objective{};
     bool rejected_by_previous{ false };
+    std::optional<ObjectiveBreakdown> member_best_objective{};
+    bool rejected_by_member_best{ false };
     std::size_t invalid_trial_count{ 0 };
     std::size_t guard_rejected_trial_count{ 0 };
     std::size_t objective_rejected_trial_count{ 0 };

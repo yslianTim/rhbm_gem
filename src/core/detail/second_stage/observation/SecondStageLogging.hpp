@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <span>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -23,6 +24,9 @@ void LogSecondStagePerformance(const PerformanceCounters &, std::size_t, double)
 struct IterationResult;
 struct FixedPointOperatorEvidence;
 struct ConvergenceCertificate;
+struct ConvergenceAssessment;
+void LogFinalStateCertificate(bool quiet, const std::optional<ConvergenceAssessment> &, bool polish_applied,
+    std::size_t attempts, std::size_t recovery_operators, std::size_t certificate_operators);
 struct ConvergenceDiagnostics;
 struct SecondStageSeedSummary;
 struct FinalDependencyPolishResult;

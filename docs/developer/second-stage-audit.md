@@ -1,10 +1,9 @@
 # Second-stage decision audit
 
 This is passive recording of evidence already produced by the algorithm.
-Trust shadow strategies, full phase snapshots/replay, per-cluster historical
-re-evaluation, and the six alternate coupling thresholds are retired. Production
-trust radius, objective gates, salvage, quarantine, `best_audit_state`, convergence
-and final operator recertification retain their decisions and ordering.
+Trust shadow strategies, full phase snapshots/replay and the six alternate coupling
+thresholds are retired. Member-best reference evaluation, controlled recovery and
+final-state certification belong to production; the observer only copies their results.
 
 ## Build and migration
 
@@ -53,12 +52,13 @@ and reference labels. `Audit()` is read-only, and writable joint records are pri
 logging and tests consume recorded evidence without changing it. Basic progress
 diagnostics and performance counters retain their existing responsibilities.
 
-The Logger line prefix is `Second-stage audit: schema=1, payload=` followed by
+The Logger line prefix is `Second-stage audit: schema=2, payload=` followed by
 strict JSON. Start records contain version, thread count and fitting settings once.
 Iteration records contain attempt/accepted counts, objective/recovery/background/
 partition revisions, stage counts, committed selection, actual scores, quarantine
 transitions and the outer convergence certificate. The operator reference is
-`iteration_previous`; all-rejected branches that did not assess the certificate
+`iteration_previous` for ordinary steps and `recovery_accepted` for accepted recovery
+steps; all-rejected branches that did not assess the certificate
 say `not_evaluated`. Background revision identifies the frozen scoring environment;
 a partition reset also advances that environment's revision.
 
@@ -76,7 +76,9 @@ of completion order. All category totals remain, even for omitted details.
 Component events identify their first member key (not an overlapping halo).
 Each event contains an internal selected-atom key identity, factor/radius where
 available, rejection/guard/solver or lifecycle reason and the evaluated references.
-No full key/model snapshots or retained atom-by-atom output is stored.
+Nominal solver diagnostics additionally record the selected-atom indices, cluster keys,
+statuses, iteration counts and terminal numerical changes. They contain no model
+snapshots or solver matrices and do not share the five anomaly-detail slots.
 
 Terminal records identify stop reason, final state source, best iteration, the
 available score in the final state's frozen environment, and elapsed milliseconds.
@@ -87,13 +89,27 @@ The final logger performs no objective recomputation. `work_counters` contains,
 in order, full state materializations, cache hits, cache misses, objective
 samples recomputed, objective samples reused, and symbolic analyses.
 
+Schema 2 adds `nominal_solves`, `recovery`, `final_nominal_solves` and
+`final_certificate`. Final certification uses the persisted parameters and last
+frozen background, separately from any provisional final-polish certificate.
+Recovery records its trigger result, up to eight trial reasons/residuals/objectives,
+and actual nominal-operator evaluation count. The basic
+`Second-stage final state: schema=1, payload=...` record is independent of extra
+audit and includes outer attempts, recovery/certification evaluation counts and
+`final_polish_applied`; it does not reinterpret `final_uses_polish` provenance.
+
+Failed numerical subproblems can be captured and replayed by **testing builds**;
+see [Production fitting](production-fitting.md). This is independent of audit and
+cannot change solver results. Production builds contain no capture hook or setting.
+
 ## Analyzer
 
-`second_stage_audit.py LOG --output-dir DIR` accepts one run in schema 1 only and
+`second_stage_audit.py LOG --output-dir DIR` accepts one run in schema 1 or 2 and
 writes `audit.json` and `report.md`. It rejects invalid numbers, count mismatches,
 more than five details, impossible applied-polish claims and mixed runs. Partial
-logs produce an explicitly incomplete report. It has no replay, shadow or legacy
-format branches. Old logs require the tools at their original Git revision; the
+logs produce an explicitly incomplete report. Schema 1 lacks endpoint-specific qualification and persisted-state certification;
+the analyzer reports that absence without inferring either. It rejects mixed schemas.
+Older legacy logs require the tools at their original Git revision; the
 [retired guide and tools](https://github.com/yslianTim/rhbm_gem/blob/8bb7bf3a878c3c94fdbd6a2063bbc8c1b5552bec/docs/developer/second-stage-phase-audit.md)
 remain historical references.
 

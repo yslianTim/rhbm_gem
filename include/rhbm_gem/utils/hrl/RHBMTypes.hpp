@@ -45,6 +45,13 @@ struct RHBMMemberDataset
     RHBMResponseVector y;   // regression response vector
 };
 
+struct RHBMBetaDiagnostics
+{
+    int iterations{ 0 };
+    std::optional<double> squared_beta_change{};
+    std::optional<double> relative_variance_change{};
+};
+
 struct RHBMBetaEstimateResult
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
@@ -53,6 +60,7 @@ struct RHBMBetaEstimateResult
     double sigma_square{ 0.0 };
     RHBMDiagonalMatrix data_weight;
     RHBMDiagonalMatrix data_covariance;
+    RHBMBetaDiagnostics diagnostics{};
 };
 
 struct RHBMGroupEstimationInput

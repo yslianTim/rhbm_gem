@@ -143,8 +143,8 @@ then rejected evidence in rejection-event order; objective exhaustion still
 does not constitute quarantine failure evidence. Accepted shrink compares the
 accepted factor with the first objective-evaluated factor directly.
 
-Candidate references and results contain no diagnostic records or history
-tokens. `CandidateSelection` retains keys, state/provenance, decision evidence,
+Candidate references may point to production-owned member-best patches, while
+results contain no observer history tokens. `CandidateSelection` retains keys, state/provenance, decision evidence,
 and lightweight boundary decisions. `IterationResult` retains accepted/rejected
 keys, radius updates, progress state and stop information; audit-patience reset
 uses rejected keys directly. Bounded output-only event records live in observation sidecars.
@@ -533,9 +533,10 @@ infinite. `operator_complete` requires every nominal atom's availability masks;
 transformed finiteness and solver qualification are separate checks. The p99
 predicate applies independently to log peak, log width, and offset coordinates.
 
-Production uses full solver qualification: active local shape refits must
-report `SUCCESS`; each active atom offset requires its owning cluster's solve
-to report `Converged`. Both require a full undamped, non-fallback endpoint.
+Production requires every nominal shape solve to report `SUCCESS` and every
+nominal offset solve to report `Converged`, using the status of that endpoint's
+actual solve. Ordinary accepted active coordinates retain their qualification
+checks as well. Both require a full undamped, non-fallback endpoint.
 A usable soft endpoint may continue through candidate selection without being
 solver qualified. Historical cluster rollups and active proposal residuals are
 not evaluated by the current runtime and do not define production.
@@ -635,7 +636,7 @@ the retained global best under the new cache before comparing or choosing
 them. An unavailable retained-best objective discards that best entry.
 Background-only refresh does not rebuild the sampling domain or its fixed
 robust scales. Refresh itself is not an improvement: audit patience uses the
-candidate's strict improvement over the recomputed previous baseline, alongside
+candidate's strict improvement over the recomputed historical best, alongside
 the existing domain/quarantine/radius reset conditions.
 
 All second-stage audit tolerances use:
@@ -804,7 +805,9 @@ failed, or above-threshold certificate discards the polish and writes the
 already converged base state unchanged.
 
 For all non-convergence stops, the chosen base state is persisted directly,
-without polish or recertification. Maximum residual remains diagnostic. Applied
+without polish, but with its own nominal operator evaluation before persistence.
+That certificate describes the chosen parameters under the last frozen background;
+it never substitutes the final attempted iteration's evidence. Maximum residual remains diagnostic. Applied
 polish updates audit and provenance without changing accepted iterations or the
 stop reason. Diagnostics report strict-fixed-point policy and absolute-passed,
 failed, error, or not-evaluated status, candidate evidence and actual application.
@@ -871,7 +874,8 @@ failed, error, or not-evaluated status, candidate evidence and actual applicatio
   masks retain priority; overlapping retry targets do not unlock coordinates
   still frozen by another target. No cooldown, attempt limit or Exhausted state
   remains. Frozen targets awaiting a recovery revision change do not hold audit
-  patience open as a scheduled recovery; active failure tracking and transitions still do.
+  patience open as a scheduled recovery. Actual transitions retain their patience
+  reset; active failure tracking alone does not.
 - Recovery needs no affecting failure and all required target coordinates active.
   It requires a finally accepted material change, or a complete, guard-safe,
   solver-qualified nonmaterial unrestricted endpoint. Missing evidence cannot
@@ -936,6 +940,16 @@ result-application entry. Local outcomes stay provisional per key through
 reconciliation and any triggered global salvage, after which accepted/rejected
 lists are materialized once.
 
+## Production member-best ownership
+
+`IterationState::member_best` retains one committed parameter patch per cluster.
+Local search and ordinary boundary members check both their previous objective and
+this historical reference. Cooperative rescue keeps its existing member rules.
+The historical comparison replaces only that member's parameters in the candidate
+overlay, preserving every other candidate parameter and the same background/domain.
+No saved scalar crosses backgrounds. Updates occur after successful transactions;
+new cluster keys initialize from the committed state and obsolete keys are removed.
+
 ## Global audit and stopping
 
 The global audit uses the fixed per-cluster fit/tail scales and retains the
@@ -943,16 +957,15 @@ earliest state that improves the best objective beyond the strict tolerance.
 
 Pre-commit acceptance follows the [conditional selection audit](#conditional-selection-audit).
 After commit, an all-rejected attempt has already published quarantine and
-radius updates and retained the previous model; the runner returns its stop
-result before candidate scoring or best/patience updates. For an accepted
+radius updates and retained the previous model; the runner returns before candidate scoring or best/patience updates and schedules controlled recovery for the next outer attempt. For an accepted
 result, it advances accepted progress and checks adaptive topology, then reuses
 `selection.final_audit_objective` when available. Otherwise it builds a snapshot
 of the committed assembled state and evaluates its audit objective in the
 current domain and frozen background.
 
 An available score is used to update retained best and to assess strict
-improvement over the same-background previous baseline for patience. If the
-score remains unavailable, neither improvement flag is set and the existing
+improvement over the same-background historical best for patience. If the
+score remains unavailable, the improvement flag remains false and the existing
 patience reset/increment rules still apply. This scoring does not reject or
 roll back the committed candidate and does not substitute for a pre-commit
 acceptance gate.
@@ -964,8 +977,10 @@ below `1e-4`, and clear orthogonal blockers. Fixed and
 quarantined coordinates are excluded only from the accepted population; they
 remain in the nominal operator population. An empty accepted population passes
 its percentile check vacuously, but an all-fixed state still needs qualified,
-complete, sufficiently small nominal operator evidence. Offset qualification
-is checked per active atom against its owning cluster's solve status. An
+complete, sufficiently small nominal operator evidence. Every nominal shape and
+offset endpoint carries the status of the solve that produced it, including the
+separate unrestricted shape refit when quarantine changes the proposal. Offset
+qualification also checks each active atom against its owning cluster's solve status. An
 unavailable endpoint makes the operator incomplete instead of substituting
 the previous state as a zero residual. `StrictOperatorPassed()` reuses the same certificate for converged
 final-polish certification without the accepted-movement or orthogonal-blocker
@@ -981,20 +996,21 @@ The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
 - accepted active-DOF p99 and complete nominal-DOF fixed-point residual p99 are
-  both below `1e-4`, every active coordinate is solver-qualified, all clusters
+  both below `1e-4`, every nominal endpoint and active coordinate is solver-qualified, all clusters
   are accepted, and no orthogonal blocker is present;
-- `kLocalFittingAuditPatience` accepted iterations produce no strict candidate
-  audit improvement over their same-background previous baselines;
-- an all-rejected attempt terminates after applying its per-cluster radius
-  actions once;
+- controlled fixed-point recovery fails after patience or an all-rejected attempt;
+- final persisted-state certification fails after provisional convergence;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
-An all-rejected attempt does not rerun the unchanged `S[k]`. Retryable
-rejections shrink their stored radius once, while exhausted terminal searches
-keep it, then the attempt stops with `all-rejected-backtracking-exhausted`
-unless the outer iteration limit has priority.
+Three accepted iterations without strict historical-best improvement schedule recovery,
+as does an all-rejected ordinary attempt. Actual domain/quarantine transitions and
+finite rejected-radius shrink actions retain their reset behavior; merely having
+an active quarantine tracker does not indefinitely reset patience. Recovery is a
+persistent production mode, bounded by the same 100 outer attempts. Its eight-step
+search, qualified nominal residual requirement and historical objective envelope
+are specified in [Production fitting](production-fitting.md).
 
-Convergence writes the current accepted state. Audit-patience, all-rejected,
+Convergence writes the current accepted state. Recovery failure, audit-patience, all-rejected,
 and iteration-limit stops always write the best validated audit state when one
 is available;
 otherwise they write the latest validated state. Best tracking, best-relative
@@ -1114,7 +1130,7 @@ Warnings report cumulative quarantine entries, releases, failed retries and
 unresolved targets. Progress, necessary warnings, final summary and basic timings
 remain available without extra audit payloads.
 
-Enabled, non-quiet Debug sessions emit `Second-stage audit: schema=1, payload={...}`.
+Enabled, non-quiet Debug sessions emit `Second-stage audit: schema=2, payload={...}`.
 There is one start record, one summary per attempt, and one terminal record.
 Only actual production evidence is recorded; no solver/operator replay, historical
 model scoring, complete snapshots, atom dump, or alternate coupling threshold scan

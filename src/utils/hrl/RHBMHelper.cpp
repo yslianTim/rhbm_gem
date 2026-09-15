@@ -577,7 +577,11 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
                 ? std::abs(result.sigma_square - variance_in_previous_iter) /
                     std::max({ std::abs(result.sigma_square), std::abs(variance_in_previous_iter), options.data_weight_min })
                 : std::numeric_limits<double>::infinity();
-            if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance &&
+            result.diagnostics.iterations = t + 1;
+            const auto squared_beta_change{ (result.beta_mdpde - beta_in_previous_iter).squaredNorm() };
+            result.diagnostics.squared_beta_change = squared_beta_change;
+            result.diagnostics.relative_variance_change = variance_relative_change;
+            if (squared_beta_change < options.tolerance &&
                 variance_relative_change < options.tolerance)
             {
                 converged = true;

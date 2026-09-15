@@ -454,7 +454,8 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             const auto evaluation{ EvaluateLocalCandidate(candidate_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, objective_sample_ref_list, previous_objective,
-                    objective_domain, trial_evidence, performance_counters}) };
+                    objective_domain, trial_evidence, performance_counters,
+                    inputs.member_best ? &inputs.member_best->at(key) : nullptr}) };
             trial_evidence = evaluation.evidence;
             const auto committed{ evaluation.accepted };
             observation.Trial(trial_evidence, committed);

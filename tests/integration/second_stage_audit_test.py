@@ -59,9 +59,24 @@ class AuditParserTest(unittest.TestCase):
         self.assertIn('iteration_previous', text)
         self.assertNotIn('123', text)
 
+    def test_schema_two_requires_current_and_persisted_evidence(self):
+        rows = records()
+        for row in rows[1:]:
+            row['recovery'] = dict(attempted=False, accepted=False, reason='not-attempted', operator_evaluations=0, trials=[])
+        rows[1]['nominal_solves'] = dict(shapes=[], offsets=[])
+        rows[2]['final_nominal_solves'] = dict(shapes=[], offsets=[])
+        rows[2]['final_certificate'] = dict(reference='persisted_state', status='not_evaluated')
+        parsed = audit.parse(log(rows, 2))
+        self.assertEqual(parsed['schema'], 2)
+        self.assertIn('persisted-state certificate', audit.report(parsed))
+        rows[2]['final_certificate']['reference'] = 'iteration_previous'
+        with self.assertRaisesRegex(ValueError, 'persisted_state'):
+            audit.parse(log(rows, 2))
+        self.assertNotIn('final_certificate', audit.parse(log(records()))['terminal'])
+
     def test_schema_malformed_json_and_nonfinite_rejected(self):
         with self.assertRaisesRegex(ValueError, 'unsupported'):
-            audit.parse(log(records(), 2))
+            audit.parse(log(records(), 3))
         with self.assertRaises(ValueError):
             audit.parse('Second-stage audit: schema=1, payload={broken')
         rows = records(); rows[0]['value'] = float('inf')

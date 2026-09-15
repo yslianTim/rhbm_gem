@@ -351,6 +351,55 @@ class Fold168RegressionTest(unittest.TestCase):
                 with self.assertRaises(regression.RegressionError):
                     regression.parse_atom_cutoff_summary(invalid_log)
 
+    def test_final_certificate_requires_persisted_state_and_finite_evidence(self) -> None:
+        record = {"final_polish_applied": False, "attempts": 12,
+                  "recovery_operator_evaluations": 1, "certificate_operator_evaluations": 1,
+                  "background_reference": "last_frozen_background",
+                  "certificate": {"reference": "persisted_state", "status": "evaluated",
+                                  "qualified": False, "complete": True,
+                                  "operator_nominal_p99": [0.0, 0.0, 0.0]}}
+        prefix = "Second-stage final state: schema=1, payload="
+        line = prefix + json.dumps(record)
+        self.assertEqual(regression.parse_final_state_certificate(line), record)
+        self.assertIsNone(regression.parse_final_state_certificate(SUMMARY_LOG))
+        for field, value in (("reference", "iteration_previous"), ("qualified", 1),
+                             ("operator_nominal_p99", [float("nan"), 0.0, 0.0]),
+                             ("operator_nominal_p99", [-1.0, 0.0, 0.0])):
+            changed = copy.deepcopy(record)
+            changed["certificate"][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(regression.RegressionError):
+                regression.parse_final_state_certificate(prefix + json.dumps(changed))
+        with self.assertRaises(regression.RegressionError):
+            regression.parse_final_state_certificate(line + "\n" + line)
+
+    def test_small_residual_and_zero_truth_error_cannot_bypass_solver_or_budget(self) -> None:
+        for qualified, complete, attempts, reason, expected in (
+                (False, True, 12, "converged", False),
+                (True, False, 12, "converged", False),
+                (True, True, 12, "recovery-failed", False),
+                (True, True, 26, "converged", False),
+                (True, True, 12, "converged", True)):
+            with self.subTest(qualified=qualified, complete=complete, attempts=attempts, reason=reason), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                args, manifest = make_fixture(root)
+                record = {"final_polish_applied": False, "attempts": attempts,
+                          "recovery_operator_evaluations": 1, "certificate_operator_evaluations": 1,
+                          "background_reference": "last_frozen_background",
+                          "certificate": {"reference": "persisted_state", "status": "evaluated",
+                                          "qualified": qualified, "complete": complete,
+                                          "operator_nominal_p99": [0.0, 0.0, 0.0]}}
+                log = SUMMARY_LOG.replace("audit-patience", reason)
+                log += "Second-stage final state: schema=1, payload=" + json.dumps(record)
+                def execute(command, **kwargs):
+                    write_database(Path(command[command.index("-d") + 1]), make_atoms(manifest))
+                    return subprocess.CompletedProcess(command, 0, log.encode())
+                with mock.patch.object(regression.subprocess, "run", side_effect=execute), redirect_stdout(StringIO()):
+                    self.assertEqual(regression.run(args), 1)
+                report = json.loads((root / "output/report.json").read_text())
+                self.assertEqual(report["errors"], [])
+                self.assertEqual(report["convergence_acceptance"]["passed"], expected)
+                self.assertEqual(report["quality_gate"]["status"], "uncalibrated")
+
     def test_separate_uncalibrated_quality_and_existing_gates(self) -> None:
         baseline = regression.load_baseline(BASELINE_PATH)
         actual = regression.make_empty_actual({})
@@ -434,6 +483,7 @@ class Fold168RegressionTest(unittest.TestCase):
                 self.assertEqual(report["quality_gate"]["status"], "uncalibrated")
                 self.assertFalse(report["passed"])
                 self.assertEqual(report["stop_reason"], "audit-patience")
+                self.assertFalse(report["convergence_acceptance"]["passed"])
                 self.assertTrue(report["iteration_gate"]["passed"])
                 self.assertTrue(report["atom_cutoff_gate"]["passed"])
                 self.assertEqual(actual["quality_metrics"]["offset_rmse"], 0.0)

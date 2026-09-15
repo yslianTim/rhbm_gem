@@ -83,11 +83,25 @@ using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
 
+struct JointOffsetDiagnostics
+{
+    int iterations{ 0 };
+    std::optional<double> normalized_change{};
+    std::optional<double> robust_scale{};
+};
+
 struct JointOffsetSolveResult
 {
     JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
     Eigen::VectorXd offset{};
+    JointOffsetDiagnostics diagnostics{};
 };
+
+JointOffsetSolveResult SolveJointOffsetSystem(
+    const algorithm::WeightedRidgeSystem &, algorithm::WeightedRidgeSolver &);
+
+const char * JointOffsetSolveStatusText(JointOffsetSolveStatus);
+const char * LocalRefitStatusText(RHBMEstimationStatus);
 
 JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageContext & context,

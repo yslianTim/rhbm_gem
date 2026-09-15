@@ -216,6 +216,34 @@ bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
     throw std::logic_error("Joint offset solve status is invalid.");
 }
 
+const char * JointOffsetSolveStatusText(JointOffsetSolveStatus status)
+{
+    switch (status)
+    {
+    case JointOffsetSolveStatus::Converged: return "converged";
+    case JointOffsetSolveStatus::SystemBuildFailed: return "system-build-failed";
+    case JointOffsetSolveStatus::EmptySystem: return "empty-system";
+    case JointOffsetSolveStatus::InitialSolveFailed: return "initial-solve-failed";
+    case JointOffsetSolveStatus::IrlsSolveFailed: return "irls-solve-failed";
+    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated: return "irls-objective-deteriorated";
+    case JointOffsetSolveStatus::IrlsMaximumIterationsReached: return "irls-maximum-iterations";
+    }
+    throw std::logic_error("Unknown joint-offset status.");
+}
+
+const char * LocalRefitStatusText(RHBMEstimationStatus status)
+{
+    switch (status)
+    {
+    case RHBMEstimationStatus::SUCCESS: return "success";
+    case RHBMEstimationStatus::SINGLE_MEMBER: return "single-member";
+    case RHBMEstimationStatus::INSUFFICIENT_DATA: return "insufficient-data";
+    case RHBMEstimationStatus::MAX_ITERATIONS_REACHED: return "maximum-iterations";
+    case RHBMEstimationStatus::NUMERICAL_FALLBACK: return "numerical-fallback";
+    }
+    throw std::logic_error("Unknown local-refit status.");
+}
+
 bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status)
 {
     switch (status)
@@ -505,6 +533,19 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
     }
 
+    const auto result{ SolveJointOffsetSystem(system, reusable_solver) };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CaptureJointFailure(system, result);
+#endif
+    return result;
+}
+
+JointOffsetSolveResult SolveJointOffsetSystem(
+    const algorithm::WeightedRidgeSystem & system,
+    algorithm::WeightedRidgeSolver & reusable_solver)
+{
+    const auto & previous_offset{ system.previous_parameter };
+    JointOffsetDiagnostics diagnostics;
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
     Eigen::VectorXd offset;
     if (!reusable_solver.Solve(system, weight, offset))
@@ -517,6 +558,7 @@ JointOffsetSolveResult EstimateJointOffsets(
 
     for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
     {
+        diagnostics.iterations = iteration + 1;
         const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
@@ -524,6 +566,7 @@ JointOffsetSolveResult EstimateJointOffsets(
                 array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
                 kJointFittingResidualScaleMin)
         };
+        diagnostics.robust_scale = residual_scale;
         for (Eigen::Index i = 0; i < residual.size(); i++)
         {
             weight(i) = algorithm::CalculateCauchyWeight(
@@ -537,7 +580,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         {
             return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
-                previous_offset
+                previous_offset, diagnostics
             };
         }
         const auto current_objective{
@@ -550,7 +593,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         {
             return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
-                offset };
+                offset, diagnostics };
         }
         const auto maximum_change{
             algorithm::CalculateMaximumNormalizedVectorChange(
@@ -558,14 +601,15 @@ JointOffsetSolveResult EstimateJointOffsets(
                 offset,
                 kJointOffsetIrlsScaleFloor)
         };
+        diagnostics.normalized_change = maximum_change;
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
-            return JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset) };
+            return JointOffsetSolveResult{ JointOffsetSolveStatus::Converged, std::move(offset), diagnostics };
         }
     }
 
-    return JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset) };
+    return JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsMaximumIterationsReached, std::move(offset), diagnostics };
 }
 
 std::optional<JointPolishParameterization> JointPolishParameterization::Build(

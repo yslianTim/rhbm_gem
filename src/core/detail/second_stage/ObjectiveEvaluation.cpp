@@ -587,4 +587,37 @@ void ReevaluateBestAuditState(
 }
 
 
+FitStatePatch OverlayMemberBest(const FitStateView & candidate, const FitStatePatch & best)
+{
+    FitStatePatch patch;
+    patch.atom_index_list = candidate.GetOverrideAtomIndexList();
+    patch.atom_index_list.insert(patch.atom_index_list.end(), best.atom_index_list.begin(), best.atom_index_list.end());
+    std::ranges::sort(patch.atom_index_list);
+    patch.atom_index_list.erase(std::unique(patch.atom_index_list.begin(), patch.atom_index_list.end()), patch.atom_index_list.end());
+    for (const auto atom : patch.atom_index_list)
+        patch.mdpde_list.push_back(best.Find(atom) ? *best.Find(atom) : candidate.GetMdpde(atom));
+    return patch;
+}
+
+void UpdateMemberBestState(const SecondStageContext & context, const ObjectiveDomain & domain,
+    const FitState & state, const std::vector<ClusterKey> & keys, MemberBestState & history)
+{
+    std::erase_if(history, [&](const auto & entry) { return std::ranges::find(keys, entry.first) == keys.end(); });
+    const auto baseline{ BuildResidualBaseline(context, state) };
+    for (const auto & key : keys)
+    {
+        const auto & samples{ domain.cluster_by_key.at(key).sample_ref_list };
+        const auto current{ EvaluateObjectiveContribution(baseline, key, samples, domain) };
+        if (!current) continue;
+        auto previous{ history.find(key) };
+        if (previous != history.end())
+        {
+            const CandidateEvaluationOverlay overlay{ context, baseline, state, previous->second };
+            const auto best{ EvaluateObjectiveContribution(overlay, key, samples, domain) };
+            if (best && !IsBetterAuditObjective(current->GetTotalObjective(), best->GetTotalObjective(), kObjectiveStrictTolerance)) continue;
+        }
+        history.insert_or_assign(key, FitStatePatch::FromState(state, key));
+    }
+}
+
 } // namespace rhbm_gem::core::detail

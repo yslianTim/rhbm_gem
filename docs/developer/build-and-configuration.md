@@ -415,8 +415,18 @@ final second-stage MDPDE columns. The parsed summary records `final_state_source
 `final_uses_polish`, and stop reason; it is not combined with another iteration's
 operator certificate.
 
+New production binaries additionally emit a certificate for the actual persisted
+state. `actual.json.production_fitting` records this evidence, outer attempts,
+operator evaluation counts and `final_polish_applied`. The last field describes
+this final polish application, independently of the existing `final_uses_polish`
+provenance. Older binaries leave this section unavailable.
+
 `report.json` separates `truth_scoring.status` (`complete` or `failed`),
 `quality_gate.status=uncalibrated`, the iteration gate, and the atom/cluster gate.
+`convergence_acceptance` separately requires a `converged` stop, a complete and
+solver-qualified persisted-state certificate with all three nominal p99 values
+below `1e-4`, and at most 25 outer attempts. Missing evidence, a small accepted
+step or a low parameter RMSE cannot satisfy this requirement.
 An unavailable gate has `passed=null`; quality remains `passed=false` until its
 thresholds are independently established. Therefore a successful measurement
 still exits 1 and does not announce a passing regression. The runner does not
@@ -429,7 +439,9 @@ still requires all 168 atoms, limit 100, at least two initial topology clusters,
 and no cluster above 100 atoms. Elapsed time remains diagnostic; the external
 CTest timeout is 900 seconds to allow the full Debug run and report to finish.
 No convergence conclusion is inferred from small parameter errors. Forward
-sampling discrepancies, truth injection, and convergence repairs are separate work.
+sampling discrepancies and truth injection are separate work. The current
+production repair and its acceptance rules are documented in
+[Production fitting](production-fitting.md).
 
 Run the self-contained scorer tests without the external fixture:
 

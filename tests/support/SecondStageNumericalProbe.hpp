@@ -1,6 +1,7 @@
 #pragma once
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SolverFailureCapture.hpp"
 #include <array>
 #include <cstddef>
 #include <string>

@@ -9,11 +9,20 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
+struct NominalShapeSolve
+{
+    std::optional<RHBMEstimationStatus> status{};
+    RHBMBetaDiagnostics diagnostics{};
+    std::optional<double> variance{};
+};
+
 struct FixedPointOperatorEvidence
 {
     FittedGaussianSnapshot state{};
     std::vector<char> shape_available_atom_mask{};
     std::vector<char> offset_available_atom_mask{};
+    std::vector<NominalShapeSolve> shape_solves{};
+    std::map<ClusterKey, JointOffsetSolveResult> offset_solves{};
 };
 
 struct IterationProposalResult
@@ -25,6 +34,12 @@ struct IterationProposalResult
     std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
     ClusterHealthMap health_by_key{};
 };
+
+bool IsNominalOperatorSolverQualified(const FixedPointOperatorEvidence &);
+
+FixedPointOperatorEvidence EvaluateNominalOperator(
+    const SecondStageContext &, const std::vector<ClusterKey> &, const FitState &,
+    const FitOptions &, const std::vector<double> & ridge_multiplier_list);
 
 IterationProposalResult BuildIterationProposal(
     const SecondStageContext & context,

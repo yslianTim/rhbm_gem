@@ -39,6 +39,7 @@ struct LocalCandidateReference
     const ObjectiveDomain & domain;
     CandidateDecisionEvidence evidence;
     PerformanceCounters & counters;
+    const FitStatePatch * member_best{ nullptr };
 };
 
 struct BoundaryCandidateReference
@@ -50,6 +51,7 @@ struct BoundaryCandidateReference
     const ObjectiveBreakdown * best_audit;
     PerformanceCounters & counters;
     const BoundaryReconciliationComponent & component;
+    const MemberBestState * member_best{ nullptr };
 };
 
 struct GlobalCandidateReference

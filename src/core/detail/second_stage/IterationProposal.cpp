@@ -18,6 +18,12 @@ namespace rhbm_gem::core::detail {
 
 namespace {
 
+NominalShapeSolve ShapeSolveEvidence(const LocalGaussianResult & result)
+{
+    if (!result.fit_result) return {};
+    return { result.fit_result->status, result.fit_result->diagnostics, result.fit_result->sigma_square };
+}
+
 struct LocalAtomRefitResult
 {
     LocalGaussianResult result{};
@@ -31,7 +37,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const LocalGaussianResult & previous_result,
     const GaussianModel3D & offset_model,
     const std::vector<double> & adjusted_response_list,
-    int thread_size)
+    int thread_size,
+    NominalShapeSolve & attempted_solve)
 {
     auto adjusted_sampling_entries{
         BuildSecondStageAdjustedSamples(atom_context, adjusted_response_list)
@@ -52,6 +59,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 thread_size,
                 offset_model)
         };
+        attempted_solve = ShapeSolveEvidence(candidate_result);
         if (candidate_result.fit_result.has_value())
         {
             attempted_refit_status = candidate_result.fit_result->status;
@@ -107,7 +115,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     };
 }
 
-static std::vector<std::optional<GaussianModel3D>>
+static std::vector<std::optional<LocalGaussianResult>>
 RunUnrestrictedShapeRefits(
     const SecondStageContext & context,
     const FittedGaussianSnapshot & operator_offset_state,
@@ -121,7 +129,7 @@ RunUnrestrictedShapeRefits(
             context,
             operator_model_bundle)
     };
-    std::vector<std::optional<GaussianModel3D>> result(
+    std::vector<std::optional<LocalGaussianResult>> result(
         context.atom_list.size());
     int refit_thread_size{ options.thread_size };
 #ifdef USE_OPENMP
@@ -136,17 +144,14 @@ RunUnrestrictedShapeRefits(
     {
         try
         {
-            const auto candidate{
+            auto candidate{
                 context.atom_list.at(atom_index).refit_design.Estimate(
                     adjusted_response_cache.at(atom_index),
                     context.atom_list.at(atom_index).alpha_r,
                     refit_thread_size,
                     GetFitModel(operator_model_bundle.node, atom_index))
             };
-            if (IsValidSecondStageGaussianModel(candidate.mdpde.GetModel()))
-            {
-                result.at(atom_index) = candidate.mdpde.GetModel();
-            }
+            result.at(atom_index) = std::move(candidate);
         }
         catch (const std::exception &)
         {
@@ -222,6 +227,7 @@ IterationProposalResult BuildIterationProposal(
     fixed_point_operator.state = current_model_snapshot.node;
     fixed_point_operator.shape_available_atom_mask.assign(context.atom_list.size(), 0);
     fixed_point_operator.offset_available_atom_mask.assign(context.atom_list.size(), 0);
+    fixed_point_operator.shape_solves.resize(context.atom_list.size());
     for (std::size_t cluster_position = 0;
         cluster_position < cluster_key_list.size(); cluster_position++)
     {
@@ -229,6 +235,7 @@ IterationProposalResult BuildIterationProposal(
         const auto & offset_result{
             joint_offset_result_list.at(cluster_position)
         };
+        fixed_point_operator.offset_solves.emplace(key, offset_result);
         for (std::size_t position = 0; position < key.size(); position++)
         {
             const auto atom_index{ key.at(position) };
@@ -319,6 +326,7 @@ IterationProposalResult BuildIterationProposal(
         BuildSecondStageAdjustedResponseCache(context, current_model_snapshot)
     };
     std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(context.atom_list.size());
+    std::vector<NominalShapeSolve> attempted_shape_solves(context.atom_list.size());
     std::vector<std::exception_ptr> refit_exception_list(context.atom_list.size());
 #ifdef USE_OPENMP
     const bool parallel_refits{
@@ -340,7 +348,8 @@ IterationProposalResult BuildIterationProposal(
                     previous_state.at(atom_index),
                     GetFitModel(current_model_snapshot.node, atom_index),
                     refit_response_cache.at(atom_index),
-                    refit_thread_size);
+                    refit_thread_size,
+                    attempted_shape_solves.at(atom_index));
         }
         catch (...)
         {
@@ -377,6 +386,8 @@ IterationProposalResult BuildIterationProposal(
         for (const auto atom_index : key)
         {
             auto refit_result{ std::move(refit_result_list.at(atom_index)) };
+            if (operator_offsets_complete && operator_offsets_match_proposal)
+                fixed_point_operator.shape_solves.at(atom_index) = attempted_shape_solves.at(atom_index);
             if (!refit_result.has_value())
             {
                 health.all_local_refits_solver_qualified = false;
@@ -425,8 +436,13 @@ IterationProposalResult BuildIterationProposal(
         {
             if (unrestricted_shape_list.at(atom_index).has_value())
             {
-                fixed_point_operator.state.at(atom_index) = *unrestricted_shape_list.at(atom_index);
-                fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
+                fixed_point_operator.shape_solves.at(atom_index) = ShapeSolveEvidence(*unrestricted_shape_list.at(atom_index));
+                const auto & model{ unrestricted_shape_list.at(atom_index)->mdpde.GetModel() };
+                if (IsValidSecondStageGaussianModel(model))
+                {
+                    fixed_point_operator.state.at(atom_index) = model;
+                    fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
+                }
             }
         }
     }
@@ -484,6 +500,37 @@ IterationProposalResult BuildIterationProposal(
         std::move(local_refit_status_by_atom),
         std::move(health_by_key)
     };
+}
+
+bool IsNominalOperatorSolverQualified(const FixedPointOperatorEvidence & evidence)
+{
+    if (evidence.state.empty() || evidence.shape_solves.size() != evidence.state.size()) return false;
+    std::vector<char> offset_qualified(evidence.state.size(), 0);
+    for (const auto & [key, solve] : evidence.offset_solves)
+    {
+        if (solve.status != JointOffsetSolveStatus::Converged) return false;
+        for (const auto atom : key)
+        {
+            if (atom >= offset_qualified.size() || offset_qualified[atom]) return false;
+            offset_qualified[atom] = 1;
+        }
+    }
+    for (std::size_t atom = 0; atom < evidence.state.size(); ++atom)
+        if (!offset_qualified[atom] || !evidence.shape_solves[atom].status ||
+            !IsLocalRefitStatusSolverQualified(*evidence.shape_solves[atom].status)) return false;
+    return true;
+}
+
+FixedPointOperatorEvidence EvaluateNominalOperator(
+    const SecondStageContext & context, const std::vector<ClusterKey> & keys,
+    const FitState & state, const FitOptions & options, const std::vector<double> & ridge)
+{
+    ClusterSolverWorkspaceMap workspaces;
+    for (const auto & key : keys) workspaces.try_emplace(key);
+    const SuspiciousBlockActivity unrestricted{
+        SuspiciousUpdateMask(state.size(), 0), SuspiciousUpdateMask(state.size(), 0),
+        SuspiciousUpdateMask(state.size(), 0) };
+    return BuildIterationProposal(context, keys, state, options, ridge, unrestricted, workspaces).fixed_point_operator;
 }
 
 } // namespace rhbm_gem::core::detail

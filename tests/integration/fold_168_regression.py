@@ -382,6 +382,35 @@ def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
     }
 
 
+def parse_final_state_certificate(log_text: str) -> dict[str, Any] | None:
+    matches = re.findall(r"Second-stage final state: schema=1, payload=(.*)", log_text)
+    if not matches:
+        return None  # Older binaries provide no persisted-state certificate.
+    require(len(matches) == 1, "Expected exactly one final-state certificate.")
+    def reject_constant(value: str) -> None:
+        raise RegressionError(f"Non-finite final-state value: {value}")
+    result = json.loads(matches[0], parse_constant=reject_constant)
+    require(isinstance(result, dict), "Invalid final-state record.")
+    require(type(result.get("final_polish_applied")) is bool, "Missing final polish application status.")
+    require(result.get("background_reference") == "last_frozen_background", "Unknown final-state background.")
+    for field in ("attempts", "recovery_operator_evaluations", "certificate_operator_evaluations"):
+        require(type(result.get(field)) is int and result[field] >= 0, f"Invalid final-state {field}.")
+    certificate = result.get("certificate", {})
+    require(isinstance(certificate, dict), "Invalid final operator certificate.")
+    require(certificate.get("reference") == "persisted_state", "Certificate describes a different state.")
+    if certificate.get("status") == "evaluated":
+        require(type(certificate.get("qualified")) is bool and type(certificate.get("complete")) is bool,
+                "Missing final operator qualification.")
+        values = certificate.get("operator_nominal_p99")
+        require(isinstance(values, list) and len(values) == 3, "Missing final operator residuals.")
+        for value in values:
+            if value is not None:
+                require(finite_number(value, "final operator residual") >= 0, "Negative final operator residual.")
+    else:
+        require(certificate.get("status") == "not_evaluated", "Unknown final certificate status.")
+    return result
+
+
 def parse_atom_cutoff_summary(log_text: str) -> dict[str, int]:
     matches = list(ATOM_CUTOFF_PATTERN.finditer(log_text))
     if len(matches) != 1:
@@ -483,6 +512,7 @@ def make_empty_actual(input_hashes: dict[str, str]) -> dict[str, Any]:
         "estimate_source": "sqlite_final_second_stage_mdpde",
         "second_stage_summary": None,
         "atom_cutoff_summary": None,
+        "production_fitting": None,
     }
 
 
@@ -616,6 +646,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             scoring_status = "complete"
             actual["second_stage_summary"] = parse_second_stage_summary(log_text)
             actual["atom_cutoff_summary"] = parse_atom_cutoff_summary(log_text)
+            actual["production_fitting"] = parse_final_state_certificate(log_text)
 
         gates = evaluate_gates(baseline, actual)
         differences = [message for gate in gates.values() for message in gate["differences"]]
@@ -624,11 +655,22 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     log_path.write_text(log_text, encoding="utf-8")
     write_json(actual_path, actual)
-    passed = not errors and all(gate["passed"] is True for gate in gates.values())
+    certificate = ((actual.get("production_fitting") or {}).get("certificate") or {})
+    residuals = certificate.get("operator_nominal_p99", [])
+    convergence_passed = (
+        (actual["second_stage_summary"] or {}).get("stop_reason") == "converged" and
+        certificate.get("status") == "evaluated" and certificate.get("complete") is True and
+        certificate.get("qualified") is True and len(residuals) == 3 and
+        all(value is not None and 0 <= value < 1e-4 for value in residuals) and
+        gates["iteration_gate"]["passed"] is True and
+        (actual.get("production_fitting") or {}).get("attempts", MAXIMUM_ACCEPTED_ITERATIONS + 1) <= MAXIMUM_ACCEPTED_ITERATIONS)
+    passed = not errors and convergence_passed and all(gate["passed"] is True for gate in gates.values())
     report = {
         "schema_version": SCHEMA_VERSION,
         "passed": passed,
         "truth_scoring": {"status": scoring_status},
+        "convergence_acceptance": {"passed": convergence_passed,
+            "reason": "certified-within-25" if convergence_passed else "convergence-not-established-within-25"},
         **gates,
         "stop_reason": (actual["second_stage_summary"] or {}).get("stop_reason"),
         "performance_gate": False,

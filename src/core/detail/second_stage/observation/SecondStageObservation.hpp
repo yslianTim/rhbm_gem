@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/second_stage/observation/SecondStageDiagnostics.hpp"
+#include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -26,15 +27,25 @@ enum class BoundaryAcceptancePolicy;
 bool IsDebugLogLevelEnabled();
 bool IsSecondStageAuditEnabled(bool quiet) noexcept;
 
+struct NominalSolveDiagnostics
+{
+    std::vector<NominalShapeSolve> shapes{};
+    std::map<ClusterKey, std::pair<JointOffsetSolveStatus, JointOffsetDiagnostics>> offsets{};
+};
+
 struct SecondStageAuditData
 {
     AuditBatch batch{};
+    NominalSolveDiagnostics nominal{}, final_nominal{};
+    RecoveryDiagnostics recovery{};
+    std::optional<ConvergenceAssessment> final_certificate{};
     bool polish_attempted{ false }, polish_accepted{ false }, polish_applied{ false };
     FinalPolishResidualSafetyStatus polish_status{ FinalPolishResidualSafetyStatus::NotEvaluated };
     std::optional<ConvergenceAssessment> polish_certificate{};
     std::optional<ObjectiveBreakdown> final_objective{};
     std::array<SelectionAuditDiagnostic, 2> selection{};
     std::optional<ConvergenceAssessment> convergence{};
+    std::string_view convergence_reference{ "iteration_previous" };
     std::optional<ObjectiveBreakdown> previous{}, candidate{}, best{};
     std::string_view score_source{ "not_evaluated" };
     std::size_t attempt{ 0 }, objective_revision{ 0 }, recovery_revision{ 0 };
@@ -66,6 +77,9 @@ public:
     void BeginAttempt(std::size_t attempt, std::size_t objective_revision, std::size_t recovery_revision,
         bool background_changed, bool partition_changed) noexcept;
     void ObserveProposal(const IterationProposalResult &) noexcept;
+    void ObserveNominal(const FixedPointOperatorEvidence &, bool final = false) noexcept;
+    void ObserveRecovery(const RecoveryDiagnostics &) noexcept;
+    void ObserveFinalState(const FixedPointOperatorEvidence &, const ConvergenceAssessment &) noexcept;
     void ObserveCommit(const CandidateSelection &, const CandidateCommitResult &, const TrustRegionStateSet &) noexcept;
     void ObserveQuarantine(const QuarantineState &, const QuarantineState &) noexcept;
     void ObserveRetries(const QuarantineState &) noexcept;
@@ -78,7 +92,7 @@ public:
     void ObserveCandidateScoreSource(bool from_selection) noexcept;
     void ObserveScores(const std::optional<ObjectiveBreakdown> & previous,
         const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best) noexcept;
-    void ObserveConvergence(const ConvergenceAssessment &) noexcept;
+    void ObserveConvergence(const ConvergenceAssessment &, std::string_view reference = "iteration_previous") noexcept;
     void BeginFinalization(const ObjectiveBreakdown * selected_best) noexcept;
     void ObserveFinalPolishAttempt() noexcept;
     void ObserveFinalCertification(const FinalDependencyPolishResult &, FinalPolishResidualSafetyStatus,

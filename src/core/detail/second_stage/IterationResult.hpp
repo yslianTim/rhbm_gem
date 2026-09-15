@@ -15,7 +15,9 @@ enum class SecondStageStopReason
     AuditPatience,
     AllRejectedBacktrackingExhausted,
     AllRejectedAtMaximumIterations,
-    MaximumIterations
+    MaximumIterations,
+    RecoveryFailed,
+    FinalCertificateFailed
 };
 
 struct IterationResult

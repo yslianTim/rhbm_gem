@@ -100,6 +100,7 @@ struct CandidateSelectionInputs
     BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
     PerformanceCounters & performance_counters;
     SecondStageObservationSession * observation{ nullptr };
+    const MemberBestState * member_best{ nullptr };
 };
 
 class BoundaryObservationScope;

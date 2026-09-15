@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize passive second-stage decision records (schema 1)."""
+"""Summarize passive second-stage decision records (schemas 1 and 2)."""
 from __future__ import annotations
 import argparse
 import json
@@ -35,12 +35,16 @@ def validate_batch(record):
 
 def parse(text):
     records = []
+    schema = None
     for line_number, line in enumerate(text.splitlines(), 1):
         match = MARKER.search(line)
         if not match:
             continue
-        if match[1] != '1':
+        if match[1] not in ('1', '2'):
             raise ValueError(f'Line {line_number}: unsupported audit schema {match[1]}')
+        if schema is not None and schema != int(match[1]):
+            raise ValueError('Mixed audit schemas')
+        schema = int(match[1])
         try:
             record = json.loads(match[2], parse_constant=reject_constant)
             if record['kind'] not in ('start', 'iteration', 'terminal'):
@@ -55,8 +59,19 @@ def parse(text):
                         raise ValueError('Unknown selection audit result')
                     if not audit['executed'] and audit['result'] in ('passed', 'rejected', 'empty_after_salvage'):
                         raise ValueError('An unexecuted gate cannot pass or reject')
-                if record['convergence']['reference'] != 'iteration_previous':
+                if record['convergence']['reference'] not in (('iteration_previous', 'recovery_accepted') if schema == 2 else ('iteration_previous',)):
                     raise ValueError('Outer operator reference must be iteration_previous')
+            if schema == 2 and record['kind'] != 'start':
+                recovery = record['recovery']
+                if len(recovery['trials']) > 8:
+                    raise ValueError('Recovery trial limit exceeded')
+                if recovery['accepted'] and not recovery['attempted']:
+                    raise ValueError('Unattempted recovery cannot be accepted')
+                solves = record['nominal_solves' if record['kind'] == 'iteration' else 'final_nominal_solves']
+                if not isinstance(solves['shapes'], list) or not isinstance(solves['offsets'], list):
+                    raise ValueError('Nominal solve diagnostics must be explicit')
+                if record['kind'] == 'terminal' and record['final_certificate']['reference'] != 'persisted_state':
+                    raise ValueError('Final certificate must describe persisted_state')
             if record['kind'] == 'terminal':
                 polish = record['final_polish']
                 if polish['applied'] and not (polish['attempted'] and polish['objective_accepted'] and polish['operator_certified'] is True):
@@ -75,7 +90,7 @@ def parse(text):
     attempts = [r['attempt'] for r in iterations]
     if attempts != sorted(set(attempts)):
         raise ValueError('Iteration attempts must be unique and ordered')
-    return {'schema': 1, 'complete': bool(terminals), 'start': records[0],
+    return {'schema': schema, 'complete': bool(terminals), 'start': records[0],
             'iterations': iterations, 'terminal': terminals[0] if terminals else None}
 
 
@@ -124,6 +139,21 @@ def report(audit):
             for event in details:
                 lines.append(f"- {event['stage']}, first atom {event['first_atom']}, trial {event['trial']}: "
                              f"{event['outcome']} ({event['reason']}); scope={event['scope']}, reference={event['reference']}.")
+    if audit['schema'] == 2:
+        lines += ['', '## Recovery and nominal solvers', '']
+        for row in audit['iterations']:
+            recovery = row['recovery']
+            failures = [(s['atom_index'], s['status']) for s in row['nominal_solves']['shapes']
+                        if s['status'] != 'success']
+            offsets = [(s['key'], s['status']) for s in row['nominal_solves']['offsets']
+                       if s['status'] != 'converged']
+            lines.append(f"- Attempt {row['attempt']}: recovery={recovery['reason']}; "
+                         f"operator evaluations={recovery['operator_evaluations']}; "
+                         f"shape failures={failures}; offset failures={offsets}.")
+        if terminal:
+            lines += ['', 'Final persisted-state certificate: ' + json.dumps(terminal['final_certificate']) + '.']
+    else:
+        lines += ['', 'Schema 1 has no endpoint-specific solver evidence or persisted-state certificate; neither is inferred.']
     return '\n'.join(lines) + '\n'
 
 

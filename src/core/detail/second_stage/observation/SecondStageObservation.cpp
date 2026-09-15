@@ -122,9 +122,35 @@ void SecondStageObservationSession::BeginAttempt(std::size_t attempt, std::size_
         .outcome="changed", .reason="partition-applied"});
 }
 
+void SecondStageObservationSession::ObserveNominal(const FixedPointOperatorEvidence & evidence, bool final) noexcept
+{
+    if (!Enabled()) return;
+    try
+    {
+        auto & target{ final ? m_audit->final_nominal : m_audit->nominal };
+        target.shapes = evidence.shape_solves;
+        target.offsets.clear();
+        for (const auto & [key, solve] : evidence.offset_solves)
+            target.offsets.emplace(key, std::pair{ solve.status, solve.diagnostics });
+    }
+    catch (...) { Disable(); }
+}
+void SecondStageObservationSession::ObserveRecovery(const RecoveryDiagnostics & diagnostic) noexcept
+{
+    if (!Enabled()) return;
+    try { m_audit->recovery = diagnostic; } catch (...) { Disable(); }
+}
+void SecondStageObservationSession::ObserveFinalState(const FixedPointOperatorEvidence & evidence,
+    const ConvergenceAssessment & assessment) noexcept
+{
+    ObserveNominal(evidence, true);
+    if (Enabled()) m_audit->final_certificate = assessment;
+}
+
 void SecondStageObservationSession::ObserveProposal(const IterationProposalResult & proposal) noexcept
 {
     if (!Enabled()) return;
+    ObserveNominal(proposal.fixed_point_operator);
     for (const auto & [key, health] : proposal.health_by_key)
     {
         AuditEvent event{ .stage=AuditStage::Proposal };
@@ -248,9 +274,9 @@ void SecondStageObservationSession::ObserveScores(const std::optional<ObjectiveB
     ObserveScoreReferences(previous,best);
     m_audit->candidate = candidate;
 }
-void SecondStageObservationSession::ObserveConvergence(const ConvergenceAssessment & assessment) noexcept
+void SecondStageObservationSession::ObserveConvergence(const ConvergenceAssessment & assessment, std::string_view reference) noexcept
 {
-    if (Enabled()) m_audit->convergence = assessment;
+    if (Enabled()) { m_audit->convergence = assessment; m_audit->convergence_reference = reference; }
 }
 void SecondStageObservationSession::BeginFinalization(const ObjectiveBreakdown * selected_best) noexcept
 {
@@ -319,11 +345,13 @@ void LocalSearchObservation::Trial(const CandidateDecisionEvidence & evidence,
         .category=accepted ? AuditCategory::None : (evidence.candidate_objective && evidence.previous_objective ? AuditCategory::Rejected : AuditCategory::Unavailable),
         .trial=m_trial, .outcome=accepted ? "accepted" : "rejected",
         .reason=accepted ? "" : (evidence.rejected_by_previous ? "previous-gate" :
-            (evidence.candidate_objective && evidence.previous_objective ? "strict-improvement" : "objective-unavailable")),
+            (evidence.rejected_by_member_best ? "member-best-gate" :
+            (evidence.candidate_objective && evidence.previous_objective ? "strict-improvement" : "objective-unavailable"))),
         .reference=polish ? "local_search_candidate" : "iteration_previous",
         .previous=evidence.previous_objective, .candidate=evidence.candidate_objective,
         .factor=evidence.accepted_factor, .radius=m_radius,
         .previous_checked=evidence.previous_objective.has_value() && evidence.candidate_objective.has_value() };
+    event.best = evidence.member_best_objective; event.best_checked = evidence.member_best_objective.has_value();
     SetKey(event,m_key); m_batch->Add(event);
 }
 
@@ -372,7 +400,7 @@ static void RecordJointMemberRejection(AuditEvent * record, const ClusterKey & k
 void JointCandidateObservation::Member(const ClusterKey & key, bool accepted,
     const CandidateDecisionEvidence & evidence) noexcept
 {
-    if (!accepted) RecordJointMemberRejection(Record(),key,evidence.previous_objective,{},evidence.candidate_objective,false);
+    if (!accepted) RecordJointMemberRejection(Record(),key,evidence.previous_objective,evidence.member_best_objective,evidence.candidate_objective,evidence.member_best_objective.has_value());
 }
 void JointCandidateObservation::Global(const ObjectiveBreakdown * previous,
     const std::optional<ObjectiveBreakdown> & candidate, const ObjectiveBreakdown * best) noexcept

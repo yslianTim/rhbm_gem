@@ -69,6 +69,9 @@ struct ConvergenceAssessment
     ConvergenceDiagnostics diagnostics{};
 };
 
+ConvergenceAssessment AssessNominalOperator(const FixedPointOperatorEvidence &, const FitState &);
+std::optional<double> QualifiedNominalResidualMeanSquare(const FixedPointOperatorEvidence &, const FitState &);
+
 enum class FinalPolishResidualSafetyStatus
 {
     NotEvaluated,

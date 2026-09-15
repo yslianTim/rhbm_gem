@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <sstream>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
@@ -61,6 +62,65 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
 }
 
 } // namespace
+
+TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
+{
+    command_test::ScopedTempDir directory{"production_truth_isolation"};
+    rgc::MapSimulationRequest simulation;
+    simulation.model_file_path = command_test::TestDataPath("test_model.cif");
+    simulation.output_dir = directory.path();
+    simulation.potential_model_choice = rgc::PotentialModel::SINGLE_GAUS;
+    simulation.blurring_width_list = {0.5};
+    simulation.grid_spacing = 0.2;
+    simulation.verbosity = 0;
+    ASSERT_TRUE(rgc::RunCommand(simulation).succeeded);
+    const auto map{FindGeneratedMap(directory.path())};
+    const auto manifest{std::filesystem::path(map.string()+".simulation.json")};
+    std::vector<double> reference;
+    std::string reference_summary;
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        if (variant == 1) std::filesystem::remove(manifest);
+        if (variant == 2) { std::ofstream out(manifest); out << "{broken"; }
+        if (variant == 3) { std::ofstream out(manifest); out << R"({"charge_used":99999,"blurring_width":123.456})"; }
+        rgc::PotentialAnalysisRequest request;
+        request.database_path = directory.path() / (std::to_string(variant)+".sqlite");
+        request.model_file_path = simulation.model_file_path;
+        request.map_file_path = map;
+        request.simulation_flag = true;
+        request.simulated_map_resolution = variant == 3 ? 123.456 : 0.5;
+        request.saved_key_tag = "isolation";
+        request.verbosity = 3;
+        testing::internal::CaptureStdout();
+        const auto result{rgc::RunCommand(request)};
+        const auto log{testing::internal::GetCapturedStdout()};
+        ASSERT_TRUE(result.succeeded);
+        rg::DataRepository repository{request.database_path};
+        auto model{repository.LoadModel("isolation")};
+        ASSERT_NE(model, nullptr);
+        std::vector<double> values;
+        for (const auto & atom : model->GetAtomList())
+        {
+            const auto view{rg::AtomLocalPotentialView::For(*atom)};
+            const auto fit{view.GetGaussianResult(rg::FittingStage::Second)};
+            for (const auto & gaussian : {fit.ols.GetModel(), fit.mdpde.GetModel()})
+            {
+                values.push_back(gaussian.GetAmplitude()); values.push_back(gaussian.GetWidth());
+                values.push_back(gaussian.GetOffset());
+            }
+            values.push_back(view.GetAlphaR(rg::FittingStage::Second));
+            for (const auto & samples : {view.GetRawSamplingEntries(false), view.GetPeelingSamplingEntries(false)})
+                for (const auto & sample : samples) { values.push_back(sample.point.distance); values.push_back(sample.response); }
+        }
+        std::istringstream lines{log}; std::string line, summary;
+        while (std::getline(lines, line))
+            for (const auto * field : {"accepted_iterations", "best_iteration", "stop_reason", "final_uses_polish", "final_state_source"})
+                if (line.find(std::string("- ")+field+" =") != std::string::npos) summary += line + '\n';
+        ASSERT_FALSE(summary.empty());
+        if (variant == 0) { reference = values; reference_summary = summary; }
+        else { EXPECT_EQ(values, reference); EXPECT_EQ(summary, reference_summary); }
+    }
+}
 
 TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
 {

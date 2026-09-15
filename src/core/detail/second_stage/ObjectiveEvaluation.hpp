@@ -49,6 +49,7 @@ struct AuditedState
 };
 
 using BestAuditState = std::optional<AuditedState>;
+using MemberBestState = std::map<ClusterKey, FitStatePatch>;
 
 class CandidateEvaluationOverlay
 {
@@ -68,6 +69,8 @@ public:
     const SecondStageContext & GetContext() const { return m_context; }
     const ResidualBaseline & GetBaseline() const { return m_baseline; }
 };
+
+FitStatePatch OverlayMemberBest(const FitStateView &, const FitStatePatch &);
 
 struct ObjectiveScale
 {
@@ -177,5 +180,8 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const ObjectiveDomain & domain,
     const ObjectiveBreakdown & baseline,
     PerformanceCounters & performance_counters);
+
+void UpdateMemberBestState(const SecondStageContext &, const ObjectiveDomain &,
+    const FitState &, const std::vector<ClusterKey> &, MemberBestState &);
 
 } // namespace rhbm_gem::core::detail

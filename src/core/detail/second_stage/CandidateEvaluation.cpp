@@ -90,7 +90,18 @@ static bool EvaluateLocalObjective(
         candidate_objective_value,
         previous_objective_value,
         kObjectiveProgressTolerance);
-    return !evidence.rejected_by_previous;
+    if (reference.member_best)
+    {
+        const auto patch{ OverlayMemberBest(candidate_overlay.GetState(), *reference.member_best) };
+        const CandidateEvaluationOverlay historical{ candidate_overlay.GetContext(), candidate_overlay.GetBaseline(),
+            candidate_overlay.GetState().GetBaseState(), patch };
+        if (performance_counters.AuditEnabled()) performance_counters.RecordObjectiveSampleEvaluation(
+            CountObjectiveSamples(objective_sample_ref_list, domain), unique_sample_count);
+        evidence.member_best_objective = EvaluateObjectiveContribution(historical, key, objective_sample_ref_list, domain);
+        evidence.rejected_by_member_best = !evidence.member_best_objective || IsObjectiveDeteriorated(
+            candidate_objective_value, evidence.member_best_objective->GetTotalObjective(), kObjectiveProgressTolerance);
+    }
+    return !evidence.rejected_by_previous && !evidence.rejected_by_member_best;
 }
 
 LocalCandidateEvaluation EvaluateLocalCandidate(const CandidateEvaluationOverlay & candidate_overlay,
@@ -125,7 +136,7 @@ static std::optional<ObjectiveBreakdown> EvaluateBoundaryCandidate(
             const auto member{ EvaluateLocalCandidate(candidate_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, reference.samples_by_key.at(key),
                     previous_objective ? &*previous_objective : nullptr, reference.domain,
-                    evidence, reference.counters}) };
+                    evidence, reference.counters, reference.member_best ? &reference.member_best->at(key) : nullptr}) };
             evidence = member.evidence;
             if (!member.accepted)
             {

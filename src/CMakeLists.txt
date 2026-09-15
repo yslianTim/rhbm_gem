@@ -35,6 +35,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/CandidateTransactionLocal.cpp
     core/detail/second_stage/ObjectiveEvaluation.cpp
     core/detail/second_stage/SuspiciousUpdate.cpp
+    core/detail/second_stage/FixedPointRecovery.cpp
     core/detail/second_stage/IterationProposal.cpp
     core/detail/second_stage/Quarantine.cpp
     core/detail/second_stage/CandidateTransactionBoundary.cpp
@@ -181,7 +182,8 @@ if(BUILD_PYTHON_BINDINGS)
 endif()
 
 if(BUILD_TESTING)
-    target_sources(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/SecondStageNumericalProbe.cpp")
+    target_sources(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/SecondStageNumericalProbe.cpp"
+        "${PROJECT_SOURCE_DIR}/tests/support/SolverFailureCapture.cpp")
     target_include_directories(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests")
     target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 endif()

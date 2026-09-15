@@ -58,6 +58,8 @@ std::string_view SecondStageStopReasonText(SecondStageStopReason reason)
     case SecondStageStopReason::AllRejectedBacktrackingExhausted:
         return "all-rejected-backtracking-exhausted";
     case SecondStageStopReason::AllRejectedAtMaximumIterations:
+    case SecondStageStopReason::RecoveryFailed: return "recovery-failed";
+    case SecondStageStopReason::FinalCertificateFailed: return "final-certificate-failed";
     case SecondStageStopReason::MaximumIterations:
         return "maximum-iterations";
     }
@@ -634,6 +636,48 @@ void JsonCertificate(std::ostream & out, const std::optional<ConvergenceAssessme
     }
     out << '}';
 }
+void JsonNominalSolves(std::ostream & out, const NominalSolveDiagnostics & diagnostics)
+{
+    out << "{\"shapes\":[";
+    for (std::size_t i = 0; i < diagnostics.shapes.size(); ++i)
+    {
+        if (i) out << ',';
+        const auto & solve{ diagnostics.shapes[i] };
+        out << "{\"atom_index\":" << i << ",\"status\":";
+        if (solve.status) out << '"' << LocalRefitStatusText(*solve.status) << '"'; else out << "null";
+        out << ",\"iterations\":" << solve.diagnostics.iterations << ",\"squared_beta_change\":";
+        JsonOptional(out, solve.diagnostics.squared_beta_change);
+        out << ",\"relative_variance_change\":"; JsonOptional(out, solve.diagnostics.relative_variance_change);
+        out << ",\"variance\":"; JsonOptional(out, solve.variance); out << '}';
+    }
+    out << "],\"offsets\":[";
+    bool first{ true };
+    for (const auto & [key, entry] : diagnostics.offsets)
+    {
+        if (!first) out << ','; first = false;
+        out << "{\"key\":"; JsonArray(out, key);
+        out << ",\"status\":\"" << JointOffsetSolveStatusText(entry.first) << "\",\"iterations\":" << entry.second.iterations;
+        out << ",\"normalized_change\":"; JsonOptional(out, entry.second.normalized_change);
+        out << ",\"robust_scale\":"; JsonOptional(out, entry.second.robust_scale); out << '}';
+    }
+    out << "]}";
+}
+void JsonRecovery(std::ostream & out, const RecoveryDiagnostics & diagnostic)
+{
+    out << "{\"attempted\":" << diagnostic.attempted << ",\"accepted\":" << diagnostic.accepted
+        << ",\"reason\":\"" << diagnostic.reason << "\",\"operator_evaluations\":" << diagnostic.operator_evaluations;
+    out << ",\"current_residual\":"; JsonOptional(out, diagnostic.current_residual);
+    out << ",\"best_objective\":"; JsonOptional(out, diagnostic.best_objective);
+    out << ",\"trials\":[";
+    bool first{ true };
+    for (const auto & trial : diagnostic.trials)
+    {
+        if (!first) out << ','; first = false;
+        out << "{\"factor\":" << trial.factor << ",\"reason\":\"" << trial.reason << "\",\"residual\":";
+        JsonOptional(out, trial.residual); out << ",\"objective\":"; JsonOptional(out, trial.objective); out << '}';
+    }
+    out << "]}";
+}
 void JsonBatch(std::ostream & out, const AuditBatch & batch)
 {
     out << "\"stages\":{";
@@ -674,7 +718,7 @@ void LogDecisionAuditStart(SecondStageObservationSession & session, const FitOpt
     if (!session.Enabled()) return;
     try
     {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=1, payload={\"kind\":\"start\",\"version\":\"" << RHBM_GEM_AUDIT_VERSION
+        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"start\",\"version\":\"" << RHBM_GEM_AUDIT_VERSION
             << "\",\"settings\":{\"threads\":" << options.thread_size << ",\"exclude_hydrogen\":" << options.exclude_hydrogen
             << ",\"boundary_halo_depth\":" << options.second_stage_boundary_halo_depth << ",\"final_polish\":" << options.enable_second_stage_dependency_polish
             << ",\"final_polish_rounds\":" << options.second_stage_dependency_polish_max_iterations << "}}";
@@ -687,7 +731,7 @@ void LogDecisionAuditIteration(SecondStageObservationSession & session, const It
     const auto * data=session.Audit(); if (!data) return;
     try
     {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=1, payload={\"kind\":\"iteration\",\"attempt\":" << result.attempt_number
+        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"iteration\",\"attempt\":" << result.attempt_number
             << ",\"accepted_iterations\":" << result.accepted_iteration_count << ",\"accepted_clusters\":" << result.accepted_key_list.size()
             << ",\"rejected_clusters\":" << result.rejected_key_list.size() << ",\"objective_revision\":" << data->objective_revision
             << ",\"recovery_revision\":" << data->recovery_revision << ",\"background_revision\":" << data->background_revision
@@ -704,7 +748,9 @@ void LogDecisionAuditIteration(SecondStageObservationSession & session, const It
                 << ",\"previous\":"; JsonObjective(out,audit.previous); out << ",\"candidate\":"; JsonObjective(out,audit.candidate);
             out << ",\"best\":"; JsonObjective(out,audit.best); out << '}';
         }
-        out << "},\"convergence\":"; JsonCertificate(out,data->convergence,"iteration_previous");
+        out << "},\"convergence\":"; JsonCertificate(out,data->convergence,data->convergence_reference);
+        out << ",\"nominal_solves\":"; JsonNominalSolves(out, data->nominal);
+        out << ",\"recovery\":"; JsonRecovery(out, data->recovery);
         out << ",\"stop_reason\":\"" << SecondStageStopReasonText(result.stop_reason) << "\","; JsonBatch(out,data->batch); out << '}';
         session.Write(out.str());
     }
@@ -716,7 +762,7 @@ void LogDecisionAuditTerminal(SecondStageObservationSession & session, std::stri
     const auto * data=session.Audit(); if (!data) return;
     try
     {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=1, payload={\"kind\":\"terminal\",\"stop_reason\":\"" << reason
+        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"terminal\",\"stop_reason\":\"" << reason
             << "\",\"final_state_source\":\"" << source << "\",\"best_iteration\":";
         if (best) out << best->source_iteration; else out << "null";
         out << ",\"attempt\":" << data->attempt << ",\"objective_revision\":" << data->objective_revision
@@ -727,12 +773,30 @@ void LogDecisionAuditTerminal(SecondStageObservationSession & session, std::stri
         if (data->polish_certificate) out << (data->polish_status == FinalPolishResidualSafetyStatus::AbsolutePassed); else out << "null";
         out << ",\"status\":\"" << GetFinalPolishResidualSafetyStatusText(data->polish_status) << "\",\"applied\":" << data->polish_applied << ",\"certificate\":";
         JsonCertificate(out,data->polish_certificate,"final_polish_candidate",false);
-        out << "},\"work_counters\":";
+        out << "},\"final_certificate\":"; JsonCertificate(out, data->final_certificate, "persisted_state", false);
+        out << ",\"final_nominal_solves\":"; JsonNominalSolves(out, data->final_nominal);
+        out << ",\"recovery\":"; JsonRecovery(out, data->recovery);
+        out << ",\"work_counters\":";
         if (counters) JsonArray(out,counters->AuditCounts()); else out << "null";
         out << ",\"elapsed_ms\":"; JsonNumber(out,session.ElapsedMilliseconds()); out << ','; JsonBatch(out,data->batch); out << '}';
         session.Write(out.str());
     }
     catch (...) { session.Disable(); }
+}
+
+void LogFinalStateCertificate(bool quiet, const std::optional<ConvergenceAssessment> & assessment, bool polish_applied,
+    std::size_t attempts, std::size_t recovery_operators, std::size_t certificate_operators)
+{
+    if (quiet) return;
+    std::ostringstream out;
+    out.imbue(std::locale::classic()); out << std::boolalpha;
+    out << "Second-stage final state: schema=1, payload={\"final_polish_applied\":" << polish_applied << ",\"certificate\":";
+    JsonCertificate(out, assessment, "persisted_state", false);
+    out << ",\"background_reference\":\"last_frozen_background\"";
+    out << ",\"attempts\":" << attempts << ",\"recovery_operator_evaluations\":" << recovery_operators
+        << ",\"certificate_operator_evaluations\":" << certificate_operators;
+    out << '}';
+    Logger::Log(LogLevel::Notice, out.str());
 }
 
 } // namespace rhbm_gem::core::detail

@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 
@@ -214,6 +215,32 @@ bool AreActiveCoordinatesSolverQualified(
     }
 
     return true;
+}
+
+ConvergenceAssessment AssessNominalOperator(const FixedPointOperatorEvidence & evidence, const FitState & state)
+{
+    std::vector<std::size_t> indices(state.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    const auto summary{ SummarizeFixedPointOperator(evidence, state, indices) };
+    ConvergenceAssessment result;
+    result.diagnostics.operator_nominal_residual = summary.nominal_residual;
+    result.certificate.operator_nominal_p99 = summary.nominal_residual.percentile_list;
+    result.certificate.operator_complete = summary.operator_complete;
+    result.certificate.solver_qualified = IsNominalOperatorSolverQualified(evidence);
+    return result;
+}
+
+std::optional<double> QualifiedNominalResidualMeanSquare(const FixedPointOperatorEvidence & evidence, const FitState & state)
+{
+    const auto assessment{ AssessNominalOperator(evidence, state) };
+    if (!assessment.certificate.operator_complete || !assessment.certificate.solver_qualified) return std::nullopt;
+    double norm{ 0.0 };
+    for (std::size_t atom = 0; atom < state.size(); ++atom)
+        for (const auto value : CalculateTransformedChange(evidence.state.at(atom), state.at(atom).mdpde.GetModel()))
+            norm = std::hypot(norm, value / kTransformedChangeTolerance);
+    const double mean_square{ (norm / std::sqrt(3.0 * state.size())) * (norm / std::sqrt(3.0 * state.size())) };
+    if (!std::isfinite(mean_square)) return std::nullopt;
+    return mean_square;
 }
 
 } // namespace rhbm_gem::core::detail
