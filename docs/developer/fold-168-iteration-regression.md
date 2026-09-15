@@ -8,6 +8,15 @@ Status: **unresolved**. The historical intervention below is not an implemented
 repair in the current production source. This documentation cleanup neither
 reruns the dataset nor changes its gates.
 
+**Truth-scoring correction (2026-09-15):** This report's offset RMSE used the
+incorrect constant truth `C=1`. Historical claims that the quality gates passed
+only describe that old test; they do not establish partial-charge accuracy.
+The original map hash, runs, and intervention evidence below remain historical.
+The schema-7 runner uses a newly generated map and its per-atom charge record;
+old outputs are not rescored with that new record. New quality thresholds are
+uncalibrated, while the 25-iteration and atom/cluster requirements remain.
+See [current truth scoring](build-and-configuration.md#fold-168-parameter-truth-scoring).
+
 Raw evidence, isolated sources, builds, and per-iteration data remain local under
 `build/fold-168-regression-investigation/`; see the
 [evidence index](second-stage-outer-iteration-algorithm-audit.md#evidence-index)

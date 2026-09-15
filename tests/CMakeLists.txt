@@ -353,7 +353,8 @@ if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION)
         PROPERTIES
             LABELS "domain:integration;intent:algorithm;benchmark:external"
             RUN_SERIAL TRUE
-            TIMEOUT 300
+            # Full Debug measurements can exceed five minutes; this is not a quality gate.
+            TIMEOUT 900
     )
 endif()
 

@@ -349,34 +349,93 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=
 
 Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings) and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
 
-The fold-168 runner verifies the two external SHA-256 identities before it
-starts the command. It passes a nonexistent database path in a temporary
-directory to `potential_analysis`; the normal persistence layer creates the
-current schema and stores the benchmark output. The database is therefore an
-ephemeral output, not a fitting input. The blocking gate requires the complete
-168 serial-ID set, finite valid atom parameters, and truth-based
-amplitude/width/offset RMSE plus maximum absolute offset no worse than 105% of
-the schema-4 reference metrics. The parsed second-stage final summary must
-report no more than 25 accepted iterations. The single wall-time measurement
-remains diagnostic/report-only. The schema-6 benchmark runner additionally
-parses the one-time initial atom-cutoff summary: 168 selected atoms, an atom
-limit of 100, at least two topology clusters, and no cluster above 100 atoms.
-This replaces the schema-5 residue-cutoff fields; old residue records are not
-reinterpreted as atom counts. Input hashes, reference quality metrics, and
-quality tolerances are unchanged by this metadata migration.
-The required fixture hashes are:
+### fold-168 parameter truth scoring
+
+The schema-7 runner reads the map's adjacent `<map filename>.simulation.json`.
+Use `--simulation-manifest /path/to/record.json` to provide a relocated record;
+CMake uses the adjacent default. The model, map, and manifest file hashes must
+match `tests/benchmarks/fold_168_simulation_baseline.json`, and the manifest's
+model/map hashes must also match the supplied files. Original paths and names
+are provenance: renamed files are accepted when their hashes match. Inputs are
+verified again after fitting, before scores are published.
+
+```sh
+python3 tests/integration/fold_168_regression.py \
+  --executable build/bin/RHBM-GEM \
+  --model /path/to/fold_test_model_0.cif \
+  --map /path/to/sim_map_gaus_grid0.10_charge1_bw0.50.map \
+  --baseline tests/benchmarks/fold_168_simulation_baseline.json \
+  --output-dir build/benchmark-results/fold_168
+```
+
+The fixed fixture uses `single_gaus`, PARTIAL charge, width 0.5 Å, grid spacing
+0.1 Å, outer cutoff 2.5 Å, hydrogen exclusion, and all backbone/sidechain atoms.
+Occupancy, temperature factors, and normalization are not applied. The kernel
+and complete effective settings are pinned by the baseline and recorded in the
+output. The required SHA-256 identities are:
 
 - CIF: `156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab`
-- map: `5e0dbb13fc3a76f8a944e6e2b18393d1896fafc2ec9020457cca8e8a421f120e`
+- map: `cc9e76f94aa524b0f444bd8120ebe1adc3c364d4a277e9d805e0088677dc0a8c`
+- manifest: `b9c882e41f4ee6349ed988861d4e63a078349da9a21bbc3560cae4d4deba7de1`
 
-Run artifacts are written under
-`<build>/benchmark-results/fold_168/{run.log,actual.json,report.json}`. A valid
-algorithm change must update the checked-in reference metrics only after
-manually reviewing `actual.json`; the runner never overwrites the baseline.
-`run.log` is retained for diagnosis; the stable second-stage final summary and
-initial atom-cutoff summary are parsed. The temporary
-database is deleted after its 168 atom results have been read and is not
-retained as an artifact.
+#### Truth and pairing
+
+Only the manifest schema-1 `single_gaus` parameter contract is supported:
+`A_truth = element atomic number`, `B_truth = settings.blurring_width`, and
+`C_truth = atoms[].charge_used`. Width is read at its full JSON precision, not
+from the filename. `C` is the physical offset coefficient, not its central
+response or a transformed convergence coordinate. The scorer never re-queries
+charge tables or uses charge mode 1 as a constant charge value.
+
+The runner reads a fresh temporary SQLite output in read-only mode. It matches
+all 168 final second-stage MDPDE results by serial, chain, sequence, component,
+atom identifier, and alternate indicator; element, structure and exact source
+coordinates must also agree. Results are ordered by preparation index. Missing,
+extra, duplicate, or mismatched atoms fail scoring. Duplicate manifest serials
+are rejected because the existing database uses serial as its atom primary key.
+The database is removed after reading; truth is never passed to production fitting.
+
+Every atom is scored, including the `PRO/OXT` atom whose unsupported spot used
+zero charge. Successful zero lookup, neutral mode, and failed lookup retain
+different statuses. Failed lookup is not a reason to silently exclude an atom.
+
+#### Metrics and result states
+
+For each parameter, the signed error is `estimate - truth`; RMSE is the square
+root of the mean squared errors. Offset bias is the mean signed error and
+`offset_max_absolute_error` is the largest absolute error. No charge-relative
+error is used. `maximum_absolute_offset` is a distribution diagnostic, not an
+accuracy gate.
+
+Artifacts remain `{run.log,actual.json,report.json}` under the requested output
+directory. `actual.json` includes input hashes, generation metadata, per-atom
+lookup evidence, truth, original estimate fields, and signed errors. The estimate
+fields `amplitude_mdpde`, `width_mdpde`, and `intercept_mdpde` come from SQLite's
+final second-stage MDPDE columns. The parsed summary records `final_state_source`,
+`final_uses_polish`, and stop reason; it is not combined with another iteration's
+operator certificate.
+
+`report.json` separates `truth_scoring.status` (`complete` or `failed`),
+`quality_gate.status=uncalibrated`, the iteration gate, and the atom/cluster gate.
+An unavailable gate has `passed=null`; quality remains `passed=false` until its
+thresholds are independently established. Therefore a successful measurement
+still exits 1 and does not announce a passing regression. The runner does not
+automatically turn the current error measurements into reference thresholds.
+Schema 6 and its constant-offset/105% quality reference are not migrated or
+reused. Old records remain historical evidence for their original inputs.
+
+The existing budget remains at most 25 accepted iterations. The structural gate
+still requires all 168 atoms, limit 100, at least two initial topology clusters,
+and no cluster above 100 atoms. Elapsed time remains diagnostic; the external
+CTest timeout is 900 seconds to allow the full Debug run and report to finish.
+No convergence conclusion is inferred from small parameter errors. Forward
+sampling discrepancies, truth injection, and convergence repairs are separate work.
+
+Run the self-contained scorer tests without the external fixture:
+
+```sh
+python3 tests/integration/fold_168_regression_test.py
+```
 
 After installation, downstream CMake projects can consume this project with:
 

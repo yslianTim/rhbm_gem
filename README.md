@@ -20,6 +20,7 @@ For the full documentation map, start at [`docs/README.md`](/docs/README.md).
 - Change the repository and follow project conventions.
 - Extend commands, data I/O, or other internal components.
 - Validate build configurations and prepare releases.
+- Evaluate fold-168 parameter errors against recorded simulation charges with the [truth scorer](docs/developer/build-and-configuration.md#fold-168-parameter-truth-scoring); its new accuracy thresholds are not yet calibrated.
 - Use the default-enabled `umap_embedding` command. In `SYSTEM` mode, installed UMAP packages are preferred and only missing UMAP components are fetched at fixed versions; disable it with `RHBM_GEM_ENABLE_UMAP=OFF` to avoid UMAP resolution and downloads.
 - Start with [`docs/developer/README.md`](/docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md).
 

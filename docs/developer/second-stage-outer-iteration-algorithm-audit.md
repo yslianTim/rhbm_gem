@@ -41,6 +41,13 @@ requirements for future work, not experiments or tests added by this cleanup.
 
 ## Unresolved fold-168 regression
 
+**2026-09-15 scoring correction:** The historical quality-gate results in this
+inventory used an incorrect constant offset truth. They are not evidence of
+partial-charge accuracy. The [schema-7 scorer](build-and-configuration.md#fold-168-parameter-truth-scoring)
+uses the new map's recorded charges and reports uncalibrated quality thresholds;
+the 25-iteration and atom/cluster requirements remain. Historical data below is
+not reinterpreted as a result on the new fixture.
+
 The recorded boundary is adjacent commits `f50a742c` (11 accepted iterations)
 and `49d3516a` (100, best iteration 27). Restoring only the historical-best
 acceptance gates for local candidates and ordinary boundary members on the

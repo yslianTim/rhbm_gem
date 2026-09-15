@@ -1,8 +1,9 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "input_hashes": {
     "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
-    "map": "5e0dbb13fc3a76f8a944e6e2b18393d1896fafc2ec9020457cca8e8a421f120e"
+    "map": "cc9e76f94aa524b0f444bd8120ebe1adc3c364d4a277e9d805e0088677dc0a8c",
+    "manifest": "b9c882e41f4ee6349ed988861d4e63a078349da9a21bbc3560cae4d4deba7de1"
   },
   "command_arguments": [
     "potential_analysis",
@@ -22,8 +23,6 @@
     "true",
     "-r",
     "0.50",
-    "--fit-max",
-    "1.0",
     "--exclude-hydrogen",
     "true"
   ],
@@ -202,13 +201,54 @@
   ],
   "truth": {
     "amplitude": "element_atomic_number",
-    "width": 0.5,
-    "offset": 1
+    "width": "settings.blurring_width",
+    "offset": "atoms[].charge_used"
   },
-  "reference_quality_metrics": {
-    "amplitude_rmse": 0.0538959080312383,
-    "width_rmse": 0.0013150213867548584,
-    "offset_rmse": 1.234298853386113,
-    "maximum_absolute_offset": 0.9086740100107469
+  "generation_contract": {
+    "settings": {
+      "potential_model": "single_gaus",
+      "potential_model_code": 0,
+      "charge_mode": "partial",
+      "charge_mode_code": 1,
+      "blurring_width": 0.5,
+      "blurring_width_list": [
+        0.5
+      ],
+      "grid_spacing": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "grid_size": [
+        244,
+        373,
+        201
+      ],
+      "origin": [
+        -12.600000000000001,
+        -16.8,
+        -11.8
+      ],
+      "cutoff_distance": 2.5,
+      "coordinate_unit": "angstrom",
+      "exclude_hydrogen": true,
+      "only_backbone": false,
+      "missing_charge_policy": "zero_with_status",
+      "occupancy_applied": false,
+      "temperature_factor_applied": false,
+      "normalization_applied": false
+    },
+    "kernel": {
+      "charge_term_cutoff": 2.5,
+      "near_zero_distance": 1e-05,
+      "minimum_charge_width": null,
+      "effective_charge_width": 0.5
+    },
+    "charge_semantics": "argument_passed_to_electric_potential",
+    "atom_count": 168,
+    "fallback_charge_count": 1
+  },
+  "quality_gate": {
+    "status": "uncalibrated"
   }
 }
