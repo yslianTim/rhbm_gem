@@ -1,5 +1,9 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/MDPDEExperiment.hpp"
+#endif
+
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
@@ -387,6 +391,75 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
 }
 } // namespace
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+namespace second_stage_test {
+MDPDEEquationEvidence EvaluateMDPDEEquations(const RHBMMemberDataset & data,
+    double alpha, const Eigen::VectorXd & beta, double variance, double floor)
+{
+    MDPDEEquationEvidence result;
+    result.reason = "invalid-input";
+    if (data.X.rows() <= data.X.cols() || data.X.cols() != beta.size() ||
+        data.y.size() != data.X.rows() || !data.X.allFinite() || !data.y.allFinite() ||
+        !beta.allFinite() || !std::isfinite(alpha) || alpha < 0.0 ||
+        !std::isfinite(floor) || floor <= 0.0) return result;
+    result.reason = "variance-boundary";
+    if (!std::isfinite(variance) || variance <= 0.0 ||
+        variance == std::numeric_limits<double>::max()) return result;
+    const auto weights{ CalculateDataWeight(alpha, data.X, data.y, beta, variance, floor) };
+    result.weights = weights.diagonal();
+    const double n{ static_cast<double>(data.y.size()) };
+    const Eigen::VectorXd residual{ data.y - data.X * beta };
+    result.denominator = result.weights.sum() - n * alpha * std::pow(1.0 + alpha, -1.5);
+    result.floor_count = static_cast<int>((result.weights.array() == floor).count());
+    result.raw.resize(beta.size() + 1);
+    result.raw.head(beta.size()) = data.X.transpose() * weights * residual;
+    result.raw(beta.size()) = (result.weights.array() *
+        (residual.array().square() / variance - 1.0)).sum() / n +
+        alpha * std::pow(1.0 + alpha, -1.5);
+    result.scaled = result.raw;
+    for (Eigen::Index k = 0; k < beta.size(); ++k)
+    {
+        const double scale{ data.X.col(k).norm() / std::sqrt(n) };
+        if (scale == 0.0) { result.reason = "zero-column"; return result; }
+        result.scaled(k) /= n * std::sqrt(variance) * scale;
+    }
+    const Eigen::MatrixXd weighted{ result.weights.cwiseSqrt().asDiagonal() * data.X };
+    const Eigen::JacobiSVD<Eigen::MatrixXd> svd(weighted);
+    result.singular_values = svd.singularValues();
+    result.rank = static_cast<int>(svd.rank());
+    result.condition = result.singular_values(0) / result.singular_values.tail(1)(0);
+    result.reason = "rank-deficient";
+    if (result.rank != data.X.cols()) return result;
+    result.reason = "invalid-denominator";
+    if (!std::isfinite(result.denominator) || result.denominator <= 0.0) return result;
+    result.reason = "invalid-model";
+    if (beta.size() != 2 || beta(1) <= 0.0) return result;
+    const double amplitude{std::exp(beta(0)) * std::pow(2.0 * std::acos(-1.0) / beta(1), 1.5)};
+    if (!std::isfinite(amplitude) || amplitude <= 0.0) return result;
+    result.valid = result.raw.allFinite() && result.scaled.allFinite();
+    result.reason = result.valid ? "valid" : "nonfinite-residual";
+    return result;
+}
+
+Eigen::VectorXd MDPDETestBeta(const RHBMMemberDataset & data,
+    const Eigen::VectorXd & weights, const std::string & backend)
+{
+    if (backend == "normal") return CalculateBetaByMDPDE(data.X, data.y, weights.asDiagonal());
+    const Eigen::MatrixXd X{ weights.cwiseSqrt().asDiagonal() * data.X };
+    const Eigen::VectorXd y{ weights.cwiseSqrt().asDiagonal() * data.y };
+    if (backend == "qr") return X.colPivHouseholderQr().solve(y);
+    if (backend == "svd") return X.jacobiSvd<Eigen::ComputeThinU | Eigen::ComputeThinV>().solve(y);
+    throw std::invalid_argument("Unknown experimental linear solver.");
+}
+
+double MDPDETestVariance(const RHBMMemberDataset & data, double alpha,
+    const Eigen::VectorXd & weights, const Eigen::VectorXd & beta)
+{
+    return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
+}
+} // namespace second_stage_test
+#endif
+
 RHBMMemberDataset rhbm_helper::BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
@@ -581,6 +654,10 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
             const auto squared_beta_change{ (result.beta_mdpde - beta_in_previous_iter).squaredNorm() };
             result.diagnostics.squared_beta_change = squared_beta_change;
             result.diagnostics.relative_variance_change = variance_relative_change;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            second_stage_test::RecordMDPDEIteration(result.beta_mdpde, result.sigma_square,
+                squared_beta_change, variance_relative_change);
+#endif
             if (squared_beta_change < options.tolerance &&
                 variance_relative_change < options.tolerance)
             {

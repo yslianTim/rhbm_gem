@@ -129,6 +129,15 @@ RunUnrestrictedShapeRefits(
             context,
             operator_model_bundle)
     };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    FitState capture_state;
+    for (const auto & m : operator_offset_state)
+    {
+        LocalGaussianResult entry; entry.mdpde = GaussianModel3DWithUncertainty{m, {}};
+        capture_state.push_back(entry);
+    }
+    const auto capture_context{ second_stage_test::CaptureOperatorContext(context, capture_state, {}) };
+#endif
     std::vector<std::optional<LocalGaussianResult>> result(
         context.atom_list.size());
     int refit_thread_size{ options.thread_size };
@@ -142,6 +151,9 @@ RunUnrestrictedShapeRefits(
 #endif
     for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        second_stage_test::ScopedSolverCaptureMember capture_member(capture_context, {atom_index}, "unrestricted-shape");
+#endif
         try
         {
             auto candidate{
@@ -176,10 +188,17 @@ IterationProposalResult BuildIterationProposal(
         BuildSecondStageModelSnapshot(context, previous_state)
     };
     const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto capture_context{ second_stage_test::CaptureOperatorContext(context, previous_state, cluster_key_list) };
+#endif
     std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        second_stage_test::ScopedSolverCaptureMember capture_member(capture_context,
+            cluster_key_list.at(cluster_position), "joint-offset");
+#endif
         try
         {
             joint_offset_result_list.at(cluster_position) = EstimateJointOffsets(
@@ -340,6 +359,9 @@ IterationProposalResult BuildIterationProposal(
     const int refit_thread_size{ parallel_refits ? 1 : options.thread_size };
     const auto run_refit = [&](std::size_t atom_index)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        second_stage_test::ScopedSolverCaptureMember capture_member(capture_context, {atom_index}, "shape");
+#endif
         try
         {
             refit_result_list.at(atom_index) =

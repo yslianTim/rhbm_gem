@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "source_commit": "d169e0706c32f4d3636ac5261417392204c45983",
+  "capture_provenance": "build/mdpde-experiment/direct/provenance.json",
+  "cases": [
+    {
+      "file": "offset-irls-maximum-iterations.txt",
+      "sha256": "e462dfe470eb632b30b43751dc9b4f22df5fe92373b094026bb4850419ef8570",
+      "phase": "proposal",
+      "attempt": 2,
+      "role": "joint-offset",
+      "identities": [
+        {
+          "serial_id": 151,
+          "chain_id": "A",
+          "sequence_id": 18,
+          "component_id": "LEU",
+          "atom_id": "C",
+          "alternate_indicator": ".",
+          "position": [
+            3.098,
+            -13.063,
+            -0.857
+          ]
+        },
+        {
+          "serial_id": 152,
+          "chain_id": "A",
+          "sequence_id": 18,
+          "component_id": "LEU",
+          "atom_id": "O",
+          "alternate_indicator": ".",
+          "position": [
+            3.476,
+            -14.236,
+            -0.93
+          ]
+        },
+        {
+          "serial_id": 157,
+          "chain_id": "A",
+          "sequence_id": 19,
+          "component_id": "GLY",
+          "atom_id": "N",
+          "alternate_indicator": ".",
+          "position": [
+            3.931,
+            -12.049,
+            -0.737
+          ]
+        },
+        {
+          "serial_id": 158,
+          "chain_id": "A",
+          "sequence_id": 19,
+          "component_id": "GLY",
+          "atom_id": "CA",
+          "alternate_indicator": ".",
+          "position": [
+            5.369,
+            -12.242,
+            -0.697
+          ]
+        },
+        {
+          "serial_id": 159,
+          "chain_id": "A",
+          "sequence_id": 19,
+          "component_id": "GLY",
+          "atom_id": "C",
+          "alternate_indicator": ".",
+          "position": [
+            5.892,
+            -12.449,
+            0.714
+          ]
+        },
+        {
+          "serial_id": 160,
+          "chain_id": "A",
+          "sequence_id": 19,
+          "component_id": "GLY",
+          "atom_id": "O",
+          "alternate_indicator": ".",
+          "position": [
+            5.199,
+            -12.167,
+            1.688
+          ]
+        },
+        {
+          "serial_id": 161,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "N",
+          "alternate_indicator": ".",
+          "position": [
+            7.122,
+            -12.944,
+            0.81
+          ]
+        },
+        {
+          "serial_id": 162,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "CA",
+          "alternate_indicator": ".",
+          "position": [
+            7.734,
+            -13.186,
+            2.116
+          ]
+        },
+        {
+          "serial_id": 163,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "C",
+          "alternate_indicator": ".",
+          "position": [
+            8.211,
+            -11.893,
+            2.794
+          ]
+        },
+        {
+          "serial_id": 164,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "O",
+          "alternate_indicator": ".",
+          "position": [
+            8.508,
+            -10.926,
+            2.095
+          ]
+        },
+        {
+          "serial_id": 165,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "CB",
+          "alternate_indicator": ".",
+          "position": [
+            8.927,
+            -14.086,
+            1.793
+          ]
+        },
+        {
+          "serial_id": 166,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "CG",
+          "alternate_indicator": ".",
+          "position": [
+            9.288,
+            -13.726,
+            0.388
+          ]
+        },
+        {
+          "serial_id": 167,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "CD",
+          "alternate_indicator": ".",
+          "position": [
+            7.982,
+            -13.327,
+            -0.294
+          ]
+        },
+        {
+          "serial_id": 168,
+          "chain_id": "A",
+          "sequence_id": 20,
+          "component_id": "PRO",
+          "atom_id": "OXT",
+          "alternate_indicator": ".",
+          "position": [
+            8.28,
+            -11.866,
+            4.016
+          ]
+        }
+      ],
+      "context_sha256": "b83fe0687dc5b3ca1bd792f283e978b53ec0232e6a6c7947cbcab34b60d8cee5",
+      "diagnostics": null
+    },
+    {
+      "file": "shape-maximum-iterations-final-32-33-99.txt",
+      "sha256": "6b7c8fe50b6732af22830f3b08799050967af347e41fe99355130a55b791eb25",
+      "phase": "final",
+      "attempt": 32,
+      "role": "shape",
+      "identities": [
+        {
+          "serial_id": 100,
+          "chain_id": "A",
+          "sequence_id": 11,
+          "component_id": "TRP",
+          "atom_id": "NE1",
+          "alternate_indicator": ".",
+          "position": [
+            -3.313,
+            -2.013,
+            -6.681
+          ]
+        }
+      ],
+      "context_sha256": "d8bc49e3d9346e7ea35106fecbba0e722c08e023989efa253d24870b3c6660c0",
+      "diagnostics": {
+        "iterations": 100,
+        "squared_beta_change": 2.762938739596821e-15,
+        "relative_variance_change": 1.424422498137467e-05
+      }
+    },
+    {
+      "file": "shape-maximum-iterations-recovery-current-32-32-99.txt",
+      "sha256": "d5e5fe8cfbcce4367dd0cb11d1f2950d3fc7f8c68fc76d0591ad680b7db5646f",
+      "phase": "recovery-current",
+      "attempt": 32,
+      "role": "shape",
+      "identities": [
+        {
+          "serial_id": 100,
+          "chain_id": "A",
+          "sequence_id": 11,
+          "component_id": "TRP",
+          "atom_id": "NE1",
+          "alternate_indicator": ".",
+          "position": [
+            -3.313,
+            -2.013,
+            -6.681
+          ]
+        }
+      ],
+      "context_sha256": "15bbb9c42d42613c0a7b22642bd961eaf413969c52a4489ec6eb71b8badaf384",
+      "diagnostics": {
+        "iterations": 100,
+        "squared_beta_change": 2.7629831439389016e-15,
+        "relative_variance_change": 1.4244322592292491e-05
+      }
+    },
+    {
+      "file": "shape-maximum-iterations.txt",
+      "sha256": "60a3f6ec486b5f0ce16caaf817e90076d69643b900db0e7c4c9ff9dacd8d4e45",
+      "phase": "proposal",
+      "attempt": 1,
+      "role": "shape",
+      "identities": [
+        {
+          "serial_id": 107,
+          "chain_id": "A",
+          "sequence_id": 12,
+          "component_id": "ASN",
+          "atom_id": "CA",
+          "alternate_indicator": ".",
+          "position": [
+            1.365,
+            -3.02,
+            -0.122
+          ]
+        }
+      ],
+      "context_sha256": "68f3369e19e245d93b653a2eb228235975a3b2233c5d61fd28e47a35aa38ef15",
+      "diagnostics": {
+        "iterations": 100,
+        "squared_beta_change": 4.94471057373364e-09,
+        "relative_variance_change": 1.665642836396374e-05
+      }
+    }
+  ]
+}

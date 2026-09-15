@@ -503,6 +503,9 @@ static IterationResult RunIteration(
     SecondStageObservationSession * observation)
 {
     iteration_state.attempts = attempt_number;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::ScopedSolverCapturePhase capture_phase("proposal", attempt_number);
+#endif
     if (observation) observation->iteration = IterationDiagnostics{};
     const auto prior_revision{ iteration_state.objective_domain_revision };
     // Prepare this attempt's frozen background, objectives, and active blocks.
@@ -811,6 +814,9 @@ static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
 static void CertifyFinalState(const SecondStageContext & context, const FitOptions & options,
     IterationState & state, const FitState & final_state, SecondStageObservationSession * observation)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::ScopedSolverCapturePhase capture_phase("final", state.attempts);
+#endif
     try
     {
         const auto keys{ BuildGraphClusterKeyList(state.graph_partition) };

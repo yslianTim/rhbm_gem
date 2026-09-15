@@ -1,4 +1,7 @@
 #include <rhbm_gem/core/MapSampler.hpp>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/ForwardModelExperiment.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -168,3 +171,11 @@ void RunPotentialSamplingWorkflow(
 }
 
 } // namespace rhbm_gem::core
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+LocalPotentialSampleList second_stage_test::SampleExperimentPoints(
+    const rhbm_gem::MapObject & map, const SamplingPointList & points)
+{
+    return rhbm_gem::core::BuildLocalPotentialSampleList(map, points);
+}
+#endif

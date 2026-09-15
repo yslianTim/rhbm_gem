@@ -133,6 +133,9 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     RHBM_TEST_WORK(Solver);
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     auto dataset{ BuildDataset(sample_response_list, offset_model) };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CaptureShapeResponse(sample_response_list, offset_model);
+#endif
     const auto result{
         rhbm_helper::EstimateBetaMDPDE(
             alpha_r,

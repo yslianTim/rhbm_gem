@@ -175,6 +175,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/LinearizationService_test.cpp
     utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
+    utils/hrl/MDPDEExperiment_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -217,6 +218,11 @@ target_include_directories(rhbm_tests PRIVATE
 rhbm_gem_apply_observation_definitions(rhbm_tests)
 
 add_dependencies(tests_all rhbm_tests)
+
+add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/ForwardModelExperiment.cpp)
+target_link_libraries(mdpde_experiment PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(mdpde_experiment PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
+target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core

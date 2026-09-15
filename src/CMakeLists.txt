@@ -183,7 +183,8 @@ endif()
 
 if(BUILD_TESTING)
     target_sources(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/SecondStageNumericalProbe.cpp"
-        "${PROJECT_SOURCE_DIR}/tests/support/SolverFailureCapture.cpp")
+        "${PROJECT_SOURCE_DIR}/tests/support/SolverFailureCapture.cpp"
+        "${PROJECT_SOURCE_DIR}/tests/support/MDPDEExperiment.cpp")
     target_include_directories(rhbm_gem PRIVATE "${PROJECT_SOURCE_DIR}/tests")
     target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 endif()
