@@ -11,8 +11,8 @@ All executable runtime targets from a build tree (CLI and C++ test executables) 
 
 This project requires CMake 3.24 or newer and uses C++20 with GNU extensions enabled by default. A single dependency-provider switch controls third-party resolution:
 
-- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: strictly require system packages for Eigen3 `>=5.0.0,<6.0.0`, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled. UMAP is the only dependency group with the system-preferred fallback described below.
-- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3 5.0.0, CLI11, SQLite3, and Boost; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
+- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: strictly require system packages for Eigen3 `>=5.0.0,<6.0.0`, CLI11, SQLite3, and Boost >=1.90; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled. UMAP is the only dependency group with the system-preferred fallback described below.
+- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3 5.0.0, CLI11, SQLite3, and Boost >=1.90; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
 
 The stable `umap_embedding` command is enabled by default. Set `RHBM_GEM_ENABLE_UMAP=OFF` to omit the command and avoid resolving its dependencies. When enabled, the build attaches the header-only `libscran::umappp` target to the internal build interface of `rhbm_gem`:
 

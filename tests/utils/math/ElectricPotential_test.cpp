@@ -141,6 +141,27 @@ TEST(ElectricPotentialTest, DefaultConstructorSetsExpectedState)
     EXPECT_NEAR(expected, computed, 1e-12);
 }
 
+TEST(ElectricPotentialTest, KernelSettingsDescribeTheSelectedChargeTerm)
+{
+    ElectricPotential potential;
+    potential.SetBlurringWidth(1.0e-6);
+    const auto single{ potential.GetKernelSettings() };
+    EXPECT_EQ(single.charge_term_cutoff, 2.5);
+    EXPECT_EQ(single.near_zero_distance, 1.0e-5);
+    EXPECT_FALSE(single.minimum_charge_width);
+    EXPECT_EQ(single.effective_charge_width, 1.0e-6);
+    potential.SetModelChoice(1);
+    const auto five{ potential.GetKernelSettings() };
+    EXPECT_EQ(five.charge_term_cutoff, 3.0);
+    EXPECT_EQ(five.minimum_charge_width, 1.0e-5);
+    EXPECT_EQ(five.effective_charge_width, 1.0e-5);
+    potential.SetBlurringWidth(0.0);
+    EXPECT_FALSE(potential.GetKernelSettings().charge_term_cutoff);
+    potential.SetModelChoice(2);
+    EXPECT_FALSE(potential.GetKernelSettings().charge_term_cutoff);
+    EXPECT_FALSE(potential.GetKernelSettings().effective_charge_width);
+}
+
 TEST(ElectricPotentialTest, SingleGaussianCarbon)
 {
     ElectricPotential potential;

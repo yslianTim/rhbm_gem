@@ -1,10 +1,29 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+
+enum class ChargeTable { Buried, Helix, Sheet, Amber95 };
+
+enum class ChargeLookupStatus
+{
+    Found,
+    UnsupportedResidue,
+    UnsupportedStructure,
+    UnsupportedSpot,
+    TableDataMismatch
+};
+
+struct ChargeLookupResult
+{
+    std::optional<double> charge{};
+    std::optional<ChargeTable> table{};
+    ChargeLookupStatus status{ ChargeLookupStatus::Found };
+};
 
 class ComponentHelper
 {
@@ -22,6 +41,8 @@ public:
 
     static size_t GetAtomCount(Residue residue);
     static size_t GetBondCount(Residue residue);
+    static ChargeLookupResult LookupPartialCharge(
+        Residue residue, Spot spot, Structure structure, bool use_amber_table=false);
     static double GetPartialCharge(
         Residue residue, Spot spot, Structure structure,
         bool use_amber_table=false, bool verbose=false

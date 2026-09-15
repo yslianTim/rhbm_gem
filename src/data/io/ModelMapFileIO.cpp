@@ -215,6 +215,8 @@ void WriteMap(const std::filesystem::path & filename, const MapObject & map_obje
         const auto & codec{ ResolveCodec(GetMapCodecs(), filename, true) };
         auto outfile{ OpenBinaryFile<std::ofstream>(filename, std::ios::binary | std::ios::trunc) };
         codec.write(outfile, map_object);
+        outfile.close();
+        if (!outfile) throw std::runtime_error("Failed to flush map output.");
     }
     catch (const std::exception & ex)
     {

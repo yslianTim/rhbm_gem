@@ -74,6 +74,7 @@ endfunction()
 
 set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
     core/command/CommandScenarios_test.cpp
+    core/command/MapSimulation_test.cpp
 )
 
 if(RHBM_GEM_ENABLE_UMAP)

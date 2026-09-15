@@ -313,10 +313,10 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     if(POLICY CMP0167)
         cmake_policy(PUSH)
         cmake_policy(SET CMP0167 OLD)
-        find_package(Boost REQUIRED)
+        find_package(Boost 1.90 REQUIRED)
         cmake_policy(POP)
     else()
-        find_package(Boost REQUIRED)
+        find_package(Boost 1.90 REQUIRED)
     endif()
     if(NOT TARGET Boost::headers
        AND NOT TARGET Boost::boost

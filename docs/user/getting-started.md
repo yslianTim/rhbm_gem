@@ -22,7 +22,7 @@ RHBM-GEM requires CMake 3.24 or newer and uses C++20 with GNU extensions enabled
 
 Some dependencies are provider-dependent or optional:
 
-- Core C++ dependencies (`Eigen3` `>=5.0.0,<6.0.0`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`; FETCH mode pins Eigen3 5.0.0.
+- Core C++ dependencies (`Eigen3` `>=5.0.0,<6.0.0`, `SQLite3`, `CLI11`, and Boost >=1.90) are selected by `RHBM_GEM_DEP_PROVIDER`; FETCH mode pins Eigen3 5.0.0.
 - `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
 - `GTest` is required only when `BUILD_TESTING=ON`.
 - The `umap_embedding` command is enabled by default. The `FETCH` provider supplies its pinned packages. The `SYSTEM` provider prefers installed umappp 3.3.2 packages and fetches only missing UMAP components at fixed versions; system Eigen3 remains required. Set `RHBM_GEM_ENABLE_UMAP=OFF` to omit the command and avoid all UMAP lookup and download activity. See the [`umap_embedding` command guide](/docs/user/command/umap_embedding.md).
@@ -96,6 +96,8 @@ sudo apt install -y build-essential cmake pkg-config python3
 ```bash
 sudo apt install -y libsqlite3-dev libeigen3-dev libboost-dev
 ```
+
+SYSTEM builds require Boost >=1.90; use a qualifying package or the FETCH provider when your distribution ships an older version.
 
 If you plan to use Python bindings, also install:
 

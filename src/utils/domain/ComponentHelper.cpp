@@ -3,7 +3,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
-#include <mutex>
+#include <algorithm>
 
 const std::unordered_map<Residue, std::vector<Spot>> ComponentHelper::m_spot_map
 {
@@ -423,63 +423,69 @@ size_t ComponentHelper::GetBondCount(Residue residue)
     return m_link_map.at(residue).size();
 }
 
+ChargeLookupResult ComponentHelper::LookupPartialCharge(
+    Residue residue, Spot spot, Structure structure, bool use_amber_table)
+{
+    ChargeLookupResult result;
+    const std::unordered_map<Residue, std::vector<double>> * charge_map{ nullptr };
+    if (use_amber_table)
+    {
+        result.table = ChargeTable::Amber95;
+        charge_map = &m_amber95_partial_charge_map;
+    }
+    else if (structure == Structure::FREE)
+    {
+        result.table = ChargeTable::Buried;
+        charge_map = &m_buried_partial_charge_map;
+    }
+    else if (structure == Structure::SHEET)
+    {
+        result.table = ChargeTable::Sheet;
+        charge_map = &m_sheet_partial_charge_map;
+    }
+    else if (structure >= Structure::HELX_P && structure < Structure::TURN_P)
+    {
+        result.table = ChargeTable::Helix;
+        charge_map = &m_helix_partial_charge_map;
+    }
+    else
+    {
+        result.status = ChargeLookupStatus::UnsupportedStructure;
+        return result;
+    }
+
+    const auto spots{ m_spot_map.find(residue) };
+    const auto charges{ charge_map->find(residue) };
+    if (spots == m_spot_map.end() || charges == charge_map->end())
+    {
+        result.status = ChargeLookupStatus::UnsupportedResidue;
+        return result;
+    }
+    if (spots->second.size() != charges->second.size())
+    {
+        result.status = ChargeLookupStatus::TableDataMismatch;
+        return result;
+    }
+    const auto found{ std::find(spots->second.begin(), spots->second.end(), spot) };
+    if (found == spots->second.end())
+    {
+        result.status = ChargeLookupStatus::UnsupportedSpot;
+        return result;
+    }
+    result.charge = charges->second.at(static_cast<size_t>(found - spots->second.begin()));
+    return result;
+}
+
 double ComponentHelper::GetPartialCharge(
     Residue residue, Spot spot, Structure structure,
     bool use_amber_table, bool verbose)
 {
-    // one cache bucket per residue, lazily initialised on first use
-    static std::unordered_map<Residue, std::unordered_map<Spot, double>> cache;
-    static std::mutex cache_mutex;
-
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    auto & residue_cache{ cache[residue] };
-    try
+    const auto result{ LookupPartialCharge(residue, spot, structure, use_amber_table) };
+    if (!result.charge && verbose)
     {
-        if (residue_cache.empty()) // first request for this residue
-        {
-            auto atom_size{ m_spot_map.at(residue).size() };
-            const auto & spot_list{ m_spot_map.at(residue) };
-            const auto & charge_list
-            {
-                (use_amber_table == true) ?
-                GetPartialChargeListAmber(residue) :
-                GetPartialChargeList(residue, structure)
-            };
-
-            // the four vectors should guaranteed aligned
-            if (atom_size != charge_list.size())
-            {
-                throw std::range_error(
-                    "ComponentHelper::GetPartialCharge ‑ the four vectors are not aligned");
-            }
-
-            residue_cache.reserve(atom_size);
-            for (std::size_t i = 0; i < atom_size; i++)
-            {
-                residue_cache.emplace(spot_list[i], charge_list[i]);
-            }
-        }
+        Logger::Log(LogLevel::Warning, "ComponentHelper::GetPartialCharge - No partial charge data for this atom.");
     }
-    catch(const std::exception & except)
-    {
-        if (verbose == true)
-        {
-            Logger::Log(LogLevel::Warning,
-                "ComponentHelper::GetPartialCharge ‑ " + std::string(except.what()));
-        }
-        return 0.0;
-    }
-    
-    if (residue_cache.find(spot) != residue_cache.end())
-    {
-        return residue_cache.at(spot);
-    }
-
-    if (verbose == true)
-    {
-        Logger::Log(LogLevel::Warning, "No partial charge data for this atom.");
-    }
-    return 0.0;
+    return result.charge.value_or(0.0);
 }
 
 const std::vector<double> & ComponentHelper::GetPartialChargeList(

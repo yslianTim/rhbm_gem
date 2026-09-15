@@ -8,3 +8,5 @@ Use this directory for command-specific developer notes.
 - [`docs/user/command/umap_embedding.md`](/docs/user/command/umap_embedding.md) documents the optional stable UMAP command, its SQLite-backed feature contract, and its shared CLI/C++/Python surface.
 - The scaffold at [`resources/tools/developer/command_scaffold.py`](/resources/tools/developer/command_scaffold.py) writes new command-note stubs into this directory.
 - Keep runnable examples under [`resources/README.md`](/resources/README.md); this directory is for narrative developer documentation only.
+
+- [`map_simulation.md`](/docs/developer/commands/map_simulation.md) describes deterministic charge lookup, map generation, and the automatic simulation JSON record.

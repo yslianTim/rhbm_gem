@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <array>
+#include <optional>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
@@ -17,6 +18,10 @@ class ElectricPotential
 
     static constexpr double F_0{ 47.87764193 };
     static constexpr double F_1{ 14.39964393 };
+    static constexpr double kNearZeroDistance{ 1.0e-5 };
+    static constexpr double kSingleChargeCutoff{ 2.5 };
+    static constexpr double kFiveChargeCutoff{ 3.0 };
+    static constexpr double kMinimumChargeWidth{ 1.0e-5 };
     static const std::unordered_map<Element, std::array<double, 5>> a_neutral_par_map;
     static const std::unordered_map<Element, std::array<double, 5>> b_neutral_par_map;
     static const std::unordered_map<Element, std::array<double, 5>> a_positive_par_map;
@@ -28,11 +33,20 @@ class ElectricPotential
     double m_blurring_width;
 
 public:
+    struct KernelSettings
+    {
+        std::optional<double> charge_term_cutoff{};
+        std::optional<double> near_zero_distance{};
+        std::optional<double> minimum_charge_width{};
+        std::optional<double> effective_charge_width{};
+    };
+
     ElectricPotential();
     ~ElectricPotential() = default;
     
     void SetModelChoice(int value);
     void SetBlurringWidth(double value);
+    KernelSettings GetKernelSettings() const;
     double GetPotentialValue(Element element, double distance, double charge, double amplitude=0.0, double width=0.0) const;
     const std::array<double, 5> & GetModelParameterAList(Element element, int delta_z) const;
     const std::array<double, 5> & GetModelParameterBList(Element element, int delta_z) const;

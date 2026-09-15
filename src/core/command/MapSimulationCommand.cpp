@@ -1,292 +1,22 @@
 #include "detail/CommandRunner.hpp"
+#include "detail/MapSimulation.hpp"
+#include "detail/SimulationManifest.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
-#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/ElectricPotential.hpp>
-#include <rhbm_gem/utils/math/ArrayHelper.hpp>
-
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
 #include <memory>
-#include <limits>
+#include <set>
+#include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace rhbm_gem::core {
 
 namespace {
 
-struct SimulationAtomPreparationResult
-{
-    std::vector<AtomObject *> atom_list;
-    std::unordered_map<int, double> atom_charge_map;
-    std::array<double, 3> range_min{
-        std::numeric_limits<double>::max(),
-        std::numeric_limits<double>::max(),
-        std::numeric_limits<double>::max() };
-    std::array<double, 3> range_max{
-        std::numeric_limits<double>::lowest(),
-        std::numeric_limits<double>::lowest(),
-        std::numeric_limits<double>::lowest() };
-    bool has_atom{ false };
-};
-
-void LogMapSummary(const MapObject & map_object)
-{
-    std::ostringstream oss;
-    oss << "MapObject Summary:\n";
-    oss << " o=====================================================o\n";
-    oss << " |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
-    oss << " o=====================================================o\n";
-    oss << " | Grid size    | ";
-    oss << std::setw(10) << map_object.GetGridSize().at(0) << " | "
-        << std::setw(10) << map_object.GetGridSize().at(1) << " | "
-        << std::setw(10) << map_object.GetGridSize().at(2) << " |\n";
-    oss << " | Grid Spacing | ";
-    oss << std::setw(10) << map_object.GetGridSpacing().at(0) << " | "
-        << std::setw(10) << map_object.GetGridSpacing().at(1) << " | "
-        << std::setw(10) << map_object.GetGridSpacing().at(2) << " |\n";
-    oss << " | Origin (A)   | ";
-    oss << std::setw(10) << map_object.GetOrigin().at(0) << " | "
-        << std::setw(10) << map_object.GetOrigin().at(1) << " | "
-        << std::setw(10) << map_object.GetOrigin().at(2) << " |\n";
-    oss << " | Map Length(A)| ";
-    oss << std::setw(10)
-        << static_cast<double>(map_object.GetGridSize().at(0)) * map_object.GetGridSpacing().at(0)
-        << " | "
-        << std::setw(10)
-        << static_cast<double>(map_object.GetGridSize().at(1)) * map_object.GetGridSpacing().at(1)
-        << " | "
-        << std::setw(10)
-        << static_cast<double>(map_object.GetGridSize().at(2)) * map_object.GetGridSpacing().at(2)
-        << " |\n";
-    oss << " |-----------------------------------------------------|\n";
-    oss << " | Map value min  | " << std::setw(34) << map_object.GetMapValueMin() << " |\n";
-    oss << " | Map value max  | " << std::setw(34) << map_object.GetMapValueMax() << " |\n";
-    oss << " | Map value mean | " << std::setw(34) << map_object.GetMapValueMean() << " |\n";
-    oss << " | Map value s.d. | " << std::setw(34) << map_object.GetMapValueSD() << " |\n";
-    oss << " o=====================================================o\n";
-    Logger::Log(LogLevel::Info, oss.str());
-}
-
-double CalculateAtomChargeForSimulation(
-    const AtomObject & atom,
-    PartialCharge partial_charge_choice)
-{
-    switch (partial_charge_choice)
-    {
-    case PartialCharge::NEUTRAL:
-        return 0.0;
-    case PartialCharge::PARTIAL:
-        return ComponentHelper::GetPartialCharge(
-            atom.GetResidue(),
-            atom.GetSpot(),
-            atom.GetStructure());
-    case PartialCharge::AMBER:
-        return ComponentHelper::GetPartialCharge(
-            atom.GetResidue(),
-            atom.GetSpot(),
-            atom.GetStructure(),
-            true);
-    default:
-        Logger::Log(LogLevel::Error,
-            "PrepareSimulationAtomList reached invalid partial-charge choice: "
-            + std::to_string(static_cast<int>(partial_charge_choice)));
-        return 0.0;
-    }
-}
-
-SimulationAtomPreparationResult PrepareSimulationAtomList(
-    ModelObject & model_object,
-    const MapSimulationRequest & request)
-{
-    SimulationAtomPreparationResult result;
-    result.atom_list.reserve(model_object.GetSelectedAtomCount());
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        result.atom_list.emplace_back(atom);
-        result.atom_charge_map.emplace(
-            atom->GetSerialID(),
-            CalculateAtomChargeForSimulation(*atom, request.partial_charge_choice));
-
-        const auto & atom_position{ atom->GetPositionRef() };
-        result.range_min[0] = std::min(result.range_min[0], atom_position[0]);
-        result.range_min[1] = std::min(result.range_min[1], atom_position[1]);
-        result.range_min[2] = std::min(result.range_min[2], atom_position[2]);
-        result.range_max[0] = std::max(result.range_max[0], atom_position[0]);
-        result.range_max[1] = std::max(result.range_max[1], atom_position[1]);
-        result.range_max[2] = std::max(result.range_max[2], atom_position[2]);
-    }
-    result.has_atom = !result.atom_list.empty();
-    if (result.has_atom)
-    {
-        for (size_t i = 0; i < result.range_min.size(); ++i)
-        {
-            result.range_min[i] -= request.cutoff_distance;
-            result.range_max[i] += request.cutoff_distance;
-        }
-    }
-
-    Logger::Log(LogLevel::Info,
-        "Number of selected atoms to be simulated = "
-        + std::to_string(result.atom_list.size()) +" / "
-        + std::to_string(model_object.GetNumberOfAtom()) + " atoms.");
-    return result;
-}
-
-std::unique_ptr<MapObject> CreateMapObject(
-    const MapSimulationRequest & request,
-    const SimulationAtomPreparationResult & result)
-{
-    ScopeTimer timer("MapSimulationCommand::CreateMapObject");
-    std::array<double, 3> grid_spacing{
-        request.grid_spacing,
-        request.grid_spacing,
-        request.grid_spacing
-    };
-    std::array<double, 3> origin{ 0.0, 0.0, 0.0 };
-    std::array<int, 3> grid_size{ 1, 1, 1 };
-    if (result.has_atom)
-    {
-        origin = {
-            std::floor(result.range_min[0] / grid_spacing[0]) * grid_spacing[0],
-            std::floor(result.range_min[1] / grid_spacing[1]) * grid_spacing[1],
-            std::floor(result.range_min[2] / grid_spacing[2]) * grid_spacing[2]
-        };
-        grid_size = {
-            static_cast<int>(std::ceil((result.range_max[0] - result.range_min[0]) / grid_spacing[0])),
-            static_cast<int>(std::ceil((result.range_max[1] - result.range_min[1]) / grid_spacing[1])),
-            static_cast<int>(std::ceil((result.range_max[2] - result.range_min[2]) / grid_spacing[2]))
-        };
-    }
-    auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
-    map_object->ClearMapValueArray();
-
-    return map_object;
-}
-
-void CollectGridIndicesInRange(
-    const MapObject & map_object,
-    const std::array<double, 3> & center,
-    double radius,
-    std::vector<size_t> & grid_index_list)
-{
-    grid_index_list.clear();
-    if (radius < 0.0) return;
-
-    const auto grid_size{ map_object.GetGridSize() };
-    const auto grid_spacing{ map_object.GetGridSpacing() };
-    const auto origin{ map_object.GetOrigin() };
-    std::array<int, 3> lower_bound{};
-    std::array<int, 3> upper_bound{};
-    for (size_t axis = 0; axis < 3; axis++)
-    {
-        const auto lower_position{ (center[axis] - radius - origin[axis]) / grid_spacing[axis] };
-        const auto upper_position{ (center[axis] + radius - origin[axis]) / grid_spacing[axis] };
-        lower_bound[axis] = std::max(0, static_cast<int>(std::floor(lower_position)));
-        upper_bound[axis] = std::min(grid_size[axis] - 1, static_cast<int>(std::floor(upper_position)));
-        if (lower_bound[axis] > upper_bound[axis]) return;
-    }
-
-    const auto radius_square{ radius * radius };
-    for (int z = lower_bound[2]; z <= upper_bound[2]; z++)
-    {
-        for (int y = lower_bound[1]; y <= upper_bound[1]; y++)
-        {
-            for (int x = lower_bound[0]; x <= upper_bound[0]; x++)
-            {
-                const std::array<double, 3> grid_position{
-                    origin[0] + static_cast<double>(x) * grid_spacing[0],
-                    origin[1] + static_cast<double>(y) * grid_spacing[1],
-                    origin[2] + static_cast<double>(z) * grid_spacing[2]
-                };
-                const auto dx{ grid_position[0] - center[0] };
-                const auto dy{ grid_position[1] - center[1] };
-                const auto dz{ grid_position[2] - center[2] };
-                const auto distance_square{ dx * dx + dy * dy + dz * dz };
-                if (distance_square > radius_square) continue;
-
-                grid_index_list.emplace_back(static_cast<size_t>(
-                    x + grid_size[0] * (y + grid_size[1] * z)));
-            }
-        }
-    }
-}
-
-void PopulateMapValueArray(
-    MapObject * map_object,
-    const SimulationAtomPreparationResult & atom_list,
-    const MapSimulationRequest & request,
-    double blurring_width,
-    int thread_size)
-{
-    ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
-    Logger::Log(LogLevel::Info,
-        " /- Start map value array production with blurring width = "+
-        string_helper::ToStringWithPrecision<double>(blurring_width, 2)
-    );
-
-    auto electric_potential{ std::make_unique<ElectricPotential>() };
-    electric_potential->SetBlurringWidth(blurring_width);
-    electric_potential->SetModelChoice(static_cast<int>(request.potential_model_choice));
-
-    auto voxel_size{ map_object->GetMapValueArraySize() };
-    auto map_value_array{ std::make_unique<double[]>(voxel_size) };
-    std::fill_n(map_value_array.get(), voxel_size, 0.0);
-
-    auto atom_size{ atom_list.atom_list.size() };
-    size_t atom_count{ 0 };
-    std::vector<size_t> in_range_grid_index_list;
-
-    Logger::Log(LogLevel::Info,
-        " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms.");
-    
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(thread_size) private(in_range_grid_index_list)
-#endif
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        auto atom{ atom_list.atom_list[i] };
-        auto charge{ atom_list.atom_charge_map.at(atom->GetSerialID()) };
-        auto element{ atom->GetElement() };
-        auto atom_position{ atom->GetPosition() };
-        CollectGridIndicesInRange(
-            *map_object,
-            atom_position,
-            request.cutoff_distance,
-            in_range_grid_index_list);
-
-        for (const auto grid_index : in_range_grid_index_list)
-        {
-            auto distance{
-                array_helper::ComputeNorm(atom_position, map_object->GetGridPosition(grid_index))
-            };
-            map_value_array[grid_index] +=
-                electric_potential->GetPotentialValue(element, distance, charge);
-        }
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
-    }
-
-    map_object->ClearMapValueArray();
-    map_object->SetMapValueArray(std::move(map_value_array));
-    LogMapSummary(*map_object);
-}
 void NormalizeAndValidateRequest(
     CommandRunner<MapSimulationRequest> & runner,
     MapSimulationRequest & request)
@@ -315,11 +45,14 @@ void NormalizeAndValidateRequest(
 
 bool ExecutePreparedRequest(const MapSimulationRequest & request)
 {
+    const auto model_sha256{ simulation::FileSha256(request.model_file_path) };
     std::unique_ptr<ModelObject> model_object;
     try
     {
         model_object = ReadModel(request.model_file_path);
         model_object->SetKeyTag("model");
+        if (simulation::FileSha256(request.model_file_path) != model_sha256)
+            throw std::runtime_error("Model file changed while preparing simulation input.");
     }
     catch(const std::exception & e)
     {
@@ -333,22 +66,32 @@ bool ExecutePreparedRequest(const MapSimulationRequest & request)
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->ApplyBackboneSelection(request.only_backbone);
     //model_object->ApplyComponentIDSelection("HOH", true);
-    auto atom_list{ PrepareSimulationAtomList(*model_object, request) };
+    const auto atom_list{ simulation::PrepareSimulationAtomList(*model_object, request) };
+    const simulation::SimulationSource source{ model_object->GetPdbID(), model_sha256 };
     Logger::Log(LogLevel::Info,
         "Total number of blurring width sets to be simulated: "
         + std::to_string(request.blurring_width_list.size()));
 
-    auto map_object{ CreateMapObject(request, atom_list) };
-    for (auto & blurring_width : request.blurring_width_list)
+    std::vector<std::filesystem::path> outputs;
+    std::set<std::filesystem::path> unique_outputs;
+    for (const auto blurring_width : request.blurring_width_list)
     {
         auto map_key_tag{
             model_object->GetPdbID() + "_bw" +
             string_helper::ToStringWithPrecision<double>(blurring_width, 2)
         };
-        PopulateMapValueArray(
-            map_object.get(), atom_list, request, blurring_width, request.job_count);
-        auto output{ request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map") };
-        WriteMap(output, *map_object);
+        const auto output{ request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map") };
+        if (!unique_outputs.insert(output).second)
+            throw std::runtime_error("Blurring widths produce the same simulation output filename: " + output.string());
+        outputs.push_back(output);
+    }
+    auto map_object{ simulation::CreateMapObject(request, atom_list) };
+    for (size_t i = 0; i < request.blurring_width_list.size(); ++i)
+    {
+        const auto blurring_width{ request.blurring_width_list[i] };
+        const auto actual_job_count{ simulation::PopulateMapValueArray(*map_object, atom_list, request, blurring_width) };
+        simulation::WriteSimulationArtifacts(outputs[i], *map_object, atom_list, request,
+            blurring_width, actual_job_count, source);
     }
     return true;
 }
@@ -368,11 +111,19 @@ namespace command_internal {
 
 CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request)
 {
-    return CommandRunner<MapSimulationRequest>{}.Run(
-        request,
-        NormalizeAndValidateRequest,
-        ValidatePreparedRequest,
-        ExecutePreparedRequest);
+    try
+    {
+        return CommandRunner<MapSimulationRequest>{}.Run(
+            request,
+            NormalizeAndValidateRequest,
+            ValidatePreparedRequest,
+            ExecutePreparedRequest);
+    }
+    catch (const std::exception & error)
+    {
+        Logger::Log(LogLevel::Error, "Map simulation failed: " + std::string(error.what()));
+        return { false, { { "request", error.what() } } };
+    }
 }
 
 } // namespace command_internal

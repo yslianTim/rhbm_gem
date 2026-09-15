@@ -7,6 +7,8 @@ set(RHBM_GEM_COMMAND_SOURCES
     core/command/RHBMTestCommand.cpp
     core/command/detail/RHBMTestPlotting.cpp
     core/command/MapSimulationCommand.cpp
+    core/command/detail/MapSimulation.cpp
+    core/command/detail/SimulationManifest.cpp
     core/command/PotentialAnalysisCommand.cpp
     core/command/PotentialDisplayCommand.cpp
     core/command/ResultDumpCommand.cpp
@@ -128,6 +130,7 @@ target_include_directories(rhbm_gem PRIVATE
 
 target_link_libraries(rhbm_gem PUBLIC rhbm_gem_dependencies)
 target_link_libraries(rhbm_gem PRIVATE "$<BUILD_INTERFACE:CompilerFlags>")
+include(SimulationBuildInfo)
 if(RHBM_GEM_ENABLE_UMAP)
     target_link_libraries(rhbm_gem PRIVATE
         "$<BUILD_INTERFACE:libscran::umappp>"

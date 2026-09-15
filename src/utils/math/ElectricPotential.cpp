@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338327950288
@@ -130,6 +131,20 @@ void ElectricPotential::SetModelChoice(int value)
 void ElectricPotential::SetBlurringWidth(double value)
 {
     m_blurring_width = value;
+}
+
+ElectricPotential::KernelSettings ElectricPotential::GetKernelSettings() const
+{
+    if (m_model_choice == ModelChoice::SINGLE_GAUS)
+    {
+        return { kSingleChargeCutoff, kNearZeroDistance, std::nullopt, m_blurring_width };
+    }
+    if (m_model_choice == ModelChoice::FIVE_GAUS_CHARGE && m_blurring_width != 0.0)
+    {
+        return { kFiveChargeCutoff, kNearZeroDistance, kMinimumChargeWidth,
+            std::max(m_blurring_width, kMinimumChargeWidth) };
+    }
+    return {};
 }
 
 double ElectricPotential::GetPotentialValue(
@@ -267,11 +282,11 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
         offset = 0.3; // TEST
     }*/
     auto charge_term{ 0.0 };
-    if (distance < 1.0e-5)
+    if (distance < kNearZeroDistance)
     {
         charge_term = offset * std::sqrt(2.0/M_PI) / m_blurring_width;
     }
-    else if (distance > 2.5)
+    else if (distance > kSingleChargeCutoff)
     {
         charge_term = 0.0; // TEST : Skip long distance contribution
     }
@@ -334,8 +349,8 @@ double ElectricPotential::CalculateFiveGausChargeDeltaTerm(double distance, doub
 {
     auto blurring_width{ m_blurring_width };
     if (blurring_width == 0.00) return F_1 * charge/distance;
-    if (blurring_width <= 1.0e-5) blurring_width = 1.0e-5;
-    if (distance > 3.0) return 0.0;
-    if (distance < 1.0e-5) return F_1 * charge * std::sqrt(2.0/M_PI) / blurring_width;
+    if (blurring_width <= kMinimumChargeWidth) blurring_width = kMinimumChargeWidth;
+    if (distance > kFiveChargeCutoff) return 0.0;
+    if (distance < kNearZeroDistance) return F_1 * charge * std::sqrt(2.0/M_PI) / blurring_width;
     return F_1 * charge/distance * std::erf(distance/blurring_width/std::sqrt(2.0));
 }
