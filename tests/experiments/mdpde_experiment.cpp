@@ -1,5 +1,6 @@
 #include "support/MDPDEExperiment.hpp"
 #include "support/ForwardModelExperiment.hpp"
+#include "support/ObservationMatchedExperiment.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -13,6 +14,11 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 6 && std::string(argv[1]) == "matched")
+        {
+            second_stage_test::matched::Run(argv[2], argv[3], argv[4], argv[5]);
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "forward")
         {
             second_stage_test::RunForwardExperiment(argv[2], argv[3], argv[4], argv[5]);
@@ -58,7 +64,7 @@ int main(int argc, char ** argv)
             return 0;
         }
         if (argc != 4 || std::string(argv[1]) != "solve")
-            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward MANIFEST MAP CAPTURES OUTPUT");
+            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | refine CAPTURES OUTPUT BUDGET");
         const fs::path output{ argv[3] };
         fs::create_directories(output);
         std::size_t count{}, offsets{};
