@@ -39,4 +39,5 @@ public:
     ~ScopedSolverCaptureMember();
 };
 void CaptureShapeResponse(const std::vector<double> &, const rhbm_gem::GaussianModel3D &) noexcept;
+boost::json::object CurrentSolverCaptureMember();
 }

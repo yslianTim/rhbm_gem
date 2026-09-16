@@ -1,5 +1,8 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SecondStageNumericalProbe.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
+#include <sstream>
+#include <iomanip>
 #else
 #define RHBM_TEST_WORK(kind) ((void)0)
 #endif
@@ -136,7 +139,7 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     second_stage_test::CaptureShapeResponse(sample_response_list, offset_model);
 #endif
-    const auto result{
+    auto result{
         rhbm_helper::EstimateBetaMDPDE(
             alpha_r,
             dataset,
@@ -144,8 +147,20 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     second_stage_test::CaptureShapeFailure(dataset, alpha_r, RHBMExecutionOptions{ .thread_size = thread_size }, result);
+    result = second_stage_test::ApplyEndpointExperiment({dataset,alpha_r,
+        RHBMExecutionOptions{.thread_size=thread_size},result});
 #endif
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+std::string PreparedLocalGaussianDesign::ExperimentSnapshot() const
+{
+    std::ostringstream out; out << std::setprecision(17) << m_source_sample_count << ':';
+    for (const auto & row : m_row_list) out << row.source_sample_index << ',' << row.distance << ';';
+    out << m_design_matrix;
+    return out.str();
+}
+#endif
 
 } // namespace rhbm_gem::core::detail

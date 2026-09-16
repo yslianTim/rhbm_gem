@@ -457,6 +457,11 @@ double MDPDETestVariance(const RHBMMemberDataset & data, double alpha,
 {
     return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
 }
+
+RHBMDiagonalMatrix MDPDETestCovariance(double variance, const Eigen::VectorXd & weights)
+{
+    return CalculateDataCovariance(variance, weights.asDiagonal());
+}
 } // namespace second_stage_test
 #endif
 

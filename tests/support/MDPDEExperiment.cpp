@@ -11,7 +11,6 @@ namespace second_stage_test {
 namespace {
 namespace json = boost::json;
 using Clock = std::chrono::steady_clock;
-constexpr int root_solve_budget{1992}; // Reserve eight equation calls for independent endpoint verification.
 thread_local json::array * production_trace{};
 json::value Number(double x) { return std::isfinite(x) ? json::value(x) : json::value(nullptr); }
 json::array Vector(const Eigen::VectorXd & v)
@@ -94,9 +93,10 @@ struct RootFunction
     mutable int evaluations{};
     mutable int jacobians{};
     mutable std::string failure_reason;
+    int budget{1992};
     int operator()(const Eigen::VectorXd & u, Eigen::VectorXd & residual) const
     {
-        if (evaluations >= root_solve_budget) return -1;
+        if (evaluations >= budget) return -1;
         ++evaluations;
         Eigen::VectorXd beta(2); beta << u(0), std::exp(u(1));
         const double v{ std::exp(u(2)) };
@@ -130,11 +130,14 @@ struct RootFunction
     }
 };
 
-json::object Root(const ShapeFixture & f, const Eigen::VectorXd & initial, const std::string & label)
+json::object Root(const ShapeFixture & f, const Eigen::VectorXd & initial, const std::string & label,
+    int total_budget = 2000)
 {
+    if (total_budget < 9) throw std::invalid_argument("Root budget must include endpoint verification.");
+    const int root_solve_budget{total_budget - 8};
     const auto start{ Clock::now() };
     auto u{ initial };
-    RootFunction function{ f, {}, 0, 0, {} };
+    RootFunction function{ f, {}, 0, 0, {}, root_solve_budget };
     Eigen::HybridNonLinearSolver<RootFunction> solver(function);
     solver.parameters.maxfev = root_solve_budget;
     solver.parameters.xtol = 1.0e-12;
@@ -222,6 +225,100 @@ boost::json::object EquationJSON(const MDPDEEquationEvidence & e)
         {"singular_values", Vector(e.singular_values)}, {"condition", Number(e.condition)},
         {"floor_count", e.floor_count}, {"equation_pass", e.valid && norm <= 1.0e-8},
         {"reference_pass", e.valid && norm <= 1.0e-10}};
+}
+
+boost::json::object CompareMDPDEBranches(const Eigen::VectorXd & candidate_beta, double candidate_variance,
+    const MDPDEEquationEvidence & candidate, const Eigen::VectorXd & reference_beta, double reference_variance,
+    const MDPDEEquationEvidence & reference, double floor)
+{
+    json::object out{{"pass", false}, {"coordinate_tolerance", 1e-6}, {"weight_tolerance", 1e-6}};
+    if (!candidate.valid || !reference.valid || candidate.weights.size() != reference.weights.size()) return out;
+    const auto u{Coordinates(candidate_beta, candidate_variance)}, v{Coordinates(reference_beta, reference_variance)};
+    Eigen::VectorXd change(3);
+    for (int k = 0; k < 3; ++k) change(k) = std::abs(u(k)-v(k)) / std::max({1.0,std::abs(u(k)),std::abs(v(k))});
+    const double weights{(candidate.weights-reference.weights).lpNorm<Eigen::Infinity>()};
+    const bool floors{((candidate.weights.array() == floor) == (reference.weights.array() == floor)).all()};
+    out["relative_coordinate_difference"] = Vector(change);
+    out["weight_max_difference"] = Number(weights); out["floor_masks_equal"] = floors;
+    out["pass"] = change.allFinite() && change.maxCoeff() <= 1e-6 && weights <= 1e-6 && floors;
+    return out;
+}
+
+EndpointRefinementResult RefineMDPDEEndpoint(const ShapeFixture & f, int equation_budget,
+    const MDPDEEquationEvidence * initial)
+{
+    using rhbm_gem::RHBMEstimationStatus;
+    EndpointRefinementResult output{f.expected, false, {}};
+    auto & out{output.evidence};
+    out = {{"schema_version", 1}, {"accepted", false}, {"reason", "ineligible"},
+        {"original_status", static_cast<int>(f.expected.status)},
+        {"original_iterations", f.expected.diagnostics.iterations},
+        {"original_squared_beta_change", Number(f.expected.diagnostics.squared_beta_change.value_or(NAN))},
+        {"original_relative_variance_change", Number(f.expected.diagnostics.relative_variance_change.value_or(NAN))},
+        {"equation_budget", equation_budget}, {"candidate_equation_evaluations", 1},
+        {"candidate_linear_solves", 0}, {"reference_updates", 0}, {"reference_equation_evaluations", 0}};
+    // Preserve the original numerical endpoint on rejection, including its weights/covariance.
+    output.result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
+    auto reference{initial ? *initial : EvaluateMDPDEEquations(f.dataset, f.alpha, f.expected.beta_mdpde,
+        f.expected.sigma_square, f.options.data_weight_min)};
+    out["original_equations"] = EquationJSON(reference);
+    if (f.dataset.X.rows() <= f.dataset.X.cols() || f.dataset.X.cols() != 2 ||
+        !f.dataset.X.allFinite() || !f.dataset.y.allFinite() ||
+        f.dataset.X.colPivHouseholderQr().rank() != 2)
+    { out["reason"] = reference.reason; return output; }
+    const auto qr{MDPDETestBeta(f.dataset, Eigen::VectorXd::Ones(f.dataset.y.size()), "qr")};
+    out["candidate_linear_solves"] = 1;
+    const double roundoff{64.0 * std::numeric_limits<double>::epsilon() *
+        (f.dataset.y.norm() + f.dataset.X.norm() * qr.norm())};
+    if ((f.dataset.y-f.dataset.X*qr).norm() <= roundoff)
+    { out["reason"] = "roundoff-exact-fit-boundary"; return output; }
+    if (!reference.valid) { out["reason"] = reference.reason; return output; }
+    if (equation_budget < 11) { out["reason"] = "budget-exhausted"; return output; }
+    auto root{Root(f, Coordinates(f.expected.beta_mdpde, f.expected.sigma_square), "endpoint", equation_budget-2)};
+    const int work{1 + static_cast<int>(root.at("equation_evaluations").as_int64()) +
+        static_cast<int>(root.at("verification_equation_evaluations").as_int64())};
+    out["candidate_equation_evaluations"] = work;
+    out["root"] = root;
+    if (root.at("stop") == "budget-exhausted") { out["reason"] = "budget-exhausted"; return output; }
+    if (!root.at("equation_pass").as_bool()) { out["reason"] = "root-equations-unqualified"; return output; }
+    Eigen::Vector2d beta;
+    beta << root.at("beta").at(0).as_double(), root.at("beta").at(1).as_double();
+    const double variance{root.at("variance").as_double()};
+    const auto candidate{EvaluateMDPDEEquations(f.dataset,f.alpha,beta,variance,f.options.data_weight_min)};
+    out["candidate_equation_evaluations"] = work+1;
+    auto reference_beta{f.expected.beta_mdpde};
+    double reference_variance{f.expected.sigma_square};
+    int updates{};
+    std::string reference_stop{"budget-exhausted"};
+    for (;;)
+    {
+        if (!reference.valid) { reference_stop = reference.reason; break; }
+        if (reference.scaled.lpNorm<Eigen::Infinity>() <= 1e-10) { reference_stop = "fresh-residual"; break; }
+        if (updates + f.expected.diagnostics.iterations >= 10000) break;
+        const auto previous{reference_beta}; const double old_v{reference_variance};
+        reference_beta = MDPDETestBeta(f.dataset,reference.weights,"normal");
+        reference_variance = MDPDETestVariance(f.dataset,f.alpha,reference.weights,reference_beta);
+        ++updates;
+        reference = EvaluateMDPDEEquations(f.dataset,f.alpha,reference_beta,reference_variance,f.options.data_weight_min);
+        if (reference_variance == old_v && (reference_beta.array() == previous.array()).all() &&
+            (!reference.valid || reference.scaled.lpNorm<Eigen::Infinity>() > 1e-10))
+        { reference_stop = "stalled"; break; }
+    }
+    auto reference_json{EquationJSON(reference)};
+    reference_json["beta"] = Vector(reference_beta); reference_json["variance"] = Number(reference_variance);
+    reference_json["stop"] = reference_stop;
+    out["reference"] = std::move(reference_json);
+    out["reference_updates"] = updates; out["reference_equation_evaluations"] = updates;
+    if (reference_stop != "fresh-residual") { out["reason"] = "reference-unqualified"; return output; }
+    auto branch{CompareMDPDEBranches(beta,variance,candidate,reference_beta,reference_variance,reference,f.options.data_weight_min)};
+    out["branch"] = branch;
+    if (!branch.at("pass").as_bool()) { out["reason"] = "branch-mismatch"; return output; }
+    output.result.beta_mdpde = beta; output.result.sigma_square = variance;
+    output.result.data_weight = candidate.weights.asDiagonal();
+    output.result.data_covariance = MDPDETestCovariance(variance,candidate.weights);
+    output.result.status = RHBMEstimationStatus::SUCCESS;
+    output.accepted = true; out["accepted"] = true; out["reason"] = "accepted";
+    return output;
 }
 
 boost::json::object CompareMDPDE(const ShapeFixture & f, bool perturb)

@@ -1,0 +1,1041 @@
+{
+  "schema_version": 1,
+  "base_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+  "scope": "testing-only; no production policy change",
+  "stage_a": {
+    "schema_version": 1,
+    "stage": "A",
+    "passed": true,
+    "budget": 128,
+    "budget_rule": "smallest of 32,64,128,256 >= twice maximum observed equation work",
+    "equation_tolerance": 1e-08,
+    "reference_tolerance": 1e-10,
+    "branch_tolerance": 1e-06,
+    "captures": 337,
+    "independent_fixtures": 4,
+    "profile_work": {
+      "count": 341,
+      "min": 18,
+      "median": 19,
+      "p99": 28,
+      "max": 35,
+      "total": 6522
+    },
+    "profile_failures": [],
+    "frozen_accepted": 341,
+    "reference_updates": {
+      "count": 341,
+      "min": 0,
+      "median": 19,
+      "p99": 68,
+      "max": 287,
+      "total": 7306
+    },
+    "profile_provenance_sha256": "850a2af036896b3d99984c61b010fccfe71fd4e9a2632fb5341617e3ec5c3cab"
+  },
+  "stage_b": {
+    "schema_version": 1,
+    "stage": "B",
+    "passed_policies": [
+      "failed-only",
+      "fresh-residual"
+    ],
+    "checkpoints": {
+      "final": {
+        "input_sha256": "f4922ef0ab1f6d67848d227f8264b30e6b61f49b5436c75b7c8fa950968a899a",
+        "legacy_exact": true,
+        "variants": {
+          "legacy": {
+            "qualified": false,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143670517417728,
+              0.00820742892201091,
+              0.001048905842297531
+            ],
+            "nominal_max": [
+              0.006283239540436858,
+              0.010416274263571723,
+              0.001273906963754512
+            ],
+            "recovery_residual_mean_square": null,
+            "candidate_and_diagnostic_equations": 168,
+            "reference_updates": 0,
+            "accepted": 0,
+            "rejections": {},
+            "delta_abc_max": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "failed-only": {
+            "qualified": true,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143670517417728,
+              0.00820742892201091,
+              0.001048905842297531
+            ],
+            "nominal_max": [
+              0.006283239540436858,
+              0.010416274263571723,
+              0.001273906963754512
+            ],
+            "recovery_residual_mean_square": 198.58450023990505,
+            "candidate_and_diagnostic_equations": 187,
+            "reference_updates": 168,
+            "accepted": 1,
+            "rejections": {},
+            "delta_abc_max": [
+              6.23052613946129e-08,
+              4.3747175659802906e-08,
+              0.0
+            ]
+          },
+          "fresh-residual": {
+            "qualified": true,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143670517417728,
+              0.00820742892201091,
+              0.0010489037843910626
+            ],
+            "nominal_max": [
+              0.006283239540436858,
+              0.010416274263571723,
+              0.001273906963754512
+            ],
+            "recovery_residual_mean_square": 198.58324901721994,
+            "candidate_and_diagnostic_equations": 2720,
+            "reference_updates": 3496,
+            "accepted": 140,
+            "rejections": {},
+            "delta_abc_max": [
+              1.8686818439306307e-06,
+              7.093971454708026e-08,
+              0.0
+            ]
+          }
+        }
+      },
+      "recovery-current": {
+        "input_sha256": "14510cbb7647c6d1bb2aa9c2ab581db242bda2e29ce5ff2b9341181172a795c1",
+        "legacy_exact": true,
+        "variants": {
+          "legacy": {
+            "qualified": false,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143685023148476,
+              0.008207503795825577,
+              0.0010486901030334359
+            ],
+            "nominal_max": [
+              0.006283157549972884,
+              0.010417843767743906,
+              0.0012741977385388736
+            ],
+            "recovery_residual_mean_square": null,
+            "candidate_and_diagnostic_equations": 168,
+            "reference_updates": 0,
+            "accepted": 0,
+            "rejections": {},
+            "delta_abc_max": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "failed-only": {
+            "qualified": true,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143685023148476,
+              0.008207503795825577,
+              0.0010486901030334359
+            ],
+            "nominal_max": [
+              0.006283157549972884,
+              0.010417843767743906,
+              0.0012741977385388736
+            ],
+            "recovery_residual_mean_square": 198.5887387543184,
+            "candidate_and_diagnostic_equations": 187,
+            "reference_updates": 168,
+            "accepted": 1,
+            "rejections": {},
+            "delta_abc_max": [
+              6.230757776393148e-08,
+              4.374757606173674e-08,
+              0.0
+            ]
+          },
+          "fresh-residual": {
+            "qualified": true,
+            "complete": true,
+            "original_solver_qualified": false,
+            "nominal_p99": [
+              0.006143685023148476,
+              0.008207503795825577,
+              0.0010486880452766302
+            ],
+            "nominal_max": [
+              0.006283157549972884,
+              0.010417843767743906,
+              0.0012741977385388736
+            ],
+            "recovery_residual_mean_square": 198.58748794407884,
+            "candidate_and_diagnostic_equations": 2728,
+            "reference_updates": 3497,
+            "accepted": 140,
+            "rejections": {},
+            "delta_abc_max": [
+              2.2735704803267254e-06,
+              7.093952647529989e-08,
+              0.0
+            ]
+          }
+        }
+      }
+    }
+  },
+  "baseline": {
+    "input_hashes": {
+      "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
+      "map": "cc9e76f94aa524b0f444bd8120ebe1adc3c364d4a277e9d805e0088677dc0a8c",
+      "manifest": "b9c882e41f4ee6349ed988861d4e63a078349da9a21bbc3560cae4d4deba7de1"
+    },
+    "quality_metrics": {
+      "amplitude_rmse": 0.011437689979958447,
+      "width_rmse": 0.0003642412076485769,
+      "offset_rmse": 0.0020040251906157966,
+      "offset_bias": -0.0001425363134443395,
+      "offset_max_absolute_error": 0.0068492784755526115
+    },
+    "second_stage_summary": {
+      "accepted_iterations": 31,
+      "best_iteration": "28",
+      "stop_reason": "recovery-failed",
+      "best_audit_objective": 0.661,
+      "final_uses_polish": true,
+      "final_state_source": "best-audit"
+    },
+    "production_fitting": {
+      "final_polish_applied": false,
+      "certificate": {
+        "reference": "persisted_state",
+        "status": "evaluated",
+        "operator_nominal_p99": [
+          0.006143670517417728,
+          0.00820742892201091,
+          0.001048905842297531
+        ],
+        "operator_population": [
+          168,
+          168,
+          168
+        ],
+        "complete": true,
+        "qualified": false,
+        "residual_reason": null
+      },
+      "background_reference": "last_frozen_background",
+      "attempts": 32,
+      "recovery_operator_evaluations": 1,
+      "certificate_operator_evaluations": 1
+    }
+  },
+  "closed_loop": {
+    "failed-only": {
+      "session": {
+        "schema_version": 1,
+        "policy": "failed-only",
+        "budget": 128,
+        "complete": true,
+        "calls": 3192,
+        "triggered": 20,
+        "accepted": 20,
+        "candidate_and_diagnostic_equations": 3691,
+        "reference_updates": 4439
+      },
+      "validation": {
+        "accepted": 20,
+        "rejections": {}
+      },
+      "summary": {
+        "accepted_iterations": 13,
+        "best_iteration": "6",
+        "stop_reason": "recovery-failed",
+        "best_audit_objective": 0.796,
+        "final_uses_polish": true,
+        "final_state_source": "best-audit"
+      },
+      "certificate": {
+        "final_polish_applied": false,
+        "certificate": {
+          "reference": "persisted_state",
+          "status": "evaluated",
+          "operator_nominal_p99": [
+            0.0062227567253929665,
+            0.008322470379508595,
+            0.0010021782426235788
+          ],
+          "operator_population": [
+            168,
+            168,
+            168
+          ],
+          "complete": true,
+          "qualified": true,
+          "residual_reason": null
+        },
+        "background_reference": "last_frozen_background",
+        "attempts": 14,
+        "recovery_operator_evaluations": 9,
+        "certificate_operator_evaluations": 1
+      },
+      "quality": {
+        "amplitude_rmse": 0.010520197886454622,
+        "width_rmse": 0.00034042451038972243,
+        "offset_rmse": 0.0018995365623237686,
+        "offset_bias": -0.00013178853152394918,
+        "offset_max_absolute_error": 0.006492505830467787
+      },
+      "recovery": [
+        {
+          "attempt": 10,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 211.3306154800788,
+          "best_objective": 0.7959374494690856,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8130805029384629
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8009967655086953
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7974002282587036
+            },
+            {
+              "factor": 0.125,
+              "reason": "accepted",
+              "residual": 172.42359421900008,
+              "objective": 0.7963906789103105
+            }
+          ]
+        },
+        {
+          "attempt": 11,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 172.42359421900008,
+          "best_objective": 0.7959374494690856,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128943402543845
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8021233391129968
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7984935352225949
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7972348170173496
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967591442864174
+            },
+            {
+              "factor": 0.03125,
+              "reason": "accepted",
+              "residual": 164.4348236898434,
+              "objective": 0.7965613124547872
+            }
+          ]
+        },
+        {
+          "attempt": 12,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 164.4348236898434,
+          "best_objective": 0.7959374494690856,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128667526075459
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8023838871022426
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.798768922173746
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7974739401685427
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7969681336907299
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967521572859779
+            },
+            {
+              "factor": 0.015625,
+              "reason": "accepted",
+              "residual": 160.62693493957704,
+              "objective": 0.7966535707479919
+            }
+          ]
+        },
+        {
+          "attempt": 13,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 160.62693493957704,
+          "best_objective": 0.7959374494690856,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128538131113182
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8025114338651225
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7989066340039819
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7975964473151025
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7970774412532939
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7968534249364234
+            },
+            {
+              "factor": 0.015625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967504551998366
+            },
+            {
+              "factor": 0.0078125,
+              "reason": "accepted",
+              "residual": 158.7712681370311,
+              "objective": 0.7967012496001518
+            }
+          ]
+        },
+        {
+          "attempt": 14,
+          "attempted": true,
+          "accepted": false,
+          "reason": "search-exhausted",
+          "operator_evaluations": 1,
+          "current_residual": 158.7712681370311,
+          "best_objective": 0.7959374494690856,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128494634748351
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8025753837031714
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7989758363363413
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7976585165699334
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7971332452131226
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7969054007216689
+            },
+            {
+              "factor": 0.015625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7968003412869882
+            },
+            {
+              "factor": 0.0078125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967500467793819
+            }
+          ]
+        }
+      ],
+      "persisted_objective": {
+        "value": {
+          "fit": 0.6504483255915847,
+          "tail": 0.5819564955100165,
+          "offset": 0,
+          "total": 0.7959374494690888
+        },
+        "reason": null
+      },
+      "candidate_max_equations": 33,
+      "trial_reason_counts": {
+        "best-objective-bound": 29,
+        "accepted": 4
+      },
+      "recovery_relative_decrease": 0.24870673481761682
+    },
+    "fresh-residual": {
+      "session": {
+        "schema_version": 1,
+        "policy": "fresh-residual",
+        "budget": 128,
+        "complete": true,
+        "calls": 3192,
+        "triggered": 2660,
+        "accepted": 2660,
+        "candidate_and_diagnostic_equations": 52188,
+        "reference_updates": 67599
+      },
+      "validation": {
+        "accepted": 2660,
+        "rejections": {}
+      },
+      "summary": {
+        "accepted_iterations": 13,
+        "best_iteration": "6",
+        "stop_reason": "recovery-failed",
+        "best_audit_objective": 0.796,
+        "final_uses_polish": true,
+        "final_state_source": "best-audit"
+      },
+      "certificate": {
+        "final_polish_applied": false,
+        "certificate": {
+          "reference": "persisted_state",
+          "status": "evaluated",
+          "operator_nominal_p99": [
+            0.006222756539481469,
+            0.00832247057585631,
+            0.0010021778333868447
+          ],
+          "operator_population": [
+            168,
+            168,
+            168
+          ],
+          "complete": true,
+          "qualified": true,
+          "residual_reason": null
+        },
+        "background_reference": "last_frozen_background",
+        "attempts": 14,
+        "recovery_operator_evaluations": 9,
+        "certificate_operator_evaluations": 1
+      },
+      "quality": {
+        "amplitude_rmse": 0.010520198713366402,
+        "width_rmse": 0.0003404244562469005,
+        "offset_rmse": 0.0018995371776300853,
+        "offset_bias": -0.00013178834627035476,
+        "offset_max_absolute_error": 0.006492506020233879
+      },
+      "recovery": [
+        {
+          "attempt": 10,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 211.32917652830105,
+          "best_objective": 0.7959352968335435,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8130782125583584
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8009945885423962
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.797398080499607
+            },
+            {
+              "factor": 0.125,
+              "reason": "accepted",
+              "residual": 172.4223672679566,
+              "objective": 0.7963885373779972
+            }
+          ]
+        },
+        {
+          "attempt": 11,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 172.4223672679566,
+          "best_objective": 0.7959352968335435,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128920523135094
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8021211513403479
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7984913784852333
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7972326700180997
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967570005726066
+            },
+            {
+              "factor": 0.03125,
+              "reason": "accepted",
+              "residual": 164.43367431606544,
+              "objective": 0.7965591699716844
+            }
+          ]
+        },
+        {
+          "attempt": 12,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 164.43367431606544,
+          "best_objective": 0.7959352968335435,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128644697952015
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8023816988896272
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7987667640016158
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7974717917799383
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7969659887570981
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967500137051539
+            },
+            {
+              "factor": 0.015625,
+              "reason": "accepted",
+              "residual": 160.62583610517854,
+              "objective": 0.7966514277481443
+            }
+          ]
+        },
+        {
+          "attempt": 13,
+          "attempted": true,
+          "accepted": true,
+          "reason": "accepted",
+          "operator_evaluations": 2,
+          "current_residual": 160.62583610517854,
+          "best_objective": 0.7959352968335435,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128515231259759
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.802509240972882
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7989044729718098
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7975942971636814
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7970752951603555
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7968512805126179
+            },
+            {
+              "factor": 0.015625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967483115188743
+            },
+            {
+              "factor": 0.0078125,
+              "reason": "accepted",
+              "residual": 158.7701817804213,
+              "objective": 0.7966991062674929
+            }
+          ]
+        },
+        {
+          "attempt": 14,
+          "attempted": true,
+          "accepted": false,
+          "reason": "search-exhausted",
+          "operator_evaluations": 1,
+          "current_residual": 158.7701817804213,
+          "best_objective": 0.7959352968335435,
+          "trials": [
+            {
+              "factor": 1,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8128471794260878
+            },
+            {
+              "factor": 0.5,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.8025731927043269
+            },
+            {
+              "factor": 0.25,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7989736758319186
+            },
+            {
+              "factor": 0.125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7976563664508214
+            },
+            {
+              "factor": 0.0625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.797131098953587
+            },
+            {
+              "factor": 0.03125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7969032560440832
+            },
+            {
+              "factor": 0.015625,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967981973117212
+            },
+            {
+              "factor": 0.0078125,
+              "reason": "best-objective-bound",
+              "residual": null,
+              "objective": 0.7967479031329119
+            }
+          ]
+        }
+      ],
+      "persisted_objective": {
+        "value": {
+          "fit": 0.6504463073191232,
+          "tail": 0.5819559580576827,
+          "offset": 0,
+          "total": 0.7959352968335439
+        },
+        "reason": null
+      },
+      "candidate_max_equations": 34,
+      "trial_reason_counts": {
+        "best-objective-bound": 29,
+        "accepted": 4
+      },
+      "recovery_relative_decrease": 0.24870675981099605
+    }
+  },
+  "evidence_hashes": {
+    "build/endpoint-refinement/failed-only-audit/execution.json": "5984205e9cfa4f2afdd97d091fb497376fec779d2209636f402fc333df87afe8",
+    "build/endpoint-refinement/failed-only-audit/provenance.json": "62ca0c04aeae4917e0d14138e200cd87a384cdc45dd8cf86f9a2f4e68b753101",
+    "build/endpoint-refinement/failed-only-audit/actual.json": "57e96b4fe3b4a3f5fc54c9a60de96827afd4559c4d35a1488b9082ecf822849f",
+    "build/endpoint-refinement/failed-only-audit/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/failed-only-audit/endpoint/session.json": "f763bedde94d43c6faceeeff7b9249e210c64d141d2a55d906fd7b52cc59866a",
+    "build/endpoint-refinement/failed-only-audit/endpoint/initial.json": "d5628bc44b23a16f3e211fc8312a0369d128fe0940fb622c14f13d1b6434074e",
+    "build/endpoint-refinement/failed-only-audit/endpoint/solves.jsonl": "625c3a100c03ba73aacc89eef63df98f2d0b8c50c04cced05c2e3387eb6462d6",
+    "build/endpoint-refinement/failed-only-audit/audit/audit.json": "c50aca8ac34f234d395a780ab8d3bfa36fec5306dc40e86513b162369ebf823c",
+    "build/endpoint-refinement/failed-only-audit/run.log": "c9f493bb43fa5a96f7063f19901922b0d19d4882513f81182d2868c285dd0145",
+    "build/endpoint-refinement/fresh-residual-audit/execution.json": "ae5ade668f71871b912d8370a7b1849f5d87843385f11e3a6bc31b3bb80db3da",
+    "build/endpoint-refinement/fresh-residual-audit/provenance.json": "62ca0c04aeae4917e0d14138e200cd87a384cdc45dd8cf86f9a2f4e68b753101",
+    "build/endpoint-refinement/fresh-residual-audit/actual.json": "8427744ac86c66de3e015495487311edb41e3aabb91da3d04e1b8ec2c711ec4d",
+    "build/endpoint-refinement/fresh-residual-audit/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/fresh-residual-audit/endpoint/session.json": "e4677c338ba0f73fc03cb5dd3b001d1499e8e82934b7938fe737c26b874b0379",
+    "build/endpoint-refinement/fresh-residual-audit/endpoint/initial.json": "d5628bc44b23a16f3e211fc8312a0369d128fe0940fb622c14f13d1b6434074e",
+    "build/endpoint-refinement/fresh-residual-audit/endpoint/solves.jsonl": "9242677f47be6b61de7a868f316a5fdb49e1f2d16b0319252631d6533adc5f33",
+    "build/endpoint-refinement/fresh-residual-audit/audit/audit.json": "d9152e588b936302ac3304a79a8fe227fcbf5433aeb57d0db8aa78cb9dbf1ead",
+    "build/endpoint-refinement/fresh-residual-audit/run.log": "1c6bed2520268df44f82b49fe8c86d2d763ac540dad24e314013cf6b764f91b1",
+    "build/endpoint-refinement/stage-a/profile/provenance.json": "850a2af036896b3d99984c61b010fccfe71fd4e9a2632fb5341617e3ec5c3cab",
+    "build/endpoint-refinement/stage-a/frozen/provenance.json": "850a2af036896b3d99984c61b010fccfe71fd4e9a2632fb5341617e3ec5c3cab",
+    "build/endpoint-refinement/compare/provenance.json": "62ca0c04aeae4917e0d14138e200cd87a384cdc45dd8cf86f9a2f4e68b753101",
+    "build/endpoint-refinement/compare/neutrality.json": "ba401293c0fe3a5a55e31f89aac4f8355602699e1051de98b308a2800c55d248",
+    "build/endpoint-refinement/legacy-off-j1/neutrality.json": "021616663225e22943a218c9b75b5f9189a4fa0c99f5091ea2742534e93e2ee5",
+    "build/endpoint-refinement/candidate-tests.log": "5b9f4e282840462c35a29f5226b33324ba537695066ae57fd3c5695f26aa588a",
+    "build/endpoint-refinement/integration-tests.log": "6c72780fe551753ac785caf1fc306b84868b013ea5bce4b8d7224ac8309ee49e",
+    "build/endpoint-refinement/replay-tests.log": "327fd7575d1ff0189df9d32d04c88f657523bb97cc8f6ee5c9f4ddd34d1134ab",
+    "build/endpoint-refinement/off-tests.log": "b24a2e17894b77877c66a8e9d17f28a63287dc7c5a36d8b12e43851101432a83",
+    "build/endpoint-refinement/python-tests.log": "a97d5413078be8a296a9d0d9df9f22fe59fac43b85338604664ef76d7b8d5101",
+    "build/endpoint-refinement/lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "build/endpoint-refinement/failed-only-audit/policy.json": "741d04b829d0bad44e96f980af10f9d671603bcfff9002505fd70868c1de20a7",
+    "build/endpoint-refinement/failed-only-parallel/provenance.json": "62ca0c04aeae4917e0d14138e200cd87a384cdc45dd8cf86f9a2f4e68b753101",
+    "build/endpoint-refinement/failed-only-parallel/execution.json": "b7e6ebad8cfa9839e225cfc8af44e32b5e1a71cb8d9b2ed109d8e207c90cffbc",
+    "build/endpoint-refinement/failed-only-parallel/actual.json": "57e96b4fe3b4a3f5fc54c9a60de96827afd4559c4d35a1488b9082ecf822849f",
+    "build/endpoint-refinement/failed-only-parallel/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/failed-only-parallel/policy.json": "d04f2a8d5b2ddd401034e3056d02b7b3cd79234181769bb5e9ea9b8afaad80f7",
+    "build/endpoint-refinement/failed-only-parallel/endpoint/session.json": "f763bedde94d43c6faceeeff7b9249e210c64d141d2a55d906fd7b52cc59866a",
+    "build/endpoint-refinement/failed-only-parallel/endpoint/initial.json": "d5628bc44b23a16f3e211fc8312a0369d128fe0940fb622c14f13d1b6434074e",
+    "build/endpoint-refinement/failed-only-off-j1/provenance.json": "ba5611f782010e0ce741eef87810162934b01d2e63ef9e4056492ae436d63f87",
+    "build/endpoint-refinement/failed-only-off-j1/execution.json": "7f6df150bd0afeff4f2727118810bd4b6566a6328deca5d4f06163bbc89770db",
+    "build/endpoint-refinement/failed-only-off-j1/actual.json": "57e96b4fe3b4a3f5fc54c9a60de96827afd4559c4d35a1488b9082ecf822849f",
+    "build/endpoint-refinement/failed-only-off-j1/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/failed-only-off-j1/policy.json": "c9b6a82516b4ae00654ebac14d6a2b16d9b0604c3c2c7b2a88b4433997876190",
+    "build/endpoint-refinement/failed-only-off-j1/endpoint/session.json": "f763bedde94d43c6faceeeff7b9249e210c64d141d2a55d906fd7b52cc59866a",
+    "build/endpoint-refinement/failed-only-off-j1/endpoint/initial.json": "f4216955bede1d6b6c7b4c18e4749a07b661f93f1e59daf4a190788c745a5c7f",
+    "build/endpoint-refinement/failed-only-neutrality.json": "0499a5f9f4ba9ea1bfcc6096354b328cefc12172d2be8165a69a743bec87cdd8",
+    "build/endpoint-refinement/fresh-residual-audit/policy.json": "11ccff0294a68942b5649baf59484051fe05296ec00eaf7bded59097a403674b",
+    "build/endpoint-refinement/fresh-residual-parallel/provenance.json": "62ca0c04aeae4917e0d14138e200cd87a384cdc45dd8cf86f9a2f4e68b753101",
+    "build/endpoint-refinement/fresh-residual-parallel/execution.json": "e906e9fcb71aa3e7b72790e6e0f9535d7c248793b2590a3318c63ee9bc8769a3",
+    "build/endpoint-refinement/fresh-residual-parallel/actual.json": "8427744ac86c66de3e015495487311edb41e3aabb91da3d04e1b8ec2c711ec4d",
+    "build/endpoint-refinement/fresh-residual-parallel/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/fresh-residual-parallel/policy.json": "67e30964d6f1d68c3e3a4df3cb48f2a597eea8d840f9d1a6a1acd194671ef89e",
+    "build/endpoint-refinement/fresh-residual-parallel/endpoint/session.json": "e4677c338ba0f73fc03cb5dd3b001d1499e8e82934b7938fe737c26b874b0379",
+    "build/endpoint-refinement/fresh-residual-parallel/endpoint/initial.json": "d5628bc44b23a16f3e211fc8312a0369d128fe0940fb622c14f13d1b6434074e",
+    "build/endpoint-refinement/fresh-residual-off-j1/provenance.json": "ba5611f782010e0ce741eef87810162934b01d2e63ef9e4056492ae436d63f87",
+    "build/endpoint-refinement/fresh-residual-off-j1/execution.json": "2dcb6d44436b5930a64f8a76271c333f443b68ea023b3cb48f1975b8eb8bfda6",
+    "build/endpoint-refinement/fresh-residual-off-j1/actual.json": "8427744ac86c66de3e015495487311edb41e3aabb91da3d04e1b8ec2c711ec4d",
+    "build/endpoint-refinement/fresh-residual-off-j1/report.json": "dd8f7497ab1d8b1edfc05df9257a2de62d550114cc364da1a9ce860f011d4b16",
+    "build/endpoint-refinement/fresh-residual-off-j1/policy.json": "c16af82b02054f4ff44e9238c6b783250ac2a40a35a05b4c3670f783379fbc32",
+    "build/endpoint-refinement/fresh-residual-off-j1/endpoint/session.json": "e4677c338ba0f73fc03cb5dd3b001d1499e8e82934b7938fe737c26b874b0379",
+    "build/endpoint-refinement/fresh-residual-off-j1/endpoint/initial.json": "f4216955bede1d6b6c7b4c18e4749a07b661f93f1e59daf4a190788c745a5c7f",
+    "build/endpoint-refinement/fresh-residual-neutrality.json": "92f075cc88f9975fd3ae1b277f3f89776df44384c78aea7dcdfb98a9cd3d494f",
+    "build/endpoint-refinement/production-symbols.txt": "30c4faa00b755f17d4e91422cb2e0063e698a405a7bd244c48f47ad5348b51c8",
+    "build/endpoint-refinement/docs-tests.log": "03e97f9245fa9b15d1dd0cc53a03da19583234846239d178736212cf0732b07e",
+    "build/endpoint-refinement/on/CMakeCache.txt": "6c4f33cffe04e318bb7fbb8d917d0cde20ee271d6f645b085d296f7ac9677ad8",
+    "build/endpoint-refinement/off/CMakeCache.txt": "1bb09859dca5cc42b5f30bfe2c35262ad059ccd8ba57f9218d74e279f7de3512",
+    "build/endpoint-refinement/production/CMakeCache.txt": "addc8a1e64d3cab7f006b061d11619ae943313db26979f4ba2a8f3b121594b62",
+    "build/endpoint-refinement/production-build.log": "a183d4f38927d3856db5b2c4a9c761152081d57a325a6ccf9cc77009a7910ac8",
+    "build/endpoint-refinement/off-build.log": "207f4775c9bf11029a635233f7b2ba79b1cb486dd141bdcfdb5702dad316efdc",
+    "docs/developer/figures/endpoint-refinement/branches.csv": "6f223b35924fbc9c92ca2007aea145fde1954c60ec77a8076204b437c74841d1"
+  },
+  "validation": {
+    "candidate_tests": 15,
+    "related_tests_passed": 196,
+    "external_replay_initially_skipped": 1,
+    "external_replay_rerun_passed": true,
+    "external_replayed_cases": 338,
+    "python_tests_passed": 34,
+    "audit_off_tests_passed": 8,
+    "documentation_tests_passed": 3,
+    "lint_repo_passed": true,
+    "production_testing_symbols_absent": true,
+    "legacy_neutrality": {
+      "reference": "build/endpoint-refinement/baseline-run",
+      "rows": 168,
+      "exact_database_records": {
+        "build/endpoint-refinement/compare": true
+      },
+      "exact_summary_and_certificate": {
+        "build/endpoint-refinement/compare": true
+      }
+    },
+    "legacy_audit_off_j1": {
+      "reference": "build/endpoint-refinement/baseline-run",
+      "rows": 168,
+      "exact_database_records": {
+        "build/endpoint-refinement/legacy-off-j1": true
+      },
+      "exact_summary_and_certificate": {
+        "build/endpoint-refinement/legacy-off-j1": true
+      }
+    },
+    "policies": {
+      "failed-only": {
+        "reference": "build/endpoint-refinement/failed-only-audit",
+        "rows": 168,
+        "exact_database_records": {
+          "build/endpoint-refinement/failed-only-parallel": true,
+          "build/endpoint-refinement/failed-only-off-j1": true
+        },
+        "exact_summary_and_certificate": {
+          "build/endpoint-refinement/failed-only-parallel": true,
+          "build/endpoint-refinement/failed-only-off-j1": true
+        },
+        "solver_work_identical": true
+      },
+      "fresh-residual": {
+        "reference": "build/endpoint-refinement/fresh-residual-audit",
+        "rows": 168,
+        "exact_database_records": {
+          "build/endpoint-refinement/fresh-residual-parallel": true,
+          "build/endpoint-refinement/fresh-residual-off-j1": true
+        },
+        "exact_summary_and_certificate": {
+          "build/endpoint-refinement/fresh-residual-parallel": true,
+          "build/endpoint-refinement/fresh-residual-off-j1": true
+        },
+        "solver_work_identical": true
+      }
+    },
+    "all_experiment_source_files_identical": true,
+    "source_files_sha256": "c179baef48728d898f386d5d027052639a643da389503ad8e6d322c4132752ba"
+  }
+}

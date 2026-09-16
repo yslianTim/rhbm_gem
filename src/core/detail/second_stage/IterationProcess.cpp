@@ -1,5 +1,6 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SecondStageNumericalProbe.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
 #else
 #define RHBM_TEST_TERMINAL(value) ((void)0)
 #endif
@@ -824,6 +825,9 @@ static void CertifyFinalState(const SecondStageContext & context, const FitOptio
         const auto ridge{ BuildSuspiciousJointOffsetRidgeMultiplierList(state.rollback_atom_mask, activity, {}) };
         ++state.certificate_operator_evaluations;
         const auto evidence{ EvaluateNominalOperator(context, keys, final_state, options, ridge) };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        second_stage_test::CompareEndpointOperators("final",context,keys,final_state,options,ridge,evidence);
+#endif
         state.final_certificate = AssessNominalOperator(evidence, final_state);
         if (observation) observation->ObserveFinalState(evidence, *state.final_certificate);
     }
@@ -930,6 +934,9 @@ static const FitState & FinalizeSecondStageState(
 
 void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::ScopedSecondStageEndpointExperiment endpoint_experiment;
+#endif
     if (options.enable_second_stage_dependency_polish &&
         options.second_stage_dependency_polish_max_iterations == 0)
     {
@@ -961,6 +968,9 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         context = std::move(initialization->context);
         initial_state = std::move(initialization->state);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CaptureEndpointInitialState(context,initial_state,options);
+#endif
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };

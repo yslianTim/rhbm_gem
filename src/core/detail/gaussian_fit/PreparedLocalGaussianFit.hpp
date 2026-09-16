@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
@@ -33,6 +34,10 @@ public:
     RHBMMemberDataset BuildDataset(
         const std::vector<double> & sample_response_list,
         const GaussianModel3D & offset_model) const;
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::string ExperimentSnapshot() const;
+#endif
 
     LocalGaussianResult Estimate(
         const std::vector<double> & sample_response_list,

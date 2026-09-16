@@ -1,4 +1,5 @@
 #include "support/SolverFailureCapture.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <cstdlib>
@@ -33,6 +34,7 @@ template<class Writer> void Capture(const std::string & name, Writer writer) noe
 {
     try
     {
+        if (IsEndpointOperatorProbe()) return;
         const auto * directory{ std::getenv("RHBM_TEST_SOLVER_CAPTURE_DIR") };
         if (!directory || !*directory) return;
         std::lock_guard lock(capture_mutex);
@@ -88,6 +90,8 @@ SolverCaptureContext CaptureOperatorContext(const rhbm_gem::core::detail::Second
 {
     try
     {
+        if (IsEndpointOperatorProbe()) return std::make_shared<const boost::json::object>(
+            boost::json::object{{"phase",phase.name},{"attempt",phase.attempt},{"operator_id","probe"}});
         const auto * directory{ std::getenv("RHBM_TEST_SOLVER_CAPTURE_DIR") };
         if (!directory || !*directory) return {};
         namespace j = boost::json;
@@ -138,11 +142,20 @@ ScopedSolverCaptureMember::ScopedSolverCaptureMember(const SolverCaptureContext 
     try
     {
         member.clear();
-        if (context) { member = *context; member["indices"] = boost::json::value_from(indices); member["role"] = role; }
+        if (context) member = *context;
+        member["indices"] = boost::json::value_from(indices); member["role"] = role;
     }
     catch (...) { member.clear(); }
 }
 ScopedSolverCaptureMember::~ScopedSolverCaptureMember() { member = std::move(previous); }
+
+boost::json::object CurrentSolverCaptureMember()
+{
+    boost::json::object out;
+    for (const auto * key : {"phase","attempt","operator_id","indices","role"})
+        if (const auto * value = member.if_contains(key)) out[key] = *value;
+    return out;
+}
 
 void CaptureShapeResponse(const std::vector<double> & response, const rhbm_gem::GaussianModel3D & model) noexcept
 {
@@ -156,7 +169,7 @@ void CaptureShapeResponse(const std::vector<double> & response, const rhbm_gem::
 void CaptureShapeFailure(const rhbm_gem::RHBMMemberDataset & dataset, double alpha,
     const rhbm_gem::RHBMExecutionOptions & options, const rhbm_gem::RHBMBetaEstimateResult & result) noexcept
 {
-    const bool contextual{ !member.empty() && (member.at("phase") == "final" || member.at("phase") == "recovery-current") };
+    const bool contextual{ member.contains("phase") && (member.at("phase") == "final" || member.at("phase") == "recovery-current") };
     if (result.status == rhbm_gem::RHBMEstimationStatus::SUCCESS && !contextual) return;
     try
     {

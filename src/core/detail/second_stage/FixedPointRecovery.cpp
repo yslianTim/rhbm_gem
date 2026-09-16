@@ -2,6 +2,7 @@
 #include <cmath>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SolverFailureCapture.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
 #endif
 
 namespace rhbm_gem::core::detail {
@@ -30,6 +31,9 @@ FixedPointRecoveryResult RunFixedPointRecovery(
     diagnostic.reason = "current-operator-unqualified";
     ++diagnostic.operator_evaluations;
     result.current_operator = EvaluateNominalOperator(context, keys, current, options, ridge);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CompareEndpointOperators("recovery-current",context,keys,current,options,ridge,result.current_operator);
+#endif
     diagnostic.current_residual = QualifiedNominalResidualMeanSquare(result.current_operator, current);
     if (!diagnostic.current_residual) return result;
     diagnostic.reason = "best-objective-unavailable";

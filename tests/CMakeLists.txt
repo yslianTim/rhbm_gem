@@ -301,6 +301,10 @@ if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
 endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
+    add_test(NAME endpoint_refinement_runner_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/endpoint_refinement_test.py")
+    set_tests_properties(endpoint_refinement_runner_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm")
     add_test(
         NAME second_stage_audit_parser_test
         COMMAND "${Python_EXECUTABLE}"

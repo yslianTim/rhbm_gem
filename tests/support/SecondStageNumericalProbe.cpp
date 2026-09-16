@@ -1,4 +1,5 @@
 #include "support/SecondStageNumericalProbe.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/IterationResult.hpp"
 #include <atomic>
@@ -29,7 +30,7 @@ NumericalCapture EndNumericalCapture()
 }
 void CountWork(Work work) noexcept
 {
-    if(enabled.load(std::memory_order_relaxed)) counts[static_cast<std::size_t>(work)].fetch_add(1,std::memory_order_relaxed);
+    if(enabled.load(std::memory_order_relaxed) && !IsEndpointOperatorProbe()) counts[static_cast<std::size_t>(work)].fetch_add(1,std::memory_order_relaxed);
 }
 void CaptureCommit(const rhbm_gem::core::detail::CandidateCommitResult & result,
     const rhbm_gem::core::detail::QuarantineState & quarantine, const rhbm_gem::core::detail::TrustRegionStateSet & radii)

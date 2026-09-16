@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include "support/MDPDEExperiment.hpp"
 #include "support/ForwardModelExperiment.hpp"
+#include "support/EndpointRefinementExperiment.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <cmath>
+#include <filesystem>
 
 namespace {
 second_stage_test::ShapeFixture Fixture(double alpha = 0.1)
@@ -129,4 +131,99 @@ TEST(MDPDEExperimentTest, SamplingWrapperUsesGridNodesAndExistingBoundaryClampin
     const auto samples{second_stage_test::SampleExperimentPoints(map,{{0.0,{-0.1,-0.1,-0.1},true},{0.0,{0.0,0.0,0.0},true}})};
     EXPECT_DOUBLE_EQ(samples[0].response,map.GetMapValue(0,0,0));
     EXPECT_DOUBLE_EQ(samples[1].response,map.GetMapValue(1,1,1));
+}
+
+TEST(EndpointRefinementTest, AcceptedResultHasFreshWeightsAndExistingCovarianceFormula)
+{
+    for (const double alpha : {0.0,0.1,0.2})
+    {
+        const auto f{Fixture(alpha)};
+        const auto refined{second_stage_test::RefineMDPDEEndpoint(f,2000)};
+        ASSERT_TRUE(refined.accepted) << refined.evidence;
+        const auto & result{refined.result};
+        const auto fresh{second_stage_test::EvaluateMDPDEEquations(f.dataset,alpha,result.beta_mdpde,
+            result.sigma_square,f.options.data_weight_min)};
+        ASSERT_TRUE(fresh.valid); EXPECT_LE(fresh.scaled.lpNorm<Eigen::Infinity>(),1e-8);
+        EXPECT_TRUE((result.data_weight.diagonal().array() == fresh.weights.array()).all());
+        const double trace{fresh.weights.cwiseInverse().sum()};
+        for (Eigen::Index i=0;i<fresh.weights.size();++i)
+            EXPECT_DOUBLE_EQ(result.data_covariance.diagonal()(i),static_cast<double>(fresh.weights.size())*result.sigma_square/fresh.weights(i)/trace);
+        EXPECT_TRUE((result.beta_ols.array() == f.expected.beta_ols.array()).all());
+        EXPECT_EQ(result.diagnostics.iterations,f.expected.diagnostics.iterations);
+        EXPECT_LE(refined.evidence.at("candidate_equation_evaluations").as_int64(),2000);
+    }
+}
+
+TEST(EndpointRefinementTest, BudgetRejectionPreservesEndpointButDoesNotInheritSuccess)
+{
+    const auto f{Fixture()}; ASSERT_EQ(f.expected.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    const auto refined{second_stage_test::RefineMDPDEEndpoint(f,11)};
+    EXPECT_FALSE(refined.accepted); EXPECT_EQ(refined.evidence.at("reason"),"budget-exhausted");
+    EXPECT_NE(refined.result.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    EXPECT_TRUE((refined.result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
+    EXPECT_DOUBLE_EQ(refined.result.sigma_square,f.expected.sigma_square);
+    EXPECT_TRUE((refined.result.data_weight.diagonal().array() == f.expected.data_weight.diagonal().array()).all());
+    EXPECT_TRUE((refined.result.data_covariance.diagonal().array() == f.expected.data_covariance.diagonal().array()).all());
+    EXPECT_LE(refined.evidence.at("candidate_equation_evaluations").as_int64(),11);
+}
+
+TEST(EndpointRefinementTest, KnownOtherRootFailsBranchComparison)
+{
+    const auto path{std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
+        "fixtures/mdpde/shape-maximum-iterations-final-32-33-99.txt"};
+    auto f{second_stage_test::ReadShapeFixture(path.string())};
+    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto refined{second_stage_test::RefineMDPDEEndpoint(f,2000)};
+    ASSERT_TRUE(refined.accepted) << refined.evidence;
+    const double other_v{2.18540209421e-5}, other_a{6.99969719603}, other_b{0.499945192644};
+    Eigen::Vector2d other; other << std::log(other_a/std::pow(2*std::acos(-1.0)*other_b*other_b,1.5)),1/(other_b*other_b);
+    const auto e{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,other,other_v,f.options.data_weight_min)};
+    ASSERT_TRUE(e.valid); EXPECT_LT(e.scaled.lpNorm<Eigen::Infinity>(),1e-8);
+    const auto reference{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,refined.result.beta_mdpde,
+        refined.result.sigma_square,f.options.data_weight_min)};
+    const auto branch{second_stage_test::CompareMDPDEBranches(other,other_v,e,refined.result.beta_mdpde,
+        refined.result.sigma_square,reference,f.options.data_weight_min)};
+    EXPECT_FALSE(branch.at("pass").as_bool()); EXPECT_FALSE(branch.at("floor_masks_equal").as_bool());
+}
+
+TEST(EndpointRefinementTest, InvalidEndpointsAreNeverPromoted)
+{
+    auto f{Fixture()}; f.expected.sigma_square=0;
+    auto result{second_stage_test::RefineMDPDEEndpoint(f,64)};
+    EXPECT_FALSE(result.accepted); EXPECT_EQ(result.evidence.at("reason"),"variance-boundary");
+    f=Fixture(); f.dataset.X.col(1)=f.dataset.X.col(0);
+    result=second_stage_test::RefineMDPDEEndpoint(f,64);
+    EXPECT_FALSE(result.accepted); EXPECT_EQ(result.evidence.at("reason"),"rank-deficient");
+    f=Fixture(); f.dataset.y.array()+=100;
+    result=second_stage_test::RefineMDPDEEndpoint(f,64);
+    EXPECT_FALSE(result.accepted); EXPECT_EQ(result.evidence.at("reason"),"invalid-denominator");
+}
+
+TEST(EndpointRefinementTest, ExactFitAndNearZeroNoiseRemainDistinct)
+{
+    auto f{Fixture()}; Eigen::Vector2d beta; beta << 1.0,4.0; f.dataset.y=f.dataset.X*beta;
+    f.expected=rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto exact{second_stage_test::RefineMDPDEEndpoint(f,128)};
+    EXPECT_FALSE(exact.accepted); EXPECT_EQ(exact.evidence.at("reason"),"roundoff-exact-fit-boundary");
+    for (int i=0;i<40;++i) f.dataset.y(i)+=1e-7*std::sin(3.0*i);
+    f.expected=rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto noisy{second_stage_test::RefineMDPDEEndpoint(f,128)};
+    EXPECT_NE(noisy.evidence.at("reason"),"roundoff-exact-fit-boundary");
+    EXPECT_LE(noisy.evidence.at("candidate_equation_evaluations").as_int64(),128);
+    if (noisy.accepted) EXPECT_TRUE(noisy.evidence.at("branch").at("pass").as_bool());
+    else EXPECT_NE(noisy.result.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+}
+
+TEST(EndpointRefinementTest, PoliciesDoNotConfuseNativeSuccessWithFreshQualification)
+{
+    using second_stage_test::EndpointPolicy; using second_stage_test::ShouldRefineEndpoint;
+    using rhbm_gem::RHBMEstimationStatus;
+    for (const bool fresh : {false,true})
+    {
+        EXPECT_FALSE(ShouldRefineEndpoint(EndpointPolicy::Legacy,RHBMEstimationStatus::MAX_ITERATIONS_REACHED,fresh));
+        EXPECT_FALSE(ShouldRefineEndpoint(EndpointPolicy::FailedOnly,RHBMEstimationStatus::SUCCESS,fresh));
+        EXPECT_TRUE(ShouldRefineEndpoint(EndpointPolicy::FailedOnly,RHBMEstimationStatus::MAX_ITERATIONS_REACHED,fresh));
+        EXPECT_TRUE(ShouldRefineEndpoint(EndpointPolicy::FreshResidual,RHBMEstimationStatus::MAX_ITERATIONS_REACHED,fresh));
+        EXPECT_EQ(ShouldRefineEndpoint(EndpointPolicy::FreshResidual,RHBMEstimationStatus::SUCCESS,fresh),!fresh);
+    }
 }
