@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/ObservationMatchedExperiment.hpp"
+#include "support/EstimatedNeighborSweep.hpp"
 #include "support/ForwardModelExperiment.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
@@ -108,4 +109,61 @@ TEST(ObservationMatchedTest, DegeneracyBoundsAndBudgetAreNotQualified)
     const Eigen::VectorXd y{m::EvaluateDesign(design,0.47,2.5).col(0)};
     EXPECT_EQ(m::Fit(design,y,0.0,false,2.5,0).at("reason"),"budget-exhausted");
     EXPECT_FALSE(m::Fit(design,-y,0.0,false,2.5).at("qualified").as_bool());
+}
+
+TEST(ObservationMatchedTest, EstimatedNeighborsAreFrozenAndTargetOrderDoesNotChangeFits)
+{
+    rhbm_gem::MapObject grid({61,61,61},{0.1,0.1,0.1},{-3,-3,-3});
+    const std::vector<m::Atom> state{{{0,0,0},6.2,0.47,-0.2},{{1.1,0.2,0.1},7.1,0.52,0.3}};
+    std::vector<m::Position> positions;
+    std::vector<m::Stencil> stencils;
+    std::vector<double> distances;
+    Eigen::VectorXd observations(80);
+    for (int i=0;i<80;++i)
+    {
+        const double r{0.025*i};
+        positions.push_back({r,0,0}); distances.push_back(r);
+        stencils.push_back(m::MakeStencil(grid,grid,positions.back()));
+        observations(i)=m::Predict(stencils.back(),state,2.5);
+    }
+    const auto prepared{m::PrepareFrozenTarget(state,0,positions,stencils,2.5)};
+    auto first = m::FitFrozenTarget(prepared,distances,observations,state[0],2.5);
+    const auto other{m::PrepareFrozenTarget(state,1,positions,stencils,2.5)};
+    static_cast<void>(m::FitFrozenTarget(other,distances,observations,state[1],2.5));
+    auto repeated = m::FitFrozenTarget(m::PrepareFrozenTarget(state,0,positions,stencils,2.5),distances,observations,state[0],2.5);
+    for (auto & row : first) row.as_object().erase("seconds");
+    for (auto & row : repeated) row.as_object().erase("seconds");
+    EXPECT_EQ(first,repeated);
+    for (const auto & row : first)
+    {
+        if (row.at("parameters")=="AB") EXPECT_DOUBLE_EQ(row.at("C").as_double(),state[0].charge);
+        if (row.at("prediction")!="matched") continue;
+        ASSERT_TRUE(row.at("qualified").as_bool()) << row.at("reason");
+        EXPECT_NEAR(row.at("A").as_double(),state[0].amplitude,1e-5);
+        EXPECT_NEAR(row.at("B").as_double(),state[0].width,1e-6);
+        EXPECT_NEAR(row.at("C").as_double(),state[0].charge,1e-6);
+    }
+    auto changed{state}; changed[1].charge+=0.1;
+    const auto perturbed{m::PrepareFrozenTarget(changed,0,positions,stencils,2.5)};
+    EXPECT_GT((prepared.neighbors[0]-perturbed.neighbors[0]).norm(),0.1);
+    EXPECT_GT((prepared.neighbors[1]-perturbed.neighbors[1]).norm(),0.1);
+    changed=state; changed[0].amplitude+=1; changed[0].width+=0.1; changed[0].charge+=0.2;
+    const auto target_changed{m::PrepareFrozenTarget(changed,0,positions,stencils,2.5)};
+    EXPECT_EQ(prepared.neighbors[0],target_changed.neighbors[0]);
+    EXPECT_EQ(prepared.neighbors[1],target_changed.neighbors[1]);
+    const auto abc = m::FitFrozenTarget(target_changed,distances,observations,changed[0],2.5).back();
+    for (const char * p : {"A","B","C"}) EXPECT_EQ(abc.at(p),first.back().at(p));
+}
+
+TEST(ObservationMatchedTest, FrozenTargetRejectsInvalidCheckpointAndObservations)
+{
+    rhbm_gem::MapObject grid({4,4,4},{0.1,0.1,0.1},{0,0,0});
+    const std::vector<m::Position> positions{{0.1,0.1,0.1}};
+    const std::vector<m::Stencil> stencils{m::MakeStencil(grid,grid,positions[0])};
+    std::vector<m::Atom> state{{{0,0,0},6,0.5,0}};
+    EXPECT_THROW(m::PrepareFrozenTarget(state,1,positions,stencils,2.5),std::invalid_argument);
+    const auto prepared{m::PrepareFrozenTarget(state,0,positions,stencils,2.5)};
+    EXPECT_THROW(m::FitFrozenTarget(prepared,{0.1},Eigen::VectorXd::Constant(1,NAN),state[0],2.5),std::invalid_argument);
+    state[0].charge=NAN;
+    EXPECT_THROW(m::PrepareFrozenTarget(state,0,positions,stencils,2.5),std::invalid_argument);
 }
