@@ -1,23 +1,13 @@
 #pragma once
 
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+#include "utils/hrl/MDPDEEndpointRefinement.hpp"
 #include <boost/json.hpp>
 #include <string>
 
 namespace second_stage_test {
 
-struct MDPDEEquationEvidence
-{
-    Eigen::VectorXd raw, scaled, weights, singular_values;
-    double denominator{}, condition{};
-    int rank{}, floor_count{};
-    bool valid{};
-    std::string reason;
-};
-
-// Implemented beside the production primitives, only with BUILD_TESTING.
-MDPDEEquationEvidence EvaluateMDPDEEquations(const rhbm_gem::RHBMMemberDataset &,
-    double alpha, const Eigen::VectorXd & beta, double variance, double floor);
+using rhbm_gem::mdpde_detail::MDPDEEquationEvidence;
+using rhbm_gem::mdpde_detail::EvaluateMDPDEEquations;
 Eigen::VectorXd MDPDETestBeta(const rhbm_gem::RHBMMemberDataset &,
     const Eigen::VectorXd & weights, const std::string & backend);
 double MDPDETestVariance(const rhbm_gem::RHBMMemberDataset &, double alpha,

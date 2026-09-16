@@ -644,7 +644,30 @@ void JsonNominalSolves(std::ostream & out, const NominalSolveDiagnostics & diagn
         if (i) out << ',';
         const auto & solve{ diagnostics.shapes[i] };
         out << "{\"atom_index\":" << i << ",\"status\":";
+        const auto effective_status{solve.EffectiveStatus()};
+        if (effective_status) out << '"' << LocalRefitStatusText(*effective_status) << '"'; else out << "null";
+        out << ",\"native_status\":";
         if (solve.status) out << '"' << LocalRefitStatusText(*solve.status) << '"'; else out << "null";
+        const auto qualification{solve.Qualification()};
+        out << ",\"qualification\":\"" << (qualification == RHBMSolveQualification::NativeSuccess ? "native-success" :
+            qualification == RHBMSolveQualification::RefinedSuccess ? "refined-success" : "unqualified") << '"';
+        if (solve.refinement)
+        {
+            const auto & r{*solve.refinement};
+            out << ",\"refinement\":{\"accepted\":" << r.accepted << ",\"reason\":\"" << r.reason
+                << "\",\"candidate_equation_evaluations\":" << r.candidate_equation_evaluations
+                << ",\"reference_updates\":" << r.reference_updates << ",\"reference_stop\":\"" << r.reference_stop
+                << "\",\"original_residual\":";
+            JsonOptional(out,r.original_residual);
+            out << ",\"candidate_residual\":"; JsonOptional(out,r.candidate_residual);
+            out << ",\"reference_residual\":"; JsonOptional(out,r.reference_residual);
+            out << ",\"relative_coordinate_difference\":";
+            if (r.relative_coordinate_difference) JsonArray(out,*r.relative_coordinate_difference); else out << "null";
+            out << ",\"weight_max_difference\":"; JsonOptional(out,r.weight_max_difference);
+            out << ",\"floor_masks_equal\":";
+            if (r.floor_masks_equal) out << *r.floor_masks_equal; else out << "null";
+            out << '}';
+        }
         out << ",\"iterations\":" << solve.diagnostics.iterations << ",\"squared_beta_change\":";
         JsonOptional(out, solve.diagnostics.squared_beta_change);
         out << ",\"relative_variance_change\":"; JsonOptional(out, solve.diagnostics.relative_variance_change);
@@ -721,7 +744,8 @@ void LogDecisionAuditStart(SecondStageObservationSession & session, const FitOpt
         std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"start\",\"version\":\"" << RHBM_GEM_AUDIT_VERSION
             << "\",\"settings\":{\"threads\":" << options.thread_size << ",\"exclude_hydrogen\":" << options.exclude_hydrogen
             << ",\"boundary_halo_depth\":" << options.second_stage_boundary_halo_depth << ",\"final_polish\":" << options.enable_second_stage_dependency_polish
-            << ",\"final_polish_rounds\":" << options.second_stage_dependency_polish_max_iterations << "}}";
+            << ",\"final_polish_rounds\":" << options.second_stage_dependency_polish_max_iterations
+            << ",\"failed_only_refinement\":" << options.enable_second_stage_failed_only_refinement << "}}";
         session.Write(out.str());
     }
     catch (...) { session.Disable(); }

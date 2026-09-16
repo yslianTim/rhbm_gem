@@ -154,12 +154,13 @@ TEST(EndpointRefinementTest, AcceptedResultHasFreshWeightsAndExistingCovarianceF
     }
 }
 
-TEST(EndpointRefinementTest, BudgetRejectionPreservesEndpointButDoesNotInheritSuccess)
+TEST(EndpointRefinementTest, BudgetRejectionPreservesNativeHistoryButIsUnqualified)
 {
     const auto f{Fixture()}; ASSERT_EQ(f.expected.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
     const auto refined{second_stage_test::RefineMDPDEEndpoint(f,11)};
     EXPECT_FALSE(refined.accepted); EXPECT_EQ(refined.evidence.at("reason"),"budget-exhausted");
-    EXPECT_NE(refined.result.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    EXPECT_EQ(refined.result.status,f.expected.status);
+    EXPECT_EQ(refined.result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
     EXPECT_TRUE((refined.result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
     EXPECT_DOUBLE_EQ(refined.result.sigma_square,f.expected.sigma_square);
     EXPECT_TRUE((refined.result.data_weight.diagonal().array() == f.expected.data_weight.diagonal().array()).all());
@@ -197,6 +198,13 @@ TEST(EndpointRefinementTest, InvalidEndpointsAreNeverPromoted)
     f=Fixture(); f.dataset.y.array()+=100;
     result=second_stage_test::RefineMDPDEEndpoint(f,64);
     EXPECT_FALSE(result.accepted); EXPECT_EQ(result.evidence.at("reason"),"invalid-denominator");
+    f=Fixture(); f.dataset.X.conservativeResize(1,2); f.dataset.y.conservativeResize(1);
+    f.expected=rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto insufficient{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
+    EXPECT_EQ(insufficient.status,rhbm_gem::RHBMEstimationStatus::INSUFFICIENT_DATA);
+    EXPECT_EQ(insufficient.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+    EXPECT_EQ(insufficient.refinement->reference_updates,0);
+    EXPECT_EQ(insufficient.refinement->candidate_equation_evaluations,1);
 }
 
 TEST(EndpointRefinementTest, ExactFitAndNearZeroNoiseRemainDistinct)
@@ -211,7 +219,7 @@ TEST(EndpointRefinementTest, ExactFitAndNearZeroNoiseRemainDistinct)
     EXPECT_NE(noisy.evidence.at("reason"),"roundoff-exact-fit-boundary");
     EXPECT_LE(noisy.evidence.at("candidate_equation_evaluations").as_int64(),128);
     if (noisy.accepted) EXPECT_TRUE(noisy.evidence.at("branch").at("pass").as_bool());
-    else EXPECT_NE(noisy.result.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    else EXPECT_EQ(noisy.result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
 }
 
 TEST(EndpointRefinementTest, PoliciesDoNotConfuseNativeSuccessWithFreshQualification)
@@ -226,4 +234,107 @@ TEST(EndpointRefinementTest, PoliciesDoNotConfuseNativeSuccessWithFreshQualifica
         EXPECT_TRUE(ShouldRefineEndpoint(EndpointPolicy::FreshResidual,RHBMEstimationStatus::MAX_ITERATIONS_REACHED,fresh));
         EXPECT_EQ(ShouldRefineEndpoint(EndpointPolicy::FreshResidual,RHBMEstimationStatus::SUCCESS,fresh),!fresh);
     }
+}
+
+TEST(EndpointRefinementTest, FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshResidual)
+{
+    auto f{Fixture()};
+    f.options.tolerance = 0.1;
+    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    ASSERT_EQ(f.expected.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    const auto fresh{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,f.expected.beta_mdpde,
+        f.expected.sigma_square,f.options.data_weight_min)};
+    ASSERT_GT(fresh.scaled.lpNorm<Eigen::Infinity>(),1e-8);
+    const auto result{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
+    EXPECT_FALSE(result.refinement);
+    EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::NativeSuccess);
+    EXPECT_TRUE((result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
+    EXPECT_DOUBLE_EQ(result.sigma_square,f.expected.sigma_square);
+    EXPECT_TRUE((result.data_weight.diagonal().array() == f.expected.data_weight.diagonal().array()).all());
+    EXPECT_TRUE((result.data_covariance.diagonal().array() == f.expected.data_covariance.diagonal().array()).all());
+}
+
+TEST(EndpointRefinementTest, ProductionRefinesCapturedFailuresWithoutRewritingNativeStatus)
+{
+    const auto directory{std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()/"fixtures/mdpde"};
+    int count{};
+    for (const auto & entry : std::filesystem::directory_iterator(directory))
+    {
+        if (!entry.path().filename().string().starts_with("shape-") || entry.path().extension() != ".txt") continue;
+        auto f{second_stage_test::ReadShapeFixture(entry.path().string())};
+        f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+        ASSERT_EQ(f.expected.status,rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
+        const auto result{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
+        ASSERT_TRUE(result.refinement);
+        ASSERT_TRUE(result.refinement->accepted) << result.refinement->reason;
+        EXPECT_EQ(result.status,f.expected.status);
+        EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::RefinedSuccess);
+        EXPECT_LE(result.refinement->candidate_equation_evaluations,128);
+        EXPECT_LE(*result.refinement->candidate_residual,1e-8);
+        EXPECT_LE(*result.refinement->reference_residual,1e-10);
+        EXPECT_TRUE(*result.refinement->floor_masks_equal);
+        EXPECT_EQ(result.diagnostics.iterations,f.expected.diagnostics.iterations);
+        const auto rejected{rhbm_gem::mdpde_detail::RefineMDPDEEndpoint(f.dataset,f.alpha,f.options,f.expected,11)};
+        EXPECT_FALSE(rejected.refinement->accepted);
+        EXPECT_EQ(rejected.status,f.expected.status);
+        EXPECT_EQ(rejected.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+        EXPECT_TRUE((rejected.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
+        EXPECT_DOUBLE_EQ(rejected.sigma_square,f.expected.sigma_square);
+        EXPECT_TRUE((rejected.data_weight.diagonal().array() == f.expected.data_weight.diagonal().array()).all());
+        EXPECT_TRUE((rejected.data_covariance.diagonal().array() == f.expected.data_covariance.diagonal().array()).all());
+        ++count;
+    }
+    EXPECT_EQ(count,3);
+}
+
+TEST(EndpointRefinementTest, ReferenceBudgetFailureDoesNotUseTheCandidateOrReferenceAsFallback)
+{
+    auto f{Fixture()};
+    f.expected.status = rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+    f.expected.diagnostics.iterations = 10000;
+    const auto result{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
+    ASSERT_TRUE(result.refinement);
+    EXPECT_EQ(result.refinement->reason,"reference-unqualified");
+    EXPECT_EQ(result.refinement->reference_stop,"budget-exhausted");
+    EXPECT_EQ(result.refinement->reference_updates,0);
+    EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+    EXPECT_TRUE((result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
+    EXPECT_DOUBLE_EQ(result.sigma_square,f.expected.sigma_square);
+}
+
+TEST(EndpointRefinementTest, ReferenceStagnationIsRejectedEvenWithQualifiedRootEquations)
+{
+    auto f{Fixture(0.0)};
+    for (int i=0;i<40;++i)
+    {
+        const double r{static_cast<double>(i)/40.0};
+        f.dataset.y(i) = 1.0 - 2.0*r*r + 1e-6*std::sin(3.0*i+0.2);
+    }
+    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto result{rhbm_gem::mdpde_detail::RefineMDPDEEndpoint(f.dataset,f.alpha,f.options,f.expected)};
+    ASSERT_TRUE(result.refinement);
+    EXPECT_LE(result.refinement->candidate_residual.value_or(INFINITY),1e-8);
+    EXPECT_EQ(result.refinement->reference_stop,"stalled");
+    EXPECT_EQ(result.refinement->reason,"reference-unqualified");
+    EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+    EXPECT_EQ(result.status,f.expected.status);
+    EXPECT_TRUE((result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
+    EXPECT_TRUE((result.data_covariance.diagonal().array() == f.expected.data_covariance.diagonal().array()).all());
+}
+
+TEST(EndpointRefinementTest, FloorMaskMismatchRejectsOtherwiseCloseBranches)
+{
+    const auto f{Fixture()};
+    const auto reference{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,
+        f.expected.beta_mdpde,f.expected.sigma_square,f.options.data_weight_min)};
+    auto candidate{reference};
+    constexpr double floor{1e-8};
+    candidate.weights(0) = floor;
+    auto other{reference}; other.weights(0) = floor + 1e-10;
+    const auto branch{rhbm_gem::mdpde_detail::CompareMDPDEBranches(f.expected.beta_mdpde,f.expected.sigma_square,
+        candidate,f.expected.beta_mdpde,f.expected.sigma_square,other,floor)};
+    ASSERT_TRUE(branch.weight_max_difference);
+    EXPECT_LT(*branch.weight_max_difference,1e-6);
+    EXPECT_FALSE(*branch.floor_masks_equal);
+    EXPECT_FALSE(branch.pass);
 }

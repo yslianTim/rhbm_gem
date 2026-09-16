@@ -14,6 +14,19 @@ struct NominalShapeSolve
     std::optional<RHBMEstimationStatus> status{};
     RHBMBetaDiagnostics diagnostics{};
     std::optional<double> variance{};
+    std::optional<RHBMEndpointRefinementDiagnostics> refinement{};
+
+    RHBMSolveQualification Qualification() const
+    {
+        return status ? GetSolveQualification(*status, refinement) : RHBMSolveQualification::Unqualified;
+    }
+
+    std::optional<RHBMEstimationStatus> EffectiveStatus() const
+    {
+        if (!status) return std::nullopt;
+        if (Qualification() != RHBMSolveQualification::Unqualified) return RHBMEstimationStatus::SUCCESS;
+        return *status == RHBMEstimationStatus::SUCCESS ? RHBMEstimationStatus::NUMERICAL_FALLBACK : *status;
+    }
 };
 
 struct FixedPointOperatorEvidence
@@ -31,7 +44,7 @@ struct IterationProposalResult
     FixedPointOperatorEvidence fixed_point_operator{};
     SuspiciousBlockActivity block_activity{};
     std::vector<SuspiciousGaussianAssessment> assessment_by_atom{};
-    std::vector<std::optional<RHBMEstimationStatus>> local_refit_status_by_atom{};
+    std::vector<NominalShapeSolve> local_refit_solves{};
     ClusterHealthMap health_by_key{};
 };
 

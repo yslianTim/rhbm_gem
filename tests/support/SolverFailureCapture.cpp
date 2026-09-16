@@ -149,6 +149,39 @@ ScopedSolverCaptureMember::ScopedSolverCaptureMember(const SolverCaptureContext 
 }
 ScopedSolverCaptureMember::~ScopedSolverCaptureMember() { member = std::move(previous); }
 
+void CaptureShapeSolve(const rhbm_gem::RHBMBetaEstimateResult & result) noexcept
+{
+    try
+    {
+        if (IsEndpointOperatorProbe() || !member.contains("operator_id")) return;
+        const auto * directory{std::getenv("RHBM_TEST_SOLVER_CAPTURE_DIR")};
+        if (!directory || !*directory) return;
+        namespace j = boost::json;
+        auto record{member};
+        record["native_status"] = static_cast<int>(result.status);
+        record["qualification"] = static_cast<int>(result.Qualification());
+        if (result.refinement)
+        {
+            const auto & r{*result.refinement};
+            j::object evidence{{"accepted",r.accepted},{"reason",r.reason},
+                {"candidate_equation_evaluations",r.candidate_equation_evaluations},
+                {"reference_updates",r.reference_updates},{"reference_stop",r.reference_stop},
+                {"original_residual",Number(r.original_residual.value_or(NAN))},
+                {"candidate_residual",Number(r.candidate_residual.value_or(NAN))},
+                {"reference_residual",Number(r.reference_residual.value_or(NAN))}};
+            if (r.relative_coordinate_difference) evidence["relative_coordinate_difference"] = j::value_from(*r.relative_coordinate_difference);
+            if (r.weight_max_difference) evidence["weight_max_difference"] = Number(*r.weight_max_difference);
+            if (r.floor_masks_equal) evidence["floor_masks_equal"] = *r.floor_masks_equal;
+            record["refinement"] = std::move(evidence);
+        }
+        std::lock_guard lock(capture_mutex);
+        std::ofstream out(std::filesystem::path(directory)/"shape-solves.jsonl",std::ios::app);
+        out.exceptions(std::ios::failbit | std::ios::badbit);
+        out << j::serialize(record) << '\n';
+    }
+    catch (...) { /* The external harness requires a complete solve population. */ }
+}
+
 boost::json::object CurrentSolverCaptureMember()
 {
     boost::json::object out;

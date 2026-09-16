@@ -220,16 +220,14 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorMapsPermutedAtomColumn
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksSolverQualification)
 {
-    EXPECT_TRUE(detail::IsLocalRefitStatusSolverQualified(
-        rg::RHBMEstimationStatus::SUCCESS));
-    EXPECT_FALSE(detail::IsLocalRefitStatusSolverQualified(
-        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
+    EXPECT_TRUE(rg::GetSolveQualification(rg::RHBMEstimationStatus::SUCCESS, {}) != rg::RHBMSolveQualification::Unqualified);
+    EXPECT_FALSE(rg::GetSolveQualification(rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED, {}) != rg::RHBMSolveQualification::Unqualified);
     for (const auto status : {
         rg::RHBMEstimationStatus::NUMERICAL_FALLBACK,
         rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
         rg::RHBMEstimationStatus::SINGLE_MEMBER })
     {
-        EXPECT_FALSE(detail::IsLocalRefitStatusSolverQualified(status));
+        EXPECT_FALSE(rg::GetSolveQualification(status, {}) != rg::RHBMSolveQualification::Unqualified);
     }
 }
 

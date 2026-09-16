@@ -81,8 +81,6 @@ struct ClusterHealth
 
 using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
-bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status);
-
 struct JointOffsetDiagnostics
 {
     int iterations{ 0 };

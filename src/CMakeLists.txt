@@ -97,6 +97,7 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/LocalPotentialSeries.cpp
     utils/hrl/RHBMTrainer.cpp
     utils/hrl/RHBMHelper.cpp
+    utils/hrl/MDPDEEndpointRefinement.cpp
     utils/hrl/LinearizationService.cpp
 )
 

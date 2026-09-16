@@ -79,7 +79,10 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
                 &Self::asymmetry_flag },
             RequestField{ "sampling_method", "--sampling-method",
                 "Sphere sampling method",
-                &Self::sampling_method });
+                &Self::sampling_method },
+            RequestField{ "enable_second_stage_failed_only_refinement", "--second-stage-failed-only-refinement",
+                "Refine failed second-stage shape solves with equation and branch verification",
+                &Self::enable_second_stage_failed_only_refinement });
     }
 };
 

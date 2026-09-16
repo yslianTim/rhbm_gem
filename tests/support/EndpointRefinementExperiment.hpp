@@ -22,6 +22,7 @@ public:
 };
 
 bool IsEndpointOperatorProbe() noexcept;
+bool IsEndpointExperimentActive() noexcept;
 rhbm_gem::RHBMBetaEstimateResult ApplyEndpointExperiment(const ShapeFixture &);
 void CaptureEndpointInitialState(const rhbm_gem::core::detail::SecondStageContext &,
     const rhbm_gem::core::detail::FitState &, const rhbm_gem::core::FitOptions &);

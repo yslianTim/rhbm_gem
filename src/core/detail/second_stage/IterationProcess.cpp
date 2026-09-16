@@ -674,7 +674,7 @@ static IterationResult RunIteration(
         iteration_state.selected_atom_index_list,
         cluster_key_list,
         selection.block_activity,
-        proposal_result.local_refit_status_by_atom,
+        proposal_result.local_refit_solves,
         proposal_result.health_by_key);
     // Advance accepted progress; a changed partition takes effect next attempt.
     iteration_state.accepted_iteration_count++;

@@ -178,12 +178,12 @@ bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const SuspiciousBlockActivity & block_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
+    std::span<const NominalShapeSolve> local_refit_solves,
     const ClusterHealthMap & health_by_key)
 {
     const auto atom_count{ block_activity.shape_fixed_atom_mask.size() };
     ValidateBlockActivitySize(atom_count, block_activity);
-    if (local_refit_status_by_atom.size() != atom_count)
+    if (local_refit_solves.size() != atom_count)
     {
         throw std::invalid_argument("Convergence audit qualification inputs are inconsistent.");
     }
@@ -191,8 +191,8 @@ bool AreActiveCoordinatesSolverQualified(
     for (const auto atom_index : atom_index_list)
     {
         if (!block_activity.HasActiveShape(atom_index)) continue;
-        const auto & status{ local_refit_status_by_atom[atom_index] };
-        if (!status.has_value() || !IsLocalRefitStatusSolverQualified(*status))
+        const auto & solve{ local_refit_solves[atom_index] };
+        if (solve.Qualification() == RHBMSolveQualification::Unqualified)
         {
             return false;
         }

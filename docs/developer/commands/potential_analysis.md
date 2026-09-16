@@ -43,6 +43,7 @@ Command-specific fields:
 - `saved_key_tag`
 - `asymmetry_flag`
 - `sampling_method`
+- `enable_second_stage_failed_only_refinement`
 
 `sampling_method` uses the shared `SphereSamplingMethod` enum and is exposed
 through the `--sampling-method` CLI flag.
@@ -86,6 +87,40 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 
 `CommandRunner` creates `output_dir` during filesystem preflight when needed.
+
+## Failed-only endpoint refinement
+
+Second-stage shape fitting enables failed-only refinement by default. Disable it
+with `--second-stage-failed-only-refinement false`, or set the request field
+`enable_second_stage_failed_only_refinement` to `false` in C++ or `False` in
+Python. Direct fitting callers use the matching `FitOptions` field.
+First-stage fitting, alpha training, group estimation and the generic
+`EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints keep their native behavior.
+
+A native successful solve is used unchanged, without a fresh-equation evaluation.
+A failed solve may be refined from its own endpoint. Acceptance requires fresh
+scaled equations at `1e-8`, a valid positive-variance Gaussian, weighted rank and
+denominator checks, and agreement with a fixed-point continuation from the
+original endpoint. The reference must reach `1e-10`; transformed coordinates and
+weights must agree within `1e-6`, with identical weight-floor activation.
+
+The candidate budget is 128 equation evaluations including verification. Reference
+continuation is separate work, capped at 10,000 total fixed-point updates including
+the native iterations. These constants are not public tuning options. Exact-fit
+variance boundaries are not promoted to successful solves. Rejection preserves
+the original numerical result; the reference is never used as a fallback.
+
+`RHBMBetaEstimateResult.status` and `diagnostics` retain native solver history.
+Use `Qualification()` to distinguish `NativeSuccess`, `RefinedSuccess` and
+`Unqualified`. The optional `refinement` diagnostics record acceptance, rejection
+reason, residuals, branch differences and candidate/reference work. Audit shape
+records retain effective `status` for existing consumers and additionally expose
+`native_status`, `qualification` and optional `refinement` evidence. No database
+schema change is required.
+
+Recovery continues to require qualified inner endpoints. Refinement does not
+relax outer convergence, offset IRLS or the best-objective bound, and does not
+itself establish convergence. See the [production validation](../failed-only-refinement.md).
 
 ## Internal fitting ranges
 

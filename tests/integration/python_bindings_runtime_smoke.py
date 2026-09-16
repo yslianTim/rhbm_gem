@@ -108,6 +108,9 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.only_backbone is True
 
     analysis = m.PotentialAnalysisRequest()
+    assert analysis.enable_second_stage_failed_only_refinement is True
+    analysis.enable_second_stage_failed_only_refinement = False
+    assert analysis.enable_second_stage_failed_only_refinement is False
     assert analysis.map_normalization_flag is True
     assert analysis.exclude_hydrogen is False
     assert analysis.only_backbone is False

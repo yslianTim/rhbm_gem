@@ -1,4 +1,5 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include "utils/hrl/MDPDEEndpointRefinement.hpp"
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/MDPDEExperiment.hpp"
@@ -391,14 +392,13 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
 }
 } // namespace
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-namespace second_stage_test {
+namespace rhbm_gem::mdpde_detail {
 MDPDEEquationEvidence EvaluateMDPDEEquations(const RHBMMemberDataset & data,
     double alpha, const Eigen::VectorXd & beta, double variance, double floor)
 {
     MDPDEEquationEvidence result;
     result.reason = "invalid-input";
-    if (data.X.rows() <= data.X.cols() || data.X.cols() != beta.size() ||
+    if (data.X.cols() <= 0 || data.X.rows() <= data.X.cols() || data.X.cols() != beta.size() ||
         data.y.size() != data.X.rows() || !data.X.allFinite() || !data.y.allFinite() ||
         !beta.allFinite() || !std::isfinite(alpha) || alpha < 0.0 ||
         !std::isfinite(floor) || floor <= 0.0) return result;
@@ -440,6 +440,26 @@ MDPDEEquationEvidence EvaluateMDPDEEquations(const RHBMMemberDataset & data,
     result.reason = result.valid ? "valid" : "nonfinite-residual";
     return result;
 }
+
+Eigen::VectorXd CalculateMDPDEBeta(const RHBMMemberDataset & data, const Eigen::VectorXd & weights)
+{
+    return CalculateBetaByMDPDE(data.X, data.y, weights.asDiagonal());
+}
+
+double CalculateMDPDEVariance(const RHBMMemberDataset & data, double alpha,
+    const Eigen::VectorXd & weights, const Eigen::VectorXd & beta)
+{
+    return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
+}
+
+RHBMDiagonalMatrix CalculateMDPDECovariance(double variance, const Eigen::VectorXd & weights)
+{
+    return CalculateDataCovariance(variance, weights.asDiagonal());
+}
+} // namespace rhbm_gem::mdpde_detail
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+namespace second_stage_test {
 
 Eigen::VectorXd MDPDETestBeta(const RHBMMemberDataset & data,
     const Eigen::VectorXd & weights, const std::string & backend)

@@ -43,7 +43,8 @@ public:
         const std::vector<double> & sample_response_list,
         double alpha_r,
         int thread_size,
-        const GaussianModel3D & offset_model) const;
+        const GaussianModel3D & offset_model,
+        bool enable_failed_only_refinement = false) const;
 };
 
 } // namespace rhbm_gem::core::detail

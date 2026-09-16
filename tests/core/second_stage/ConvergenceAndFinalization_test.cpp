@@ -594,7 +594,7 @@ TEST(EstimatorSecondStageDefenseTest, IndependentOffsetActivityRequiresItsOwnClu
     const std::vector<detail::TransformedChange> changes(2);
     const auto summary{ detail::SummarizeActiveDofChanges(changes, population) };
     EXPECT_TRUE(detail::IsTransformedPercentileConverged(summary));
-    const std::vector<std::optional<rg::RHBMEstimationStatus>> status(2);
+    const std::vector<detail::NominalShapeSolve> status(2);
     EXPECT_FALSE(detail::AreActiveCoordinatesSolverQualified(
         atoms, { atoms }, activity, status, {}));
     detail::ClusterHealthMap health;
@@ -695,8 +695,8 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateQualifiesIndependent
     const auto nominal_population{ detail::BuildActiveCoordinatePopulation(atom_index_list, nominal) };
     certificate.operator_nominal_p99 =
         detail::SummarizeActiveDofChanges(changes, nominal_population).percentile_list;
-    const std::vector<std::optional<rg::RHBMEstimationStatus>>
-        local_refit_status_by_atom(2, rg::RHBMEstimationStatus::SUCCESS);
+    const std::vector<detail::NominalShapeSolve>
+        local_refit_status_by_atom(2, {rg::RHBMEstimationStatus::SUCCESS});
     detail::ClusterHealthMap health_by_key;
     health_by_key.emplace(
         atom_index_list,

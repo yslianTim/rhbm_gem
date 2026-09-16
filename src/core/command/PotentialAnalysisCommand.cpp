@@ -131,6 +131,7 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     FitOptions options;
     options.thread_size = request.job_count;
     options.exclude_hydrogen = request.exclude_hydrogen;
+    options.enable_second_stage_failed_only_refinement = request.enable_second_stage_failed_only_refinement;
     try
     {
         RunPotentialFittingWorkflow(*model_object, options);

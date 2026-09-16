@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -52,8 +54,34 @@ struct RHBMBetaDiagnostics
     std::optional<double> relative_variance_change{};
 };
 
+enum class RHBMSolveQualification { Unqualified, NativeSuccess, RefinedSuccess };
+
+struct RHBMEndpointRefinementDiagnostics
+{
+    bool accepted{ false };
+    std::string reason{};
+    int candidate_equation_evaluations{ 0 };
+    int reference_updates{ 0 };
+    std::string reference_stop{};
+    std::optional<double> original_residual{}, candidate_residual{}, reference_residual{};
+    std::optional<std::array<double, 3>> relative_coordinate_difference{};
+    std::optional<double> weight_max_difference{};
+    std::optional<bool> floor_masks_equal{};
+};
+
+inline RHBMSolveQualification GetSolveQualification(
+    RHBMEstimationStatus status,
+    const std::optional<RHBMEndpointRefinementDiagnostics> & refinement)
+{
+    if (refinement)
+        return refinement->accepted ? RHBMSolveQualification::RefinedSuccess : RHBMSolveQualification::Unqualified;
+    return status == RHBMEstimationStatus::SUCCESS ?
+        RHBMSolveQualification::NativeSuccess : RHBMSolveQualification::Unqualified;
+}
+
 struct RHBMBetaEstimateResult
 {
+    // Native fixed-point status; refinement never rewrites this history.
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
     RHBMParameterVector beta_ols;
     RHBMParameterVector beta_mdpde;
@@ -61,6 +89,9 @@ struct RHBMBetaEstimateResult
     RHBMDiagonalMatrix data_weight;
     RHBMDiagonalMatrix data_covariance;
     RHBMBetaDiagnostics diagnostics{};
+    std::optional<RHBMEndpointRefinementDiagnostics> refinement{};
+
+    RHBMSolveQualification Qualification() const { return GetSolveQualification(status, refinement); }
 };
 
 struct RHBMGroupEstimationInput

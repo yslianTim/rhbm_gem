@@ -21,7 +21,8 @@ namespace {
 NominalShapeSolve ShapeSolveEvidence(const LocalGaussianResult & result)
 {
     if (!result.fit_result) return {};
-    return { result.fit_result->status, result.fit_result->diagnostics, result.fit_result->sigma_square };
+    return { result.fit_result->status, result.fit_result->diagnostics, result.fit_result->sigma_square,
+        result.fit_result->refinement };
 }
 
 struct LocalAtomRefitResult
@@ -29,7 +30,7 @@ struct LocalAtomRefitResult
     LocalGaussianResult result{};
     std::optional<GaussianModel3D> unrestricted_model{};
     SuspiciousGaussianAssessment assessment{};
-    std::optional<RHBMEstimationStatus> attempted_refit_status{};
+    NominalShapeSolve attempted_refit_solve{};
 };
 
 static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
@@ -38,7 +39,8 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const GaussianModel3D & offset_model,
     const std::vector<double> & adjusted_response_list,
     int thread_size,
-    NominalShapeSolve & attempted_solve)
+    NominalShapeSolve & attempted_solve,
+    bool enable_failed_only_refinement)
 {
     auto adjusted_sampling_entries{
         BuildSecondStageAdjustedSamples(atom_context, adjusted_response_list)
@@ -48,7 +50,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         BuildPreviousSuspiciousProfileBaseline(adjusted_sampling_entries, previous_model)
     };
     SuspiciousGaussianAssessment failed_shape_assessment;
-    std::optional<RHBMEstimationStatus> attempted_refit_status;
+    NominalShapeSolve attempted_refit_solve;
     std::optional<GaussianModel3D> unrestricted_model;
     try
     {
@@ -57,13 +59,11 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 adjusted_response_list,
                 atom_context.alpha_r,
                 thread_size,
-                offset_model)
+                offset_model,
+                enable_failed_only_refinement)
         };
         attempted_solve = ShapeSolveEvidence(candidate_result);
-        if (candidate_result.fit_result.has_value())
-        {
-            attempted_refit_status = candidate_result.fit_result->status;
-        }
+        attempted_refit_solve = attempted_solve;
         if (IsValidSecondStageGaussianModel(candidate_result.mdpde.GetModel()))
         {
             unrestricted_model = candidate_result.mdpde.GetModel();
@@ -81,7 +81,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
                 std::move(candidate_result),
                 std::move(unrestricted_model),
                 assessment,
-                attempted_refit_status
+                attempted_refit_solve
             };
         }
         failed_shape_assessment = assessment;
@@ -111,7 +111,7 @@ static std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         std::move(result),
         std::move(unrestricted_model),
         failed_shape_assessment,
-        attempted_refit_status
+        attempted_refit_solve
     };
 }
 
@@ -161,7 +161,8 @@ RunUnrestrictedShapeRefits(
                     adjusted_response_cache.at(atom_index),
                     context.atom_list.at(atom_index).alpha_r,
                     refit_thread_size,
-                    GetFitModel(operator_model_bundle.node, atom_index))
+                    GetFitModel(operator_model_bundle.node, atom_index),
+                    options.enable_second_stage_failed_only_refinement)
             };
             result.at(atom_index) = std::move(candidate);
         }
@@ -283,8 +284,8 @@ IterationProposalResult BuildIterationProposal(
         SuspiciousUpdateMask(context.atom_list.size(), 0),
         SuspiciousUpdateMask(context.atom_list.size(), 0)
     };
-    std::vector<std::optional<RHBMEstimationStatus>>
-        local_refit_status_by_atom(context.atom_list.size());
+    std::vector<NominalShapeSolve>
+        local_refit_solves(context.atom_list.size());
     ClusterHealthMap health_by_key;
     for (std::size_t cluster_position = 0;
         cluster_position < cluster_key_list.size();
@@ -371,7 +372,8 @@ IterationProposalResult BuildIterationProposal(
                     GetFitModel(current_model_snapshot.node, atom_index),
                     refit_response_cache.at(atom_index),
                     refit_thread_size,
-                    attempted_shape_solves.at(atom_index));
+                    attempted_shape_solves.at(atom_index),
+                    options.enable_second_stage_failed_only_refinement);
         }
         catch (...)
         {
@@ -429,10 +431,9 @@ IterationProposalResult BuildIterationProposal(
                     fixed_point_operator.shape_available_atom_mask.at(atom_index) = 1;
                 }
             }
-            local_refit_status_by_atom.at(atom_index) = refit_result->attempted_refit_status;
+            local_refit_solves.at(atom_index) = refit_result->attempted_refit_solve;
             const auto shape_solver_qualified{
-                refit_result->attempted_refit_status.has_value() &&
-                IsLocalRefitStatusSolverQualified(*refit_result->attempted_refit_status)
+                refit_result->attempted_refit_solve.Qualification() != RHBMSolveQualification::Unqualified
             };
             if (!shape_solver_qualified)
             {
@@ -519,7 +520,7 @@ IterationProposalResult BuildIterationProposal(
         std::move(fixed_point_operator),
         std::move(block_activity),
         std::move(assessment_by_atom),
-        std::move(local_refit_status_by_atom),
+        std::move(local_refit_solves),
         std::move(health_by_key)
     };
 }
@@ -538,8 +539,7 @@ bool IsNominalOperatorSolverQualified(const FixedPointOperatorEvidence & evidenc
         }
     }
     for (std::size_t atom = 0; atom < evidence.state.size(); ++atom)
-        if (!offset_qualified[atom] || !evidence.shape_solves[atom].status ||
-            !IsLocalRefitStatusSolverQualified(*evidence.shape_solves[atom].status)) return false;
+        if (!offset_qualified[atom] || evidence.shape_solves[atom].Qualification() == RHBMSolveQualification::Unqualified) return false;
     return true;
 }
 

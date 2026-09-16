@@ -85,6 +85,10 @@ def capture(args):
     fold.validate_input_hashes({"model": args.model, "map": args.map,
         "manifest": Path(str(args.map) + ".simulation.json")}, baseline["input_hashes"])
     command = fold.build_command(executable, directory / "database.sqlite", args.model.resolve(), args.map.resolve())
+    # Historical binaries predate the production switch; they are already native-only.
+    help_text = subprocess.check_output([str(executable), "potential_analysis", "--help"], text=True)
+    if "--second-stage-failed-only-refinement" in help_text:
+        command += ["--second-stage-failed-only-refinement", "false"]
     command[command.index("-v") + 1] = str(args.verbosity)
     command[command.index("-j") + 1] = str(args.jobs)
     env = os.environ.copy()

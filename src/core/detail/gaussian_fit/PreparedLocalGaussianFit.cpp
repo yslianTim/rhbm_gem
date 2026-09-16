@@ -7,6 +7,7 @@
 #define RHBM_TEST_WORK(kind) ((void)0)
 #endif
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "utils/hrl/MDPDEEndpointRefinement.hpp"
 
 #include <cmath>
 #include <stdexcept>
@@ -131,7 +132,8 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     const std::vector<double> & sample_response_list,
     double alpha_r,
     int thread_size,
-    const GaussianModel3D & offset_model) const
+    const GaussianModel3D & offset_model,
+    bool enable_failed_only_refinement) const
 {
     RHBM_TEST_WORK(Solver);
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
@@ -147,8 +149,20 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     second_stage_test::CaptureShapeFailure(dataset, alpha_r, RHBMExecutionOptions{ .thread_size = thread_size }, result);
-    result = second_stage_test::ApplyEndpointExperiment({dataset,alpha_r,
-        RHBMExecutionOptions{.thread_size=thread_size},result});
+    if (second_stage_test::IsEndpointExperimentActive())
+    {
+        result = second_stage_test::ApplyEndpointExperiment({dataset,alpha_r,
+            RHBMExecutionOptions{.thread_size=thread_size},result});
+    }
+    else
+#endif
+    if (enable_failed_only_refinement)
+    {
+        result = mdpde_detail::ApplyFailedOnlyRefinement(dataset, alpha_r,
+            RHBMExecutionOptions{.thread_size = thread_size}, result);
+    }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    second_stage_test::CaptureShapeSolve(result);
 #endif
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }

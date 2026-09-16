@@ -826,3 +826,11 @@ TEST(CommandScenariosTest, PositionEstimationDoesNotRequireDatabaseConfiguration
 }
 
 #endif
+
+TEST(CommandScenariosTest, FailedOnlyRefinementDefaultsOnAndCanBeDisabled)
+{
+    rhbm_gem::core::PotentialAnalysisRequest request;
+    EXPECT_TRUE(request.enable_second_stage_failed_only_refinement);
+    request.enable_second_stage_failed_only_refinement = false;
+    EXPECT_FALSE(request.enable_second_stage_failed_only_refinement);
+}

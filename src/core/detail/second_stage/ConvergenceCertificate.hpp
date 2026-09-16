@@ -30,6 +30,7 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     const ActiveCoordinatePopulation & population);
 
 struct FixedPointOperatorEvidence;
+struct NominalShapeSolve;
 
 struct FixedPointOperatorSummary
 {
@@ -84,7 +85,7 @@ bool AreActiveCoordinatesSolverQualified(
     const std::vector<std::size_t> & atom_index_list,
     const std::vector<ClusterKey> & cluster_key_list,
     const SuspiciousBlockActivity & block_activity,
-    std::span<const std::optional<RHBMEstimationStatus>> local_refit_status_by_atom,
+    std::span<const NominalShapeSolve> local_refit_solves,
     const ClusterHealthMap & health_by_key);
 
 } // namespace rhbm_gem::core::detail

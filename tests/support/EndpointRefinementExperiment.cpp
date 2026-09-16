@@ -107,7 +107,7 @@ j::object Operator(const d::FixedPointOperatorEvidence & evidence, const d::FitS
     j::array models, shape, offsets;
     for (const auto & model : evidence.state) models.push_back(Model(model));
     for (const auto & s : evidence.shape_solves) shape.push_back(j::object{
-        {"status",s.status ? j::value(static_cast<int>(*s.status)) : j::value(nullptr)},
+        {"status",s.EffectiveStatus() ? j::value(static_cast<int>(*s.EffectiveStatus())) : j::value(nullptr)},
         {"variance",Number(s.variance.value_or(NAN))},{"iterations",s.diagnostics.iterations},
         {"beta_change",Number(s.diagnostics.squared_beta_change.value_or(NAN))},
         {"variance_change",Number(s.diagnostics.relative_variance_change.value_or(NAN))}});
@@ -179,6 +179,8 @@ ScopedSecondStageEndpointExperiment::~ScopedSecondStageEndpointExperiment()
 }
 bool IsEndpointOperatorProbe() noexcept
 { const auto * run{active.load()}; return run && run->probe; }
+bool IsEndpointExperimentActive() noexcept
+{ return active.load() != nullptr; }
 
 rhbm_gem::RHBMBetaEstimateResult ApplyEndpointExperiment(const ShapeFixture & f)
 {
@@ -204,7 +206,9 @@ rhbm_gem::RHBMBetaEstimateResult ApplyEndpointExperiment(const ShapeFixture & f)
         if (!accepted) record["rejected_input"] = j::object{{"X",Matrix(f.dataset.X)},
             {"y",Vector(f.dataset.y)},{"alpha",f.alpha},{"weight_floor",f.options.data_weight_min}};
     }
-    record["effective_status"] = static_cast<int>(result.status);
+    record["effective_status"] = static_cast<int>(result.Qualification() != rhbm_gem::RHBMSolveQualification::Unqualified ?
+        RHBMEstimationStatus::SUCCESS : (result.status == RHBMEstimationStatus::SUCCESS ?
+            RHBMEstimationStatus::NUMERICAL_FALLBACK : result.status));
     record["effective_beta"] = Vector(result.beta_mdpde); record["effective_variance"] = Number(result.sigma_square);
     std::lock_guard lock(run->mutex);
     ++run->calls; run->triggered += trigger; run->accepted += accepted;

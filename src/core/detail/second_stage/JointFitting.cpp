@@ -244,21 +244,6 @@ const char * LocalRefitStatusText(RHBMEstimationStatus status)
     throw std::logic_error("Unknown local-refit status.");
 }
 
-bool IsLocalRefitStatusSolverQualified(RHBMEstimationStatus status)
-{
-    switch (status)
-    {
-    case RHBMEstimationStatus::SUCCESS:
-        return true;
-    case RHBMEstimationStatus::MAX_ITERATIONS_REACHED:
-    case RHBMEstimationStatus::SINGLE_MEMBER:
-    case RHBMEstimationStatus::INSUFFICIENT_DATA:
-    case RHBMEstimationStatus::NUMERICAL_FALLBACK:
-        return false;
-    }
-    throw std::logic_error("Local Gaussian refit status is invalid.");
-}
-
 static algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,

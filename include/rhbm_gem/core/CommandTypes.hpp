@@ -86,6 +86,7 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::string saved_key_tag{ "model" };
     bool asymmetry_flag{ false };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
+    bool enable_second_stage_failed_only_refinement{ true };
 };
 
 struct PotentialDisplayRequest : public CommandRequestBase

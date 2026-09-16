@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/SecondStageTestSupport.hpp"
 #include "support/SolverFailureCapture.hpp"
+#include "support/MDPDEExperiment.hpp"
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
@@ -58,6 +59,64 @@ TEST(ProductionFittingTest, NominalQualificationBelongsToEveryEndpoint)
     evidence.offset_solves.at({1}).status = d::JointOffsetSolveStatus::Converged;
     evidence.shape_available_atom_mask[1] = 0;
     EXPECT_FALSE(d::AssessNominalOperator(evidence, fixture.state).certificate.StrictOperatorPassed());
+}
+
+TEST(ProductionFittingTest, RefinedQualificationReachesNominalAndActiveCertificates)
+{
+    const auto path{std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()/
+        "fixtures/mdpde/shape-maximum-iterations-final-32-33-99.txt"};
+    auto f{second_stage_test::ReadShapeFixture(path.string())};
+    f.expected = rg::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
+    const auto refined{rg::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
+    ASSERT_EQ(refined.Qualification(),rg::RHBMSolveQualification::RefinedSuccess);
+    auto fixture{Fixture()};
+    auto evidence{QualifiedEvidence(fixture.state)};
+    evidence.shape_solves[1] = {refined.status,refined.diagnostics,refined.sigma_square,refined.refinement};
+    EXPECT_EQ(evidence.shape_solves[1].status,rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
+    EXPECT_TRUE(d::IsNominalOperatorSolverQualified(evidence));
+    EXPECT_TRUE(d::QualifiedNominalResidualMeanSquare(evidence,fixture.state));
+    d::ClusterHealthMap health;
+    health.emplace(d::ClusterKey{0,1}, d::ClusterHealth{d::JointOffsetSolveStatus::Converged});
+    const d::SuspiciousBlockActivity active{{0,0},{0,0},{0,0}};
+    EXPECT_TRUE(d::AreActiveCoordinatesSolverQualified({0,1},{{0,1}},active,evidence.shape_solves,health));
+    evidence.shape_solves[1].refinement->accepted = false;
+    EXPECT_FALSE(d::IsNominalOperatorSolverQualified(evidence));
+    EXPECT_FALSE(d::AreActiveCoordinatesSolverQualified({0,1},{{0,1}},active,evidence.shape_solves,health));
+    evidence.shape_solves[1].refinement->accepted = true;
+    evidence.shape_solves[1].status.reset();
+    EXPECT_FALSE(d::IsNominalOperatorSolverQualified(evidence));
+    evidence.shape_solves[1].status = refined.status;
+    evidence.offset_solves.at({1}).status = d::JointOffsetSolveStatus::IrlsMaximumIterationsReached;
+    EXPECT_FALSE(d::QualifiedNominalResidualMeanSquare(evidence,fixture.state));
+}
+
+TEST(ProductionFittingTest, PreparedShapeRefinementIsExplicitAndGenericLocalFitRemainsNative)
+{
+    const auto path{std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()/
+        "fixtures/mdpde/shape-maximum-iterations-final-32-33-99.txt"};
+    const auto f{second_stage_test::ReadShapeFixture(path.string())};
+    LocalPotentialSampleList samples;
+    std::vector<double> responses;
+    for (Eigen::Index i=0;i<f.dataset.y.size();++i)
+    {
+        const double radius{std::sqrt(-2.0*f.dataset.X(i,1))};
+        responses.push_back(std::exp(f.dataset.y(i)));
+        samples.push_back({responses.back(),{radius,{radius,0.0,0.0},true}});
+    }
+    const d::PreparedLocalGaussianDesign design{samples,0.0,1.0};
+    const rg::GaussianModel3D offset{0.0,1.0,0.0};
+    const auto native{design.Estimate(responses,f.alpha,1,offset)};
+    const auto refined{design.Estimate(responses,f.alpha,1,offset,true)};
+    ASSERT_TRUE(native.fit_result); ASSERT_TRUE(refined.fit_result);
+    EXPECT_FALSE(native.fit_result->refinement);
+    EXPECT_EQ(native.fit_result->status,rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
+    EXPECT_EQ(refined.fit_result->Qualification(),rg::RHBMSolveQualification::RefinedSuccess);
+    const rg::core::FitOptions options;
+    EXPECT_TRUE(options.enable_second_stage_failed_only_refinement);
+    const auto generic{rg::core::EstimateLocalGaussian(samples,f.alpha,options,offset)};
+    ASSERT_TRUE(generic.fit_result);
+    EXPECT_FALSE(generic.fit_result->refinement);
+    EXPECT_DOUBLE_EQ(generic.fit_result->sigma_square,native.fit_result->sigma_square);
 }
 
 TEST(ProductionFittingTest, NominalEvaluationIsReadOnlyAndUsesUnrestrictedSolveStatus)
