@@ -3,6 +3,7 @@
 #include "support/ObservationMatchedExperiment.hpp"
 #include "support/EstimatedNeighborSweep.hpp"
 #include "support/MatchedJointAC.hpp"
+#include "support/UniqueStencilGrid.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -16,6 +17,11 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 6 && std::string(argv[1]) == "unique-stencil-grid")
+        {
+            second_stage_test::matched::unique_grid::Run(argv[2],argv[3],argv[4],argv[5]);
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "matched-joint-ac")
         {
             second_stage_test::matched::joint_ac::Run(argv[2],argv[3],argv[4],argv[5]);
@@ -76,7 +82,7 @@ int main(int argc, char ** argv)
             return 0;
         }
         if (argc != 4 || std::string(argv[1]) != "solve")
-            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | matched-sweep|matched-joint-ac MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
+            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
         const fs::path output{ argv[3] };
         fs::create_directories(output);
         std::size_t count{}, offsets{};

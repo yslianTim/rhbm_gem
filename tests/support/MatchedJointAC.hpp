@@ -1,5 +1,6 @@
 #pragma once
 #include "support/ObservationMatchedExperiment.hpp"
+#include <Eigen/SparseCore>
 
 namespace second_stage_test::matched::joint_ac {
 struct LinearResult
@@ -27,11 +28,12 @@ struct Evidence
 Eigen::VectorXd BlockVariances(const Eigen::VectorXd & residual, const Blocks &);
 double Objective(const Eigen::VectorXd & residual, const Eigen::VectorXd & variances, const Blocks &);
 LinearResult WeightedSolve(const Eigen::MatrixXd &, const Eigen::VectorXd &,
-    const Eigen::VectorXd & weights, bool svd = false);
+    const Eigen::VectorXd & weights, bool svd = false, bool blocked_svd = false, const Eigen::SparseMatrix<double> * sparse_design = nullptr);
 Evidence Evaluate(const Eigen::MatrixXd &, const Eigen::VectorXd &,
     const Eigen::VectorXd & beta, const Eigen::VectorXd & variances, const Blocks &);
 boost::json::object Fit(const Eigen::MatrixXd &, const Eigen::VectorXd &,
-    const Eigen::VectorXd & initial, const Blocks &, int budget = 2000, int reference_budget = 4000);
+    const Eigen::VectorXd & initial, const Blocks &, int budget = 2000, int reference_budget = 4000,
+    bool blocked_svd = false, const Eigen::SparseMatrix<double> * sparse_design = nullptr);
 struct Components
 {
     std::vector<std::vector<std::size_t>> atoms, rows, contributors;

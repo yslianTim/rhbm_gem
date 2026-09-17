@@ -1,0 +1,95 @@
+{
+  "cpp_targeted_tests": 34,
+  "python_tests": 62,
+  "ctest_groups": 8,
+  "lint_passed": true,
+  "production_isolation": {
+    "build_testing": false,
+    "experimental_symbols": [],
+    "library": "build/unique-stencil-grid/off/src/librhbm_gem.dylib"
+  },
+  "svd_preconditioner_consistency": true,
+  "sparse_qr_consistency": true,
+  "sparse_row_reduction_consistency": true,
+  "documentation_links_passed": true,
+  "test_log_sha256": {
+    "lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "partial-checker-test.log": "a41764a2e895c52393af73531567b8043d43b49faa48d26fdabcb0412b0245a9",
+    "cpp-tests.log": "568c7078066aa237f7534065b7742e497a07e417bc38fed167dec6a25a25e10e",
+    "python-tests.log": "7464952290de55f8dae06e7bde8ab7ffc8b2d4d37249f9617f626c76f0be04e0",
+    "ctest.log": "7daeaa9c4354cb51e6f63f0dd57a83202dd360c1f88ca4230684d50f76969397"
+  },
+  "dataset_and_all_slots_verified": true,
+  "completed_fits_and_residuals_verified": 9,
+  "source_binary_inputs_unchanged_at_stop": true,
+  "postprocessing_source_hashes": {
+    "tests/integration/unique_stencil_grid.py": "9f3fcb7b36f304838440011a0c17c57d4497ace873347d984b4545aed0ad6b5e",
+    "tests/integration/unique_stencil_grid_test.py": "8ca228d60679341a18029f3971d82a5ff91e2fd19f8b955a2a3b9f0955b20a78"
+  },
+  "weight_checker_note": "After stopping, propagate the scaled residual rounding bound through the Gaussian weight; fitting evidence and tolerances unchanged.",
+  "independent_repeat_completed": false,
+  "dense_sparse_baseline_alpha0": {
+    "qualified": true,
+    "seconds": 58.373130875,
+    "stationarity": 1.4479039207826553e-11,
+    "maximum_dense_beta_difference": 8.277822871605167e-13,
+    "variance_difference": 1.8581785280391214e-20,
+    "design_nonzeros": 5245432
+  },
+  "population": {
+    "observations": {
+      "negative": 210011,
+      "positive": 392984
+    },
+    "multiplicity_histogram": {
+      "1": 126040,
+      "2": 111673,
+      "3": 96509,
+      "4": 125803,
+      "5": 74773,
+      "6": 21524,
+      "7": 12169,
+      "8": 9126,
+      "9": 6563,
+      "10": 3726,
+      "11": 2152,
+      "12": 1548,
+      "13": 1256,
+      "14": 1160,
+      "15": 1054,
+      "16": 762,
+      "17": 822,
+      "18": 845,
+      "19": 944,
+      "20": 959,
+      "21": 996,
+      "22": 882,
+      "23": 719,
+      "24": 503,
+      "25": 235,
+      "26": 100,
+      "27": 77,
+      "28": 38,
+      "29": 28,
+      "30": 8,
+      "31": 1
+    },
+    "rows": 602995,
+    "slots": 2150400
+  },
+  "evidence_hashes": {
+    "build/unique-stencil-grid/validation/lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "build/unique-stencil-grid/validation/partial-checker-test.log": "a41764a2e895c52393af73531567b8043d43b49faa48d26fdabcb0412b0245a9",
+    "build/unique-stencil-grid/validation/cpp-tests.log": "568c7078066aa237f7534065b7742e497a07e417bc38fed167dec6a25a25e10e",
+    "build/unique-stencil-grid/validation/python-tests.log": "7464952290de55f8dae06e7bde8ab7ffc8b2d4d37249f9617f626c76f0be04e0",
+    "build/unique-stencil-grid/validation/ctest.log": "7daeaa9c4354cb51e6f63f0dd57a83202dd360c1f88ca4230684d50f76969397",
+    "build/unique-stencil-grid/validation/partial_summary.py": "1d8c6e60e7dce7bb9cdbdc4bbefdb0cca8c7a6b9490943f057edf4c04efc1a89",
+    "build/unique-stencil-grid/validation/partial_publish.py": "0c9d2d26c17a9dec42fdfa0d2271afd8464c89efa6421881264a3744504db919"
+  },
+  "pdf_render_review_passed": true,
+  "weight_replay_rounding_audit": {
+    "maximum_absolute_weight_difference": 3.102296197710075e-12,
+    "maximum_inferred_residual_difference": 9.993091423798894e-16,
+    "fitting_tolerances_changed": false
+  }
+}

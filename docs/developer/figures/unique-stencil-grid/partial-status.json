@@ -1,0 +1,39 @@
+{
+  "status": "user-stopped-partial",
+  "stopped_at_utc": "2026-09-17 04:53:39 UTC",
+  "planned_fits": 32,
+  "completed_fits": 9,
+  "qualified_fits": 5,
+  "budget_exhausted_fits": 4,
+  "interrupted_cases": [
+    "failed-only-best-6-alpha-1"
+  ],
+  "not_started_cases": [
+    "failed-only-best-6-alpha-2",
+    "failed-only-best-6-alpha-3",
+    "failed-only-recovery-10-alpha-0",
+    "failed-only-recovery-10-alpha-1",
+    "failed-only-recovery-10-alpha-2",
+    "failed-only-recovery-10-alpha-3",
+    "failed-only-recovery-11-alpha-0",
+    "failed-only-recovery-11-alpha-1",
+    "failed-only-recovery-11-alpha-2",
+    "failed-only-recovery-11-alpha-3",
+    "failed-only-recovery-12-alpha-0",
+    "failed-only-recovery-12-alpha-1",
+    "failed-only-recovery-12-alpha-2",
+    "failed-only-recovery-12-alpha-3",
+    "failed-only-recovery-13-alpha-0",
+    "failed-only-recovery-13-alpha-1",
+    "failed-only-recovery-13-alpha-2",
+    "failed-only-recovery-13-alpha-3",
+    "failed-only-recovery-14-alpha-0",
+    "failed-only-recovery-14-alpha-1",
+    "failed-only-recovery-14-alpha-2",
+    "failed-only-recovery-14-alpha-3"
+  ],
+  "independent_repeat_completed": false,
+  "peak_child_rss_bytes": null,
+  "resource_note": "Runner was interrupted before its final resource summary; peak RSS is unavailable.",
+  "full_experiment_complete": false
+}
