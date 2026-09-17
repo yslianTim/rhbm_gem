@@ -1,4 +1,6 @@
 #include "support/UniqueStencilGrid.hpp"
+#include "support/AtomCenteredVoxelUnion.hpp"
+#include <chrono>
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -80,9 +82,26 @@ j::object Diagnostics(const Eigen::MatrixXd & x,const Eigen::VectorXd & weights)
         {"top_one_percent_rows",top},{"top_one_percent_share",std::accumulate(sorted.begin(),sorted.begin()+static_cast<std::ptrdiff_t>(top),0.0)/weights.sum()},
         {"underflow_count",static_cast<std::size_t>((weights.array()==0).count())},{"weight_quantiles",quantiles}};
 }
+j::object Diagnostics(const Eigen::SparseMatrix<double> & x,const Eigen::VectorXd & weights)
+{
+    if (weights.size()!=x.rows() || !weights.allFinite() || weights.sum()<=0 || (weights.array()<0).any())
+        return {{"available",false},{"reason","invalid-weights"}};
+    auto out=joint_ac::SparseSpectrum(x,weights); out["available"]=true;
+    std::vector<double> sorted(weights.data(),weights.data()+weights.size());
+    std::sort(sorted.begin(),sorted.end(),std::greater<double>());
+    const auto top=static_cast<std::size_t>(std::ceil(.01*static_cast<double>(sorted.size()))); j::array quantiles;
+    for (double q:{0.0,.01,.1,.5,.9,.99,1.0})
+    {const auto k=static_cast<std::size_t>(q*static_cast<double>(sorted.size()-1)); quantiles.emplace_back(j::array{q,sorted[sorted.size()-1-k]});}
+    out["effective_n"]=Number(weights.sum()*weights.sum()/weights.squaredNorm());
+    out["effective_fraction"]=Number(weights.sum()*weights.sum()/weights.squaredNorm()/static_cast<double>(weights.size()));
+    out["maximum_row_share"]=weights.maxCoeff()/weights.sum(); out["top_one_percent_rows"]=top;
+    out["top_one_percent_share"]=std::accumulate(sorted.begin(),sorted.begin()+static_cast<std::ptrdiff_t>(top),0.0)/weights.sum();
+    out["underflow_count"]=static_cast<std::size_t>((weights.array()==0).count()); out["weight_quantiles"]=quantiles;
+    return out;
+}
 j::object Residuals(const fs::path & output,const std::string & name,const Grid & grid,
     const std::vector<Stencil> & stencils,const Eigen::VectorXd & sample_y,const Eigen::VectorXd & y,
-    const Eigen::VectorXd & prediction,const Eigen::VectorXd * weights)
+    const Eigen::VectorXd & prediction,const Eigen::VectorXd * weights,bool union_domain=false)
 {
     auto voxels{CSV(output/"residuals"/(name+".csv"),"row,prediction,residual,weight")};
     for (Eigen::Index p=0;p<y.size();++p)
@@ -94,8 +113,30 @@ j::object Residuals(const fs::path & output,const std::string & name,const Grid 
     const Eigen::VectorXd sampled{Project(grid,stencils,prediction)};
     auto samples{CSV(output/"residuals"/(name+"-samples.csv"),"sample,prediction,residual")};
     for (Eigen::Index p=0;p<sample_y.size();++p) samples<<p<<','<<sampled(p)<<','<<sample_y(p)-sampled(p)<<'\n';
-    return {{"grid_rmse",std::sqrt((y-prediction).squaredNorm()/static_cast<double>(y.size()))},
+    j::object out{{"grid_rmse",std::sqrt((y-prediction).squaredNorm()/static_cast<double>(y.size()))},
         {"matched_sample_rmse",std::sqrt((sample_y-sampled).squaredNorm()/static_cast<double>(sample_y.size()))}};
+    if (union_domain)
+    {
+        struct Group {std::size_t n{}; double ss{},mass{},squares{};}; std::array<Group,8> groups{};
+        for (std::size_t p=0;p<grid.voxels.size();++p)
+        {
+            const auto & v=grid.voxels[p]; const double residual=y(static_cast<Eigen::Index>(p))-prediction(static_cast<Eigen::Index>(p));
+            const double w=weights && weights->size()==y.size() ? (*weights)(static_cast<Eigen::Index>(p)) : 0;
+            for (auto g:{std::size_t{0},v.in_stencil ? std::size_t{1} : std::size_t{2},
+                std::size_t{3}+std::min(std::size_t{4},static_cast<std::size_t>(v.nearest_distance/.5))})
+            {++groups[g].n; groups[g].ss+=residual*residual; groups[g].mass+=w; groups[g].squares+=w*w;}
+        }
+        j::array regions; const std::array<const char *,8> names{"union","stencil","added","distance-0-0.5","distance-0.5-1","distance-1-1.5","distance-1.5-2","distance-2-2.5"};
+        for (std::size_t g=0;g<groups.size();++g)
+        {
+            const auto & v=groups[g]; regions.emplace_back(j::object{{"region",names[g]},{"rows",v.n},
+                {"rmse",v.n ? Number(std::sqrt(v.ss/static_cast<double>(v.n))) : j::value(nullptr)},
+                {"weight_share",groups[0].mass>0 ? Number(v.mass/groups[0].mass) : j::value(nullptr)},
+                {"effective_n",v.squares>0 ? Number(v.mass*v.mass/v.squares) : j::value(nullptr)}});
+        }
+        out["regions"]=regions;
+    }
+    return out;
 }
 } // namespace
 
@@ -176,10 +217,34 @@ j::object Fit(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::V
     j::value labeled{std::move(result)}; GlobalLabels(labeled); return std::move(labeled.as_object());
 }
 
-void Run(const std::string & manifest_path,const std::string & map_path,
-    const std::string & index_path,const std::string & output_path)
+j::object Fit(const Eigen::SparseMatrix<double> & x,const Eigen::VectorXd & y,const Eigen::VectorXd & initial,double alpha)
+{
+    const auto * sparse_design=&x;
+    const auto blocks{GlobalBlock(y.size(),alpha)};
+    auto result{joint_ac::Fit(x,y,initial,blocks,iteration_budget,refinement_budget,true,sparse_design)};
+    result["experiment"]="unique-stencil-grid"; result["alpha"]=alpha;
+    result["svd_preconditioner"]="independent-tsqr-8192";
+    result["linear_solver"]=sparse_design ? "sparse-qr" : "dense-qr";
+    if (sparse_design) result["sparse_row_reduction"]="householder-qr-1024";
+    if (sparse_design) result["design_nonzeros"]=sparse_design->nonZeros();
+    result["iteration_budget"]=iteration_budget; result["refinement_budget"]=refinement_budget;
+    const auto diagnostics_start=std::chrono::steady_clock::now();
+    for (auto & branch:result.at("branches").as_array())
+    {
+        const auto & endpoint{branch.at("primary")};
+        const auto evidence{joint_ac::Evaluate(x,y,Values(endpoint.at("beta")),Values(endpoint.at("variances")),blocks)};
+        branch.as_object()["endpoint_diagnostics"]=Diagnostics(x,evidence.linear_weights);
+    }
+    result["endpoint_diagnostics_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-diagnostics_start).count();
+    j::value labeled{std::move(result)}; GlobalLabels(labeled); return std::move(labeled.as_object());
+}
+
+static void RunGrid(const std::string & manifest_path,const std::string & map_path,
+    const std::string & index_path,const std::string & output_path,bool union_domain)
 {
     Eigen::setNbThreads(1);
+    const auto started=std::chrono::steady_clock::now();
+    const std::string experiment=union_domain ? "atom-centered-voxel-union" : "unique-stencil-grid";
     const fs::path output{output_path};
     if (fs::exists(output/"fits") || fs::exists(output/"residuals")) throw std::runtime_error("Unique-grid output already exists.");
     const auto manifest{Read(manifest_path)},index{Read(index_path)};
@@ -236,8 +301,9 @@ void Run(const std::string & manifest_path,const std::string & map_path,
                 {"response",observations.back()},{"selected",sample.at("selected")},{"boundary",stencils.back().boundary}});
         }
     }
-    const auto grid{BuildGrid(stencils,*original)};
-    if (grid.voxels.size()!=602995) throw std::runtime_error("Unique stencil population differs from preflight: "+std::to_string(grid.voxels.size()));
+    if (union_domain && cutoff!=atom_union::radius) throw std::runtime_error("Union radius must match 2.5 A generator cutoff.");
+    const auto grid=union_domain ? atom_union::BuildGrid(geometry,stencils,generation,*original) : BuildGrid(stencils,*original);
+    if (grid.voxels.size()!=(union_domain ? 3768656u : 602995u)) throw std::runtime_error("Unique stencil population differs from preflight: "+std::to_string(grid.voxels.size()));
     Eigen::VectorXd y(static_cast<Eigen::Index>(grid.voxels.size()));
     for (std::size_t p=0;p<grid.voxels.size();++p) y(static_cast<Eigen::Index>(p))=grid.voxels[p].observed;
     const Eigen::Map<const Eigen::VectorXd> sample_y(observations.data(),static_cast<Eigen::Index>(observations.size()));
@@ -247,7 +313,7 @@ void Run(const std::string & manifest_path,const std::string & map_path,
     rhbm_gem::core::MapSimulationRequest request; request.job_count=1; request.cutoff_distance=cutoff;
     request.potential_model_choice=rhbm_gem::core::PotentialModel::SINGLE_GAUS;
     sim::PopulateMapValueArray(generation,generator_atoms,request,j::value_to<double>(settings.at("blurring_width")));
-    auto voxels{CSV(output/"voxels.csv","row,index,x,y,z,observed,multiplicity,reference_double,quantization_bound")};
+    auto voxels{CSV(output/"voxels.csv","row,index,x,y,z,observed,multiplicity,reference_double,quantization_bound"+std::string(union_domain ? ",nearest_distance,in_stencil" : ""))};
     double max_double{},max_quantized{},max_excess{};
     for (std::size_t p=0;p<grid.voxels.size();++p)
     {
@@ -259,23 +325,28 @@ void Run(const std::string & manifest_path,const std::string & map_path,
         max_excess=std::max(max_excess,std::abs(predicted-v.observed)-bound-tolerance);
         if (std::abs(predicted-reference)>tolerance || rounded!=v.observed || std::abs(predicted-v.observed)>bound+tolerance)
             throw std::runtime_error("Independent voxel forward check failed at "+std::to_string(v.index));
-        voxels<<p<<','<<v.index<<','<<v.position[0]<<','<<v.position[1]<<','<<v.position[2]<<','<<v.observed<<','<<v.multiplicity<<','<<reference<<','<<bound<<'\n';
+        voxels<<p<<','<<v.index<<','<<v.position[0]<<','<<v.position[1]<<','<<v.position[2]<<','<<v.observed<<','<<v.multiplicity<<','<<reference<<','<<bound;
+        if (union_domain) voxels<<','<<v.nearest_distance<<','<<v.in_stencil;
+        voxels<<'\n';
     }
     voxels.close();
     auto slots{CSV(output/"slots.csv","sample,slot,voxel_row,coefficient")};
     for (std::size_t p=0;p<stencils.size();++p) for (std::size_t k=0;k<64;++k)
         slots<<p<<','<<k<<','<<grid.sample_rows[p][k]<<','<<stencils[p].slots[k].coefficient<<'\n';
     slots.close();
-    Write(output/"dataset.json",j::object{{"schema_version",1},{"experiment","unique-stencil-grid"},{"atoms",atoms_json},
+    j::object dataset{{"schema_version",1},{"experiment",experiment},{"atoms",atoms_json},
         {"samples",samples_json},{"row_count",grid.voxels.size()},{"slot_count",64*stencils.size()},
         {"grid_size",j::value_from(original->GetGridSize())},{"generation_origin",j::value_from(generation.GetOrigin())},
         {"generation_spacing",j::value_from(generation.GetGridSpacing())},{"sampling_origin",j::value_from(original->GetOrigin())},
         {"sampling_spacing",j::value_from(original->GetGridSpacing())},{"cutoff",cutoff},{"alphas",j::value_from(alphas)},
-        {"voxel_table_sha256",sim::FileSha256((output/"voxels.csv").string())},{"slot_table_sha256",sim::FileSha256((output/"slots.csv").string())}});
+        {"voxel_table_sha256",sim::FileSha256((output/"voxels.csv").string())},{"slot_table_sha256",sim::FileSha256((output/"slots.csv").string())}};
+    if (union_domain) {dataset["radius"]=atom_union::radius; dataset["stencil_rows"]=602995; dataset["membership_geometry"]="generation";}
+    Write(output/"dataset.json",dataset);
     Write(output/"forward-status.json",j::object{{"passed",true},{"voxel_count",grid.voxels.size()},{"sample_count",stencils.size()},
         {"maximum_double_difference",max_double},{"maximum_quantized_difference",max_quantized},{"maximum_bound_excess",max_excess},
         {"maximum_replay_difference",(replay-sample_y).cwiseAbs().maxCoeff()}});
     j::array cases;
+    if (union_domain) Write(output/"completion.json",j::object{{"cases",cases},{"complete",false}});
     for (std::size_t s=0;s<contexts.size();++s)
     {
         const auto id{j::value_to<std::string>(index.at("states").at(s).at("id"))};
@@ -289,7 +360,12 @@ void Run(const std::string & manifest_path,const std::string & map_path,
             initial(static_cast<Eigen::Index>(2*a))=abc[0]; initial(static_cast<Eigen::Index>(2*a+1))=abc[2];
         }
         std::cout<<"unique-grid building state="<<id<<" rows="<<y.size()<<std::endl;
-        const auto x{BuildDesign(grid,state,cutoff)}; const Eigen::VectorXd input_prediction{x*initial}; double max_design{};
+        Eigen::MatrixXd x; Eigen::SparseMatrix<double> sparse_design;
+        const auto build_start=std::chrono::steady_clock::now();
+        if (union_domain) sparse_design=atom_union::BuildDesign(grid,state,generation,cutoff);
+        else {x=BuildDesign(grid,state,cutoff); sparse_design=x.sparseView(0.0,0.0);}
+        const double build_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-build_start).count();
+        const Eigen::VectorXd input_prediction=union_domain ? Eigen::VectorXd(sparse_design*initial) : Eigen::VectorXd(x*initial); double max_design{};
         for (std::size_t p=0;p<grid.voxels.size();++p)
         {
             double absolute{}; const double direct{Direct(grid.voxels[p].position,state,cutoff,&absolute)};
@@ -297,31 +373,95 @@ void Run(const std::string & manifest_path,const std::string & map_path,
             if (error>1024*eps*std::max(1.0,absolute)) throw std::runtime_error("Grid X beta mismatch.");
             max_design=std::max(max_design,error);
         }
-        auto input{Residuals(output,id+"-input",grid,stencils,sample_y,y,input_prediction,nullptr)};
+        auto input{Residuals(output,id+"-input",grid,stencils,sample_y,y,input_prediction,nullptr,union_domain)};
         input["abc"]=contexts[s].at("state"); input["maximum_design_difference"]=max_design;
         Write(output/(id+"-input.json"),input);
         // Exact zeros only: keep every nonzero basis coefficient, including
         // arbitrarily small values. All alpha branches share this cache.
-        const Eigen::SparseMatrix<double> sparse_design{x.sparseView(0.0,0.0)};
-        if (sparse_design.nonZeros()!=(x.array()!=0).count()) throw std::runtime_error("Sparse design lost nonzero coefficients.");
+        if (!union_domain && sparse_design.nonZeros()!=(x.array()!=0).count()) throw std::runtime_error("Sparse design lost nonzero coefficients.");
         std::cout<<"unique-grid sparse nonzeros="<<sparse_design.nonZeros()<<std::endl;
+        if (union_domain)
+        {
+            // Replay A on its original rows before interpreting an ROI change.
+            std::vector<int> a_rows(grid.voxels.size(),-1); Eigen::Index count{};
+            for (std::size_t p=0;p<grid.voxels.size();++p) if (grid.voxels[p].in_stencil) a_rows[p]=static_cast<int>(count++);
+            if (count!=602995) throw std::runtime_error("A is not the complete stencil subset of B.");
+            std::vector<Eigen::Triplet<double>> entries; entries.reserve(5245432);
+            for (int col=0;col<sparse_design.outerSize();++col)
+                for (Eigen::SparseMatrix<double>::InnerIterator e(sparse_design,col);e;++e)
+                    if (a_rows[static_cast<std::size_t>(e.row())]>=0) entries.emplace_back(a_rows[static_cast<std::size_t>(e.row())],col,e.value());
+            Eigen::SparseMatrix<double> ax(count,sparse_design.cols()); ax.setFromTriplets(entries.begin(),entries.end());
+            entries.clear(); entries.shrink_to_fit();
+            const Eigen::MatrixXd dense_a(ax); Eigen::VectorXd ay(count);
+            for (std::size_t p=0;p<grid.voxels.size();++p) if (a_rows[p]>=0) ay(a_rows[p])=y(static_cast<Eigen::Index>(p));
+            j::array replays;
+            for (std::size_t k=0;k<alphas.size();++k)
+            {
+                const auto requested=j::value_to<std::vector<double>>(index.at("alphas"));
+                if (std::find(requested.begin(),requested.end(),alphas[k])==requested.end()) continue;
+                const std::string name=id+"-alpha-"+std::to_string(k);
+                const fs::path path=fs::path(j::value_to<std::string>(index.at("reference_a")))/"fits"/(name+".json");
+                const auto old=Read(path); const auto beta=Values(old.at("beta")),variance=Values(old.at("variances"));
+                for (std::size_t a=0;a<168;++a) if (old.at("abc").at(a).at(1)!=contexts[s].at("state").at(a).at(1))
+                    throw std::runtime_error("A reference B changed.");
+                const auto blocks=GlobalBlock(count,alphas[k]);
+                const auto dense=joint_ac::Evaluate(dense_a,ay,beta,variance,blocks),fresh=joint_ac::Evaluate(ax,ay,beta,variance,blocks);
+                const double pdiff=(Eigen::VectorXd(dense_a*beta)-Eigen::VectorXd(ax*beta)).cwiseAbs().maxCoeff();
+                const auto first=joint_ac::WeightedSolve(dense_a,ay,dense.linear_weights,false,true,&ax);
+                const auto second=joint_ac::WeightedSolve(ax,ay,fresh.linear_weights);
+                const double bdiff=((first.beta-second.beta).array().abs()/(1+first.beta.array().abs())).maxCoeff();
+                const double odiff=std::abs(fresh.objective-j::value_to<double>(old.at("objective")));
+                const double sdiff=std::abs(fresh.stationarity-j::value_to<double>(old.at("stationarity")));
+                if (!dense.valid || !fresh.valid || !first.valid || !second.valid || pdiff>1e-11 || bdiff>1e-10 ||
+                    odiff>1e-10*std::max(1.0,std::abs(fresh.objective)) || sdiff>1e-12 ||
+                    std::abs(dense.stationarity-fresh.stationarity)>1e-12)
+                    throw std::runtime_error("A sparse replay differs from retained evidence.");
+                const Eigen::VectorXd predicted=sparse_design*beta;
+                auto cross=Residuals(output,name+"-reference-a",grid,stencils,sample_y,y,predicted,nullptr,true);
+                cross["source_sha256"]=sim::FileSha256(path.string()); cross["qualified"]=old.at("qualified");
+                cross["reason"]=old.at("reason"); cross["abc"]=old.at("abc"); cross["alpha"]=alphas[k]; cross["state_id"]=id;
+                Write(output/(name+"-reference-a.json"),cross);
+                replays.emplace_back(j::object{{"alpha",alphas[k]},{"passed",true},{"maximum_prediction_difference",pdiff},
+                    {"scaled_linear_solution_difference",bdiff},{"objective_difference",odiff},{"stationarity_difference",sdiff}});
+            }
+            Write(output/(id+"-a-replay.json"),j::object{{"passed",true},{"cases",replays}});
+        }
         for (std::size_t k=0;k<alphas.size();++k)
         {
+            if (union_domain)
+            {
+                const auto requested=j::value_to<std::vector<double>>(index.at("alphas"));
+                if (std::find(requested.begin(),requested.end(),alphas[k])==requested.end()) continue;
+            }
             const std::string name{id+"-alpha-"+std::to_string(k)};
             std::cout<<"unique-grid fit="<<name<<" alpha="<<alphas[k]<<std::endl;
-            auto fit{Fit(x,y,initial,alphas[k],&sparse_design)}; fit["state_id"]=id;
-            const auto beta{Values(fit.at("beta"))}; const Eigen::VectorXd prediction{x*beta};
+            auto fit=union_domain ? Fit(sparse_design,y,initial,alphas[k]) : Fit(x,y,initial,alphas[k],&sparse_design);
+            fit["state_id"]=id; fit["experiment"]=experiment;
+            if (union_domain) fit["design_build_seconds"]=build_seconds;
+            const auto beta{Values(fit.at("beta"))}; const Eigen::VectorXd prediction=union_domain ? Eigen::VectorXd(sparse_design*beta) : Eigen::VectorXd(x*beta);
             Eigen::VectorXd weights;
-            if (fit.contains("variances")) weights=joint_ac::Evaluate(x,y,beta,Values(fit.at("variances")),GlobalBlock(y.size(),alphas[k])).weights;
-            fit["residuals"]=Residuals(output,name,grid,stencils,sample_y,y,prediction,&weights);
+            if (fit.contains("variances")) weights=(union_domain ?
+                joint_ac::Evaluate(sparse_design,y,beta,Values(fit.at("variances")),GlobalBlock(y.size(),alphas[k])) :
+                joint_ac::Evaluate(x,y,beta,Values(fit.at("variances")),GlobalBlock(y.size(),alphas[k]))).weights;
+            const auto output_start=std::chrono::steady_clock::now();
+            fit["residuals"]=Residuals(output,name,grid,stencils,sample_y,y,prediction,&weights,union_domain);
             j::array abc;
             for (std::size_t a=0;a<168;++a) abc.emplace_back(j::array{beta(static_cast<Eigen::Index>(2*a)),state[a].width,beta(static_cast<Eigen::Index>(2*a+1))});
+            if (union_domain) fit["residual_output_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-output_start).count();
             fit["abc"]=abc; Write(output/"fits"/(name+".json"),fit); cases.emplace_back(name);
+            if (union_domain) Write(output/"completion.json",j::object{{"cases",cases},{"complete",false},
+                {"seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()}});
             std::cout<<"unique-grid finished="<<name<<" reason="<<fit.at("reason")<<std::endl;
         }
     }
-    Write(output/"fit-index.json",j::object{{"schema_version",1},{"experiment","unique-stencil-grid"},{"states",index.at("states")},
-        {"selected_state_ids",index.at("selected_state_ids")},{"alphas",j::value_from(alphas)},{"cases",cases},
+    Write(output/"fit-index.json",j::object{{"schema_version",1},{"experiment",experiment},{"states",index.at("states")},
+        {"selected_state_ids",index.at("selected_state_ids")},{"alphas",union_domain ? index.at("alphas") : j::value_from(alphas)},{"cases",cases},
         {"iteration_budget",iteration_budget},{"refinement_budget",refinement_budget},{"joint_fits",cases.size()}});
+    if (union_domain) Write(output/"completion.json",j::object{{"cases",cases},{"complete",true},
+        {"seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()}});
 }
+void Run(const std::string & manifest,const std::string & map,const std::string & index,const std::string & output)
+{RunGrid(manifest,map,index,output,false);}
+void RunUnion(const std::string & manifest,const std::string & map,const std::string & index,const std::string & output)
+{RunGrid(manifest,map,index,output,true);}
 } // namespace second_stage_test::matched::unique_grid

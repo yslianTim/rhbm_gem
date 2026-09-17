@@ -1,0 +1,121 @@
+{
+  "cpp_targeted_tests": 38,
+  "python_tests": 68,
+  "ctest_groups": 9,
+  "lint_repo": "passed",
+  "build_testing_off": "built, no experimental symbols",
+  "source_and_input_hashes": "verified before and after both runs",
+  "numerical_thresholds": {
+    "primary": 1e-08,
+    "reference": 1e-10,
+    "coefficient_and_log_variance_difference": 1e-06
+  },
+  "repeated_alphas": [
+    0
+  ],
+  "not_repeated_alphas": [
+    0.1,
+    0.5,
+    1
+  ],
+  "checks": {
+    "off-isolation.json": {
+      "passed": true,
+      "build": "build/unique-stencil-grid/off",
+      "testing": false,
+      "absent_symbols": [
+        "atom_union",
+        "RunUnion",
+        "ReferenceQR",
+        "SparseSpectrum",
+        "unique_grid",
+        "matched::joint_ac"
+      ]
+    },
+    "objective-traces.json": {
+      "cases": [
+        {
+          "case": "baseline-best-28-alpha-0",
+          "passed": true,
+          "trace_rows": 5,
+          "largest_objective_increase": 0.0
+        },
+        {
+          "case": "baseline-best-28-alpha-1",
+          "passed": true,
+          "trace_rows": 202,
+          "largest_objective_increase": 0.0
+        },
+        {
+          "case": "baseline-best-28-alpha-2",
+          "passed": true,
+          "trace_rows": 202,
+          "largest_objective_increase": 0.0
+        },
+        {
+          "case": "baseline-best-28-alpha-3",
+          "passed": true,
+          "trace_rows": 202,
+          "largest_objective_increase": 0.0
+        }
+      ]
+    },
+    "ls-domain-optimality.json": {
+      "passed": true,
+      "A_domain": {
+        "A_rmse": 0.0006465016137467238,
+        "B_rmse": 0.0007227265017865017
+      },
+      "B_domain": {
+        "A_rmse": 0.00046526513537442394,
+        "B_rmse": 0.00040407767839331795
+      }
+    },
+    "python-environment.json": {
+      "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+      "numpy": "2.5.3",
+      "matplotlib": "3.11.2",
+      "module_hashes": {
+        "/Users/yslian/Project/em_map_analysis/build/observation-matching/plot-env/lib/python3.14/site-packages/numpy/__init__.py": "09295a80660f17925ae23765ce8cbd7ff7ceae968d5f2f89349f1cb74c0b9e11",
+        "/Users/yslian/Project/em_map_analysis/build/observation-matching/plot-env/lib/python3.14/site-packages/matplotlib/__init__.py": "37abb78e74e9e0085a4e306a919606ffa8ff3c263def80ae2f4d938cfa79cd32"
+      }
+    },
+    "pdf-visual-review.json": {
+      "passed": true,
+      "method": "pdftoppm rendering and visual review",
+      "figures": [
+        {
+          "file": "common-domain-residuals.pdf",
+          "sha256": "b2569ba96d588bfcf80f328147b59b27329b84a88b928aa28c93eef27117e57b",
+          "render_width_pixels": 1600,
+          "layout": "no clipping or overlap"
+        },
+        {
+          "file": "parameter-errors.pdf",
+          "sha256": "bf5fb5042108248041fea9e3ca6cdfb12daaf0241bc07c44528c633e2bb0e681",
+          "render_width_pixels": 1600,
+          "layout": "no clipping or overlap"
+        },
+        {
+          "file": "solver-and-spatial-diagnostics.pdf",
+          "sha256": "c507a7cc6c464a53342d2d63f1995846aea2e2c1d344b86fc6af482dac6dff51",
+          "render_width_pixels": 1600,
+          "layout": "no clipping or overlap"
+        }
+      ]
+    }
+  },
+  "log_hashes": {
+    "cpp-tests.log": "33c8835dc7f89aee4202e413bf28266c8e18829b5498ba5b232af855467165b9",
+    "python-tests.log": "2c3e4a2bc34f9e71b27c8780ee13ba1f820baefa683b5a24fa50c19fe815c5dc",
+    "ctest.log": "7ec232d59c9ec8db7e961fd5079a13d0fac72bbd6ba0ed51c767862a2bdd6448",
+    "lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "off-build.log": "c2ed93ffd93c840755c0e91392ae593b1b52de9b7aaf6c208123feaceb1dde2e",
+    "final-lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c"
+  },
+  "document_links": {
+    "passed": true,
+    "checked": 44,
+    "missing": []
+  }
+}

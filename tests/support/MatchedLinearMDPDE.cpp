@@ -6,6 +6,7 @@
 #include <iostream>
 #include <numbers>
 #include <set>
+#include <type_traits>
 #include <Eigen/SparseQR>
 
 namespace second_stage_test::matched::joint_ac {
@@ -71,7 +72,65 @@ j::object Row(const Endpoint & e)
         {"iterations",e.iterations},{"linear_solves",e.solves},{"constraint_releases",e.releases},
         {"backtracks",e.backtracks}};
 }
-Endpoint Iterate(const Eigen::MatrixXd & x, const Eigen::VectorXd & y, Eigen::VectorXd beta,
+using Sparse = Eigen::SparseMatrix<double>;
+bool Finite(const Eigen::MatrixXd & x) { return x.allFinite(); }
+bool Finite(const Sparse & x)
+{
+    for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e)
+        if (!std::isfinite(e.value())) return false;
+    return true;
+}
+Eigen::VectorXd ColumnNorms(const Eigen::MatrixXd & x) { return x.colwise().norm(); }
+Eigen::VectorXd ColumnNorms(const Sparse & x)
+{
+    Eigen::VectorXd out=Eigen::VectorXd::Zero(x.cols());
+    for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e) out(k)+=e.value()*e.value();
+    return out.cwiseSqrt();
+}
+Eigen::VectorXd RowSquares(const Eigen::MatrixXd & x) { return x.rowwise().squaredNorm(); }
+Eigen::VectorXd RowSquares(const Sparse & x)
+{
+    Eigen::VectorXd out=Eigen::VectorXd::Zero(x.rows());
+    for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e) out(e.row())+=e.value()*e.value();
+    return out;
+}
+double WeightedColumnSquare(const Eigen::MatrixXd & x,Eigen::Index k,const Eigen::VectorXd & w)
+{ return (w.array()*x.col(k).array().square()).sum(); }
+double WeightedColumnSquare(const Sparse & x,Eigen::Index k,const Eigen::VectorXd & w)
+{
+    double sum{}; for (Sparse::InnerIterator e(x,k);e;++e) sum+=w(e.row())*e.value()*e.value(); return sum;
+}
+// Independent full-column TSQR. Every original row enters an 8192-row tile;
+// neither the primary 1024-row reduction nor its R is reused.
+std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
+    const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,const Eigen::VectorXd & y)
+{
+    const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
+    Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
+    constexpr Eigen::Index tile=8192;
+    for (Eigen::Index first=0;first<x.rows();first+=tile)
+    {
+        const Eigen::Index n=std::min(tile,x.rows()-first), prior=r.rows();
+        Eigen::MatrixXd a=Eigen::MatrixXd::Zero(prior+n,x.cols());
+        Eigen::VectorXd rhs=Eigen::VectorXd::Zero(prior+n);
+        if (prior) {a.topRows(prior)=r; rhs.head(prior)=target;}
+        for (Eigen::Index row=first;row<first+n;++row)
+        {
+            const double w=std::sqrt(weights(row)); rhs(prior+row-first)=w*y(row);
+            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
+                a(prior+row-first,e.col())=w*e.value()/scales(e.col());
+        }
+        const Eigen::HouseholderQR<Eigen::MatrixXd> qr(a);
+        const Eigen::VectorXd transformed=qr.householderQ().adjoint()*rhs;
+        const Eigen::Index keep=std::min(a.rows(),a.cols());
+        r=qr.matrixQR().topRows(keep).triangularView<Eigen::Upper>(); target=transformed.head(keep);
+    }
+    return {std::move(r),std::move(target)};
+}
+boost::json::object DesignSpectrum(const Eigen::MatrixXd &,const Eigen::VectorXd &,bool);
+boost::json::object DesignSpectrum(const Sparse &,const Eigen::VectorXd &,bool);
+template<class Matrix>
+Endpoint Iterate(const Matrix & x, const Eigen::VectorXd & y, Eigen::VectorXd beta,
     Eigen::VectorXd variances, const Blocks & blocks, int budget, double tolerance, const Eigen::SparseMatrix<double> * sparse_design)
 {
     Endpoint out; out.beta=std::move(beta); out.variances=std::move(variances); out.stop="budget-exhausted";
@@ -139,6 +198,23 @@ j::object Spectrum(const Eigen::MatrixXd & x, bool blocked_svd)
     const int rank{static_cast<int>((s.array()>threshold*s(0)).count())};
     return {{"rank",rank},{"minimum_singular",Number(s.tail(1)(0))},
         {"condition",Number(s(0)/s.tail(1)(0))}};
+}
+j::object DesignSpectrum(const Eigen::MatrixXd & x,const Eigen::VectorXd & weights,bool blocked)
+{
+    Eigen::MatrixXd z=weights.cwiseSqrt().asDiagonal()*x;
+    for (Eigen::Index k=0;k<z.cols();++k) {const double n=z.col(k).norm(); if (n>0) z.col(k)/=n;}
+    return Spectrum(z,blocked);
+}
+j::object DesignSpectrum(const Sparse & x,const Eigen::VectorXd & weights,bool)
+{
+    Eigen::VectorXd scales(x.cols());
+    for (Eigen::Index k=0;k<x.cols();++k) scales(k)=std::sqrt(WeightedColumnSquare(x,k,weights));
+    for (Eigen::Index k=0;k<x.cols();++k) if (scales(k)==0) scales(k)=1;
+    const auto reduced=ReferenceQR(x,weights,scales,Eigen::VectorXd::Zero(x.rows()));
+    const Eigen::JacobiSVD<Eigen::MatrixXd> svd(reduced.first); const auto values=svd.singularValues();
+    const double threshold=eps*static_cast<double>(std::max(x.rows(),x.cols()));
+    return {{"rank",static_cast<int>((values.array()>threshold*values(0)).count())},
+        {"minimum_singular",Number(values.tail(1)(0))},{"condition",Number(values(0)/values.tail(1)(0))}};
 }
 j::object WeightSummary(const Eigen::VectorXd & w)
 {
@@ -209,14 +285,16 @@ double Objective(const Eigen::VectorXd & residual, const Eigen::VectorXd & varia
     for (std::size_t i=0;i<blocks.size();++i) sum+=BlockObjective(residual,variances(static_cast<Eigen::Index>(i)),blocks[i]);
     return sum/static_cast<double>(blocks.size());
 }
-LinearResult WeightedSolve(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
+template<class Matrix>
+LinearResult WeightedSolveImpl(const Matrix & x, const Eigen::VectorXd & y,
     const Eigen::VectorXd & weights, bool use_svd, bool blocked_svd, const Eigen::SparseMatrix<double> * sparse_design)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
-        !x.allFinite() || !y.allFinite() || !weights.allFinite() || (weights.array()<0).any()) return out;
-    const Eigen::VectorXd scales{x.colwise().norm()};
+        !Finite(x) || !y.allFinite() || !weights.allFinite() || (weights.array()<0).any()) return out;
+    const Eigen::VectorXd scales{ColumnNorms(x)};
     if ((scales.array()==0).any()) {out.reason="rank-deficient"; return out;}
+    if constexpr (std::is_same_v<Matrix,Sparse>) sparse_design=&x;
     const bool sparse{sparse_design && !use_svd};
     Eigen::MatrixXd z;
     Eigen::SparseMatrix<double> sparse_z;
@@ -228,9 +306,14 @@ LinearResult WeightedSolve(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
             for (Eigen::SparseMatrix<double>::InnerIterator entry(sparse_z,k);entry;++entry)
                 entry.valueRef()*=std::sqrt(weights(entry.row()))/scales(k);
     }
-    else z=weights.cwiseSqrt().asDiagonal()*x*scales.cwiseInverse().asDiagonal();
+    else if constexpr (!std::is_same_v<Matrix,Sparse>) z=weights.cwiseSqrt().asDiagonal()*x*scales.cwiseInverse().asDiagonal();
+    Eigen::VectorXd rhs{weights.cwiseSqrt().array()*y.array()};
+    const double original_rhs_norm=rhs.norm();
+    if constexpr (std::is_same_v<Matrix,Sparse>) if (use_svd)
+    {
+        auto reduced=ReferenceQR(x,weights,scales,y); z=std::move(reduced.first); rhs=std::move(reduced.second);
+    }
     const double znorm{sparse ? sparse_z.norm() : z.norm()};
-    const Eigen::VectorXd rhs{weights.cwiseSqrt().array()*y.array()};
     const double rank_threshold{eps*static_cast<double>(std::max(x.rows(),x.cols()))};
     Eigen::VectorXd b{Eigen::VectorXd::Zero(x.cols())};
     std::vector<bool> free(static_cast<std::size_t>(x.cols()),true);
@@ -243,7 +326,7 @@ LinearResult WeightedSolve(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
         Eigen::MatrixXd a;
         if (!sparse)
         {
-            a.resize(x.rows(),static_cast<Eigen::Index>(columns.size()));
+            a.resize(z.rows(),static_cast<Eigen::Index>(columns.size()));
             for (std::size_t k=0;k<columns.size();++k) a.col(static_cast<Eigen::Index>(k))=z.col(columns[k]);
         }
         Eigen::VectorXd solution;
@@ -322,7 +405,7 @@ LinearResult WeightedSolve(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
         Eigen::VectorXd gradient;
         if (sparse) gradient=sparse_z.transpose()*(rhs-sparse_z*b);
         else gradient=z.transpose()*(rhs-z*b);
-        const double tolerance{128*eps*std::max(1.0,znorm*(rhs.norm()+znorm*b.norm()))};
+        const double tolerance{128*eps*std::max(1.0,znorm*(original_rhs_norm+znorm*b.norm()))};
         Eigen::Index release{-1}; double largest{tolerance};
         for (Eigen::Index k=0;k<x.cols();k+=2) if (!free[static_cast<std::size_t>(k)] && gradient(k)>largest)
         {release=k; largest=gradient(k);}
@@ -332,20 +415,22 @@ LinearResult WeightedSolve(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
     out.reason="active-set-budget-exhausted"; return out;
 }
 
-Evidence Evaluate(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
+template<class Matrix>
+Evidence EvaluateImpl(const Matrix & x, const Eigen::VectorXd & y,
     const Eigen::VectorXd & beta, const Eigen::VectorXd & variances, const Blocks & blocks)
 {
     Evidence out; out.reason="invalid-input"; out.objective=out.stationarity=std::numeric_limits<double>::quiet_NaN();
     if (x.rows()<=x.cols() || x.cols()==0 || x.cols()%2 || x.cols()!=beta.size() || x.rows()!=y.size() ||
         !ValidBlocks(blocks,y.size()) || variances.size()!=static_cast<Eigen::Index>(blocks.size())) return out;
-    if (!x.allFinite() || !y.allFinite() || !beta.allFinite()) {out.reason="nonfinite"; return out;}
+    if (!Finite(x) || !y.allFinite() || !beta.allFinite()) {out.reason="nonfinite"; return out;}
     for (Eigen::Index k=0;k<beta.size();k+=2) if (beta(k)<0) {out.reason="infeasible-amplitude"; return out;}
     const Eigen::VectorXd r{y-x*beta};
+    const Eigen::VectorXd row_squares=RowSquares(x);
     // A single exactly fitted observation block is already a scale boundary.
     for (std::size_t i=0;i<blocks.size();++i)
     {
         double rss{}, ys{}, xs{};
-        for (auto p:blocks[i].rows) {rss+=r(p)*r(p); ys+=y(p)*y(p); xs+=x.row(p).squaredNorm();}
+        for (auto p:blocks[i].rows) {rss+=r(p)*r(p); ys+=y(p)*y(p); xs+=row_squares(p);}
         const double bound{64*eps*(std::sqrt(ys)+std::sqrt(xs)*beta.norm())};
         if (std::sqrt(rss)<=bound)
         {out.reason="exact-fit-boundary"; out.failure_owner=static_cast<int>(blocks[i].owner); return out;}
@@ -386,7 +471,7 @@ Evidence Evaluate(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
     out.scaled.head(beta.size())=x.transpose()*(out.linear_weights.array()*r.array()).matrix();
     for (Eigen::Index k=0;k<beta.size();++k)
     {
-        const double norm{std::sqrt((out.prefactors.array()*x.col(k).array().square()).sum())};
+        const double norm{std::sqrt(WeightedColumnSquare(x,k,out.prefactors))};
         if (norm==0 || qv<=0) {out.reason="rank-deficient"; return out;}
         out.scaled(k)/=std::sqrt(qv)*norm;
         if (k%2==0 && beta(k)==0) out.scaled(k)=std::max(0.0,out.scaled(k));
@@ -396,11 +481,13 @@ Evidence Evaluate(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
     out.reason=out.valid ? "valid" : "nonfinite"; return out;
 }
 
-j::object Fit(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
+template<class Matrix>
+j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
     const Eigen::VectorXd & initial, const Blocks & blocks, int budget, int reference_budget, bool blocked_svd,
     const Eigen::SparseMatrix<double> * sparse_design)
 {
     const auto start{std::chrono::steady_clock::now()};
+    double verification_seconds{};
     if (initial.size()!=x.cols() || !initial.allFinite() || !ValidBlocks(blocks,y.size()) || budget<0 || reference_budget<0)
         throw std::invalid_argument("Invalid fixed-width composite MDPDE initialization.");
     for (Eigen::Index k=0;k<initial.size();k+=2) if (initial(k)<0)
@@ -414,9 +501,18 @@ j::object Fit(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
         {"beta",Vector(initial)},{"uncertainty",j::array{}},{"branches",j::array{}},
         {"initial_linear_solves",ls.solves}};
     if (!ls.valid) return result;
-    const Eigen::VectorXd scales{x.colwise().norm()};
-    const Eigen::MatrixXd normalized{x*scales.cwiseInverse().asDiagonal()};
-    result["design_spectrum"]=Spectrum(normalized,blocked_svd);
+    const Eigen::VectorXd scales{ColumnNorms(x)};
+    if constexpr (std::is_same_v<Matrix,Sparse>)
+    {
+        const auto check_start=std::chrono::steady_clock::now();
+        result["design_spectrum"]=DesignSpectrum(x,Eigen::VectorXd::Ones(x.rows()),true);
+        verification_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-check_start).count();
+    }
+    else
+    {
+        const Eigen::MatrixXd normalized{x*scales.cwiseInverse().asDiagonal()};
+        result["design_spectrum"]=Spectrum(normalized,blocked_svd);
+    }
     j::array branches; std::vector<Endpoint> primary, references; std::vector<Eigen::VectorXd> checked;
     std::vector<bool> qualified;
     for (int seed=0;seed<2;++seed)
@@ -438,6 +534,7 @@ j::object Fit(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
         Eigen::VectorXd verified{reference.beta};
         if (pass)
         {
+            const auto check_start=std::chrono::steady_clock::now();
             const auto check{WeightedSolve(x,y,reference.evidence.linear_weights,true,blocked_svd)};
             if (check.valid) verified=check.beta;
             const double delta{std::max(Difference(endpoint.beta,reference.beta),Difference(reference.beta,verified))};
@@ -445,12 +542,8 @@ j::object Fit(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
             branch["svd_beta"]=Vector(verified); branch["svd_reason"]=check.reason;
             branch["svd_linear_solves"]=check.solves; branch["coefficient_difference"]=Number(delta);
             branch["log_variance_difference"]=Number(vdelta);
-            Eigen::MatrixXd weighted{reference.evidence.linear_weights.cwiseSqrt().asDiagonal()*x};
-            for (Eigen::Index k=0;k<weighted.cols();++k)
-            {
-                const double norm{weighted.col(k).norm()}; if (norm>0) weighted.col(k)/=norm;
-            }
-            branch["weighted_spectrum"]=Spectrum(weighted,blocked_svd);
+            branch["weighted_spectrum"]=DesignSpectrum(x,reference.evidence.linear_weights,blocked_svd);
+            verification_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-check_start).count();
             pass &= check.valid && delta<=1e-6 && vdelta<=1e-6 && branch.at("weighted_spectrum").at("rank").as_int64()==x.cols();
         }
         if (reference.evidence.weights.size()==y.size())
@@ -490,7 +583,23 @@ j::object Fit(const Eigen::MatrixXd & x, const Eigen::VectorXd & y,
         ScaleDifference(primary[0].variances,primary[1].variances)>1e-6);
     int active{}; for (Eigen::Index k=0;k<end.beta.size();k+=2) active+=end.beta(k)==0;
     result["active_amplitudes"]=active; result["branches"]=std::move(branches);
+    if constexpr (std::is_same_v<Matrix,Sparse>) result["independent_validation_seconds"]=verification_seconds;
     result["seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
     return result;
 }
+LinearResult WeightedSolve(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::VectorXd & w,
+    bool svd,bool blocked,const Sparse * cache) {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
+LinearResult WeightedSolve(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & w,
+    bool svd,bool blocked,const Sparse * cache) {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
+Evidence Evaluate(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Eigen::VectorXd & v,const Blocks & blocks) {return EvaluateImpl(x,y,b,v,blocks);}
+Evidence Evaluate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Eigen::VectorXd & v,const Blocks & blocks) {return EvaluateImpl(x,y,b,v,blocks);}
+j::object Fit(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Blocks & blocks,int budget,int reference,bool blocked,const Sparse * cache)
+{return FitImpl(x,y,b,blocks,budget,reference,blocked,cache);}
+j::object Fit(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Blocks & blocks,int budget,int reference,bool blocked,const Sparse * cache)
+{return FitImpl(x,y,b,blocks,budget,reference,blocked,cache);}
+j::object SparseSpectrum(const Sparse & x,const Eigen::VectorXd & w) {return DesignSpectrum(x,w,true);}
 } // namespace second_stage_test::matched::joint_ac

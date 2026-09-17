@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "states": [
+    {
+      "id": "baseline-best-28",
+      "policy": "baseline",
+      "phase": "final",
+      "attempt": 32,
+      "best_iteration": 28,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/baseline-run/solver-failures/contexts/final-32-33.json",
+      "sha256": "d8bc49e3d9346e7ea35106fecbba0e722c08e023989efa253d24870b3c6660c0",
+      "context_semantics": "best parameters with final certification context"
+    },
+    {
+      "id": "baseline-recovery-32",
+      "policy": "baseline",
+      "phase": "recovery-current",
+      "attempt": 32,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/baseline-run/solver-failures/contexts/recovery-current-32-32.json",
+      "sha256": "15bbb9c42d42613c0a7b22642bd961eaf413969c52a4489ec6eb71b8badaf384",
+      "context_semantics": "recovery entry state"
+    },
+    {
+      "id": "failed-only-best-6",
+      "policy": "failed-only",
+      "phase": "final",
+      "attempt": 14,
+      "best_iteration": 6,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/final-14-19.json",
+      "sha256": "ee545f1635159351658604ad35f20003c9c5f72cc15951a9c8cae67d51ac8788",
+      "context_semantics": "best parameters with final certification context"
+    },
+    {
+      "id": "failed-only-recovery-10",
+      "policy": "failed-only",
+      "phase": "recovery-current",
+      "attempt": 10,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/recovery-current-10-10.json",
+      "sha256": "e8bd12767c989b59dc68714d2917c4ab33bd3cd2fabb10b2f6850dbb528bfdef",
+      "context_semantics": "recovery entry state"
+    },
+    {
+      "id": "failed-only-recovery-11",
+      "policy": "failed-only",
+      "phase": "recovery-current",
+      "attempt": 11,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/recovery-current-11-12.json",
+      "sha256": "10edf32b32c26dcc0a789da2408df254691a2c36c966904d862e9646b3a5a55e",
+      "context_semantics": "recovery entry state"
+    },
+    {
+      "id": "failed-only-recovery-12",
+      "policy": "failed-only",
+      "phase": "recovery-current",
+      "attempt": 12,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/recovery-current-12-14.json",
+      "sha256": "54f21b0d77985c26e616cbf34dff09145974a597d485b79b8a96f5c1db168029",
+      "context_semantics": "recovery entry state"
+    },
+    {
+      "id": "failed-only-recovery-13",
+      "policy": "failed-only",
+      "phase": "recovery-current",
+      "attempt": 13,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/recovery-current-13-16.json",
+      "sha256": "d09fcf311b4ecd217fe1fa85db8b884edac69d60f651d770d59ab6f1594228b6",
+      "context_semantics": "recovery entry state"
+    },
+    {
+      "id": "failed-only-recovery-14",
+      "policy": "failed-only",
+      "phase": "recovery-current",
+      "attempt": 14,
+      "best_iteration": null,
+      "context": "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/failed-only-audit/solver-failures/contexts/recovery-current-14-18.json",
+      "sha256": "20f5b3eb5cc600d17f23e324970fcc6048ae1f37660e8a92818f3211cca65fe8",
+      "context_semantics": "recovery entry state"
+    }
+  ],
+  "selected_state_ids": [
+    "baseline-best-28"
+  ],
+  "alphas": [
+    0,
+    0.1,
+    0.5,
+    1
+  ],
+  "reference_a": "/Users/yslian/Project/em_map_analysis/build/unique-stencil-grid/final"
+}

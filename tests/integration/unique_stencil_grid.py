@@ -122,8 +122,8 @@ def validate_dataset(directory, dataset):
     return values
 
 
-def validate_fit(fit, context, alpha, rows=ROWS):
-    require(fit.get("schema_version") == 2 and fit.get("experiment") == "unique-stencil-grid", "Unsupported fit schema.")
+def validate_fit(fit, context, alpha, rows=ROWS, experiment_name="unique-stencil-grid"):
+    require(fit.get("schema_version") == 2 and fit.get("experiment") == experiment_name, "Unsupported fit schema.")
     require(fit["rows"] == rows and fit["columns"] == 2*len(context["state"]) and fit["alpha"] == alpha, "Fit population mismatch.")
     require(fit["iteration_budget"] == fit["refinement_budget"] == BUDGET, "Changed iteration budget.")
     require(fit.get("linear_solver") == "sparse-qr" and fit.get("sparse_row_reduction") == "householder-qr-1024"

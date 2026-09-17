@@ -34,6 +34,16 @@ Evidence Evaluate(const Eigen::MatrixXd &, const Eigen::VectorXd &,
 boost::json::object Fit(const Eigen::MatrixXd &, const Eigen::VectorXd &,
     const Eigen::VectorXd & initial, const Blocks &, int budget = 2000, int reference_budget = 4000,
     bool blocked_svd = false, const Eigen::SparseMatrix<double> * sparse_design = nullptr);
+// Sparse-only experiment path. Dense production-test entry points stay unchanged.
+LinearResult WeightedSolve(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, bool svd = false, bool blocked_svd = true,
+    const Eigen::SparseMatrix<double> * sparse_design = nullptr);
+Evidence Evaluate(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, const Eigen::VectorXd &, const Blocks &);
+boost::json::object Fit(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, const Blocks &, int budget = 100, int reference_budget = 100,
+    bool blocked_svd = true, const Eigen::SparseMatrix<double> * sparse_design = nullptr);
+boost::json::object SparseSpectrum(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd & weights);
 struct Components
 {
     std::vector<std::vector<std::size_t>> atoms, rows, contributors;
