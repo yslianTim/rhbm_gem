@@ -20,6 +20,8 @@ using Blocks = std::vector<Block>;
 struct Evidence
 {
     Eigen::VectorXd weights, linear_weights, prefactors, denominators, scaled;
+    // Composite memberships are ordered by block, then by its row list.
+    Eigen::VectorXd membership_weights, block_prefactors, log_prefactors;
     double objective{}, stationarity{};
     bool valid{};
     std::string reason;
@@ -44,6 +46,10 @@ boost::json::object Fit(const Eigen::SparseMatrix<double> &, const Eigen::Vector
     const Eigen::VectorXd &, const Blocks &, int budget = 100, int reference_budget = 100,
     bool blocked_svd = true, const Eigen::SparseMatrix<double> * sparse_design = nullptr);
 boost::json::object SparseSpectrum(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd & weights);
+Evidence EvaluateComposite(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, const Eigen::VectorXd &, const Blocks &);
+boost::json::object FitComposite(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, const Blocks &, int budget = 100, int reference_budget = 100);
 struct Components
 {
     std::vector<std::vector<std::size_t>> atoms, rows, contributors;

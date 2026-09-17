@@ -105,11 +105,11 @@ def sphere_membership(dataset):
     return indices, coverage[indices], np.sqrt(nearest[indices])
 
 
-def validate_dataset(directory, dataset, expected_rows=ROWS):
+def validate_dataset(directory, dataset, expected_rows=ROWS, experiment_name=NAME, expected_alphas=ALPHAS):
     import numpy as np
-    require(dataset.get("experiment") == NAME and dataset.get("radius") == RADIUS
+    require(dataset.get("experiment") == experiment_name and dataset.get("radius") == RADIUS
             and dataset.get("membership_geometry") == "generation", "Invalid union geometry.")
-    require(dataset["row_count"] == expected_rows and dataset["alphas"] == ALPHAS, "Incomplete voxel population.")
+    require(dataset["row_count"] == expected_rows and dataset["alphas"] == expected_alphas, "Incomplete voxel population.")
     indices, coverage, nearest = sphere_membership(dataset)
     require(len(indices) == expected_rows, "Independent sphere union population differs.")
     require(fold.sha256_file(directory/"voxels.csv") == dataset["voxel_table_sha256"] and

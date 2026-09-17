@@ -1,0 +1,304 @@
+{
+  "cpp_targeted_tests": 45,
+  "python_tests": 75,
+  "ctest_groups": 10,
+  "lint_repo": "passed",
+  "independent_repeat": false,
+  "source_inputs_binary": "verified before and after formal run",
+  "checks": {
+    "weight-roundoff.json": {
+      "maximum_weight_difference": 1.7211326808208582e-10,
+      "rigid_tolerance_failures": 554,
+      "outside_propagated_roundoff_bound": 0,
+      "minimum_variance": 2.156869056222254e-12,
+      "maximum_variance": 3.4753945779612603e-05
+    },
+    "testing-off.json": {
+      "passed": true,
+      "build_testing": "OFF",
+      "absent_symbols": [
+        "EvaluateComposite",
+        "FitComposite",
+        "RunComposite",
+        "atom_block",
+        "BuildBlocks",
+        "unique_grid"
+      ]
+    },
+    "scientific-checks.json": {
+      "passed": true,
+      "trajectories": [
+        {
+          "seed": "checkpoint",
+          "phase": "trace",
+          "rows": 101,
+          "monotone_with_roundoff": true
+        },
+        {
+          "seed": "checkpoint",
+          "phase": "reference_trace",
+          "rows": 0,
+          "monotone_with_roundoff": true
+        },
+        {
+          "seed": "constrained-ls",
+          "phase": "trace",
+          "rows": 101,
+          "monotone_with_roundoff": true
+        },
+        {
+          "seed": "constrained-ls",
+          "phase": "reference_trace",
+          "rows": 0,
+          "monotone_with_roundoff": true
+        }
+      ],
+      "unique_union_ls_seed_difference": 6.775739630089016e-20,
+      "historical_full_prediction_replay": [
+        {
+          "alpha": 0,
+          "rows": 3768656,
+          "maximum_prediction_or_residual_difference": 0.0
+        },
+        {
+          "alpha": 0.1,
+          "rows": 3768656,
+          "maximum_prediction_or_residual_difference": 0.0
+        },
+        {
+          "alpha": 0.5,
+          "rows": 3768656,
+          "maximum_prediction_or_residual_difference": 0.0
+        },
+        {
+          "alpha": 1,
+          "rows": 3768656,
+          "maximum_prediction_or_residual_difference": 0.0
+        }
+      ],
+      "spatial_reconstruction": [
+        {
+          "seed": "checkpoint",
+          "coverage_and_block_center_radial": "passed",
+          "membership_rows": 10995198
+        },
+        {
+          "seed": "constrained-ls",
+          "coverage_and_block_center_radial": "passed",
+          "membership_rows": 10995198
+        }
+      ]
+    },
+    "pdf-visual-review.json": {
+      "passed": true,
+      "renderer": "pdftoppm",
+      "width_pixels": 1600,
+      "figures": [
+        "parameter-errors",
+        "common-domain-residuals",
+        "solver-and-block-diagnostics"
+      ],
+      "review": "All three PDF pages visually checked: readable labels, no clipping or overlap."
+    },
+    "document-links.json": {
+      "passed": true,
+      "links": [
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "atom-centered-voxel-union-experiment.md"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/parameter-errors.png"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/solver-and-block-diagnostics.png"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/common-domain-residuals.png"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/postprocessing-provenance.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/results.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/statistics.csv"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/estimates.csv"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/blocks.csv"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/regions.csv"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/branch-diagnostics.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/full-trajectories.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/validation.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/numerical-validation.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/provenance.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/input-hashes.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/raw-artifact-index.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/artifact-index.json"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/parameter-errors.pdf"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/common-domain-residuals.pdf"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "figures/atom-block-grid-composite/solver-and-block-diagnostics.pdf"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "unique-stencil-grid-experiment.md"
+        },
+        {
+          "document": "docs/developer/atom-block-grid-composite-experiment.md",
+          "target": "matched-joint-ac-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/build-and-configuration.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/development-guidelines.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/architecture/command-architecture.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/architecture/object-architecture.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/architecture/dataobject-io-architecture.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/adding-dataobject-operations.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/adding-a-command.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/commands/README.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "estimate-local-gaussian-with-offset.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "second-stage-local-fitting.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "second-stage-outer-iteration-algorithm-audit.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "fold-168-iteration-regression.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "production-fitting.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "second-stage-audit.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "mdpde-forward-model-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "endpoint-refinement-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "failed-only-refinement.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "observation-matched-prediction-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "estimated-neighbor-sweep-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "matched-joint-ac-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "unique-stencil-grid-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "atom-centered-voxel-union-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "atom-block-grid-composite-experiment.md"
+        },
+        {
+          "document": "docs/developer/README.md",
+          "target": "/docs/developer/release-compliance.md"
+        }
+      ]
+    }
+  },
+  "log_hashes": {
+    "cpp-tests.log": "bbf0e688089bf39bd0fef83dc353c8ff9d1b6aff54ff24160a61960823b71beb",
+    "python-tests.log": "8a22a60dfbabac65c3fc557b2cbcb64ba89d9511b6ee08484171c5f49cff8b83",
+    "ctest.log": "4cefe95229199d058b99b7466ffbd8286bcf7f2af1f4b45a97cb62ee808e1d99",
+    "lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "testing-off-build.log": "c2ed93ffd93c840755c0e91392ae593b1b52de9b7aaf6c208123feaceb1dde2e"
+  }
+}

@@ -180,6 +180,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/MatchedJointAC_test.cpp
     utils/hrl/UniqueStencilGrid_test.cpp
     utils/hrl/AtomCenteredVoxelUnion_test.cpp
+    utils/hrl/AtomBlockGridComposite_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -203,7 +204,7 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
 target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp support/ObservationMatchedPrediction.cpp
-    support/EstimatedNeighborSweep.cpp support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp)
+    support/EstimatedNeighborSweep.cpp support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp)
 target_compile_definitions(rhbm_tests PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
@@ -226,7 +227,7 @@ add_dependencies(tests_all rhbm_tests)
 
 add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/ForwardModelExperiment.cpp
     support/ObservationMatchedPrediction.cpp support/ObservationMatchedExperiment.cpp support/EstimatedNeighborSweep.cpp
-    support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp)
+    support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp)
 target_link_libraries(mdpde_experiment PRIVATE rhbm_gem CompilerFlags)
 target_include_directories(mdpde_experiment PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
@@ -341,6 +342,11 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         second_stage_audit_parser_test
         PROPERTIES LABELS "domain:integration;intent:algorithm"
     )
+    add_test(NAME atom_block_grid_composite_runner_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/atom_block_grid_composite_test.py")
+    set_tests_properties(atom_block_grid_composite_runner_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm")
+
 
     add_test(
         NAME fold_168_regression_runner_test

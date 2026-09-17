@@ -25,6 +25,7 @@ boost::json::object Fit(const Eigen::MatrixXd &, const Eigen::VectorXd &, const 
     const Eigen::SparseMatrix<double> * sparse_design = nullptr);
 boost::json::object Fit(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &, const Eigen::VectorXd &, double alpha);
 void RunUnion(const std::string &, const std::string &, const std::string &, const std::string &);
+void RunComposite(const std::string &, const std::string &, const std::string &, const std::string &);
 void Run(const std::string & manifest, const std::string & map,
     const std::string & state_index, const std::string & output);
 } // namespace second_stage_test::matched::unique_grid

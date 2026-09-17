@@ -10,6 +10,11 @@
 #include <Eigen/SparseQR>
 
 namespace second_stage_test::matched::joint_ac {
+template<class Matrix>
+Evidence EvaluateImpl(const Matrix &, const Eigen::VectorXd &, const Eigen::VectorXd &,
+    const Eigen::VectorXd &, const Blocks &, bool overlap=false);
+double ObjectiveImpl(const Eigen::VectorXd &, const Eigen::VectorXd &, const Blocks &, bool);
+Eigen::VectorXd BlockVariancesImpl(const Eigen::VectorXd &, const Blocks &, bool);
 namespace {
 namespace j = boost::json;
 constexpr double eps{std::numeric_limits<double>::epsilon()};
@@ -18,20 +23,24 @@ j::array Vector(const Eigen::VectorXd & v)
 {
     j::array out; for (double x : v) out.push_back(Number(x)); return out;
 }
-bool ValidBlocks(const Blocks & blocks, Eigen::Index rows)
+bool ValidBlocks(const Blocks & blocks, Eigen::Index rows, bool overlap=false)
 {
     if (blocks.empty() || rows<=0) return false;
-    std::vector<bool> seen(static_cast<std::size_t>(rows)); std::set<std::size_t> owners;
+    std::vector<std::size_t> seen(static_cast<std::size_t>(rows)); std::set<std::size_t> owners;
+    std::size_t block_id{};
     for (const auto & b:blocks)
     {
+        ++block_id;
         if (!std::isfinite(b.alpha) || b.alpha<0 || b.rows.empty() || !owners.insert(b.owner).second) return false;
         for (auto p:b.rows)
         {
-            if (p<0 || p>=rows || seen[static_cast<std::size_t>(p)]) return false;
-            seen[static_cast<std::size_t>(p)]=true;
+            if (p<0 || p>=rows) return false;
+            auto & previous=seen[static_cast<std::size_t>(p)];
+            if (previous && (!overlap || previous==block_id)) return false;
+            previous=block_id;
         }
     }
-    return std::all_of(seen.begin(),seen.end(),[](bool v){return v;});
+    return std::all_of(seen.begin(),seen.end(),[](std::size_t v){return v!=0;});
 }
 double Difference(const Eigen::VectorXd & a, const Eigen::VectorXd & b)
 {
@@ -131,12 +140,12 @@ boost::json::object DesignSpectrum(const Eigen::MatrixXd &,const Eigen::VectorXd
 boost::json::object DesignSpectrum(const Sparse &,const Eigen::VectorXd &,bool);
 template<class Matrix>
 Endpoint Iterate(const Matrix & x, const Eigen::VectorXd & y, Eigen::VectorXd beta,
-    Eigen::VectorXd variances, const Blocks & blocks, int budget, double tolerance, const Eigen::SparseMatrix<double> * sparse_design)
+    Eigen::VectorXd variances, const Blocks & blocks, int budget, double tolerance, const Eigen::SparseMatrix<double> * sparse_design, bool overlap)
 {
     Endpoint out; out.beta=std::move(beta); out.variances=std::move(variances); out.stop="budget-exhausted";
     for (int iteration=0; iteration<=budget; ++iteration)
     {
-        out.evidence=Evaluate(x,y,out.beta,out.variances,blocks);
+        out.evidence=EvaluateImpl(x,y,out.beta,out.variances,blocks,overlap);
         if (x.cols()>2 && x.rows()>1000 && iteration%25==0)
             std::cout<<"joint composite iteration="<<iteration<<" tolerance="<<tolerance
                      <<" stationarity="<<out.evidence.stationarity<<std::endl;
@@ -149,11 +158,15 @@ Endpoint Iterate(const Matrix & x, const Eigen::VectorXd & y, Eigen::VectorXd be
         if (!next.valid) {out.stop=next.reason; break;}
         const Eigen::VectorXd residual{y-x*next.beta};
         Eigen::VectorXd proposed(out.variances.size());
-        bool positive=true;
+        bool positive=true; std::size_t membership{};
         for (std::size_t i=0;i<blocks.size();++i)
         {
             double numerator{};
-            for (auto p:blocks[i].rows) numerator+=out.evidence.weights(p)*residual(p)*residual(p);
+            for (auto p:blocks[i].rows)
+            {
+                const double w=overlap ? out.evidence.membership_weights(static_cast<Eigen::Index>(membership++)) : out.evidence.weights(p);
+                numerator+=w*residual(p)*residual(p);
+            }
             proposed(static_cast<Eigen::Index>(i))=numerator/out.evidence.denominators(static_cast<Eigen::Index>(i));
             if (!std::isfinite(proposed(static_cast<Eigen::Index>(i))) || proposed(static_cast<Eigen::Index>(i))<=0)
             {out.evidence.failure_owner=static_cast<int>(blocks[i].owner); positive=false; break;}
@@ -165,7 +178,7 @@ Endpoint Iterate(const Matrix & x, const Eigen::VectorXd & y, Eigen::VectorXd be
             const double t{std::ldexp(1.0,-backtrack)};
             const Eigen::VectorXd trial{out.beta+t*(next.beta-out.beta)};
             const Eigen::VectorXd v{(out.variances.array().log()+t*(proposed.array().log()-out.variances.array().log())).exp()};
-            const double objective{Objective(y-x*trial,v,blocks)};
+            const double objective{ObjectiveImpl(y-x*trial,v,blocks,overlap)};
             const double tau{32*eps*std::max(1.0,std::abs(out.evidence.objective))};
             if (std::isfinite(objective) && objective<=out.evidence.objective+tau)
             {
@@ -177,7 +190,7 @@ Endpoint Iterate(const Matrix & x, const Eigen::VectorXd & y, Eigen::VectorXd be
         ++out.iterations;
     }
     const int failure_owner{out.evidence.failure_owner};
-    out.evidence=Evaluate(x,y,out.beta,out.variances,blocks);
+    out.evidence=EvaluateImpl(x,y,out.beta,out.variances,blocks,overlap);
     if (failure_owner>=0) out.evidence.failure_owner=failure_owner;
     return out;
 }
@@ -265,9 +278,9 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
 }
 } // namespace
 
-Eigen::VectorXd BlockVariances(const Eigen::VectorXd & r, const Blocks & blocks)
+Eigen::VectorXd BlockVariancesImpl(const Eigen::VectorXd & r, const Blocks & blocks, bool overlap)
 {
-    if (!ValidBlocks(blocks,r.size())) throw std::invalid_argument("Invalid observation blocks.");
+    if (!ValidBlocks(blocks,r.size(),overlap)) throw std::invalid_argument("Invalid observation blocks.");
     Eigen::VectorXd v(static_cast<Eigen::Index>(blocks.size()));
     for (std::size_t i=0;i<blocks.size();++i)
     {
@@ -276,9 +289,9 @@ Eigen::VectorXd BlockVariances(const Eigen::VectorXd & r, const Blocks & blocks)
     }
     return v;
 }
-double Objective(const Eigen::VectorXd & residual, const Eigen::VectorXd & variances, const Blocks & blocks)
+double ObjectiveImpl(const Eigen::VectorXd & residual, const Eigen::VectorXd & variances, const Blocks & blocks, bool overlap)
 {
-    if (!ValidBlocks(blocks,residual.size()) || !residual.allFinite() ||
+    if (!ValidBlocks(blocks,residual.size(),overlap) || !residual.allFinite() ||
         variances.size()!=static_cast<Eigen::Index>(blocks.size()) || !variances.allFinite() ||
         (variances.array()<=0).any()) return std::numeric_limits<double>::quiet_NaN();
     double sum{};
@@ -417,11 +430,11 @@ LinearResult WeightedSolveImpl(const Matrix & x, const Eigen::VectorXd & y,
 
 template<class Matrix>
 Evidence EvaluateImpl(const Matrix & x, const Eigen::VectorXd & y,
-    const Eigen::VectorXd & beta, const Eigen::VectorXd & variances, const Blocks & blocks)
+    const Eigen::VectorXd & beta, const Eigen::VectorXd & variances, const Blocks & blocks, bool overlap)
 {
     Evidence out; out.reason="invalid-input"; out.objective=out.stationarity=std::numeric_limits<double>::quiet_NaN();
     if (x.rows()<=x.cols() || x.cols()==0 || x.cols()%2 || x.cols()!=beta.size() || x.rows()!=y.size() ||
-        !ValidBlocks(blocks,y.size()) || variances.size()!=static_cast<Eigen::Index>(blocks.size())) return out;
+        !ValidBlocks(blocks,y.size(),overlap) || variances.size()!=static_cast<Eigen::Index>(blocks.size())) return out;
     if (!Finite(x) || !y.allFinite() || !beta.allFinite()) {out.reason="nonfinite"; return out;}
     for (Eigen::Index k=0;k<beta.size();k+=2) if (beta(k)<0) {out.reason="infeasible-amplitude"; return out;}
     const Eigen::VectorXd r{y-x*beta};
@@ -438,8 +451,16 @@ Evidence EvaluateImpl(const Matrix & x, const Eigen::VectorXd & y,
         if (!std::isfinite(v) || v<=0)
         {out.reason=std::isfinite(v) ? "variance-boundary" : "nonfinite"; out.failure_owner=static_cast<int>(blocks[i].owner); return out;}
     }
-    out.objective=Objective(r,variances,blocks);
-    out.weights.resize(y.size()); out.prefactors.resize(y.size());
+    out.objective=ObjectiveImpl(r,variances,blocks,overlap);
+    if (overlap)
+    {
+        std::size_t count{}; for (const auto & b:blocks) count+=b.rows.size();
+        out.membership_weights.resize(static_cast<Eigen::Index>(count));
+        out.block_prefactors.resize(variances.size());
+        out.prefactors=Eigen::VectorXd::Zero(y.size());
+        out.linear_weights=Eigen::VectorXd::Zero(y.size());
+    }
+    else {out.weights.resize(y.size()); out.prefactors.resize(y.size());}
     out.denominators.resize(variances.size()); out.scaled=Eigen::VectorXd::Zero(beta.size()+variances.size());
     Eigen::VectorXd logq(variances.size());
     for (std::size_t i=0;i<blocks.size();++i)
@@ -449,22 +470,30 @@ Evidence EvaluateImpl(const Matrix & x, const Eigen::VectorXd & y,
             std::log(static_cast<double>(blocks[i].rows.size()))-std::log(v)-.5*a*std::log(2*std::numbers::pi*v);
     }
     // One common multiplier preserves every relative block weight and KKT equation.
-    const double offset{logq.maxCoeff()}; double qv{};
+    const double offset{logq.maxCoeff()}; double qv{}; std::size_t membership{};
+    if (overlap) out.log_prefactors=logq;
     for (std::size_t i=0;i<blocks.size();++i)
     {
         const auto bi{static_cast<Eigen::Index>(i)}; const auto & block{blocks[i]};
         const double a{block.alpha},v{variances(bi)},q{std::exp(logq(bi)-offset)};
         double sumw{},equation{};
+        if (overlap) out.block_prefactors(bi)=q;
         for (auto p:block.rows)
         {
             const double t{r(p)*r(p)/v};
             const double w{a==0 ? 1 : std::exp(-.5*a*t)};
-            out.weights(p)=w; out.prefactors(p)=q; sumw+=w; equation+=w*(t-1); qv+=q*v;
+            if (overlap)
+            {
+                out.membership_weights(static_cast<Eigen::Index>(membership++))=w;
+                out.prefactors(p)+=q; out.linear_weights(p)+=q*w;
+            }
+            else {out.weights(p)=w; out.prefactors(p)=q;}
+            sumw+=w; equation+=w*(t-1); qv+=q*v;
         }
         out.denominators(bi)=sumw-static_cast<double>(block.rows.size())*a*std::pow(1+a,-1.5);
         out.scaled(beta.size()+bi)=equation/static_cast<double>(block.rows.size())+a*std::pow(1+a,-1.5);
     }
-    out.linear_weights=out.prefactors.array()*out.weights.array();
+    if (!overlap) out.linear_weights=out.prefactors.array()*out.weights.array();
     for (std::size_t i=0;i<blocks.size();++i)
         if (!std::isfinite(out.denominators(static_cast<Eigen::Index>(i))) || out.denominators(static_cast<Eigen::Index>(i))<=0)
         {out.reason="invalid-denominator"; out.failure_owner=static_cast<int>(blocks[i].owner); return out;}
@@ -484,11 +513,11 @@ Evidence EvaluateImpl(const Matrix & x, const Eigen::VectorXd & y,
 template<class Matrix>
 j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
     const Eigen::VectorXd & initial, const Blocks & blocks, int budget, int reference_budget, bool blocked_svd,
-    const Eigen::SparseMatrix<double> * sparse_design)
+    const Eigen::SparseMatrix<double> * sparse_design, bool overlap=false)
 {
     const auto start{std::chrono::steady_clock::now()};
     double verification_seconds{};
-    if (initial.size()!=x.cols() || !initial.allFinite() || !ValidBlocks(blocks,y.size()) || budget<0 || reference_budget<0)
+    if (initial.size()!=x.cols() || !initial.allFinite() || !ValidBlocks(blocks,y.size(),overlap) || budget<0 || reference_budget<0)
         throw std::invalid_argument("Invalid fixed-width composite MDPDE initialization.");
     for (Eigen::Index k=0;k<initial.size();k+=2) if (initial(k)<0)
         throw std::invalid_argument("Negative initial amplitude.");
@@ -518,10 +547,10 @@ j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
     for (int seed=0;seed<2;++seed)
     {
         const Eigen::VectorXd b{seed==1 ? ls.beta : initial};
-        const Eigen::VectorXd v{BlockVariances(y-x*b,blocks)};
-        auto endpoint{Iterate(x,y,b,v,blocks,budget,1e-8,sparse_design)};
+        const Eigen::VectorXd v{BlockVariancesImpl(y-x*b,blocks,overlap)};
+        auto endpoint{Iterate(x,y,b,v,blocks,budget,1e-8,sparse_design,overlap)};
         auto reference{endpoint.stop=="stationary" ?
-            Iterate(x,y,endpoint.beta,endpoint.variances,blocks,reference_budget,1e-10,sparse_design) : endpoint};
+            Iterate(x,y,endpoint.beta,endpoint.variances,blocks,reference_budget,1e-10,sparse_design,overlap) : endpoint};
         if (endpoint.stop!="stationary")
         {
             reference.trace.clear(); reference.solves=reference.iterations=reference.releases=reference.backtracks=0;
@@ -535,7 +564,8 @@ j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
         if (pass)
         {
             const auto check_start=std::chrono::steady_clock::now();
-            const auto check{WeightedSolve(x,y,reference.evidence.linear_weights,true,blocked_svd)};
+            const auto fresh=EvaluateImpl(x,y,reference.beta,reference.variances,blocks,overlap);
+            const auto check{WeightedSolve(x,y,fresh.linear_weights,true,blocked_svd)};
             if (check.valid) verified=check.beta;
             const double delta{std::max(Difference(endpoint.beta,reference.beta),Difference(reference.beta,verified))};
             const double vdelta{ScaleDifference(endpoint.variances,reference.variances)};
@@ -546,15 +576,22 @@ j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
             verification_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-check_start).count();
             pass &= check.valid && delta<=1e-6 && vdelta<=1e-6 && branch.at("weighted_spectrum").at("rank").as_int64()==x.cols();
         }
-        if (reference.evidence.weights.size()==y.size())
+        if (reference.evidence.linear_weights.size()==y.size())
         {
-            const auto & e{reference.evidence}; branch["weights"]=WeightSummary(e.weights);
-            j::array diagnostics;
+            const auto & e{reference.evidence}; branch["weights"]=WeightSummary(overlap ? e.linear_weights : e.weights);
+            j::array diagnostics; std::size_t membership{};
             for (std::size_t i=0;i<blocks.size();++i)
             {
                 const auto & block{blocks[i]}; Eigen::VectorXd w(static_cast<Eigen::Index>(block.rows.size())); double mass{};
-                for (std::size_t k=0;k<block.rows.size();++k) {w(static_cast<Eigen::Index>(k))=e.weights(block.rows[k]); mass+=e.linear_weights(block.rows[k]);}
-                auto d{WeightSummary(w)}; d["owner"]=block.owner; d["alpha"]=block.alpha;
+                for (std::size_t k=0;k<block.rows.size();++k)
+                {
+                    const double value=overlap ? e.membership_weights(static_cast<Eigen::Index>(membership++)) : e.weights(block.rows[k]);
+                    w(static_cast<Eigen::Index>(k))=value;
+                    mass+=overlap ? e.block_prefactors(static_cast<Eigen::Index>(i))*value : e.linear_weights(block.rows[k]);
+                }
+                auto d{WeightSummary(w)};
+                if (overlap) {d["log_prefactor"]=Number(e.log_prefactors(static_cast<Eigen::Index>(i))); d["scaled_prefactor"]=Number(e.block_prefactors(static_cast<Eigen::Index>(i)));}
+                d["owner"]=block.owner; d["alpha"]=block.alpha;
                 d["variance"]=Number(reference.variances(static_cast<Eigen::Index>(i)));
                 d["scale_equation"]=Number(e.scaled(x.cols()+static_cast<Eigen::Index>(i)));
                 d["denominator"]=Number(e.denominators(static_cast<Eigen::Index>(i)));
@@ -587,6 +624,8 @@ j::object FitImpl(const Matrix & x, const Eigen::VectorXd & y,
     result["seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
     return result;
 }
+Eigen::VectorXd BlockVariances(const Eigen::VectorXd & r,const Blocks & b) {return BlockVariancesImpl(r,b,false);}
+double Objective(const Eigen::VectorXd & r,const Eigen::VectorXd & v,const Blocks & b) {return ObjectiveImpl(r,v,b,false);}
 LinearResult WeightedSolve(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::VectorXd & w,
     bool svd,bool blocked,const Sparse * cache) {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
 LinearResult WeightedSolve(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & w,
@@ -601,5 +640,10 @@ j::object Fit(const Eigen::MatrixXd & x,const Eigen::VectorXd & y,const Eigen::V
 j::object Fit(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
     const Blocks & blocks,int budget,int reference,bool blocked,const Sparse * cache)
 {return FitImpl(x,y,b,blocks,budget,reference,blocked,cache);}
+Evidence EvaluateComposite(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Eigen::VectorXd & v,const Blocks & blocks) {return EvaluateImpl(x,y,b,v,blocks,true);}
+j::object FitComposite(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & b,
+    const Blocks & blocks,int budget,int reference)
+{return FitImpl(x,y,b,blocks,budget,reference,true,&x,true);}
 j::object SparseSpectrum(const Sparse & x,const Eigen::VectorXd & w) {return DesignSpectrum(x,w,true);}
 } // namespace second_stage_test::matched::joint_ac

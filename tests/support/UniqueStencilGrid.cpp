@@ -1,5 +1,6 @@
 #include "support/UniqueStencilGrid.hpp"
 #include "support/AtomCenteredVoxelUnion.hpp"
+#include "support/AtomBlockGridComposite.hpp"
 #include <chrono>
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
@@ -240,11 +241,11 @@ j::object Fit(const Eigen::SparseMatrix<double> & x,const Eigen::VectorXd & y,co
 }
 
 static void RunGrid(const std::string & manifest_path,const std::string & map_path,
-    const std::string & index_path,const std::string & output_path,bool union_domain)
+    const std::string & index_path,const std::string & output_path,bool union_domain,bool composite=false)
 {
     Eigen::setNbThreads(1);
     const auto started=std::chrono::steady_clock::now();
-    const std::string experiment=union_domain ? "atom-centered-voxel-union" : "unique-stencil-grid";
+    const std::string experiment=composite ? "atom-block-grid-composite" : union_domain ? "atom-centered-voxel-union" : "unique-stencil-grid";
     const fs::path output{output_path};
     if (fs::exists(output/"fits") || fs::exists(output/"residuals")) throw std::runtime_error("Unique-grid output already exists.");
     const auto manifest{Read(manifest_path)},index{Read(index_path)};
@@ -268,7 +269,7 @@ static void RunGrid(const std::string & manifest_path,const std::string & map_pa
     }
     if (contexts.size()!=8 || manifest.at("atoms").as_array().size()!=168) throw std::runtime_error("Require complete fold-168 population.");
     const auto selected{j::value_to<std::vector<std::string>>(index.at("selected_state_ids"))};
-    if (selected.empty() || std::set<std::string>(selected.begin(),selected.end()).size()!=selected.size()) throw std::runtime_error("Invalid selected states.");
+    if ((composite && selected.size()!=1) || selected.empty() || std::set<std::string>(selected.begin(),selected.end()).size()!=selected.size()) throw std::runtime_error("Invalid selected states.");
     for (const auto & id:selected) if (!ids.contains(id)) throw std::runtime_error("Unknown selected state.");
     std::vector<Atom> geometry,truth; sim::SimulationAtomPreparationResult generator_atoms;
     std::vector<Stencil> stencils; std::vector<double> observations; j::array atoms_json,samples_json;
@@ -341,6 +342,15 @@ static void RunGrid(const std::string & manifest_path,const std::string & map_pa
         {"sampling_spacing",j::value_from(original->GetGridSpacing())},{"cutoff",cutoff},{"alphas",j::value_from(alphas)},
         {"voxel_table_sha256",sim::FileSha256((output/"voxels.csv").string())},{"slot_table_sha256",sim::FileSha256((output/"slots.csv").string())}};
     if (union_domain) {dataset["radius"]=atom_union::radius; dataset["stencil_rows"]=602995; dataset["membership_geometry"]="generation";}
+    if (composite)
+    {
+        const auto it=std::find_if(index.at("states").as_array().begin(),index.at("states").as_array().end(),
+            [&](const auto & entry){return j::value_to<std::string>(entry.at("id"))==selected.front();});
+        const auto state_index=static_cast<std::size_t>(it-index.at("states").as_array().begin());
+        j::array captured_alphas;
+        for (const auto & atom:contexts[state_index].at("atoms").as_array()) captured_alphas.push_back(atom.at("alpha"));
+        dataset["alphas"]=captured_alphas; dataset["alpha_source"]="checkpoint";
+    }
     Write(output/"dataset.json",dataset);
     Write(output/"forward-status.json",j::object{{"passed",true},{"voxel_count",grid.voxels.size()},{"sample_count",stencils.size()},
         {"maximum_double_difference",max_double},{"maximum_quantized_difference",max_quantized},{"maximum_bound_excess",max_excess},
@@ -380,7 +390,7 @@ static void RunGrid(const std::string & manifest_path,const std::string & map_pa
         // arbitrarily small values. All alpha branches share this cache.
         if (!union_domain && sparse_design.nonZeros()!=(x.array()!=0).count()) throw std::runtime_error("Sparse design lost nonzero coefficients.");
         std::cout<<"unique-grid sparse nonzeros="<<sparse_design.nonZeros()<<std::endl;
-        if (union_domain)
+        if (union_domain && !composite)
         {
             // Replay A on its original rows before interpreting an ROI change.
             std::vector<int> a_rows(grid.voxels.size(),-1); Eigen::Index count{};
@@ -426,6 +436,88 @@ static void RunGrid(const std::string & manifest_path,const std::string & map_pa
             }
             Write(output/(id+"-a-replay.json"),j::object{{"passed",true},{"cases",replays}});
         }
+        if (composite)
+        {
+            const auto captured_alphas=j::value_to<std::vector<double>>(dataset.at("alphas"));
+            const auto blocks=atom_union::BuildBlocks(grid,state,generation,captured_alphas,cutoff);
+            auto memberships=CSV(output/"memberships.csv","block,row,index");
+            std::vector<std::size_t> coverage(grid.voxels.size()); std::size_t count{};
+            for (const auto & block:blocks) for (auto row:block.rows)
+            {
+                const auto p=static_cast<std::size_t>(row); ++coverage[p]; ++count;
+                memberships<<block.owner<<','<<row<<','<<grid.voxels[p].index<<'\n';
+            }
+            memberships.close();
+            for (std::size_t p=0;p<coverage.size();++p) if (coverage[p]!=grid.voxels[p].multiplicity)
+                throw std::runtime_error("Composite membership coverage differs.");
+            if (count!=10995198) throw std::runtime_error("Composite membership population differs.");
+            dataset["membership_count"]=count; dataset["membership_table_sha256"]=sim::FileSha256((output/"memberships.csv").string());
+            Write(output/"dataset.json",dataset);
+            const fs::path b_directory=j::value_to<std::string>(index.at("reference_b"));
+            const auto previous_dataset=Read(b_directory/"dataset.json");
+            for (const char * key:{"voxel_table_sha256","slot_table_sha256","atoms","grid_size","generation_origin","generation_spacing"})
+                if (dataset.at(key)!=previous_dataset.at(key)) throw std::runtime_error("C observation domain differs from B.");
+            j::array replays,comparisons;
+            for (std::size_t k=0;k<alphas.size();++k)
+            {
+                const auto previous=Read(b_directory/"fits"/(id+"-alpha-"+std::to_string(k)+".json"));
+                const auto b=Values(previous.at("beta")),v=Values(previous.at("variances"));
+                for (std::size_t a=0;a<168;++a) if (previous.at("abc").at(a).at(1)!=contexts[s].at("state").at(a).at(1))
+                    throw std::runtime_error("B reference width changed.");
+                const auto global=GlobalBlock(y.size(),alphas[k]);
+                const auto old=joint_ac::Evaluate(sparse_design,y,b,v,global),fresh=joint_ac::EvaluateComposite(sparse_design,y,b,v,global);
+                const auto before=joint_ac::WeightedSolve(sparse_design,y,old.linear_weights);
+                const auto after=joint_ac::WeightedSolve(sparse_design,y,fresh.linear_weights,true);
+                const double delta=((before.beta-after.beta).array().abs()/(1+before.beta.array().abs().max(after.beta.array().abs()))).maxCoeff();
+                const double odiff=std::abs(fresh.objective-j::value_to<double>(previous.at("objective")));
+                const double sdiff=std::abs(fresh.stationarity-j::value_to<double>(previous.at("stationarity")));
+                if (!old.valid || !fresh.valid || !before.valid || !after.valid || delta>1e-6 ||
+                    !old.linear_weights.isApprox(fresh.linear_weights,0) || odiff>1e-10*std::max(1.,std::abs(fresh.objective)) || sdiff>1e-12)
+                    throw std::runtime_error("B composite replay differs.");
+                auto scored=Residuals(output,id+"-reference-b-"+std::to_string(k),grid,stencils,sample_y,y,sparse_design*b,nullptr,true);
+                const double rdiff=std::abs(j::value_to<double>(scored.at("grid_rmse"))-j::value_to<double>(previous.at("residuals").at("grid_rmse")));
+                if (rdiff>1e-12) throw std::runtime_error("B prediction replay differs.");
+                replays.emplace_back(j::object{{"alpha",alphas[k]},{"passed",true},{"objective_difference",odiff},
+                    {"stationarity_difference",sdiff},{"scaled_linear_solution_difference",delta},{"grid_rmse_difference",rdiff}});
+                scored["method"]="B"; scored["alpha"]=alphas[k]; scored["abc"]=previous.at("abc");
+                scored["qualified"]=previous.at("qualified"); scored["reason"]=previous.at("reason"); comparisons.push_back(scored);
+                const fs::path a_directory=j::value_to<std::string>(index.at("reference_a"));
+                const auto previous_a=Read(a_directory/"fits"/(id+"-alpha-"+std::to_string(k)+".json"));
+                for (std::size_t a=0;a<168;++a) if (previous_a.at("abc").at(a).at(1)!=contexts[s].at("state").at(a).at(1))
+                    throw std::runtime_error("A reference width changed.");
+                auto scored_a=Residuals(output,id+"-reference-a-"+std::to_string(k),grid,stencils,sample_y,y,sparse_design*Values(previous_a.at("beta")),nullptr,true);
+                scored_a["method"]="A"; scored_a["alpha"]=alphas[k]; scored_a["abc"]=previous_a.at("abc");
+                scored_a["qualified"]=previous_a.at("qualified"); scored_a["reason"]=previous_a.at("reason"); comparisons.push_back(scored_a);
+            }
+            Write(output/(id+"-b-replay.json"),j::object{{"passed",true},{"cases",replays}});
+            Write(output/(id+"-historical.json"),comparisons);
+            const std::string name=id+"-checkpoint-alpha";
+            std::cout<<"composite-grid fit="<<name<<" memberships="<<count<<std::endl;
+            auto fit=joint_ac::FitComposite(sparse_design,y,initial,blocks,iteration_budget,refinement_budget);
+            fit["experiment"]=experiment; fit["state_id"]=id; fit["alpha_source"]="checkpoint";
+            fit["iteration_budget"]=iteration_budget; fit["refinement_budget"]=refinement_budget;
+            fit["linear_solver"]="sparse-qr"; fit["sparse_row_reduction"]="householder-qr-1024";
+            fit["svd_preconditioner"]="independent-tsqr-8192"; fit["design_nonzeros"]=sparse_design.nonZeros();
+            fit["design_build_seconds"]=build_seconds; fit["membership_count"]=count;
+            const auto diagnostics_start=std::chrono::steady_clock::now();
+            for (auto & branch:fit.at("branches").as_array())
+            {
+                const auto & endpoint=branch.at("primary"); const auto b=Values(endpoint.at("beta")),v=Values(endpoint.at("variances"));
+                const auto e=joint_ac::EvaluateComposite(sparse_design,y,b,v,blocks);
+                branch.as_object()["endpoint_diagnostics"]=Diagnostics(sparse_design,e.linear_weights);
+                branch.as_object()["composite_diagnostics"]=atom_block::Diagnostics(e,y-sparse_design*b,v,blocks,grid,state);
+            }
+            fit["endpoint_diagnostics_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-diagnostics_start).count();
+            const auto beta=Values(fit.at("beta")); const auto e=joint_ac::EvaluateComposite(sparse_design,y,beta,Values(fit.at("variances")),blocks);
+            const auto output_start=std::chrono::steady_clock::now();
+            fit["residuals"]=Residuals(output,name,grid,stencils,sample_y,y,sparse_design*beta,&e.linear_weights,true);
+            j::array abc; for (std::size_t a=0;a<168;++a) abc.emplace_back(j::array{beta(static_cast<Eigen::Index>(2*a)),state[a].width,beta(static_cast<Eigen::Index>(2*a+1))});
+            fit["abc"]=abc; fit["residual_output_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-output_start).count();
+            Write(output/"fits"/(name+".json"),fit); cases.emplace_back(name);
+            Write(output/"completion.json",j::object{{"cases",cases},{"complete",false}});
+            std::cout<<"composite-grid finished="<<name<<" reason="<<fit.at("reason")<<std::endl;
+            continue;
+        }
         for (std::size_t k=0;k<alphas.size();++k)
         {
             if (union_domain)
@@ -455,7 +547,7 @@ static void RunGrid(const std::string & manifest_path,const std::string & map_pa
         }
     }
     Write(output/"fit-index.json",j::object{{"schema_version",1},{"experiment",experiment},{"states",index.at("states")},
-        {"selected_state_ids",index.at("selected_state_ids")},{"alphas",union_domain ? index.at("alphas") : j::value_from(alphas)},{"cases",cases},
+        {"selected_state_ids",index.at("selected_state_ids")},{"alphas",composite ? dataset.at("alphas") : union_domain ? index.at("alphas") : j::value_from(alphas)},{"cases",cases},
         {"iteration_budget",iteration_budget},{"refinement_budget",refinement_budget},{"joint_fits",cases.size()}});
     if (union_domain) Write(output/"completion.json",j::object{{"cases",cases},{"complete",true},
         {"seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()}});
@@ -464,4 +556,6 @@ void Run(const std::string & manifest,const std::string & map,const std::string 
 {RunGrid(manifest,map,index,output,false);}
 void RunUnion(const std::string & manifest,const std::string & map,const std::string & index,const std::string & output)
 {RunGrid(manifest,map,index,output,true);}
+void RunComposite(const std::string & manifest,const std::string & map,const std::string & index,const std::string & output)
+{RunGrid(manifest,map,index,output,true,true);}
 } // namespace second_stage_test::matched::unique_grid

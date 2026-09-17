@@ -54,6 +54,25 @@ unique_grid::Grid BuildGrid(const std::vector<Atom> & atoms,const std::vector<St
     }
     return out;
 }
+joint_ac::Blocks BuildBlocks(const unique_grid::Grid & grid,const std::vector<Atom> & atoms,
+    const rhbm_gem::MapObject & generation,const std::vector<double> & alphas,double cutoff)
+{
+    if (alphas.size()!=atoms.size()) throw std::invalid_argument("Block alpha population differs.");
+    std::vector<int> rows(generation.GetMapValueArraySize(),-1);
+    for (std::size_t p=0;p<grid.voxels.size();++p) rows.at(grid.voxels[p].index)=static_cast<int>(p);
+    joint_ac::Blocks blocks;
+    for (std::size_t a=0;a<atoms.size();++a)
+    {
+        joint_ac::Block block{a,alphas[a],{}};
+        Sphere(atoms[a],generation,cutoff,[&](std::size_t i,const Position &,double)
+        {
+            if (rows[i]<0) throw std::invalid_argument("Block voxel outside union.");
+            block.rows.push_back(rows[i]);
+        });
+        blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
 Eigen::SparseMatrix<double> BuildDesign(const unique_grid::Grid & grid,const std::vector<Atom> & atoms,
     const rhbm_gem::MapObject & generation,double cutoff)
 {

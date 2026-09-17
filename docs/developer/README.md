@@ -18,4 +18,5 @@ Start here if you are changing the codebase, validating build configurations, or
    See the [fixed-width joint A/C MDPDE experiment](matched-joint-ac-experiment.md) for checkpoint atom-specific alpha, block scales, constrained raw-space regression, and same-domain frozen controls.
    See [Experiment A: unique stencil grid](unique-stencil-grid-experiment.md) for deduplicated direct voxel observations, common alpha and variance, and 100-step joint A/C solver qualification.
    See [Experiment B: atom-centered voxel union](atom-centered-voxel-union-experiment.md) for the 2.5 Å voxel union, exact sparse fitting, independent TSQR/SVD verification, and paired ROI comparisons.
+   See [Experiment C: atom-block grid composite MDPDE](atom-block-grid-composite-experiment.md) for overlapping voxel blocks, checkpoint alpha, per-atom variances, and aggregate-weight diagnostics.
 9. Read [`docs/developer/release-compliance.md`](/docs/developer/release-compliance.md) before preparing source or binary releases.
