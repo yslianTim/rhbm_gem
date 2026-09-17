@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "state_id": "baseline-best-28",
+  "input_hashes": {
+    "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
+    "map": "ece7fc32f3731411d5c126ac0ec791b3fe9d2c005fec1659904b1e61cd80d9c1",
+    "manifest": "7c605f46632d6005b1c7372f10f1d77da3cb421a922ab9b8c9d58f23be0b1e93"
+  },
+  "checkpoint_sha256": "d8bc49e3d9346e7ea35106fecbba0e722c08e023989efa253d24870b3c6660c0",
+  "expected_rows": 139551,
+  "expected_memberships": 407237,
+  "voxel_ids_sha256_le_u64": "89460cd8673ea5a22e882c6523a28fc29b217f6544e0bfd0636788c16e48c054",
+  "generation_contract": {
+    "settings": {
+      "potential_model": "single_gaus",
+      "potential_model_code": 0,
+      "charge_mode": "partial",
+      "charge_mode_code": 1,
+      "blurring_width": 0.5,
+      "blurring_width_list": [
+        0.5
+      ],
+      "grid_spacing": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "grid_size": [
+        82,
+        125,
+        67
+      ],
+      "origin": [
+        -12.6,
+        -16.8,
+        -12.0
+      ],
+      "cutoff_distance": 2.5,
+      "coordinate_unit": "angstrom",
+      "exclude_hydrogen": true,
+      "only_backbone": false,
+      "missing_charge_policy": "zero_with_status",
+      "occupancy_applied": false,
+      "temperature_factor_applied": false,
+      "normalization_applied": false
+    },
+    "kernel": {
+      "charge_term_cutoff": 2.5,
+      "near_zero_distance": 1e-05,
+      "minimum_charge_width": null,
+      "effective_charge_width": 0.5
+    },
+    "atom_count": 168,
+    "fallback_charge_count": 1,
+    "charge_semantics": "argument_passed_to_electric_potential"
+  }
+}
