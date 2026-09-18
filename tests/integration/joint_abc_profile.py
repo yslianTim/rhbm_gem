@@ -27,11 +27,11 @@ def initial_widths(checkpoint, atoms, start):
     return np.asarray(checkpoint)*factors
 
 
-def raw_certificate(points, atoms, y, endpoint):
+def raw_certificate(points, atoms, y, endpoint, column_builder=fixed.columns):
     beta = np.asarray(endpoint["beta"]); widths = np.asarray(endpoint["b"])
     require(beta.shape == (2*len(atoms),) and widths.shape == (len(atoms),) and
             np.isfinite(beta).all() and np.isfinite(widths).all() and np.all(widths > 0), "Invalid joint endpoint.")
-    basis = fixed.columns(points, atoms, widths); prediction = fixed.predict(basis, beta, len(y)); residual = prediction-y
+    basis = column_builder(points, atoms, widths); prediction = fixed.predict(basis, beta, len(y)); residual = prediction-y
     norms = np.array([np.linalg.norm(v) for _, v in basis]); scale = max(1., np.linalg.norm(y))
     require(np.all(norms > 0), "Zero design column.")
     u = norms*beta/scale
@@ -68,7 +68,7 @@ def qualification(fit):
     return inner and gradient and local and identified and verified
 
 
-def validate_fit(directory, name, fit, points, atoms, y, expected_initial):
+def validate_fit(directory, name, fit, points, atoms, y, expected_initial, certificate_fn=raw_certificate, numeric_check=require):
     require(fit["case"] == name and fit["experiment"] == "joint-abc-profile" and fit["alpha"] == 0 and
             fit["execution_complete"] and fit["row_count"] == len(y) and fit["initial_b"] == expected_initial.tolist(),
             "Changed joint case/initialization contract.")
@@ -85,11 +85,11 @@ def validate_fit(directory, name, fit, points, atoms, y, expected_initial):
     for label in ("initial", "primary", "reference"):
         endpoint = fit[label]
         if not endpoint["valid"]: continue
-        independent = raw_certificate(points, atoms, y, endpoint)
-        require(abs(independent["projected_kkt"]-endpoint["projected_kkt"]) <= 1e-13 and
-                independent["feasible"] == endpoint["feasible"] and independent["active_atoms"] == endpoint["active_atoms"],
-                "Independent A/C KKT differs.")
-        require(np.allclose(independent["b_gradient"], endpoint["b_gradient"], rtol=2e-9, atol=1e-13) and
+        independent = certificate_fn(points, atoms, y, endpoint)
+        require(independent["feasible"] == endpoint["feasible"] and independent["active_atoms"] == endpoint["active_atoms"],
+                "Independent feasibility/active constraints differ.")
+        numeric_check(abs(independent["projected_kkt"]-endpoint["projected_kkt"]) <= 1e-13, "Independent A/C KKT differs.")
+        numeric_check(np.allclose(independent["b_gradient"], endpoint["b_gradient"], rtol=2e-9, atol=1e-13) and
                 abs(np.max(np.abs(endpoint["b_gradient"]))-endpoint["b_gradient_inf"]) <= 1e-16, "Independent B gradient differs.")
         if label == "primary": primary = independent
     beta = np.asarray(fit["primary"]["beta"]); reference = np.asarray(fit["reference"]["beta"])
@@ -100,10 +100,10 @@ def validate_fit(directory, name, fit, points, atoms, y, expected_initial):
     require(fixed.fold.sha256_file(residual_path) == fit["residual_sha256"], "Residual hash mismatch.")
     table = fixed.load_table(residual_path)
     require(len(table) == len(y) and np.array_equal(table["row"], np.arange(len(y))) and
-            np.array_equal(table["residual"], table["prediction"]-y) and
-            np.allclose(primary["prediction"], table["prediction"], rtol=2e-13, atol=2e-12), "Independent prediction differs.")
+            np.array_equal(table["residual"], table["prediction"]-y), "Residual row contract differs.")
+    numeric_check(np.allclose(primary["prediction"], table["prediction"], rtol=2e-13, atol=2e-12), "Independent prediction differs.")
     rss = float(table["residual"]@table["residual"])
-    require(math.isclose(rss, fit["primary"]["rss"], rel_tol=1e-9, abs_tol=1e-24), "Raw residual RSS differs.")
+    numeric_check(math.isclose(rss, fit["primary"]["rss"], rel_tol=1e-9, abs_tol=1e-24), "Raw residual RSS differs.")
     if "width_spectrum" in fit:
         require(fit["width_spectrum"]["active_face_only"] == bool(fit["primary"]["active_atoms"]), "Incorrect active-face interpretation.")
         weak = fixed.load_table(directory / "weak-directions" / f"{name}.csv")

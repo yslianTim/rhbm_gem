@@ -1,0 +1,48 @@
+[
+  {
+    "dataset": "near-0.02",
+    "case": "narrower-double",
+    "joint_qualified": false,
+    "primary_valid": true,
+    "reference_valid": false,
+    "qualification_failure": "inner-solve",
+    "maximum_abs_coefficient": 3.84766482238277e+18,
+    "maximum_b": 5852.090280821143,
+    "cpp_projected_kkt": 1.6893306198362268e-11,
+    "independent_projected_kkt": 1.7454537815098092e-11,
+    "kkt_difference": 5.612316167358244e-13,
+    "maximum_prediction_difference": 5.285096804641398e-10,
+    "maximum_absolute_contribution_sum": 2437957.0269903066,
+    "maximum_cancellation_ratio": 2437949.5946492036,
+    "maximum_b_gradient_difference": 6.493750519221973e-08,
+    "independent_replay_failures": [
+      "Independent A/C KKT differs.",
+      "Independent B gradient differs.",
+      "Independent prediction differs."
+    ],
+    "cancellation_ratio_definition": "max(sum(abs(column*coefficient))/max(1,abs(independent prediction)))"
+  },
+  {
+    "dataset": "near-0.02",
+    "case": "narrower-float32",
+    "joint_qualified": false,
+    "primary_valid": true,
+    "reference_valid": false,
+    "qualification_failure": "inner-solve",
+    "maximum_abs_coefficient": 3.8476441627172905e+18,
+    "maximum_b": 5852.083783910467,
+    "cpp_projected_kkt": 5.6421409211360185e-11,
+    "independent_projected_kkt": 5.492331589529442e-11,
+    "kkt_difference": 1.4980933160657628e-12,
+    "maximum_prediction_difference": 5.854619011813611e-10,
+    "maximum_absolute_contribution_sum": 2437952.0563682285,
+    "maximum_cancellation_ratio": 2437944.6240271907,
+    "maximum_b_gradient_difference": 3.4616034758908034e-06,
+    "independent_replay_failures": [
+      "Independent A/C KKT differs.",
+      "Independent B gradient differs.",
+      "Independent prediction differs."
+    ],
+    "cancellation_ratio_definition": "max(sum(abs(column*coefficient))/max(1,abs(independent prediction)))"
+  }
+]

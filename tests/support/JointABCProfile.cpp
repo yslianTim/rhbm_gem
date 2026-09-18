@@ -201,9 +201,18 @@ Differential Differentiate(const Evaluation & e,double scale)
     out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
 }
 
-j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b)
+j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j::object * resources)
 {
     const auto start=std::chrono::steady_clock::now();
+    auto measure=[](auto since) {
+        struct rusage usage{}; getrusage(RUSAGE_SELF,&usage);
+#ifdef __APPLE__
+        const auto bytes=usage.ru_maxrss;
+#else
+        const auto bytes=usage.ru_maxrss*1024;
+#endif
+        return j::object{{"seconds",Seconds(since)},{"process_peak_rss_bytes",bytes}};
+    };
     const double scale=std::max(1.0,y.norm());
     Profile profile{domain,y,scale,{}, {},0,0,{}};
     Eigen::LevenbergMarquardt<Profile> lm(profile);
@@ -220,6 +229,13 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b)
         status=lm.minimizeOneStep(eta);
         if (lm.iter>before) {++accepted; profile.Accept(eta,accepted);}
     }
+    if (resources) (*resources)["search"]=measure(start);
+    const auto audit_start=std::chrono::steady_clock::now();
+    auto finish=[&](j::object & result) {
+        if (resources) (*resources)["endpoint_audit"]=measure(audit_start);
+        result["seconds"]=Seconds(start);
+        return result;
+    };
     j::object out{{"schema_version",1},{"experiment","joint-abc-profile"},{"alpha",0},
         {"execution_complete",true},{"joint_qualified",false},{"initial",initial},
         {"lm_status",static_cast<int>(status)},{"stop_reason",profile.failure.empty() ? "native-lm-stop" : profile.failure},
@@ -235,7 +251,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b)
     out["endpoint_evaluations"]=2; out["directional_evaluations"]=0;
     if (!endpoint.valid || !reference.valid)
     {
-        out["qualification_failure"]="inner-solve"; out["seconds"]=Seconds(start); return out;
+        out["qualification_failure"]="inner-solve"; return finish(out);
     }
     const double difference=Difference(endpoint.beta,reference.beta);
     out["scaled_reference_difference"]=Number(difference);
@@ -243,7 +259,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b)
     const auto differential=Differentiate(endpoint,scale);
     if (!differential.valid)
     {
-        out["qualification_failure"]=differential.reason; out["seconds"]=Seconds(start); return out;
+        out["qualification_failure"]=differential.reason; return finish(out);
     }
     const auto width_reduced=Reduce(differential.projected,Matrix(y.size(),0));
     const auto widths=Decompose(width_reduced.first,y.size());
@@ -298,7 +314,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b)
         {"local_correction",local},{"identified",identified},{"derivative",verified}};
     out["qualification_failure"]=!inner ? "inner-solve" : !verified ? "derivative-unverified" :
         !identified ? "width-unidentified" : !gradient || !local ? "b-not-stationary" : "none";
-    out["seconds"]=Seconds(start); return out;
+    return finish(out);
 }
 
 void Run(const std::string & manifest,const std::string & map,const std::string & checkpoint,const std::string & output_path)

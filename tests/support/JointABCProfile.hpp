@@ -28,7 +28,8 @@ struct Differential
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
     const Eigen::VectorXd & eta, bool reference=false);
 Differential Differentiate(const Evaluation &, double scale);
-boost::json::object Fit(const Domain &, const Eigen::VectorXd & y, const Eigen::VectorXd & initial_b);
+boost::json::object Fit(const Domain &, const Eigen::VectorXd & y, const Eigen::VectorXd & initial_b,
+    boost::json::object * resources = nullptr);
 void Run(const std::string & manifest, const std::string & map,
     const std::string & checkpoint, const std::string & output);
 } // namespace second_stage_test::matched::joint_abc

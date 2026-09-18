@@ -20,5 +20,6 @@ Start here if you are changing the codebase, validating build configurations, or
    See [Experiment B: atom-centered voxel union](atom-centered-voxel-union-experiment.md) for the 2.5 Å voxel union, exact sparse fitting, independent TSQR/SVD verification, and paired ROI comparisons.
    See the [fixed-B oracle/quantization controls](fixed-b-oracle-experiment.md) for the 0.30 Å, alpha=0 recovery baseline and separation of width error from float32 quantization.
    See the [joint A/C/B profile experiment](joint-abc-profile-experiment.md) for fixed-ROI variable projection, independent width identification and eight-case recovery checks.
+   See the [joint-LS coverage experiment](joint-abc-coverage-experiment.md) for heterogeneous widths, first-stage initialization and the 72-case recovery/identifiability matrix.
    See [Experiment C: atom-block grid composite MDPDE](atom-block-grid-composite-experiment.md) for overlapping voxel blocks, checkpoint alpha, per-atom variances, and aggregate-weight diagnostics.
 9. Read [`docs/developer/release-compliance.md`](/docs/developer/release-compliance.md) before preparing source or binary releases.

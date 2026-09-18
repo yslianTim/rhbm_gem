@@ -1,0 +1,40 @@
+{
+  "matrix_complete": true,
+  "main_recovery_passed": true,
+  "case_count": 72,
+  "qualified_count": 32,
+  "all_72_qualified": false,
+  "data_contract_passed": true,
+  "all_endpoint_replays_passed": false,
+  "qualified_endpoint_replays_passed": true,
+  "reproducibility_passed": true,
+  "engineering": {
+    "passed": true,
+    "cpp_tests": 134,
+    "python_tests": 53,
+    "ctest_groups": 9,
+    "new_cpp_tests": 3,
+    "new_python_tests": 10,
+    "repository_lint": "passed",
+    "production_isolation": {
+      "passed": true,
+      "BUILD_TESTING": false,
+      "experiment_target_absent": true,
+      "test_target_absent": true,
+      "coverage_symbols_absent": true,
+      "joint_abc_symbols_absent": true,
+      "fixed_b_symbols_absent": true
+    },
+    "log_sha256": {
+      "validation-tests.log": "8caf7943ee66fcd8abd04aaeea15711fd093e7b63871587b0c55caf18c46041a",
+      "production-build.log": "e635a13ea038e41feae764662a738c9d42b9cf99daddb1fde6fa23db21533871",
+      "lint.log": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c"
+    }
+  },
+  "notes": [
+    "The coverage matrix is complete; numerical failures remain failures.",
+    "Two near-0.02/narrower endpoints fail independent numerical replay.",
+    "Truth recovery is not required for zero-signal or duplicate unidentifiable parameters.",
+    "Raw voxel and residual CSV files are retained in build/joint-abc-coverage/formal and repeat; SHA-256 manifests are included."
+  ]
+}

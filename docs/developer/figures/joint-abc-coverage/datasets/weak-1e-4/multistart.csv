@@ -1,0 +1,13 @@
+left,right,scaled_abc_difference,maximum_log_b_difference,both_qualified,passed
+first-stage-double,narrower-double,8.533403868584507e-14,2.750022431996513e-13,False,True
+first-stage-double,wider-double,6.498769776287878e-14,2.274846977456946e-13,False,True
+first-stage-double,mixed-double,6.35602681597894e-14,2.2248869413488137e-13,False,True
+narrower-double,wider-double,9.031090052037126e-14,2.9098945475425353e-13,False,True
+narrower-double,mixed-double,7.585202307528205e-14,2.6545432518787493e-13,False,True
+wider-double,mixed-double,4.618527782440049e-14,1.3855583347321954e-13,False,True
+first-stage-float32,narrower-float32,7.731966945252947e-10,2.7061918261850337e-09,False,True
+first-stage-float32,wider-float32,7.770497254525924e-10,2.719677372198248e-09,False,True
+first-stage-float32,mixed-float32,7.6899897882785e-10,2.691499800810959e-09,False,True
+narrower-float32,wider-float32,1.1240274704090801e-10,3.6218683607813773e-10,False,True
+narrower-float32,mixed-float32,7.825484687664214e-11,2.5215451948668033e-10,False,True
+wider-float32,mixed-float32,1.906575939087541e-10,6.143413555648181e-10,False,True

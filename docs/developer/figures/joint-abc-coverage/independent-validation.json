@@ -1,0 +1,37 @@
+{
+  "complete": true,
+  "passed": false,
+  "qualified_endpoints_passed": true,
+  "data_contract_passed": true,
+  "failed_endpoint_replays": [
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-double",
+      "failures": [
+        "Independent A/C KKT differs.",
+        "Independent B gradient differs.",
+        "Independent prediction differs."
+      ]
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-float32",
+      "failures": [
+        "Independent A/C KKT differs.",
+        "Independent B gradient differs.",
+        "Independent prediction differs."
+      ]
+    }
+  ],
+  "seconds": 16.64351720799459,
+  "checks": [
+    "frozen inputs, identities, heterogeneous widths",
+    "complete 72-case matrix including failed branches",
+    "original-row forward, float32 map bytes, ROI and quantization",
+    "first-stage provenance and legal widths",
+    "independent A/C KKT, B gradient, residual and qualification replay",
+    "fixed-B0 initial profile parity",
+    "12-atom independent truth rank and width sensitivity",
+    "truth-free RSS representative selection"
+  ]
+}

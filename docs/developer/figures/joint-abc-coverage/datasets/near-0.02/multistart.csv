@@ -1,0 +1,13 @@
+left,right,scaled_abc_difference,maximum_log_b_difference,both_qualified,passed
+first-stage-double,narrower-double,1.0,9.367701369925653,False,False
+first-stage-double,wider-double,6.4710142006723125e-15,6.661338147750939e-16,False,True
+first-stage-double,mixed-double,1.649474208014519e-15,1.3322676295501878e-15,False,True
+narrower-double,wider-double,1.0,9.367701369925651,False,False
+narrower-double,mixed-double,1.0,9.367701369925651,False,False
+wider-double,mixed-double,5.075305255429284e-15,6.661338147750939e-16,False,True
+first-stage-float32,narrower-float32,1.0,9.367700075495888,False,False
+first-stage-float32,wider-float32,1.8797656326922995e-12,7.129852264142755e-13,False,True
+first-stage-float32,mixed-float32,2.4221887227914115e-13,9.126033262418787e-14,False,True
+narrower-float32,wider-float32,1.0,9.367700075495177,False,False
+narrower-float32,mixed-float32,1.0,9.367700075495797,False,False
+wider-float32,mixed-float32,1.637546760413555e-12,6.217248937900877e-13,False,True
