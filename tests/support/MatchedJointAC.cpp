@@ -119,6 +119,7 @@ void Run(const std::string & manifest_path,const std::string & map_path,
     const fs::path output{output_path};
     if (fs::exists(output/"fits")||fs::exists(output/"samples")) throw std::runtime_error("Joint output already exists.");
     const auto manifest{Read(manifest_path)},index{Read(index_path)};
+    if (manifest.at("schema_version")!=1) throw std::runtime_error("Historical experiment only supports frozen manifest v1.");
     const auto & settings{manifest.at("settings")};
     if (settings.at("potential_model")!="single_gaus" || index.at("schema_version")!=1 ||
         sim::FileSha256(map_path)!=j::value_to<std::string>(manifest.at("output").at("map_sha256")))

@@ -77,7 +77,7 @@ def validate_fit(directory, name, fit, points, atoms, y, expected_initial, certi
     require(len(fit["trials"]) == fit["profile_evaluations"] <= 200 and fit["accepted_updates"] <= 100 and
             fit["endpoint_evaluations"] == 2 and fit["directional_evaluations"] in (0, 12), "Incorrect evaluation budget.")
     accepted = [t for t in fit["trials"] if t["accepted"]]
-    require(len(accepted) == fit["accepted_updates"]+int(fit["initial"]["valid"]), "Incomplete accepted trajectory.")
+    require(len(accepted) == fit["accepted_updates"]+int(fit.get("initial_accepted", fit["initial"]["valid"])), "Incomplete accepted trajectory.")
     require(all(t["valid"] and t["kkt_passed"] for t in accepted), "Accepted failed inner solve.")
     require(all(accepted[k]["rss"] >= accepted[k+1]["rss"] for k in range(len(accepted)-1)), "Nondecreasing accepted RSS.")
     require(fit["joint_qualified"] == qualification(fit), "Unverified joint qualification.")

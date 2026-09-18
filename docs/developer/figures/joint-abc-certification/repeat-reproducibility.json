@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "case_count": 216,
+  "scientific_file_count": 1724,
+  "differences": [],
+  "scientific_catalog_sha256": "f477f7367db3cfc9282c680fd3619499735082a2265bc06c0569fac55df4e0e1",
+  "comparison": "Exact scientific JSON and CSV, including failed branches, final certificates and acceptance evidence; timing, RSS and execution paths excluded."
+}

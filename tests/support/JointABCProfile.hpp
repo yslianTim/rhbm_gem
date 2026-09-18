@@ -10,6 +10,8 @@ struct Domain
     Eigen::Index rows;
     std::vector<std::vector<Support>> atoms;
     Domain(const unique_grid::Grid &, const std::vector<Atom> &);
+    Domain(Eigen::Index count, std::vector<std::vector<Support>> support)
+        :rows(count),atoms(std::move(support)) {}
 };
 struct Evaluation
 {
@@ -28,8 +30,9 @@ struct Differential
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
     const Eigen::VectorXd & eta, bool reference=false);
 Differential Differentiate(const Evaluation &, double scale);
+boost::json::object Trust(const Domain &, const Eigen::VectorXd &, const Evaluation &);
 boost::json::object Fit(const Domain &, const Eigen::VectorXd & y, const Eigen::VectorXd & initial_b,
-    boost::json::object * resources = nullptr);
+    boost::json::object * resources = nullptr, const std::string & variant = "");
 void Run(const std::string & manifest, const std::string & map,
     const std::string & checkpoint, const std::string & output);
 } // namespace second_stage_test::matched::joint_abc

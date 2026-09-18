@@ -219,7 +219,8 @@ void Run(const std::string & manifest_path, const std::string & map_path,
 {
     const fs::path output{output_path}; fs::create_directories(output);
     if (fs::exists(output/"samples.csv") || fs::exists(output/"fits")) throw std::runtime_error("Experiment output already exists.");
-    const auto manifest{Read(manifest_path)}; const auto & settings{manifest.at("settings")};
+    const auto manifest{Read(manifest_path)};
+    if (manifest.at("schema_version")!=1) throw std::runtime_error("Historical experiment only supports frozen manifest v1."); const auto & settings{manifest.at("settings")};
     if (settings.at("potential_model")!="single_gaus" ||
         sim::FileSha256(map_path)!=j::value_to<std::string>(manifest.at("output").at("map_sha256")))
         throw std::runtime_error("Unsupported generation model or mismatched map hash.");

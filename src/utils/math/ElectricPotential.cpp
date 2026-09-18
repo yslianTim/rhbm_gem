@@ -261,18 +261,24 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
     }
 }
 
+ElectricPotential::EffectiveWidths ElectricPotential::GetEffectiveWidths(Element element) const
+{
+    if (m_model_choice == ModelChoice::SINGLE_GAUS)
+    {
+        double width{ m_blurring_width };
+        if (element == Element::OXYGEN) width *= 0.8;
+        else if (element == Element::NITROGEN) width *= 0.9;
+        return { width, width };
+    }
+    if (m_model_choice == ModelChoice::FIVE_GAUS_CHARGE && m_blurring_width != 0.0)
+        return { std::nullopt, std::max(m_blurring_width, kMinimumChargeWidth) };
+    return {};
+}
+
 double ElectricPotential::CalculateSingleGausModel(Element element, double distance, double charge) const
 {
     auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
-    auto width{ m_blurring_width };
-    if (element == Element::OXYGEN)
-    {
-        width *= 0.8;
-    }
-    else if (element == Element::NITROGEN)
-    {
-        width *= 0.9;
-    }
+    const auto width{ *GetEffectiveWidths(element).gaussian };
     auto width_square{ width * width };
     auto distance_square{ distance * distance };
     auto exp_index{ -distance_square/(2.0 * width_square) };

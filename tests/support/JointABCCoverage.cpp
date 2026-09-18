@@ -1,6 +1,8 @@
 #include "support/JointABCCoverage.hpp"
 #include "support/AtomCenteredVoxelUnion.hpp"
 #include "support/FixedBOracle.hpp"
+#include "support/JointABCCertification.hpp"
+#include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -151,13 +153,26 @@ Data SyntheticData(const std::string & name)
     data.observation=std::make_unique<rhbm_gem::MapObject>(size,spacing,origin,std::move(y32));
     return data;
 }
-void RunDataset(const std::string & name,Data & data,const fs::path & output)
+void RunDataset(const std::string & name,Data & data,const fs::path & root,bool certify)
 {
+    fs::path output=root;
     const auto preparation_start=Clock::now();
     fs::create_directories(output/"fits"); fs::create_directories(output/"residuals");
     fs::create_directories(output/"weak-directions"); fs::create_directories(output/"controls");
     Write(output/"completion.json",j::object{{"complete",false},{"cases",j::array{}}});
-    const auto grid=atom_union::BuildGrid(data.truth,{},*data.generation,*data.observation);
+    auto grid=atom_union::BuildGrid(data.truth,{},*data.generation,*data.observation);
+    if(certify)
+    {
+        const auto size=data.generation->GetGridSize();
+        for(auto & voxel:grid.voxels)
+        {
+            const auto i=voxel.index; const auto nx=static_cast<std::size_t>(size[0]),ny=static_cast<std::size_t>(size[1]);
+            const auto position=sim::GridPosition({static_cast<int>(i%nx),static_cast<int>(i/nx%ny),
+                static_cast<int>(i/(nx*ny))},data.generation->GetGridSpacing(),data.generation->GetOrigin());
+            if(position!=voxel.position) throw std::runtime_error("Legacy coordinates disagree with explicit FMA snapshot.");
+            voxel.position=position;
+        }
+    }
     Vector y64(static_cast<Eigen::Index>(grid.voxels.size())),y32(y64.size());
     auto table=CSV(output/"voxels.csv","row,index,x,y,z,multiplicity,nearest_distance,reference_double,observed,quantization_delta");
     std::size_t memberships{}; double max_forward{},max_quantization{};
@@ -207,7 +222,7 @@ void RunDataset(const std::string & name,Data & data,const fs::path & output)
     const auto initialization=Initialize(*data.model,*data.observation,data.identities);
     Write(output/"initialization.json",initialization.evidence);
     // Optimizer domain contains geometry/support only; truth never supplies a start.
-    const joint_abc::Domain domain(grid,data.truth);
+    const auto domain=certify ? certification::Snapshot(grid,data.truth,root) : joint_abc::Domain(grid,data.truth);
     if (name=="heterogeneous-168")
     {
         for (const std::string kind:{"true-b","first-stage-b"})
@@ -225,17 +240,27 @@ void RunDataset(const std::string & name,Data & data,const fs::path & output)
             }
         }
     }
+    for (const std::string & variant:certify ? std::vector<std::string>{"legacy","guarded","guarded-log"} : std::vector<std::string>{""})
+    {
+    if (certify)
+    {
+        output=root/variant;
+        for (const char * sub:{"fits","residuals","weak-directions","controls","audits"}) fs::create_directories(output/sub);
+        for (const char * file:{"voxels.csv","dataset.json","scoring-truth.json","forward-status.json","initialization.json","snapshot.json","contributors.csv"})
+            fs::copy_file(root/file,output/file);
+        for (const auto & file:fs::directory_iterator(root/"controls")) fs::copy_file(file.path(),output/"controls"/file.path().filename());
+    }
     j::array completed;
     for (bool quantized:{false,true}) for (const std::string start:{"first-stage","narrower","wider","mixed"})
     {
         const std::string label=start+(quantized ? "-float32" : "-double");
-        std::cout<<"Starting "<<name<<'/'<<label<<std::endl;
+        std::cout<<"Starting "<<variant<<'/'<<name<<'/'<<label<<std::endl;
         j::object fit;
         if (initialization.valid)
         {
             const auto initial=InitialWidths(initialization.b,data.identities,start);
             j::object resources;
-            fit=joint_abc::Fit(domain,quantized ? y32 : y64,initial,&resources);
+            fit=joint_abc::Fit(domain,quantized ? y32 : y64,initial,&resources,variant);
             fit["initial_b"]=Values(initial); fit["resources"]=resources;
             fit["initialization_status"]="valid";
             if (fit.at("primary").at("valid").as_bool())
@@ -244,7 +269,8 @@ void RunDataset(const std::string & name,Data & data,const fs::path & output)
                 const Vector coefficients=Parse(endpoint.at("beta")),b=Parse(endpoint.at("b"));
                 auto atoms=data.truth;
                 for (std::size_t k=0;k<atoms.size();++k) atoms[k].width=b(static_cast<Eigen::Index>(k));
-                const auto x=atom_union::BuildDesign(grid,atoms,*data.generation);
+                const auto x=certify ? joint_abc::Evaluate(domain,quantized ? y32 : y64,Parse(endpoint.at("eta"))).x :
+                    atom_union::BuildDesign(grid,atoms,*data.generation);
                 const Vector prediction=x*coefficients; const auto & y=quantized ? y32 : y64;
                 auto residual=CSV(output/"residuals"/(label+".csv"),"row,prediction,residual");
                 for (Eigen::Index k=0;k<y.size();++k) residual<<k<<','<<prediction(k)<<','<<prediction(k)-y(k)<<'\n';
@@ -264,10 +290,13 @@ void RunDataset(const std::string & name,Data & data,const fs::path & output)
         else fit={{"execution_complete",false},{"joint_qualified",false},
             {"initialization_status","invalid"},{"qualification_failure","initialization-failed"}};
         fit["case"]=label; fit["dataset"]=name;
+        if(certify) {fit["variant"]=variant; fit["observation_snapshot_sha256"]=sim::FileSha256(root/"snapshot.json");}
         Write(output/"fits"/(label+".json"),fit); completed.emplace_back(label);
         Write(output/"completion.json",j::object{{"complete",completed.size()==8},{"cases",completed}});
         std::cout<<name<<'/'<<label<<" qualified="<<fit.at("joint_qualified")<<std::endl;
     }
+    }
+    if (certify) Write(root/"completion.json",j::object{{"complete",true},{"variants",j::array{"legacy","guarded","guarded-log"}}});
 }
 } // namespace
 
@@ -381,19 +410,45 @@ Vector InitialWidths(const Vector & b,const j::array & identities,const std::str
     return result;
 }
 
-void Run(const std::string & model,const std::string & map,const std::string & manifest,const std::string & output_path)
+void Run(const std::string & model,const std::string & map,const std::string & manifest,const std::string & output_path,bool certify)
 {
     Eigen::setNbThreads(1); const fs::path output(output_path);
     if (fs::exists(output/"completion.json") || fs::exists(output/"datasets"))
         throw std::runtime_error("Coverage output already exists.");
     fs::create_directories(output); j::array completed;
     Write(output/"completion.json",j::object{{"complete",false},{"datasets",completed}});
-    auto main=MainData(model,map,Read(manifest));
-    RunDataset("heterogeneous-168",main,output/"datasets"/"heterogeneous-168"); completed.push_back("heterogeneous-168");
+    const auto metadata=Read(manifest);
+    if (metadata.at("schema_version")==1)
+    {
+        const auto fixture=Read(fs::path(__FILE__).parent_path().parent_path()/"benchmarks/joint_abc_coverage.json");
+        if (sim::FileSha256(manifest)!=j::value_to<std::string>(fixture.at("input_hashes").at("manifest")))
+            throw std::runtime_error("Unknown v1 coverage width contract.");
+    }
+    else if (!certify || metadata.at("schema_version")!=2)
+        throw std::runtime_error("Unsupported coverage manifest version.");
+    else
+    {
+        const auto & kernel=metadata.at("kernel"); const auto & support=metadata.at("support");
+        const j::object policy{{"id","element-scaled-v1"},{"oxygen",.8},{"nitrogen",.9},{"other",1.0}};
+        if(kernel.at("version")!="single_gaus-v1" || kernel.at("width_policy")!=policy ||
+            kernel.as_object().contains("effective_charge_width") || kernel.at("near_zero_distance")!=1e-5 ||
+            kernel.at("charge_term_cutoff")!=2.5 || !kernel.at("minimum_charge_width").is_null() ||
+            support.at("version")!="sphere-fma-v1" || support.at("outer_cutoff")!=2.5 ||
+            support.at("coordinates")!="fma(index,spacing,origin)" ||
+            support.at("squared_distance")!="fma(dz,dz,fma(dy,dy,dx*dx))" ||
+            support.at("comparison")!="squared_distance<=cutoff*cutoff")
+            throw std::runtime_error("Changed manifest v2 kernel/support policy.");
+        for(const auto & atom:metadata.at("atoms").as_array())
+            if(atom.at("effective_gaussian_width")!=ElementWidth(j::value_to<int>(atom.at("element"))) ||
+                atom.at("effective_charge_width")!=atom.at("effective_gaussian_width"))
+                throw std::runtime_error("Wrong per-atom effective widths.");
+    }
+    auto main=MainData(model,map,metadata);
+    RunDataset("heterogeneous-168",main,output/"datasets"/"heterogeneous-168",certify); completed.push_back("heterogeneous-168");
     Write(output/"completion.json",j::object{{"complete",false},{"datasets",completed}});
     for (const auto * name:synthetic_names)
     {
-        auto data=SyntheticData(name); RunDataset(name,data,output/"datasets"/name); completed.push_back(name);
+        auto data=SyntheticData(name); RunDataset(name,data,output/"datasets"/name,certify); completed.push_back(name);
         Write(output/"completion.json",j::object{{"complete",completed.size()==9},{"datasets",completed}});
     }
 }

@@ -47,6 +47,11 @@ public:
     void SetModelChoice(int value);
     void SetBlurringWidth(double value);
     KernelSettings GetKernelSettings() const;
+    struct EffectiveWidths
+    {
+        std::optional<double> gaussian, charge;
+    };
+    EffectiveWidths GetEffectiveWidths(Element element) const;
     double GetPotentialValue(Element element, double distance, double charge, double amplitude=0.0, double width=0.0) const;
     const std::array<double, 5> & GetModelParameterAList(Element element, int delta_z) const;
     const std::array<double, 5> & GetModelParameterBList(Element element, int delta_z) const;

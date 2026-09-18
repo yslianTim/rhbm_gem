@@ -1,4 +1,5 @@
 #include "MapSimulation.hpp"
+#include "SimulationGeometry.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -7,7 +8,6 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
-#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -231,18 +231,12 @@ int PopulateMapValueArray(MapObject & map, const SimulationAtomPreparationResult
                     {
                         for (int x = bounds[i].lower[0]; x <= bounds[i].upper[0]; ++x)
                         {
-                            const std::array<double, 3> position{
-                                origin[0] + static_cast<double>(x) * spacing[0],
-                                origin[1] + static_cast<double>(y) * spacing[1],
-                                origin[2] + static_cast<double>(z) * spacing[2]
-                            };
-                            const auto dx{ position[0] - atom.position[0] };
-                            const auto dy{ position[1] - atom.position[1] };
-                            const auto dz{ position[2] - atom.position[2] };
-                            if (dx * dx + dy * dy + dz * dz > radius_square) continue;
+                            const auto position{ GridPosition({ x, y, z }, spacing, origin) };
+                            const auto square{ SupportSquare(position, atom.position) };
+                            if (square > radius_square) continue;
                             const auto index{ static_cast<size_t>(x) + static_cast<size_t>(grid_size[0])
                                 * (static_cast<size_t>(y) + static_cast<size_t>(grid_size[1]) * static_cast<size_t>(z)) };
-                            const auto distance{ array_helper::ComputeNorm(atom.position, map.GetGridPosition(index)) };
+                            const auto distance{ std::sqrt(square) };
                             const auto contribution{ potential.GetPotentialValue(atom.element, distance, atom.charge_used) };
                             values[index] += contribution;
                             if (!std::isfinite(contribution) || !std::isfinite(values[index]))

@@ -1,5 +1,6 @@
 #include "support/JointABCProfile.hpp"
 #include "support/FixedBOracle.hpp"
+#include "support/InstrumentedLM.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <algorithm>
@@ -90,11 +91,38 @@ struct Profile
     j::array trace;
     int evaluations{},derivatives{};
     std::string failure;
+    std::string variant;
+    int references{};
+    double reference_seconds{};
+    bool guarded() const {return variant=="guarded" || variant=="guarded-log";}
+    bool retry() const {return guarded() && evaluations<evaluation_budget && failure!="unrepresentable-step";}
+    bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
+        double radius,double damping,double actual,double predicted,double ratio,bool proposed)
+    {
+        if (trace.empty()) return false;
+        auto & row=trace.back().as_object();
+        row["lm"]=j::object{{"accepted_eta",Values(accepted)},{"step",Values(step)},
+            {"diagonal",Values(diagonal)},{"radius",Number(radius)},{"damping",Number(damping)},
+            {"actual_decrease",cached.valid ? Number(actual) : j::value(nullptr)},
+            {"predicted_decrease",Number(predicted)},{"ratio",cached.valid ? Number(ratio) : j::value(nullptr)},
+            {"proposed_acceptance",proposed}};
+        bool trusted=cached.valid;
+        if (proposed || domain.atoms.size()<=12)
+        {
+            const auto start=std::chrono::steady_clock::now();
+            auto evidence=Trust(domain,y,cached); ++references;
+            reference_seconds+=Seconds(start); trusted=evidence.at("passed").as_bool();
+            row["trust"]=std::move(evidence);
+        }
+        if (guarded() && !trusted) failure="untrusted-trial";
+        return trusted;
+    }
     int values() const {return static_cast<int>(domain.rows);}
     bool Get(const Vector & eta)
     {
         if (cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if (evaluations>=evaluation_budget) {failure="profile-budget"; return false;}
+        if (guarded()) failure.clear();
         const auto start=std::chrono::steady_clock::now();
         cached=Evaluate(domain,y,eta); ++evaluations;
         auto row=Endpoint(cached); row["evaluation"]=evaluations; row["accepted"]=false;
@@ -201,7 +229,72 @@ Differential Differentiate(const Evaluation & e,double scale)
     out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
 }
 
-j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j::object * resources)
+j::object Trust(const Domain & domain,const Vector & y,const Evaluation & e)
+{
+    const auto reference=Evaluate(domain,y,e.eta,true);
+    j::object out{{"reference",Endpoint(reference)},{"passed",false}};
+    if (!e.valid)
+    {
+        out["reason"]="invalid-primary";
+        if(e.x.cols()>0 && e.x.nonZeros()>0 && domain.atoms.size()<=12)
+            out["design_spectrum"]=joint_ac::SparseSpectrum(e.x,Vector::Ones(y.size()));
+        return out;
+    }
+    const double difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
+        std::numeric_limits<double>::infinity(),scale=std::max(1.0,y.norm());
+    Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
+    // Independent scalar forward and compensated summation, using frozen support.
+    auto add=[&](Eigen::Index row,double value) {
+        const double increment=value-compensation(row),sum=prediction(row)+increment;
+        compensation(row)=(sum-prediction(row))-increment; prediction(row)=sum; absolute(row)+=std::abs(value);
+    };
+    for (Eigen::Index a=0;a<e.eta.size();++a)
+    {
+        const double b=std::exp(e.eta(a));
+        for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
+        {
+            const double r=std::sqrt(p.square),g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
+            const double k=r<1e-5 ? std::sqrt(2/M_PI)/b : std::erf(r/b/std::sqrt(2.0))/r;
+            add(p.row,e.beta(2*a)*g); add(p.row,e.beta(2*a+1)*k);
+        }
+    }
+    const Vector replay_residual=prediction-y,original_prediction=e.x*e.beta;
+    Vector norms(e.x.cols());
+    for (Eigen::Index k=0;k<e.x.cols();++k) norms(k)=e.x.col(k).norm();
+    const Vector u=norms.array()*e.beta.array()/scale;
+    const Vector gradient=(e.x.transpose()*replay_residual).array()/norms.array()/scale;
+    Vector projected=u-gradient;
+    for (Eigen::Index k=0;k<e.beta.size();k+=2) projected(k)=std::max(0.0,projected(k));
+    const double kkt=(u-projected).lpNorm<Eigen::Infinity>();
+    Vector width_gradient=Vector::Zero(e.eta.size());
+    for (Eigen::Index a=0;a<e.eta.size();++a)
+    {
+        const double b=std::exp(e.eta(a));
+        for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
+        {
+            const double g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
+            const double dk=-std::sqrt(2/M_PI)/b*(p.square<1e-10 ? 1 : std::exp(-p.square/(2*b*b)));
+            width_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
+        }
+    }
+    const bool prediction_ok=((prediction-original_prediction).array().abs()<=
+        2e-12+2e-13*original_prediction.array().abs()).all();
+    const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
+    const bool reference_gradient_ok=reference.valid && ((reference.gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
+    const double kkt_difference=std::abs(kkt-j::value_to<double>(e.certificate.at("projected_kkt")));
+    out["scaled_coefficient_difference"]=Number(difference); out["prediction_passed"]=prediction_ok;
+    out["gradient_passed"]=gradient_ok && reference_gradient_ok;
+    out["kkt_replay_difference"]=Number(kkt_difference);
+    out["maximum_prediction_difference"]=Number((prediction-original_prediction).lpNorm<Eigen::Infinity>());
+    out["maximum_gradient_difference"]=Number((width_gradient-e.gradient).lpNorm<Eigen::Infinity>());
+    out["maximum_cancellation_ratio"]=Number((absolute.array()/prediction.array().abs().max(1.0)).maxCoeff());
+    if (domain.atoms.size()<=12) out["design_spectrum"]=joint_ac::SparseSpectrum(e.x,Vector::Ones(y.size()));
+    out["passed"]=difference<=1e-10 && prediction_ok && gradient_ok && reference_gradient_ok && kkt_difference<=1e-13;
+    out["reason"]=out.at("passed").as_bool() ? "trusted" : !reference.valid ? "invalid-reference" : "replay-disagreement";
+    return out;
+}
+
+j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j::object * resources,const std::string & variant)
 {
     const auto start=std::chrono::steady_clock::now();
     auto measure=[](auto since) {
@@ -214,14 +307,19 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
         return j::object{{"seconds",Seconds(since)},{"process_peak_rss_bytes",bytes}};
     };
     const double scale=std::max(1.0,y.norm());
-    Profile profile{domain,y,scale,{}, {},0,0,{}};
-    Eigen::LevenbergMarquardt<Profile> lm(profile);
+    Profile profile{domain,y,scale,{}, {},0,0,{},variant};
+    Vector eta=initial_b.array().log(); int accepted{};
+    auto search=[&](auto & lm) {
     lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
     lm.parameters.gtol=1e-12; lm.parameters.maxfev=evaluation_budget;
-    Vector eta=initial_b.array().log();
-    auto status=lm.minimizeInit(eta); int accepted{};
+    if (variant=="guarded-log") {lm.useExternalScaling=true; lm.diag=Vector::Ones(eta.size());}
+    auto status=lm.minimizeInit(eta);
+    if (!variant.empty() && profile.cached.valid)
+    {
+        const bool trusted=profile.Trial(eta,Vector::Zero(eta.size()),Vector::Ones(eta.size()),0,0,0,0,0,true);
+        if (profile.guarded() && !trusted) return Eigen::LevenbergMarquardtSpace::UserAsked;
+    }
     if (profile.cached.valid) profile.Accept(eta,0);
-    const auto initial=Endpoint(profile.cached);
     while (status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
     {
         if (accepted>=update_budget) {profile.failure="accepted-update-budget"; break;}
@@ -229,6 +327,13 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
         status=lm.minimizeOneStep(eta);
         if (lm.iter>before) {++accepted; profile.Accept(eta,accepted);}
     }
+    return status;
+    };
+    Eigen::LevenbergMarquardtSpace::Status status;
+    if (variant.empty()) {Eigen::LevenbergMarquardt<Profile> lm(profile); status=search(lm);}
+    else {InstrumentedLM<Profile> lm(profile); status=search(lm);}
+    auto initial=profile.trace.empty() ? Endpoint(profile.cached) : profile.trace.front().as_object();
+    for (const char * key:{"evaluation","accepted","accepted_update","seconds","trust","lm"}) initial.erase(key);
     if (resources) (*resources)["search"]=measure(start);
     const auto audit_start=std::chrono::steady_clock::now();
     auto finish=[&](j::object & result) {
@@ -245,6 +350,14 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
             {"profile_budget",evaluation_budget},{"accepted_update_budget",update_budget}}},
         {"linear_solver","sparse-qr-householder-1024"},{"reference_solver","independent-tsqr-8192-svd"},
         {"residual_scale",scale},{"variance_semantics","descriptive RSS/N; zero permitted"}};
+    if (!variant.empty())
+    {
+        out["variant"]=variant; out["search_reference_evaluations"]=profile.references;
+        out["initial_accepted"]=!profile.trace.empty() && profile.trace.front().at("accepted").as_bool();
+        out["search_reference_seconds"]=profile.reference_seconds;
+        out["search_stopped_without_convergence"]=status==Eigen::LevenbergMarquardtSpace::UserAsked ||
+            status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
+    }
     // Fresh endpoint evaluation, independent of the optimizer's cached trial.
     const auto endpoint=Evaluate(domain,y,eta),reference=Evaluate(domain,y,eta,true);
     out["primary"]=Endpoint(endpoint); out["reference"]=Endpoint(reference);

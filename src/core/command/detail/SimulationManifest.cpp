@@ -74,6 +74,7 @@ json::object MakeManifest(const std::filesystem::path & output, const std::strin
     size_t fallback_count{ 0 };
     for (const auto & atom : atoms.atom_list)
     {
+        const auto widths{ potential.GetEffectiveWidths(atom.element) };
         if (atom.charge_lookup && !atom.charge_lookup->charge) ++fallback_count;
         atom_records.emplace_back(json::object{
             { "preparation_index", atom_records.size() },
@@ -88,7 +89,9 @@ json::object MakeManifest(const std::filesystem::path & output, const std::strin
             { "table", atom.charge_lookup ? TableName(atom.charge_lookup->table) : json::value(nullptr) },
             { "lookup_status", std::string(ChargeStatusText(atom)) },
             { "lookup_charge", atom.charge_lookup ? OptionalNumber(atom.charge_lookup->charge) : json::value(nullptr) },
-            { "charge_used", atom.charge_used }
+            { "charge_used", atom.charge_used },
+            { "effective_gaussian_width", OptionalNumber(widths.gaussian) },
+            { "effective_charge_width", OptionalNumber(widths.charge) }
         });
     }
 #ifdef USE_OPENMP
@@ -97,7 +100,7 @@ json::object MakeManifest(const std::filesystem::path & output, const std::strin
     constexpr bool openmp_enabled{ false };
 #endif
     return {
-        { "schema_version", 1 },
+        { "schema_version", 2 },
         { "generator", json::object{
             { "version", RHBM_GEM_SIMULATION_VERSION },
             { "source_sha256", RHBM_GEM_SIMULATION_SOURCE_SHA256 },
@@ -129,10 +132,20 @@ json::object MakeManifest(const std::filesystem::path & output, const std::strin
             { "normalization_applied", false }
         } },
         { "kernel", json::object{
+            { "version", std::string(PotentialModelName(request.potential_model_choice)) + "-v1" },
+            { "width_policy", request.potential_model_choice == PotentialModel::SINGLE_GAUS
+                ? json::value(json::object{ { "id", "element-scaled-v1" },
+                    { "oxygen", 0.8 }, { "nitrogen", 0.9 }, { "other", 1.0 } })
+                : json::value(json::object{ { "id", "model-specific-v1" } }) },
             { "charge_term_cutoff", OptionalNumber(kernel.charge_term_cutoff) },
             { "near_zero_distance", OptionalNumber(kernel.near_zero_distance) },
-            { "minimum_charge_width", OptionalNumber(kernel.minimum_charge_width) },
-            { "effective_charge_width", OptionalNumber(kernel.effective_charge_width) }
+            { "minimum_charge_width", OptionalNumber(kernel.minimum_charge_width) }
+        } },
+        { "support", json::object{
+            { "version", "sphere-fma-v1" }, { "outer_cutoff", request.cutoff_distance },
+            { "comparison", "squared_distance<=cutoff*cutoff" },
+            { "coordinates", "fma(index,spacing,origin)" },
+            { "squared_distance", "fma(dz,dz,fma(dy,dy,dx*dx))" }
         } },
         { "execution", json::object{
             { "openmp_enabled", openmp_enabled }, { "requested_job_count", request.job_count },

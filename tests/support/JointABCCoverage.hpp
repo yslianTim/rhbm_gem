@@ -17,5 +17,5 @@ Initialization Initialize(rhbm_gem::ModelObject &, rhbm_gem::MapObject &,
     const boost::json::array & identities);
 Eigen::VectorXd InitialWidths(const Eigen::VectorXd &, const boost::json::array &, const std::string &);
 void Run(const std::string & model, const std::string & map,
-    const std::string & manifest, const std::string & output);
+    const std::string & manifest, const std::string & output, bool certification=false);
 } // namespace second_stage_test::matched::coverage

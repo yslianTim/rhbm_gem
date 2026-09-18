@@ -23,19 +23,20 @@ Grid origin, dimensions, sampling, and potential formulas retain their existing 
 
 `SINGLE_GAUS_USER` still requires amplitude and width arguments that this command does not supply; a non-empty simulation using that option fails on its non-finite potential instead of publishing invalid voxels. This change does not add user-Gaussian parameter support.
 
-## Generation record, schema version 1
+## Generation record, schema version 2
 
 Each output `name.map` has an adjacent `name.map.simulation.json`. All floating-point fields are JSON numbers serialized with double round-trip precision. Identifiers are escaped as JSON strings. Atom enum fields preserve the integer codes from `GlobalEnumClass.hpp`; raw component and atom identifiers are saved separately.
 
 | Object or field | Contents |
 | --- | --- |
-| `schema_version` | Integer `1` |
+| `schema_version` | Integer `2` |
 | `generator` | Project `version`, `source_sha256`, `configuration_sha256`, and combined `build_sha256` |
 | `source` | Absolute `model_path`, `pdb_id`, and SHA-256 of the model file bytes |
 | `output` | `map_file`, SHA-256 of the saved map bytes, `format=ccp4`, `calculation_precision=float64`, `storage_precision=float32` |
 | `settings` | Potential model and charge mode names/codes, this map's exact `blurring_width`, the normalized `blurring_width_list`, grid spacing/size/origin, outer cutoff, coordinate unit, selection flags, and `missing_charge_policy=zero_with_status` |
 | `settings` treatment flags | Occupancy, temperature factor, and normalization are currently not applied; each has an explicit false flag |
-| `kernel` | `charge_term_cutoff`, `near_zero_distance`, `minimum_charge_width`, and `effective_charge_width`; inapplicable fields are null |
+| `kernel` | Model formula `version`, explicit `width_policy`, `charge_term_cutoff`, `near_zero_distance`, and `minimum_charge_width`; inapplicable fields are null |
+| `support` | `sphere-fma-v1`, explicit FMA coordinates/squared-distance arithmetic, strict cutoff comparison and outer cutoff |
 | `execution` | OpenMP availability, normalized requested and actual team sizes, `accumulation=z_planes_in_preparation_order` |
 | `charge_semantics` | `argument_passed_to_electric_potential` |
 | `atom_count`, `fallback_charge_count` | Selected atom count and count of failed lookups using zero |
@@ -49,8 +50,13 @@ Every atom record contains:
 - `lookup_status`: `found`, `unsupported_residue`, `unsupported_structure`, `unsupported_spot`, `table_data_mismatch`, or `neutral_mode`.
 - `lookup_charge`: the table value on success, otherwise null.
 - `charge_used`: the actual coefficient supplied to potential evaluation, including zero fallback and neutral mode.
+- `effective_gaussian_width` and `effective_charge_width`: values used for this atom, or null where a single width is inapplicable.
 
 The combination of source fingerprint, preparation index, and identity fields identifies an atom. A consumer must not match solely by element or assume serial IDs are globally unique. For SINGLE_GAUS, this coefficient is the physical offset under that model's existing contract; other potential models must be interpreted according to their own formula.
+
+For `single_gaus`, the width policy is O × 0.8, N × 0.9 and other elements × 1, supplied by the same width decision function used by evaluation. The five-Gaussian model has no single Gaussian width. V2 removes the misleading global charge width from `kernel`.
+
+Grid coordinates use explicit `fma(index, spacing, origin)`. Squared distances use `fma(dz, dz, fma(dy, dy, dx*dx))`, with strict `r² <= cutoff²` membership and no support tolerance. Historical maps and v1 manifests remain unchanged. Consumers of v1 must use a hash-identified frozen width contract; unknown legacy widths must not be inferred from the current generator. Historical experiment readers reject v2 until they explicitly support its semantics. See the [certification contract](../joint_abc_certification_contract.md).
 
 ### Build fingerprints
 

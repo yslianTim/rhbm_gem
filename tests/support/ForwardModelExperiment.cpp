@@ -176,6 +176,7 @@ void RunForwardExperiment(const std::string & manifest_path, const std::string &
     const std::string & capture_directory, const std::string & output_directory)
 {
     const auto manifest{ReadJSON(manifest_path)};
+    if (manifest.at("schema_version")!=1) throw std::runtime_error("Historical experiment only supports frozen manifest v1.");
     if (sim::FileSha256(map_path) != j::value_to<std::string>(manifest.at("output").at("map_sha256")))
         throw std::runtime_error("Map hash does not match the simulation manifest.");
     const auto & settings{manifest.at("settings")};

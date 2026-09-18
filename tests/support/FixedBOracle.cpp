@@ -106,6 +106,7 @@ Data Prepare(const std::string & manifest_path,const std::string & map_path,
     if (fs::exists(output/"dataset.json") || fs::exists(output/"fits") || fs::exists(output/"residuals"))
         throw std::runtime_error("Oracle output already exists.");
     const auto manifest=Read(manifest_path),checkpoint=Read(checkpoint_path);
+    if (manifest.at("schema_version")!=1) throw std::runtime_error("Historical experiment only supports frozen manifest v1.");
     const auto & settings=manifest.at("settings");
     if (settings.at("potential_model")!="single_gaus" || settings.at("blurring_width")!=.5 ||
         settings.at("cutoff_distance")!=2.5 || manifest.at("atoms").as_array().size()!=168 ||

@@ -7,6 +7,7 @@
 #include "support/FixedBOracle.hpp"
 #include "support/JointABCProfile.hpp"
 #include "support/JointABCCoverage.hpp"
+#include "support/JointABCCertification.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -20,6 +21,14 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 3 && std::string(argv[1]) == "joint-abc-certification-audit")
+        {
+            second_stage_test::matched::certification::AuditDirectory(argv[2]); return 0;
+        }
+        if (argc == 6 && std::string(argv[1]) == "joint-abc-certification")
+        {
+            second_stage_test::matched::coverage::Run(argv[2],argv[3],argv[4],argv[5],true); return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "joint-abc-coverage")
         {
             second_stage_test::matched::coverage::Run(argv[2],argv[3],argv[4],argv[5]);
@@ -110,7 +119,7 @@ int main(int argc, char ** argv)
             return 0;
         }
         if (argc != 4 || std::string(argv[1]) != "solve")
-            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | joint-abc-profile|fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | joint-abc-coverage MODEL MAP MANIFEST OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
+            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | joint-abc-profile|fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | joint-abc-coverage|joint-abc-certification MODEL MAP MANIFEST OUTPUT | joint-abc-certification-audit OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
         const fs::path output{ argv[3] };
         fs::create_directories(output);
         std::size_t count{}, offsets{};

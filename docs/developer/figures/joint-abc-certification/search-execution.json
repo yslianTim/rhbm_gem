@@ -1,0 +1,13 @@
+{
+  "returncode": 0,
+  "seconds": 1660.735869666998,
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/observation-matching/on/bin/mdpde_experiment",
+    "joint-abc-certification",
+    "/Users/yslian/Documents/simulation/fold_test_model_0.cif",
+    "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.30_charge1_width_bw0.50.map",
+    "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.30_charge1_width_bw0.50.map.simulation.json",
+    "/Users/yslian/Project/em_map_analysis/build/joint-abc-certification/formal"
+  ],
+  "process_peak_rss_bytes": 1206157312
+}

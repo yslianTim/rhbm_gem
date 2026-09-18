@@ -43,6 +43,8 @@ std::filesystem::path FindMap(const std::filesystem::path & directory)
 // Independent scalar reference, including the existing single-Gaussian charge cutoff.
 double SingleGaussianReference(Element element, double distance, double width, double charge)
 {
+    if (element == Element::OXYGEN) width *= 0.8;
+    else if (element == Element::NITROGEN) width *= 0.9;
     const double variance{ width * width };
     double charge_term{};
     if (distance < 1.0e-5) charge_term = charge * std::sqrt(2.0 / std::numbers::pi) / width;
@@ -262,7 +264,7 @@ TEST_F(MapSimulationTest, ManifestReconstructsSavedVoxelsAndRecordsExactSettings
     {
         if (entry.path().extension() != ".map") continue;
         const auto manifest{ ReadManifest(entry.path()) };
-        EXPECT_EQ(manifest.at("schema_version").as_int64(), 1);
+        EXPECT_EQ(manifest.at("schema_version").as_int64(), 2);
         EXPECT_EQ(manifest.at("source").at("model_sha256").as_string(), simulation::FileSha256(request.model_file_path));
         EXPECT_EQ(manifest.at("output").at("map_sha256").as_string(), simulation::FileSha256(entry.path()));
         EXPECT_EQ(manifest.at("output").at("map_file").as_string(), entry.path().filename().string());
@@ -277,7 +279,8 @@ TEST_F(MapSimulationTest, ManifestReconstructsSavedVoxelsAndRecordsExactSettings
         const double width{ json::value_to<double>(settings.at("blurring_width")) };
         EXPECT_TRUE(width == widths[0] || width == widths[1]);
         EXPECT_DOUBLE_EQ(json::value_to<double>(manifest.at("kernel").at("charge_term_cutoff")), 2.5);
-        EXPECT_DOUBLE_EQ(json::value_to<double>(manifest.at("kernel").at("effective_charge_width")), width);
+        EXPECT_FALSE(manifest.at("kernel").as_object().contains("effective_charge_width"));
+        EXPECT_EQ(manifest.at("support").at("version"), "sphere-fma-v1");
         EXPECT_EQ(settings.at("missing_charge_policy").as_string(), "zero_with_status");
         EXPECT_EQ(manifest.at("execution").at("requested_job_count").as_int64(), 4);
 #ifdef USE_OPENMP
@@ -291,6 +294,10 @@ TEST_F(MapSimulationTest, ManifestReconstructsSavedVoxelsAndRecordsExactSettings
         for (const auto & record : manifest.at("atoms").as_array())
         {
             EXPECT_EQ(json::value_to<size_t>(record.at("preparation_index")), reconstructed.size());
+            const int element{ json::value_to<int>(record.at("element")) };
+            const double effective{ width * (element == 8 ? 0.8 : element == 7 ? 0.9 : 1.0) };
+            EXPECT_DOUBLE_EQ(json::value_to<double>(record.at("effective_gaussian_width")), effective);
+            EXPECT_DOUBLE_EQ(json::value_to<double>(record.at("effective_charge_width")), effective);
             reconstructed.push_back(simulation::SimulationAtom{
                 .element = static_cast<Element>(record.at("element").as_int64()),
                 .position = json::value_to<std::array<double, 3>>(record.at("position")),
