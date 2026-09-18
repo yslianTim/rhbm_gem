@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/observation-matching/on/bin/mdpde_experiment",
+    "joint-abc-profile",
+    "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.30_charge1_bw0.50.map.simulation.json",
+    "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.30_charge1_bw0.50.map",
+    "/Users/yslian/Project/em_map_analysis/build/endpoint-refinement/baseline-run/solver-failures/contexts/final-32-33.json",
+    "/Users/yslian/Project/em_map_analysis/build/joint-abc-profile/final"
+  ],
+  "returncode": 0,
+  "seconds": 412.3644460840005,
+  "jobs": 1,
+  "user_interrupted": false,
+  "peak_child_rss_bytes": 1218199552
+}

@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "cases": [
+    "checkpoint-double",
+    "narrower-double",
+    "wider-double",
+    "mixed-double",
+    "checkpoint-float32",
+    "narrower-float32",
+    "wider-float32",
+    "mixed-float32"
+  ],
+  "differences": [],
+  "excluded": [
+    "timing",
+    "resource usage",
+    "execution/output directory"
+  ],
+  "comparison": "exact scientific JSON and CSV bytes"
+}

@@ -57,7 +57,7 @@ def validate_inputs(paths, fixture):
     return manifest, checkpoint_widths(manifest, read(paths["checkpoint"]))
 
 
-def run(args):
+def run(args, operation="fixed-b-oracle", summarize_result=None):
     output = args.output.resolve()
     require(not output.exists(), "Use a fresh output directory.")
     paths = {k: getattr(args, k).resolve() for k in ("model", "map", "manifest", "checkpoint")}
@@ -71,7 +71,7 @@ def run(args):
                        ("environment", {"python": sys.version, "platform": platform.platform(), "jobs": 1,
                         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()})):
         experiment.write(output / f"{name}.json", data)
-    command = [str(executable), "fixed-b-oracle", *(str(paths[k]) for k in ("manifest", "map", "checkpoint")), str(output)]
+    command = [str(executable), operation, *(str(paths[k]) for k in ("manifest", "map", "checkpoint")), str(output)]
     env = dict(os.environ, OMP_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1", OPENBLAS_NUM_THREADS="1")
     start = time.perf_counter(); interrupted = False
     with (output / "run.log").open("w") as log:
@@ -88,7 +88,7 @@ def run(args):
     experiment.write(output / "execution-status.json", {"inputs_and_sources_stable": stable,
         "reason": "user-interrupted" if interrupted else "technical-failure" if status or not stable else "completed"})
     require(status == 0 and stable, "Incomplete execution or changed provenance; retained completed cases.")
-    summarize(output)
+    (summarize_result or summarize)(output)
 
 
 def load_table(path):
@@ -100,9 +100,9 @@ def validate_quantization(y64, y32, q):
             and np.array_equal(y32-y64, q), "Quantization differs.")
 
 
-def validate_dataset(directory, dataset, fixture, paths, manifest):
+def validate_dataset(directory, dataset, fixture, paths, manifest, experiment_name="fixed-b-oracle"):
     ids, coverage, nearest = union.sphere_membership(dataset)
-    require(dataset["experiment"] == "fixed-b-oracle" and dataset["radius"] == 2.5 and
+    require(dataset["experiment"] == experiment_name and dataset["radius"] == 2.5 and
             dataset["membership_geometry"] == "generation", "Invalid oracle geometry.")
     require(len(ids) == dataset["row_count"] == fixture["expected_rows"] and
             int(coverage.sum()) == dataset["memberships"] == fixture["expected_memberships"], "Wrong voxel population.")

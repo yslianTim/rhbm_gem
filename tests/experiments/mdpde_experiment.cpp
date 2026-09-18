@@ -5,6 +5,7 @@
 #include "support/MatchedJointAC.hpp"
 #include "support/UniqueStencilGrid.hpp"
 #include "support/FixedBOracle.hpp"
+#include "support/JointABCProfile.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -18,6 +19,11 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 6 && std::string(argv[1]) == "joint-abc-profile")
+        {
+            second_stage_test::matched::joint_abc::Run(argv[2],argv[3],argv[4],argv[5]);
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "fixed-b-oracle")
         {
             second_stage_test::matched::fixed_b::Run(argv[2],argv[3],argv[4],argv[5]);
@@ -98,7 +104,7 @@ int main(int argc, char ** argv)
             return 0;
         }
         if (argc != 4 || std::string(argv[1]) != "solve")
-            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
+            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | joint-abc-profile|fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
         const fs::path output{ argv[3] };
         fs::create_directories(output);
         std::size_t count{}, offsets{};

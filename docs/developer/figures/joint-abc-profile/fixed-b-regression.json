@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "differences": [],
+  "comparison": "exact scientific JSON and CSV against pre-refactor fixed-B results",
+  "excluded": [
+    "timing",
+    "provenance changed by intended source refactor"
+  ]
+}

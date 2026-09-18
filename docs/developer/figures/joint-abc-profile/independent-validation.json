@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "seconds": 10.236337916998309,
+  "checks": [
+    "complete original ROI and frozen geometry",
+    "generator/analytic forward and float32 map bytes",
+    "checkpoint identity and initialization",
+    "original-row prediction, A/C KKT and B gradient",
+    "raw residuals and per-atom statistics",
+    "joint qualification and multistart comparisons"
+  ]
+}

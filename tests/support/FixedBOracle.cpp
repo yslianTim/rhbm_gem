@@ -98,8 +98,8 @@ j::object Fit(const Sparse & x,const Eigen::VectorXd & y,const j::object & spect
         {"variance_semantics","descriptive RSS/N; zero permitted"},{"kkt_tolerance",1e-10},{"reference_tolerance",1e-10}};
 }
 
-void Run(const std::string & manifest_path,const std::string & map_path,
-    const std::string & checkpoint_path,const std::string & output_path)
+Data Prepare(const std::string & manifest_path,const std::string & map_path,
+    const std::string & checkpoint_path,const std::string & output_path,const std::string & experiment)
 {
     Eigen::setNbThreads(1);
     const fs::path output(output_path);
@@ -114,8 +114,9 @@ void Run(const std::string & manifest_path,const std::string & map_path,
         sim::FileSha256(map_path)!=j::value_to<std::string>(manifest.at("output").at("map_sha256")))
         throw std::runtime_error("Invalid oracle manifest/map/checkpoint.");
     const auto original=rhbm_gem::ReadMap(map_path);
-    rhbm_gem::MapObject generation(j::value_to<std::array<int,3>>(settings.at("grid_size")),
+    auto generation_ptr=std::make_unique<rhbm_gem::MapObject>(j::value_to<std::array<int,3>>(settings.at("grid_size")),
         j::value_to<Position>(settings.at("grid_spacing")),j::value_to<Position>(settings.at("origin")));
+    auto & generation=*generation_ptr;
     std::vector<Atom> truth,states; sim::SimulationAtomPreparationResult generator;
     j::array identities; Eigen::VectorXd truth_beta(336),checkpoint_b(168);
     std::set<int> serials;
@@ -148,7 +149,7 @@ void Run(const std::string & manifest_path,const std::string & map_path,
     fs::create_directories(output/"fits"); fs::create_directories(output/"residuals");
     j::array completed; Write(output/"completion.json",j::object{{"complete",false},{"cases",completed}});
     const auto start=std::chrono::steady_clock::now();
-    const auto grid=atom_union::BuildGrid(states,{},generation,*original);
+    auto grid=atom_union::BuildGrid(states,{},generation,*original);
     rhbm_gem::core::MapSimulationRequest request; request.job_count=1; request.cutoff_distance=2.5;
     request.potential_model_choice=rhbm_gem::core::PotentialModel::SINGLE_GAUS;
     const int jobs=sim::PopulateMapValueArray(generation,generator,request,.5);
@@ -167,7 +168,7 @@ void Run(const std::string & manifest_path,const std::string & map_path,
         table<<p<<','<<v.index<<','<<v.position[0]<<','<<v.position[1]<<','<<v.position[2]<<','<<v.multiplicity<<','<<v.nearest_distance<<','<<reference<<','<<v.observed<<','<<q<<'\n';
     }
     table.close();
-    Write(output/"dataset.json",j::object{{"schema_version",1},{"experiment","fixed-b-oracle"},{"atoms",identities},
+    Write(output/"dataset.json",j::object{{"schema_version",1},{"experiment",experiment},{"atoms",identities},
         {"row_count",grid.voxels.size()},{"memberships",memberships},{"radius",2.5},{"membership_geometry","generation"},
         {"grid_size",settings.at("grid_size")},{"generation_origin",settings.at("origin")},{"generation_spacing",settings.at("grid_spacing")},
         {"header_origin",j::value_from(original->GetOrigin())},{"header_spacing",j::value_from(original->GetGridSpacing())},
@@ -176,6 +177,17 @@ void Run(const std::string & manifest_path,const std::string & map_path,
     Write(output/"forward-status.json",j::object{{"passed",true},{"maximum_double_difference",maximum_forward},
         {"maximum_quantized_difference",0},{"maximum_quantization_delta",maximum_quantization},{"generator_jobs",jobs},
         {"voxel_count",grid.voxels.size()},{"seconds",Seconds(start)}});
+    return {std::move(grid),std::move(states),std::move(generation_ptr),std::move(y64),std::move(y32),std::move(checkpoint_b),std::move(identities)};
+}
+
+void Run(const std::string & manifest_path,const std::string & map_path,
+    const std::string & checkpoint_path,const std::string & output_path)
+{
+    const auto data=Prepare(manifest_path,map_path,checkpoint_path,output_path);
+    const fs::path output(output_path); j::array completed;
+    const auto & grid=data.grid; const auto & states=data.atoms;
+    const auto & generation=*data.generation;
+    const auto & y64=data.y64; const auto & y32=data.y32; const auto & checkpoint_b=data.checkpoint_b;
     for (bool oracle:{true,false})
     {
         auto model=states; if (oracle) for (auto & atom:model) atom.width=.5;
