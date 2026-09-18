@@ -264,27 +264,23 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
 double ElectricPotential::CalculateSingleGausModel(Element element, double distance, double charge) const
 {
     auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
-    auto width_square{ m_blurring_width * m_blurring_width };
-    auto distance_square{ distance * distance };
-    auto exp_index{ -distance_square/(2.0 * width_square) };
-    auto offset{ charge };
-    /*
+    auto width{ m_blurring_width };
     if (element == Element::OXYGEN)
     {
-        offset = -0.1; // TEST
+        width *= 0.8;
     }
     else if (element == Element::NITROGEN)
     {
-        offset = 0.1; // TEST
+        width *= 0.9;
     }
-    else if (element == Element::CARBON)
-    {
-        offset = 0.3; // TEST
-    }*/
+    auto width_square{ width * width };
+    auto distance_square{ distance * distance };
+    auto exp_index{ -distance_square/(2.0 * width_square) };
+    auto offset{ charge };
     auto charge_term{ 0.0 };
     if (distance < kNearZeroDistance)
     {
-        charge_term = offset * std::sqrt(2.0/M_PI) / m_blurring_width;
+        charge_term = offset * std::sqrt(2.0/M_PI) / width;
     }
     else if (distance > kSingleChargeCutoff)
     {
@@ -292,7 +288,7 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     }
     else
     {
-        charge_term = offset/distance * std::erf(distance/m_blurring_width/std::sqrt(2.0));
+        charge_term = offset/distance * std::erf(distance/width/std::sqrt(2.0));
     }
     
     return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index) + charge_term;
