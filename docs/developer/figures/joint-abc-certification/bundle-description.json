@@ -1,7 +1,0 @@
-{
-  "archive": "scientific-records.tar.gz",
-  "files": 1366,
-  "contents": "All branch fits/traces/audits, controls, independent model evidence and one immutable voxel/contributor snapshot per dataset.",
-  "omissions": "Duplicate observation/initialization copies and per-branch residual tables; reconstruct predictions from retained rows and fitted coefficients. Raw original hashes are retained.",
-  "memory_semantics": "Process high-water RSS, not isolated per-phase allocation. Nested reference and precision times must not be added twice."
-}

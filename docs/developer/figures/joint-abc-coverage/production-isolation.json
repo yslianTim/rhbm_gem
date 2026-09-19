@@ -1,9 +1,0 @@
-{
-  "passed": true,
-  "BUILD_TESTING": false,
-  "experiment_target_absent": true,
-  "test_target_absent": true,
-  "coverage_symbols_absent": true,
-  "joint_abc_symbols_absent": true,
-  "fixed_b_symbols_absent": true
-}

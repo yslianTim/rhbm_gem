@@ -1,1 +1,0 @@
-These are the source files before the audit-scope correction. The 216-branch search in both runs used this version; all other solver, kernel and initializer sources are unchanged by that correction. `provenance.json` identifies the complete search source and build. The final audit revision is separately recorded. No search result is recomputed or selected using truth.

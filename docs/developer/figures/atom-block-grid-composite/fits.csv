@@ -1,2 +1,0 @@
-state_id,qualified,reason,stationarity,objective,branch_sensitive,rank,minimum_singular,condition,available,effective_n,effective_fraction,maximum_row_share,top_one_percent_rows,top_one_percent_share,underflow_count,primary_iterations,reference_iterations,grid_rmse,matched_sample_rmse
-baseline-best-28,False,budget-exhausted,0.02666755263120136,-1085.8807784804499,False,336,0.24949975949133676,9.225370181765598,True,33853.632064887344,0.008982945661500371,3.3763908862396084e-05,37687,0.9374673204416117,29639,100,0,0.0021374943194372355,0.006810036384830599

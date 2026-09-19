@@ -1,9 +1,0 @@
-{
-  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
-  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
-  "jobs": 1,
-  "iteration_budget": 100,
-  "refinement_budget": 100,
-  "radius": 2.5,
-  "source_commit": "ff79c8fb45888fa27b821a6dc3b6b13e2d7cf031"
-}

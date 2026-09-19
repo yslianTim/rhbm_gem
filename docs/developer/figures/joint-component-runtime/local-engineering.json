@@ -1,8 +1,0 @@
-{
-  "stage": "component-local-certification",
-  "cpp_tests": 25,
-  "cpp_failures": 0,
-  "python_runner_tests": 6,
-  "python_runner_failures": 0,
-  "frozen_audit": "passed: local-summary.json and local-repeat.json"
-}

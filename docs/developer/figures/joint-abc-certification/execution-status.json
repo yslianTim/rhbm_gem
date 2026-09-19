@@ -1,7 +1,0 @@
-{
-  "complete": true,
-  "inputs_stable": true,
-  "original_search_and_audit_sources_stable": true,
-  "revision_audit_sources_stable": true,
-  "scope": "Separate immutable search/original-audit and final targeted-audit source records."
-}
