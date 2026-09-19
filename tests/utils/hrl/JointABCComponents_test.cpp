@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/JointABCComponents.hpp"
 #include "support/JointABCPrecision.hpp"
+#include "support/JointABCLocalCertification.hpp"
 #include <boost/multiprecision/cpp_dec_float.hpp>
 
 namespace {
@@ -277,4 +278,33 @@ TEST(JointABCComponentsTest, GlobalBlockBoundaryScanIncludesOtherComponentsAndCo
     EXPECT_GT(boost::json::value_to<int>(second_stage_test::matched::certification::PrecisionCacheCosts().at("boundary_reference_reuses")),0);
     second_stage_test::matched::certification::ResetPrecisionCache();
     EXPECT_EQ(second_stage_test::matched::certification::PrecisionCacheCosts().at("boundary_reference_reuses"),0);
+}
+
+TEST(JointABCComponentsTest, LocalAuditUsesActualStateAndDiscardsSiblingDirections)
+{
+    const TwoBlocks f;
+    auto parent=p::MakeContext(f.y,2);
+    const auto part=p::BuildPartition(f.domain,parent.atom_ids);
+    const auto & view=part.components[0];
+    auto fit=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    ASSERT_TRUE(fit.at("usable_state").as_bool());
+    const auto y=p::Select(f.y,view.rows);
+    auto child=p::ComponentContext(parent,view,true);
+    child.audit.directions=Eigen::MatrixXd::Zero(1,3);
+    const auto before=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
+    (void)p::FitComponent(part.components[1],f.y,Vector::Constant(2,.55),parent);
+    child.audit.directions=Eigen::MatrixXd::Constant(1,3,1e-100);
+    const auto after=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
+    EXPECT_EQ(before.fit,after.fit);
+    EXPECT_EQ(before.scope,after.scope);
+    EXPECT_EQ(before.context.audit.directions,after.context.audit.directions);
+    EXPECT_EQ(before.context.scale,parent.scale);
+    EXPECT_EQ(before.context.rank.rows,view.domain.rows);
+    EXPECT_EQ(before.fit.at("primary").at("beta"),fit.at("last_trusted_state").at("beta"));
+    ASSERT_TRUE(before.scope.at("weak_direction_available").as_bool());
+    EXPECT_DOUBLE_EQ(before.context.audit.directions.col(0).norm(),1);
+    fit["usable_state"]=false;
+    const auto missing=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
+    EXPECT_FALSE(missing.fit.at("primary").at("valid").as_bool());
+    EXPECT_FALSE(missing.scope.at("weak_direction_available").as_bool());
 }

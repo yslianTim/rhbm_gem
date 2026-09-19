@@ -181,7 +181,7 @@ def run(args):
     def run_one(source):
         seconds = execute([executable, "joint-abc-components-run", source, output/"datasets"/source.name], output/(source.name+"-run.log"))
         print(f"Completed searches: {source.name}", flush=True)
-        audit_seconds = execute([executable, "joint-abc-components-audit", source, output/"datasets"/source.name,
+        audit_seconds = execute([executable, ("joint-abc-components-local-audit" if args.local_only else "joint-abc-components-audit"), source, output/"datasets"/source.name,
                                  output/"audits"/source.name], output/(source.name+"-audit.log"))
         print(f"Completed fresh audits: {source.name}", flush=True)
         return {"dataset": source.name, "run_seconds": seconds, "audit_seconds": audit_seconds}
@@ -221,7 +221,7 @@ def audit(args):
     # also prevents one expensive boundary case from serializing an entire run.
     def run_one(item):
         source, case = item
-        seconds = execute([executable, "joint-abc-components-audit", source, run_root/"datasets"/source.name, output/source.name, case],
+        seconds = execute([executable, ("joint-abc-components-local-audit" if args.local_only else "joint-abc-components-audit"), source, run_root/"datasets"/source.name, output/source.name, case],
                           output/(source.name+"-"+case+".log"))
         print(f"Completed endpoint audit: {source.name}/{case}", flush=True)
         return {"dataset": source.name, "case": case, "audit_seconds": seconds}
@@ -234,7 +234,8 @@ def audit(args):
               "cache_policy": "fresh process per case; no cross-case or cross-run cache"})
     require(before == provenance(executable), "Audit sources or executable changed during execution.")
     write(output/"completion.json", {"complete": True, "costs": costs, "seconds": time.monotonic()-start})
-    summarize(run_root, output)
+    if not args.local_only: summarize(run_root, output)
+    summarize_local(run_root, output)
 
 
 def subset(data, component):
@@ -277,6 +278,42 @@ def certify(data, y, fit, audit_record, scope):
         result["regular_qualified"] = all(v is True for v in result["checks"].values())
     result["scope"] = scope
     return result
+
+
+def summarize_local(run_root, audit_root):
+    rows = []
+    for source in sorted((run_root/"inputs").iterdir()):
+        data = records.load(source)
+        root = run_root/"datasets"/source.name
+        census = read(root/"census.json")
+        for case in read(root/"completion.json")["cases"]:
+            for k, component in enumerate(census["components"]):
+                directory = audit_root/source.name/case/"local-components"/str(k)
+                fit, audit_record, scope = (read(directory/name) for name in ("fit.json", "audit.json", "scope.json"))
+                context = read(directory/"context.json")
+                frozen = read(root/"cases"/case/"components"/(str(k)+"-fit.json"))
+                require(scope["component_id"] == component["id"] and scope["parent_snapshot_sha256"] == data["hash"], "Wrong local audit identity.")
+                if frozen["usable_state"]:
+                    state = frozen["last_trusted_state"]
+                    require(scope["state"] == {key: state[key] for key in ("eta", "beta")}, "Local audit replaced the trusted state.")
+                    require(all(fit["primary"][key] == state[key] for key in ("eta", "beta")), "Local assessment changed coefficients.")
+                if scope["weak_direction_available"]:
+                    validate_endpoint_scope(fit, context)
+                    require(all(abs(np.linalg.norm(d)-1) <= 1e-12 for d in context["audit"]["directions"]), "Local directions are not unit vectors.")
+                local = subset(data, component); y = local["y64" if case.endswith("double") else "y32"]
+                cert = certify(local, y, fit, audit_record, "component-local")
+                cert["checks"].update(local_weak_direction=scope["weak_direction_available"],
+                    actual_state_profile=fit.get("assembled_profile_agrees", False), usable_state=frozen["usable_state"])
+                cert["failures"] = [k for k, v in cert["checks"].items() if v is False]
+                cert["unavailable"] = [k for k, v in cert["checks"].items() if v is None]
+                cert["regular_qualified"] = all(v is True for v in cert["checks"].values())
+                write(directory/"certificate.json", cert)
+                rows.append(dict(dataset=source.name, case=case, component=component["id"],
+                    regular=cert["regular_qualified"], failures=";".join(cert["failures"]),
+                    unavailable=";".join(cert["unavailable"]), derivative_status=cert["derivative_status"]))
+    output = audit_root/"local-summary"; output.mkdir(exist_ok=True)
+    csv_write(output/"certificates.csv", rows)
+    write(output/"summary.json", dict(records=len(rows), regular=sum(r["regular"] for r in rows), scope="component-local"))
 
 
 def endpoint_parity(data, y, monolithic, assembled, certificates, required):
@@ -477,11 +514,12 @@ def rerun_component(args):
     k, component = found[0]
     require(not output.exists(), "Use a fresh rerun directory."); output.parent.mkdir(parents=True, exist_ok=True)
     audit_root = (args.audits or root/"audits").resolve()
-    original_audit = audit_root/args.dataset/args.case/"components"/str(k)
+    original_audit = audit_root/args.dataset/args.case/("local-components" if args.local_only else "components")/str(k)
     bundle = output.with_suffix(".context.json")
-    write(bundle, {"search_context": read(target/"context.json"),
-                   "audit_context": read(audit_root/args.dataset/args.case/"assembled/context.json")})
-    execute([args.executable.resolve(), "joint-abc-rerun-component", data, args.case, component["id"], bundle, output], output.with_suffix(".log"))
+    context_bundle = {"search_context": read(target/"context.json")}
+    if not args.local_only: context_bundle["audit_context"] = read(audit_root/args.dataset/args.case/"assembled/context.json")
+    write(bundle, context_bundle)
+    execute([args.executable.resolve(), ("joint-abc-rerun-local-component" if args.local_only else "joint-abc-rerun-component"), data, args.case, component["id"], bundle, output], output.with_suffix(".log"))
     require(before == provenance(args.executable.resolve()), "Rerun sources or executable changed.")
     write(output/"provenance.json", before); shutil.copyfile(bundle, output/"context-bundle.json")
     differences = []
@@ -492,6 +530,8 @@ def rerun_component(args):
         if scientific(read(a)) != scientific(read(b)): differences.append(a.name)
     if (original_audit/"boundary.json").exists() and scientific(read(original_audit/"boundary.json")) != scientific(read(output/"audit/boundary.json")):
         differences.append("boundary.json")
+    if args.local_only and scientific(read(output/"audit/scope.json")) != scientific(read(original_audit/"scope.json")):
+        differences.append("scope.json")
     result = {"passed": not differences, "dataset": args.dataset, "case": args.case,
               "component_id": component["id"], "differences": differences}
     write(output/"comparison.json", result); print(json.dumps(result), flush=True)
@@ -507,6 +547,7 @@ def main():
     sub = commands.add_parser("run")
     for name in ("baseline", "executable", "output", "regression-gate"): sub.add_argument("--"+name, type=Path, required=True)
     sub = commands.add_parser("audit")
+    sub.add_argument("--local-only", action="store_true")
     for name in ("run", "executable", "output"): sub.add_argument("--"+name, type=Path, required=True)
     sub = commands.add_parser("summarize"); sub.add_argument("--run", type=Path, required=True)
     sub.add_argument("--audits", type=Path)
@@ -514,6 +555,7 @@ def main():
     for name in ("left", "right", "output"): sub.add_argument("--"+name, type=Path, required=True)
     for name in ("left-audits", "right-audits"): sub.add_argument("--"+name, type=Path)
     sub = commands.add_parser("rerun-component")
+    sub.add_argument("--local-only", action="store_true")
     for name in ("run", "executable", "output"): sub.add_argument("--"+name, type=Path, required=True)
     for name in ("dataset", "case", "component"): sub.add_argument("--"+name, required=True)
     sub.add_argument("--audits", type=Path)

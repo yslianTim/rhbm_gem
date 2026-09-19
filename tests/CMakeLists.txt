@@ -212,7 +212,7 @@ target_sources(rhbm_tests PRIVATE support/JointABCCoverage.cpp support/JointABCC
 target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp support/ObservationMatchedPrediction.cpp
     support/EstimatedNeighborSweep.cpp support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp support/FixedBOracle.cpp support/JointABCProfile.cpp)
 target_compile_definitions(rhbm_tests PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-target_sources(rhbm_tests PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp)
+target_sources(rhbm_tests PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp support/JointABCLocalCertification.cpp)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
 )
@@ -236,7 +236,7 @@ add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/Forward
     support/ObservationMatchedPrediction.cpp support/ObservationMatchedExperiment.cpp support/EstimatedNeighborSweep.cpp
     support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp support/FixedBOracle.cpp support/JointABCProfile.cpp)
 target_link_libraries(mdpde_experiment PRIVATE rhbm_gem CompilerFlags)
-target_sources(mdpde_experiment PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp)
+target_sources(mdpde_experiment PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp support/JointABCLocalCertification.cpp)
 target_sources(mdpde_experiment PRIVATE support/JointABCCoverage.cpp support/JointABCCertification.cpp support/JointABCPrecision.cpp support/JointABCContext.cpp)
 target_include_directories(mdpde_experiment PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)

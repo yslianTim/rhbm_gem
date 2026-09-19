@@ -1,6 +1,7 @@
 #include "support/JointABCComponentExperiment.hpp"
 #include "support/JointABCComponents.hpp"
 #include "support/JointABCCertification.hpp"
+#include "support/JointABCLocalCertification.hpp"
 #include "support/JointABCPrecision.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
 #include <filesystem>
@@ -189,6 +190,20 @@ void AuditFit(const Domain & domain,const Vector & y,const j::object & search_fi
     if(context.audit.precision && context.observations) audit["precision_normalization"]=certification::PrecisionNormalization(*context.observations);
     Write(output/"audit.json",audit);
     Write(output/"context.json",ContextEvidence(context));
+    j::array direction_diagnostics;
+    if(fit.contains("primary") && fit.at("primary").at("valid").as_bool())
+    {
+        const auto & state=fit.at("primary");
+        const auto e=AtState(domain,y,Parse(state.at("eta")),Parse(state.at("beta")),context);
+        const auto d=Differentiate(e,context.scale,&context);
+        for(Eigen::Index k=0;k<context.audit.directions.cols();++k)
+        {
+            const double norm=context.audit.directions.col(k).norm();
+            direction_diagnostics.push_back(j::object{{"direction",k},{"norm",norm},{"zero_direction",norm==0},
+                {"jacobian_direction_norm",d.valid ? j::value((d.jacobian*context.audit.directions.col(k)).norm()) : j::value(nullptr)}});
+        }
+    }
+    Write(output/"direction-diagnostics.json",direction_diagnostics);
     if(context.audit.boundary && fit.contains("primary") && fit.at("primary").at("valid").as_bool())
         Write(output/"boundary.json",certification::BoundaryAudit(domain,y,Parse(fit.at("primary").at("eta")),Parse(fit.at("primary").at("beta")),&context));
 }
@@ -290,8 +305,19 @@ void ComponentRun(const std::string & dataset_path,const std::string & output_pa
     }
     Write(output/"completion.json",j::object{{"complete",true},{"cases",cases},{"snapshot_sha256",in.hash}});
 }
+namespace {
+void LocalAuditFit(const ComponentView & view,const Vector & parent_y,const j::object & fit,
+    const EvaluationContext & parent,const fs::path & output)
+{
+    const auto y=Select(parent_y,view.rows);
+    auto local=certification::PrepareLocalAudit(view.domain,y,fit,ComponentContext(parent,view,true));
+    certification::ResetPrecisionCache();
+    AuditFit(view.domain,y,local.fit,local.context,output,false);
+    Write(output/"scope.json",local.scope);
+}
+}
 void ComponentAudit(const std::string & dataset_path,const std::string & run_path,const std::string & output_path,
-    const std::string & only_case)
+    const std::string & only_case,bool local_only)
 {
     Eigen::setNbThreads(1); const auto in=Load(dataset_path); const fs::path run(run_path),output(output_path);
     if(fs::exists(only_case.empty() ? output : output/only_case)) throw std::runtime_error("Use a fresh component audit directory.");
@@ -306,6 +332,8 @@ void ComponentAudit(const std::string & dataset_path,const std::string & run_pat
         const auto source=run/"cases"/name,target=output/name; const auto context=RestoreContext(in,y,name,Read(source/"context.json"));
         certification::ResetPrecisionCache();
         std::cout<<in.name<<'/'<<name<<" audit"<<std::endl;
+        if(!local_only)
+        {
         for(const std::string variant:{"monolithic","assembled"})
         {
             const auto fit=Read(source/(variant+"-fit.json")).as_object();
@@ -322,24 +350,33 @@ void ComponentAudit(const std::string & dataset_path,const std::string & run_pat
             AuditFit(view.domain,Select(y,view.rows),Read(source/"components"/(std::to_string(k)+"-fit.json")).as_object(),child,target/"components"/std::to_string(k),in.sources.size()>1);
         }
         Write(target/"reference-costs.json",certification::PrecisionCacheCosts());
+        }
+        for(std::size_t k=0;k<partition.components.size();++k)
+            LocalAuditFit(partition.components[k],y,Read(source/"components"/(std::to_string(k)+"-fit.json")).as_object(),
+                context,target/"local-components"/std::to_string(k));
     }
     Write((only_case.empty() ? output : output/only_case)/"completion.json",j::object{{"complete",true},{"cases",cases},{"cache_policy","exact-input precision references within one case; cleared before every case; no cross-run cache"}});
 }
 void ComponentRerun(const std::string & dataset_path,const std::string & name,const std::string & id,
-    const std::string & context_path,const std::string & output_path)
+    const std::string & context_path,const std::string & output_path,bool local_only)
 {
     Eigen::setNbThreads(1); const auto in=Load(dataset_path); const fs::path output(output_path);
     if(fs::exists(output)) throw std::runtime_error("Use a fresh isolated component directory.");
     const auto & y=name.ends_with("double") ? in.y64 : in.y32;
     const auto bundle=Read(context_path);
     const auto context=RestoreContext(in,y,name,bundle.at("search_context"));
-    const auto audit_context=RestoreContext(in,y,name,bundle.at("audit_context")); const auto partition=BuildPartition(in.domain,in.ids);
+    const auto partition=BuildPartition(in.domain,in.ids);
     const auto found=std::find_if(partition.components.begin(),partition.components.end(),[&](const auto & c){return c.id==id;});
     if(found==partition.components.end()) throw std::invalid_argument("Unknown stable component identity.");
     const auto initial=Frozen(in,name,false).initial_b; auto fit=FitComponent(*found,y,initial,context);
     Label(fit,in,name,Select(initial,found->atoms)); fs::create_directories(output); Write(output/"fit.json",fit);
     certification::ResetPrecisionCache();
-    AuditFit(found->domain,Select(y,found->rows),fit,ComponentContext(audit_context,*found,true),output/"audit",in.sources.size()>1);
+    if(local_only) LocalAuditFit(*found,y,fit,context,output/"audit");
+    else
+    {
+        const auto audit_context=RestoreContext(in,y,name,bundle.at("audit_context"));
+        AuditFit(found->domain,Select(y,found->rows),fit,ComponentContext(audit_context,*found,true),output/"audit",in.sources.size()>1);
+    }
     Write(output/"completion.json",j::object{{"complete",true},{"component_id",id},{"snapshot_sha256",in.hash}});
 }
 } // namespace second_stage_test::matched::joint_abc

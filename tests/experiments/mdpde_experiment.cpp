@@ -24,6 +24,10 @@ int main(int argc, char ** argv)
     {
         if (argc == 4 && std::string(argv[1]) == "joint-abc-components-run")
         {second_stage_test::matched::joint_abc::ComponentRun(argv[2],argv[3]); return 0;}
+        if ((argc == 5 || argc == 6) && std::string(argv[1]) == "joint-abc-components-local-audit")
+        {second_stage_test::matched::joint_abc::ComponentAudit(argv[2],argv[3],argv[4],argc==6 ? argv[5] : "",true); return 0;}
+        if (argc == 7 && std::string(argv[1]) == "joint-abc-rerun-local-component")
+        {second_stage_test::matched::joint_abc::ComponentRerun(argv[2],argv[3],argv[4],argv[5],argv[6],true); return 0;}
         if ((argc == 5 || argc == 6) && std::string(argv[1]) == "joint-abc-components-audit")
         {second_stage_test::matched::joint_abc::ComponentAudit(argv[2],argv[3],argv[4],argc==6 ? argv[5] : ""); return 0;}
         if (argc == 7 && std::string(argv[1]) == "joint-abc-rerun-component")
