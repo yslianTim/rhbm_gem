@@ -22,6 +22,10 @@ set(RHBM_GEM_EXPERIMENTAL_SOURCES
 target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
+    core/detail/joint_component/Numerics.cpp
+    core/detail/joint_component/LinearSolve.cpp
+    core/detail/joint_component/Search.cpp
+    core/detail/joint_component/Components.cpp
     core/GaussianEstimator.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp

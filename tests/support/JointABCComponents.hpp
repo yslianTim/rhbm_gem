@@ -2,17 +2,8 @@
 #include "support/JointABCProfile.hpp"
 
 namespace second_stage_test::matched::joint_abc {
-struct ComponentView
-{
-    std::string id;
-    std::vector<Eigen::Index> atoms, rows, atom_to_local, row_to_local;
-    Domain domain{0,{}};
-};
-struct ComponentPartition
-{
-    std::vector<ComponentView> components;
-    std::vector<Eigen::Index> atom_component, row_component, constant_rows, unobserved_atoms;
-};
+using ComponentView=runtime::ComponentView;
+using ComponentPartition=runtime::ComponentPartition;
 ComponentPartition BuildPartition(const Domain &, const std::vector<std::string> & atom_ids);
 Eigen::VectorXd Select(const Eigen::VectorXd &, const std::vector<Eigen::Index> &);
 EvaluationContext ComponentContext(const EvaluationContext &, const ComponentView &, bool independent_search);

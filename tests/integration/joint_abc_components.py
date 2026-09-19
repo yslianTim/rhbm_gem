@@ -47,7 +47,9 @@ def sha(path):
 
 
 def provenance(executable):
-    files = [*sorted((ROOT/"tests/support").glob("*.cpp")),
+    files = [*sorted((ROOT/"src/core/detail/joint_component").glob("*.[ch]pp")),
+             ROOT/"src/CMakeLists.txt",
+             *sorted((ROOT/"tests/support").glob("*.cpp")),
              *sorted((ROOT/"tests/support").glob("*.hpp")),
              *sorted((ROOT/"tests/utils/hrl").glob("JointABC*.cpp")),
              ROOT/"tests/experiments/mdpde_experiment.cpp", *sorted((ROOT/"tests/integration").glob("*.py")),
@@ -195,7 +197,7 @@ def run(args):
 
 def compatible_search_kernels(run_root, current):
     previous = read(run_root/"provenance.json")["source_hashes"]
-    keys = [key for key in previous if key.startswith("tests/support/") and
+    keys = [key for key in previous if (key.startswith("tests/support/") or key.startswith("src/core/detail/joint_component/")) and
             key not in ("tests/support/JointABCComponentExperiment.cpp", "tests/support/JointABCComponentExperiment.hpp")]
     require(all(previous[key] == current["source_hashes"][key] for key in keys),
             "Search numerical kernels changed; rerun the searches before comparing components.")

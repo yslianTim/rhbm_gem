@@ -1,0 +1,194 @@
+#pragma once
+#include <Eigen/Dense>
+#include <Eigen/SparseCore>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+#include <limits>
+
+namespace rhbm_gem::core::joint_component {
+using Vector=Eigen::VectorXd;
+using Matrix=Eigen::MatrixXd;
+using Sparse=Eigen::SparseMatrix<double>;
+inline constexpr double unavailable=std::numeric_limits<double>::quiet_NaN();
+struct RankPolicy
+{
+    Eigen::Index rows{}, design_columns{}, width_columns{};
+    double Relative(Eigen::Index columns) const;
+    double Absolute(Eigen::Index columns,double maximum) const;
+};
+struct AuditPlan
+{
+    bool trial_details{}, expanded_if_unverified{}, precision{}, boundary{};
+    bool block_precision{}, cache_precision{};
+    std::vector<Eigen::Index> boundary_atoms;
+    Matrix directions;
+};
+struct LinearPolicy
+{
+    double rank_relative{};
+    int active_set_iteration_factor{20};
+    double release_factor{128}, release_response_norm{-1};
+};
+struct EvaluationContext
+{
+    std::string snapshot_hash;
+    std::shared_ptr<const Vector> observations;
+    std::vector<std::string> atom_ids,row_ids;
+    double scale{1};
+    RankPolicy rank;
+    LinearPolicy linear;
+    AuditPlan audit;
+    bool independent_search{};
+    int profile_budget{200},update_budget{100};
+};
+EvaluationContext CreateContext(const Vector &,Eigen::Index,const std::string & = "",const AuditPlan & = {});
+struct Support {Eigen::Index row; double square;};
+struct Domain
+{
+    Eigen::Index rows;
+    std::vector<std::vector<Support>> atoms;
+    Domain(Eigen::Index count,std::vector<std::vector<Support>> support):rows(count),atoms(std::move(support)) {}
+};
+struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
+BasisValues EvaluateKernel(double,double,double);
+struct LinearResult
+{
+    Vector beta;
+    bool valid{};
+    std::string reason;
+    int rank{},solves{},releases{},block_factorizations{};
+};
+struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
+LinearResult SolveLinear(const Sparse &,const Vector &,const Vector &,bool=false,bool=true,
+    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr);
+LinearResult SolveLinear(const Matrix &,const Vector &,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
+std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,const Vector &);
+struct Certificate
+{
+    bool evaluated{},available{},feasible{},kkt_passed{};
+    double projected_kkt{unavailable},rss{unavailable},objective{unavailable},residual_scale{unavailable},
+        residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
+    std::vector<Eigen::Index> active_atoms;
+    std::optional<int> linear_solves,free_rank,block_factorizations;
+};
+Certificate CertifyLinear(const Sparse &,const Vector &,const Vector &,double=0);
+struct Endpoint
+{
+    Vector eta,beta,gradient;
+    Certificate certificate;
+    bool valid{};
+    std::string reason;
+};
+struct Evaluation : Endpoint {Vector residual; Sparse x,derivative;};
+struct Differential {Matrix projected,jacobian; bool valid{}; std::string reason;};
+struct Spectrum
+{
+    bool available{true};
+    std::string reason;
+    Eigen::Index rank{},rows{},columns{};
+    Vector singular_values,column_norms;
+    double minimum{unavailable},condition{unavailable},threshold{};
+};
+Spectrum DesignSpectrum(const Sparse &,const Vector &);
+Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
+Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
+Evaluation EvaluateProfile(const Domain &,const Vector &,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr);
+Evaluation EvaluateState(const Domain &,const Vector &,const Vector &,const Vector &,const EvaluationContext &);
+Differential DifferentiateProfile(const Evaluation &,double,const EvaluationContext *,double=-1);
+Vector ComputeLocalCorrection(const Evaluation &,const Differential &,const EvaluationContext &,double=-1);
+struct TrustEvidence
+{
+    Endpoint reference;
+    bool primary_valid{},passed{},prediction_passed{},gradient_passed{};
+    std::string reason;
+    double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
+        gradient_difference{unavailable},cancellation_ratio{unavailable};
+    std::optional<Spectrum> design;
+};
+TrustEvidence CheckTrust(const Domain &,const Vector &,const Evaluation &,const EvaluationContext &);
+struct LmTrial
+{
+    Vector accepted_eta,step,diagonal;
+    double radius{},damping{},actual_decrease{unavailable},predicted_decrease{},ratio{unavailable};
+    bool proposed_acceptance{};
+};
+struct Trial
+{
+    Endpoint endpoint;
+    int evaluation{};
+    bool accepted{};
+    std::optional<int> accepted_update;
+    double seconds{};
+    std::optional<LmTrial> lm;
+    std::optional<TrustEvidence> trust;
+};
+enum class SearchVariant {Original,Legacy,Guarded,GuardedLog};
+struct SearchResult
+{
+    Endpoint initial;
+    Vector eta;
+    std::vector<Trial> trials;
+    int lm_status{},evaluations{},derivatives{},accepted{},references{};
+    bool stopped{},initial_accepted{};
+    std::string stop_reason;
+    double seconds{},reference_seconds{};
+};
+SearchResult SearchProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,SearchVariant);
+struct DerivativeCheck
+{
+    std::size_t direction{};
+    double h{},error{unavailable};
+    bool same_face{},passed{},plus_valid{},minus_valid{};
+};
+struct Assessment
+{
+    Endpoint primary,reference;
+    std::optional<Spectrum> design,widths,normalized_widths,jacobian;
+    Matrix weak_directions;
+    Vector correction;
+    double coefficient_difference{unavailable};
+    std::vector<DerivativeCheck> derivatives;
+    bool qualified{},derivative_verified{},inner{},gradient{},local{},identified{};
+    std::string failure;
+};
+Assessment AssessProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,const Vector * = nullptr);
+struct ComponentView
+{
+    std::string id;
+    std::vector<Eigen::Index> atoms,rows,atom_to_local,row_to_local;
+    Domain domain{0,{}};
+};
+struct ComponentPartition
+{
+    std::vector<ComponentView> components;
+    std::vector<Eigen::Index> atom_component,row_component,constant_rows,unobserved_atoms;
+};
+ComponentPartition Partition(const Domain &,const std::vector<std::string> &);
+Vector SelectValues(const Vector &,const std::vector<Eigen::Index> &);
+EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,bool);
+struct ComponentResult
+{
+    SearchResult search;
+    Assessment assessment;
+    std::optional<Endpoint> trusted_state;
+    std::optional<std::size_t> trusted_trial;
+    double assessment_seconds{};
+    std::optional<TrustEvidence> endpoint_trust;
+    bool search_success{};
+};
+ComponentResult SolveComponent(const ComponentView &,const Vector &,const Vector &,const EvaluationContext &);
+struct AssemblyResult
+{
+    bool available{},completed{true},profile_agrees{};
+    std::vector<bool> row_mask;
+    Vector eta,beta,prediction;
+    double objective{unavailable},profile_difference{unavailable};
+    Assessment assessment;
+    Endpoint raw,profile_control;
+    bool profile_evaluated{};
+};
+AssemblyResult AssembleComponents(const Domain &,const Vector &,const ComponentPartition &,const EvaluationContext &,
+    const std::vector<ComponentResult> &);
+}

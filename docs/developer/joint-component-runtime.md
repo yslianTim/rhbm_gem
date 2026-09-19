@@ -44,3 +44,23 @@ runtime extraction, and a fresh Map/Model entry point. Validation results are
 recorded under `figures/joint-component-runtime/`; historical archives are
 read-only reference inputs. A successful local scope does not change any
 historical global qualification.
+
+## Typed runtime numerical core
+
+`src/core/detail/joint_component/` owns the basis kernel, mixed constrained
+linear solver, independent reference QR, complete variable-projection
+Jacobian, Guarded LM, structural partition and actual-state assembly. Its
+interfaces contain typed states, spectra, trial/trust evidence and assessments;
+there is no JSON, file access, truth, dataset registry or multiprecision audit
+orchestration in that module. The adapted Eigen LM retains its original license.
+
+Testing entry points now serialize this core through `JointRuntimeJson.hpp`.
+Legacy and Guarded-log are retained as regression controls in the internal
+search API. The public estimator uses Guarded only. Shared dense/sparse linear
+solver callers and the older fixed-B experiments use the same extracted
+implementation.
+
+Component search/assessment durations are measured separately. The component
+adapter records process high-water RSS after the component returns; it is not a
+per-phase allocation measurement. Numerical certificates and accepted-state
+semantics are unchanged by the extraction.

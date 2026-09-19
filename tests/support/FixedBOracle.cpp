@@ -1,4 +1,5 @@
 #include "support/FixedBOracle.hpp"
+#include "support/JointRuntimeJson.hpp"
 #include "support/AtomCenteredVoxelUnion.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
@@ -53,32 +54,8 @@ j::object Endpoint(const Sparse & x,const Eigen::VectorXd & y,const joint_ac::Li
 }
 }
 
-j::object Certificate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & beta,double observation_scale)
-{
-    j::object out{{"feasible",false},{"kkt_passed",false},{"projected_kkt",nullptr}};
-    if (x.rows()!=y.size() || x.cols()!=beta.size() || !beta.allFinite() || !y.allFinite()) return out;
-    Eigen::VectorXd norms(x.cols());
-    for (Eigen::Index k=0;k<x.cols();++k) norms(k)=x.col(k).norm();
-    if (!norms.allFinite() || (norms.array()<=0).any()) return out;
-    const Eigen::VectorXd residual=x*beta-y;
-    if (!residual.allFinite()) return out;
-    const double s=observation_scale>0 ? observation_scale : std::max(1.0,y.norm());
-    const Eigen::VectorXd u=norms.array()*beta.array()/s;
-    const Eigen::VectorXd gradient=(x.transpose()*residual).array()/norms.array()/s;
-    Eigen::VectorXd projected=u-gradient; j::array active; bool feasible=true;
-    for (Eigen::Index k=0;k<beta.size();k+=2)
-    {
-        feasible &= beta(k)>=0; projected(k)=std::max(0.0,projected(k));
-        if (beta(k)==0) active.push_back(k/2);
-    }
-    const double kkt=(u-projected).lpNorm<Eigen::Infinity>();
-    out["feasible"]=feasible; out["projected_kkt"]=Number(kkt); out["kkt_passed"]=feasible && kkt<=1e-10;
-    out["rss"]=Number(residual.squaredNorm()); out["objective"]=Number(.5*residual.squaredNorm());
-    out["residual_scale"]=Number(residual.squaredNorm()/static_cast<double>(y.size()));
-    out["residual_rmse"]=Number(residual.norm()/std::sqrt(static_cast<double>(y.size())));
-    out["residual_max"]=Number(residual.cwiseAbs().maxCoeff()); out["relative_residual"]=Number(residual.norm()/s);
-    out["active_atoms"]=active; return out;
-}
+j::object Certificate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & beta,double scale)
+{return runtime_json::Certificate(rhbm_gem::core::joint_component::CertifyLinear(x,y,beta,scale));}
 
 j::object Fit(const Sparse & x,const Eigen::VectorXd & y,const j::object & spectrum)
 {

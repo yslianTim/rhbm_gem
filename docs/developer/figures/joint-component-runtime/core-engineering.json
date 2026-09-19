@@ -1,0 +1,7 @@
+{
+  "cpp_tests": 66,
+  "cpp_failures": 0,
+  "baseline_scientific_records": 76,
+  "baseline_differences": [],
+  "full_regression": "running in frozen executable/source snapshot; final results reported separately"
+}

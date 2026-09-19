@@ -4,15 +4,8 @@
 #include "support/JointABCContext.hpp"
 
 namespace second_stage_test::matched::joint_ac {
-struct LinearResult
-{
-    Eigen::VectorXd beta;
-    bool valid{};
-    std::string reason;
-    int rank{}, solves{}, releases{};
-    int block_factorizations{};
-};
-struct LinearBlock {std::vector<Eigen::Index> rows, columns;};
+using LinearResult=rhbm_gem::core::joint_component::LinearResult;
+using LinearBlock=rhbm_gem::core::joint_component::LinearBlock;
 struct Block
 {
     std::size_t owner{};

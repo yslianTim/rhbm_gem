@@ -1,4 +1,5 @@
 #include "support/ObservationMatchedExperiment.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <boost/math/tools/minima.hpp>
 #include <algorithm>
@@ -9,7 +10,6 @@
 
 namespace second_stage_test::matched {
 namespace {
-constexpr double pi{std::numbers::pi};
 constexpr double lower_width{0.1}, upper_width{2.0};
 std::array<double, 4> Coefficients(double t)
 {
@@ -138,18 +138,10 @@ Stencil MakeStencil(const rhbm_gem::MapObject & generation,
     }
     return out;
 }
-Basis EvaluateBasis(double square, double width, double cutoff)
+Basis EvaluateBasis(double square,double width,double cutoff)
 {
-    if (!(width>0.0) || !std::isfinite(width)) throw std::invalid_argument("Invalid matched width.");
-    if (square > cutoff*cutoff) return {};
-    const double r{std::sqrt(square)}, r2{r*r}, b2{width*width}, exponent{std::exp(-r2/(2.0*b2))};
-    Basis out;
-    out.gaussian = std::pow(2.0*pi*b2,-1.5)*exponent;
-    out.gaussian_log_width = out.gaussian*(r2/b2-3.0);
-    const double center{std::sqrt(2.0/pi)/width};
-    if (r < 1e-5) {out.charge=center; out.charge_log_width=-center;}
-    else if (r <= 2.5) {out.charge=std::erf(r/width/std::sqrt(2.0))/r; out.charge_log_width=-center*exponent;}
-    return out;
+    const auto b=rhbm_gem::core::joint_component::EvaluateKernel(square,width,cutoff);
+    return {b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
 }
 Design MakeDesign(const std::vector<Stencil> & stencils, const Position & center)
 {

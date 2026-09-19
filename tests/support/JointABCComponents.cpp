@@ -1,4 +1,6 @@
 #include "support/JointABCComponents.hpp"
+#include "support/JointRuntimeJson.hpp"
+#include <sys/resource.h>
 #include <algorithm>
 #include <map>
 #include <numeric>
@@ -14,78 +16,9 @@ std::size_t Index(Eigen::Index i) {return static_cast<std::size_t>(i);}
 j::array Indices(const std::vector<Eigen::Index> & v)
 {j::array out; for(auto i:v) out.push_back(i); return out;}
 }
-ComponentPartition BuildPartition(const Domain & domain,const std::vector<std::string> & ids)
-{
-    const auto count=static_cast<Eigen::Index>(domain.atoms.size());
-    if(domain.rows<0 || ids.size()!=domain.atoms.size() || std::set<std::string>(ids.begin(),ids.end()).size()!=ids.size())
-        throw std::invalid_argument("Invalid structural partition identities.");
-    std::vector<Eigen::Index> parent(static_cast<std::size_t>(count)); std::iota(parent.begin(),parent.end(),0);
-    auto root=[&](Eigen::Index a) {while(parent[Index(a)]!=a) {parent[Index(a)]=parent[Index(parent[Index(a)])]; a=parent[Index(a)];} return a;};
-    std::vector<std::vector<Eigen::Index>> contributors(static_cast<std::size_t>(domain.rows));
-    ComponentPartition out; out.atom_component.assign(ids.size(),-1); out.row_component.assign(static_cast<std::size_t>(domain.rows),-1);
-    for(Eigen::Index a=0;a<count;++a)
-    {
-        std::set<Eigen::Index> seen;
-        for(const auto & s:domain.atoms[Index(a)])
-        {
-            if(s.row<0 || s.row>=domain.rows || !std::isfinite(s.square) || s.square<0 || s.square>6.25 || !seen.insert(s.row).second)
-                throw std::invalid_argument("Invalid structural membership.");
-            contributors[Index(s.row)].push_back(a);
-        }
-        if(domain.atoms[Index(a)].empty()) out.unobserved_atoms.push_back(a);
-    }
-    for(const auto & row:contributors) for(std::size_t k=1;k<row.size();++k) parent[Index(root(row[k]))]=root(row[0]);
-    std::map<Eigen::Index,std::vector<Eigen::Index>> groups;
-    for(Eigen::Index a=0;a<count;++a) groups[root(a)].push_back(a);
-    for(const auto & [key,atoms]:groups)
-    {
-        (void)key; ComponentView v; v.atoms=atoms;
-        v.id=ids[Index(*std::min_element(atoms.begin(),atoms.end(),[&](auto a,auto b){return ids[Index(a)]<ids[Index(b)];}))];
-        out.components.push_back(std::move(v));
-    }
-    std::sort(out.components.begin(),out.components.end(),[](const auto & a,const auto & b){return a.id<b.id;});
-    for(std::size_t c=0;c<out.components.size();++c) for(auto a:out.components[c].atoms) out.atom_component[Index(a)]=static_cast<Eigen::Index>(c);
-    for(Eigen::Index r=0;r<domain.rows;++r)
-    {
-        if(contributors[Index(r)].empty()) {out.constant_rows.push_back(r); continue;}
-        const auto c=out.atom_component[Index(contributors[Index(r)][0])]; out.row_component[Index(r)]=c; out.components[Index(c)].rows.push_back(r);
-    }
-    for(auto & v:out.components)
-    {
-        v.atom_to_local.assign(ids.size(),-1); v.row_to_local.assign(static_cast<std::size_t>(domain.rows),-1);
-        for(std::size_t r=0;r<v.rows.size();++r) v.row_to_local[Index(v.rows[r])]=static_cast<Eigen::Index>(r);
-        v.domain.rows=static_cast<Eigen::Index>(v.rows.size()); v.domain.atoms.resize(v.atoms.size());
-        for(std::size_t a=0;a<v.atoms.size();++a)
-        {
-            v.atom_to_local[Index(v.atoms[a])]=static_cast<Eigen::Index>(a);
-            for(const auto & s:domain.atoms[Index(v.atoms[a])]) v.domain.atoms[a].push_back({v.row_to_local[Index(s.row)],s.square});
-        }
-    }
-    return out;
-}
-Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices)
-{Eigen::VectorXd out(static_cast<Eigen::Index>(indices.size())); for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(indices[k]); return out;}
-EvaluationContext ComponentContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
-{
-    auto c=parent; c.atom_ids.clear(); c.row_ids.clear();
-    for(auto a:view.atoms) c.atom_ids.push_back(parent.atom_ids.at(static_cast<std::size_t>(a)));
-    for(auto r:view.rows) c.row_ids.push_back(parent.row_ids.at(static_cast<std::size_t>(r)));
-    if(parent.audit.directions.size())
-    {
-        c.audit.directions.resize(static_cast<Eigen::Index>(view.atoms.size()),parent.audit.directions.cols());
-        for(std::size_t a=0;a<view.atoms.size();++a) c.audit.directions.row(static_cast<Eigen::Index>(a))=parent.audit.directions.row(view.atoms[a]);
-    }
-    c.audit.boundary_atoms.clear();
-    for(auto a:parent.audit.boundary_atoms) if(view.atom_to_local.at(static_cast<std::size_t>(a))>=0) c.audit.boundary_atoms.push_back(view.atom_to_local[Index(a)]);
-    c.audit.boundary=!c.audit.boundary_atoms.empty();
-    c.independent_search=independent;
-    if(independent)
-    {
-        const auto n=static_cast<Eigen::Index>(view.atoms.size()); c.rank={view.domain.rows,2*n,n};
-        c.linear.rank_relative=c.rank.Relative(2*n);
-    }
-    return c;
-}
+ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
+Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices) {return runtime::SelectValues(v,indices);}
+EvaluationContext ComponentContext(const EvaluationContext & p,const ComponentView & v,bool independent) {return runtime::ChildContext(p,v,independent);}
 j::object Census(const Domain & domain,const ComponentPartition & partition,const EvaluationContext & context)
 {
     j::array components; std::size_t memberships{},largest_atoms{},largest_rows{};
@@ -349,76 +282,72 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
 }
 j::object FitComponent(const ComponentView & view,const Vector & y,const Vector & initial_b,const EvaluationContext & parent)
 {
-    const auto context=ComponentContext(parent,view,true); const Vector local_y=Select(y,view.rows),start=Select(initial_b,view.atoms);
-    j::object resources; auto fit=Fit(view.domain,local_y,start,&resources,"guarded",&context);
+    const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
+    const auto result=runtime::SolveComponent(view,y,initial_b,parent);
+    auto fit=runtime_json::Search(result.search,context,"guarded",view.domain.rows);
+    auto assessment=runtime_json::Assessment(result.assessment);
+    for(auto & field:assessment) fit[field.key()]=std::move(field.value());
+    struct rusage usage{}; getrusage(RUSAGE_SELF,&usage);
+#ifdef __APPLE__
+    const auto bytes=usage.ru_maxrss;
+#else
+    const auto bytes=usage.ru_maxrss*1024;
+#endif
+    fit["resources"]=j::object{{"search",j::object{{"seconds",result.search.seconds},{"process_peak_rss_bytes",bytes}}},
+        {"endpoint_audit",j::object{{"seconds",result.assessment_seconds},{"process_peak_rss_bytes",bytes}}}};
+    fit["seconds"]=result.search.seconds+result.assessment_seconds;
     fit["component_id"]=view.id; fit["parent_atoms"]=Indices(view.atoms); fit["parent_rows"]=Indices(view.rows);
-    fit["context"]=ContextEvidence(context); fit["resources"]=resources; fit["initial_b"]=Values(start);
-    fit["usable_state"]=false; fit["last_trusted_state"]=nullptr;
-    for(const auto & trial:fit.at("trials").as_array())
-        if(trial.at("accepted").as_bool() && trial.as_object().if_contains("trust") && trial.at("trust").at("passed").as_bool())
-        {fit["last_trusted_state"]=trial; fit["usable_state"]=true;}
-    // Only a freshly trusted endpoint supersedes the last accepted state.
-    const auto & primary=fit.at("primary");
-    if(fit.at("usable_state").as_bool() && primary.at("valid").as_bool())
-    {
-        const auto e=Evaluate(view.domain,local_y,Parse(primary.at("eta")),false,&context);
-        fit["endpoint_trust"]=Trust(view.domain,local_y,e,&context);
-        if(fit.at("endpoint_trust").at("passed").as_bool()) fit["last_trusted_state"]=primary;
-    }
-    fit["search_success"]=fit.at("usable_state").as_bool() && !fit.at("search_stopped_without_convergence").as_bool();
-    return fit;
+    fit["context"]=ContextEvidence(context); fit["initial_b"]=Values(start);
+    fit["usable_state"]=result.trusted_state.has_value(); fit["last_trusted_state"]=nullptr;
+    if(result.trusted_trial) fit["last_trusted_state"]=runtime_json::Trial(result.search.trials[*result.trusted_trial]);
+    else if(result.trusted_state) fit["last_trusted_state"]=runtime_json::Endpoint(*result.trusted_state);
+    if(result.endpoint_trust) fit["endpoint_trust"]=runtime_json::Trust(*result.endpoint_trust);
+    fit["search_success"]=result.search_success; return fit;
 }
 j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartition & partition,
     const EvaluationContext & context,const j::array & fits)
 {
     const auto start=std::chrono::steady_clock::now();
-    Vector eta(static_cast<Eigen::Index>(domain.atoms.size())),beta(2*eta.size());
-    std::vector<bool> mask(Index(domain.rows),false); for(auto r:partition.constant_rows) mask[Index(r)]=true;
-    bool available=true,completed=true; int evaluations{},references{},updates{}; j::array failed;
+    std::vector<runtime::ComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
     for(const auto & view:partition.components)
     {
         const auto found=std::find_if(fits.begin(),fits.end(),[&](const auto & f){return f.at("component_id").as_string()==view.id;});
         if(found==fits.end()) throw std::invalid_argument("Missing component scientific record.");
         const auto & fit=*found; evaluations+=j::value_to<int>(fit.at("profile_evaluations"));
         references+=j::value_to<int>(fit.at("search_reference_evaluations")); updates+=j::value_to<int>(fit.at("accepted_updates"));
-        completed &= fit.at("search_success").as_bool();
-        if(!fit.at("search_success").as_bool()) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
-        if(!fit.at("usable_state").as_bool()) {available=false; continue;}
-        const auto & state=fit.at("last_trusted_state"); const auto local_eta=Parse(state.at("eta")),local_beta=Parse(state.at("beta"));
-        for(std::size_t a=0;a<view.atoms.size();++a)
-        {eta(view.atoms[a])=local_eta(static_cast<Eigen::Index>(a)); beta(2*view.atoms[a])=local_beta(static_cast<Eigen::Index>(2*a)); beta(2*view.atoms[a]+1)=local_beta(static_cast<Eigen::Index>(2*a+1));}
-        for(auto r:view.rows) mask[Index(r)]=true;
+        runtime::ComponentResult child; child.search_success=fit.at("search_success").as_bool();
+        if(!child.search_success) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
+        if(fit.at("usable_state").as_bool())
+        {
+            runtime::Endpoint state; state.eta=Parse(fit.at("last_trusted_state").at("eta"));
+            state.beta=Parse(fit.at("last_trusted_state").at("beta")); child.trusted_state=std::move(state);
+        }
+        children.push_back(std::move(child));
     }
-    j::array row_mask; for(bool value:mask) row_mask.push_back(value);
+    const auto assembly=runtime::AssembleComponents(domain,y,partition,context,children);
+    j::array mask; for(bool value:assembly.row_mask) mask.push_back(value);
     j::object out{{"schema_version",1},{"experiment","exact-component-equivalence"},{"variant","guarded-components"},
-        {"execution_complete",true},{"search_stopped_without_convergence",!completed},{"prediction_available",available},
-        {"objective_available",available},{"available_row_mask",row_mask},{"failed_components",failed},
+        {"execution_complete",true},{"search_stopped_without_convergence",!assembly.completed},{"prediction_available",assembly.available},
+        {"objective_available",assembly.available},{"available_row_mask",mask},{"failed_components",failed},
         {"profile_evaluations",evaluations},{"search_reference_evaluations",references},{"accepted_updates",updates},
         {"joint_qualified",false},{"context",ContextEvidence(context)},{"row_count",domain.rows},{"residual_scale",context.scale}};
-    if(!available)
+    if(!assembly.available)
     {out["qualification_failure"]="missing-trusted-component-state"; out["prediction"]=nullptr; out["objective"]=nullptr; return out;}
-    auto assessment=Assess(domain,y,eta,context,&beta);
+    auto assessment=runtime_json::Assessment(assembly.assessment);
     for(auto & field:assessment) out[field.key()]=std::move(field.value());
-    // Keep actual independent estimates; a fresh global profile is evidence,
-    // not an implicit replacement of the assembled estimator's coefficients.
-    const auto raw=AtState(domain,y,eta,beta,context);
-    out["assembled_state"]=j::object{{"eta",Values(eta)},{"b",Values(eta.array().exp())},{"beta",Values(beta)},
-        {"certificate",raw.certificate},{"valid",raw.valid}};
+    out["assembled_state"]=j::object{{"eta",Values(assembly.eta)},{"b",Values(assembly.eta.array().exp())},{"beta",Values(assembly.beta)},
+        {"certificate",runtime_json::Certificate(assembly.raw.certificate)},{"valid",assembly.raw.valid}};
     out["assembled_state_preserved"]=true;
-    out["assembled_rss"]=raw.valid ? j::value(raw.residual.squaredNorm()) : j::value(nullptr);
-    bool profile_agrees=false;
-    if(raw.valid && out.at("primary").at("valid").as_bool())
+    out["assembled_rss"]=assembly.raw.valid ? j::value(assembly.raw.certificate.rss) : j::value(nullptr);
+    if(assembly.profile_evaluated)
     {
-        const auto profile=Evaluate(domain,y,eta,false,&context);
-        out["profile_control"]=State(profile); out["profile_control_evaluations"]=1;
-        if(profile.valid)
-        {
-            const double difference=Scaled(beta,profile.beta);
-            out["assembled_profile_difference"]=difference; profile_agrees=difference<=1e-10;
-        }
+        out["profile_control"]=j::object{{"valid",assembly.profile_control.valid},{"reason",assembly.profile_control.reason},
+            {"certificate",runtime_json::Certificate(assembly.profile_control.certificate)}};
+        out["profile_control_evaluations"]=1;
+        if(assembly.profile_control.valid) out["assembled_profile_difference"]=assembly.profile_difference;
     }
-    out["assembled_profile_agrees"]=profile_agrees;
-    out["joint_qualified"]=completed && profile_agrees && out.at("joint_qualified").as_bool();
+    out["assembled_profile_agrees"]=assembly.profile_agrees;
+    out["joint_qualified"]=assembly.completed && assembly.profile_agrees && assembly.assessment.qualified;
     out["assembly_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
 }
 j::object FitComponents(const Domain & domain,const Vector & y,const Vector & initial_b,

@@ -4,30 +4,20 @@
 
 namespace second_stage_test::matched::joint_abc {
 using Sparse=Eigen::SparseMatrix<double>;
-struct Support {Eigen::Index row; double square;};
-// Fixed observation domain and contributor support; no parameter truth.
-struct Domain
+using Support=runtime::Support;
+struct Domain : runtime::Domain
 {
-    Eigen::Index rows;
-    std::vector<std::vector<Support>> atoms;
-    Domain(const unique_grid::Grid &, const std::vector<Atom> &);
-    Domain(Eigen::Index count, std::vector<std::vector<Support>> support)
-        :rows(count),atoms(std::move(support)) {}
+    using runtime::Domain::Domain;
+    Domain(const runtime::Domain & d):runtime::Domain(d) {}
+    Domain(const unique_grid::Grid &,const std::vector<Atom> &);
 };
-struct Evaluation
+struct Evaluation : runtime::Evaluation
 {
-    Eigen::VectorXd eta, beta, residual, gradient;
-    Sparse x, derivative;
     boost::json::object certificate;
-    bool valid{};
-    std::string reason;
+    Evaluation()=default;
+    explicit Evaluation(runtime::Evaluation e);
 };
-struct Differential
-{
-    Eigen::MatrixXd projected, jacobian;
-    bool valid{};
-    std::string reason;
-};
+using Differential=runtime::Differential;
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
     const Eigen::VectorXd & eta, bool reference=false, const EvaluationContext * = nullptr,
     const std::vector<joint_ac::LinearBlock> * = nullptr);
