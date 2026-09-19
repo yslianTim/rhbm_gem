@@ -53,7 +53,7 @@ j::object Endpoint(const Sparse & x,const Eigen::VectorXd & y,const joint_ac::Li
 }
 }
 
-j::object Certificate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & beta)
+j::object Certificate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & beta,double observation_scale)
 {
     j::object out{{"feasible",false},{"kkt_passed",false},{"projected_kkt",nullptr}};
     if (x.rows()!=y.size() || x.cols()!=beta.size() || !beta.allFinite() || !y.allFinite()) return out;
@@ -62,7 +62,7 @@ j::object Certificate(const Sparse & x,const Eigen::VectorXd & y,const Eigen::Ve
     if (!norms.allFinite() || (norms.array()<=0).any()) return out;
     const Eigen::VectorXd residual=x*beta-y;
     if (!residual.allFinite()) return out;
-    const double s=std::max(1.0,y.norm());
+    const double s=observation_scale>0 ? observation_scale : std::max(1.0,y.norm());
     const Eigen::VectorXd u=norms.array()*beta.array()/s;
     const Eigen::VectorXd gradient=(x.transpose()*residual).array()/norms.array()/s;
     Eigen::VectorXd projected=u-gradient; j::array active; bool feasible=true;

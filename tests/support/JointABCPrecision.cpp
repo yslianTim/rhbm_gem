@@ -1,4 +1,5 @@
 #include "support/JointABCPrecision.hpp"
+#include "support/JointABCComponents.hpp"
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <boost/multiprecision/eigen.hpp>
 #include <boost/math/constants/constants.hpp>
@@ -8,6 +9,8 @@
 #include <set>
 #include <map>
 #include <sys/resource.h>
+#include <sstream>
+#include <iomanip>
 
 namespace second_stage_test::matched::certification {
 namespace {
@@ -77,7 +80,7 @@ template<class T> struct Linear
     T kkt{};
     bool valid{};
 };
-template<class T> Linear<T> Solve(const M<T> & x,const V<T> & y,const std::set<Eigen::Index> & active)
+template<class T> Linear<T> Solve(const M<T> & x,const V<T> & y,const std::set<Eigen::Index> & active,const T & scale)
 {
     using boost::multiprecision::abs;
     Linear<T> out; out.beta=V<T>::Zero(x.cols()); out.norms=x.colwise().norm();
@@ -94,7 +97,7 @@ template<class T> Linear<T> Solve(const M<T> & x,const V<T> & y,const std::set<E
     for(Eigen::Index k=0;k<p;++k) if(abs(out.r(k,k))<tolerance) return out;
     const V<T> coefficients=out.qr.solve(y);
     for(std::size_t i=0;i<out.free.size();++i) out.beta(out.free[i])=coefficients(static_cast<Eigen::Index>(i))/out.norms(out.free[i]);
-    out.residual=x*out.beta-y; const T scale=std::max(T(1),T(y.norm()));
+    out.residual=x*out.beta-y;
     const V<T> g=x.transpose()*out.residual;
     for(Eigen::Index k=0;k<x.cols();++k)
     {
@@ -104,19 +107,19 @@ template<class T> Linear<T> Solve(const M<T> & x,const V<T> & y,const std::set<E
     }
     out.valid=true; return out;
 }
-template<class T> Linear<T> Constrained(const M<T> & x,const V<T> & y,std::set<Eigen::Index> active)
+template<class T> Linear<T> Constrained(const M<T> & x,const V<T> & y,std::set<Eigen::Index> active,const T & scale)
 {
     using boost::multiprecision::abs;
     std::set<std::set<Eigen::Index>> visited;
     for(Eigen::Index iteration=0;iteration<4*x.cols()*x.cols();++iteration)
     {
         if(!visited.insert(active).second) break;
-        auto out=Solve(x,y,active); if(!out.valid) return out;
+        auto out=Solve(x,y,active,scale); if(!out.valid) return out;
         Eigen::Index negative=-1;
         for(Eigen::Index k=0;k<x.cols();k+=2) if(out.beta(k)<0 && (negative<0 || out.beta(k)*out.norms(k)<out.beta(negative)*out.norms(negative))) negative=k;
         if(negative>=0) {active.insert(negative); continue;}
         const V<T> gradient=x.transpose()*out.residual; Eigen::Index release=-1;
-        const T tolerance=pow(T(10),-std::numeric_limits<T>::digits10+10)*std::max(T(1),T(y.norm()));
+        const T tolerance=pow(T(10),-std::numeric_limits<T>::digits10+10)*scale;
         for(auto k:active) if(gradient(k)/out.norms(k)<-tolerance && (release<0 || gradient(k)/out.norms(k)<gradient(release)/out.norms(release))) release=k;
         if(release<0) return out;
         active.erase(release);
@@ -131,15 +134,31 @@ template<class T> struct Precision
     M<T> directional;
     T kkt{};
 };
-template<class T> Precision<T> Calculate(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions)
+std::size_t precision_hits{},precision_solves{},scan_hits{},scan_solves{};
+template<class T> auto & References() {static std::map<std::string,Precision<T>> cache; return cache;}
+template<class T> auto & Scans() {static std::map<std::string,j::object> cache; return cache;}
+std::string CacheKey(const joint_abc::Domain & domain,const Vector & y,const Vector & eta,
+    const Vector & beta,const Matrix & directions,const joint_abc::EvaluationContext & context,bool boundary)
+{
+    // The immutable parent pointer is valid only within one explicitly reset
+    // audit case. All local numeric inputs are exact round-trip double text.
+    std::ostringstream key; key<<std::setprecision(17)<<context.observations.get()<<' '<<domain.rows<<' '<<eta.size()<<' '<<directions.cols()<<' ';
+    for(double x:y) key<<x<<' '; for(double x:eta) key<<x<<' ';
+    for(Eigen::Index k=0;k<beta.size();++k) key<<(boundary ? beta(k) : (k%2==0 && beta(k)==0 ? 1. : 0.))<<' ';
+    for(const auto & atom:domain.atoms) {key<<'['; for(const auto & s:atom) key<<s.row<<':'<<s.square<<','; key<<']';}
+    for(Eigen::Index k=0;k<directions.cols();++k) for(double x:directions.col(k)) key<<x<<' ';
+    if(boundary) for(auto a:context.audit.boundary_atoms) key<<a<<',';
+    return key.str();
+}
+template<class T> Precision<T> Calculate(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext * context)
 {
     Precision<T> out; const V<T> eta=Promote<T>(e.eta),response=Promote<T>(y);
     M<T> dx; const auto x=Design(domain,eta,&dx);
     std::set<Eigen::Index> active; for(Eigen::Index k=0;k<e.beta.size();k+=2) if(e.beta(k)==0) active.insert(k);
-    auto inner=Solve(x,response,active); if(!inner.valid) return out;
+    const T scale=std::max(T(1),T(Promote<T>(context && context->observations ? *context->observations : y).norm()));
+    auto inner=Solve(x,response,active,scale); if(!inner.valid) return out;
     out.beta=inner.beta; out.kkt=inner.kkt; out.feasible=true;
     for(Eigen::Index k=0;k<out.beta.size();k+=2) out.feasible &= out.beta(k)>=0;
-    const T scale=std::max(T(1),T(response.norm()));
     M<T> raw=M<T>::Zero(domain.rows,eta.size());
     for(Eigen::Index k=0;k<x.cols();++k) raw.col(k/2)+=dx.col(k)*inner.beta(k);
     // Dense QR differentiated stationarity; no rounded double basis/solution reuse.
@@ -169,8 +188,45 @@ template<class A,class B> P100 Compare(const A & a,const B & b)
     }
     return difference;
 }
+template<class T> Precision<T> Reference(const joint_abc::Domain & domain,const Vector & y,
+    const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext * context)
+{
+    if(!context || !context->audit.cache_precision) return Calculate<T>(domain,y,e,directions,context);
+    const auto key=CacheKey(domain,y,e.eta,e.beta,directions,*context,false); auto & cache=References<T>();
+    if(cache.contains(key)) {++precision_hits; return cache.at(key);}
+    ++precision_solves; auto value=Calculate<T>(domain,y,e,directions,context); cache.emplace(key,value); return value;
+}
 
-template<class T> j::object Scan(const joint_abc::Domain & domain,const Vector & y,const Vector & eta0,const Vector & beta0)
+// This is a global high-precision reference calculation: all blocks use the
+// full-parent T-precision normalization, and their vectors are reassembled
+// before applying the global 50/100-digit and directional tests.
+template<class T> Precision<T> CalculateBlocks(const joint_abc::Domain & domain,const Vector & y,
+    const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext & context)
+{
+    const auto partition=joint_abc::BuildPartition(domain,context.atom_ids);
+    if(partition.components.size()==1) return Reference<T>(domain,y,e,directions,&context);
+    Precision<T> out; out.beta.resize(e.beta.size()); out.gradient.resize(e.eta.size()); out.correction.resize(e.eta.size());
+    out.directional=M<T>::Zero(domain.rows,directions.cols()); out.feasible=true;
+    for(const auto & view:partition.components)
+    {
+        auto child=joint_abc::ComponentContext(context,view,false);
+        Matrix local_directions(static_cast<Eigen::Index>(view.atoms.size()),directions.cols());
+        for(std::size_t k=0;k<view.atoms.size();++k) local_directions.row(static_cast<Eigen::Index>(k))=directions.row(view.atoms[k]);
+        const auto local=Reference<T>(view.domain,joint_abc::Select(y,view.rows),joint_abc::ComponentEvaluation(e,view),local_directions,&child);
+        if(!local.valid) return out;
+        out.feasible &= local.feasible; out.kkt=std::max(out.kkt,local.kkt);
+        for(std::size_t k=0;k<view.atoms.size();++k)
+        {
+            const auto a=view.atoms[k],i=static_cast<Eigen::Index>(k);
+            out.beta(2*a)=local.beta(2*i); out.beta(2*a+1)=local.beta(2*i+1);
+            out.gradient(a)=local.gradient(i); out.correction(a)=local.correction(i);
+        }
+        for(std::size_t r=0;r<view.rows.size();++r) out.directional.row(view.rows[r])=local.directional.row(static_cast<Eigen::Index>(r));
+    }
+    out.valid=true; return out;
+}
+
+template<class T> j::object Scan(const joint_abc::Domain & domain,const Vector & y,const Vector & eta0,const Vector & beta0,const joint_abc::EvaluationContext * context)
 {
     const auto eta=Promote<T>(eta0),beta=Promote<T>(beta0),response=Promote<T>(y);
     M<T> derivative;
@@ -185,10 +241,10 @@ template<class T> j::object Scan(const joint_abc::Domain & domain,const Vector &
     const M<T> r=common.matrixQR().topRows(p).template triangularView<Eigen::Upper>();
     V<T> reduced_y=V<T>::Zero(p+2); reduced_y.head(p)=r.col(p-1);
     V<T> prediction=V<T>::Zero(p+2); prediction.head(p)=r.leftCols(base.cols())*beta;
-    const T scale=std::max(T(1),T(response.norm())),pi=boost::math::constants::pi<T>();
+    const T scale=std::max(T(1),T(Promote<T>(context && context->observations ? *context->observations : y).norm())),pi=boost::math::constants::pi<T>();
     std::set<Eigen::Index> active; for(Eigen::Index k=0;k<beta.size();k+=2) if(beta(k)==0) active.insert(k);
     j::array rows;
-    for(Eigen::Index atom:{1,5,9})
+    for(Eigen::Index atom:(context ? context->audit.boundary_atoms : std::vector<Eigen::Index>{1,5,9}))
     {
         const V<T> first_order=derivative.col(2*atom)*beta(2*atom)+derivative.col(2*atom+1)*beta(2*atom+1)+
             base.col(2*atom)*(4*pi*exp(2*eta(atom))*beta(2*atom+1));
@@ -206,7 +262,8 @@ template<class T> j::object Scan(const joint_abc::Domain & domain,const Vector &
             M<T> design=M<T>::Zero(p+2,base.cols()); design.topRows(p)=r.leftCols(base.cols());
             design.block(0,2*atom,p,2)=rotated.topRows(p);
             design.block(p,2*atom,2,2)=tail.matrixQR().topRows(2).template triangularView<Eigen::Upper>();
-            const auto fixed=Solve(design,reduced_y,active),profile=Constrained(design,reduced_y,active);
+            const T inner_scale=context ? scale : std::max(T(1),T(reduced_y.norm()));
+            const auto fixed=Solve(design,reduced_y,active,inner_scale),profile=Constrained(design,reduced_y,active,inner_scale);
             const V<T> delta=design*path_beta-prediction,residual=design*path_beta-reduced_y;
             const T change=delta.norm(),structure_loss=change*change/2;
             rows.push_back(j::object{{"atom",atom},{"k",k},{"step",String(step)},
@@ -225,19 +282,91 @@ template<class T> j::object Scan(const joint_abc::Domain & domain,const Vector &
     }
     return {{"digits",std::numeric_limits<T>::digits10},{"rows",rows},{"active_a",static_cast<std::int64_t>(active.size())}};
 }
+template<class T> j::object BoundaryReference(const joint_abc::Domain & domain,const Vector & y,const Vector & eta,
+    const Vector & beta,const joint_abc::EvaluationContext * context)
+{
+    if(!context || !context->audit.cache_precision) return Scan<T>(domain,y,eta,beta,context);
+    const auto key=CacheKey(domain,y,eta,beta,Matrix(eta.size(),0),*context,true); auto & cache=Scans<T>();
+    if(cache.contains(key)) {++scan_hits; return cache.at(key);}
+    ++scan_solves; auto value=Scan<T>(domain,y,eta,beta,context); cache.emplace(key,value); return value;
+}
+template<class T> j::object ScanBlocks(const joint_abc::Domain & domain,const Vector & y,const Vector & eta,
+    const Vector & beta,const joint_abc::EvaluationContext & context)
+{
+    const auto partition=joint_abc::BuildPartition(domain,context.atom_ids);
+    if(partition.components.size()==1) return BoundaryReference<T>(domain,y,eta,beta,&context);
+    const T scale=std::max(T(1),T(Promote<T>(*context.observations).norm()));
+    struct Background {T path{},fixed{},profile{},kkt{}; bool fixed_valid{},profile_valid{};};
+    std::vector<Background> background; std::vector<Vector> local_beta;
+    for(const auto & view:partition.components)
+    {
+        Vector b(static_cast<Eigen::Index>(2*view.atoms.size())); std::set<Eigen::Index> active;
+        for(std::size_t a=0;a<view.atoms.size();++a)
+        {b(static_cast<Eigen::Index>(2*a))=beta(2*view.atoms[a]); b(static_cast<Eigen::Index>(2*a+1))=beta(2*view.atoms[a]+1);
+         if(b(static_cast<Eigen::Index>(2*a))==0) active.insert(static_cast<Eigen::Index>(2*a));}
+        const auto x=Design(view.domain,Promote<T>(joint_abc::Select(eta,view.atoms)));
+        const auto response=Promote<T>(joint_abc::Select(y,view.rows));
+        const auto fixed=Solve(x,response,active,scale),profile=Constrained(x,response,active,scale);
+        Background entry; entry.path=(x*Promote<T>(b)-response).squaredNorm()/2;
+        entry.fixed_valid=fixed.valid; entry.profile_valid=profile.valid;
+        if(fixed.valid) entry.fixed=fixed.residual.squaredNorm()/2;
+        if(profile.valid) {entry.profile=profile.residual.squaredNorm()/2; entry.kkt=profile.kkt;}
+        background.push_back(entry); local_beta.push_back(b);
+    }
+    T constant{}; for(auto r:partition.constant_rows) constant+=T(y(r))*T(y(r))/2;
+    j::array rows;
+    for(std::size_t c=0;c<partition.components.size();++c)
+    {
+        const auto & view=partition.components[c]; const auto child=joint_abc::ComponentContext(context,view,false);
+        if(child.audit.boundary_atoms.empty()) continue;
+        auto scan=BoundaryReference<T>(view.domain,joint_abc::Select(y,view.rows),joint_abc::Select(eta,view.atoms),local_beta[c],&child);
+        for(auto & value:scan.at("rows").as_array())
+        {
+            auto row=value.as_object(); row["atom"]=view.atoms.at(j::value_to<std::size_t>(row.at("atom")));
+            T path=constant,fixed=constant,profile=constant,kkt{};
+            bool fixed_valid=row.at("fixed_face_valid").as_bool(),profile_valid=row.at("profile_valid").as_bool();
+            for(std::size_t other=0;other<background.size();++other) if(other!=c)
+            {
+                const auto & b=background[other]; path+=b.path; fixed+=b.fixed; profile+=b.profile;
+                kkt=std::max(kkt,b.kkt); fixed_valid &= b.fixed_valid; profile_valid &= b.profile_valid;
+            }
+            row["path_objective"]=String(T(T(j::value_to<std::string>(row.at("path_objective")))+path));
+            row["fixed_face_objective"]=fixed_valid ? j::value(String(T(T(j::value_to<std::string>(row.at("fixed_face_objective")))+fixed))) : j::value(nullptr);
+            row["profile_objective"]=profile_valid ? j::value(String(T(T(j::value_to<std::string>(row.at("profile_objective")))+profile))) : j::value(nullptr);
+            row["profile_kkt"]=profile_valid ? j::value(String(std::max(kkt,T(j::value_to<std::string>(row.at("profile_kkt")))))) : j::value(nullptr);
+            row["fixed_face_valid"]=fixed_valid; row["profile_valid"]=profile_valid; rows.push_back(row);
+        }
+    }
+    std::size_t active{}; for(Eigen::Index k=0;k<beta.size();k+=2) active+=beta(k)==0;
+    return {{"digits",std::numeric_limits<T>::digits10},{"rows",rows},{"active_a",active}};
+}
 }
 
-j::object PrecisionAudit(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions)
+void ResetPrecisionCache()
+{References<P50>().clear(); References<P100>().clear(); Scans<P50>().clear(); Scans<P100>().clear(); precision_hits=precision_solves=scan_hits=scan_solves=0;}
+j::object PrecisionCacheCosts()
+{return {{"precision_reference_computations",precision_solves},{"precision_reference_reuses",precision_hits},
+    {"boundary_reference_computations",scan_solves},{"boundary_reference_reuses",scan_hits},
+    {"scope","current audit case only; caches cleared before next case"}};}
+
+j::object PrecisionNormalization(const Vector & y)
+{
+    const P50 a=std::max(P50(1),P50(Promote<P50>(y).norm()));
+    const P100 b=std::max(P100(1),P100(Promote<P100>(y).norm()));
+    return {{"parent_rows",y.size()},{"scale50",String(a)},{"scale100",String(b)}};
+}
+j::object PrecisionAudit(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext * context,bool blocks)
 {
     const auto start=std::chrono::steady_clock::now();
-    const auto a=Calculate<P50>(domain,y,e,directions);
-    const auto b=Calculate<P100>(domain,y,e,directions);
-    j::object out{{"precisions",j::array{50,100}},{"solver","independent-dense-householder-qr"},
+    if(blocks && !context) throw std::invalid_argument("Block precision reference requires a parent context.");
+    const auto a=blocks ? CalculateBlocks<P50>(domain,y,e,directions,*context) : Reference<P50>(domain,y,e,directions,context);
+    const auto b=blocks ? CalculateBlocks<P100>(domain,y,e,directions,*context) : Reference<P100>(domain,y,e,directions,context);
+    j::object out{{"precisions",j::array{50,100}},{"solver",blocks ? "independent-block-dense-householder-qr" : "independent-dense-householder-qr"},
         {"valid50",a.valid},{"valid100",b.valid},{"agreement_passed",false},{"derivative_passed",false}};
     if(a.valid && b.valid)
     {
         const P100 difference=std::max({Compare(a.beta,b.beta),Compare(a.gradient,b.gradient),Compare(a.correction,b.correction),Compare(a.directional,b.directional)});
-        const auto analytic=joint_abc::Differentiate(e,std::max(1.0,y.norm())); j::array errors; bool derivative=true;
+        const auto analytic=joint_abc::Differentiate(e,context ? context->scale : std::max(1.0,y.norm()),context); j::array errors; bool derivative=true;
         for(Eigen::Index k=0;k<directions.cols();++k)
         {
             const Vector reference=Demote<P100>(b.directional.col(k)),observed=analytic.jacobian*directions.col(k);
@@ -254,10 +383,12 @@ j::object PrecisionAudit(const joint_abc::Domain & domain,const Vector & y,const
     out["seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
 }
 
-j::object BoundaryAudit(const joint_abc::Domain & domain,const Vector & y,const Vector & eta,const Vector & beta)
+j::object BoundaryAudit(const joint_abc::Domain & domain,const Vector & y,const Vector & eta,const Vector & beta,const joint_abc::EvaluationContext * context)
 {
     const auto start=std::chrono::steady_clock::now();
-    auto a=Scan<P50>(domain,y,eta,beta),b=Scan<P100>(domain,y,eta,beta);
+    const bool blocks=context && context->audit.block_precision;
+    auto a=blocks ? ScanBlocks<P50>(domain,y,eta,beta,*context) : BoundaryReference<P50>(domain,y,eta,beta,context);
+    auto b=blocks ? ScanBlocks<P100>(domain,y,eta,beta,*context) : BoundaryReference<P100>(domain,y,eta,beta,context);
     bool agreement=true; P100 maximum{};
     for(std::size_t k=0;k<a.at("rows").as_array().size();++k)
     {

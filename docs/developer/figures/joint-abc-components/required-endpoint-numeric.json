@@ -1,0 +1,12 @@
+{
+  "scope": "Numeric endpoint controls for source-required regular pairs; final endpoint certificate checked separately",
+  "count": 64,
+  "numeric_passed": true,
+  "maxima": {
+    "scaled_ac_difference": 2.258904752742714e-11,
+    "scaled_b_difference": 2.651804872844775e-12,
+    "maximum_log_b_difference": 7.955414105254022e-12,
+    "normalized_prediction_inf_difference": 2.853955247763132e-14,
+    "normalized_objective_difference": 2.0892288522597327e-25
+  }
+}

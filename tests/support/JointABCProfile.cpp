@@ -20,7 +20,6 @@ namespace fs=std::filesystem;
 using Matrix=Eigen::MatrixXd;
 using Vector=Eigen::VectorXd;
 constexpr double eps=std::numeric_limits<double>::epsilon();
-constexpr int evaluation_budget=200, update_budget=100;
 j::value Number(double x) {return std::isfinite(x) ? j::value(x) : j::value(nullptr);}
 j::array Values(const Vector & v) {j::array out; for (double x:v) out.push_back(Number(x)); return out;}
 Vector Parse(const j::value & v)
@@ -87,6 +86,7 @@ struct Profile
     const Domain & domain;
     const Vector & y;
     double scale;
+    const EvaluationContext & context;
     Evaluation cached;
     j::array trace;
     int evaluations{},derivatives{};
@@ -95,7 +95,7 @@ struct Profile
     int references{};
     double reference_seconds{};
     bool guarded() const {return variant=="guarded" || variant=="guarded-log";}
-    bool retry() const {return guarded() && evaluations<evaluation_budget && failure!="unrepresentable-step";}
+    bool retry() const {return guarded() && evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
         double radius,double damping,double actual,double predicted,double ratio,bool proposed)
     {
@@ -107,10 +107,10 @@ struct Profile
             {"predicted_decrease",Number(predicted)},{"ratio",cached.valid ? Number(ratio) : j::value(nullptr)},
             {"proposed_acceptance",proposed}};
         bool trusted=cached.valid;
-        if (proposed || domain.atoms.size()<=12)
+        if (proposed || context.audit.trial_details)
         {
             const auto start=std::chrono::steady_clock::now();
-            auto evidence=Trust(domain,y,cached); ++references;
+            auto evidence=Trust(domain,y,cached,&context); ++references;
             reference_seconds+=Seconds(start); trusted=evidence.at("passed").as_bool();
             row["trust"]=std::move(evidence);
         }
@@ -121,10 +121,10 @@ struct Profile
     bool Get(const Vector & eta)
     {
         if (cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
-        if (evaluations>=evaluation_budget) {failure="profile-budget"; return false;}
+        if (evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         if (guarded()) failure.clear();
         const auto start=std::chrono::steady_clock::now();
-        cached=Evaluate(domain,y,eta); ++evaluations;
+        cached=Evaluate(domain,y,eta,false,&context); ++evaluations;
         auto row=Endpoint(cached); row["evaluation"]=evaluations; row["accepted"]=false;
         row["seconds"]=Seconds(start); trace.push_back(row);
         if (!cached.valid) failure="inner-"+cached.reason;
@@ -138,7 +138,7 @@ struct Profile
     int df(const Vector & eta,Matrix & jacobian)
     {
         if (!Get(eta)) return -1;
-        auto differential=Differentiate(cached,scale); ++derivatives;
+        auto differential=Differentiate(cached,scale,&context); ++derivatives;
         if (!differential.valid) {failure=differential.reason; return -1;}
         jacobian=std::move(differential.jacobian); return 0;
     }
@@ -161,7 +161,8 @@ Domain::Domain(const unique_grid::Grid & grid,const std::vector<Atom> & geometry
     }
 }
 
-Evaluation Evaluate(const Domain & domain,const Vector & y,const Vector & eta,bool reference)
+namespace {
+Evaluation Basis(const Domain & domain,const Vector & y,const Vector & eta)
 {
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
@@ -185,20 +186,71 @@ Evaluation Evaluate(const Domain & domain,const Vector & y,const Vector & eta,bo
         }
     }
     out.x.setFromTriplets(x.begin(),x.end()); out.derivative.setFromTriplets(dx.begin(),dx.end());
-    const auto solved=joint_ac::WeightedSolve(out.x,y,Vector::Ones(y.size()),reference);
-    out.beta=solved.beta; out.certificate=fixed_b::Certificate(out.x,y,out.beta);
+    out.valid=true; return out;
+}
+}
+Evaluation Evaluate(const Domain & domain,const Vector & y,const Vector & eta,bool reference,const EvaluationContext * context,
+    const std::vector<joint_ac::LinearBlock> * blocks)
+{
+    auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
+    const Eigen::Index m=eta.size();
+    const auto solved=joint_ac::WeightedSolve(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks);
+    out.beta=solved.beta; out.certificate=fixed_b::Certificate(out.x,y,out.beta,context ? context->scale : 0);
     out.certificate["linear_solves"]=solved.solves; out.certificate["free_rank"]=solved.rank;
+    if(blocks) out.certificate["block_factorizations"]=solved.block_factorizations;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.at("kkt_passed").as_bool()) {out.reason="kkt-failed"; return out;}
     out.residual=out.x*out.beta-y; out.gradient=Vector::Zero(m);
-    const double scale=std::max(1.0,y.norm());
+    const double scale=context ? context->scale : std::max(1.0,y.norm());
     for (Eigen::Index k=0;k<2*m;++k)
         out.gradient(k/2)+=out.beta(k)*out.derivative.col(k).dot(out.residual)/scale/scale;
     out.valid=out.residual.allFinite() && out.gradient.allFinite();
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
 
-Differential Differentiate(const Evaluation & e,double scale)
+Evaluation AtState(const Domain & domain,const Vector & y,const Vector & eta,const Vector & beta,const EvaluationContext & context)
+{
+    auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
+    if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
+    out.beta=beta; out.residual=out.x*beta-y; out.gradient=Vector::Zero(eta.size());
+    out.certificate=fixed_b::Certificate(out.x,y,beta,context.scale);
+    for(Eigen::Index k=0;k<beta.size();++k)
+        out.gradient(k/2)+=beta(k)*out.derivative.col(k).dot(out.residual)/context.scale/context.scale;
+    out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
+    return out;
+}
+namespace {
+template<class Design> j::object SpectrumRecord(const Design & input,const RankPolicy & policy,Eigen::Index columns,bool normalize)
+{
+    if(input.cols()==0) return {{"available",false},{"reason","empty-matrix"}};
+    if(input.rows()==0) return {{"available",true},{"singular_values",j::array{}},{"rank",0},
+        {"rank_threshold",0},{"global_rows",policy.rows},{"global_columns",columns},{"reason","unobserved-columns"}};
+    Design x=input; Vector norms(input.cols());
+    for(Eigen::Index k=0;k<x.cols();++k) {norms(k)=x.col(k).norm(); if(normalize && norms(k)>0) x.col(k)/=norms(k);}
+    const auto reduced=Reduce(x,Matrix(x.rows(),0));
+    const Eigen::JacobiSVD<Matrix> svd(reduced.first,Eigen::ComputeThinV); const auto & values=svd.singularValues();
+    const double threshold=policy.Absolute(columns,values(0));
+    return {{"available",true},{"singular_values",Values(values)},{"rank",(values.array()>threshold).count()},
+        {"rank_threshold",threshold},{"global_rows",policy.rows},{"global_columns",columns},
+        {"column_norms",Values(norms)},{"minimum_singular",Number(values(values.size()-1))},
+        {"condition",Number(values(0)/values(values.size()-1))}};
+}
+}
+j::object MatrixSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
+{return SpectrumRecord(x,p,columns,normalize);}
+j::object MatrixSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
+{return SpectrumRecord(x,p,columns,normalize);}
+Vector LocalCorrection(const Evaluation & e,const Differential & d,const EvaluationContext & context,double absolute)
+{
+    if(!e.valid || !d.valid) return {};
+    const auto reduced=Reduce(d.jacobian,Matrix(-e.residual/context.scale));
+    auto svd=Decompose(reduced.first,context.rank.rows);
+    if(absolute>=0 && svd.singularValues()(0)>0) svd.setThreshold(absolute/svd.singularValues()(0));
+    if(svd.rank()!=d.jacobian.cols()) return {};
+    return svd.solve(reduced.second.col(0));
+}
+
+Differential Differentiate(const Evaluation & e,double scale,const EvaluationContext * context,double free_design_threshold)
 {
     Differential out;
     if (!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
@@ -217,7 +269,8 @@ Differential Differentiate(const Evaluation & e,double scale)
         t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
     }
     z.setFromTriplets(entries.begin(),entries.end());
-    const auto reduced=Reduce(z,raw); const auto svd=Decompose(reduced.first,n);
+    const auto reduced=Reduce(z,raw); auto svd=Decompose(reduced.first,context ? context->rank.rows : n);
+    if(free_design_threshold>=0 && svd.singularValues()(0)>0) svd.setThreshold(free_design_threshold/svd.singularValues()(0));
     if (svd.rank()!=p) {out.reason="rank-deficient-free-design"; return out;}
     const Matrix coefficients=reduced.first.triangularView<Eigen::Upper>().solve(reduced.second);
     // R^{-1} R^{-T} T via orthogonal factors; never form X^T X.
@@ -229,19 +282,19 @@ Differential Differentiate(const Evaluation & e,double scale)
     out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
 }
 
-j::object Trust(const Domain & domain,const Vector & y,const Evaluation & e)
+j::object Trust(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext * context)
 {
-    const auto reference=Evaluate(domain,y,e.eta,true);
+    const auto reference=Evaluate(domain,y,e.eta,true,context);
     j::object out{{"reference",Endpoint(reference)},{"passed",false}};
     if (!e.valid)
     {
         out["reason"]="invalid-primary";
-        if(e.x.cols()>0 && e.x.nonZeros()>0 && domain.atoms.size()<=12)
+        if(e.x.cols()>0 && e.x.nonZeros()>0 && (context ? context->audit.trial_details : RegisteredAudit(static_cast<Eigen::Index>(domain.atoms.size())).trial_details))
             out["design_spectrum"]=joint_ac::SparseSpectrum(e.x,Vector::Ones(y.size()));
         return out;
     }
     const double difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
-        std::numeric_limits<double>::infinity(),scale=std::max(1.0,y.norm());
+        std::numeric_limits<double>::infinity(),scale=context ? context->scale : std::max(1.0,y.norm());
     Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
     // Independent scalar forward and compensated summation, using frozen support.
     auto add=[&](Eigen::Index row,double value) {
@@ -288,14 +341,16 @@ j::object Trust(const Domain & domain,const Vector & y,const Evaluation & e)
     out["maximum_prediction_difference"]=Number((prediction-original_prediction).lpNorm<Eigen::Infinity>());
     out["maximum_gradient_difference"]=Number((width_gradient-e.gradient).lpNorm<Eigen::Infinity>());
     out["maximum_cancellation_ratio"]=Number((absolute.array()/prediction.array().abs().max(1.0)).maxCoeff());
-    if (domain.atoms.size()<=12) out["design_spectrum"]=joint_ac::SparseSpectrum(e.x,Vector::Ones(y.size()));
+    if ((context ? context->audit.trial_details : RegisteredAudit(static_cast<Eigen::Index>(domain.atoms.size())).trial_details)) out["design_spectrum"]=joint_ac::SparseSpectrum(e.x,Vector::Ones(y.size()));
     out["passed"]=difference<=1e-10 && prediction_ok && gradient_ok && reference_gradient_ok && kkt_difference<=1e-13;
     out["reason"]=out.at("passed").as_bool() ? "trusted" : !reference.valid ? "invalid-reference" : "replay-disagreement";
     return out;
 }
 
-j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j::object * resources,const std::string & variant)
+j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j::object * resources,const std::string & variant,const EvaluationContext * provided)
 {
+    const auto fallback=provided ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
+    const auto * context=provided ? provided : &fallback;
     const auto start=std::chrono::steady_clock::now();
     auto measure=[](auto since) {
         struct rusage usage{}; getrusage(RUSAGE_SELF,&usage);
@@ -306,12 +361,12 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
 #endif
         return j::object{{"seconds",Seconds(since)},{"process_peak_rss_bytes",bytes}};
     };
-    const double scale=std::max(1.0,y.norm());
-    Profile profile{domain,y,scale,{}, {},0,0,{},variant};
+    const double scale=context ? context->scale : std::max(1.0,y.norm());
+    Profile profile{domain,y,scale,*context,{}, {},0,0,{},variant};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
     lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
-    lm.parameters.gtol=1e-12; lm.parameters.maxfev=evaluation_budget;
+    lm.parameters.gtol=1e-12; lm.parameters.maxfev=context->profile_budget;
     if (variant=="guarded-log") {lm.useExternalScaling=true; lm.diag=Vector::Ones(eta.size());}
     auto status=lm.minimizeInit(eta);
     if (!variant.empty() && profile.cached.valid)
@@ -322,7 +377,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
     if (profile.cached.valid) profile.Accept(eta,0);
     while (status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
     {
-        if (accepted>=update_budget) {profile.failure="accepted-update-budget"; break;}
+        if (accepted>=context->update_budget) {profile.failure="accepted-update-budget"; break;}
         const auto before=lm.iter;
         status=lm.minimizeOneStep(eta);
         if (lm.iter>before) {++accepted; profile.Accept(eta,accepted);}
@@ -347,7 +402,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
         {"profile_evaluations",profile.evaluations},{"jacobian_evaluations",profile.derivatives},
         {"accepted_updates",accepted},{"trials",profile.trace},{"row_count",y.size()},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},
-            {"profile_budget",evaluation_budget},{"accepted_update_budget",update_budget}}},
+            {"profile_budget",context->profile_budget},{"accepted_update_budget",context->update_budget}}},
         {"linear_solver","sparse-qr-householder-1024"},{"reference_solver","independent-tsqr-8192-svd"},
         {"residual_scale",scale},{"variance_semantics","descriptive RSS/N; zero permitted"}};
     if (!variant.empty())
@@ -358,29 +413,41 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
         out["search_stopped_without_convergence"]=status==Eigen::LevenbergMarquardtSpace::UserAsked ||
             status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
     }
+    auto assessment=Assess(domain,y,eta,*context);
+    for(auto & field:assessment) out[field.key()]=std::move(field.value());
+    return finish(out);
+}
+
+j::object Assess(const Domain & domain,const Vector & y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
+{
+    const auto * context=&policy; const double scale=context->scale;
+    j::object out{{"joint_qualified",false}};
     // Fresh endpoint evaluation, independent of the optimizer's cached trial.
-    const auto endpoint=Evaluate(domain,y,eta),reference=Evaluate(domain,y,eta,true);
+    auto endpoint=supplied_beta ? AtState(domain,y,eta,*supplied_beta,*context) : Evaluate(domain,y,eta,false,context);
+    const auto reference=Evaluate(domain,y,eta,true,context);
+    if(supplied_beta && endpoint.valid && !endpoint.certificate.at("kkt_passed").as_bool())
+    {endpoint.valid=false; endpoint.reason="assembled-kkt-failed";}
     out["primary"]=Endpoint(endpoint); out["reference"]=Endpoint(reference);
     out["endpoint_evaluations"]=2; out["directional_evaluations"]=0;
     if (!endpoint.valid || !reference.valid)
     {
-        out["qualification_failure"]="inner-solve"; return finish(out);
+        out["qualification_failure"]="inner-solve"; return out;
     }
     const double difference=Difference(endpoint.beta,reference.beta);
     out["scaled_reference_difference"]=Number(difference);
     out["design_spectrum"]=joint_ac::SparseSpectrum(endpoint.x,Vector::Ones(y.size()));
-    const auto differential=Differentiate(endpoint,scale);
+    const auto differential=Differentiate(endpoint,scale,context);
     if (!differential.valid)
     {
-        out["qualification_failure"]=differential.reason; return finish(out);
+        out["qualification_failure"]=differential.reason; return out;
     }
     const auto width_reduced=Reduce(differential.projected,Matrix(y.size(),0));
-    const auto widths=Decompose(width_reduced.first,y.size());
-    auto spectrum=Spectrum(widths,y.size());
+    const auto widths=Decompose(width_reduced.first,context->rank.rows);
+    auto spectrum=Spectrum(widths,context->rank.rows);
     const Vector norms=differential.projected.colwise().norm(); spectrum["column_norms"]=Values(norms);
     Matrix normalized=width_reduced.first;
     for (Eigen::Index k=0;k<norms.size();++k) if (norms(k)>0) normalized.col(k)/=norms(k);
-    spectrum["column_normalized"]=Spectrum(Decompose(normalized,y.size()),y.size());
+    spectrum["column_normalized"]=Spectrum(Decompose(normalized,context->rank.rows),context->rank.rows);
     spectrum["active_face_only"]=!endpoint.certificate.at("active_atoms").as_array().empty();
     j::array weak;
     for (Eigen::Index k=0;k<std::min<Eigen::Index>(3,widths.matrixV().cols());++k)
@@ -391,16 +458,19 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
     }
     spectrum["weak_directions"]=weak; out["width_spectrum"]=spectrum;
     const auto correction_reduced=Reduce(differential.jacobian,Matrix(-endpoint.residual/scale));
-    const auto correction_svd=Decompose(correction_reduced.first,y.size());
+    const auto correction_svd=Decompose(correction_reduced.first,context->rank.rows);
     const Vector correction=correction_svd.solve(correction_reduced.second.col(0));
     out["local_correction"]=Values(correction); out["local_correction_inf"]=Number(correction.lpNorm<Eigen::Infinity>());
-    out["profile_jacobian_spectrum"]=Spectrum(correction_svd,y.size());
+    out["profile_jacobian_spectrum"]=Spectrum(correction_svd,context->rank.rows);
     std::vector<Vector> directions{Vector::Ones(eta.size()).normalized(),Vector(eta.size()),Parse(weak[0])};
     for (Eigen::Index k=0;k<eta.size();++k) directions[1](k)=k%2 ? -1 : 1;
-    directions[1].normalize(); j::array checks; bool verified=true; int validation_evaluations{};
+    directions[1].normalize();
+    if(context->audit.directions.size())
+    {directions.clear(); for(Eigen::Index k=0;k<context->audit.directions.cols();++k) directions.push_back(context->audit.directions.col(k));}
+    j::array checks; bool verified=true; int validation_evaluations{};
     for (std::size_t k=0;k<directions.size();++k) for (double h:{1e-4,5e-5})
     {
-        const auto plus=Evaluate(domain,y,eta+h*directions[k],true),minus=Evaluate(domain,y,eta-h*directions[k],true);
+        const auto plus=Evaluate(domain,y,eta+h*directions[k],true,context),minus=Evaluate(domain,y,eta-h*directions[k],true,context);
         validation_evaluations+=2;
         bool passed=false,same_face=false; double error=std::numeric_limits<double>::infinity();
         if (plus.valid && minus.valid)
@@ -427,7 +497,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,j:
         {"local_correction",local},{"identified",identified},{"derivative",verified}};
     out["qualification_failure"]=!inner ? "inner-solve" : !verified ? "derivative-unverified" :
         !identified ? "width-unidentified" : !gradient || !local ? "b-not-stationary" : "none";
-    return finish(out);
+    return out;
 }
 
 void Run(const std::string & manifest,const std::string & map,const std::string & checkpoint,const std::string & output_path)

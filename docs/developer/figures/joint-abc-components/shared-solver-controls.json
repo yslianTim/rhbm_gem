@@ -1,0 +1,254 @@
+{
+  "tests": 21,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-09-18T19:04:13Z",
+  "time": "0.092s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "UniqueStencilGridTest",
+      "tests": 10,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-09-18T19:04:13Z",
+      "time": "0.056s",
+      "testsuite": [
+        {
+          "name": "DeduplicatesAllSlotsIncludingZerosClampsAndRepeatedSamples",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "KeepsGenerationCoordinatesSeparateFromSamplingHeader",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 56,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "DirectDesignMatchesIndependentGeneratorAndUsesCheckpointWidths",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 72,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "CommonAlphaFitsPreserveQualificationAndBothHundredStepBudgets",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.009s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "BoundariesFailuresAndStagnationRemainUnqualified",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "ZeroAmplitudeAndSignedChargesAreAllowed",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 138,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "BlockedSvdAgreesWithPivotedSvdIncludingConstraintsAndRankFailure",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.002s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "SparseQrPreservesEveryNonzeroConstraintsAndRankFailures",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 183,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.021s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "SparseQrCommonAlphaAgreesWithDenseAndIndependentSvd",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 210,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.01s",
+          "classname": "UniqueStencilGridTest"
+        },
+        {
+          "name": "SparseRowReductionAcrossTilesPreservesWeightedConstrainedSolution",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/UniqueStencilGrid_test.cpp",
+          "line": 227,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.009s",
+          "classname": "UniqueStencilGridTest"
+        }
+      ]
+    },
+    {
+      "name": "AtomCenteredVoxelUnionTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-09-18T19:04:13Z",
+      "time": "0.019s",
+      "testsuite": [
+        {
+          "name": "ExactSphereBoundaryOverlapAndClippedEdges",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomCenteredVoxelUnion_test.cpp",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomCenteredVoxelUnionTest"
+        },
+        {
+          "name": "HeaderGeometryAndSparseDesignReplay",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomCenteredVoxelUnion_test.cpp",
+          "line": 41,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomCenteredVoxelUnionTest"
+        },
+        {
+          "name": "IndependentTSQRAndConstraintsMatchDenseSVD",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomCenteredVoxelUnion_test.cpp",
+          "line": 54,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.008s",
+          "classname": "AtomCenteredVoxelUnionTest"
+        },
+        {
+          "name": "AllAlphaBranchesAndQualificationMatchDense",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomCenteredVoxelUnion_test.cpp",
+          "line": 75,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.01s",
+          "classname": "AtomCenteredVoxelUnionTest"
+        }
+      ]
+    },
+    {
+      "name": "AtomBlockGridCompositeTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-09-18T19:04:13Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "ExplicitExpansionMatchesObjectiveEquationsUpdatesAndMass",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 33,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "PartitionEntryRejectsOverlapAndCompositeRejectsWithinBlockDuplicates",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 70,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "DisjointAndGlobalBlocksKeepLegacyEndpoints",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 79,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0.015s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "CompositeGradientMatchesObjectiveAndAlphaZeroIsNotOrdinaryLS",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 100,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "BoundaryDenominatorRankConstraintsAndExhaustion",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 115,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "MembershipGeometryCoverageAndDiagnosticsAreIndependentOfBasis",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 131,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        },
+        {
+          "name": "StagnationAndUnverifiedRefinementCannotQualify",
+          "file": "\/Users\/yslian\/Project\/em_map_analysis\/tests\/utils\/hrl\/AtomBlockGridComposite_test.cpp",
+          "line": 146,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-09-18T19:04:13Z",
+          "time": "0s",
+          "classname": "AtomBlockGridCompositeTest"
+        }
+      ]
+    }
+  ]
+}

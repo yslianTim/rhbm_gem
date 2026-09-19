@@ -1,0 +1,34 @@
+{
+  "passed": true,
+  "records": [
+    {
+      "passed": true,
+      "dataset": "baseline",
+      "case": "first-stage-double",
+      "component_id": "1",
+      "differences": []
+    },
+    {
+      "passed": true,
+      "dataset": "regular-duplicate",
+      "case": "first-stage-double",
+      "component_id": "01:duplicate:1",
+      "differences": []
+    },
+    {
+      "passed": true,
+      "dataset": "regular-duplicate",
+      "case": "first-stage-double",
+      "component_id": "00:baseline:1",
+      "differences": []
+    },
+    {
+      "passed": true,
+      "dataset": "regular-near",
+      "case": "narrower-double",
+      "component_id": "01:near-0.02:1",
+      "differences": []
+    }
+  ],
+  "comparison": "Raw search fit, scoped final fit, audit, context and available boundary evidence; timing and process peak RSS excluded."
+}

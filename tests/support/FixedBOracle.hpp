@@ -18,7 +18,7 @@ Data Prepare(const std::string & manifest, const std::string & map,
     const std::string & experiment = "fixed-b-oracle");
 // Mean-only LS certificate: exact residuals require no positive variance.
 boost::json::object Certificate(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
-    const Eigen::VectorXd &);
+    const Eigen::VectorXd &, double observation_scale = 0);
 boost::json::object Fit(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
     const boost::json::object & spectrum);
 void Run(const std::string & manifest, const std::string & map,

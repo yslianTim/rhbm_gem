@@ -54,6 +54,9 @@ Thumbs.db
 *.zip
 *.log
 
+# Versioned exact-component experiment evidence
+!docs/developer/figures/joint-abc-components/*.tar.gz
+
 # Local datasets and generated outputs
 data/local/
 output/

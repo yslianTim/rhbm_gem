@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "project_head": "d9f2202649d02b63f4ad3a5dda778c619a2b8f04",
+  "linked_libraries": {
+    "@rpath/librhbm_gem.dylib": {
+      "path": "/Users/yslian/Project/em_map_analysis/build/observation-matching/on/src/librhbm_gem.dylib",
+      "sha256": "9c61a81d1a49530a9978a4d4423589e68adf5d170d9da268d4b27b9c4657fed3"
+    },
+    "/opt/homebrew/opt/libomp/lib/libomp.dylib": {
+      "path": "/opt/homebrew/opt/libomp/lib/libomp.dylib",
+      "sha256": "0d18bd3a84eae020733be930e1e6fa47925597cfdc4afd9210644836bc4a1b54"
+    },
+    "/opt/homebrew/opt/root/lib/root/libGpad.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libGpad.so",
+      "sha256": "f6c55b41b8d76d2ffce3f00abded68231210822c4c079d7a338812359240dc9e"
+    },
+    "/opt/homebrew/opt/root/lib/root/libGraf.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libGraf.so",
+      "sha256": "a547e33e2bcf81c589be235b3da9bfbb836dbb213b83b852d71cf8bc6618b19e"
+    },
+    "/opt/homebrew/opt/root/lib/root/libHist.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libHist.so",
+      "sha256": "939ac8e6fccc22e202aa85ef4b522c3390ff5dd7787a3854b13858979bf5e6a7"
+    },
+    "/opt/homebrew/opt/root/lib/root/libMatrix.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libMatrix.so",
+      "sha256": "58652213a93e57babf4e0293ad08ee263d59dc009ce4001cdd08fb1d9c62f178"
+    },
+    "/opt/homebrew/opt/root/lib/root/libMathCore.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libMathCore.so",
+      "sha256": "5cdd13253838afb5217cb6ea5f6ce1b43a5fcc8a95314977fc986c24e32d03b3"
+    },
+    "/opt/homebrew/opt/root/lib/root/libRIO.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libRIO.so",
+      "sha256": "fb0b320435062e60e353ef88c9b7d30ff2106f6adaa88eb042bd55b2a6ac6ce9"
+    },
+    "/opt/homebrew/opt/root/lib/root/libThread.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libThread.so",
+      "sha256": "824c2e63b92d7333f5ab84bb13ee8de601e02b3d4ede0a6a5fe6dadead122ac0"
+    },
+    "/opt/homebrew/opt/root/lib/root/libCore.so": {
+      "path": "/opt/homebrew/opt/root/lib/root/libCore.so",
+      "sha256": "2f20a32f7056efc20e284bc9673582d4b4aef29e88b8b44c4ca5cb24deb9c85f"
+    }
+  },
+  "numeric_threads": 1,
+  "note": "Shared-library hashes recorded during both runs; separate testing and production build trees."
+}

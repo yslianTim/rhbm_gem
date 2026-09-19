@@ -1,6 +1,7 @@
 #pragma once
 #include "support/ObservationMatchedExperiment.hpp"
 #include <Eigen/SparseCore>
+#include "support/JointABCContext.hpp"
 
 namespace second_stage_test::matched::joint_ac {
 struct LinearResult
@@ -9,7 +10,9 @@ struct LinearResult
     bool valid{};
     std::string reason;
     int rank{}, solves{}, releases{};
+    int block_factorizations{};
 };
+struct LinearBlock {std::vector<Eigen::Index> rows, columns;};
 struct Block
 {
     std::size_t owner{};
@@ -39,7 +42,8 @@ boost::json::object Fit(const Eigen::MatrixXd &, const Eigen::VectorXd &,
 // Sparse-only experiment path. Dense production-test entry points stay unchanged.
 LinearResult WeightedSolve(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
     const Eigen::VectorXd &, bool svd = false, bool blocked_svd = true,
-    const Eigen::SparseMatrix<double> * sparse_design = nullptr);
+    const Eigen::SparseMatrix<double> * sparse_design = nullptr,
+    const joint_abc::LinearPolicy * = nullptr, const std::vector<LinearBlock> * = nullptr);
 Evidence Evaluate(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,
     const Eigen::VectorXd &, const Eigen::VectorXd &, const Blocks &);
 boost::json::object Fit(const Eigen::SparseMatrix<double> &, const Eigen::VectorXd &,

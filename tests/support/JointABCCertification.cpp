@@ -56,8 +56,11 @@ joint_abc::Domain Snapshot(const unique_grid::Grid & grid,const std::vector<Atom
     return {static_cast<Eigen::Index>(grid.voxels.size()),std::move(support)};
 }
 
-void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & fit,const fs::path & output)
+void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & fit,const fs::path & output,const joint_abc::EvaluationContext * provided)
 {
+    const auto plan=joint_abc::RegisteredAudit(static_cast<Eigen::Index>(domain.atoms.size()),j::value_to<std::string>(fit.at("dataset")),j::value_to<std::string>(fit.at("case")));
+    const auto fallback=provided ? joint_abc::EvaluationContext{} : joint_abc::MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()),"",&plan);
+    const auto * context=provided ? provided : &fallback;
     const auto start=std::chrono::steady_clock::now();
     j::object audit{{"schema_version",2},{"case",fit.at("case")},{"dataset",fit.at("dataset")},
         {"legacy_joint_qualified",fit.at("joint_qualified")},{"derivative_status","unavailable"},
@@ -65,9 +68,11 @@ void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & f
     if(!fit.contains("primary")) {audit["reason"]="initialization-failed"; Write(output,audit); return;}
     const auto & primary=fit.at("primary");
     if (!primary.at("valid").as_bool()) {Write(output,audit); return;}
-    const auto e=joint_abc::Evaluate(domain,y,Parse(primary.at("eta")));
-    audit["endpoint_trust"]=joint_abc::Trust(domain,y,e);
-    const double scale=std::max(1.0,y.norm());
+    const bool supplied=fit.if_contains("assembled_state_preserved") && fit.at("assembled_state_preserved").as_bool();
+    const auto e=supplied ? joint_abc::AtState(domain,y,Parse(primary.at("eta")),Parse(primary.at("beta")),*context) :
+        joint_abc::Evaluate(domain,y,Parse(primary.at("eta")),false,context);
+    audit["endpoint_trust"]=joint_abc::Trust(domain,y,e,context);
+    const double scale=context->scale;
     Vector norms(e.beta.size()); for(Eigen::Index k=0;k<norms.size();++k) norms(k)=e.x.col(k).norm();
     const Vector u=norms.array()*e.beta.array()/scale,dual=(e.x.transpose()*e.residual).array()/norms.array()/scale;
     j::array slack;
@@ -75,34 +80,32 @@ void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & f
         {"dual",Number(dual(k))},{"complementarity",Number(u(k)*dual(k))},{"exactly_active",e.beta(k)==0}});
     audit["constraint_evidence"]=slack;
     if (!fit.contains("width_spectrum")) {audit["reason"]="missing-width-spectrum"; Write(output,audit); return;}
-    const auto d=joint_abc::Differentiate(e,scale);
+    const auto d=joint_abc::Differentiate(e,scale,context);
     if(!d.valid) {audit["reason"]=d.reason; Write(output,audit); return;}
     Matrix directions(e.eta.size(),3); directions.col(0)=Vector::Ones(e.eta.size()).normalized();
     for(Eigen::Index k=0;k<e.eta.size();++k) directions(k,1)=k%2 ? -1 : 1;
     directions.col(1).normalize(); directions.col(2)=Parse(fit.at("width_spectrum").at("weak_directions").at(0));
-    const std::string dataset=j::value_to<std::string>(fit.at("dataset")),name=j::value_to<std::string>(fit.at("case"));
-    const bool small=domain.atoms.size()<=12;
-    const bool precision=small && (dataset=="weak-1e-4" || dataset=="near-0.02" || dataset=="active-a" ||
-        (dataset=="baseline" && name.starts_with("first-stage")));
-    if(precision) audit["precision"]=PrecisionAudit(domain,y,e,directions);
+    if(context->audit.directions.size()) directions=context->audit.directions;
+    const bool precision=context->audit.precision;
+    if(precision) audit["precision"]=PrecisionAudit(domain,y,e,directions,context,context->audit.block_precision);
     const bool old_verified=fit.at("derivative_verified").as_bool();
     bool verified=old_verified; bool crossed{},missing_interval{};
     j::array ladders;
-    const bool expanded_audit=small && (!old_verified || precision);
+    const bool expanded_audit=context->audit.expanded_if_unverified && (!old_verified || precision);
     if(expanded_audit)
     {
         verified=true;
-        for(Eigen::Index direction=0;direction<3;++direction)
+        for(Eigen::Index direction=0;direction<directions.cols();++direction)
         {
             std::vector<Vector> finite; std::vector<double> noise; std::vector<bool> valid;
             j::array samples;
             for(int k=0;k<=16;++k)
             {
                 const double h=std::ldexp(.01,-k);
-                const auto plus=joint_abc::Evaluate(domain,y,e.eta+h*directions.col(direction));
-                const auto minus=joint_abc::Evaluate(domain,y,e.eta-h*directions.col(direction));
-                const auto rp=joint_abc::Evaluate(domain,y,e.eta+h*directions.col(direction),true);
-                const auto rm=joint_abc::Evaluate(domain,y,e.eta-h*directions.col(direction),true);
+                const auto plus=joint_abc::Evaluate(domain,y,e.eta+h*directions.col(direction),false,context);
+                const auto minus=joint_abc::Evaluate(domain,y,e.eta-h*directions.col(direction),false,context);
+                const auto rp=joint_abc::Evaluate(domain,y,e.eta+h*directions.col(direction),true,context);
+                const auto rm=joint_abc::Evaluate(domain,y,e.eta-h*directions.col(direction),true,context);
                 const bool solved=plus.valid && minus.valid && rp.valid && rm.valid;
                 const bool face=solved && plus.certificate.at("active_atoms")==e.certificate.at("active_atoms") &&
                     minus.certificate.at("active_atoms")==e.certificate.at("active_atoms") &&

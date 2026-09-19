@@ -8,6 +8,7 @@
 #include "support/JointABCProfile.hpp"
 #include "support/JointABCCoverage.hpp"
 #include "support/JointABCCertification.hpp"
+#include "support/JointABCComponentExperiment.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -21,6 +22,20 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 4 && std::string(argv[1]) == "joint-abc-components-run")
+        {second_stage_test::matched::joint_abc::ComponentRun(argv[2],argv[3]); return 0;}
+        if ((argc == 5 || argc == 6) && std::string(argv[1]) == "joint-abc-components-audit")
+        {second_stage_test::matched::joint_abc::ComponentAudit(argv[2],argv[3],argv[4],argc==6 ? argv[5] : ""); return 0;}
+        if (argc == 7 && std::string(argv[1]) == "joint-abc-rerun-component")
+        {second_stage_test::matched::joint_abc::ComponentRerun(argv[2],argv[3],argv[4],argv[5],argv[6]); return 0;}
+        if (argc == 4 && std::string(argv[1]) == "joint-abc-component-same-state")
+        {
+            second_stage_test::matched::joint_abc::ComponentSameState(argv[2],argv[3]); return 0;
+        }
+        if (argc == 4 && std::string(argv[1]) == "joint-abc-component-regression")
+        {
+            second_stage_test::matched::joint_abc::ComponentRegression(argv[2],argv[3]); return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "joint-abc-certification-audit")
         {
             second_stage_test::matched::certification::AuditDirectory(argv[2]); return 0;
@@ -119,7 +134,7 @@ int main(int argc, char ** argv)
             return 0;
         }
         if (argc != 4 || std::string(argv[1]) != "solve")
-            throw std::runtime_error("Usage: mdpde_experiment solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | joint-abc-profile|fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | joint-abc-coverage|joint-abc-certification MODEL MAP MANIFEST OUTPUT | joint-abc-certification-audit OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
+            throw std::runtime_error("Usage: mdpde_experiment joint-abc-components-run|joint-abc-component-same-state|joint-abc-component-regression DATASET OUTPUT | joint-abc-components-audit DATASET RUN OUTPUT | joint-abc-rerun-component DATASET CASE COMPONENT CONTEXT OUTPUT | solve CAPTURES OUTPUT | forward|matched MANIFEST MAP CAPTURES OUTPUT | joint-abc-profile|fixed-b-oracle MANIFEST MAP CHECKPOINT OUTPUT | joint-abc-coverage|joint-abc-certification MODEL MAP MANIFEST OUTPUT | joint-abc-certification-audit OUTPUT | matched-sweep|matched-joint-ac|unique-stencil-grid|atom-centered-voxel-union|atom-block-grid-composite MANIFEST MAP STATE_INDEX OUTPUT | refine CAPTURES OUTPUT BUDGET");
         const fs::path output{ argv[3] };
         fs::create_directories(output);
         std::size_t count{}, offsets{};
