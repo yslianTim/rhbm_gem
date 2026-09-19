@@ -54,9 +54,6 @@ Thumbs.db
 *.zip
 *.log
 
-# Versioned exact-component experiment evidence
-!docs/developer/figures/joint-abc-components/*.tar.gz
-
 # Local datasets and generated outputs
 data/local/
 output/
@@ -67,3 +64,6 @@ scripts/user/local/
 # Local database files stored at repository root (legacy)
 /*.sqlite
 /*.db
+
+# Immutable joint runtime regression fixtures
+!tests/fixtures/joint_component/*.tar.gz

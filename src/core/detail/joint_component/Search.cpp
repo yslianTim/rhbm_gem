@@ -16,11 +16,9 @@ struct Profile
     std::vector<joint_component::Trial> trace;
     int evaluations{},derivatives{};
     std::string failure;
-    SearchVariant variant;
     int references{};
     double reference_seconds{};
-    bool guarded() const {return variant==SearchVariant::Guarded || variant==SearchVariant::GuardedLog;}
-    bool retry() const {return guarded() && evaluations<context.profile_budget && failure!="unrepresentable-step";}
+    bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
         double radius,double damping,double actual,double predicted,double ratio,bool proposed)
     {
@@ -35,7 +33,7 @@ struct Profile
             auto evidence=CheckTrust(domain,y,cached,context); ++references;
             reference_seconds+=Seconds(start); trusted=evidence.passed; row.trust=std::move(evidence);
         }
-        if(guarded() && !trusted) failure="untrusted-trial";
+        if(!trusted) failure="untrusted-trial";
         return trusted;
     }
     int values() const {return static_cast<int>(domain.rows);}
@@ -43,7 +41,7 @@ struct Profile
     {
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
-        if(guarded()) failure.clear();
+        failure.clear();
         const auto start=std::chrono::steady_clock::now();
         cached=EvaluateProfile(domain,y,eta,false,&context); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start); trace.push_back(std::move(row));
@@ -68,20 +66,19 @@ struct Profile
 };
 }
 SearchResult SearchProfile(const Domain & domain,const Vector & y,const Vector & initial_b,
-    const EvaluationContext & context,SearchVariant variant)
+    const EvaluationContext & context)
 {
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{},variant};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
         lm.parameters.gtol=1e-12; lm.parameters.maxfev=context.profile_budget;
-        if(variant==SearchVariant::GuardedLog) {lm.useExternalScaling=true; lm.diag=Vector::Ones(eta.size());}
         auto status=lm.minimizeInit(eta);
-        if(variant!=SearchVariant::Original && profile.cached.valid)
+        if(profile.cached.valid)
         {
             const bool trusted=profile.Trial(eta,Vector::Zero(eta.size()),Vector::Ones(eta.size()),0,0,0,0,0,true);
-            if(profile.guarded() && !trusted) return Eigen::LevenbergMarquardtSpace::UserAsked;
+            if(!trusted) return Eigen::LevenbergMarquardtSpace::UserAsked;
         }
         if(profile.cached.valid) profile.Accept(eta,0);
         while(status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
@@ -92,9 +89,7 @@ SearchResult SearchProfile(const Domain & domain,const Vector & y,const Vector &
         }
         return status;
     };
-    Eigen::LevenbergMarquardtSpace::Status status;
-    if(variant==SearchVariant::Original) {Eigen::LevenbergMarquardt<Profile> lm(profile); status=search(lm);}
-    else {InstrumentedLM<Profile> lm(profile); status=search(lm);}
+    InstrumentedLM<Profile> lm(profile); const auto status=search(lm);
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);

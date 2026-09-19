@@ -82,6 +82,22 @@ Run repository guards and install consumer smoke (lint lane):
 cmake --build build --target lint_repo
 ```
 
+## Joint component regression
+
+The `rhbm_tests_joint_component` group owns the sources under
+`tests/core/joint_component/`. They run once in the ordinary test executable.
+`joint_component_regression` verifies eight frozen cases, and
+`joint_component_physical_smoke` checks double/float32 generation and CIF/MRC.
+All required inputs live in `tests/fixtures/joint_component/`; no historical
+archive or external model is loaded.
+
+`RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON` adds the 168-atom float32 case and
+additional catalog cases. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON` builds the
+separate precision/certification targets and tests. Both default to OFF.
+Use `joint:extended` and `joint:offline` labels to select those lanes. High
+precision code must not be linked into `rhbm_tests` or `joint_test_support`.
+See the [runtime guide](../docs/developer/joint-component-runtime.md).
+
 ## Adding New Tests
 
 ### Second-stage fitting

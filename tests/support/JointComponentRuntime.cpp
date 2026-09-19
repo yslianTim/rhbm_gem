@@ -1,6 +1,5 @@
 #include "support/JointComponentRuntime.hpp"
 #include "support/JointRuntimeJson.hpp"
-#include "support/JointABCPrecision.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
@@ -11,7 +10,6 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <fstream>
 #include <iomanip>
-#include <chrono>
 
 namespace second_stage_test::matched::joint_abc {
 namespace {
@@ -81,55 +79,52 @@ void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::pat
     const std::string dataset=physical ? "physical-two" : "fresh-map";
     Snapshot(problem,map,model,root,dataset);
     auto context=data.context; context.snapshot_hash=sim::FileSha256(root/"snapshot.json");
-    auto audit_context=context;
-    audit_context.audit=RegisteredAudit(static_cast<Eigen::Index>(problem.Input().atom_ids.size()),"baseline","first-stage");
-    audit_context.audit.cache_precision=true;
-    if(physical) {audit_context.audit.precision=true; audit_context.audit.expanded_if_unverified=true; audit_context.audit.block_precision=true;}
     Write(root/"census.json",Census(data.domain,data.partition,context));
     if(physical && data.partition.components.size()!=2) throw std::runtime_error("Physical fixture did not produce two structural components.");
-    j::array complete;
-    for(const std::string start:{"first-stage","narrower","wider","mixed"})
+    const auto & initial=first.initialization.b;
+    const auto & fit=first;
+    const std::string name="first-stage-"+precision; const auto target=root/"cases"/name;
+    const Vector b=Eigen::Map<const Vector>(initial.data(),static_cast<Eigen::Index>(initial.size()));
+    auto mono=Fit(data.domain,data.y,b,&context); mono["case"]=name; mono["dataset"]=dataset;
+    j::array components;
+    for(std::size_t k=0;k<fit.components.size();++k)
     {
-        auto initial=first.initialization.b;
-        for(std::size_t a=0;a<initial.size();++a)
-        {
-            const int serial=std::stoi(problem.Input().atom_ids[a]);
-            if(start=="narrower" || (start=="mixed" && serial%2)) initial[a]*=.8;
-            else if(start=="wider" || start=="mixed") initial[a]*=1.2;
-        }
-        const auto fit=start=="first-stage" ? first : core::FitJointComponents(problem,initial);
-        const std::string name=start+"-"+precision; const auto target=root/"cases"/name;
-        const Vector b=Eigen::Map<const Vector>(initial.data(),static_cast<Eigen::Index>(initial.size()));
-        auto mono=Fit(data.domain,data.y,b,nullptr,"guarded",&context); mono["case"]=name; mono["dataset"]=dataset;
-        j::array components;
-        for(std::size_t k=0;k<fit.components.size();++k)
-        {
-            auto child=ComponentFit(fit.components[k],name,dataset,context.scale);
-            Write(target/"components"/(std::to_string(k)+".json"),child); components.push_back(child);
-            WriteLocalAudit(data.partition.components[k],data.y,child,audit_context,target/"local-components"/std::to_string(k));
-        }
-        auto assembled=Assemble(data.domain,data.y,data.partition,context,components); assembled["case"]=name; assembled["dataset"]=dataset;
-        if(fit.prediction.has_value()!=assembled.at("prediction_available").as_bool()) throw std::runtime_error("Runtime availability differs from reference assembly.");
-        double prediction_difference{};
-        if(fit.prediction)
-        {
-            const auto state=runtime::EvaluateState(data.domain,data.y,Parse(assembled.at("assembled_state").at("eta")),Parse(assembled.at("assembled_state").at("beta")),context);
-            const Vector runtime_prediction=Eigen::Map<const Vector>(fit.prediction->data(),static_cast<Eigen::Index>(fit.prediction->size()));
-            prediction_difference=(runtime_prediction-(state.x*state.beta)).lpNorm<Eigen::Infinity>();
-            if(prediction_difference!=0 || !fit.objective || *fit.objective!=state.certificate.objective)
-                throw std::runtime_error("Runtime result changed during audit assembly.");
-        }
-        Write(target/"monolithic-fit.json",mono); Write(target/"assembled-fit.json",assembled);
-        certification::ResetPrecisionCache(); WriteEndpointAudit(data.domain,data.y,mono,audit_context,target/"monolithic");
-        certification::ResetPrecisionCache(); WriteEndpointAudit(data.domain,data.y,assembled,audit_context,target/"assembled");
-        Write(target/"runtime.json",j::object{{"initial_b",Values(initial)},{"search_completed",fit.search_completed},
-            {"prediction_available",fit.prediction.has_value()},{"objective",fit.objective ? runtime_json::Number(*fit.objective) : j::value(nullptr)},
-            {"regular_certificate","not-run"},{"prediction_reassembly_difference",prediction_difference},
-            {"initialization_seconds",fit.costs.initialization_seconds},{"search_seconds",fit.costs.search_seconds},
-            {"search_reference_seconds",fit.costs.search_reference_seconds},{"assessment_seconds",fit.costs.assessment_seconds},{"assembly_seconds",fit.costs.assembly_seconds}});
-        complete.emplace_back(name);
+        auto child=ComponentFit(fit.components[k],name,dataset,context.scale);
+        Write(target/"components"/(std::to_string(k)+".json"),child); components.push_back(child);
     }
-    Write(root/"completion.json",j::object{{"complete",true},{"cases",complete},{"requires_regular_parity",physical},
+    auto assembled=Assemble(data.domain,data.y,data.partition,context,components); assembled["case"]=name; assembled["dataset"]=dataset;
+    if(fit.prediction.has_value()!=assembled.at("prediction_available").as_bool()) throw std::runtime_error("Runtime availability differs from reference assembly.");
+    double prediction_difference{};
+    if(fit.prediction)
+    {
+        const auto state=runtime::EvaluateState(data.domain,data.y,Parse(assembled.at("assembled_state").at("eta")),Parse(assembled.at("assembled_state").at("beta")),context);
+        const Vector runtime_prediction=Eigen::Map<const Vector>(fit.prediction->data(),static_cast<Eigen::Index>(fit.prediction->size()));
+        prediction_difference=(runtime_prediction-(state.x*state.beta)).lpNorm<Eigen::Infinity>();
+        if(prediction_difference!=0 || !fit.objective || *fit.objective!=state.certificate.objective/(context.scale*context.scale))
+            throw std::runtime_error("Runtime result changed during audit assembly.");
+    }
+    bool monolithic_parity=false;
+    if(fit.prediction && mono.at("primary").at("valid").as_bool())
+    {
+        const auto & endpoint=mono.at("primary");
+        const auto beta=Parse(endpoint.at("beta")),eta=Parse(endpoint.at("eta"));
+        const auto state=runtime::EvaluateState(data.domain,data.y,eta,beta,context);
+        const auto actual_beta=Parse(assembled.at("assembled_state").at("beta"));
+        const auto actual_eta=Parse(assembled.at("assembled_state").at("eta"));
+        const Vector actual_prediction=Eigen::Map<const Vector>(fit.prediction->data(),data.y.size());
+        monolithic_parity=state.valid &&
+            ((beta-actual_beta).array().abs()/(1+beta.array().abs().max(actual_beta.array().abs()))).maxCoeff()<=1e-8 &&
+            (eta-actual_eta).lpNorm<Eigen::Infinity>()<=1e-8 &&
+            (state.x*beta-actual_prediction).lpNorm<Eigen::Infinity>()/context.scale<=1e-8 &&
+            std::abs(state.certificate.objective/(context.scale*context.scale)-*fit.objective)<=1e-12;
+    }
+    Write(target/"monolithic-fit.json",mono); Write(target/"assembled-fit.json",assembled);
+    Write(target/"runtime.json",j::object{{"initial_b",Values(initial)},{"search_completed",fit.search_completed},
+        {"prediction_available",fit.prediction.has_value()},{"objective",fit.objective ? runtime_json::Number(*fit.objective) : j::value(nullptr)},
+        {"regular_certificate","not-run"},{"monolithic_parity_passed",monolithic_parity},{"prediction_reassembly_difference",prediction_difference},
+        {"initialization_seconds",fit.costs.initialization_seconds},{"search_seconds",fit.costs.search_seconds},
+        {"search_reference_seconds",fit.costs.search_reference_seconds},{"assessment_seconds",fit.costs.assessment_seconds},{"assembly_seconds",fit.costs.assembly_seconds}});
+    Write(root/"completion.json",j::object{{"complete",true},{"cases",j::array{name}},{"requires_regular_parity",physical},
         {"historical_files_required",false},{"geometry_source","input-MapObject"}});
 }
 }

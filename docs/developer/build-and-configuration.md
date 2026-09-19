@@ -113,6 +113,15 @@ cmake --build build --target lint_repo
 `lint_repo` also exercises the command catalog indirectly through compile-time typed visitors and
 contract tests.
 
+## Joint component regression options
+
+`RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` enables self-contained 168-atom float32
+and additional frozen cases. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` builds the
+separate derivative, multiprecision, boundary and local-certification tools.
+Both default to OFF and require `BUILD_TESTING=ON`. They do not change the
+installed estimator or require the external fold-168 model/map settings.
+See the [runtime validation commands](joint-component-runtime.md).
+
 ## Static Quality Checks (Targeted)
 
 Clang-tidy check for painter/parser directories:

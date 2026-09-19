@@ -1,5 +1,10 @@
 # Exact-component equivalence contract, version 1
 
+Retained mathematical and historical scope contract. The multi-version/matrix
+procedures below describe the frozen baseline, not the current daily workflow.
+Use the [runtime guide](joint-component-runtime.md) for current commands and the
+[evidence index](joint-component-evidence.md) for archived evidence.
+
 This testing-only experiment extends the frozen `d9f22026` certification results.
 It has three sequential gates: unchanged monolithic evaluation/certification and
 structural partitioning; same-state numerical equivalence; independent Guarded

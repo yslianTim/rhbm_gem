@@ -91,7 +91,7 @@ inline j::object Assessment(const r::Assessment & a)
         {"identified",a.identified},{"derivative",a.derivative_verified}};
     return out;
 }
-inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,const std::string & variant,Eigen::Index rows)
+inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)
 {
     j::array trials; for(const auto & t:s.trials) trials.push_back(Trial(t));
     j::object out{{"schema_version",1},{"experiment","joint-abc-profile"},{"alpha",0},{"execution_complete",true},{"joint_qualified",false},
@@ -100,12 +100,9 @@ inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},
         {"linear_solver","sparse-qr-householder-1024"},{"reference_solver","independent-tsqr-8192-svd"},
         {"residual_scale",c.scale},{"variance_semantics","descriptive RSS/N; zero permitted"}};
-    if(!variant.empty())
-    {
-        out["variant"]=variant; out["search_reference_evaluations"]=s.references;
-        out["initial_accepted"]=s.initial_accepted; out["search_reference_seconds"]=s.reference_seconds;
-        out["search_stopped_without_convergence"]=s.stopped;
-    }
+    out["variant"]="guarded"; out["search_reference_evaluations"]=s.references;
+    out["initial_accepted"]=s.initial_accepted; out["search_reference_seconds"]=s.reference_seconds;
+    out["search_stopped_without_convergence"]=s.stopped;
     return out;
 }
 }

@@ -86,7 +86,7 @@ ComponentResult SolveComponent(const ComponentView & view,const Vector & y,const
 {
     const auto context=ChildContext(parent,view,true);
     const Vector local_y=SelectValues(y,view.rows),start=SelectValues(initial_b,view.atoms);
-    ComponentResult out; out.search=SearchProfile(view.domain,local_y,start,context,SearchVariant::Guarded);
+    ComponentResult out; out.search=SearchProfile(view.domain,local_y,start,context);
     const auto audit_start=std::chrono::steady_clock::now();
     out.assessment=AssessProfile(view.domain,local_y,out.search.eta,context);
     out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();

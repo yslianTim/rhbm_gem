@@ -1,10 +1,15 @@
 # Joint-ABC certification contract, version 2
 
+Retained mathematical and historical scope contract. The multi-version/matrix
+procedures below describe the frozen baseline, not the current daily workflow.
+Use the [runtime guide](joint-component-runtime.md) for current commands and the
+[evidence index](joint-component-evidence.md) for archived evidence.
+
 This testing-only experiment extends the frozen `ecf55f45` coverage results. It does not replace production fitting, change the statistical objective, or reinterpret the earlier uniform-width fixture. The original coverage reports remain immutable.
 
 ## Inputs and objective
 
-The nine datasets, 72 precision/start combinations, first-stage initialization, four main-data fixed-B controls and truth definitions are inherited from `tests/benchmarks/joint_abc_coverage.json`. Each dataset runs initialization once, using its float32 map and the original deterministic sampling, local alpha training and fixed-offset first-stage fitting. All versions use the resulting MDPDE B vector. A/C are profiled again. Truth is used only for simulation scoring and separately labelled generating-model diagnostics.
+The nine datasets, 72 precision/start combinations, first-stage initialization, four main-data fixed-B controls and truth definitions are inherited from the [fixture catalog](../../tests/fixtures/joint_component/catalog.json) (the original v1 hash/width contract is preserved in `tests/fixtures/joint_component/simulation-contract.json`). Each dataset runs initialization once, using its float32 map and the original deterministic sampling, local alpha training and fixed-offset first-stage fitting. All versions use the resulting MDPDE B vector. A/C are profiled again. Truth is used only for simulation scoring and separately labelled generating-model diagnostics.
 
 The objective is equal-weight least squares with alpha zero, nonnegative A, positive B and signed C. No regularization, additional noise, width bounds or step clipping is introduced. Search retains 200 profile trial evaluations and 100 accepted updates, factor 0.1, ftol 1e-14, xtol 1e-12 and gtol 1e-12. Reference solves and endpoint audits are charged separately.
 

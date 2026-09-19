@@ -124,7 +124,6 @@ struct Trial
     std::optional<LmTrial> lm;
     std::optional<TrustEvidence> trust;
 };
-enum class SearchVariant {Original,Legacy,Guarded,GuardedLog};
 struct SearchResult
 {
     Endpoint initial;
@@ -135,7 +134,7 @@ struct SearchResult
     std::string stop_reason;
     double seconds{},reference_seconds{};
 };
-SearchResult SearchProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,SearchVariant);
+SearchResult SearchProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &);
 struct DerivativeCheck
 {
     std::size_t direction{};

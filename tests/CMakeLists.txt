@@ -176,17 +176,14 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
     utils/hrl/MDPDEExperiment_test.cpp
-    utils/hrl/ObservationMatchedExperiment_test.cpp
-    utils/hrl/MatchedJointAC_test.cpp
-    utils/hrl/UniqueStencilGrid_test.cpp
-    utils/hrl/AtomCenteredVoxelUnion_test.cpp
-    utils/hrl/FixedBOracle_test.cpp
-    utils/hrl/JointABCProfile_test.cpp
-    utils/hrl/JointABCCoverage_test.cpp
-    utils/hrl/JointABCCertification_test.cpp
-    utils/hrl/JointABCComponents_test.cpp
-    utils/hrl/JointComponentRuntime_test.cpp
-    utils/hrl/AtomBlockGridComposite_test.cpp
+)
+
+set(JOINT_COMPONENT_TEST_SOURCES
+    core/joint_component/Numerics_test.cpp
+    core/joint_component/Search_test.cpp
+    core/joint_component/Components_test.cpp
+    core/joint_component/Observation_test.cpp
+    core/joint_component/Runtime_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -205,15 +202,13 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
     ${UTILS_MATH_TEST_SOURCES}
     ${UTILS_DOMAIN_TEST_SOURCES}
     ${UTILS_HRL_TEST_SOURCES}
+    ${JOINT_COMPONENT_TEST_SOURCES}
     ${INTEGRATION_COMMAND_TEST_SOURCES}
 )
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
-target_sources(rhbm_tests PRIVATE support/JointABCCoverage.cpp support/JointABCCertification.cpp support/JointABCPrecision.cpp support/JointABCContext.cpp)
-target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp support/ObservationMatchedPrediction.cpp
-    support/EstimatedNeighborSweep.cpp support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp support/FixedBOracle.cpp support/JointABCProfile.cpp)
+target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
 target_compile_definitions(rhbm_tests PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-target_sources(rhbm_tests PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp support/JointABCLocalCertification.cpp support/JointComponentRuntime.cpp)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
 )
@@ -233,14 +228,41 @@ rhbm_gem_apply_observation_definitions(rhbm_tests)
 
 add_dependencies(tests_all rhbm_tests)
 
-add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/ForwardModelExperiment.cpp
-    support/ObservationMatchedPrediction.cpp support/ObservationMatchedExperiment.cpp support/EstimatedNeighborSweep.cpp
-    support/MatchedLinearMDPDE.cpp support/MatchedJointAC.cpp support/UniqueStencilGrid.cpp support/AtomCenteredVoxelUnion.cpp support/AtomBlockGridComposite.cpp support/FixedBOracle.cpp support/JointABCProfile.cpp)
+# Test-only helpers contain no historical runner or multiprecision orchestration.
+add_library(joint_test_support STATIC
+    support/JointTestGeometry.cpp support/JointTestNumerics.cpp
+    support/JointTestContext.cpp support/JointComponentChecks.cpp
+    support/JointLocalEvidence.cpp support/JointFixtureSupport.cpp)
+target_link_libraries(joint_test_support PUBLIC rhbm_gem CompilerFlags)
+target_include_directories(joint_test_support PUBLIC "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
+target_link_libraries(rhbm_tests PRIVATE joint_test_support)
+
+add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/ForwardModelExperiment.cpp)
 target_link_libraries(mdpde_experiment PRIVATE rhbm_gem CompilerFlags)
-target_sources(mdpde_experiment PRIVATE support/JointABCComponents.cpp support/JointABCComponentExperiment.cpp support/JointABCLocalCertification.cpp support/JointComponentRuntime.cpp)
-target_sources(mdpde_experiment PRIVATE support/JointABCCoverage.cpp support/JointABCCertification.cpp support/JointABCPrecision.cpp support/JointABCContext.cpp)
 target_include_directories(mdpde_experiment PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
+
+add_executable(joint_component_runtime experiments/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
+target_link_libraries(joint_component_runtime PRIVATE joint_test_support)
+add_dependencies(tests_all joint_component_runtime)
+
+if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
+    add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
+        support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp)
+    target_link_libraries(joint_offline_support PUBLIC joint_test_support)
+    add_executable(joint_component_audit experiments/joint_component_audit.cpp)
+    target_link_libraries(joint_component_audit PRIVATE joint_offline_support)
+    add_executable(joint_offline_tests core/joint_component/Precision_test.cpp
+        core/joint_component/OfflineComponents_test.cpp)
+    target_link_libraries(joint_offline_tests PRIVATE joint_offline_support ${GTEST_MAIN_TARGET})
+    add_test(NAME joint_component_offline_tests COMMAND joint_offline_tests)
+    set_tests_properties(joint_component_offline_tests PROPERTIES LABELS "domain:core;intent:algorithm;joint:offline")
+    add_dependencies(tests_all joint_component_audit joint_offline_tests)
+endif()
+
+add_rhbm_gtest_group(rhbm_tests_joint_component
+    DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_TEST_SOURCES})
+set_property(TEST rhbm_tests_joint_component APPEND PROPERTY LABELS "joint:runtime")
 
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
@@ -319,46 +341,30 @@ if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
 endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
-    add_test(NAME joint_abc_components_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_abc_components_test.py")
-    set_tests_properties(joint_abc_components_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME joint_abc_certification_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_abc_certification_test.py")
-    set_tests_properties(joint_abc_certification_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME joint_abc_coverage_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_abc_coverage_test.py")
-    set_tests_properties(joint_abc_coverage_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME joint_abc_profile_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_abc_profile_test.py")
-    set_tests_properties(joint_abc_profile_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME fixed_b_oracle_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/fixed_b_oracle_test.py")
-    set_tests_properties(fixed_b_oracle_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME atom_centered_voxel_union_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/atom_centered_voxel_union_test.py")
-    set_tests_properties(atom_centered_voxel_union_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME unique_stencil_grid_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/unique_stencil_grid_test.py")
-    set_tests_properties(unique_stencil_grid_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME matched_joint_ac_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/matched_joint_ac_test.py")
-    set_tests_properties(matched_joint_ac_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME estimated_neighbor_sweep_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/estimated_neighbor_sweep_test.py")
-    set_tests_properties(estimated_neighbor_sweep_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
-    add_test(NAME observation_matching_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/observation_matching_test.py")
-    set_tests_properties(observation_matching_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
+    add_test(NAME joint_component_evidence_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
+    add_test(NAME joint_component_runtime_runner_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
+    add_test(NAME joint_component_regression
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
+            regression --executable $<TARGET_FILE:joint_component_runtime> --work-dir "${PROJECT_BINARY_DIR}/joint-regression")
+    add_test(NAME joint_component_physical_smoke
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
+            physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
+    set_tests_properties(joint_component_evidence_test joint_component_runtime_runner_test joint_component_regression joint_component_physical_smoke
+        PROPERTIES LABELS "domain:integration;intent:algorithm;joint:runtime")
+    if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
+        add_test(NAME joint_component_offline_regression
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
+                --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-offline")
+        set_tests_properties(joint_component_offline_regression PROPERTIES LABELS "domain:integration;intent:algorithm;joint:offline")
+    endif()
+    if(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS)
+        add_test(NAME joint_component_extended_regression
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
+                regression --extended --executable $<TARGET_FILE:joint_component_runtime> --work-dir "${PROJECT_BINARY_DIR}/joint-extended")
+        set_tests_properties(joint_component_extended_regression PROPERTIES LABELS "domain:integration;intent:algorithm;joint:extended")
+    endif()
     add_test(NAME endpoint_refinement_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/endpoint_refinement_test.py")
     set_tests_properties(endpoint_refinement_runner_test
@@ -372,10 +378,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         second_stage_audit_parser_test
         PROPERTIES LABELS "domain:integration;intent:algorithm"
     )
-    add_test(NAME atom_block_grid_composite_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/atom_block_grid_composite_test.py")
-    set_tests_properties(atom_block_grid_composite_runner_test
-        PROPERTIES LABELS "domain:integration;intent:algorithm")
 
 
     add_test(

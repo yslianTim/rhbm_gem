@@ -35,8 +35,8 @@ std::vector<const AtomObject *> Contributors(const ModelObject & model)
     if(atoms.empty()) throw std::invalid_argument("Joint fitting requires at least one non-hydrogen atom.");
     return atoms;
 }
-JointState State(const n::Endpoint & e)
-{return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective};}
+JointState State(const n::Endpoint & e,double scale)
+{return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale)};}
 std::vector<JointCheck> Evidence(const n::Assessment & a,JointEvidenceScope scope)
 {
     using Status=JointCheckStatus;
@@ -156,7 +156,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         component.accepted_updates=result.search.accepted;
         if(result.trusted_state)
         {
-            component.state=State(*result.trusted_state);
+            component.state=State(*result.trusted_state,data.context.scale);
             auto context=n::ChildContext(data.context,view,true); context.audit.directions.resize(0,0);
             const auto assessment=n::AssessProfile(view.domain,n::SelectValues(data.y,view.rows),result.trusted_state->eta,context,&result.trusted_state->beta);
             component.evidence=Evidence(assessment,JointEvidenceScope::ComponentLocal);
@@ -176,8 +176,8 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     if(assembly.available)
     {
         const auto state=n::EvaluateState(data.domain,data.y,assembly.eta,assembly.beta,data.context);
-        out.assembled_state=State(state);
-        if(state.valid) {out.prediction=Values(assembly.prediction); out.objective=assembly.objective;}
+        out.assembled_state=State(state,data.context.scale);
+        if(state.valid) {out.prediction=Values(assembly.prediction); out.objective=assembly.objective/(data.context.scale*data.context.scale);}
         out.evidence.push_back({"assembled-profile",assembly.profile_agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,
             JointEvidenceScope::AssembledGlobal,assembly.profile_difference,1e-10,{}});
     }

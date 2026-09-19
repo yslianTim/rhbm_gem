@@ -224,7 +224,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     if (iter == 1) delta = (std::min)(delta, pnorm);
 
     /* evaluate the function at x + p and calculate its norm. */
-    if ((wa2.array() == x.array()).all() && functor.guarded()) {
+    if ((wa2.array() == x.array()).all()) {
       functor.failure = "unrepresentable-step";
       return LevenbergMarquardtSpace::UserAsked;
     }
@@ -256,7 +256,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
 
     const bool trusted = functor.Trial(x, wa1, diag, delta, par, actred, prered, ratio,
                                       ratio >= Scalar(1e-4));
-    if (!trusted && functor.guarded()) {
+    if (!trusted) {
       if (!functor.retry()) return LevenbergMarquardtSpace::UserAsked;
       rejected_invalid = true;
       delta *= Scalar(.25); par *= Scalar(4.); ratio = 0.; continue;
@@ -288,7 +288,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     }
 
     /* tests for convergence. */
-    if (rejected_invalid && functor.guarded() &&
+    if (rejected_invalid &&
         ((abs(actred) <= parameters.ftol && prered <= parameters.ftol) ||
          delta <= parameters.xtol * xnorm || nfev >= parameters.maxfev)) {
       functor.failure = "no-trustworthy-descent-step";

@@ -15,8 +15,9 @@ def resolve(path, paths):
     fold.require(value["source"]["model_sha256"] == hashes["model"] and value["output"]["map_sha256"] == hashes["map"], "Simulation input hash mismatch.")
     version = value.get("schema_version")
     if version == 1:
-        for fixture_path in ("joint_abc_coverage.json", "fold_168_simulation_baseline.json"):
-            fixture = fold.read_json(ROOT/"tests/benchmarks"/fixture_path)
+        for fixture_path in ("tests/fixtures/joint_component/simulation-contract.json",
+                             "tests/benchmarks/fold_168_simulation_baseline.json"):
+            fixture = fold.read_json(ROOT/fixture_path)
             if hashes == fixture["input_hashes"]:
                 fold.load_simulation_manifest(path, hashes)
                 widths = fixture.get("width_contract", {}).get("b", [value["settings"]["blurring_width"]]*len(value["atoms"]))

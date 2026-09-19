@@ -66,6 +66,7 @@ struct JointInitialization
 struct JointState
 {
     std::vector<double> ac,b,log_b,width_gradient;
+    // 0.5 * squared residual norm / parent ObservationScale() squared.
     double objective{};
 };
 struct JointComponentResult
@@ -91,6 +92,7 @@ struct JointFitResult
     std::vector<JointComponentResult> components;
     std::optional<JointState> assembled_state;
     std::optional<std::vector<double>> prediction;
+    // Includes constant rows; unavailable when any component state is missing.
     std::optional<double> objective;
     std::vector<bool> available_row_mask;
     std::vector<JointCheck> evidence;

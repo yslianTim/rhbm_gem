@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "source_commit": "6f30510c06def630226a3dab25e9bcc579d72687",
+  "source_archive": "docs/developer/figures/joint-abc-components/search-records-a.tar.gz",
+  "source_archive_sha256": "08fc5798f9cd5683653621beb88bf20ff44d8d1d6a9e763057d86d993b310cd1",
+  "starts": [
+    "first-stage",
+    "narrower",
+    "wider",
+    "mixed"
+  ],
+  "precisions": [
+    "double",
+    "float32"
+  ],
+  "datasets": {
+    "heterogeneous-168": {
+      "archive": "heterogeneous-168.tar.gz",
+      "sha256": "4c17ae3bc5f076f0444d3bfaef0bf7c1af244089016c804d49354b135731bfd2",
+      "files": {
+        "dataset.json": "731a0c873c105a5600469b4eb4cd40552577baf4d83f0f652678267bccd9f2ad",
+        "snapshot.json": "33bcf36b88b0b047188e773ca1de80cd87a8252762b8aa6b0eed1a9893b79cc1",
+        "voxels.csv": "89cc1df3c2f06728fedaf253f56fb64c0a56e980f620ec8fa5542f4e6f892fa7",
+        "contributors.csv": "a7986f2a8d967072062bbc04990c75d93d5dda7d683db1ff5296ebad0e946fb8",
+        "cases.json": "a6230c5af038ca62c07380e85560442dd38640da7c8a88800c5e07ca8b319945"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/heterogeneous-168/dataset.json",
+          "sha256": "731a0c873c105a5600469b4eb4cd40552577baf4d83f0f652678267bccd9f2ad"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/heterogeneous-168/snapshot.json",
+          "sha256": "33bcf36b88b0b047188e773ca1de80cd87a8252762b8aa6b0eed1a9893b79cc1"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/heterogeneous-168/voxels.csv",
+          "sha256": "89cc1df3c2f06728fedaf253f56fb64c0a56e980f620ec8fa5542f4e6f892fa7"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/heterogeneous-168/contributors.csv",
+          "sha256": "a7986f2a8d967072062bbc04990c75d93d5dda7d683db1ff5296ebad0e946fb8"
+        }
+      },
+      "default_cases": [],
+      "extended_cases": [
+        "first-stage-float32"
+      ]
+    },
+    "baseline": {
+      "archive": "baseline.tar.gz",
+      "sha256": "936a86ba9fc76b42756881bc45f35be6660302e5851166ba5455ff4091f15c01",
+      "files": {
+        "dataset.json": "b7dc9823b7126a77f4c11ae14dfbd3dbb01348d0b34d76fb03aa48a9cbfbb455",
+        "snapshot.json": "ac136c62a862f1e22986c423443a72f66a11be4cd3ab893a63568bc0f22804d4",
+        "voxels.csv": "1258b9a9ba922828699474227bdd7e8036e74f5b2283855cc27379b4841f5dbb",
+        "contributors.csv": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060",
+        "cases.json": "22ca401e074c42e6d3f3c2362c2b15c4cc7881e6428c7152dcb4b09bd2a5f140"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/baseline/dataset.json",
+          "sha256": "b7dc9823b7126a77f4c11ae14dfbd3dbb01348d0b34d76fb03aa48a9cbfbb455"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/baseline/snapshot.json",
+          "sha256": "ac136c62a862f1e22986c423443a72f66a11be4cd3ab893a63568bc0f22804d4"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/baseline/voxels.csv",
+          "sha256": "1258b9a9ba922828699474227bdd7e8036e74f5b2283855cc27379b4841f5dbb"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/baseline/contributors.csv",
+          "sha256": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060"
+        }
+      },
+      "default_cases": [
+        "first-stage-double",
+        "first-stage-float32"
+      ],
+      "extended_cases": []
+    },
+    "weak-1e-2": {
+      "archive": "weak-1e-2.tar.gz",
+      "sha256": "910badcf108802a21d35fa55485d35f8cd83544ddff3812f9deb3808133cb5d0",
+      "files": {
+        "dataset.json": "7763528389437d5eea743ba05d559aaecbb597030f363ebec6900615f3d43b7e",
+        "snapshot.json": "c46ef87c71a964fd8aa8f6f0460e085f94adbf5d5f0ade63f0dd05d265c5afef",
+        "voxels.csv": "29e27303ddd8beb700a203c8439de1e2942568fa7f29e914eb413859102eb38e",
+        "contributors.csv": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060",
+        "cases.json": "cd2bda0f7c9e84bab27cf7c995a958ca2ff830fb96b75f7b5640951c1118088e"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/weak-1e-2/dataset.json",
+          "sha256": "7763528389437d5eea743ba05d559aaecbb597030f363ebec6900615f3d43b7e"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/weak-1e-2/snapshot.json",
+          "sha256": "c46ef87c71a964fd8aa8f6f0460e085f94adbf5d5f0ade63f0dd05d265c5afef"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/weak-1e-2/voxels.csv",
+          "sha256": "29e27303ddd8beb700a203c8439de1e2942568fa7f29e914eb413859102eb38e"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/weak-1e-2/contributors.csv",
+          "sha256": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060"
+        }
+      },
+      "default_cases": [],
+      "extended_cases": [
+        "first-stage-double"
+      ]
+    },
+    "weak-1e-4": {
+      "archive": "weak-1e-4.tar.gz",
+      "sha256": "e4ca6d43baad004991c4a977c175e0d4fccc46d6827d0cdaa0f447ee8638e1e5",
+      "files": {
+        "dataset.json": "e6ca7e668179731d842d6fd04c7ac5e8e90e4130eaf019e93e49dc043d0f2eb8",
+        "snapshot.json": "cb04016a1faaf32223b6aa0fb15624e891443cd9c97077795311000b2b4bae9d",
+        "voxels.csv": "c63a5791ba8cede95e74c8e2b83a84aaed9583a616740879fdf245b7c255640f",
+        "contributors.csv": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060",
+        "cases.json": "0f1b5091e6cc3c5e3b9f326f6b6164004fc9b72186e9930ee387536424201e7a"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/weak-1e-4/dataset.json",
+          "sha256": "e6ca7e668179731d842d6fd04c7ac5e8e90e4130eaf019e93e49dc043d0f2eb8"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/weak-1e-4/snapshot.json",
+          "sha256": "cb04016a1faaf32223b6aa0fb15624e891443cd9c97077795311000b2b4bae9d"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/weak-1e-4/voxels.csv",
+          "sha256": "c63a5791ba8cede95e74c8e2b83a84aaed9583a616740879fdf245b7c255640f"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/weak-1e-4/contributors.csv",
+          "sha256": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060"
+        }
+      },
+      "default_cases": [
+        "first-stage-double"
+      ],
+      "extended_cases": []
+    },
+    "active-a": {
+      "archive": "active-a.tar.gz",
+      "sha256": "75315b5e0c386f3d40ce99bb6f9305682368251c159a8ddfaf10e61db8228c65",
+      "files": {
+        "dataset.json": "57afbab799985181fe480d500fb181dd7ca7825a2bb48a1ae882ad4bcce3d487",
+        "snapshot.json": "d64fe5981dc140567923324cd232e75d85fa4f6cbe22f5f9e7027de6ee769a93",
+        "voxels.csv": "e4d431e14d32d3da1cfb7fdb9844f435b8fdb1c0368286ec1acb5a98333baf8f",
+        "contributors.csv": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060",
+        "cases.json": "4fa3812f4b20c65974cd716c523daac12d6620610de908b9bcfe553ae1e7ea1e"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/active-a/dataset.json",
+          "sha256": "57afbab799985181fe480d500fb181dd7ca7825a2bb48a1ae882ad4bcce3d487"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/active-a/snapshot.json",
+          "sha256": "d64fe5981dc140567923324cd232e75d85fa4f6cbe22f5f9e7027de6ee769a93"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/active-a/voxels.csv",
+          "sha256": "e4d431e14d32d3da1cfb7fdb9844f435b8fdb1c0368286ec1acb5a98333baf8f"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/active-a/contributors.csv",
+          "sha256": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060"
+        }
+      },
+      "default_cases": [
+        "first-stage-double"
+      ],
+      "extended_cases": []
+    },
+    "zero-signal": {
+      "archive": "zero-signal.tar.gz",
+      "sha256": "8b14359b78106f27073a81cc23fee1909a41209b6c8261f2a5086cd1f7453e0b",
+      "files": {
+        "dataset.json": "577793531061d754668fb0e93873f1080f6fbb5532d732536c7146a1cd21c76e",
+        "snapshot.json": "d295629010fb941a36e1f7088c62580886bfa6f5fab14d30599b95f8353fb2ff",
+        "voxels.csv": "28cb822106e0cbb471940c398a20d60dec8c70dcbcb4ebbc21e26512002786a4",
+        "contributors.csv": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060",
+        "cases.json": "be8e004303cb103a9f8ea4fe83a5ac5f2be13f23dd71070ff17f3a689e98d6eb"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/zero-signal/dataset.json",
+          "sha256": "577793531061d754668fb0e93873f1080f6fbb5532d732536c7146a1cd21c76e"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/zero-signal/snapshot.json",
+          "sha256": "d295629010fb941a36e1f7088c62580886bfa6f5fab14d30599b95f8353fb2ff"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/zero-signal/voxels.csv",
+          "sha256": "28cb822106e0cbb471940c398a20d60dec8c70dcbcb4ebbc21e26512002786a4"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/zero-signal/contributors.csv",
+          "sha256": "87ea1b72e78689231d466b3eb9efefd47d7b7604b819e2633dfdbf62d45f7060"
+        }
+      },
+      "default_cases": [
+        "first-stage-double"
+      ],
+      "extended_cases": []
+    },
+    "near-0.10": {
+      "archive": "near-0.10.tar.gz",
+      "sha256": "1d782360f194fccfeef801cc75594aed2c9b6a8fb064ff6030534efd5ba8a2af",
+      "files": {
+        "dataset.json": "c130b7c5851adcd8afeb72bcc60d19380ee08b1520177a10a3bf37d6d3461af8",
+        "snapshot.json": "06fd548f765500229909580926c456b4fe6fe065034fe853d6d3b57a6e0174d2",
+        "voxels.csv": "6ccc9366ef2787c20e79ce0032db29e04a94a9b7d1e30593a051d2529d414a91",
+        "contributors.csv": "5f61ce5c7012665a5cd43f99a5d136a10bd16b142f843425225ed923df537b8d",
+        "cases.json": "8fee48d656d1207a9516b32d922b016bbd2ba949ed6904c6e7da77708d365ed1"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/near-0.10/dataset.json",
+          "sha256": "c130b7c5851adcd8afeb72bcc60d19380ee08b1520177a10a3bf37d6d3461af8"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/near-0.10/snapshot.json",
+          "sha256": "06fd548f765500229909580926c456b4fe6fe065034fe853d6d3b57a6e0174d2"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/near-0.10/voxels.csv",
+          "sha256": "6ccc9366ef2787c20e79ce0032db29e04a94a9b7d1e30593a051d2529d414a91"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/near-0.10/contributors.csv",
+          "sha256": "5f61ce5c7012665a5cd43f99a5d136a10bd16b142f843425225ed923df537b8d"
+        }
+      },
+      "default_cases": [],
+      "extended_cases": [
+        "first-stage-double"
+      ]
+    },
+    "near-0.02": {
+      "archive": "near-0.02.tar.gz",
+      "sha256": "7705ce83f0d95a30b37b0ba8cb42c7b7ecea58095d9ac850851a53aed10d329b",
+      "files": {
+        "dataset.json": "b88c33a4cc5ff070ef09adfa14b6e80bda0ddecb4f5ba5fd552fe5a746e5de1d",
+        "snapshot.json": "e8a15d7fd1729b6e07a901d52a2cb8fa9bb79bd647f175244dfee4bb0b9b0398",
+        "voxels.csv": "e42d9633bc6959795e0a9c24347ef57f6d1cba97cd6b483736c2d01a776e94db",
+        "contributors.csv": "6d1b693aeebee0675508a4a8004d4d0e64e7d7c0e57940cd045ba35aa5eeff5e",
+        "cases.json": "d31fb49c093a3c5217e13ea9db423b2c43854c22fa3f37e9a8b46244cf94783e"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/near-0.02/dataset.json",
+          "sha256": "b88c33a4cc5ff070ef09adfa14b6e80bda0ddecb4f5ba5fd552fe5a746e5de1d"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/near-0.02/snapshot.json",
+          "sha256": "e8a15d7fd1729b6e07a901d52a2cb8fa9bb79bd647f175244dfee4bb0b9b0398"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/near-0.02/voxels.csv",
+          "sha256": "e42d9633bc6959795e0a9c24347ef57f6d1cba97cd6b483736c2d01a776e94db"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/near-0.02/contributors.csv",
+          "sha256": "6d1b693aeebee0675508a4a8004d4d0e64e7d7c0e57940cd045ba35aa5eeff5e"
+        }
+      },
+      "default_cases": [
+        "narrower-double",
+        "narrower-float32"
+      ],
+      "extended_cases": []
+    },
+    "duplicate": {
+      "archive": "duplicate.tar.gz",
+      "sha256": "366843b0506bc567ed4d768912fd336f00f52fee3f39e6d6ed2fa1aa7bdd13ce",
+      "files": {
+        "dataset.json": "9e21f5f766ff72a73f8e1c7ab0b1ee5229e6748ed17d2bad76abde1a6562635d",
+        "snapshot.json": "8c00b76bd24a66ea47997c45eabd9ed6736db13a4c35164220ca65c1dbabb856",
+        "voxels.csv": "0aa6d5a1d65c018c006068d51a0b137eafe15741b89cabf7110d9b87760d2964",
+        "contributors.csv": "5cd116a293032993ff0c80357f577f2bbcecbfe5c52a54766c31d48abaa65d06",
+        "cases.json": "2c9ab1129880d2975ad8ff28cf4cba888f9ce2c215758b2c1c719aab2c63d36b"
+      },
+      "source_files": {
+        "dataset.json": {
+          "member": "formal-a/inputs/duplicate/dataset.json",
+          "sha256": "9e21f5f766ff72a73f8e1c7ab0b1ee5229e6748ed17d2bad76abde1a6562635d"
+        },
+        "snapshot.json": {
+          "member": "formal-a/inputs/duplicate/snapshot.json",
+          "sha256": "8c00b76bd24a66ea47997c45eabd9ed6736db13a4c35164220ca65c1dbabb856"
+        },
+        "voxels.csv": {
+          "member": "formal-a/inputs/duplicate/voxels.csv",
+          "sha256": "0aa6d5a1d65c018c006068d51a0b137eafe15741b89cabf7110d9b87760d2964"
+        },
+        "contributors.csv": {
+          "member": "formal-a/inputs/duplicate/contributors.csv",
+          "sha256": "5cd116a293032993ff0c80357f577f2bbcecbfe5c52a54766c31d48abaa65d06"
+        }
+      },
+      "default_cases": [
+        "first-stage-double"
+      ],
+      "extended_cases": []
+    }
+  },
+  "local_audit_source": {
+    "commit": "ba2449faf1e1b163f1b4209c3ef386ff6516de43",
+    "archive": "docs/developer/figures/joint-component-runtime/component-audit-records.tar.gz",
+    "sha256": "8436936d09e727495f6972d1a6ec5b4dd2fdb8cea15c87ed45747dd462dcf6fe"
+  }
+}

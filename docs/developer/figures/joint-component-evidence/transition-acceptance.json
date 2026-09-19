@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "ba2449faf1e1b163f1b4209c3ef386ff6516de43",
+  "pre_extraction_commit": "6f30510c06def630226a3dab25e9bcc579d72687",
+  "excluded": [
+    "elapsed seconds",
+    "process peak RSS",
+    "process completion manifests"
+  ],
+  "migrated_search_vs_pre_extraction": {
+    "passed": true,
+    "records": 1248,
+    "differences": [],
+    "scientific_sha256": "e29da48ed2841678dcdc24c9685a94283444658962e91c47ba70d08478c2c92a"
+  },
+  "fresh_baseline_search_vs_migrated": {
+    "passed": true,
+    "records": 1248,
+    "differences": [],
+    "scientific_sha256": "e29da48ed2841678dcdc24c9685a94283444658962e91c47ba70d08478c2c92a"
+  },
+  "historical_global_and_restricted_audits": {
+    "passed": true,
+    "records": 2096,
+    "differences": [],
+    "scientific_sha256": "62db5a20c52cb498f446fe65eecd4baf8ee2a8ef01475c7259b40f1a02cd0008"
+  },
+  "baseline_audits_including_separate_local_scopes": {
+    "passed": true,
+    "records": 3712,
+    "differences": [],
+    "scientific_sha256": "7742a2aa90dd8ebcaa37fcfe86aa0b7cdbceade15e528732df3fdcbdd92d617c"
+  },
+  "global_pairs": {
+    "schema_version": 1,
+    "passed": true,
+    "regular_certificates": {
+      "original_monolithic": 40,
+      "original_assembled": 40,
+      "composite_monolithic": 24,
+      "composite_assembled": 24
+    },
+    "same_state_records": 256,
+    "full_same_state_equivalence": 196,
+    "endpoint_same_state_records": 256,
+    "endpoint_full_same_state_equivalence": 160,
+    "paired_branches": 128,
+    "required_regular_pairs": 64,
+    "failed_pairs": [],
+    "historical_differences": []
+  },
+  "component_local_scopes": {
+    "records": 192,
+    "regular": 128,
+    "scope": "component-local"
+  },
+  "global_restricted_scopes": {
+    "records": 192,
+    "regular": 96,
+    "compared_separately": true
+  },
+  "audit_provenance": "The full fresh audits were executed with the frozen ba2449fa executable. All 1,248 migrated search/state/context records match that executable and pre-extraction records exactly after cost-field removal. Migrated offline tools were additionally rerun on the four representative scopes below; this is not a claim of rerunning all audits with the migrated driver.",
+  "migrated_fresh_offline_scopes": {
+    "passed": true,
+    "scopes": [
+      {
+        "dataset": "baseline",
+        "case": "first-stage-double",
+        "regular": true
+      },
+      {
+        "dataset": "near-0.02",
+        "case": "narrower-double",
+        "regular": true
+      },
+      {
+        "dataset": "weak-1e-4",
+        "case": "first-stage-double",
+        "regular": false
+      },
+      {
+        "dataset": "active-a",
+        "case": "first-stage-double",
+        "regular": false
+      }
+    ]
+  },
+  "passed": true
+}

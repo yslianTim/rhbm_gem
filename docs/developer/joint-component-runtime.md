@@ -1,205 +1,122 @@
-# Component-local certification and runtime parity
-
-This work starts at `6f30510c`. The exact-component v1 and certification v2
-contracts remain the numerical baseline. Local certificates supplement, and
-never replace, monolithic/global and globally restricted certificates.
-
-## Component-local evidence
-
-`joint-abc-components-local-audit DATASET RUN OUTPUT [CASE]` reads frozen
-component fits and their immutable search context. It does not read an assembled
-fit or a final global context. Isolated reruns use a self-contained component
-bundle with its immutable parent context and initial widths.
-
-The Python component runner exposes these through `audit --local-only` and
-`rerun-component --local-only`. The latter exports a self-contained bundle and
-executes `joint-abc-rerun-local-bundle BUNDLE OUTPUT`: only local memberships/B₀,
-immutable parent observations/context and the registered audit policy are read. Ordinary full audits additionally produce
-`local-components/`, preserving the existing `components/` restricted evidence.
-
-Each local scope records the stable component ID, parent snapshot identity and
-exact eta/beta of the last trusted state used by assembly. Assessment uses those
-coefficients, with a separately reprofiled consistency control. Normalization
-and active-set response norm still come from all parent observations. Rank
-sizes remain the existing independent-component sizes.
-
-Inherited directions are discarded. The local endpoint supplies normalized
-all-ones, alternating and weakest projected-width directions, with direction
-norms and Jacobian response norms saved. Missing trusted states or width spectra
-are explicit limitations, not unit-axis substitutes. Search completion, usable
-state, derivative evidence and regular qualification remain separate.
-
-The two-step derivative checks and registered Richardson/50-100 digit audits
-retain their existing thresholds. Truth never selects directions, intervals or
-qualification. Local certificates additionally require a usable actual state,
-weak-direction evidence and agreement with the profiled control. Missing
-components cannot be promoted by another component's certificate.
-
-Independence means identical component input and immutable parent context:
-sibling execution order and sibling endpoint availability cannot affect local
-evidence. It does not assert invariance when parent observations/scale change.
-
-## Implementation and validation records
-
-The implementation is delivered in three stages: local certification, typed
-runtime extraction, and a fresh Map/Model entry point. Validation results are
-recorded under `figures/joint-component-runtime/`; historical archives are
-read-only reference inputs. A successful local scope does not change any
-historical global qualification.
-
-## Typed runtime numerical core
-
-`src/core/detail/joint_component/` owns the basis kernel, mixed constrained
-linear solver, independent reference QR, complete variable-projection
-Jacobian, Guarded LM, structural partition and actual-state assembly. Its
-interfaces contain typed states, spectra, trial/trust evidence and assessments;
-there is no JSON, file access, truth, dataset registry or multiprecision audit
-orchestration in that module. The adapted Eigen LM retains its original license.
-
-Testing entry points now serialize this core through `JointRuntimeJson.hpp`.
-Legacy and Guarded-log are retained as regression controls in the internal
-search API. The public estimator uses Guarded only. Shared dense/sparse linear
-solver callers and the older fixed-B experiments use the same extracted
-implementation.
-
-Component search/assessment durations are measured separately. The component
-adapter records process high-water RSS after the component returns; it is not a
-per-phase allocation measurement. Numerical certificates and accepted-state
-semantics are unchanged by the extraction.
-
-## Public C++ entry points
+# Joint component estimator and regression workflow
 
 Include `<rhbm_gem/core/JointComponentEstimator.hpp>` and link
-`RHBM_GEM::rhbm_gem`. No testing target or offline audit library is needed.
+`RHBM_GEM::rhbm_gem`. The installed API needs no testing or offline audit target.
 
 ```cpp
 model.SelectAllAtoms();
 auto result = rhbm_gem::core::EstimateJointComponents(map, model);
-// Or freeze a problem and provide explicit positive finite widths:
 auto problem = rhbm_gem::core::BuildJointProblem(map, model);
 auto repeated = rhbm_gem::core::FitJointComponents(problem, initial_b);
 ```
 
-`JointProblem` owns an immutable snapshot. `JointProblemInput` also permits a
-caller to supply frozen observations, identities and structural squared-distance
-memberships directly. The version-one numerical policy is fixed: equal-weight
-LS, nonnegative A, signed C, log-B, 2.5 Angstrom support and Guarded search with
-200 profile evaluations / 100 accepted updates per component. The public fit
-uses the existing scoped Eigen thread guard to retain single-thread numerical
-behavior, then restores the caller's thread setting.
+## Runtime contract
 
-The Map/Model builder rejects a partial non-hydrogen selection. It constructs a
-unique voxel union from the actual Map geometry using `sphere-fma-v1`, retaining
-negative and zero observations. Every structural membership is retained,
-including zero coefficients and numerically invisible basis values.
+`JointProblem` owns an immutable snapshot. `JointProblemInput` accepts frozen
+observations, identities and squared-distance memberships. V1 uses equal-weight
+LS, A nonnegative, C signed, log-B, structural 2.5 Angstrom support and Guarded
+search (200 profile evaluations / 100 accepted updates per component). Search
+reference/replay, LM settings and endpoint assessment are unchanged by cleanup.
 
-`EstimateJointComponents` runs deterministic Fibonacci sampling, first-stage
-alpha training and first-stage MDPDE fitting in a model copy. It copies only raw
-samples and first-stage fitting results back to the supplied model; selection,
-second-stage estimates and group results are preserved. Only B enters joint
-initialization. No Peeling result, truth, historical fit or certificate is read.
-Invalid widths produce explicit initialization failure instead of a fallback.
+The Map/Model builder includes all non-hydrogen contributors and rejects partial
+non-hydrogen selection. It uses the actual Map geometry and `sphere-fma-v1`,
+retaining negative/zero observations and every structural membership, including
+zero coefficients and numerically invisible basis values.
 
-Result coefficient order is `[A0, C0, A1, C1, ...]`; width vectors follow the
-problem atom identities. First-stage OLS/MDPDE diagnostic arrays are `[A, B, C]`.
-Objectives are `0.5 * ||prediction - observations||² / ObservationScale()²`;
-component objectives use the same parent scale, and width gradients are with
-respect to log-B. Component `state` is the last trusted state actually
-used by assembly. Search completion, state availability and evidence status are
-separate. An unobserved or failed component prevents a complete prediction and
-objective; `available_row_mask` retains usable rows, including constant rows.
-There is no zero-filled substitute for missing component predictions.
+`EstimateJointComponents` runs deterministic Fibonacci sampling, alpha training
+and first-stage MDPDE in a model copy. Only B initializes joint fitting. Raw
+samples and first-stage results are copied back; selection, second-stage and
+group results are preserved. Invalid widths yield explicit initialization
+failure. No Peeling result, truth, historical fit or certificate initializes the
+public estimator.
 
-Runtime performs search trust/reference/replay and operational local/assembled
-assessments. Richardson, multiprecision, boundary and regular certificates are
-explicitly `NotRun` until an offline adapter supplies that evidence. Runtime
-operational checks must not be reported as offline regular certification.
+A/C order is `[A0, C0, A1, C1, ...]`; widths follow atom identities. Public
+component, assembled-state and result objectives are
+`0.5 * ||prediction - observations||² / ObservationScale()²`. Components use the
+same parent scale `max(1, ||parent observations||₂)`; constant rows contribute
+once to the global objective.
+Width gradients are with respect to log-B. Internal and historical raw objectives
+retain half-RSS semantics. This public objective correction changes returned
+scale, not the optimizer or its acceptance thresholds.
 
-## Fresh-input experimental entry points
+Component `state` is the actual last trusted state used by assembly. Search
+completion, usable state and evidence status are separate. A missing component
+prevents complete prediction/objective; the row mask retains available rows,
+including constant rows. Assembly does not reprofile or zero-fill missing states.
+Richardson, multiprecision, boundary and regular certificates remain `NotRun`
+until an offline tool supplies evidence. Operational runtime checks are not
+regular certification.
 
-The testing executable provides:
+## Routine regression
 
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build --target tests_all -j
+ctest --test-dir build -L joint:runtime --output-on-failure
 ```
-mdpde_experiment joint-component-runtime MODEL MAP OUTPUT
-mdpde_experiment joint-component-physical OUTPUT
-mdpde_experiment joint-component-physical-inputs OUTPUT
+
+The ordinary executable tests numerical, support, partition, same-state,
+actual-state assembly, local-context and failure-isolation contracts. Eight
+frozen representative cases run through the public API and numerical core;
+physical double/float32 and CIF/MRC tests exercise fresh initialization. The
+[fixture catalog](../../tests/fixtures/joint_component/README.md) is self-contained
+and uses independent pre-extraction records plus scalar reference controls.
+The Python runner sets numerical thread limits before importing NumPy.
+
+`joint_component_runtime` provides `run MODEL MAP OUTPUT`, `physical OUTPUT`,
+`physical-inputs OUTPUT`, and `fixture DATASET CASE OUTPUT_JSON`. The Python
+runner exposes `run`, `physical`, `summarize`, `compare`, `regression` and
+`physical-smoke`. Fresh-input commands use one first-stage start, not the old
+four-start/audit matrix. Numerical equality is checked against a monolithic
+solve of the actual loaded problem; MRC header geometry is never replaced by
+generation coordinates.
+
+## Extended and offline checks
+
+Both options default to `OFF` and require `BUILD_TESTING=ON`:
+
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON \
+  -DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON \
+  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
+cmake --build build --target tests_all -j
+ctest --test-dir build -L 'joint:extended|joint:offline' --output-on-failure
 ```
 
-The Python `tests/integration/joint_component_runtime.py` runner exposes `run`,
-`physical`, `summarize` and `compare`. Both numerical precisions in the physical
-fixture use the same generated Map geometry; float32 observations are rounded
-from that map. The fixture contains two copies of the heterogeneous 12-atom
-baseline separated by 12 Angstrom and is generated by the production forward
-model. The `physical-inputs` mode writes a minimal CIF and float32 MRC for a
-separate test of the ordinary file-reading path.
+Extended tests add heterogeneous-168/first-stage-float32 and the remaining
+catalog datasets. For initialization changes, select additional frozen starts:
 
-Generation geometry and MRC header geometry are recorded separately. A loaded
-map is compared to a fresh monolithic solve of its own observations and support;
-it is never forced onto historical generation coordinates. Each fresh case
-records four matched starts, first-stage diagnostics, structural census,
-observations, local/global audits, actual-state reassembly checks and costs.
+```sh
+python3 tests/integration/joint_component_runtime.py regression \
+  --executable build/bin/joint_component_runtime --work-dir build/joint-starts \
+  --dataset baseline --all-starts
+```
 
-The frozen-input regression uses records saved before extraction, not two
-wrappers of the extracted core as its oracle. Full end-to-end comparisons use
-the shared core with different monolithic/component orchestration and are
-supplementary to that independent frozen regression.
+Offline precision code is linked only into `joint_component_audit` and
+`joint_offline_tests`, never the library or ordinary test executable. Tests
+cover baseline, near-0.02/narrower, weak-1e-4 and active-a; qualification failures
+must match their historical scopes. Kernel/Jacobian changes require derivative
+audits; constraint changes also require boundary controls. Backend changes
+require rank/precision controls and the extended lane.
 
-An isolated local rerun bundle contains `search_context`, `component_initial_b`,
-`parent_observations` and `component_input` (own support and parent mappings).
-The standalone executable reconstructs and verifies the parent normalization and
-policy, validates the component graph, and records the bundle SHA-256. Its executable does not open historical fit files or
-sibling/global endpoint records. The immutable parent observations still
-provide the same normalization and active-set response norm.
+```sh
+python3 tests/integration/joint_component_audit.py \
+  --executable build/bin/joint_component_audit --work-dir build/joint-audits
+build/bin/joint_component_audit local-bundle INPUT_JSON OUTPUT_DIRECTORY
+```
 
-`joint_component_runtime.py frozen-parity --reference OLD_RUN --reference-audits
-OLD_AUDITS --run NEW_RUN --output REPORT` compares all historical search and audit
-scientific JSON against the new core, while permitting additional local-scope
-files. It requires both reference populations to exist. Timing/RSS and process
-completion manifests are excluded; endpoint states, spectra, derivatives,
-accepted trials, stopping decisions and existing certificates are compared.
+A standalone bundle carries immutable parent observations/context, component
+memberships and initial widths. Local directions come from the actual component
+endpoint; sibling/global endpoints are not inputs. Modified parent context or
+invalid widths are rejected. Parent normalization, actual-state preservation,
+local weak-direction evidence and independently reprofiled consistency remain
+required; a local certificate cannot promote a missing or failed component.
 
-The frozen monolithic regression input is reconstructed from the existing
-`joint-abc-components/prerequisite-records.tar.gz` stage-one records plus the
-original snapshots in `search-records-a.tar.gz`. This uses the already archived
-pre-extraction records and does not require a missing certification archive.
+## Retired workflows
 
-## Completed validation
-
-| Gate | Result |
-| --- | --- |
-| Frozen monolithic regression | 216 branches; all 432 fit/audit records unchanged; regular counts 38/40/40 for Legacy/Guarded/Guarded-log |
-| Frozen component numerical parity | 128 paired branches; 1,248 search and 2,096 existing audit scientific records unchanged |
-| Global qualification | All 64 required regular pairs pass; originals 40 and composites 24 on both monolithic and assembled endpoints |
-| Component-local certification | 192 scopes, 128 regular; all 1,168 local scientific records unchanged by core extraction |
-| Independent full-matrix repeat | Two fresh runs; all 5,008 scientific records agree |
-| Physical disconnected fixture | 8 regular paired branches, 16 regular local scopes; 228 repeated scientific records agree |
-| CIF/MRC entry | 4 regular paired branches, 8 regular local scopes; 114 repeated scientific records agree, including final API verification |
-| Engineering | 72 focused C++ tests, 43 Python tests; testing-disabled production build and installed consumer pass |
-
-Historical globally restricted component scopes have 96 regular certificates;
-new component-local scopes have 128. The 32 additional local qualifications occur
-in regular-active (8), regular-near (8), regular-weak (8), regular-three (4),
-regular-two (2) and regular-zero (2). These are separate scopes; historical
-certificates were neither overwritten nor relabeled.
-
-The same-state experiment retains 196/256 complete frozen-state equivalence
-records and 160/256 complete endpoint equivalence records. Applicable checks all
-pass. The remaining rank, active-face and local-correction limitations are
-preserved, rather than counted as complete regular evidence.
-
-The physical fixture's maximum paired scaled A/C difference is
-`3.299e-15`, maximum log-B difference `2.22e-16`, normalized prediction difference
-`1.405e-16`, and normalized objective difference `9.566e-26`.
-The actual MRC-header problem is validated separately against its own fresh
-monolithic reference; no historical geometry is substituted.
-
-Isolated validation includes eight difficult-composite baseline reruns in both
-precisions with historical fit directories absent. A further single-file bundle
-run reproduces the same scientific records in a directory containing only its
-input bundle; changed parent observations and invalid initial widths are rejected.
-The C++ tests cover before/after sibling execution, reversed fitting order,
-missing states, zero inherited directions, and standalone bundle execution.
-
-Detailed certificates, failure matrices, costs, hashes, source provenance and
-compressed records are indexed in
-[the evidence directory](figures/joint-component-runtime/README.md).
+The [evidence index](joint-component-evidence.md) records the retired research
+workflows, limitations and retrieval commits. No ordinary regression requires
+the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. First-stage `mdpde_experiment solve`, `forward`
+and `refine`, production second-stage and the separate fold-168 regression
+remain supported. Endpoint assessment deduplication and memory/backend changes
+are separate future work.
