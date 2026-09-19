@@ -48,7 +48,8 @@ def sha(path):
 
 def provenance(executable):
     files = [*sorted((ROOT/"src/core/detail/joint_component").glob("*.[ch]pp")),
-             ROOT/"src/CMakeLists.txt",
+             ROOT/"src/CMakeLists.txt", ROOT/"src/core/JointComponentEstimator.cpp",
+             ROOT/"include/rhbm_gem/core/JointComponentEstimator.hpp",
              *sorted((ROOT/"tests/support").glob("*.cpp")),
              *sorted((ROOT/"tests/support").glob("*.hpp")),
              *sorted((ROOT/"tests/utils/hrl").glob("JointABC*.cpp")),
@@ -183,7 +184,7 @@ def run(args):
     def run_one(source):
         seconds = execute([executable, "joint-abc-components-run", source, output/"datasets"/source.name], output/(source.name+"-run.log"))
         print(f"Completed searches: {source.name}", flush=True)
-        audit_seconds = execute([executable, ("joint-abc-components-local-audit" if args.local_only else "joint-abc-components-audit"), source, output/"datasets"/source.name,
+        audit_seconds = execute([executable, "joint-abc-components-audit", source, output/"datasets"/source.name,
                                  output/"audits"/source.name], output/(source.name+"-audit.log"))
         print(f"Completed fresh audits: {source.name}", flush=True)
         return {"dataset": source.name, "run_seconds": seconds, "audit_seconds": audit_seconds}
@@ -193,12 +194,14 @@ def run(args):
     require(before == provenance(executable), "Experiment sources or executable changed during execution.")
     write(output/"completion.json", {"complete": True, "datasets": [p.name for p in datasets], "costs": costs})
     summarize(output)
+    summarize_local(output, output/"audits")
 
 
 def compatible_search_kernels(run_root, current):
     previous = read(run_root/"provenance.json")["source_hashes"]
     keys = [key for key in previous if (key.startswith("tests/support/") or key.startswith("src/core/detail/joint_component/")) and
-            key not in ("tests/support/JointABCComponentExperiment.cpp", "tests/support/JointABCComponentExperiment.hpp")]
+            key not in ("tests/support/JointABCComponentExperiment.cpp", "tests/support/JointABCComponentExperiment.hpp",
+                        "tests/support/JointComponentRuntime.cpp", "tests/support/JointComponentRuntime.hpp")]
     require(all(previous[key] == current["source_hashes"][key] for key in keys),
             "Search numerical kernels changed; rerun the searches before comparing components.")
     return keys
@@ -519,9 +522,18 @@ def rerun_component(args):
     original_audit = audit_root/args.dataset/args.case/("local-components" if args.local_only else "components")/str(k)
     bundle = output.with_suffix(".context.json")
     context_bundle = {"search_context": read(target/"context.json")}
+    if args.local_only:
+        parent = records.load(data); local = subset(parent, component)
+        context_bundle.update(component_initial_b=read(target/"components"/(str(k)+"-fit.json"))["initial_b"],
+            parent_observations=parent["y64" if args.case.endswith("double") else "y32"].tolist(),
+            dataset=args.dataset, case=args.case,
+            component_input=dict(id=component["id"], atoms=component["atoms"], rows=component["rows"],
+                                 memberships=[[int(r), int(a), float(square)] for r, a, square in local["table"]]))
     if not args.local_only: context_bundle["audit_context"] = read(audit_root/args.dataset/args.case/"assembled/context.json")
     write(bundle, context_bundle)
-    execute([args.executable.resolve(), ("joint-abc-rerun-local-component" if args.local_only else "joint-abc-rerun-component"), data, args.case, component["id"], bundle, output], output.with_suffix(".log"))
+    command = [args.executable.resolve(), "joint-abc-rerun-local-bundle", bundle, output] if args.local_only else [
+        args.executable.resolve(), "joint-abc-rerun-component", data, args.case, component["id"], bundle, output]
+    execute(command, output.with_suffix(".log"))
     require(before == provenance(args.executable.resolve()), "Rerun sources or executable changed.")
     write(output/"provenance.json", before); shutil.copyfile(bundle, output/"context-bundle.json")
     differences = []

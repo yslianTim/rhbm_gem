@@ -1,0 +1,103 @@
+{
+  "complete": true,
+  "datasets": [
+    "active-a",
+    "baseline",
+    "duplicate",
+    "heterogeneous-168",
+    "near-0.02",
+    "near-0.10",
+    "regular-active",
+    "regular-duplicate",
+    "regular-near",
+    "regular-three",
+    "regular-two",
+    "regular-weak",
+    "regular-zero",
+    "weak-1e-2",
+    "weak-1e-4",
+    "zero-signal"
+  ],
+  "costs": [
+    {
+      "dataset": "active-a",
+      "run_seconds": 9.299352375001035,
+      "audit_seconds": 1505.0716818749988
+    },
+    {
+      "dataset": "baseline",
+      "run_seconds": 3.748932499998773,
+      "audit_seconds": 58.87265304099856
+    },
+    {
+      "dataset": "duplicate",
+      "run_seconds": 1.9129272919999494,
+      "audit_seconds": 4.712516958999913
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "run_seconds": 1192.4667488750001,
+      "audit_seconds": 367.8284235829997
+    },
+    {
+      "dataset": "near-0.02",
+      "run_seconds": 5.054799874998935,
+      "audit_seconds": 260.2769927919999
+    },
+    {
+      "dataset": "near-0.10",
+      "run_seconds": 4.495423708000089,
+      "audit_seconds": 0.844560667001133
+    },
+    {
+      "dataset": "regular-active",
+      "run_seconds": 24.28720470799999,
+      "audit_seconds": 2963.394856834002
+    },
+    {
+      "dataset": "regular-duplicate",
+      "run_seconds": 5.4573780829996394,
+      "audit_seconds": 65.16231979200165
+    },
+    {
+      "dataset": "regular-near",
+      "run_seconds": 15.435568541000976,
+      "audit_seconds": 719.1910529170018
+    },
+    {
+      "dataset": "regular-three",
+      "run_seconds": 28.380610250002064,
+      "audit_seconds": 231.7230457500009
+    },
+    {
+      "dataset": "regular-two",
+      "run_seconds": 13.743674374996772,
+      "audit_seconds": 174.40255850000176
+    },
+    {
+      "dataset": "regular-weak",
+      "run_seconds": 13.936330625001574,
+      "audit_seconds": 687.524576374999
+    },
+    {
+      "dataset": "regular-zero",
+      "run_seconds": 13.640599250000378,
+      "audit_seconds": 199.48953154099945
+    },
+    {
+      "dataset": "weak-1e-2",
+      "run_seconds": 4.516098416999739,
+      "audit_seconds": 0.8229619999983697
+    },
+    {
+      "dataset": "weak-1e-4",
+      "run_seconds": 4.379369083999336,
+      "audit_seconds": 233.91504516600253
+    },
+    {
+      "dataset": "zero-signal",
+      "run_seconds": 5.061693708001258,
+      "audit_seconds": 18.016447667003376
+    }
+  ]
+}

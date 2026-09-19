@@ -1,0 +1,646 @@
+{
+  "complete": true,
+  "costs": [
+    {
+      "dataset": "active-a",
+      "case": "first-stage-double",
+      "audit_seconds": 92.35372054199979
+    },
+    {
+      "dataset": "active-a",
+      "case": "narrower-double",
+      "audit_seconds": 92.70446162499866
+    },
+    {
+      "dataset": "active-a",
+      "case": "wider-double",
+      "audit_seconds": 92.44070237499909
+    },
+    {
+      "dataset": "active-a",
+      "case": "mixed-double",
+      "audit_seconds": 91.81586545800019
+    },
+    {
+      "dataset": "active-a",
+      "case": "first-stage-float32",
+      "audit_seconds": 91.76141137499872
+    },
+    {
+      "dataset": "active-a",
+      "case": "narrower-float32",
+      "audit_seconds": 91.71145987499949
+    },
+    {
+      "dataset": "active-a",
+      "case": "wider-float32",
+      "audit_seconds": 91.82938737499899
+    },
+    {
+      "dataset": "active-a",
+      "case": "mixed-float32",
+      "audit_seconds": 91.62701187499988
+    },
+    {
+      "dataset": "baseline",
+      "case": "first-stage-double",
+      "audit_seconds": 13.952010332999635
+    },
+    {
+      "dataset": "baseline",
+      "case": "narrower-double",
+      "audit_seconds": 0.0826700420002453
+    },
+    {
+      "dataset": "baseline",
+      "case": "wider-double",
+      "audit_seconds": 0.08213591599997017
+    },
+    {
+      "dataset": "baseline",
+      "case": "mixed-double",
+      "audit_seconds": 0.08220075000099314
+    },
+    {
+      "dataset": "baseline",
+      "case": "first-stage-float32",
+      "audit_seconds": 13.951233124998907
+    },
+    {
+      "dataset": "baseline",
+      "case": "narrower-float32",
+      "audit_seconds": 0.08225854100055585
+    },
+    {
+      "dataset": "baseline",
+      "case": "wider-float32",
+      "audit_seconds": 0.08300862499891082
+    },
+    {
+      "dataset": "baseline",
+      "case": "mixed-float32",
+      "audit_seconds": 0.0822615000015503
+    },
+    {
+      "dataset": "duplicate",
+      "case": "first-stage-double",
+      "audit_seconds": 0.02931841700046789
+    },
+    {
+      "dataset": "duplicate",
+      "case": "narrower-double",
+      "audit_seconds": 0.02694783299921255
+    },
+    {
+      "dataset": "duplicate",
+      "case": "wider-double",
+      "audit_seconds": 0.027539833001355873
+    },
+    {
+      "dataset": "duplicate",
+      "case": "mixed-double",
+      "audit_seconds": 0.6245254170007684
+    },
+    {
+      "dataset": "duplicate",
+      "case": "first-stage-float32",
+      "audit_seconds": 0.02615466599854699
+    },
+    {
+      "dataset": "duplicate",
+      "case": "narrower-float32",
+      "audit_seconds": 0.026559584001006442
+    },
+    {
+      "dataset": "duplicate",
+      "case": "wider-float32",
+      "audit_seconds": 0.02664704100061499
+    },
+    {
+      "dataset": "duplicate",
+      "case": "mixed-float32",
+      "audit_seconds": 0.6583512500001234
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "first-stage-double",
+      "audit_seconds": 28.77978216700103
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "narrower-double",
+      "audit_seconds": 29.009129041998676
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "wider-double",
+      "audit_seconds": 29.997314166999786
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "mixed-double",
+      "audit_seconds": 30.07298429199909
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "first-stage-float32",
+      "audit_seconds": 30.098491958000523
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "narrower-float32",
+      "audit_seconds": 29.16675154099903
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "wider-float32",
+      "audit_seconds": 29.11729695900067
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "case": "mixed-float32",
+      "audit_seconds": 29.051883915999497
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "first-stage-double",
+      "audit_seconds": 15.404693208000026
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-double",
+      "audit_seconds": 15.3913964580006
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "wider-double",
+      "audit_seconds": 15.38862275000065
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "mixed-double",
+      "audit_seconds": 15.372179749998395
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "first-stage-float32",
+      "audit_seconds": 15.396941332999631
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-float32",
+      "audit_seconds": 15.388276333000249
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "wider-float32",
+      "audit_seconds": 15.393058292000205
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "mixed-float32",
+      "audit_seconds": 15.372421416999714
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "first-stage-double",
+      "audit_seconds": 0.08383870800025761
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "narrower-double",
+      "audit_seconds": 0.08188937500017346
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "wider-double",
+      "audit_seconds": 0.08238299999902665
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "mixed-double",
+      "audit_seconds": 0.08159045800130116
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "first-stage-float32",
+      "audit_seconds": 0.08190149999973073
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "narrower-float32",
+      "audit_seconds": 0.08170529200106103
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "wider-float32",
+      "audit_seconds": 0.08191612499831535
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "mixed-float32",
+      "audit_seconds": 0.08156329200028267
+    },
+    {
+      "dataset": "regular-active",
+      "case": "first-stage-double",
+      "audit_seconds": 105.5604494170002
+    },
+    {
+      "dataset": "regular-active",
+      "case": "narrower-double",
+      "audit_seconds": 105.51317070799996
+    },
+    {
+      "dataset": "regular-active",
+      "case": "wider-double",
+      "audit_seconds": 105.72996183299983
+    },
+    {
+      "dataset": "regular-active",
+      "case": "mixed-double",
+      "audit_seconds": 106.25165504100005
+    },
+    {
+      "dataset": "regular-active",
+      "case": "first-stage-float32",
+      "audit_seconds": 106.02823083300063
+    },
+    {
+      "dataset": "regular-active",
+      "case": "narrower-float32",
+      "audit_seconds": 106.196475499999
+    },
+    {
+      "dataset": "regular-active",
+      "case": "wider-float32",
+      "audit_seconds": 106.25369741699978
+    },
+    {
+      "dataset": "regular-active",
+      "case": "mixed-float32",
+      "audit_seconds": 106.21551720800016
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "first-stage-double",
+      "audit_seconds": 14.143471458000931
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "narrower-double",
+      "audit_seconds": 0.10082999999940512
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "wider-double",
+      "audit_seconds": 0.1010019999994256
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "mixed-double",
+      "audit_seconds": 0.7045647909999389
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "first-stage-float32",
+      "audit_seconds": 14.145653834000768
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "narrower-float32",
+      "audit_seconds": 0.1028988340003707
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "wider-float32",
+      "audit_seconds": 0.1029274170014105
+    },
+    {
+      "dataset": "regular-duplicate",
+      "case": "mixed-float32",
+      "audit_seconds": 0.7452674579999439
+    },
+    {
+      "dataset": "regular-near",
+      "case": "first-stage-double",
+      "audit_seconds": 29.565876124999704
+    },
+    {
+      "dataset": "regular-near",
+      "case": "narrower-double",
+      "audit_seconds": 29.522359624999808
+    },
+    {
+      "dataset": "regular-near",
+      "case": "wider-double",
+      "audit_seconds": 29.49199041599968
+    },
+    {
+      "dataset": "regular-near",
+      "case": "mixed-double",
+      "audit_seconds": 29.522360625000147
+    },
+    {
+      "dataset": "regular-near",
+      "case": "first-stage-float32",
+      "audit_seconds": 29.47141366700089
+    },
+    {
+      "dataset": "regular-near",
+      "case": "narrower-float32",
+      "audit_seconds": 29.51763637499971
+    },
+    {
+      "dataset": "regular-near",
+      "case": "wider-float32",
+      "audit_seconds": 29.540508916999897
+    },
+    {
+      "dataset": "regular-near",
+      "case": "mixed-float32",
+      "audit_seconds": 29.58920158300134
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-double",
+      "audit_seconds": 43.103677458000675
+    },
+    {
+      "dataset": "regular-three",
+      "case": "narrower-double",
+      "audit_seconds": 0.23093783299918869
+    },
+    {
+      "dataset": "regular-three",
+      "case": "wider-double",
+      "audit_seconds": 0.2257123750005121
+    },
+    {
+      "dataset": "regular-three",
+      "case": "mixed-double",
+      "audit_seconds": 0.23225249999995867
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-float32",
+      "audit_seconds": 42.997521041001164
+    },
+    {
+      "dataset": "regular-three",
+      "case": "narrower-float32",
+      "audit_seconds": 0.2261400000006688
+    },
+    {
+      "dataset": "regular-three",
+      "case": "wider-float32",
+      "audit_seconds": 0.2283788340009778
+    },
+    {
+      "dataset": "regular-three",
+      "case": "mixed-float32",
+      "audit_seconds": 0.23408208300133992
+    },
+    {
+      "dataset": "regular-two",
+      "case": "first-stage-double",
+      "audit_seconds": 28.121241916000145
+    },
+    {
+      "dataset": "regular-two",
+      "case": "narrower-double",
+      "audit_seconds": 0.15485170900137746
+    },
+    {
+      "dataset": "regular-two",
+      "case": "wider-double",
+      "audit_seconds": 0.15418508299990208
+    },
+    {
+      "dataset": "regular-two",
+      "case": "mixed-double",
+      "audit_seconds": 0.15452245899905392
+    },
+    {
+      "dataset": "regular-two",
+      "case": "first-stage-float32",
+      "audit_seconds": 28.010670792000383
+    },
+    {
+      "dataset": "regular-two",
+      "case": "narrower-float32",
+      "audit_seconds": 0.15568374999929802
+    },
+    {
+      "dataset": "regular-two",
+      "case": "wider-float32",
+      "audit_seconds": 0.15446208300090802
+    },
+    {
+      "dataset": "regular-two",
+      "case": "mixed-float32",
+      "audit_seconds": 0.1579415420001169
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "first-stage-double",
+      "audit_seconds": 28.069953915999577
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "narrower-double",
+      "audit_seconds": 28.082911334000528
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "wider-double",
+      "audit_seconds": 28.085593916999642
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "mixed-double",
+      "audit_seconds": 28.093017040999257
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "first-stage-float32",
+      "audit_seconds": 28.149730457998885
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "narrower-float32",
+      "audit_seconds": 28.22019491699939
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "wider-float32",
+      "audit_seconds": 28.22137720899991
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "mixed-float32",
+      "audit_seconds": 28.20901129199956
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "first-stage-double",
+      "audit_seconds": 28.317946542001664
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "narrower-double",
+      "audit_seconds": 0.7061741659999825
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "wider-double",
+      "audit_seconds": 0.7063823339994997
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "mixed-double",
+      "audit_seconds": 0.7035171249990526
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "first-stage-float32",
+      "audit_seconds": 28.278187833999255
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "narrower-float32",
+      "audit_seconds": 0.691495708999355
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "wider-float32",
+      "audit_seconds": 0.690961165999397
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "mixed-float32",
+      "audit_seconds": 0.6904740000009042
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "first-stage-double",
+      "audit_seconds": 0.08663591699951212
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "narrower-double",
+      "audit_seconds": 0.08292024999900605
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "wider-double",
+      "audit_seconds": 0.08302587499929359
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "mixed-double",
+      "audit_seconds": 0.08204570899943064
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "first-stage-float32",
+      "audit_seconds": 0.08257770800082653
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "narrower-float32",
+      "audit_seconds": 0.08200291599860066
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "wider-float32",
+      "audit_seconds": 0.08377691600071557
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "mixed-float32",
+      "audit_seconds": 0.08330174999900919
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "first-stage-double",
+      "audit_seconds": 13.968015458000082
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "narrower-double",
+      "audit_seconds": 14.02942320800139
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "wider-double",
+      "audit_seconds": 14.015765083000588
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "mixed-double",
+      "audit_seconds": 14.006249500000195
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "first-stage-float32",
+      "audit_seconds": 14.00095650000003
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "narrower-float32",
+      "audit_seconds": 14.013845166000465
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "wider-float32",
+      "audit_seconds": 14.007440957999279
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "mixed-float32",
+      "audit_seconds": 14.023342042000877
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "first-stage-double",
+      "audit_seconds": 0.6321422089986299
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "narrower-double",
+      "audit_seconds": 0.6393812499991327
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "wider-double",
+      "audit_seconds": 0.6289910420000524
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "mixed-double",
+      "audit_seconds": 0.632087790998412
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "first-stage-float32",
+      "audit_seconds": 0.6196887499991135
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "narrower-float32",
+      "audit_seconds": 0.620468000000983
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "wider-float32",
+      "audit_seconds": 0.6205486670005484
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "mixed-float32",
+      "audit_seconds": 0.6207995000004303
+    }
+  ],
+  "seconds": 930.6469122090002
+}

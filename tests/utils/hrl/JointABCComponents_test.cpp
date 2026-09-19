@@ -2,6 +2,9 @@
 #include "support/JointABCComponents.hpp"
 #include "support/JointABCPrecision.hpp"
 #include "support/JointABCLocalCertification.hpp"
+#include "support/JointABCComponentExperiment.hpp"
+#include "support/CommandTestHelpers.hpp"
+#include <fstream>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 
 namespace {
@@ -295,6 +298,11 @@ TEST(JointABCComponentsTest, LocalAuditUsesActualStateAndDiscardsSiblingDirectio
     (void)p::FitComponent(part.components[1],f.y,Vector::Constant(2,.55),parent);
     child.audit.directions=Eigen::MatrixXd::Constant(1,3,1e-100);
     const auto after=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
+    const auto rerun=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    const auto reverse=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,rerun,child);
+    EXPECT_EQ(Science(fit),Science(rerun));
+    EXPECT_EQ(Science(before.fit),Science(reverse.fit));
+    EXPECT_EQ(before.scope,reverse.scope);
     EXPECT_EQ(before.fit,after.fit);
     EXPECT_EQ(before.scope,after.scope);
     EXPECT_EQ(before.context.audit.directions,after.context.audit.directions);
@@ -307,4 +315,37 @@ TEST(JointABCComponentsTest, LocalAuditUsesActualStateAndDiscardsSiblingDirectio
     const auto missing=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
     EXPECT_FALSE(missing.fit.at("primary").at("valid").as_bool());
     EXPECT_FALSE(missing.scope.at("weak_direction_available").as_bool());
+}
+
+TEST(JointABCComponentsTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
+{
+    namespace j=boost::json;
+    const TwoBlocks f; const auto parent=p::MakeContext(f.y,2);
+    const auto partition=p::BuildPartition(f.domain,parent.atom_ids); const auto & view=partition.components[0];
+    j::array observations,atoms,rows,memberships;
+    for(double value:f.y) observations.push_back(value);
+    for(auto atom:view.atoms) atoms.push_back(atom);
+    for(auto row:view.rows) rows.push_back(row);
+    for(std::size_t atom=0;atom<view.domain.atoms.size();++atom)
+        for(const auto & support:view.domain.atoms[atom]) memberships.push_back(j::array{support.row,atom,support.square});
+    j::object bundle{{"search_context",p::ContextEvidence(parent)},{"parent_observations",observations},
+        {"component_initial_b",j::array{.55}},{"dataset","unit"},{"case","unit"},
+        {"component_input",j::object{{"id",view.id},{"atoms",atoms},{"rows",rows},{"memberships",memberships}}}};
+    command_test::ScopedTempDir temporary("joint-local-bundle"); const auto input=temporary.path()/"input.json";
+    const auto write=[&] {std::ofstream stream(input); stream<<j::serialize(bundle);};
+    const auto read=[](const auto & path) {
+        std::ifstream stream(path); j::parse_options options; options.numbers=j::number_precision::precise;
+        return j::parse(std::string(std::istreambuf_iterator<char>(stream),{}),{},options);
+    };
+    write(); p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"fit").string());
+    auto expected=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    expected["dataset"]="unit"; expected["case"]="unit"; expected["initial_b"]=j::array{.55};
+    expected["observation_snapshot_sha256"]=parent.snapshot_hash;
+    EXPECT_EQ(Science(expected),Science(read(temporary.path()/"fit/fit.json")));
+    EXPECT_EQ(read(temporary.path()/"fit/audit/scope.json").at("state").at("beta"),expected.at("last_trusted_state").at("beta"));
+    bundle["parent_observations"].as_array()[0]=1e6; write();
+    EXPECT_THROW(p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"invalid-parent").string()),std::invalid_argument);
+    EXPECT_FALSE(std::filesystem::exists(temporary.path()/"invalid-parent"));
+    bundle["parent_observations"]=observations; bundle["component_initial_b"]=j::array{0}; write();
+    EXPECT_THROW(p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"invalid-width").string()),std::invalid_argument);
 }

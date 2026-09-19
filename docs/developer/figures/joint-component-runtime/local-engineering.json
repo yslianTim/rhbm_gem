@@ -4,5 +4,5 @@
   "cpp_failures": 0,
   "python_runner_tests": 6,
   "python_runner_failures": 0,
-  "frozen_audit": "running; results reported separately"
+  "frozen_audit": "passed: local-summary.json and local-repeat.json"
 }

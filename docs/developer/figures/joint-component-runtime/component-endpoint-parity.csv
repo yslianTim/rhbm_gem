@@ -1,0 +1,129 @@
+dataset,case,required_regular,both_regular,available,passed,reason,scaled_ac_difference,scaled_b_difference,maximum_log_b_difference,normalized_prediction_inf_difference,normalized_objective_difference,numeric_passed
+active-a,first-stage-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,narrower-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,wider-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,mixed-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,first-stage-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,narrower-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,wider-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+active-a,mixed-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+baseline,first-stage-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,narrower-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,wider-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,mixed-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,first-stage-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,narrower-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,wider-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+baseline,mixed-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+duplicate,first-stage-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,narrower-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,wider-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,mixed-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+duplicate,first-stage-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,narrower-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,wider-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+duplicate,mixed-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,first-stage-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,narrower-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,wider-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,mixed-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,first-stage-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,narrower-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,wider-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+heterogeneous-168,mixed-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,first-stage-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,narrower-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,wider-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,mixed-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,first-stage-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,narrower-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,wider-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.02,mixed-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,first-stage-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,narrower-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,wider-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,mixed-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,first-stage-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,narrower-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,wider-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+near-0.10,mixed-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+regular-active,first-stage-double,False,False,True,True,nonregular-control,4.761586260384668e-08,2.9035628396755718e-08,9.35592452400158e-08,5.028273484591553e-17,1.1516475802155393e-32,False
+regular-active,narrower-double,False,False,True,True,nonregular-control,3.835205886130831e-08,2.3386661778391618e-08,7.535701984640042e-08,3.771205113443664e-17,1.5065876019831024e-32,False
+regular-active,wider-double,False,False,True,True,nonregular-control,7.276224177576123e-08,3.860156341741887e-08,1.1580468817218303e-07,3.771205113443664e-17,1.1949238978057603e-33,False
+regular-active,mixed-double,False,False,True,True,nonregular-control,2.9816928565931344e-08,1.581836861508524e-08,5.435128158648439e-08,3.771205113443664e-17,8.570657224267286e-33,False
+regular-active,first-stage-float32,False,False,True,True,nonregular-control,8.017923038456263e-08,5.6923743019246125e-08,1.9919261085021844e-07,2.0524626683089256e-13,2.9997554089208465e-25,False
+regular-active,narrower-float32,False,False,True,True,nonregular-control,1.6049165227398115e-08,1.139419540730276e-08,3.987158114782119e-08,4.097414353105103e-14,5.671994792895721e-26,False
+regular-active,wider-float32,False,False,True,True,nonregular-control,1.0536731502070298e-08,5.589907158345421e-09,1.6769719168863162e-08,2.9069706063983897e-16,4.308137850277815e-25,False
+regular-active,mixed-float32,False,False,True,True,nonregular-control,5.965149794954892e-08,3.164608354223425e-08,9.493824748574298e-08,2.92268396102757e-15,2.0184982102052064e-25,False
+regular-duplicate,first-stage-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,narrower-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,wider-double,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,mixed-double,False,False,True,True,nonregular-control,7.253189092983874e-14,3.2091728078518815e-05,7.249825564345502e-05,5.0643679958676093e-17,1.1360292994230485e-32,False
+regular-duplicate,first-stage-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,narrower-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,wider-float32,False,False,False,True,nonregular-or-unavailable; see certificates,,,,,,
+regular-duplicate,mixed-float32,False,False,True,True,nonregular-control,2.7992255330735356e-06,0.2748089811624153,0.32167980388529926,3.8615805941516624e-16,3.8136794690371884e-26,False
+regular-near,first-stage-double,True,True,True,True,regular-parity,1.141943682471592e-15,5.181040781584062e-16,1.4432899320127035e-15,5.063571083455828e-17,8.298357796752936e-33,True
+regular-near,narrower-double,True,True,True,True,regular-parity,8.628018934229784e-15,2.220446049250311e-16,6.661338147750939e-16,6.329463854319785e-17,1.9111731842141046e-32,True
+regular-near,wider-double,True,True,True,True,regular-parity,2.7914178904861153e-15,3.700743415417186e-16,1.2212453270876722e-15,5.063571083455828e-17,8.278517465801336e-33,True
+regular-near,mixed-double,True,True,True,True,regular-parity,2.5376526277146483e-15,3.700743415417186e-16,1.1102230246251565e-15,5.063571083455828e-17,3.0068725773973287e-33,True
+regular-near,first-stage-float32,True,True,True,True,regular-parity,4.821538578632559e-15,3.7007431881387217e-16,9.992007221626409e-16,6.329463845116727e-17,4.6430062919357145e-26,True
+regular-near,narrower-float32,True,True,True,True,regular-parity,2.258904752742714e-11,2.651804872844775e-12,7.955414105254022e-12,2.853955247763132e-14,8.020048801175528e-26,True
+regular-near,wider-float32,True,True,True,True,regular-parity,1.2434494229104957e-14,5.551115481281626e-16,1.6653345369377348e-15,5.063571076093381e-17,3.301866756250766e-27,True
+regular-near,mixed-float32,True,True,True,True,regular-parity,2.461522326985508e-13,2.967996410658577e-14,8.903988657493755e-14,9.494195767675089e-17,2.9917447249841856e-26,True
+regular-three,first-stage-double,True,True,True,True,regular-parity,4.82153999265781e-15,1.4802973661668753e-16,3.3306690738754696e-16,4.663694793955659e-17,4.953985285650816e-33,True
+regular-three,narrower-double,True,True,True,True,regular-parity,2.9183005218718376e-15,7.930164461608261e-17,2.220446049250313e-16,6.218259725274212e-17,2.0465308691544617e-32,True
+regular-three,wider-double,True,True,True,True,regular-parity,4.187126835729154e-15,7.930164461608261e-17,2.220446049250313e-16,8.291012967032283e-17,5.2050360812920146e-33,True
+regular-three,mixed-double,True,True,True,True,regular-parity,3.8064789415719565e-15,7.930164461608261e-17,1.1102230246251565e-16,7.254636346153248e-17,2.2021442086114795e-32,True
+regular-three,first-stage-float32,True,True,True,True,regular-parity,8.247370793082806e-15,6.661338079302367e-16,2.1094237467877974e-15,5.181883101655928e-17,2.0892305020412355e-25,True
+regular-three,narrower-float32,True,True,True,True,regular-parity,1.4340380750325254e-15,7.930164463180126e-17,2.220446049250313e-16,5.181883101655928e-17,2.070717753872005e-25,True
+regular-three,wider-float32,True,True,True,True,regular-parity,1.77635678620245e-15,7.656710516291057e-17,2.220446049250313e-16,6.218259721987114e-17,4.927396914913267e-26,True
+regular-three,mixed-float32,True,True,True,True,regular-parity,2.4107700427085065e-15,2.220446026434122e-16,7.771561172376096e-16,6.218259721987114e-17,1.6993084933626565e-25,True
+regular-two,first-stage-double,True,True,True,True,regular-parity,1.2451099341590514e-15,8.141635513917802e-16,2.55351295663786e-15,5.313885671312023e-17,1.1660354148479711e-32,True
+regular-two,narrower-double,True,True,True,True,regular-parity,3.4825392046024927e-15,7.656710514656254e-17,3.3306690738754696e-16,4.317532107941019e-17,1.8612374939562643e-32,True
+regular-two,wider-double,True,True,True,True,regular-parity,3.7574765102290035e-15,1.5860328923216522e-16,5.551115123125783e-16,5.978121380226026e-17,5.06731112278059e-33,True
+regular-two,mixed-double,True,True,True,True,regular-parity,3.6527384890379515e-15,4.976861834526565e-16,1.5543122344752192e-15,4.6496499623980204e-17,5.5827740854783085e-33,True
+regular-two,first-stage-float32,True,True,True,True,regular-parity,3.2943534232602487e-15,5.55111558718901e-16,1.6653345369377348e-15,3.9854142551825237e-17,5.201890318948642e-26,True
+regular-two,narrower-float32,True,True,True,True,regular-parity,4.596374680757642e-14,9.290187354433638e-14,3.2507330161024584e-13,2.3414308749197327e-16,4.48621051023845e-26,True
+regular-two,wider-float32,True,True,True,True,regular-parity,2.4124005382929368e-15,9.992008056940229e-16,2.9976021664879227e-15,3.9854142551825237e-17,8.306529361860999e-26,True
+regular-two,mixed-float32,True,True,True,True,regular-parity,1.7120261884659574e-15,5.742533203145211e-16,1.887379141862766e-15,5.313885673576698e-17,9.813068182327571e-26,True
+regular-weak,first-stage-double,False,False,True,True,nonregular-control,1.2688263138573216e-15,9.237821235933064e-14,2.9765079290200447e-13,4.6501008119828944e-17,1.0866655639488383e-32,True
+regular-weak,narrower-double,False,False,True,True,nonregular-control,1.6494742080145174e-15,5.2106467289067537e-14,1.5631940186722204e-13,3.3215005799877816e-17,1.0126018651613835e-32,True
+regular-weak,wider-double,False,False,True,True,nonregular-control,1.3957089452430533e-15,4.440892098500215e-14,1.354472090042691e-13,4.6501008119828944e-17,1.8424422606545216e-32,True
+regular-weak,mixed-double,False,False,True,True,nonregular-control,3.694218194787467e-15,1.2094029481581425e-13,3.6282088444750116e-13,5.978701043978007e-17,1.2317439883651258e-32,True
+regular-weak,first-stage-float32,False,False,True,True,nonregular-control,3.82376269557848e-12,7.594895966757004e-10,2.6582168688449315e-09,2.0444666429709308e-14,3.339132669671012e-26,True
+regular-weak,narrower-float32,False,False,True,True,nonregular-control,1.3833409816745205e-15,5.913760224808373e-14,1.7741363933510002e-13,7.971601386020444e-17,3.0678069298744996e-27,True
+regular-weak,wider-float32,False,False,True,True,nonregular-control,1.0150610535466237e-15,3.8850222052607363e-13,1.1654011089490268e-12,4.650100808511926e-17,1.9090770608745895e-26,True
+regular-weak,mixed-float32,False,False,True,True,nonregular-control,3.3768319794501155e-13,7.679233838112492e-11,2.474420668363564e-10,1.0711839362464971e-15,2.7507444812159636e-25,True
+regular-zero,first-stage-double,False,False,True,True,nonregular-control,2.157004733557445e-15,4.1874292126616096e-05,0.00011199985871956919,5.5396313487284817e-17,2.486937623171689e-32,False
+regular-zero,narrower-double,False,False,True,True,nonregular-control,1.015061051085857e-15,0.0013051229301526957,0.0026908317982949487,3.9103280108671634e-17,9.731830903512904e-33,False
+regular-zero,wider-double,False,False,True,True,nonregular-control,1.8361504196528724e-15,0.00036034611683747036,0.0008779716431352447,4.5620493460116907e-17,2.040115854923463e-32,False
+regular-zero,mixed-double,False,False,True,True,nonregular-control,1.141943682471589e-15,0.0020472417614954583,0.0038124499446731686,3.9103280108671634e-17,3.244794093019963e-32,False
+regular-zero,first-stage-float32,False,False,True,True,nonregular-control,2.5220692590569518e-11,7.715884921238834e-05,0.00020045274070551455,3.416974960857191e-14,6.810386691858776e-26,False
+regular-zero,narrower-float32,False,False,True,True,nonregular-control,1.286620121657398e-11,5.7318778828428245e-05,0.00014888727251688438,1.0548924463126971e-14,4.187127244902436e-26,False
+regular-zero,wider-float32,False,False,True,True,nonregular-control,3.1567688908106432e-12,1.4043450974739458e-05,3.64746580010511e-05,2.582445791035022e-15,1.0431042227669387e-25,False
+regular-zero,mixed-float32,False,False,True,True,nonregular-control,1.4424764529393266e-12,6.439783198642331e-06,1.6726703329195125e-05,1.187762133542291e-15,2.4099697547808797e-25,False
+weak-1e-2,first-stage-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,narrower-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,wider-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,mixed-double,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,first-stage-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,narrower-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,wider-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-2,mixed-float32,True,True,True,True,regular-parity,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,first-stage-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,narrower-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,wider-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,mixed-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,first-stage-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,narrower-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,wider-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+weak-1e-4,mixed-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,first-stage-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,narrower-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,wider-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,mixed-double,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,first-stage-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,narrower-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,wider-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True
+zero-signal,mixed-float32,False,False,True,True,nonregular-control,0.0,0.0,0.0,0.0,0.0,True

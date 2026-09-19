@@ -1,0 +1,132 @@
+#include <gtest/gtest.h>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include "core/detail/joint_component/Problem.hpp"
+#include "core/command/detail/SimulationGeometry.hpp"
+#include "core/command/detail/MapSimulation.hpp"
+#include "support/JointABCProfile.hpp"
+#include <cmath>
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
+
+namespace {
+namespace core=rhbm_gem::core;
+namespace n=core::joint_component;
+core::JointProblemInput Snapshot()
+{
+    core::JointProblemInput input; input.atom_ids={"a","b"}; input.support.resize(2);
+    for(int a=0;a<2;++a) for(int k=0;k<40;++k)
+    {
+        const double square=.003*k*k; const auto basis=n::EvaluateKernel(square,.5,2.5);
+        input.support[static_cast<std::size_t>(a)].push_back({input.observations.size(),square});
+        input.row_ids.push_back(std::to_string(input.observations.size()));
+        input.observations.push_back(2*basis.gaussian+.2*basis.charge);
+    }
+    return input;
+}
+}
+TEST(JointComponentRuntimeTest, ImmutableSnapshotAndPartialFailure)
+{
+    auto input=Snapshot(); input.atom_ids.push_back("unobserved"); input.support.emplace_back();
+    input.row_ids.push_back("constant"); input.observations.push_back(3);
+    const core::JointProblem problem(input); input.observations[0]=999;
+    EXPECT_NE(problem.Input().observations[0],999);
+    const auto fit=core::FitJointComponents(problem,{.55,.55,.55});
+    ASSERT_EQ(fit.components.size(),3);
+    EXPECT_TRUE(fit.components[0].state.has_value()); EXPECT_TRUE(fit.components[1].state.has_value());
+    EXPECT_FALSE(fit.components[2].state.has_value());
+    EXPECT_FALSE(fit.prediction.has_value()); EXPECT_FALSE(fit.objective.has_value());
+    EXPECT_EQ(fit.available_row_mask.size(),81); EXPECT_TRUE(fit.available_row_mask.back());
+    EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
+    const auto invalid=core::FitJointComponents(problem,{.55,0,.55});
+    EXPECT_FALSE(invalid.initialization.valid); EXPECT_TRUE(invalid.components.empty());
+    EXPECT_FALSE(invalid.objective.has_value());
+}
+TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    rhbm_gem::eigen_helper::ScopedEigenThreadCount caller_threads{2};
+    const auto before_threads=Eigen::nbThreads();
+    const auto fit=core::FitJointComponents(problem,{.55,.55}); ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(Eigen::nbThreads(),before_threads);
+    auto original=second_stage_test::matched::joint_abc::Fit(data.domain,data.y,n::Vector::Constant(2,.55),nullptr,"guarded",&data.context);
+    const auto & beta=original.at("primary").at("beta").as_array();
+    for(std::size_t k=0;k<beta.size();++k) EXPECT_NEAR(fit.assembled_state->ac[k],boost::json::value_to<double>(beta[k]),1e-8);
+    EXPECT_TRUE(fit.search_completed); EXPECT_EQ(fit.components.size(),2);
+    ASSERT_EQ(fit.components[0].ranks.size(),4);
+    EXPECT_EQ(fit.components[0].ranks[1].rank,1);
+    EXPECT_GT(fit.components[0].ranks[1].threshold,0);
+    for(const auto & check:fit.components[0].evidence)
+        if(check.name=="richardson") EXPECT_EQ(check.status,core::JointCheckStatus::NotRun);
+    EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
+}
+TEST(JointComponentRuntimeTest, GeometrySelectionAndNegativeObservations)
+{
+    auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1); atom->SetElement(Element::CARBON); atom->SetPosition(0,0,0);
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
+    rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    auto values=std::make_unique<double[]>(11); for(std::size_t k=0;k<11;++k) values[k]=k%2 ? -1 : 0;
+    rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    const auto problem=core::BuildJointProblem(map,model);
+    ASSERT_EQ(problem.Input().observations.size(),11);
+    EXPECT_EQ(problem.Input().support[0].front().squared_distance,6.25);
+    EXPECT_EQ(problem.Input().support[0].back().squared_distance,6.25);
+    EXPECT_EQ(problem.Input().observations[1],-1);
+    model.SetAtomSelected(1,false);
+    EXPECT_THROW(core::BuildJointProblem(map,model),std::invalid_argument);
+}
+
+TEST(JointComponentRuntimeTest, FreshInitializationPreservesSecondStageAndSelection)
+{
+    auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1); atom->SetElement(Element::CARBON);
+    atom->SetPosition(0,0,0); atom->SetChainID("A"); atom->SetComponentID("ALA"); atom->SetAtomID("C");
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
+    auto hydrogen=std::make_unique<rhbm_gem::AtomObject>(); hydrogen->SetSerialID(2); hydrogen->SetElement(Element::HYDROGEN);
+    hydrogen->SetPosition(1,0,0); atoms.push_back(std::move(hydrogen));
+    rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    rhbm_gem::LocalGaussianResult sentinel; sentinel.alpha_r=.789;
+    sentinel.mdpde=rhbm_gem::GaussianModel3DWithUncertainty{rhbm_gem::GaussianModel3D{7.,.91,.23},{}};
+    model.EditAnalysis().SetAtomLocalGaussianResult(rhbm_gem::FittingStage::Second,*model.FindAtomPtr(1),sentinel);
+    rhbm_gem::MapObject map({25,25,25},{.3,.3,.3},{-3.6,-3.6,-3.6});
+    core::simulation::SimulationAtomPreparationResult generator;
+    generator.atom_list.push_back(core::simulation::SimulationAtom{.serial_id=1,.element=Element::CARBON,.position={0,0,0},.charge_used=.2});
+    core::MapSimulationRequest request; request.job_count=1; request.cutoff_distance=2.5;
+    request.potential_model_choice=core::PotentialModel::SINGLE_GAUS;
+    core::simulation::PopulateMapValueArray(map,generator,request,.5);
+    const auto fit=core::EstimateJointComponents(map,model);
+    ASSERT_TRUE(fit.initialization.valid) << fit.initialization.reason;
+    EXPECT_EQ(model.GetSelectedAtoms().size(),2);
+    EXPECT_EQ(fit.initialization.atoms.size(),1);
+    const auto view=rhbm_gem::AtomLocalPotentialView::For(*model.FindAtomPtr(1));
+    EXPECT_EQ(view.GetAlphaR(rhbm_gem::FittingStage::Second),.789);
+    EXPECT_EQ(view.GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
+    EXPECT_EQ(view.GetEstimateMDPDE(rhbm_gem::FittingStage::First).GetWidth(),fit.initialization.b[0]);
+    EXPECT_GT(view.GetRawSamplingEntries(false).size(),0);
+}
+
+TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
+{
+    auto input=Snapshot();
+    for(const auto & support:input.support) for(const auto & point:support)
+        input.observations[point.row]=.2*n::EvaluateKernel(point.squared_distance,.5,2.5).charge;
+    const auto fit=core::FitJointComponents(core::JointProblem(std::move(input)),{.5,.5});
+    ASSERT_EQ(fit.components.size(),2);
+    for(const auto & component:fit.components)
+    {
+        ASSERT_TRUE(component.state);
+        EXPECT_NEAR(component.state->ac[0],0,1e-10);
+        bool found_inner=false;
+        for(const auto & check:component.evidence) if(check.name=="inner")
+        {
+            found_inner=true;
+            EXPECT_EQ(check.status,core::JointCheckStatus::Passed);
+            ASSERT_TRUE(check.value); ASSERT_TRUE(check.threshold);
+            EXPECT_LE(*check.value,*check.threshold);
+        }
+        EXPECT_TRUE(found_inner);
+        EXPECT_EQ(component.regular_certificate,core::JointCheckStatus::NotRun);
+    }
+}

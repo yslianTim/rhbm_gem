@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "fit_count": 216,
+  "compared_fit_and_audit_files": 432,
+  "regular_certificates": {
+    "legacy": 38,
+    "guarded": 40,
+    "guarded-log": 40
+  },
+  "differences": [],
+  "costs": [
+    {
+      "dataset": "active-a",
+      "seconds": 235.35805062500003
+    },
+    {
+      "dataset": "baseline",
+      "seconds": 30.83308924999983
+    },
+    {
+      "dataset": "duplicate",
+      "seconds": 4.377613624999867
+    },
+    {
+      "dataset": "heterogeneous-168",
+      "seconds": 1169.5859438339994
+    },
+    {
+      "dataset": "near-0.02",
+      "seconds": 219.63896679199934
+    },
+    {
+      "dataset": "near-0.10",
+      "seconds": 3.228248542000074
+    },
+    {
+      "dataset": "weak-1e-2",
+      "seconds": 3.4375027080004656
+    },
+    {
+      "dataset": "weak-1e-4",
+      "seconds": 226.876860458
+    },
+    {
+      "dataset": "zero-signal",
+      "seconds": 13.528468209000494
+    }
+  ],
+  "replay_evidence": "Frozen independent raw-row replay; exact trial and endpoint identity required before reuse."
+}

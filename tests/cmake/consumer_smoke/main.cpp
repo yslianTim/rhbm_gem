@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/CommandSystem.hpp>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -37,6 +38,13 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::core::UmapEmbeddingRequest>);
 #endif
 
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids={"unobserved"}; input.support.resize(1);
+    const rhbm_gem::core::JointProblem problem(std::move(input));
+    const auto joint=rhbm_gem::core::FitJointComponents(problem,{0.});
+    if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
+    const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
+    if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
     rhbm_gem::ModelObject model_object;
     (void)model_object;
     rhbm_gem::core::FitOptions fit_options;

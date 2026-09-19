@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "compared_records": {
+    "search": 1248,
+    "audit": 2096
+  },
+  "differences": [],
+  "reference": "pre-extraction exact-component records",
+  "excluded": [
+    "elapsed seconds",
+    "process peak RSS",
+    "process completion manifests"
+  ],
+  "additional_component_local_records": "separate; never substituted for historical scopes"
+}

@@ -1,0 +1,170 @@
+{
+  "historical_scope": "global-restricted",
+  "historical_regular": 96,
+  "new_scope": "component-local",
+  "new_regular": 128,
+  "newly_regular_local_scopes": [
+    {
+      "dataset": "regular-active",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "mixed-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "mixed-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "narrower-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "narrower-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "wider-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-active",
+      "case": "wider-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "mixed-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "mixed-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "narrower-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "narrower-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "wider-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-near",
+      "case": "wider-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-double",
+      "component": "01:baseline:1"
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-three",
+      "case": "first-stage-float32",
+      "component": "01:baseline:1"
+    },
+    {
+      "dataset": "regular-two",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-two",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "mixed-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "mixed-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "narrower-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "narrower-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "wider-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-weak",
+      "case": "wider-float32",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "first-stage-double",
+      "component": "00:baseline:1"
+    },
+    {
+      "dataset": "regular-zero",
+      "case": "first-stage-float32",
+      "component": "00:baseline:1"
+    }
+  ],
+  "old_regular_but_local_nonregular": [],
+  "historical_certificates_modified": false
+}

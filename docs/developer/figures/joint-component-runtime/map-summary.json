@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "paired_branches": 4,
+  "regular_pairs": 4,
+  "local_certificates": 8,
+  "local_regular": 8,
+  "geometry_verified": true,
+  "historical_files_required": false
+}

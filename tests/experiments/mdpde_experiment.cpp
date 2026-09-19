@@ -9,6 +9,7 @@
 #include "support/JointABCCoverage.hpp"
 #include "support/JointABCCertification.hpp"
 #include "support/JointABCComponentExperiment.hpp"
+#include "support/JointComponentRuntime.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -22,12 +23,18 @@ int main(int argc, char ** argv)
     namespace fs = std::filesystem;
     try
     {
+        if (argc == 5 && std::string(argv[1]) == "joint-component-runtime")
+        {second_stage_test::matched::joint_abc::RunJointRuntime(argv[2],argv[3],argv[4]); return 0;}
+        if (argc == 3 && std::string(argv[1]) == "joint-component-physical-inputs")
+        {second_stage_test::matched::joint_abc::RunPhysicalJointRuntime(argv[2],true); return 0;}
+        if (argc == 3 && std::string(argv[1]) == "joint-component-physical")
+        {second_stage_test::matched::joint_abc::RunPhysicalJointRuntime(argv[2]); return 0;}
         if (argc == 4 && std::string(argv[1]) == "joint-abc-components-run")
         {second_stage_test::matched::joint_abc::ComponentRun(argv[2],argv[3]); return 0;}
         if ((argc == 5 || argc == 6) && std::string(argv[1]) == "joint-abc-components-local-audit")
         {second_stage_test::matched::joint_abc::ComponentAudit(argv[2],argv[3],argv[4],argc==6 ? argv[5] : "",true); return 0;}
-        if (argc == 7 && std::string(argv[1]) == "joint-abc-rerun-local-component")
-        {second_stage_test::matched::joint_abc::ComponentRerun(argv[2],argv[3],argv[4],argv[5],argv[6],true); return 0;}
+        if (argc == 4 && std::string(argv[1]) == "joint-abc-rerun-local-bundle")
+        {second_stage_test::matched::joint_abc::ComponentLocalBundleRerun(argv[2],argv[3]); return 0;}
         if ((argc == 5 || argc == 6) && std::string(argv[1]) == "joint-abc-components-audit")
         {second_stage_test::matched::joint_abc::ComponentAudit(argv[2],argv[3],argv[4],argc==6 ? argv[5] : ""); return 0;}
         if (argc == 7 && std::string(argv[1]) == "joint-abc-rerun-component")

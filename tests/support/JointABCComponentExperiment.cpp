@@ -316,6 +316,12 @@ void LocalAuditFit(const ComponentView & view,const Vector & parent_y,const j::o
     Write(output/"scope.json",local.scope);
 }
 }
+void WriteEndpointAudit(const Domain & domain,const Vector & y,const j::object & fit,
+    const EvaluationContext & context,const fs::path & output)
+{AuditFit(domain,y,fit,EndpointContext(context,fit),output,true);}
+void WriteLocalAudit(const ComponentView & view,const Vector & y,const j::object & fit,
+    const EvaluationContext & context,const fs::path & output)
+{LocalAuditFit(view,y,fit,context,output);}
 void ComponentAudit(const std::string & dataset_path,const std::string & run_path,const std::string & output_path,
     const std::string & only_case,bool local_only)
 {
@@ -357,8 +363,71 @@ void ComponentAudit(const std::string & dataset_path,const std::string & run_pat
     }
     Write((only_case.empty() ? output : output/only_case)/"completion.json",j::object{{"complete",true},{"cases",cases},{"cache_policy","exact-input precision references within one case; cleared before every case; no cross-run cache"}});
 }
+void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string & output_path)
+{
+    Eigen::setNbThreads(1); const auto bundle=Read(bundle_path); const fs::path output(output_path);
+    if(fs::exists(output)) throw std::runtime_error("Use a fresh isolated component directory.");
+    const auto & saved=bundle.at("search_context"),registration=saved.at("audit");
+    const auto y=Parse(bundle.at("parent_observations"));
+    AuditPlan plan;
+    plan.trial_details=registration.at("trial_details").as_bool();
+    plan.expanded_if_unverified=registration.at("expanded_if_unverified").as_bool();
+    plan.precision=registration.at("precision").as_bool(); plan.boundary=registration.at("boundary").as_bool();
+    plan.block_precision=registration.at("block_precision_reference").as_bool();
+    plan.cache_precision=registration.at("precision_cache").as_string()=="exact-input, current-audit-case-only";
+    for(const auto & atom:registration.at("boundary_atoms").as_array()) plan.boundary_atoms.push_back(j::value_to<Eigen::Index>(atom));
+    const auto count=static_cast<Eigen::Index>(saved.at("atom_ids").as_array().size());
+    const auto & directions=registration.at("directions").as_array();
+    if(!directions.empty())
+    {
+        plan.directions.resize(count,static_cast<Eigen::Index>(directions.size()));
+        for(std::size_t k=0;k<directions.size();++k)
+        {
+            const auto direction=Parse(directions[k]);
+            if(direction.size()!=count) throw std::invalid_argument("Invalid parent audit direction.");
+            plan.directions.col(static_cast<Eigen::Index>(k))=direction;
+        }
+    }
+    auto context=runtime::CreateContext(y,count,j::value_to<std::string>(saved.at("parent_snapshot_sha256")),plan);
+    context.atom_ids.clear(); context.row_ids.clear();
+    for(const auto & id:saved.at("atom_ids").as_array()) context.atom_ids.push_back(j::value_to<std::string>(id));
+    for(const auto & id:saved.at("row_ids").as_array()) context.row_ids.push_back(j::value_to<std::string>(id));
+    if(ContextEvidence(context)!=saved) throw std::invalid_argument("Isolated parent context differs from its observations or numerical policy.");
+    const auto & input=bundle.at("component_input"); ComponentView view;
+    view.id=j::value_to<std::string>(input.at("id"));
+    view.atom_to_local.assign(static_cast<std::size_t>(count),-1); view.row_to_local.assign(static_cast<std::size_t>(y.size()),-1);
+    for(const auto & atom:input.at("atoms").as_array())
+    {
+        const auto index=j::value_to<Eigen::Index>(atom);
+        view.atom_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.atoms.size()); view.atoms.push_back(index);
+    }
+    for(const auto & row:input.at("rows").as_array())
+    {
+        const auto index=j::value_to<Eigen::Index>(row);
+        if(view.row_to_local.at(static_cast<std::size_t>(index))!=-1) throw std::invalid_argument("Duplicate component row.");
+        view.row_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.rows.size()); view.rows.push_back(index);
+    }
+    view.domain.rows=static_cast<Eigen::Index>(view.rows.size()); view.domain.atoms.resize(view.atoms.size());
+    for(const auto & entry:input.at("memberships").as_array())
+        view.domain.atoms.at(j::value_to<std::size_t>(entry.at(1))).push_back({j::value_to<Eigen::Index>(entry.at(0)),j::value_to<double>(entry.at(2))});
+    std::vector<std::string> ids; for(auto atom:view.atoms) ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
+    const auto partition=BuildPartition(view.domain,ids);
+    if(partition.components.size()!=1 || partition.components[0].id!=view.id) throw std::invalid_argument("Bundle must contain exactly the requested structural component.");
+    const auto local_b=Parse(bundle.at("component_initial_b"));
+    if(local_b.size()!=static_cast<Eigen::Index>(view.atoms.size()) || !local_b.allFinite() || (local_b.array()<=0).any())
+        throw std::invalid_argument("Invalid isolated component initialization.");
+    Vector initial=Vector::Zero(count);
+    for(std::size_t k=0;k<view.atoms.size();++k) initial(view.atoms[k])=local_b(static_cast<Eigen::Index>(k));
+    auto fit=FitComponent(view,y,initial,context);
+    fit["dataset"]=bundle.at("dataset"); fit["case"]=bundle.at("case"); fit["initial_b"]=Values(local_b);
+    fit["observation_snapshot_sha256"]=context.snapshot_hash;
+    fs::create_directories(output); Write(output/"fit.json",fit);
+    LocalAuditFit(view,y,fit,context,output/"audit");
+    Write(output/"completion.json",j::object{{"complete",true},{"component_id",view.id},
+        {"snapshot_sha256",context.snapshot_hash},{"input_bundle_sha256",sim::FileSha256(bundle_path)}});
+}
 void ComponentRerun(const std::string & dataset_path,const std::string & name,const std::string & id,
-    const std::string & context_path,const std::string & output_path,bool local_only)
+    const std::string & context_path,const std::string & output_path)
 {
     Eigen::setNbThreads(1); const auto in=Load(dataset_path); const fs::path output(output_path);
     if(fs::exists(output)) throw std::runtime_error("Use a fresh isolated component directory.");
@@ -371,12 +440,8 @@ void ComponentRerun(const std::string & dataset_path,const std::string & name,co
     const auto initial=Frozen(in,name,false).initial_b; auto fit=FitComponent(*found,y,initial,context);
     Label(fit,in,name,Select(initial,found->atoms)); fs::create_directories(output); Write(output/"fit.json",fit);
     certification::ResetPrecisionCache();
-    if(local_only) LocalAuditFit(*found,y,fit,context,output/"audit");
-    else
-    {
-        const auto audit_context=RestoreContext(in,y,name,bundle.at("audit_context"));
-        AuditFit(found->domain,Select(y,found->rows),fit,ComponentContext(audit_context,*found,true),output/"audit",in.sources.size()>1);
-    }
+    const auto audit_context=RestoreContext(in,y,name,bundle.at("audit_context"));
+    AuditFit(found->domain,Select(y,found->rows),fit,ComponentContext(audit_context,*found,true),output/"audit",in.sources.size()>1);
     Write(output/"completion.json",j::object{{"complete",true},{"component_id",id},{"snapshot_sha256",in.hash}});
 }
 } // namespace second_stage_test::matched::joint_abc
