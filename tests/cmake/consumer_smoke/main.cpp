@@ -43,6 +43,10 @@ int main()
     const rhbm_gem::core::JointProblem problem(std::move(input));
     const auto joint=rhbm_gem::core::FitJointComponents(problem,{0.});
     if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
+    const auto saved=rhbm_gem::core::CaptureJointAnalysisResult(joint);
+    rhbm_gem::ModelObject saved_model;
+    saved_model.EditAnalysis().SetJointResult(saved);
+    if(!saved_model.GetAnalysisView().GetJointResult()) return 5;
     const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
     if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
     if(joint.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||

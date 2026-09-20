@@ -459,6 +459,11 @@ if(UNIX)
 endif()
 
 if(DEFINED Python_EXECUTABLE)
+    add_dependencies(tests_all rhbm_gem_cli)
+    add_test(NAME joint_workflow_cli_smoke_test
+        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/integration/joint_workflow_cli_smoke.py
+            $<TARGET_FILE:rhbm_gem_cli>)
+    set_tests_properties(joint_workflow_cli_smoke_test PROPERTIES LABELS "domain:integration;intent:command")
     add_test(
         NAME command_scaffold_smoke_test
         COMMAND ${Python_EXECUTABLE}

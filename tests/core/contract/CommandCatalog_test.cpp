@@ -90,6 +90,16 @@ struct EnumMappingTraits<PrinterType>
 };
 
 template <>
+struct EnumMappingTraits<PotentialEstimator>
+{
+    static constexpr std::string_view kFirstBindingToken{ "TWO_STAGE" };
+    static constexpr std::array<EnumMappingExpectation<PotentialEstimator>, 2> kExpectations{{
+        { "two-stage", PotentialEstimator::TWO_STAGE },
+        { "joint-components", PotentialEstimator::JOINT_COMPONENTS },
+    }};
+};
+
+template <>
 struct EnumMappingTraits<PotentialModel>
 {
     static constexpr std::string_view kFirstBindingToken{ "SINGLE_GAUS" };
@@ -155,6 +165,7 @@ using CommandEnumTypes = testing::Types<
     PainterType,
     PrinterType,
     PotentialModel,
+    PotentialEstimator,
     PartialCharge,
     TesterType,
     SphereSamplingMethod>;

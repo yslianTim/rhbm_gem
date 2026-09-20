@@ -214,6 +214,26 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     out.costs.assembly_seconds=Seconds(assembly_start);
     return out;
 }
+JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, JointAnalysisMetadata metadata)
+{
+    if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
+    JointAnalysisResult out;
+    out.metadata=std::move(metadata);
+    out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
+    out.initialization=fit.initialization; out.costs=fit.costs;
+    for (const auto & component:fit.components)
+    {
+        JointAnalysisComponent saved;
+        static_cast<JointComponentData &>(saved)=component;
+        saved.runtime_convergence=component.RuntimeConvergence();
+        out.components.push_back(std::move(saved));
+    }
+    out.assembled_state=fit.assembled_state; out.objective=fit.objective;
+    out.available_row_mask=fit.available_row_mask; out.evidence=fit.evidence; out.ranks=fit.ranks;
+    out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
+    out.runtime_convergence=fit.RuntimeConvergence(); out.regular_certificate=fit.regular_certificate;
+    return out;
+}
 JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
 {
     const auto problem=BuildJointProblem(map,model);

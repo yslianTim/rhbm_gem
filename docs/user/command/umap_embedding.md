@@ -26,9 +26,11 @@ fallback downloads.
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use the currently
-supported SQLite schema (schema v16). `--model-key` must identify exactly one
+supported SQLite schema (schema v17). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
+
+Joint component results are not supported by UMAP; export them with `result_dump --printer joint`.
 
 The saved model must contain at least three selected atoms and complete persisted
 local-fitting analysis for every selected atom:

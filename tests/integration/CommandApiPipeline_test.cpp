@@ -8,6 +8,10 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -222,4 +226,82 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     }
     EXPECT_TRUE(found_outlier_csv);
 
+}
+
+TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSourceInputs)
+{
+    command_test::ScopedTempDir directory{"joint_command_pipeline"};
+    rgc::MapSimulationRequest simulation;
+    simulation.model_file_path=command_test::TestDataPath("test_model.cif");
+    simulation.output_dir=directory.path(); simulation.grid_spacing=.3;
+    simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
+    simulation.blurring_width_list={.5}; simulation.verbosity=0;
+    ASSERT_TRUE(rgc::RunCommand(simulation).succeeded);
+    const auto map_path=FindGeneratedMap(directory.path()); ASSERT_FALSE(map_path.empty());
+    rgc::PotentialAnalysisRequest request;
+    request.model_file_path=simulation.model_file_path; request.map_file_path=map_path;
+    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
+    request.database_path=directory.path()/"joint.sqlite"; request.saved_key_tag="joint/model";
+    request.verbosity=0;
+    for(bool normalization:{false,true})
+    {
+        request.map_normalization_flag=normalization;
+        ASSERT_TRUE(rgc::RunCommand(request).succeeded);
+        rg::DataRepository repository{request.database_path};
+        auto loaded=repository.LoadModel(request.saved_key_tag);
+        ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+        const auto & saved=*loaded->GetAnalysisView().GetJointResult();
+        EXPECT_EQ(saved.metadata.map_normalization_applied,normalization);
+        auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
+        model->SelectAllAtoms(); if(normalization) map->MapValueArrayNormalization();
+        const auto direct=rgc::EstimateJointComponents(*map,*model);
+        auto expected=rgc::CaptureJointAnalysisResult(direct,saved.metadata); expected.costs=saved.costs;
+        EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
+    }
+    for(int option=0;option<3;++option)
+    {
+        auto invalid=request;
+        if(option==0) invalid.only_backbone=true;
+        if(option==1) invalid.asymmetry_flag=true;
+        if(option==2) invalid.sampling_method=SphereSamplingMethod::VolumeUniformRandom;
+        EXPECT_FALSE(rgc::RunCommand(invalid).succeeded);
+    }
+    {
+        auto zero_map=rg::ReadMap(map_path);
+        zero_map->SetMapValueArray(std::make_unique<double[]>(zero_map->GetMapValueArraySize()));
+        const auto zero_path=directory.path()/"zero.mrc"; rg::WriteMap(zero_path,*zero_map);
+        auto zero_request=request; zero_request.map_file_path=zero_path;
+        zero_request.map_normalization_flag=false; zero_request.saved_key_tag="zero";
+        ASSERT_TRUE(rgc::RunCommand(zero_request).succeeded);
+        rg::DataRepository repository{request.database_path};
+        auto zero_model=repository.LoadModel("zero");
+        ASSERT_TRUE(zero_model->GetAnalysisView().GetJointResult());
+        EXPECT_NE(zero_model->GetAnalysisView().GetJointResult()->runtime_convergence,rg::JointCheckStatus::Passed);
+    }
+    std::filesystem::remove(map_path);
+    rgc::ResultDumpRequest dump; dump.database_path=request.database_path;
+    dump.model_key_tag_list={request.saved_key_tag}; dump.output_dir=directory.path()/"export";
+    dump.printer_choice=rgc::PrinterType::JOINT_ESTIMATES; dump.verbosity=0;
+    ASSERT_TRUE(rgc::RunCommand(dump).succeeded);
+    EXPECT_TRUE(std::filesystem::exists(dump.output_dir/"joint_result_joint_model.json"));
+    EXPECT_TRUE(std::filesystem::exists(dump.output_dir/"joint_atoms_joint_model.csv"));
+    dump.printer_choice=rgc::PrinterType::GAUS_ESTIMATES; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+    dump.printer_choice=rgc::PrinterType::ATOM_OUTLIER; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+    dump.printer_choice=rgc::PrinterType::ATOM_POSITION; EXPECT_TRUE(rgc::RunCommand(dump).succeeded);
+    rgc::PotentialDisplayRequest display; display.database_path=request.database_path;
+    display.model_key_tag_list={request.saved_key_tag}; display.verbosity=0;
+    EXPECT_FALSE(rgc::RunCommand(display).succeeded);
+#ifdef RHBM_GEM_ENABLE_UMAP
+    rgc::UmapEmbeddingRequest umap; umap.database_path=request.database_path;
+    umap.model_key_tag=request.saved_key_tag; umap.verbosity=0;
+    EXPECT_FALSE(rgc::RunCommand(umap).succeeded);
+#endif
+    rg::DataRepository repository{request.database_path};
+    auto loaded=repository.LoadModel(request.saved_key_tag);
+    repository.SaveModel(*loaded,"joint_model");
+    dump.printer_choice=rgc::PrinterType::JOINT_ESTIMATES;
+    dump.model_key_tag_list={request.saved_key_tag,"joint_model"};
+    EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+    loaded->EditAnalysis().ClearJointResult(); repository.SaveModel(*loaded,"legacy");
+    dump.model_key_tag_list={"legacy"}; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
 }

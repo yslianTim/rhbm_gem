@@ -1,6 +1,8 @@
 #include "detail/CommandRunner.hpp"
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
@@ -60,6 +62,16 @@ void NormalizeAndValidateRequest(
         request, &PotentialAnalysisRequest::simulated_map_resolution);
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
     runner.RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
+    runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
+    if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
+    {
+        if (request.only_backbone) runner.AddFieldValidationError(&PotentialAnalysisRequest::only_backbone,"Joint fitting requires all non-hydrogen atoms.");
+        if (request.asymmetry_flag) runner.AddFieldValidationError(&PotentialAnalysisRequest::asymmetry_flag,"Joint fitting does not support partial selection.");
+        if (request.sampling_method!=SphereSamplingMethod::FibonacciDeterministic)
+            runner.AddFieldValidationError(&PotentialAnalysisRequest::sampling_method,"Joint initialization requires Fibonacci sampling.");
+        if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
+        request.exclude_hydrogen=true;
+    }
 }
 
 bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
@@ -123,6 +135,32 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->ApplyBackboneSelection(request.only_backbone);
+    if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
+    {
+        const auto fit=EstimateJointComponents(*map_object,*model_object);
+        JointAnalysisMetadata metadata;
+        metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
+        metadata.grid_size=map_object->GetGridSize(); metadata.grid_spacing=map_object->GetGridSpacing();
+        metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
+        metadata.map_normalization_applied=!request.simulation_flag && request.map_normalization_flag;
+        model_object->EditAnalysis().SetJointResult(CaptureJointAnalysisResult(fit,std::move(metadata)));
+        DataRepository repository{request.database_path};
+        repository.SaveModel(*model_object,request.saved_key_tag);
+        std::size_t available=0;
+        for (const auto & component:fit.components)
+        {
+            available+=component.state.has_value();
+            Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
+                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.RuntimeConvergence())));
+        }
+        Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
+            ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
+            ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.RuntimeConvergence()))+
+            ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
+        if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
+        model_object->EditAnalysis().ClearTransientFitStates();
+        return true;
+    }
     model_object->EditAnalysis().InitializeFromSelection();
     Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
     Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
@@ -168,7 +206,15 @@ CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & r
         request,
         NormalizeAndValidateRequest,
         ValidatePreparedRequest,
-        ExecutePreparedRequest);
+        [](const PotentialAnalysisRequest & prepared)
+        {
+            try { return ExecutePreparedRequest(prepared); }
+            catch (const std::exception & error)
+            {
+                Logger::Log(LogLevel::Error,"PotentialAnalysisCommand : "+std::string(error.what()));
+                return false;
+            }
+        });
 }
 
 } // namespace command_internal

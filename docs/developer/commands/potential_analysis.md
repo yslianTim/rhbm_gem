@@ -33,6 +33,7 @@ Shared fields:
 
 Command-specific fields:
 
+- `estimator` (default `PotentialEstimator::TWO_STAGE`)
 - `database_path`
 - `model_file_path`
 - `map_file_path`
@@ -144,3 +145,77 @@ Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 - [`tests/core/contract/CommandCatalog_test.cpp`](/tests/core/contract/CommandCatalog_test.cpp)
 - [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)
 - [`tests/integration/python_bindings_runtime_smoke.py`](/tests/integration/python_bindings_runtime_smoke.py)
+
+## Joint component opt-in
+
+`--estimator joint-components` selects the installed `EstimateJointComponents`
+runtime directly. `--estimator two-stage` remains the default. The joint branch
+runs its own first-stage initialization once and never runs Peeling, second-stage
+fitting, group fitting, or per-atom acceptance after the joint solve.
+
+The saved estimator contract is `guarded-joint-ls-v1`; the objective contract is
+`parent-normalized-half-rss-v1` and support is `sphere-fma-v1`.
+Public C++ value types are shared across runtime and saved results; consumers
+should rebuild against the updated library.
+
+Joint uses all non-hydrogen atoms, deterministic Fibonacci initialization and one
+worker. Hydrogen is excluded regardless of `--exclude-hydrogen`; backbone-only,
+asymmetry and non-Fibonacci sampling requests are rejected. `-j` values greater
+than one produce a notice that joint uses one worker. The second-stage refinement
+option applies only to the two-stage estimator. Map normalization and Q-score
+preprocessing retain the existing command semantics: simulation skips map
+normalization; other requests honor `--map-normalization`.
+
+```cpp
+rhbm_gem::core::PotentialAnalysisRequest request;
+request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
+request.model_file_path = "model.cif";
+request.map_file_path = "map.mrc";
+request.database_path = "joint.sqlite"; // new v17 database
+request.saved_key_tag = "example";
+auto completed = rhbm_gem::core::RunCommand(request);
+```
+
+```python
+import rhbm_gem_module as gem
+request = gem.PotentialAnalysisRequest()
+request.estimator = gem.PotentialEstimator.JOINT_COMPONENTS
+request.model_file_path = "model.cif"
+request.map_file_path = "map.mrc"
+request.database_path = "joint.sqlite"
+request.saved_key_tag = "example"
+assert gem.RunCommand(request).succeeded  # execution/persistence, not convergence
+export = gem.ResultDumpRequest()
+export.database_path = request.database_path
+export.model_key_tag_list = ["example"]
+export.printer_choice = gem.PrinterType.JOINT_ESTIMATES
+export.output_dir = "results"
+assert gem.RunCommand(export).succeeded
+```
+
+A returned initialization failure or missing/unconverged component is a saved
+outcome, not an execution error. `CommandResult.succeeded` is true after successful
+persistence. The log and saved record separately expose search completion, stop
+reasons, available components, runtime convergence and regular certificate.
+Invalid input/problem construction and persistence errors fail the command.
+`NotRun` offline evidence never implies passing certification.
+
+`result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
+`joint_atoms_<sanitized-key>.csv`. JSON schema 1 includes metadata, identities,
+row mappings/mask, initial values, actual states, objectives, cost counters,
+checks, ranks and captured convergence. CSV has one row per non-hydrogen atom:
+`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate`.
+A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
+Available but unconverged states are retained. Missing estimates have empty CSV
+fields and null JSON states. Initialization diagnostics with nonfinite numbers
+use null; they are not converted to zero. Numeric serialization preserves finite
+double values on reload.
+
+Export needs only the saved model. It fails on missing joint records, colliding
+sanitized keys or write errors. Legacy Gaussian/outlier export, display,
+comparison and UMAP reject joint models; atom-position and map-value dumping
+remain usable. No joint values are copied into legacy second-stage/group fields.
+
+SQLite v17 accepts empty databases and valid v17 databases only. Older versions,
+including v16, remain unchanged on rejection. A saved key holds one joint outcome;
+saving a model without a joint result over that key removes the previous outcome.

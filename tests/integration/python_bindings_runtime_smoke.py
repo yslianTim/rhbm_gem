@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -33,7 +34,10 @@ def assert_module_surface() -> None:
     assert hasattr(m, "RunCommand")
     assert hasattr(m, "PainterType")
     assert not hasattr(m.PainterType, "QSCORE")
+    assert hasattr(m, "PotentialEstimator")
+    assert hasattr(m.PotentialEstimator, "JOINT_COMPONENTS")
     assert hasattr(m, "PrinterType")
+    assert hasattr(m.PrinterType, "JOINT_ESTIMATES")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
@@ -108,6 +112,7 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.only_backbone is True
 
     analysis = m.PotentialAnalysisRequest()
+    assert analysis.estimator == m.PotentialEstimator.TWO_STAGE
     assert analysis.enable_second_stage_failed_only_refinement is True
     analysis.enable_second_stage_failed_only_refinement = False
     assert analysis.enable_second_stage_failed_only_refinement is False
@@ -215,11 +220,43 @@ def assert_umap_runtime_behavior() -> None:
         assert not Path(request.database_path).exists()
 
 
+def assert_joint_workflow() -> None:
+    with tempfile.TemporaryDirectory(prefix="rhbm_joint_python_") as directory:
+        root = Path(directory)
+        simulation = m.MapSimulationRequest()
+        simulation.model_file_path = PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif"
+        simulation.output_dir = root
+        simulation.potential_model_choice = m.PotentialModel.SINGLE_GAUS
+        simulation.blurring_width_list = [.5]
+        simulation.grid_spacing = .3
+        simulation.verbosity = 0
+        assert m.RunCommand(simulation).succeeded
+        analysis = m.PotentialAnalysisRequest()
+        analysis.estimator = m.PotentialEstimator.JOINT_COMPONENTS
+        analysis.model_file_path = simulation.model_file_path
+        analysis.map_file_path = next(root.glob("*.map"))
+        analysis.database_path = root / "joint.sqlite"
+        analysis.map_normalization_flag = False
+        analysis.verbosity = 0
+        assert m.RunCommand(analysis).succeeded
+        export = m.ResultDumpRequest()
+        export.database_path = analysis.database_path
+        export.model_key_tag_list = [analysis.saved_key_tag]
+        export.printer_choice = m.PrinterType.JOINT_ESTIMATES
+        export.output_dir = root
+        assert m.RunCommand(export).succeeded
+        saved = json.loads((root / "joint_result_model.json").read_text())
+        assert saved["regular_certificate"] == "not-run"
+        assert saved["assembled_state"] is not None
+        assert saved["runtime_convergence"] in {"passed", "failed", "unavailable", "not-run"}
+
+
 def main() -> int:
     assert_module_surface()
     assert_request_objects_are_usable()
     assert_command_result_runtime_behavior()
     assert_umap_runtime_behavior()
+    assert_joint_workflow()
     return 0
 
 

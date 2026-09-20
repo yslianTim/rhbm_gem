@@ -1,4 +1,5 @@
 #pragma once
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -13,6 +14,8 @@ class ModelAnalysisEditor
     ModelObject & m_model_object;
 
 public:
+    void SetJointResult(JointAnalysisResult result);
+    void ClearJointResult();
     void Clear();
     void ClearTransientFitStates();
     void InitializeFromSelection();

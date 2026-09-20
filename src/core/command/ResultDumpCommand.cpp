@@ -1,6 +1,9 @@
 #include "detail/CommandRunner.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include <set>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -364,6 +367,29 @@ bool ExecutePreparedRequest(const ResultDumpRequest & request)
         return false;
     }
 
+    if (request.printer_choice==PrinterType::JOINT_ESTIMATES)
+    {
+        std::set<std::string> tags;
+        for (const auto & model:inputs->model_objects)
+        {
+            if (!model->GetAnalysisView().GetJointResult())
+                throw std::invalid_argument("No joint result saved for key '"+model->GetKeyTag()+"'.");
+            if (!tags.insert(path_helper::EnsureSanitizedTag(model->GetKeyTag())).second)
+                throw std::invalid_argument("Joint export filenames collide after key sanitization.");
+        }
+        for (const auto & model:inputs->model_objects)
+        {
+            const auto tag=path_helper::EnsureSanitizedTag(model->GetKeyTag());
+            WriteJointAnalysisResult(*model->GetAnalysisView().GetJointResult(),
+                request.output_dir/("joint_result_"+tag+".json"),request.output_dir/("joint_atoms_"+tag+".csv"));
+        }
+        return true;
+    }
+    if (request.printer_choice==PrinterType::GAUS_ESTIMATES || request.printer_choice==PrinterType::ATOM_OUTLIER)
+        for (const auto & model:inputs->model_objects)
+            if (model->GetAnalysisView().GetJointResult())
+                throw std::invalid_argument("Joint results require '--printer joint'; legacy Gaussian/outlier export is unsupported.");
+
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
@@ -425,7 +451,15 @@ CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request)
         request,
         NormalizeAndValidateRequest,
         ValidatePreparedRequest,
-        ExecutePreparedRequest);
+        [](const ResultDumpRequest & prepared)
+        {
+            try { return ExecutePreparedRequest(prepared); }
+            catch (const std::exception & error)
+            {
+                Logger::Log(LogLevel::Error,"ResultDumpCommand : "+std::string(error.what()));
+                return false;
+            }
+        });
 }
 
 } // namespace command_internal

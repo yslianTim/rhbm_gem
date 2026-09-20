@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -17,6 +18,7 @@ class ModelAnalysisView
     const ModelObject & m_model_object;
 
 public:
+    const std::optional<JointAnalysisResult> & GetJointResult() const;
     bool HasGroupedAnalysisData() const;
     bool HasAtomGroup(GroupKey group_key) const;
     const GaussianModel3D & GetAtomGroupMean(GroupKey group_key) const;

@@ -47,6 +47,8 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
     {
         using Self = PotentialAnalysisRequest;
         VisitFieldList(visitor,
+            RequestField{ "estimator", "--estimator",
+                "Estimator: two-stage (default) or joint-components", &Self::estimator },
             RequestField{ "database_path", "-d,--database",
                 "Database file path",
                 &Self::database_path },
@@ -81,7 +83,7 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
                 "Sphere sampling method",
                 &Self::sampling_method },
             RequestField{ "enable_second_stage_failed_only_refinement", "--second-stage-failed-only-refinement",
-                "Refine failed second-stage shape solves with equation and branch verification",
+                "Two-stage only: refine failed shape solves with equation and branch verification",
                 &Self::enable_second_stage_failed_only_refinement });
     }
 };

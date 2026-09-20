@@ -20,11 +20,11 @@ void ExpectCurrentSchemaValidationFailure(
     const command_test::ScopedTempDir temp_dir{ temp_dir_name };
     const auto database_path{ temp_dir.path() / database_name };
     { rg::DataRepository repository{ database_path }; }
-    ASSERT_EQ(data_test::GetUserVersion(database_path), 16);
+    ASSERT_EQ(data_test::GetUserVersion(database_path), 17);
 
     mutate_database(database_path);
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 16);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 17);
 }
 
 void RecreateChainMapTable(
@@ -246,5 +246,17 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsGroupStageColumn)
         {
             data_test::ExecuteSql(database_path,
                 "ALTER TABLE model_atom_group_potential ADD COLUMN alpha_g_3rd DOUBLE;");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, JointResultPayloadMustBeNotNull)
+{
+    ExpectCurrentSchemaValidationFailure(
+        "joint_nullable_payload", "nullable.sqlite",
+        [](const std::filesystem::path & path)
+        {
+            data_test::ExecuteSql(path,"DROP TABLE model_joint_result;");
+            data_test::ExecuteSql(path,"CREATE TABLE model_joint_result (key_tag TEXT PRIMARY KEY, result_json TEXT, "
+                "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE);");
         });
 }

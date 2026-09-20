@@ -44,6 +44,10 @@ void BindCommandTypes(py::module_ & module)
     BindEnumEntries(printer_type);
     py::implicitly_convertible<int, PrinterType>();
 
+    auto potential_estimator{ py::enum_<PotentialEstimator>(module, "PotentialEstimator") };
+    BindEnumEntries(potential_estimator);
+    py::implicitly_convertible<int, PotentialEstimator>();
+
     auto potential_model{ py::enum_<PotentialModel>(module, "PotentialModel") };
     BindEnumEntries(potential_model);
     py::implicitly_convertible<int, PotentialModel>();

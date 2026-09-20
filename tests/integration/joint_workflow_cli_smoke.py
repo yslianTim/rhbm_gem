@@ -1,0 +1,50 @@
+"""Exercise the real CLI's joint analysis, persistence and export contract."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sqlite3
+import subprocess
+import sys
+import tempfile
+
+
+def main() -> int:
+    executable = str(Path(sys.argv[1]).resolve())
+    model = Path(__file__).resolve().parents[1] / "fixtures" / "test_model.cif"
+    with tempfile.TemporaryDirectory(prefix="rhbm_joint_cli_") as directory:
+        root = Path(directory)
+
+        def run(*args: object, succeeds: bool = True) -> None:
+            result = subprocess.run([executable, *map(str, args)], capture_output=True, text=True)
+            assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
+
+        run("map_simulation", "-a", model, "-o", root, "--potential-model", "single",
+            "--blurring-width", ".5", "-g", ".3", "-v", "0")
+        map_path = next(root.glob("*.map"))
+        database = root / "joint.sqlite"
+        run("potential_analysis", "--estimator", "joint-components", "-a", model,
+            "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
+        map_path.unlink()
+        run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
+        saved = json.loads((root / "joint_result_example.json").read_text())
+        with sqlite3.connect(database) as connection:
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 17
+            payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
+        assert saved == json.loads(payload)
+        assert saved["regular_certificate"] == "not-run"
+        assert saved["components"] and saved["assembled_state"] is not None
+        assert "prediction" not in saved and "observations" not in saved
+        assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
+        run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", succeeds=False)
+        help_text = subprocess.run([executable, "--help"], capture_output=True, text=True, check=True).stdout
+        if "umap_embedding" in help_text:
+            rejected = subprocess.run([executable, "umap_embedding", "-d", str(database), "--model-key", "example"],
+                                      capture_output=True, text=True)
+            assert rejected.returncode != 0
+            assert "Joint result UMAP is not supported" in rejected.stdout + rejected.stderr
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

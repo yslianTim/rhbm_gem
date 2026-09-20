@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <unordered_map>
 
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -28,6 +29,7 @@ public:
     static ModelAnalysisData & Of(ModelObject & model_object);
     static const ModelAnalysisData & Of(const ModelObject & model_object);
 
+    std::optional<JointAnalysisResult> joint_result;
     void Clear();
     AtomGroupPotentialEntry & AtomGroupEntry();
     const AtomGroupPotentialEntry & AtomGroupEntry() const;

@@ -12,6 +12,11 @@ ModelAnalysisView::ModelAnalysisView(const ModelObject & model_object) :
 {
 }
 
+const std::optional<JointAnalysisResult> & ModelAnalysisView::GetJointResult() const
+{
+    return ModelAnalysisData::Of(m_model_object).joint_result;
+}
+
 bool ModelAnalysisView::HasGroupedAnalysisData() const
 {
     return !ModelAnalysisData::Of(m_model_object)

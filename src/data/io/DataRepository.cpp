@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 16;
+constexpr int kCurrentSchemaVersion = 17;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -27,7 +27,7 @@ constexpr std::string_view kTableNamesSql =
     "ORDER BY name;";
 constexpr std::string_view kPragmaUserVersionSql = "PRAGMA user_version;";
 
-constexpr std::array<std::string_view, 10> kModelTableNames{
+constexpr std::array<std::string_view, 11> kModelTableNames{
     "model_atom",
     "model_atom_group_potential",
     "model_atom_local_potential",
@@ -37,10 +37,11 @@ constexpr std::array<std::string_view, 10> kModelTableNames{
     "model_component",
     "model_component_atom",
     "model_component_bond",
+    "model_joint_result",
     "model_object"
 };
 
-constexpr std::array<std::string_view, 9> kModelChildTableNames{
+constexpr std::array<std::string_view, 10> kModelChildTableNames{
     "model_atom",
     "model_atom_group_potential",
     "model_atom_local_potential",
@@ -49,7 +50,8 @@ constexpr std::array<std::string_view, 9> kModelChildTableNames{
     "model_chain_map",
     "model_component",
     "model_component_atom",
-    "model_component_bond"
+    "model_component_bond",
+    "model_joint_result"
 };
 
 struct TableColumnInfo
@@ -178,7 +180,7 @@ void ValidateColumns(
     if (columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v16 column mismatch for table: " + std::string(table_name));
+            "Schema v17 column mismatch for table: " + std::string(table_name));
     }
 
     auto column_iter{ columns.begin() };
@@ -187,7 +189,7 @@ void ValidateColumns(
         if (column_iter->name != expected_name)
         {
             throw std::runtime_error(
-                "Schema v16 column mismatch for table: " + std::string(table_name));
+                "Schema v17 column mismatch for table: " + std::string(table_name));
         }
         ++column_iter;
     }
@@ -210,7 +212,7 @@ void ValidatePrimaryKey(
     if (primary_key_columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v16 primary key mismatch for table: " + std::string(table_name));
+            "Schema v17 primary key mismatch for table: " + std::string(table_name));
     }
 
     auto primary_key_iter{ primary_key_columns.begin() };
@@ -219,7 +221,7 @@ void ValidatePrimaryKey(
         if (primary_key_iter->second != expected_name)
         {
             throw std::runtime_error(
-                "Schema v16 primary key mismatch for table: " + std::string(table_name));
+                "Schema v17 primary key mismatch for table: " + std::string(table_name));
         }
         ++primary_key_iter;
     }
@@ -237,7 +239,7 @@ void ValidateSelectionColumn(
         }
     }
     throw std::runtime_error(
-        "Schema v16 requires a NOT NULL is_selected column on table: "
+        "Schema v17 requires a NOT NULL is_selected column on table: "
         + std::string(table_name));
 }
 
@@ -256,7 +258,7 @@ void ValidateModelRootForeignKey(
         }
     }
     throw std::runtime_error(
-        "Schema v16 model root foreign key mismatch for table: "
+        "Schema v17 model root foreign key mismatch for table: "
         + std::string(table_name));
 }
 
@@ -265,7 +267,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
         != static_cast<int>(kModelTableNames.size()))
     {
-        throw std::runtime_error("Schema v16 contains an unexpected schema object.");
+        throw std::runtime_error("Schema v17 contains an unexpected schema object.");
     }
 
     const auto table_names{ QueryTableNames(database) };
@@ -275,7 +277,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             kModelTableNames.begin(),
             kModelTableNames.end()))
     {
-        throw std::runtime_error("Schema v16 contains an unexpected table set.");
+        throw std::runtime_error("Schema v17 contains an unexpected table set.");
     }
 
     ValidateColumns(database, "model_object", {
@@ -325,6 +327,10 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         "amplitude_variance_prior", "width_variance_prior",
         "intercept_variance_prior", "alpha_g" });
 
+    ValidateColumns(database, "model_joint_result", { "key_tag", "result_json" });
+    ValidatePrimaryKey(database, "model_joint_result", { "key_tag" });
+    if (QueryTableInfo(database, "model_joint_result").at(1).not_null != 1)
+        throw std::runtime_error("Schema v17 requires NOT NULL model_joint_result.result_json.");
     ValidatePrimaryKey(database, "model_object", { "key_tag" });
     ValidatePrimaryKey(database, "model_chain_map", {
         "key_tag", "entity_id", "chain_ordinal" });
@@ -358,7 +364,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         rhbm_gem::model_storage::CreateTables(database);
         ValidateCurrentSchema(database);
-        database.Execute("PRAGMA user_version = 16;");
+        database.Execute("PRAGMA user_version = 17;");
         return;
     }
     if (user_version == kCurrentSchemaVersion)
@@ -367,7 +373,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v16.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v17.");
 }
 
 } // namespace

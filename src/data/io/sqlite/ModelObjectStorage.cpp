@@ -1,6 +1,7 @@
 #include "ModelObjectStorage.hpp"
 
 #include "SQLiteWrapper.hpp"
+#include "data/io/detail/JointResultJson.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
@@ -207,7 +208,16 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::array<std::string_view, 10> kCreateModelTableSqlList{
+inline constexpr std::string_view kCreateJointResultTableSql = R"sql(
+    CREATE TABLE IF NOT EXISTS model_joint_result (
+        key_tag TEXT PRIMARY KEY,
+        result_json TEXT NOT NULL,
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
+    )
+)sql";
+
+inline constexpr std::array<std::string_view, 11> kCreateModelTableSqlList{
+    kCreateJointResultTableSql,
     kCreateModelObjectTableSql,
     kCreateModelChainMapTableSql,
     kCreateModelComponentTableSql,
@@ -220,7 +230,8 @@ inline constexpr std::array<std::string_view, 10> kCreateModelTableSqlList{
     kCreateModelAtomGroupTableSql
 };
 
-inline constexpr std::array<std::string_view, 9> kModelTablesScopedByKey{
+inline constexpr std::array<std::string_view, 10> kModelTablesScopedByKey{
+    "model_joint_result",
     "model_chain_map",
     "model_component",
     "model_component_atom",
@@ -1241,6 +1252,42 @@ void LoadAtomGroupPotentialEntryList(
     }
 }
 
+void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & result)
+{
+    std::set<std::string> expected;
+    for (const auto & atom:model.GetAtomList())
+        if (atom->GetElement()!=Element::HYDROGEN) expected.insert(std::to_string(atom->GetSerialID()));
+    if (expected!=std::set<std::string>(result.atom_ids.begin(),result.atom_ids.end()))
+        throw std::invalid_argument("Joint result atom identities do not match the saved model.");
+}
+
+void SaveJointResult(SQLiteWrapper & database, const ModelObject & model, const std::string & key_tag)
+{
+    const auto & result=ModelAnalysisData::Of(model).joint_result;
+    if (!result) return;
+    ValidateJointAtoms(model,*result);
+    const auto json=joint_result_io::Encode(*result);
+    SQLiteStatementBatch batch{database,"INSERT INTO model_joint_result (key_tag,result_json) VALUES (?,?);"};
+    batch.Execute([&](SQLiteWrapper & statement)
+    {
+        statement.Bind<std::string>(1,key_tag);
+        statement.Bind<std::string>(2,json);
+    });
+}
+
+void LoadJointResult(SQLiteWrapper & database, ModelObject & model, const std::string & key_tag)
+{
+    database.Prepare("SELECT result_json FROM model_joint_result WHERE key_tag = ?;");
+    SQLiteWrapper::StatementGuard guard(database);
+    database.Bind<std::string>(1,key_tag);
+    const auto rc=database.StepNext();
+    if (rc==SQLiteWrapper::StepDone()) return;
+    if (rc!=SQLiteWrapper::StepRow()) throw std::runtime_error("Failed to load joint result: "+database.ErrorMessage());
+    auto result=joint_result_io::Decode(database.GetColumn<std::string>(0));
+    ValidateJointAtoms(model,result);
+    ModelAnalysisData::Of(model).joint_result=std::move(result);
+}
+
 void SaveAnalysis(
     SQLiteWrapper & database,
     const ModelObject & model_obj,
@@ -1306,6 +1353,7 @@ void Save(
 
     SaveStructure(database, model_obj, key_tag);
     SaveAnalysis(database, model_obj, key_tag);
+    SaveJointResult(database, model_obj, key_tag);
 }
 
 std::unique_ptr<ModelObject> Load(
@@ -1327,6 +1375,7 @@ std::unique_ptr<ModelObject> Load(
     });
     LoadModelObjectRow(database, *model_object, key_tag);
     LoadAnalysis(database, *model_object, key_tag);
+    LoadJointResult(database, *model_object, key_tag);
     return model_object;
 }
 

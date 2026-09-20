@@ -11,6 +11,7 @@
 #include "support/JointTestNumerics.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include <cmath>
+#include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
 namespace {
@@ -348,5 +349,39 @@ TEST(JointRuntimeTest, ManyComponentsShareOneParentMapping)
         EXPECT_EQ(c.domain.atoms.Storage(),&problem.Input());
         for(std::size_t a=0;a<c.atoms.size();++a) EXPECT_EQ(c.LocalAtom(c.atoms[a]),static_cast<Eigen::Index>(a));
         for(std::size_t r=0;r<c.rows.size();++r) EXPECT_EQ(c.LocalRow(c.rows[r]),static_cast<Eigen::Index>(r));
+    }
+}
+
+TEST(JointComponentRuntimeTest, SavedOutcomesPreserveActualResultsWithoutProblemOrPrediction)
+{
+    namespace io=rhbm_gem::joint_result_io;
+    for(int variant=0;variant<4;++variant)
+    {
+        auto input=Snapshot();
+        input.row_ids.push_back("constant"); input.observations.push_back(3);
+        if(variant==1) {input.atom_ids.push_back("unobserved"); input.support.emplace_back();}
+        if(variant==2) for(auto & y:input.observations) y=0;
+        std::vector<double> initial(input.atom_ids.size(),.55);
+        if(variant==3) initial[0]=std::numeric_limits<double>::quiet_NaN();
+        const auto fit=core::FitJointComponents(core::JointProblem(input),initial);
+        const auto saved=core::CaptureJointAnalysisResult(fit);
+        const auto encoded=io::Encode(saved);
+        const auto decoded=io::Decode(encoded);
+        EXPECT_EQ(io::Encode(decoded),encoded);
+        EXPECT_EQ(decoded.runtime_convergence,fit.RuntimeConvergence());
+        EXPECT_EQ(decoded.available_row_mask,fit.available_row_mask);
+        EXPECT_EQ(decoded.objective,fit.objective);
+        EXPECT_EQ(decoded.observation_scale,fit.observation_scale);
+        ASSERT_EQ(decoded.components.size(),fit.components.size());
+        for(std::size_t k=0;k<fit.components.size();++k)
+        {
+            EXPECT_EQ(decoded.components[k].runtime_convergence,fit.components[k].RuntimeConvergence());
+            EXPECT_EQ(decoded.components[k].regular_certificate,core::JointCheckStatus::NotRun);
+            EXPECT_EQ(decoded.components[k].state.has_value(),fit.components[k].state.has_value());
+            if(fit.components[k].state) EXPECT_EQ(decoded.components[k].state->ac,fit.components[k].state->ac);
+        }
+        EXPECT_EQ(encoded.find("\"prediction\""),std::string::npos);
+        EXPECT_EQ(encoded.find("\"observations\""),std::string::npos);
+        if(variant==3) EXPECT_TRUE(std::isnan(decoded.initialization.b[0]));
     }
 }

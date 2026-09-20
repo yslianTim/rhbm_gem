@@ -32,6 +32,16 @@ ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
 {
 }
 
+void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
+{
+    ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
+}
+
+void ModelAnalysisEditor::ClearJointResult()
+{
+    ModelAnalysisData::Of(m_model_object).joint_result.reset();
+}
+
 void ModelAnalysisEditor::Clear()
 {
     ModelAnalysisData::Of(m_model_object).Clear();

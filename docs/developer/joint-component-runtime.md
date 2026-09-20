@@ -225,6 +225,26 @@ The [evidence index](joint-component-evidence.md) records the retired research
 workflows, limitations and retrieval commits. No ordinary regression requires
 the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. First-stage `mdpde_experiment solve`, `forward`
 and `refine`, production second-stage and the separate fold-168 regression
-remain supported. Formal workflow adoption and result persistence remain separate
-future work. See [tiled backend acceptance](joint-component-tiled-backend.md) for
+remain supported. Formal workflow adoption and result persistence use the opt-in command described below. See [tiled backend acceptance](joint-component-tiled-backend.md) for
 validation and measured costs.
+
+## Saved production outcomes
+
+`potential_analysis --estimator joint-components` stores a `JointAnalysisResult`
+on the model and saves it through `DataRepository`. The default estimator remains
+two-stage. See the [command contract](commands/potential_analysis.md#joint-component-opt-in).
+
+Direct `EstimateJointComponents` callers keep the return-only joint contract.
+To explicitly retain a result, use `CaptureJointAnalysisResult(fit, metadata)` and
+`model.EditAnalysis().SetJointResult(...)`, then `DataRepository::SaveModel`.
+Read it through `model.GetAnalysisView().GetJointResult()`. Include
+`<rhbm_gem/data/io/JointAnalysisFileIO.hpp>` to export a saved result directly with
+`WriteJointAnalysisResult(result, json_path, csv_path)`.
+
+The snapshot, prediction vector and numerical workspaces are not captured. Only
+result values and identity/mapping information survive. Global and component
+runtime-convergence statuses are captured from the existing runtime methods;
+storage validates the document structure but neither recomputes convergence nor
+runs an audit. These saved documents are not standalone numerical audit bundles.
+Model copying retains the outcome; analysis `Clear()` and `ClearJointResult()`
+remove it, while `ClearTransientFitStates()` does not.

@@ -1,6 +1,6 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v16 boundary.
+This document describes the current typed file I/O and Model-only SQLite v17 boundary.
 
 ## 1. Public Surface
 
@@ -73,25 +73,25 @@ There is no intermediate persistence forwarding class. `ModelObjectStorage` rema
 
 Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
 
-## 6. SQLite v16 Lifecycle
+## 6. SQLite v17 Lifecycle
 
 The accepted states are intentionally strict:
 
-1. An empty database with `PRAGMA user_version = 0` is initialized as v16.
-2. A database with `PRAGMA user_version = 16` is accepted only after structural validation.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v17.
+2. A database with `PRAGMA user_version = 17` is accepted only after structural validation.
 3. Every other version or pre-existing unexpected structure is rejected.
 
-There are no migrations and no overwrite-on-open fallback. In particular, v15 and earlier versions are rejected without changing their versions, tables, or rows.
+There are no migrations and no overwrite-on-open fallback. In particular, v16 and earlier versions are rejected without changing their versions, tables, or rows.
 
 Validation checks:
 
-- the exact ten-table set;
+- the exact eleven-table set;
 - exact ordered column sets;
 - every primary-key shape;
 - `NOT NULL is_selected` on atom and bond rows;
 - direct `key_tag` foreign keys from every child table to `model_object(key_tag)` with `ON DELETE CASCADE`.
 
-## 7. v16 Table Topology
+## 7. v17 Table Topology
 
 `model_object` is the direct root. There is no `object_catalog`, `map_list`, or legacy bond-analysis table.
 
@@ -107,9 +107,10 @@ flowchart TD
     M --> AL[model_atom_local_potential]
     M --> AP[model_atom_posterior]
     M --> AG[model_atom_group_potential]
+    M --> J[model_joint_result]
 ```
 
-The ten tables are:
+The eleven tables are:
 
 - `model_object`;
 - `model_chain_map`;
@@ -120,7 +121,8 @@ The ten tables are:
 - `model_bond`;
 - `model_atom_local_potential`;
 - `model_atom_posterior`;
-- `model_atom_group_potential`.
+- `model_atom_group_potential`;
+- `model_joint_result`.
 
 ## 8. Stored and Derived Values
 
@@ -181,3 +183,19 @@ A missing `key_tag` raises an error; it does not produce an empty model.
 - `src/data/io/file/CCP4Format.*`
 - `src/data/io/sqlite/ModelObjectStorage.*`
 - `src/data/io/sqlite/SQLiteWrapper.hpp`
+
+## Joint result payload
+
+`model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
+same direct cascading model-root foreign key as other child tables. Its JSON
+schema 1 codec is shared by SQLite and the public joint file exporter. Finite
+doubles use precise parsing for round-trip preservation. Nonfinite initialization
+diagnostics alone use null; decoded unavailable diagnostics remain NaN in memory.
+The captured runtime-convergence status is read as stored, alongside original
+scoped evidence. Missing fields, invalid enum/schema values and inconsistent
+state/mapping dimensions are rejected, without numerical reassessment.
+
+Save/load uses the model transaction. Saving over a key replaces its joint
+payload too; a model without a joint outcome removes that key's previous payload.
+Stored atom identities must match the model's non-hydrogen atoms. No observations,
+structural support or prediction vectors are stored by this result codec.

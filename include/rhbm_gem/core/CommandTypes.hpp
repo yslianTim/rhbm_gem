@@ -24,7 +24,14 @@ enum class PrinterType : int
     ATOM_POSITION  = 0,
     MAP_VALUE      = 1,
     GAUS_ESTIMATES = 2,
-    ATOM_OUTLIER   = 3
+    ATOM_OUTLIER   = 3,
+    JOINT_ESTIMATES = 4
+};
+
+enum class PotentialEstimator : int
+{
+    TWO_STAGE = 0,
+    JOINT_COMPONENTS = 1
 };
 
 enum class PotentialModel : int
@@ -75,6 +82,7 @@ struct CommandRequestBase
 
 struct PotentialAnalysisRequest : public CommandRequestBase
 {
+    PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};

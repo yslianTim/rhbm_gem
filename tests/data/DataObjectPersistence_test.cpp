@@ -2,6 +2,10 @@
 
 #include <stdexcept>
 #include <string>
+#include <fstream>
+#include <boost/json.hpp>
+#include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
+#include "data/io/detail/JointResultJson.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -231,7 +235,7 @@ TEST(DataObjectPersistenceTest, InvalidV14SamplingBlobLengthIsRejected)
 
     rg::DataRepository repository{ database_path };
     EXPECT_THROW((void)repository.LoadModel("model"), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 16);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 17);
     EXPECT_EQ(
         data_test::CountRows(
             database_path, "model_atom_local_potential", "model"),
@@ -474,4 +478,75 @@ TEST(DataObjectPersistenceTest, GroupWriteFailureRollsBackAnalysisReplacement)
         *loaded_view.GetAtomObjectList(group_key).front()).GetGroupMemberResult() };
     ASSERT_TRUE(member.has_value());
     EXPECT_DOUBLE_EQ(member->statistical_distance, 2.5);
+}
+
+namespace {
+rg::JointAnalysisResult SavedJointExample()
+{
+    rg::JointAnalysisResult result;
+    result.atom_ids={"1","2"}; result.row_ids={"voxel-1","constant"}; result.available_row_mask={true,true};
+    result.initialization={true,"",{.5,.6},{}};
+    rg::JointAnalysisComponent component;
+    component.id="component-0"; component.atoms={0,1}; component.rows={0};
+    component.stop_reason="budget"; component.search_completed=false;
+    component.state=rg::JointState{{2.123456789012345,-.3,4,.2},{.5,.6},{-.7,-.5},{1e-14,-2e-14},.012345678901234567};
+    component.runtime_convergence=rg::JointCheckStatus::Failed;
+    component.evidence.push_back({"local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,.1,1e-10,"too-large"});
+    result.components.push_back(component); result.assembled_state=component.state;
+    result.objective=.11234567890123456; result.observation_scale=9;
+    result.runtime_convergence=rg::JointCheckStatus::Failed;
+    return result;
+}
+}
+
+TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomically)
+{
+    const command_test::ScopedTempDir dir{"joint_persistence"};
+    const auto path=dir.path()/"results.sqlite";
+    rg::DataRepository repository{path}; auto model=data_test::MakeModelWithBond();
+    const auto record=SavedJointExample(); model->EditAnalysis().SetJointResult(record);
+    model->EditAnalysis().ClearTransientFitStates();
+    rg::ModelObject copied(*model);
+    ASSERT_TRUE(copied.GetAnalysisView().GetJointResult());
+    EXPECT_EQ(rg::joint_result_io::Encode(*copied.GetAnalysisView().GetJointResult()),rg::joint_result_io::Encode(record));
+    copied.EditAnalysis().Clear(); EXPECT_FALSE(copied.GetAnalysisView().GetJointResult());
+    repository.SaveModel(*model,"model"); auto loaded=repository.LoadModel("model");
+    ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(rg::joint_result_io::Encode(*loaded->GetAnalysisView().GetJointResult()),rg::joint_result_io::Encode(record));
+    auto invalid=record; invalid.available_row_mask.clear(); model->EditAnalysis().SetJointResult(invalid);
+    model->SetPdbID("should-roll-back");
+    EXPECT_THROW(repository.SaveModel(*model,"model"),std::invalid_argument);
+    loaded=repository.LoadModel("model"); EXPECT_NE(loaded->GetPdbID(),"should-roll-back");
+    EXPECT_EQ(rg::joint_result_io::Encode(*loaded->GetAnalysisView().GetJointResult()),rg::joint_result_io::Encode(record));
+    model->EditAnalysis().ClearJointResult(); repository.SaveModel(*model,"model");
+    EXPECT_FALSE(repository.LoadModel("model")->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(data_test::CountRows(path,"model_joint_result"),0);
+    model->EditAnalysis().SetJointResult(record); repository.SaveModel(*model,"model");
+    data_test::ExecuteSql(path,"DELETE FROM model_object WHERE key_tag='model';");
+    EXPECT_EQ(data_test::CountRows(path,"model_joint_result"),0);
+}
+
+TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMissingValues)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    auto invalid=record; invalid.components[0].atoms[0]=99;
+    EXPECT_THROW(io::Encode(invalid),std::invalid_argument);
+    auto json=boost::json::parse(io::Encode(record)).as_object();
+    json["schema_version"]=99; EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::invalid_argument);
+    json["schema_version"]=1; json.erase("runtime_convergence");
+    EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::exception);
+    record.components[0].state.reset(); record.assembled_state.reset(); record.objective.reset();
+    record.runtime_convergence=rg::JointCheckStatus::Unavailable;
+    record.available_row_mask={false,true};
+    const auto decoded=io::Decode(io::Encode(record));
+    EXPECT_FALSE(decoded.objective); EXPECT_FALSE(decoded.components[0].state);
+    EXPECT_EQ(decoded.available_row_mask,record.available_row_mask);
+    EXPECT_EQ(decoded.regular_certificate,rg::JointCheckStatus::NotRun);
+    const command_test::ScopedTempDir dir{"joint_export"};
+    rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
+    std::ifstream csv(dir.path()/"atoms.csv"); std::string header,line;
+    std::getline(csv,header); std::getline(csv,line);
+    EXPECT_NE(line.find("\"1\",\"component-0\",,,,0,0,"),std::string::npos);
+    EXPECT_THROW(rg::WriteJointAnalysisResult(decoded,dir.path()/"missing"/"result.json",dir.path()/"atoms.csv"),std::runtime_error);
 }

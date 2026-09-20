@@ -28,6 +28,23 @@ For the full documentation map, start at [`docs/README.md`](/docs/README.md).
 
 Browse runnable examples and helper assets in [`resources/README.md`](/resources/README.md).
 
+## Joint component workflow (opt-in)
+
+The default estimator remains the two-stage workflow. Use a **new SQLite v17
+file** for analysis; v16 and earlier databases are rejected without migration.
+
+```sh
+RHBM-GEM potential_analysis --estimator joint-components -a model.cif -m map.mrc -d joint.sqlite -k example
+RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
+```
+
+Joint output contains A/B/C, component availability, runtime convergence and
+separate offline-certificate status. A successful command means the outcome was
+saved, including incomplete or unconverged outcomes. See the
+[joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-opt-in)
+for options, C++/Python examples and JSON/CSV output. Joint results are not yet
+supported by legacy plots, comparisons, Gaussian/outlier dumps or UMAP.
+
 ## License, Citation, and Third-Party Notices
 
 - Project-owned source code, build scripts, examples, and documentation in this repository are licensed under the MIT License (see [`LICENSE`](/LICENSE)).

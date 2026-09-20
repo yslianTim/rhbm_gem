@@ -273,6 +273,7 @@ ModelObject::ModelObject(const ModelObject & other) :
     AttachOwnedObjects();
 
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
+    m_analysis_data->joint_result = source_analysis_data.joint_result;
     {
         const auto & source_entry{ source_analysis_data.AtomGroupEntry() };
         auto & cloned_entry{ m_analysis_data->AtomGroupEntry() };

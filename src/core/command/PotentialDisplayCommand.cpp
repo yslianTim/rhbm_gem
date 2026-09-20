@@ -3,6 +3,7 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/core/PainterFunctions.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -45,6 +46,8 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
         {
             Logger::ProgressBar(model_count, model_size);
             inputs.model_objects.emplace_back(repository.LoadModel(key));
+            if (inputs.model_objects.back()->GetAnalysisView().GetJointResult())
+                throw std::invalid_argument("Joint result display is not supported; use result_dump --printer joint.");
             model_count++;
         }
 
@@ -59,6 +62,8 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 ref_model_objects.emplace_back(repository.LoadModel(key_tag));
+                if (ref_model_objects.back()->GetAnalysisView().GetJointResult())
+                    throw std::invalid_argument("Joint result comparison is not supported; use result_dump --printer joint.");
                 ref_model_count++;
             }
         }

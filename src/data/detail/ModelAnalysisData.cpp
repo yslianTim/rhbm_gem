@@ -24,6 +24,7 @@ void ModelAnalysisData::Clear()
 {
     m_atom_group_entry = AtomGroupPotentialEntry{};
     m_atom_local_entry_map.clear();
+    joint_result.reset();
 }
 
 AtomGroupPotentialEntry & ModelAnalysisData::AtomGroupEntry()

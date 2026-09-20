@@ -33,11 +33,21 @@ struct CommandEnumTraits<PainterType>
 template <>
 struct CommandEnumTraits<PrinterType>
 {
-    inline static constexpr std::array<CommandEnumDefinition<PrinterType, 2>, 4> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PrinterType, 2>, 5> kOptions{{
         { PrinterType::ATOM_POSITION, "ATOM_POSITION", { "0", "atom_pos" } },
         { PrinterType::MAP_VALUE, "MAP_VALUE", { "1", "map" } },
         { PrinterType::GAUS_ESTIMATES, "GAUS_ESTIMATES", { "2", "gaus" } },
-        { PrinterType::ATOM_OUTLIER, "ATOM_OUTLIER", { "3", "atom_out" } }
+        { PrinterType::ATOM_OUTLIER, "ATOM_OUTLIER", { "3", "atom_out" } },
+        { PrinterType::JOINT_ESTIMATES, "JOINT_ESTIMATES", { "4", "joint" } }
+    }};
+};
+
+template <>
+struct CommandEnumTraits<PotentialEstimator>
+{
+    inline static constexpr std::array<CommandEnumDefinition<PotentialEstimator, 2>, 2> kOptions{{
+        { PotentialEstimator::TWO_STAGE, "TWO_STAGE", { "0", "two-stage" } },
+        { PotentialEstimator::JOINT_COMPONENTS, "JOINT_COMPONENTS", { "1", "joint-components" } }
     }};
 };
 

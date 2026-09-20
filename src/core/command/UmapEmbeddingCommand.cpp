@@ -4,6 +4,7 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -756,6 +757,8 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
                 try
                 {
                     model_object = repository.LoadModel(prepared_request.model_key_tag);
+                    if (model_object->GetAnalysisView().GetJointResult())
+                        throw std::invalid_argument("Joint result UMAP is not supported; use result_dump --printer joint.");
                 }
                 catch (const std::exception & error)
                 {
