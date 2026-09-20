@@ -108,6 +108,7 @@ struct TrustEvidence
     std::optional<Spectrum> design;
 };
 TrustEvidence CheckTrust(const Domain &,const Vector &,const Evaluation &,const EvaluationContext &);
+TrustEvidence CheckTrust(const Domain &,const Vector &,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
 struct LmTrial
 {
     Vector accepted_eta,step,diagonal;
@@ -153,6 +154,21 @@ struct Assessment
     std::string failure;
 };
 Assessment AssessProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,const Vector * = nullptr);
+// Evaluations belong to this exact domain, observations and numerical policy.
+Assessment AssessEvaluated(const Domain &,const Vector &,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
+bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
+// Borrowed only while the originating immutable problem and report remain alive.
+struct AssessmentReuse
+{
+    const Domain & domain;
+    const Vector & observations;
+    const EvaluationContext & context;
+    const Assessment & assessment;
+};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct AssessmentWork {int assessments{},directional_evaluations{};};
+AssessmentWork & AssessmentWorkForTesting();
+#endif
 struct ComponentView
 {
     std::string id;
@@ -170,13 +186,15 @@ EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,b
 struct ComponentResult
 {
     SearchResult search;
-    Assessment assessment;
+    Assessment assessment; // Historical search-endpoint diagnostics.
+    std::optional<Assessment> trusted_assessment; // Actual state, component-local directions.
     std::optional<Endpoint> trusted_state;
     std::optional<std::size_t> trusted_trial;
     double assessment_seconds{};
     std::optional<TrustEvidence> endpoint_trust;
     bool search_success{};
 };
+ComponentResult AssessComponentSearch(const Domain &,const Vector &,const EvaluationContext &,SearchResult);
 ComponentResult SolveComponent(const ComponentView &,const Vector &,const Vector &,const EvaluationContext &);
 struct AssemblyResult
 {
@@ -189,5 +207,5 @@ struct AssemblyResult
     bool profile_evaluated{};
 };
 AssemblyResult AssembleComponents(const Domain &,const Vector &,const ComponentPartition &,const EvaluationContext &,
-    const std::vector<ComponentResult> &);
+    const std::vector<ComponentResult> &,const AssessmentReuse * = nullptr);
 }

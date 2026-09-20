@@ -189,10 +189,13 @@ Differential DifferentiateProfile(const Evaluation & e,double scale,const Evalua
 }
 
 TrustEvidence CheckTrust(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext & policy)
-
+{
+    const auto reference=EvaluateProfile(domain,y,e.eta,true,&policy);
+    return CheckTrust(domain,y,e,policy,reference);
+}
+TrustEvidence CheckTrust(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
     const auto * context=&policy;
-    const auto reference=EvaluateProfile(domain,y,e.eta,true,context);
     TrustEvidence out; out.reference=reference; out.primary_valid=e.valid;
     if (!e.valid)
     {
@@ -298,13 +301,33 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights)
 }
 Assessment AssessProfile(const Domain & domain,const Vector & y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
 {
-    const auto * context=&policy; const double scale=context->scale; Assessment out;
-    auto endpoint=supplied_beta ? EvaluateState(domain,y,eta,*supplied_beta,*context) : EvaluateProfile(domain,y,eta,false,context);
-    const auto reference=EvaluateProfile(domain,y,eta,true,context);
-    if(supplied_beta && endpoint.valid && !endpoint.certificate.kkt_passed)
-    {endpoint.valid=false; endpoint.reason="assembled-kkt-failed";}
+    const auto endpoint=supplied_beta ? EvaluateState(domain,y,eta,*supplied_beta,policy) : EvaluateProfile(domain,y,eta,false,&policy);
+    const auto reference=EvaluateProfile(domain,y,eta,true,&policy);
+    return AssessEvaluated(domain,y,endpoint,reference,policy,supplied_beta!=nullptr);
+}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+AssessmentWork & AssessmentWorkForTesting() {static thread_local AssessmentWork work; return work;}
+#endif
+bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & b)
+{
+    return a.scale==b.scale && a.rank.rows==b.rank.rows && a.rank.design_columns==b.rank.design_columns &&
+        a.rank.width_columns==b.rank.width_columns && a.linear.rank_relative==b.linear.rank_relative &&
+        a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
+        a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids &&
+        a.audit.directions.rows()==b.audit.directions.rows() && a.audit.directions.cols()==b.audit.directions.cols() &&
+        (a.audit.directions.array()==b.audit.directions.array()).all();
+}
+Assessment AssessEvaluated(const Domain & domain,const Vector & y,const Evaluation & endpoint,const Evaluation & reference,
+    const EvaluationContext & policy,bool supplied)
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ++AssessmentWorkForTesting().assessments;
+#endif
+    const auto * context=&policy; const double scale=context->scale; const auto & eta=endpoint.eta; Assessment out;
     out.primary=endpoint; out.reference=reference;
-    if(!endpoint.valid || !reference.valid) {out.failure="inner-solve"; return out;}
+    if(supplied && endpoint.valid && !endpoint.certificate.kkt_passed)
+    {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
+    if(!out.primary.valid || !reference.valid) {out.failure="inner-solve"; return out;}
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
     out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()));
     const auto differential=DifferentiateProfile(endpoint,scale,context);
@@ -335,6 +358,9 @@ Assessment AssessProfile(const Domain & domain,const Vector & y,const Vector & e
     bool verified=true;
     for(std::size_t k=0;k<directions.size();++k) for(double h:{1e-4,5e-5})
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentWorkForTesting().directional_evaluations+=2;
+#endif
         const auto plus=EvaluateProfile(domain,y,eta+h*directions[k],true,context),minus=EvaluateProfile(domain,y,eta-h*directions[k],true,context);
         bool passed=false,same_face=false; double error=std::numeric_limits<double>::infinity();
         if(plus.valid && minus.valid)

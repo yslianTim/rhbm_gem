@@ -9,6 +9,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointTestNumerics.hpp"
+#include "support/JointRuntimeJson.hpp"
 #include <cmath>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
@@ -173,4 +174,75 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfRe
     EXPECT_FALSE(assembled.profile_agrees);
     const auto replay=n::EvaluateState(data.domain,data.y,assembled.eta,assembled.beta,data.context);
     EXPECT_EQ(assembled.prediction,replay.x*assembled.beta);
+}
+
+TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
+{
+    auto input=Snapshot(); input.atom_ids.resize(1); input.support.resize(1);
+    input.row_ids.resize(40); input.observations.resize(40);
+    n::AssessmentWorkForTesting()={};
+    const auto fit=core::FitJointComponents(core::JointProblem(input),{.55});
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().directional_evaluations,12);
+    input.row_ids.push_back("constant"); input.observations.push_back(7);
+    n::AssessmentWorkForTesting()={};
+    const auto constant=core::FitJointComponents(core::JointProblem(input),{.55});
+    ASSERT_TRUE(constant.assembled_state);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,2);
+    n::AssessmentWorkForTesting()={};
+    const auto multiple=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
+    ASSERT_TRUE(multiple.assembled_state);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,3);
+}
+
+TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsChangedInputs)
+{
+    auto input=Snapshot(); input.atom_ids.resize(1); input.support.resize(1);
+    input.row_ids.resize(40); input.observations.resize(40);
+    const core::JointProblem problem(input); const auto & data=core::JointProblemAccess::Get(problem);
+    auto context=n::ChildContext(data.context,data.partition.components[0],true);
+    std::vector<n::ComponentResult> fits{n::SolveComponent(data.partition.components[0],data.y,n::Vector::Constant(1,.55),data.context)};
+    ASSERT_TRUE(fits[0].trusted_assessment);
+    const n::AssessmentReuse reuse{data.domain,data.y,context,*fits[0].trusted_assessment};
+    const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
+        n::AssessmentWorkForTesting()={};
+        const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,fits,&reuse);
+        EXPECT_EQ(n::AssessmentWorkForTesting().assessments,assessments);
+        const auto fresh=n::AssessProfile(domain,y,assembled.eta,policy,&assembled.beta);
+        EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(assembled.assessment),
+            second_stage_test::matched::runtime_json::Assessment(fresh));
+    };
+    check(data.domain,data.y,data.context,0);
+    auto policy=data.context; policy.rank.rows+=100; check(data.domain,data.y,policy,1);
+    policy=data.context; policy.scale*=2; check(data.domain,data.y,policy,1);
+    policy=data.context; policy.linear.release_factor*=2; check(data.domain,data.y,policy,1);
+    policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,1);
+    auto y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
+    auto domain=data.domain; domain.atoms[0][1].square+=.001; check(domain,data.y,data.context,1);
+    fits[0].trusted_state->beta(0)+=.1; check(data.domain,data.y,data.context,1);
+}
+
+TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirections)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0];
+    auto context=n::ChildContext(data.context,view,true); const auto y=n::SelectValues(data.y,view.rows);
+    auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
+    ASSERT_TRUE(search.trials.back().accepted);
+    const auto accepted=search.trials.back().endpoint;
+    search.eta=n::Vector::Constant(1,1000); search.stopped=true; search.stop_reason="untrusted-trial";
+    const auto fallback=n::AssessComponentSearch(view.domain,y,context,search);
+    ASSERT_TRUE(fallback.trusted_state && fallback.trusted_assessment);
+    EXPECT_FALSE(fallback.search_success); EXPECT_FALSE(fallback.assessment.primary.valid);
+    EXPECT_EQ(fallback.trusted_state->eta,accepted.eta);
+    EXPECT_EQ(fallback.trusted_assessment->primary.eta,accepted.eta);
+    EXPECT_EQ(fallback.trusted_assessment->primary.beta,accepted.beta);
+    context.audit.directions=n::Matrix::Zero(1,3);
+    const auto local=n::SolveComponent(view,data.y,n::Vector::Constant(2,.55),data.context);
+    const auto directed=n::AssessComponentSearch(view.domain,y,context,local.search);
+    ASSERT_TRUE(directed.trusted_assessment);
+    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(*directed.trusted_assessment),
+        second_stage_test::matched::runtime_json::Assessment(n::AssessProfile(view.domain,y,
+            directed.trusted_state->eta,n::ChildContext(data.context,view,true),&directed.trusted_state->beta)));
 }

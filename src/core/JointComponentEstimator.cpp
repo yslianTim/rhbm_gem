@@ -157,10 +157,8 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         if(result.trusted_state)
         {
             component.state=State(*result.trusted_state,data.context.scale);
-            auto context=n::ChildContext(data.context,view,true); context.audit.directions.resize(0,0);
-            const auto assessment=n::AssessProfile(view.domain,n::SelectValues(data.y,view.rows),result.trusted_state->eta,context,&result.trusted_state->beta);
-            component.evidence=Evidence(assessment,JointEvidenceScope::ComponentLocal);
-            component.ranks=Ranks(assessment,JointEvidenceScope::ComponentLocal);
+            component.evidence=Evidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
+            component.ranks=Ranks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
         }
         else component.evidence=Evidence({},JointEvidenceScope::ComponentLocal);
         out.costs.search_seconds+=result.search.seconds;
@@ -169,13 +167,22 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         out.components.push_back(std::move(component)); results.push_back(std::move(result));
     }
     const auto assembly_start=Clock::now();
-    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results);
+    std::optional<n::EvaluationContext> reuse_context;
+    std::optional<n::AssessmentReuse> reuse;
+    if(results.size()==1 && results[0].trusted_assessment && data.partition.constant_rows.empty())
+    {
+        const auto & view=data.partition.components[0];
+        // A single full component has identity row/atom mappings in this immutable snapshot.
+        reuse_context=n::ChildContext(data.context,view,true); reuse_context->audit.directions.resize(0,0);
+        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*results[0].trusted_assessment});
+    }
+    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=Evidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.ranks=Ranks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     if(assembly.available)
     {
-        const auto state=n::EvaluateState(data.domain,data.y,assembly.eta,assembly.beta,data.context);
+        const auto & state=assembly.raw;
         out.assembled_state=State(state,data.context.scale);
         if(state.valid) {out.prediction=Values(assembly.prediction); out.objective=assembly.objective/(data.context.scale*data.context.scale);}
         out.evidence.push_back({"assembled-profile",assembly.profile_agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,

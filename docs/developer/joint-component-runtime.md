@@ -18,6 +18,20 @@ LS, A nonnegative, C signed, log-B, structural 2.5 Angstrom support and Guarded
 search (200 profile evaluations / 100 accepted updates per component). Search
 reference/replay, LM settings and endpoint assessment are unchanged by cleanup.
 
+Endpoint evaluations and reference solves are passed into assessment and trust
+replay instead of being repeated. A component returns both its historical search
+endpoint diagnostics and the assessment of its actual trusted state; the public
+API consumes the latter. Assembly uses its raw evaluation for the returned state
+and retains an independently reprofiled consistency control.
+
+Within one immutable problem, a full single component can share its assessment
+with assembly only when observations, structural support, identities, state,
+scale, linear/rank policy and audit directions match exactly. Constant rows or
+different contexts require separate assessments. This is scoped result reuse,
+not a persistent cache. A fallback state's evidence is assessed at that state's
+actual coefficients and widths. Search decisions and search evaluation counts
+are unchanged; assessment work and timing are separate from search work.
+
 The Map/Model builder includes all non-hydrogen contributors and rejects partial
 non-hydrogen selection. It uses the actual Map geometry and `sphere-fma-v1`,
 retaining negative/zero observations and every structural membership, including
@@ -118,5 +132,4 @@ The [evidence index](joint-component-evidence.md) records the retired research
 workflows, limitations and retrieval commits. No ordinary regression requires
 the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. First-stage `mdpde_experiment solve`, `forward`
 and `refine`, production second-stage and the separate fold-168 regression
-remain supported. Endpoint assessment deduplication and memory/backend changes
-are separate future work.
+remain supported. Memory/backend changes are separate future work.

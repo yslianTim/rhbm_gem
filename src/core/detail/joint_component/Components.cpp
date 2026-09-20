@@ -86,10 +86,15 @@ ComponentResult SolveComponent(const ComponentView & view,const Vector & y,const
 {
     const auto context=ChildContext(parent,view,true);
     const Vector local_y=SelectValues(y,view.rows),start=SelectValues(initial_b,view.atoms);
-    ComponentResult out; out.search=SearchProfile(view.domain,local_y,start,context);
+    return AssessComponentSearch(view.domain,local_y,context,SearchProfile(view.domain,local_y,start,context));
+}
+ComponentResult AssessComponentSearch(const Domain & domain,const Vector & y,const EvaluationContext & context,SearchResult search)
+{
+    ComponentResult out; out.search=std::move(search);
     const auto audit_start=std::chrono::steady_clock::now();
-    out.assessment=AssessProfile(view.domain,local_y,out.search.eta,context);
-    out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();
+    const auto endpoint=EvaluateProfile(domain,y,out.search.eta,false,&context);
+    const auto reference=EvaluateProfile(domain,y,out.search.eta,true,&context);
+    out.assessment=AssessEvaluated(domain,y,endpoint,reference,context);
     for(std::size_t k=0;k<out.search.trials.size();++k)
     {
         const auto & trial=out.search.trials[k];
@@ -97,14 +102,23 @@ ComponentResult SolveComponent(const ComponentView & view,const Vector & y,const
     }
     if(out.trusted_state && out.assessment.primary.valid)
     {
-        const auto e=EvaluateProfile(view.domain,local_y,out.assessment.primary.eta,false,&context);
-        out.endpoint_trust=CheckTrust(view.domain,local_y,e,context);
+        out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
         if(out.endpoint_trust->passed) {out.trusted_state=out.assessment.primary; out.trusted_trial.reset();}
     }
+    if(out.trusted_state)
+    {
+        auto local_context=context; local_context.audit.directions.resize(0,0);
+        const auto & state=*out.trusted_state;
+        const bool same=state.eta.size()==endpoint.eta.size() && state.beta.size()==endpoint.beta.size() &&
+            (state.eta.array()==endpoint.eta.array()).all() && (state.beta.array()==endpoint.beta.array()).all();
+        if(same && SameAssessmentPolicy(context,local_context)) out.trusted_assessment=out.assessment;
+        else out.trusted_assessment=AssessProfile(domain,y,state.eta,local_context,&state.beta);
+    }
+    out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,const Vector & y,const ComponentPartition & partition,
-    const EvaluationContext & context,const std::vector<ComponentResult> & fits)
+    const EvaluationContext & context,const std::vector<ComponentResult> & fits,const AssessmentReuse * reuse)
 {
     if(fits.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");
     AssemblyResult out; out.available=true; out.row_mask.assign(static_cast<std::size_t>(domain.rows),false);
@@ -125,9 +139,30 @@ AssemblyResult AssembleComponents(const Domain & domain,const Vector & y,const C
         for(auto r:view.rows) out.row_mask[static_cast<std::size_t>(r)]=true;
     }
     if(!out.available) return out;
-    out.assessment=AssessProfile(domain,y,out.eta,context,&out.beta);
     const auto raw=EvaluateState(domain,y,out.eta,out.beta,context);
     out.raw=raw;
+    bool same=reuse && SameAssessmentPolicy(reuse->context,context) && reuse->domain.rows==domain.rows &&
+        reuse->domain.atoms.size()==domain.atoms.size() && reuse->observations.size()==y.size() &&
+        (reuse->observations.array()==y.array()).all() && reuse->assessment.primary.eta.size()==out.eta.size() &&
+        reuse->assessment.primary.beta.size()==out.beta.size() &&
+        (reuse->assessment.primary.eta.array()==out.eta.array()).all() && (reuse->assessment.primary.beta.array()==out.beta.array()).all();
+    if(same) for(std::size_t a=0;a<domain.atoms.size();++a)
+    {
+        const auto & left=reuse->domain.atoms[a], & right=domain.atoms[a];
+        same &= left.size()==right.size();
+        if(same) for(std::size_t k=0;k<left.size();++k) same &= left[k].row==right[k].row && left[k].square==right[k].square;
+    }
+    if(same)
+    {
+        out.assessment=reuse->assessment;
+        // Preserve raw-state metadata; the shared numerical evidence is unchanged.
+        out.assessment.primary=raw;
+    }
+    else
+    {
+        const auto reference=EvaluateProfile(domain,y,out.eta,true,&context);
+        out.assessment=AssessEvaluated(domain,y,raw,reference,context,true);
+    }
     if(raw.valid) {out.prediction=raw.x*out.beta; out.objective=.5*raw.residual.squaredNorm();}
     if(raw.valid && out.assessment.primary.valid)
     {
