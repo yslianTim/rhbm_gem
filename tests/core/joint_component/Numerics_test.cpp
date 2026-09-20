@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <cmath>
@@ -163,5 +164,49 @@ TEST(JointComponentNumericsTest, TrueWidthDoubleAndFloat32LinearControls)
         EXPECT_LT((primary.beta-truth).norm(),quantized ? 1e-6 : 1e-12);
         if(quantized) EXPECT_GT(primary.residual.norm(),1e-9);
         else EXPECT_LT(primary.residual.norm(),1e-12);
+    }
+}
+
+TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
+{
+    namespace n=p::runtime;
+    Sample sample; const p::Domain base(sample.grid,sample.atoms);
+    for(Eigen::Index rows:{8191,8192,8193})
+    {
+        std::vector<std::vector<p::Support>> support(base.atoms.size()); Vector y(rows);
+        for(Eigen::Index first=0;first<rows;first+=base.rows)
+            for(std::size_t a=0;a<support.size();++a) for(const auto & s:base.atoms[a])
+                if(first+s.row<rows) support[a].push_back({first+s.row,s.square});
+        for(Eigen::Index r=0;r<rows;++r) y(r)=sample.y(r%base.rows)+.03*std::sin(static_cast<double>(r));
+        const p::Domain domain(rows,std::move(support)); const auto context=p::MakeContext(y,2);
+        const auto e=p::Evaluate(domain,y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
+        ASSERT_TRUE(e.valid); const auto dense=p::DenseDifferentiate(e,context.scale,&context);
+        ASSERT_TRUE(dense.valid); ASSERT_GT((dense.projected-dense.jacobian).norm(),1e-3);
+        const auto correction=p::DenseLocalCorrection(e,dense,context);
+        for(Eigen::Index tile:{17,8192})
+        {
+            n::DerivativeWorkForTesting()={};
+            const auto d=n::PrepareDerivative(e,context.scale,&context,-1,tile);
+            const auto reduced=n::ReduceDerivative(d,e.residual,true,tile);
+            ASSERT_TRUE(reduced.valid);
+            EXPECT_LE(n::DerivativeWorkForTesting().maximum_generated_rows,tile);
+            EXPECT_LE(n::DerivativeWorkForTesting().maximum_reduction_rows,tile+e.x.cols());
+            const auto actual=p::MaterializeDerivative(e,context.scale,&context,-1,tile);
+            EXPECT_LT((actual.projected-dense.projected).norm()/dense.projected.norm(),1e-8);
+            EXPECT_LT((actual.jacobian-dense.jacobian).norm()/dense.jacobian.norm(),1e-8);
+            for(const auto & matrices:{std::pair{dense.projected,reduced.projected},std::pair{dense.jacobian,reduced.jacobian}})
+            {
+                const auto left=n::ComputeSpectrum(matrices.first,context.rank,2,false);
+                const auto right=n::ComputeSpectrum(matrices.second,context.rank,2,false);
+                EXPECT_EQ(left.rank,right.rank);
+                EXPECT_LE((left.singular_values-right.singular_values).lpNorm<Eigen::Infinity>()/left.singular_values(0),1e-10);
+                EXPECT_NEAR(left.threshold,right.threshold,1e-10*left.threshold);
+            }
+            Eigen::JacobiSVD<Eigen::MatrixXd> svd(reduced.jacobian,Eigen::ComputeThinU|Eigen::ComputeThinV);
+            svd.setThreshold(context.rank.Relative(2));
+            const Vector compact=svd.solve(-reduced.response);
+            EXPECT_LE(((correction-compact).array().abs()/(1+correction.array().abs().max(compact.array().abs()))).maxCoeff(),1e-10);
+            EXPECT_LT((reduced.jacobian_norms-dense.jacobian.colwise().blueNorm().transpose()).norm()/dense.jacobian.norm(),1e-10);
+        }
     }
 }

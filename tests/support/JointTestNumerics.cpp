@@ -34,9 +34,9 @@ j::object MatrixSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index colu
 j::object MatrixSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return runtime_json::MatrixSpectrum(runtime::ComputeSpectrum(x,p,columns,normalize));}
 Vector LocalCorrection(const Evaluation & e,const Differential & d,const EvaluationContext & c,double threshold)
-{return runtime::ComputeLocalCorrection(e,d,c,threshold);}
+{return DenseLocalCorrection(e,d,c,threshold);}
 Differential Differentiate(const Evaluation & e,double scale,const EvaluationContext * c,double threshold)
-{return runtime::DifferentiateProfile(e,scale,c,threshold);}
+{return MaterializeDerivative(e,scale,c,threshold);}
 j::object Trust(const Domain & d,const Vector & y,const Evaluation & e,const EvaluationContext * c)
 {
     const auto fallback=c ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(d.atoms.size()));

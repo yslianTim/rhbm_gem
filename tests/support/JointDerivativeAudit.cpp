@@ -15,7 +15,7 @@ boost::json::object AssessWithDerivativeAudit(const joint_abc::Domain & domain,c
     out.erase("runtime_convergence"); out.erase("runtime_checks"); out.erase("runtime_failure");
     out["joint_qualified"]=false; out["qualification_failure"]=assessment.failure;
     if(!assessment.jacobian) return out;
-    const auto differential=DifferentiateProfile(endpoint,scale,context);
+    const auto differential=joint_abc::MaterializeDerivative(endpoint,scale,context);
     j::array checks;
     std::vector<Vector> directions{Vector::Ones(eta.size()).normalized(),Vector(eta.size()),assessment.weak_directions.col(0)};
     for(Eigen::Index k=0;k<eta.size();++k) directions[1](k)=k%2 ? -1 : 1;

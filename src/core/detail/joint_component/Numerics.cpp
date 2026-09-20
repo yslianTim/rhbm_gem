@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "TiledDerivative.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -337,13 +338,13 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
     out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()));
     out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
-    const auto differential=DifferentiateProfile(endpoint,scale,context);
+    const auto prepared=PrepareDerivative(endpoint,scale,context);
+    const auto differential=ReduceDerivative(prepared,endpoint.residual);
     if(!differential.valid) {out.failure=differential.reason; return out;}
-    const auto width_reduced=Reduce(differential.projected,Matrix(y.size(),0));
-    const auto widths=Decompose(width_reduced.first,context->rank.rows);
+    const auto widths=Decompose(differential.projected,context->rank.rows);
     out.widths=CompactSpectrum(widths,context->rank.rows);
-    const Vector norms=differential.projected.colwise().norm(); out.widths->column_norms=norms;
-    Matrix normalized=width_reduced.first;
+    const Vector & norms=differential.projected_norms; out.widths->column_norms=norms;
+    Matrix normalized=differential.projected;
     for(Eigen::Index k=0;k<norms.size();++k) if(norms(k)>0) normalized.col(k)/=norms(k);
     out.normalized_widths=CompactSpectrum(Decompose(normalized,context->rank.rows),context->rank.rows);
     out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.matrixV().cols()));
@@ -353,9 +354,8 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
         Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign); if(direction(sign)<0) direction=-direction;
         out.weak_directions.col(k)=direction;
     }
-    const auto correction_reduced=Reduce(differential.jacobian,Matrix(-endpoint.residual/scale));
-    const auto correction_svd=Decompose(correction_reduced.first,context->rank.rows);
-    const Vector correction=correction_svd.solve(correction_reduced.second.col(0)); out.correction=correction;
+    const auto correction_svd=Decompose(differential.jacobian,context->rank.rows);
+    const Vector correction=correction_svd.solve(-differential.response); out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
     out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;

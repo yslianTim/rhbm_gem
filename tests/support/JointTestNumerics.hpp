@@ -1,6 +1,7 @@
 #pragma once
 #include "support/JointTestGeometry.hpp"
 #include "support/JointTestContext.hpp"
+#include "support/JointDenseReference.hpp"
 
 namespace second_stage_test::matched::joint_abc {
 using Sparse=Eigen::SparseMatrix<double>;
@@ -17,7 +18,7 @@ struct Evaluation : runtime::Evaluation
     Evaluation()=default;
     explicit Evaluation(runtime::Evaluation e);
 };
-using Differential=runtime::Differential;
+using Differential=DenseDifferential;
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
     const Eigen::VectorXd & eta, bool reference=false, const EvaluationContext * = nullptr,
     const std::vector<runtime::LinearBlock> * = nullptr);
