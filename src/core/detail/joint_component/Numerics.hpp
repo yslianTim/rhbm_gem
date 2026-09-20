@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include "SnapshotViews.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
 #include <memory>
@@ -9,7 +10,6 @@
 #include <limits>
 
 namespace rhbm_gem::core::joint_component {
-using Vector=Eigen::VectorXd;
 using Matrix=Eigen::MatrixXd;
 using Sparse=Eigen::SparseMatrix<double>;
 inline constexpr double unavailable=std::numeric_limits<double>::quiet_NaN();
@@ -35,8 +35,8 @@ struct LinearPolicy
 struct EvaluationContext
 {
     std::string snapshot_hash;
-    std::shared_ptr<const Vector> observations;
-    std::vector<std::string> atom_ids,row_ids;
+    std::shared_ptr<const VectorMap> observations;
+    Identities atom_ids,row_ids;
     double scale{1};
     RankPolicy rank;
     LinearPolicy linear;
@@ -44,14 +44,8 @@ struct EvaluationContext
     bool independent_search{};
     int profile_budget{200},update_budget{100};
 };
-EvaluationContext CreateContext(const Vector &,Eigen::Index,const std::string & = "",const AuditPlan & = {});
-struct Support {Eigen::Index row; double square;};
-struct Domain
-{
-    Eigen::Index rows;
-    std::vector<std::vector<Support>> atoms;
-    Domain(Eigen::Index count,std::vector<std::vector<Support>> support):rows(count),atoms(std::move(support)) {}
-};
+EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",const AuditPlan & = {});
+EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "",const AuditPlan & = {});
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
 BasisValues EvaluateKernel(double,double,double);
 struct LinearResult
@@ -62,10 +56,10 @@ struct LinearResult
     int rank{},solves{},releases{},block_factorizations{};
 };
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
-LinearResult SolveLinear(const Sparse &,const Vector &,const Vector &,bool=false,bool=true,
+LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
     const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr);
-LinearResult SolveLinear(const Matrix &,const Vector &,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
-std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,const Vector &);
+LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
+std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
@@ -74,7 +68,7 @@ struct Certificate
     std::vector<Eigen::Index> active_atoms;
     std::optional<int> linear_solves,free_rank,block_factorizations;
 };
-Certificate CertifyLinear(const Sparse &,const Vector &,const Vector &,double=0);
+Certificate CertifyLinear(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint
 {
     Vector eta,beta,gradient;
@@ -95,8 +89,8 @@ struct Spectrum
 Spectrum DesignSpectrum(const Sparse &,const Vector &);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
-Evaluation EvaluateProfile(const Domain &,const Vector &,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr);
-Evaluation EvaluateState(const Domain &,const Vector &,const Vector &,const Vector &,const EvaluationContext &);
+Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr);
+Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 Differential DifferentiateProfile(const Evaluation &,double,const EvaluationContext *,double=-1);
 Vector ComputeLocalCorrection(const Evaluation &,const Differential &,const EvaluationContext &,double=-1);
 struct TrustEvidence
@@ -108,8 +102,8 @@ struct TrustEvidence
         gradient_difference{unavailable},cancellation_ratio{unavailable};
     std::optional<Spectrum> design;
 };
-TrustEvidence CheckTrust(const Domain &,const Vector &,const Evaluation &,const EvaluationContext &);
-TrustEvidence CheckTrust(const Domain &,const Vector &,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
+TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
+TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
 struct LmTrial
 {
     Vector accepted_eta,step,diagonal;
@@ -136,7 +130,7 @@ struct SearchResult
     std::string stop_reason;
     double seconds{},reference_seconds{};
 };
-SearchResult SearchProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &);
+SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &);
 struct Assessment
 {
     Endpoint primary,reference;
@@ -150,15 +144,15 @@ struct Assessment
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
-Assessment AssessProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,const Vector * = nullptr);
+Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr);
 // Evaluations belong to this exact domain, observations and numerical policy.
-Assessment AssessEvaluated(const Domain &,const Vector &,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
+Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
 bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
 // Borrowed only while the originating immutable problem and report remain alive.
 struct AssessmentReuse
 {
     const Domain & domain;
-    const Vector & observations;
+    VectorRef observations;
     const EvaluationContext & context;
     const Assessment & assessment;
 };
@@ -169,16 +163,21 @@ AssessmentWork & AssessmentWorkForTesting();
 struct ComponentView
 {
     std::string id;
-    std::vector<Eigen::Index> atoms,rows,atom_to_local,row_to_local;
+    std::vector<Eigen::Index> atoms,rows;
+    std::shared_ptr<const PartitionMappings> mappings;
+    Eigen::Index component_index{};
+    Eigen::Index LocalAtom(Eigen::Index a) const {return mappings->atom_component.at(static_cast<std::size_t>(a))==component_index ? mappings->atom_to_local.at(static_cast<std::size_t>(a)) : -1;}
+    Eigen::Index LocalRow(Eigen::Index r) const {return mappings->row_component.at(static_cast<std::size_t>(r))==component_index ? mappings->row_to_local.at(static_cast<std::size_t>(r)) : -1;}
     Domain domain{0,{}};
 };
 struct ComponentPartition
 {
     std::vector<ComponentView> components;
-    std::vector<Eigen::Index> atom_component,row_component,constant_rows,unobserved_atoms;
+    std::shared_ptr<const PartitionMappings> mappings;
+    std::vector<Eigen::Index> constant_rows,unobserved_atoms;
 };
-ComponentPartition Partition(const Domain &,const std::vector<std::string> &);
-Vector SelectValues(const Vector &,const std::vector<Eigen::Index> &);
+ComponentPartition Partition(const Domain &,const Identities &);
+Vector SelectValues(VectorRef,const std::vector<Eigen::Index> &);
 EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,bool);
 struct ComponentResult
 {
@@ -191,8 +190,8 @@ struct ComponentResult
     std::optional<TrustEvidence> endpoint_trust;
     bool search_success{};
 };
-ComponentResult AssessComponentSearch(const Domain &,const Vector &,const EvaluationContext &,SearchResult);
-ComponentResult SolveComponent(const ComponentView &,const Vector &,const Vector &,const EvaluationContext &);
+ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult);
+ComponentResult SolveComponent(const ComponentView &,VectorRef,const Vector &,const EvaluationContext &);
 struct AssemblyResult
 {
     bool available{},completed{true},profile_agrees{};
@@ -203,6 +202,6 @@ struct AssemblyResult
     Endpoint raw,profile_control;
     bool profile_evaluated{};
 };
-AssemblyResult AssembleComponents(const Domain &,const Vector &,const ComponentPartition &,const EvaluationContext &,
+AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
     const std::vector<ComponentResult> &,const AssessmentReuse * = nullptr);
 }

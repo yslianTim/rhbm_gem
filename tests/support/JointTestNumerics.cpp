@@ -15,11 +15,13 @@ double Seconds(std::chrono::steady_clock::time_point start)
 Domain::Domain(const unique_grid::Grid & grid,const std::vector<Atom> & geometry)
     :runtime::Domain(static_cast<Eigen::Index>(grid.voxels.size()),std::vector<std::vector<Support>>(geometry.size()))
 {
+    std::vector<std::vector<Support>> support(geometry.size());
     for (std::size_t a=0;a<geometry.size();++a) for (Eigen::Index p=0;p<rows;++p)
     {
         const double square=SquareDistance(grid.voxels[static_cast<std::size_t>(p)].position,geometry[a].position);
-        if (square<=2.5*2.5) atoms[a].push_back({p,square});
+        if (square<=2.5*2.5) support[a].push_back({p,square});
     }
+    static_cast<runtime::Domain &>(*this)=runtime::Domain(rows,std::move(support));
 }
 
 Evaluation::Evaluation(runtime::Evaluation e):runtime::Evaluation(std::move(e)),certificate(runtime_json::Certificate(runtime::Evaluation::certificate)) {}

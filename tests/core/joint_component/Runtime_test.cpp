@@ -218,8 +218,8 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     policy=data.context; policy.scale*=2; check(data.domain,data.y,policy,1);
     policy=data.context; policy.linear.release_factor*=2; check(data.domain,data.y,policy,1);
     policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,0);
-    auto y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
-    auto domain=data.domain; domain.atoms[0][1].square+=.001; check(domain,data.y,data.context,1);
+    n::Vector y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
+    auto support=data.domain.CopySupport(); support[0][1].square+=.001; n::Domain domain(data.domain.rows,std::move(support)); check(domain,data.y,data.context,1);
     fits[0].trusted_state->beta(0)+=.1; check(data.domain,data.y,data.context,1);
 }
 
@@ -294,4 +294,59 @@ TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConver
     global=fit; global.available_row_mask[0]=false; EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
     global=fit; global.components.clear(); EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
     EXPECT_EQ(core::JointFitResult{}.RuntimeConvergence(),Status::Unavailable);
+}
+
+TEST(JointRuntimeTest, SnapshotViewsRetainStorageWithoutDuplicatingObservationsOrMemberships)
+{
+    std::optional<n::ComponentView> retained;
+    std::optional<n::EvaluationContext> context;
+    const double * observations=nullptr;
+    {
+        auto input=Snapshot(); core::JointProblem original(input);
+        core::JointProblem copy=original; core::JointProblem moved=std::move(copy);
+        const auto & data=core::JointProblemAccess::Get(moved);
+        observations=moved.Input().observations.data();
+        EXPECT_EQ(data.y.data(),observations);
+        EXPECT_EQ(data.context.observations->data(),observations);
+        EXPECT_EQ(data.domain.atoms.Storage(),&moved.Input());
+        EXPECT_EQ(data.partition.components[0].domain.atoms.Storage(),&moved.Input());
+        EXPECT_EQ(data.partition.components[0].mappings,data.partition.components[1].mappings);
+        EXPECT_EQ(&data.context.atom_ids[0],&moved.Input().atom_ids[0]);
+        EXPECT_EQ(data.partition.mappings->row_to_local.size(),input.observations.size());
+        retained=data.partition.components[0]; context=n::ChildContext(data.context,*retained,true);
+        input.observations[0]=999; input.support[0].clear();
+    }
+    ASSERT_TRUE(retained && context);
+    EXPECT_EQ(context->observations->data(),observations);
+    EXPECT_NE((*context->observations)(0),999);
+    EXPECT_EQ(retained->domain.atoms[0].size(),40);
+    const n::Vector y=n::SelectValues(*context->observations,retained->rows);
+    EXPECT_TRUE(n::EvaluateProfile(retained->domain,y,n::Vector::Constant(1,std::log(.55)),false,&*context).valid);
+}
+
+TEST(JointRuntimeTest, ManyComponentsShareOneParentMapping)
+{
+    auto input=Snapshot();
+    const auto base=input;
+    for(std::size_t block=1;block<64;++block)
+    {
+        const auto offset=input.observations.size();
+        for(std::size_t a=0;a<base.support.size();++a)
+        {
+            input.atom_ids.push_back(std::to_string(block)+"/"+base.atom_ids[a]);
+            auto support=base.support[a]; for(auto & s:support) s.row+=offset;
+            input.support.push_back(std::move(support));
+        }
+        for(std::size_t r=0;r<base.observations.size();++r)
+        {input.observations.push_back(base.observations[r]); input.row_ids.push_back(std::to_string(block)+"/"+base.row_ids[r]);}
+    }
+    const core::JointProblem problem(std::move(input)); const auto & data=core::JointProblemAccess::Get(problem);
+    ASSERT_EQ(data.partition.components.size(),128);
+    for(const auto & c:data.partition.components)
+    {
+        EXPECT_EQ(c.mappings,data.partition.mappings);
+        EXPECT_EQ(c.domain.atoms.Storage(),&problem.Input());
+        for(std::size_t a=0;a<c.atoms.size();++a) EXPECT_EQ(c.LocalAtom(c.atoms[a]),static_cast<Eigen::Index>(a));
+        for(std::size_t r=0;r<c.rows.size();++r) EXPECT_EQ(c.LocalRow(c.rows[r]),static_cast<Eigen::Index>(r));
+    }
 }

@@ -19,13 +19,15 @@ struct TwoBlocks
     TwoBlocks(double amplitude=2)
     {
         beta<<2,.2,amplitude,-.15;
+        auto support=domain.CopySupport();
         for(int block=0;block<2;++block) for(int k=0;k<40;++k)
         {
             const auto row=block*40+k; const double square=.003*k*k;
-            domain.atoms[static_cast<std::size_t>(block)].push_back({row,square});
+            support[static_cast<std::size_t>(block)].push_back({row,square});
             const auto b=second_stage_test::matched::EvaluateBasis(square,.5,2.5);
             y(row)=beta(2*block)*b.gaussian+beta(2*block+1)*b.charge+.001*std::sin(k);
         }
+        domain=p::Domain(81,std::move(support));
         y(80)=3;
     }
 };

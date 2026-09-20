@@ -10,15 +10,18 @@ namespace rhbm_gem::core::joint_component {
 namespace {
 std::size_t Index(Eigen::Index i) {return static_cast<std::size_t>(i);}
 }
-ComponentPartition Partition(const Domain & domain,const std::vector<std::string> & ids)
+ComponentPartition Partition(const Domain & domain,const Identities & ids)
 {
+    const std::vector<std::string> identities=ids;
     const auto count=static_cast<Eigen::Index>(domain.atoms.size());
-    if(domain.rows<0 || ids.size()!=domain.atoms.size() || std::set<std::string>(ids.begin(),ids.end()).size()!=ids.size())
+    if(domain.rows<0 || ids.size()!=domain.atoms.size() || std::set<std::string>(identities.begin(),identities.end()).size()!=ids.size())
         throw std::invalid_argument("Invalid structural partition identities.");
     std::vector<Eigen::Index> parent(static_cast<std::size_t>(count)); std::iota(parent.begin(),parent.end(),0);
     auto root=[&](Eigen::Index a) {while(parent[Index(a)]!=a) {parent[Index(a)]=parent[Index(parent[Index(a)])]; a=parent[Index(a)];} return a;};
     std::vector<std::vector<Eigen::Index>> contributors(static_cast<std::size_t>(domain.rows));
-    ComponentPartition out; out.atom_component.assign(ids.size(),-1); out.row_component.assign(static_cast<std::size_t>(domain.rows),-1);
+    ComponentPartition out; auto mappings=std::make_shared<PartitionMappings>(); out.mappings=mappings;
+    mappings->atom_component.assign(ids.size(),-1); mappings->row_component.assign(static_cast<std::size_t>(domain.rows),-1);
+    mappings->atom_to_local.assign(ids.size(),-1); mappings->row_to_local.assign(static_cast<std::size_t>(domain.rows),-1);
     for(Eigen::Index a=0;a<count;++a)
     {
         std::set<Eigen::Index> seen;
@@ -40,39 +43,34 @@ ComponentPartition Partition(const Domain & domain,const std::vector<std::string
         out.components.push_back(std::move(v));
     }
     std::sort(out.components.begin(),out.components.end(),[](const auto & a,const auto & b){return a.id<b.id;});
-    for(std::size_t c=0;c<out.components.size();++c) for(auto a:out.components[c].atoms) out.atom_component[Index(a)]=static_cast<Eigen::Index>(c);
+    for(std::size_t c=0;c<out.components.size();++c) for(auto a:out.components[c].atoms) mappings->atom_component[Index(a)]=static_cast<Eigen::Index>(c);
     for(Eigen::Index r=0;r<domain.rows;++r)
     {
         if(contributors[Index(r)].empty()) {out.constant_rows.push_back(r); continue;}
-        const auto c=out.atom_component[Index(contributors[Index(r)][0])]; out.row_component[Index(r)]=c; out.components[Index(c)].rows.push_back(r);
+        const auto c=mappings->atom_component[Index(contributors[Index(r)][0])]; mappings->row_component[Index(r)]=c; out.components[Index(c)].rows.push_back(r);
     }
-    for(auto & v:out.components)
+    for(std::size_t c=0;c<out.components.size();++c)
     {
-        v.atom_to_local.assign(ids.size(),-1); v.row_to_local.assign(static_cast<std::size_t>(domain.rows),-1);
-        for(std::size_t r=0;r<v.rows.size();++r) v.row_to_local[Index(v.rows[r])]=static_cast<Eigen::Index>(r);
-        v.domain.rows=static_cast<Eigen::Index>(v.rows.size()); v.domain.atoms.resize(v.atoms.size());
-        for(std::size_t a=0;a<v.atoms.size();++a)
-        {
-            v.atom_to_local[Index(v.atoms[a])]=static_cast<Eigen::Index>(a);
-            for(const auto & s:domain.atoms[Index(v.atoms[a])]) v.domain.atoms[a].push_back({v.row_to_local[Index(s.row)],s.square});
-        }
+        auto & v=out.components[c]; v.mappings=mappings; v.component_index=static_cast<Eigen::Index>(c);
+        for(std::size_t r=0;r<v.rows.size();++r) mappings->row_to_local[Index(v.rows[r])]=static_cast<Eigen::Index>(r);
+        for(std::size_t a=0;a<v.atoms.size();++a) mappings->atom_to_local[Index(v.atoms[a])]=static_cast<Eigen::Index>(a);
+        const std::shared_ptr<const Indices> rows(mappings,&mappings->row_to_local);
+        v.domain=domain.Select(v.atoms,static_cast<Eigen::Index>(v.rows.size()),rows);
     }
     return out;
 }
-Eigen::VectorXd SelectValues(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices)
+Eigen::VectorXd SelectValues(VectorRef v,const std::vector<Eigen::Index> & indices)
 {Eigen::VectorXd out(static_cast<Eigen::Index>(indices.size())); for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(indices[k]); return out;}
 EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
 {
-    auto c=parent; c.atom_ids.clear(); c.row_ids.clear();
-    for(auto a:view.atoms) c.atom_ids.push_back(parent.atom_ids.at(static_cast<std::size_t>(a)));
-    for(auto r:view.rows) c.row_ids.push_back(parent.row_ids.at(static_cast<std::size_t>(r)));
+    auto c=parent; c.atom_ids=parent.atom_ids.Select(view.atoms); c.row_ids=parent.row_ids.Select(view.rows);
     if(parent.audit.directions.size())
     {
         c.audit.directions.resize(static_cast<Eigen::Index>(view.atoms.size()),parent.audit.directions.cols());
         for(std::size_t a=0;a<view.atoms.size();++a) c.audit.directions.row(static_cast<Eigen::Index>(a))=parent.audit.directions.row(view.atoms[a]);
     }
     c.audit.boundary_atoms.clear();
-    for(auto a:parent.audit.boundary_atoms) if(view.atom_to_local.at(static_cast<std::size_t>(a))>=0) c.audit.boundary_atoms.push_back(view.atom_to_local[Index(a)]);
+    for(auto a:parent.audit.boundary_atoms) if(view.LocalAtom(a)>=0) c.audit.boundary_atoms.push_back(view.LocalAtom(a));
     c.audit.boundary=!c.audit.boundary_atoms.empty();
     c.independent_search=independent;
     if(independent)
@@ -82,13 +80,20 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     }
     return c;
 }
-ComponentResult SolveComponent(const ComponentView & view,const Vector & y,const Vector & initial_b,const EvaluationContext & parent)
+ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto context=ChildContext(parent,view,true);
-    const Vector local_y=SelectValues(y,view.rows),start=SelectValues(initial_b,view.atoms);
+    const Vector start=SelectValues(initial_b,view.atoms);
+    const bool contiguous=!view.rows.empty() && view.rows.back()-view.rows.front()+1==static_cast<Eigen::Index>(view.rows.size());
+    if(contiguous)
+    {
+        const auto local_y=y.segment(view.rows.front(),static_cast<Eigen::Index>(view.rows.size()));
+        return AssessComponentSearch(view.domain,local_y,context,SearchProfile(view.domain,local_y,start,context));
+    }
+    const Vector local_y=SelectValues(y,view.rows);
     return AssessComponentSearch(view.domain,local_y,context,SearchProfile(view.domain,local_y,start,context));
 }
-ComponentResult AssessComponentSearch(const Domain & domain,const Vector & y,const EvaluationContext & context,SearchResult search)
+ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search)
 {
     ComponentResult out; out.search=std::move(search);
     const auto audit_start=std::chrono::steady_clock::now();
@@ -116,7 +121,7 @@ ComponentResult AssessComponentSearch(const Domain & domain,const Vector & y,con
     out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;
 }
-AssemblyResult AssembleComponents(const Domain & domain,const Vector & y,const ComponentPartition & partition,
+AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
     const EvaluationContext & context,const std::vector<ComponentResult> & fits,const AssessmentReuse * reuse)
 {
     if(fits.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");

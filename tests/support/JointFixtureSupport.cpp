@@ -35,18 +35,19 @@ FrozenFixture LoadFixture(const fs::path & path)
         if(sim::FileSha256(path/file)!=j::value_to<std::string>(snapshot.at(key))) throw std::runtime_error("Snapshot hash mismatch.");
     FrozenFixture in; in.hash=sim::FileSha256(path/"snapshot.json"); in.name=j::value_to<std::string>(dataset.at("name"));
     const auto voxels=Table(path/"voxels.csv"),contributors=Table(path/"contributors.csv");
-    in.domain.rows=static_cast<Eigen::Index>(voxels.size()); in.domain.atoms.resize(j::value_to<std::size_t>(snapshot.at("atoms")));
+    in.domain.rows=static_cast<Eigen::Index>(voxels.size()); std::vector<std::vector<Support>> support(j::value_to<std::size_t>(snapshot.at("atoms")));
     if(j::value_to<std::size_t>(snapshot.at("rows"))!=voxels.size() || j::value_to<std::size_t>(snapshot.at("memberships"))!=contributors.size()) throw std::runtime_error("Snapshot population mismatch.");
     std::vector<std::size_t> offsets(voxels.size()+1); std::pair<Eigen::Index,Eigen::Index> previous{-1,-1};
     for(const auto & r:contributors)
     {
         const auto row=static_cast<Eigen::Index>(r.at(0)),atom=static_cast<Eigen::Index>(r.at(1));
-        if(row<0 || row>=in.domain.rows || atom<0 || static_cast<std::size_t>(atom)>=in.domain.atoms.size() ||
+        if(row<0 || row>=in.domain.rows || atom<0 || static_cast<std::size_t>(atom)>=support.size() ||
             r[0]!=static_cast<double>(row) || r[1]!=static_cast<double>(atom) || std::pair{row,atom}<=previous)
             throw std::runtime_error("Invalid contributor CSR.");
         previous={row,atom}; ++offsets[static_cast<std::size_t>(row)+1];
-        in.domain.atoms[static_cast<std::size_t>(atom)].push_back({row,r.at(2)});
+        support[static_cast<std::size_t>(atom)].push_back({row,r.at(2)});
     }
+    in.domain=Domain(in.domain.rows,std::move(support));
     for(std::size_t k=1;k<offsets.size();++k) offsets[k]+=offsets[k-1];
     if(snapshot.at("row_offsets").as_array().size()!=offsets.size()) throw std::runtime_error("Invalid CSR offsets.");
     for(std::size_t k=0;k<offsets.size();++k) if(j::value_to<std::size_t>(snapshot.at("row_offsets").at(k))!=offsets[k]) throw std::runtime_error("Invalid CSR offsets.");

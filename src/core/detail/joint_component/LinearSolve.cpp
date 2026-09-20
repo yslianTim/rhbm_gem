@@ -23,7 +23,7 @@ Eigen::VectorXd ColumnNorms(const Sparse & x)
 }
 }
 std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
-    const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,const Eigen::VectorXd & y)
+    const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,VectorRef y)
 {
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
     Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
@@ -96,7 +96,7 @@ struct BlockFace
 };
 // Only the free-face factorization changes. The caller owns the single global
 // active-set trajectory, release tolerance and coefficient vector.
-BlockFace SolveBlocks(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & weights,
+BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weights,
     const Eigen::VectorXd & scales,const std::vector<Eigen::Index> & free,
     const std::vector<LinearBlock> & blocks,bool reference,double relative)
 {
@@ -175,7 +175,7 @@ BlockFace SolveBlocks(const Sparse & x,const Eigen::VectorXd & y,const Eigen::Ve
     return out;
 }
 template<class Matrix>
-LinearResult WeightedSolveImpl(const Matrix & x, const Eigen::VectorXd & y,
+LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
     const Eigen::VectorXd & weights, bool use_svd, bool blocked_svd, const Eigen::SparseMatrix<double> * sparse_design,
     const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr)
 {
@@ -317,8 +317,8 @@ LinearResult WeightedSolveImpl(const Matrix & x, const Eigen::VectorXd & y,
 
 
 } // namespace
-LinearResult SolveLinear(const Sparse & x,const Vector & y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
+LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
 {return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks);}
-LinearResult SolveLinear(const Matrix & x,const Vector & y,const Vector & w,bool svd,bool blocked,const Sparse * cache)
+LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache)
 {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
 }

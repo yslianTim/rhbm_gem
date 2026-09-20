@@ -37,16 +37,21 @@ double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const
 {return Relative(columns)*maximum;}
-EvaluationContext CreateContext(const Vector & y,Eigen::Index atoms,const std::string & hash,const AuditPlan & plan)
+EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,const std::string & hash,const AuditPlan & plan)
 {
-    EvaluationContext c; c.snapshot_hash=hash; c.observations=std::make_shared<const Eigen::VectorXd>(y);
+    EvaluationContext c; c.snapshot_hash=hash; c.observations=Observe(input);
+    const auto & y=*c.observations; const auto atoms=static_cast<Eigen::Index>(input->atom_ids.size());
     c.scale=std::max(1.0,y.norm()); c.rank={y.size(),2*atoms,atoms};
-    c.linear.rank_relative=c.rank.Relative(2*atoms);
-    c.linear.release_response_norm=y.norm();
-    c.audit=plan;
-    for(Eigen::Index a=0;a<atoms;++a) c.atom_ids.push_back(std::to_string(a));
-    for(Eigen::Index r=0;r<y.size();++r) c.row_ids.push_back(std::to_string(r));
-    return c;
+    c.linear.rank_relative=c.rank.Relative(2*atoms); c.linear.release_response_norm=y.norm(); c.audit=plan;
+    c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
+    c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
+}
+EvaluationContext CreateContext(VectorRef y,Eigen::Index atoms,const std::string & hash,const AuditPlan & plan)
+{
+    auto input=std::make_shared<JointProblemInput>(); input->observations.assign(y.data(),y.data()+y.size());
+    for(Eigen::Index a=0;a<atoms;++a) input->atom_ids.push_back(std::to_string(a));
+    for(Eigen::Index r=0;r<y.size();++r) input->row_ids.push_back(std::to_string(r));
+    return CreateContext(std::move(input),hash,plan);
 }
 BasisValues EvaluateKernel(double square, double width, double cutoff)
 {
@@ -61,7 +66,7 @@ BasisValues EvaluateKernel(double square, double width, double cutoff)
     else if (r <= 2.5) {out.charge=std::erf(r/width/std::sqrt(2.0))/r; out.charge_log_width=-center*exponent;}
     return out;
 }
-Certificate CertifyLinear(const Sparse & x,const Eigen::VectorXd & y,const Eigen::VectorXd & beta,double observation_scale)
+Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & beta,double observation_scale)
 {
     Certificate out; out.evaluated=true;
     if (x.rows()!=y.size() || x.cols()!=beta.size() || !beta.allFinite() || !y.allFinite()) return out;
@@ -89,7 +94,7 @@ Certificate CertifyLinear(const Sparse & x,const Eigen::VectorXd & y,const Eigen
 }
 
 namespace {
-Evaluation Basis(const Domain & domain,const Vector & y,const Vector & eta)
+Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
@@ -116,7 +121,7 @@ Evaluation Basis(const Domain & domain,const Vector & y,const Vector & eta)
     out.valid=true; return out;
 }
 }
-Evaluation EvaluateProfile(const Domain & domain,const Vector & y,const Vector & eta,bool reference,const EvaluationContext * context,
+Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -138,7 +143,7 @@ Evaluation EvaluateProfile(const Domain & domain,const Vector & y,const Vector &
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
 
-Evaluation EvaluateState(const Domain & domain,const Vector & y,const Vector & eta,const Vector & beta,const EvaluationContext & context)
+Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context)
 {
     auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
@@ -191,12 +196,12 @@ Differential DifferentiateProfile(const Evaluation & e,double scale,const Evalua
     out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
 }
 
-TrustEvidence CheckTrust(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext & policy)
+TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
     const auto reference=EvaluateProfile(domain,y,e.eta,true,&policy);
     return CheckTrust(domain,y,e,policy,reference);
 }
-TrustEvidence CheckTrust(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
+TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
     const auto * context=&policy;
     TrustEvidence out; out.reference=reference; out.primary_valid=e.valid;
@@ -302,7 +307,7 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights)
     Spectrum out; out.rank=(values.array()>threshold*values(0)).count(); out.minimum=values.tail(1)(0);
     out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=threshold*values(0); return out;
 }
-Assessment AssessProfile(const Domain & domain,const Vector & y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
+Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
 {
     const auto endpoint=supplied_beta ? EvaluateState(domain,y,eta,*supplied_beta,policy) : EvaluateProfile(domain,y,eta,false,&policy);
     const auto reference=EvaluateProfile(domain,y,eta,true,&policy);
@@ -318,7 +323,7 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
-Assessment AssessEvaluated(const Domain &,const Vector & y,const Evaluation & endpoint,const Evaluation & reference,
+Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
     const EvaluationContext & policy,bool supplied)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION

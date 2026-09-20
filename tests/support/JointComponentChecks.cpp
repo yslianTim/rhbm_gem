@@ -26,15 +26,18 @@ j::object Census(const Domain & domain,const ComponentPartition & partition,cons
     {
         std::size_t entries{}; for(const auto & a:c.domain.atoms) entries+=a.size(); memberships+=entries;
         largest_atoms=std::max(largest_atoms,c.atoms.size()); largest_rows=std::max(largest_rows,c.rows.size());
+        std::vector<Eigen::Index> atom_map(partition.mappings->atom_component.size(),-1),row_map(partition.mappings->row_component.size(),-1);
+        for(auto a:c.atoms) atom_map[Index(a)]=c.LocalAtom(a);
+        for(auto r:c.rows) row_map[Index(r)]=c.LocalRow(r);
         components.push_back(j::object{{"id",c.id},{"atoms",Indices(c.atoms)},{"rows",Indices(c.rows)},
-            {"parent_atom_to_local",Indices(c.atom_to_local)},{"parent_row_to_local",Indices(c.row_to_local)},
+            {"parent_atom_to_local",Indices(atom_map)},{"parent_row_to_local",Indices(row_map)},
             {"atom_count",c.atoms.size()},{"row_count",c.rows.size()},{"memberships",entries}});
     }
     double constant{}; if(context.observations) for(auto r:partition.constant_rows) constant+=std::pow((*context.observations)(r),2)/2;
     return {{"schema_version",1},{"snapshot_sha256",context.snapshot_hash},{"atoms",domain.atoms.size()},
         {"rows",domain.rows},{"memberships",memberships},{"component_count",components.size()},{"components",components},
-        {"largest_atom_count",largest_atoms},{"largest_row_count",largest_rows},{"atom_component",Indices(partition.atom_component)},
-        {"row_component",Indices(partition.row_component)},{"constant_rows",Indices(partition.constant_rows)},
+        {"largest_atom_count",largest_atoms},{"largest_row_count",largest_rows},{"atom_component",Indices(partition.mappings->atom_component)},
+        {"row_component",Indices(partition.mappings->row_component)},{"constant_rows",Indices(partition.constant_rows)},
         {"constant_objective",constant},{"unobserved_atoms",Indices(partition.unobserved_atoms)}};
 }
 
@@ -51,7 +54,7 @@ Sparse Slice(const Sparse & x,const ComponentView & view,const std::vector<Eigen
     std::vector<Eigen::Triplet<double>> entries;
     for(std::size_t k=0;k<columns.size();++k) for(Sparse::InnerIterator e(x,columns[k]);e;++e)
     {
-        const auto row=view.row_to_local[Index(e.row())];
+        const auto row=view.LocalRow(e.row());
         if(row<0) throw std::runtime_error("Cross-component numeric entry.");
         entries.emplace_back(row,static_cast<Eigen::Index>(k),e.value());
     }

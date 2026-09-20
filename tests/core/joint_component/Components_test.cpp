@@ -15,13 +15,15 @@ struct TwoBlocks
     TwoBlocks(double amplitude=2)
     {
         beta<<2,.2,amplitude,-.15;
+        auto support=domain.CopySupport();
         for(int block=0;block<2;++block) for(int k=0;k<40;++k)
         {
             const auto row=block*40+k; const double square=.003*k*k;
-            domain.atoms[static_cast<std::size_t>(block)].push_back({row,square});
+            support[static_cast<std::size_t>(block)].push_back({row,square});
             const auto b=second_stage_test::matched::EvaluateBasis(square,.5,2.5);
             y(row)=beta(2*block)*b.gaussian+beta(2*block+1)*b.charge+.001*std::sin(k);
         }
+        domain=p::Domain(81,std::move(support));
         y(80)=3;
     }
 };
@@ -115,7 +117,7 @@ TEST(JointComponentChecksTest, ZeroObservationsAndUnderflowDoNotChangeStructural
     const auto before=p::BuildPartition(domain,c.atom_ids);
     (void)p::Evaluate(domain,Vector::Zero(3),Vector::Constant(2,-100));
     const auto after=p::BuildPartition(domain,c.atom_ids);
-    ASSERT_EQ(before.components.size(),1); EXPECT_EQ(before.atom_component,after.atom_component);
+    ASSERT_EQ(before.components.size(),1); EXPECT_EQ(before.mappings->atom_component,after.mappings->atom_component);
 }
 
 TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
@@ -173,7 +175,7 @@ TEST(JointComponentChecksTest, RankEvidenceUsesGlobalDimensionsAndCurrentSpectru
 
 TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
 {
-    TwoBlocks f; f.domain.atoms.push_back(f.domain.atoms[1]);
+    TwoBlocks f; auto support=f.domain.CopySupport(); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));
     auto c=p::MakeContext(f.y,3); const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const Vector initial=Vector::Constant(3,.55);
     const auto result=p::FitComponents(f.domain,f.y,initial,part,c);
@@ -209,7 +211,7 @@ TEST(JointComponentChecksTest, BudgetAndInvalidStartRetainHonestAvailability)
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)
 {
-    TwoBlocks f; f.domain.atoms[1].clear(); const auto c=p::MakeContext(f.y,2);
+    TwoBlocks f; auto support=f.domain.CopySupport(); support[1].clear(); f.domain=p::Domain(f.domain.rows,std::move(support)); const auto c=p::MakeContext(f.y,2);
     const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const auto state=p::SameState(f.domain,f.y,f.eta,f.beta,part,c);
     EXPECT_TRUE(state.at("raw").at("passed").as_bool()); EXPECT_TRUE(state.at("passed").as_bool());

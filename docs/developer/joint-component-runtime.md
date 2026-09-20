@@ -86,6 +86,24 @@ evidence remains resolution-unverified. Active-a fails local correction,
 zero-signal fails width identification, and duplicate has no usable state. None
 of these runtime results claims an offline regular certificate.
 
+## Immutable storage and component views
+
+The input snapshot owns observations, memberships and identities once. Numerical
+observations are read-only Eigen maps; contexts and component support views retain
+shared ownership, including after the original problem handle is destroyed.
+Partition reverse mappings are shared once across components. Local support is
+mapped on access without copying squared distances. Contiguous observation ranges
+are borrowed; noncontiguous ranges use one scoped gather buffer for search and
+assessment. Census and offline bundles materialize legacy mappings only at their
+serialization boundary.
+
+The Map builder collects and sorts relevant voxel indices instead of allocating
+an index array for the entire map. Voxel ordering and support arithmetic remain
+unchanged. `joint_component_benchmark DATASET CASE` measures the public API in a
+fresh process and reports construction, search, assessment, assembly, total time
+and process peak RSS. It uses only the installed public API and can also be built
+against the baseline library.
+
 ## Routine regression
 
 ```sh

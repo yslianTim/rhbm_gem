@@ -111,21 +111,15 @@ JointProblem::JointProblem(JointProblemInput input)
     if(input.atom_ids.empty() || input.support.size()!=input.atom_ids.size() || input.row_ids.size()!=input.observations.size() ||
         std::set<std::string>(input.row_ids.begin(),input.row_ids.end()).size()!=input.row_ids.size())
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
-    auto data=std::make_shared<n::ProblemData>(); data->input=std::move(input);
-    data->y=Eigen::Map<const n::Vector>(data->input.observations.data(),static_cast<Eigen::Index>(data->input.observations.size()));
+    for(const auto & atom:input.support) for(const auto & s:atom)
+        if(s.row>=input.observations.size()) throw std::invalid_argument("Invalid joint contributor row.");
+    auto data=std::make_shared<n::ProblemData>(std::make_shared<const JointProblemInput>(std::move(input)));
     if(!data->y.allFinite()) throw std::invalid_argument("Nonfinite joint observations.");
-    data->domain.rows=data->y.size(); data->domain.atoms.resize(data->input.support.size());
-    for(std::size_t a=0;a<data->input.support.size();++a) for(const auto & s:data->input.support[a])
-    {
-        if(s.row>=data->input.observations.size()) throw std::invalid_argument("Invalid joint contributor row.");
-        data->domain.atoms[a].push_back({static_cast<Eigen::Index>(s.row),s.squared_distance});
-    }
-    data->partition=n::Partition(data->domain,data->input.atom_ids);
-    data->context=n::CreateContext(data->y,static_cast<Eigen::Index>(data->input.atom_ids.size()));
-    data->context.atom_ids=data->input.atom_ids; data->context.row_ids=data->input.row_ids;
+    data->partition=n::Partition(data->domain,data->input->atom_ids);
+    data->context=n::CreateContext(data->input);
     m_data=std::move(data);
 }
-const JointProblemInput & JointProblem::Input() const {return m_data->input;}
+const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
 JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 {
@@ -133,8 +127,8 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     const auto dims=map.GetGridSize(); const auto spacing=map.GetGridSpacing(),origin=map.GetOrigin();
     for(std::size_t k=0;k<3;++k) if(dims[k]<=0 || !std::isfinite(spacing[k]) || spacing[k]<=0 || !std::isfinite(origin[k]))
         throw std::invalid_argument("Invalid joint map geometry.");
-    std::vector<std::vector<std::pair<std::size_t,double>>> support(atoms.size());
-    std::vector<Eigen::Index> rows(map.GetMapValueArraySize(),-1);
+    input.support.resize(atoms.size());
+    std::vector<std::size_t> rows;
     for(std::size_t a=0;a<atoms.size();++a)
     {
         input.atom_ids.push_back(std::to_string(atoms[a]->GetSerialID()));
@@ -149,14 +143,13 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         {
             const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dims[0])*(static_cast<std::size_t>(y)+static_cast<std::size_t>(dims[1])*static_cast<std::size_t>(z));
             const double square=simulation::SupportSquare(simulation::GridPosition({x,y,z},spacing,origin),position);
-            if(square<=6.25) {rows[index]=0; support[a].push_back({index,square});}
+            if(square<=6.25) {rows.push_back(index); input.support[a].push_back({index,square});}
         }
     }
-    for(std::size_t k=0;k<rows.size();++k) if(rows[k]==0)
-    {rows[k]=static_cast<Eigen::Index>(input.observations.size()); input.row_ids.push_back(std::to_string(k)); input.observations.push_back(map.GetMapValue(k));}
-    input.support.resize(atoms.size());
-    for(std::size_t a=0;a<atoms.size();++a) for(const auto & [index,square]:support[a])
-        input.support[a].push_back({static_cast<std::size_t>(rows[index]),square});
+    std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
+    for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
+    for(auto & atom:input.support) for(auto & s:atom)
+        s.row=static_cast<std::size_t>(std::lower_bound(rows.begin(),rows.end(),s.row)-rows.begin());
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
@@ -168,7 +161,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
     if(!out.initialization.valid)
     {
-        out.available_row_mask.assign(data.input.observations.size(),false);
+        out.available_row_mask.assign(data.input->observations.size(),false);
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
         return out;
     }

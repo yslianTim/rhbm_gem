@@ -9,7 +9,7 @@ double Seconds(std::chrono::steady_clock::time_point start)
 struct Profile
 {
     const Domain & domain;
-    const Vector & y;
+    VectorRef y;
     double scale;
     const EvaluationContext & context;
     Evaluation cached;
@@ -65,7 +65,7 @@ struct Profile
     }
 };
 }
-SearchResult SearchProfile(const Domain & domain,const Vector & y,const Vector & initial_b,
+SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context)
 {
     const auto start=std::chrono::steady_clock::now();

@@ -246,6 +246,10 @@ add_executable(joint_component_runtime experiments/joint_component_runtime.cpp s
 target_link_libraries(joint_component_runtime PRIVATE joint_test_support)
 add_dependencies(tests_all joint_component_runtime)
 
+add_executable(joint_component_benchmark experiments/joint_component_benchmark.cpp)
+target_link_libraries(joint_component_benchmark PRIVATE rhbm_gem CompilerFlags)
+add_dependencies(tests_all joint_component_benchmark)
+
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
         support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp

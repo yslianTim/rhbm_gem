@@ -101,27 +101,31 @@ void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string
         }
     }
     auto context=runtime::CreateContext(y,count,j::value_to<std::string>(saved.at("parent_snapshot_sha256")),plan);
-    context.atom_ids.clear(); context.row_ids.clear();
-    for(const auto & id:saved.at("atom_ids").as_array()) context.atom_ids.push_back(j::value_to<std::string>(id));
-    for(const auto & id:saved.at("row_ids").as_array()) context.row_ids.push_back(j::value_to<std::string>(id));
+    std::vector<std::string> atom_ids,row_ids;
+    for(const auto & id:saved.at("atom_ids").as_array()) atom_ids.push_back(j::value_to<std::string>(id));
+    for(const auto & id:saved.at("row_ids").as_array()) row_ids.push_back(j::value_to<std::string>(id));
+    context.atom_ids=std::move(atom_ids); context.row_ids=std::move(row_ids);
     if(ContextEvidence(context)!=saved) throw std::invalid_argument("Isolated parent context differs from its observations or numerical policy.");
     const auto & input=bundle.at("component_input"); ComponentView view;
     view.id=j::value_to<std::string>(input.at("id"));
-    view.atom_to_local.assign(static_cast<std::size_t>(count),-1); view.row_to_local.assign(static_cast<std::size_t>(y.size()),-1);
+    auto mappings=std::make_shared<runtime::PartitionMappings>(); view.mappings=mappings;
+    mappings->atom_to_local.assign(static_cast<std::size_t>(count),-1); mappings->row_to_local.assign(static_cast<std::size_t>(y.size()),-1);
+    mappings->atom_component.assign(static_cast<std::size_t>(count),-1); mappings->row_component.assign(static_cast<std::size_t>(y.size()),-1);
     for(const auto & atom:input.at("atoms").as_array())
     {
         const auto index=j::value_to<Eigen::Index>(atom);
-        view.atom_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.atoms.size()); view.atoms.push_back(index);
+        mappings->atom_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.atoms.size()); mappings->atom_component.at(static_cast<std::size_t>(index))=0; view.atoms.push_back(index);
     }
     for(const auto & row:input.at("rows").as_array())
     {
         const auto index=j::value_to<Eigen::Index>(row);
-        if(view.row_to_local.at(static_cast<std::size_t>(index))!=-1) throw std::invalid_argument("Duplicate component row.");
-        view.row_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.rows.size()); view.rows.push_back(index);
+        if(mappings->row_to_local.at(static_cast<std::size_t>(index))!=-1) throw std::invalid_argument("Duplicate component row.");
+        mappings->row_to_local.at(static_cast<std::size_t>(index))=static_cast<Eigen::Index>(view.rows.size()); mappings->row_component.at(static_cast<std::size_t>(index))=0; view.rows.push_back(index);
     }
-    view.domain.rows=static_cast<Eigen::Index>(view.rows.size()); view.domain.atoms.resize(view.atoms.size());
+    std::vector<std::vector<Support>> support(view.atoms.size());
     for(const auto & entry:input.at("memberships").as_array())
-        view.domain.atoms.at(j::value_to<std::size_t>(entry.at(1))).push_back({j::value_to<Eigen::Index>(entry.at(0)),j::value_to<double>(entry.at(2))});
+        support.at(j::value_to<std::size_t>(entry.at(1))).push_back({j::value_to<Eigen::Index>(entry.at(0)),j::value_to<double>(entry.at(2))});
+    view.domain=Domain(static_cast<Eigen::Index>(view.rows.size()),std::move(support));
     std::vector<std::string> ids; for(auto atom:view.atoms) ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
     const auto partition=BuildPartition(view.domain,ids);
     if(partition.components.size()!=1 || partition.components[0].id!=view.id) throw std::invalid_argument("Bundle must contain exactly the requested structural component.");
