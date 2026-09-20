@@ -77,7 +77,6 @@ struct Endpoint
     std::string reason;
 };
 struct Evaluation : Endpoint {Vector residual; Sparse x,derivative;};
-struct Differential {Matrix projected,jacobian; bool valid{}; std::string reason;};
 struct Spectrum
 {
     bool available{true};
@@ -91,8 +90,6 @@ Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
-Differential DifferentiateProfile(const Evaluation &,double,const EvaluationContext *,double=-1);
-Vector ComputeLocalCorrection(const Evaluation &,const Differential &,const EvaluationContext &,double=-1);
 struct TrustEvidence
 {
     Endpoint reference;

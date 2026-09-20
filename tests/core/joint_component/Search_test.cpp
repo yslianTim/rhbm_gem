@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
 #include "support/InstrumentedLM.hpp"
+#include "core/detail/joint_component/TiledQR.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
@@ -30,6 +31,8 @@ struct RejectOnce
     int values() const {return 2;}
     int operator()(const Vector & x,Vector & r) {++calls; r=Vector::Constant(2,tiny_step ? -1 : x(0)-1); return 0;}
     int df(const Vector &,Eigen::MatrixXd & d) {d=Eigen::MatrixXd::Constant(2,1,tiny_step ? 1e100 : 1.); return 0;}
+    int linearize(const Vector & x,const Vector & residual,Eigen::MatrixXd & d,Vector & response,Vector & norms)
+    {df(x,d); response=residual; norms=d.colwise().blueNorm(); return 0;}
     bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double,bool proposed)
     {if(reject_all || (proposed && (always || rejected==0))) {++rejected; return false;} return true;}
 };
@@ -86,4 +89,46 @@ TEST(JointComponentSearchTest, BudgetAndUnrepresentableStepsReturnWithoutAnUpdat
     small.useExternalScaling=true; small.diag=Vector::Ones(1); x.setOnes(); small.minimizeInit(x);
     EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::UserAsked);
     EXPECT_EQ(tiny.failure,"unrepresentable-step"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
+}
+
+namespace {
+struct LinearResidual
+{
+    Eigen::MatrixXd design;
+    Vector target,step;
+    bool tiled;
+    double predicted{},actual{},ratio{};
+    std::string failure;
+    explicit LinearResidual(bool compact):design(7,2),target(7),tiled(compact)
+    {design<<1,2, 3,-1, 2,4, -1,3, 4,2, 2,-2, 0,1; target<<1,3,-2,5,2,-3,4;}
+    int values() const {return 7;}
+    bool retry() const {return false;}
+    int operator()(const Vector & x,Vector & r) {r=design*x-target; return 0;}
+    int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
+    {
+        norms=design.colwise().blueNorm();
+        if(!tiled) {factor=design; response=residual; return 0;}
+        p::runtime::TiledQR reduced(2,1);
+        for(Eigen::Index first=0;first<7;first+=2)
+        {const auto count=std::min<Eigen::Index>(2,7-first); reduced.Append(design.middleRows(first,count),residual.segment(first,count));}
+        factor=reduced.r; response=reduced.target.col(0); return 0;
+    }
+    bool Trial(const Vector &,const Vector & s,const Vector &,double,double,double a,double p0,double r,bool)
+    {step=s; actual=a; predicted=p0; ratio=r; return true;}
+};
+}
+TEST(JointComponentSearchTest, CompactLinearizationPreservesStepAndFullResidualReduction)
+{
+    LinearResidual dense(false),tiled(true); p::InstrumentedLM<LinearResidual> a(dense),b(tiled);
+    Vector x=Vector::Zero(2),y=x;
+    a.parameters.factor=b.parameters.factor=.1;
+    a.minimizeInit(x); b.minimizeInit(y);
+    EXPECT_EQ(a.fjac.rows(),2); EXPECT_EQ(b.fjac.rows(),2);
+    EXPECT_EQ(a.minimizeOneStep(x),b.minimizeOneStep(y));
+    EXPECT_LT((x-y).norm(),1e-12); EXPECT_LT((dense.step-tiled.step).norm(),1e-12);
+    EXPECT_NEAR(dense.predicted,tiled.predicted,1e-12);
+    EXPECT_NEAR(dense.actual,tiled.actual,1e-12); EXPECT_NEAR(dense.ratio,tiled.ratio,1e-12);
+    EXPECT_NEAR(b.fnorm,(tiled.design*y-tiled.target).stableNorm(),1e-12);
+    EXPECT_GT(b.fnorm,1); // Nonzero orthogonal residual must survive row reduction.
+    EXPECT_EQ(b.fjac.rows(),2);
 }

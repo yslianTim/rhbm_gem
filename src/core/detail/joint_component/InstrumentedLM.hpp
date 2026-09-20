@@ -14,7 +14,8 @@
 #include <unsupported/Eigen/NonLinearOptimization>
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.
-// Only trial instrumentation/rejection was added; control arithmetic is retained.
+// Trial instrumentation/rejection and compact QR input are added; trust-region
+// control arithmetic and full residual norms are retained.
 namespace rhbm_gem::core::joint_component {
 using namespace Eigen;
 template <typename FunctorType, typename Scalar = double>
@@ -123,7 +124,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeIni
   wa3.resize(n);
   wa4.resize(m);
   fvec.resize(m);
-  fjac.resize(m, n);
+  fjac.resize(n, n);
   if (!useExternalScaling) diag.resize(n);
   eigen_assert((!useExternalScaling || diag.size() == n) &&
                "When useExternalScaling is set, the caller must provide a valid 'diag'");
@@ -162,8 +163,9 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
 
   eigen_assert(x.size() == n);  // check the caller is not cheating us
 
-  /* calculate the jacobian matrix. */
-  Index df_ret = functor.df(x, fjac);
+  /* Orthogonal row reduction preserves J and Q^T f for the LM step. */
+  FVectorType reduced_response;
+  Index df_ret = functor.linearize(x, fvec, fjac, reduced_response, wa2);
   if (df_ret < 0) return LevenbergMarquardtSpace::UserAsked;
   if (df_ret > 0)
     // numerical diff, we evaluated the function df_ret times
@@ -172,7 +174,6 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     njev++;
 
   /* compute the qr factorization of the jacobian. */
-  wa2 = fjac.colwise().blueNorm();
   ColPivHouseholderQR<JacobianType> qrfac(fjac);
   fjac = qrfac.matrixQR();
   permutation = qrfac.colsPermutation();
@@ -192,9 +193,8 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
 
   /* form (q transpose)*fvec and store the first n components in */
   /* qtf. */
-  wa4 = fvec;
-  wa4.applyOnTheLeft(qrfac.householderQ().adjoint());
-  qtf = wa4.head(n);
+  reduced_response.applyOnTheLeft(qrfac.householderQ().adjoint());
+  qtf = reduced_response.head(n);
 
   /* compute the norm of the scaled gradient. */
   gnorm = 0.;

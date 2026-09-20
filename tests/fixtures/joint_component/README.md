@@ -14,10 +14,17 @@ historical global or globally restricted qualifications.
 
 The Python runtime runner verifies the package and member hashes before
 extracting into its build/work directory. No external CIF/MRC or historical
-experiment archive is required. Numeric states use scaled `1e-10` comparison;
-accepted/rejected decisions, stopping reasons, ranks, counts and availability
-must match exactly. Independent scalar forward/KKT/gradient replay supplies an
-additional endpoint check.
+experiment archive is required. The ownership-only transition uses `--strict-history`: numeric states use
+scaled `1e-10` comparison and decisions, stops, ranks, counts and availability
+match exactly. The current tiled runtime uses backend numerical parity:
+converged identifiable states retain scaled `1e-10` comparison, normalized
+objectives use `1e-12`, and runtime checks/availability remain exact. Iteration
+counts and stop codes may change. Nonconverged endpoints need not be unique;
+their objectives may not worsen beyond `1e-12`. Changed endpoint active faces
+are reported rather than comparing ranks of different free designs. At both
+actual and historical fixed states, dense/tiled derivative, spectrum, rank and
+local-correction comparisons remain mandatory where applicable. Independent
+scalar forward/KKT/gradient replay supplies an additional endpoint check.
 
 Default cases are baseline first-stage in both precisions, near-0.02/narrower in
 both precisions, and weak-1e-4, active-a, zero-signal and duplicate first-stage

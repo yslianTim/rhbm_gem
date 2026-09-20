@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from joint_runtime_support import differences, scientific, unpack, read
-from joint_component_runtime import CATALOG, compare, runtime_expected
+from joint_component_runtime import CATALOG, compare, runtime_expected, backend_differences
 import joint_fixture_records as records
 import joint_offline_support as runner
 import numpy as np
@@ -48,6 +48,42 @@ class JointRuntimeSupportTest(unittest.TestCase):
         self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
         expected['qualification_checks'] = {}
         self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+
+    def test_backend_contract_allows_trace_changes_but_not_lost_evidence(self):
+        record = dict(usable_state=True, runtime_convergence='passed',
+                      runtime_checks=dict(inner=True, b_gradient=True, local_correction=True, identified=True),
+                      search_success=True, stop_reason='native-lm-stop', accepted_updates=3, profile_evaluations=4,
+                      trials=[dict(accepted=True, valid=True, trust_passed=True)],
+                      last_trusted_state=dict(valid=True, feasible=True, kkt_passed=True, free_rank=2,
+                                              objective=1e-15, beta=[2., .1], eta=[-.7], b=[.5]))
+        actual = copy.deepcopy(record)
+        actual.update(accepted_updates=4, profile_evaluations=5, stop_reason='unrepresentable-step', search_success=False)
+        self.assertFalse(backend_differences(record, actual, 1.))
+        actual['last_trusted_state']['b'][0] += 1e-6
+        self.assertTrue(backend_differences(record, actual, 1.))
+        actual = copy.deepcopy(record); del actual['runtime_checks']['inner']
+        self.assertTrue(backend_differences(record, actual, 1.))
+        actual = copy.deepcopy(record); actual['trials'][0]['trust_passed'] = False
+        self.assertTrue(backend_differences(record, actual, 1.))
+        actual = copy.deepcopy(record); actual['profile_evaluations'] = 201
+        self.assertTrue(backend_differences(record, actual, 1.))
+        actual = copy.deepcopy(record); actual['last_trusted_state']['free_rank'] = 1
+        self.assertTrue(backend_differences(record, actual, 1.))
+
+    def test_backend_nonconverged_endpoint_must_not_worsen_objective(self):
+        expected = dict(usable_state=True, runtime_convergence='failed', runtime_checks={'identified': False},
+                        search_success=False, stop_reason='profile-budget', accepted_updates=1, profile_evaluations=200,
+                        last_trusted_state=dict(valid=True, feasible=True, kkt_passed=True, free_rank=2, objective=.1))
+        actual = copy.deepcopy(expected)
+        actual['last_trusted_state']['objective'] = .09
+        self.assertFalse(backend_differences(expected, actual, 10.))
+        expected['last_trusted_state']['active_atoms'] = []
+        actual['last_trusted_state'].update(active_atoms=[0], free_rank=1)
+        self.assertFalse(backend_differences(expected, actual, 10.))
+        actual['last_trusted_state']['objective'] = .10001
+        self.assertTrue(backend_differences(expected, actual, 10.))
+        actual['last_trusted_state'] = None
+        self.assertTrue(backend_differences(expected, actual, 10.))
 
     def test_fixture_is_self_contained_and_restores_modified_member(self):
         with tempfile.TemporaryDirectory() as tmp:

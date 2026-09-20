@@ -1,5 +1,6 @@
 #include "Numerics.hpp"
 #include "InstrumentedLM.hpp"
+#include "TiledDerivative.hpp"
 #include <chrono>
 
 namespace rhbm_gem::core::joint_component {
@@ -50,12 +51,14 @@ struct Profile
     }
     int operator()(const Vector & eta,Vector & residual)
     {if(!Get(eta)) return -1; residual=cached.residual/scale; return 0;}
-    int df(const Vector & eta,Matrix & jacobian)
+    int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
         if(!Get(eta)) return -1;
-        auto differential=DifferentiateProfile(cached,scale,&context); ++derivatives;
+        const auto prepared=PrepareDerivative(cached,scale,&context);
+        auto differential=ReduceDerivative(prepared,cached.residual,false); ++derivatives;
         if(!differential.valid) {failure=differential.reason; return -1;}
-        jacobian=std::move(differential.jacobian); return 0;
+        factor=std::move(differential.jacobian); response=std::move(differential.response);
+        norms=std::move(differential.jacobian_norms); return 0;
     }
     void Accept(const Vector & eta,int update)
     {

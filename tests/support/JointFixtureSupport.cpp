@@ -1,5 +1,6 @@
 #include "support/JointFixtureSupport.hpp"
 #include "support/JointRuntimeJson.hpp"
+#include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/command/detail/SimulationManifest.hpp"
 #include <fstream>
@@ -26,6 +27,61 @@ std::vector<std::vector<double>> Table(const fs::path & path)
     std::string line; std::getline(in,line); std::vector<std::vector<double>> rows;
     while(std::getline(in,line)) {std::istringstream stream(line); std::string cell; auto & r=rows.emplace_back(); while(std::getline(stream,cell,',')) r.push_back(std::stod(cell));}
     return rows;
+}
+
+j::object BackendParity(const Domain & domain,const Vector & y,const j::value & state,const EvaluationContext & context)
+{
+    if(state.is_null()) return {{"status","unavailable"},{"reason","missing-trusted-state"}};
+    const auto e=runtime::EvaluateState(domain,y,Parse(state.at("eta")),Parse(state.at("beta")),context);
+    const auto dense=DenseDifferentiate(e,context.scale,&context);
+    const auto prepared=runtime::PrepareDerivative(e,context.scale,&context);
+    const auto reduced=runtime::ReduceDerivative(prepared,e.residual);
+    if(dense.valid!=reduced.valid) return {{"status","failed"},{"reason","derivative-validity"}};
+    if(!dense.valid) return {{"status","limited"},{"reason",dense.reason}};
+    double projected_error{},jacobian_error{};
+    runtime::Matrix projected,jacobian;
+    for(Eigen::Index first=0;first<domain.rows;first+=runtime::derivative_tile_rows)
+    {
+        const auto count=std::min(runtime::derivative_tile_rows,domain.rows-first);
+        prepared.Rows(first,count,projected,jacobian);
+        projected_error+=(projected-dense.projected.middleRows(first,count)).squaredNorm();
+        jacobian_error+=(jacobian-dense.jacobian.middleRows(first,count)).squaredNorm();
+    }
+    projected_error=std::sqrt(projected_error)/std::max(1e-12,dense.projected.norm());
+    jacobian_error=std::sqrt(jacobian_error)/std::max(1e-12,dense.jacobian.norm());
+    bool passed=projected_error<=1e-8 && jacobian_error<=1e-8;
+    double spectrum_error{}; bool ranks=true;
+    for(int family=0;family<3;++family)
+    {
+        const auto a=runtime::ComputeSpectrum(family==2 ? dense.jacobian : dense.projected,context.rank,e.eta.size(),family==1);
+        runtime::Matrix compact=family==2 ? reduced.jacobian : reduced.projected;
+        if(family==1) for(Eigen::Index k=0;k<compact.cols();++k)
+            if(reduced.projected_norms(k)>0) compact.col(k)/=reduced.projected_norms(k);
+        const auto b=runtime::ComputeSpectrum(compact,context.rank,e.eta.size(),false);
+        const double error=(a.singular_values-b.singular_values).lpNorm<Eigen::Infinity>();
+        spectrum_error=std::max(spectrum_error,a.singular_values(0)>0 ? error/a.singular_values(0) : error);
+        ranks &= a.rank==b.rank && a.available==b.available;
+    }
+    passed &= ranks && spectrum_error<=1e-10;
+    const auto correction=DenseLocalCorrection(e,dense,context);
+    Eigen::JacobiSVD<runtime::Matrix> svd(reduced.jacobian,Eigen::ComputeThinU|Eigen::ComputeThinV);
+    svd.setThreshold(context.rank.Relative(e.eta.size()));
+    const bool correction_available=svd.rank()==e.eta.size();
+    passed &= (correction.size()!=0)==correction_available;
+    double correction_error{};
+    if(correction_available && correction.size())
+    {
+        const Vector actual=svd.solve(-reduced.response);
+        correction_error=((correction-actual).array().abs()/(1+correction.array().abs().max(actual.array().abs()))).maxCoeff();
+        passed &= correction_error<=1e-10;
+    }
+    const Vector gradient=reduced.jacobian.transpose()*reduced.response;
+    const bool gradient_passed=((gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
+    passed &= gradient_passed;
+    return {{"status",passed ? (correction_available ? "passed" : "limited") : "failed"},
+        {"projected_relative_difference",projected_error},{"jacobian_relative_difference",jacobian_error},
+        {"normalized_spectrum_difference",spectrum_error},{"ranks_agree",ranks},{"gradient_passed",gradient_passed},
+        {"local_correction_available",correction_available},{"local_correction_scaled_difference",correction_available ? j::value(correction_error) : j::value(nullptr)}};
 }
 }
 FrozenFixture LoadFixture(const fs::path & path)
@@ -117,7 +173,9 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
             if(std::abs(value-objective)>1e-15*(1+objective)) throw std::runtime_error("Public objective normalization differs.");
     }
     else if(result.prediction || result.objective) throw std::runtime_error("Failed component fabricated a complete prediction.");
+    const j::object parity{{"historical_endpoint",BackendParity(in.domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
+        {"actual_endpoint",BackendParity(in.domain,y,record.at("last_trusted_state"),context)}};
     fs::create_directories(output.parent_path());
-    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(in.domain,partition,context)},{"api_contract_passed",true}});
+    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(in.domain,partition,context)},{"api_contract_passed",true},{"backend_parity",parity}});
 }
 }

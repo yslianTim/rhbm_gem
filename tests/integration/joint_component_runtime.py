@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Self-contained runtime regressions and fresh Map/Model entry points."""
 import argparse
+import json
+from statistics import median
 from pathlib import Path
 import subprocess
 import tempfile
@@ -30,6 +32,43 @@ def runtime_expected(expected):
     return out
 
 
+def backend_differences(expected, actual, scale):
+    """Fixed backend contract; historical search traces remain in differences()."""
+    delta = []
+    for key in ('usable_state', 'runtime_convergence', 'runtime_checks'):
+        if (key in expected) != (key in actual) or expected.get(key) != actual.get(key):
+            delta.append('/'+key)
+    if not isinstance(actual.get('search_success'), bool) or not actual.get('stop_reason'):
+        delta.append('/search-termination')
+    for key, maximum in (('accepted_updates', 100), ('profile_evaluations', 200)):
+        value = actual.get(key)
+        if type(value) is not int or not 0 <= value <= maximum:
+            delta.append('/'+key)
+    for trial in actual.get('trials', []):
+        if trial['accepted'] and (not trial['valid'] or trial['trust_passed'] is not True):
+            delta.append('/untrusted-accepted-trial')
+    left, right = expected.get('last_trusted_state'), actual.get('last_trusted_state')
+    if (left is None) != (right is None):
+        return delta+['/last_trusted_state']
+    if left is None:
+        return delta
+    same_face = left.get('active_atoms') == right.get('active_atoms')
+    endpoint_flags = ('valid', 'feasible', 'kkt_passed') + (('free_rank',) if same_face else ())
+    for key in endpoint_flags:
+        if key not in left or key not in right or left[key] != right[key]:
+            delta.append('/last_trusted_state/'+key)
+    a, b = left['objective']/scale**2, right['objective']/scale**2
+    converged = expected['runtime_convergence'] == 'passed'
+    if not np.isfinite(b) or (abs(a-b) if converged else b-a) > 1e-12:
+        delta.append('/normalized-objective')
+    if converged:
+        for key in ('beta', 'eta', 'b'):
+            x, y = np.asarray(left[key]), np.asarray(right[key])
+            if x.shape != y.shape or not np.all(np.isfinite(y)) or np.any(np.abs(x-y) > 1e-10*(1+np.maximum(np.abs(x), np.abs(y)))):
+                delta.append('/last_trusted_state/'+key)
+    return delta
+
+
 def regression(args):
     catalog = read(args.catalog)
     results = []
@@ -56,11 +95,21 @@ def regression(args):
             if state is not None:
                 y = data['y64' if case.endswith('double') else 'y32']
                 require(replay_passed(data, y, state, max(1., np.linalg.norm(y))), 'Independent endpoint replay failed')
-            delta = differences(runtime_expected(cases[case]['expected']), actual['record'])
+            expected = runtime_expected(cases[case]['expected'])
+            scale = max(1., np.linalg.norm(data['y64' if case.endswith('double') else 'y32']))
+            delta = (differences(expected, actual['record']) if args.strict_history else
+                     backend_differences(expected, actual['record'], scale))
+            if not args.strict_history:
+                for parity in actual['backend_parity'].values():
+                    require(parity['status'] != 'failed', 'Same-state backend parity failed: '+str(parity))
+                    if expected['runtime_convergence'] == 'passed':
+                        require(parity['status'] == 'passed', 'Missing backend parity for a converged endpoint')
             require(actual['api_contract_passed'] and not delta, dataset+'/'+case+': '+str(delta[:20]))
-            results.append(dict(dataset=dataset, case=case, passed=True))
+            old_state = expected.get('last_trusted_state')
+            results.append(dict(dataset=dataset, case=case, passed=True,
+                                endpoint_same_active_face=(old_state['active_atoms'] == state['active_atoms']) if old_state and state else None))
     require(results, 'No regression cases selected')
-    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states')
+    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states', comparison='strict-history' if args.strict_history else 'backend-numerical')
     write(args.work_dir/'summary.json', result)
     return result
 
@@ -95,6 +144,21 @@ def physical_smoke(executable):
     return dict(passed=True, cases=3)
 
 
+def benchmark(args):
+    samples = []
+    for _ in range(3):
+        result = subprocess.run([str(args.executable), str(args.input), args.case],
+                                check=True, capture_output=True, text=True)
+        sample = json.loads(result.stdout)
+        require(sample['available'], 'Benchmark has no assembled state')
+        samples.append(sample)
+    keys = ('construction_seconds', 'search_seconds', 'assessment_seconds', 'assembly_seconds',
+            'total_seconds', 'process_peak_rss_bytes')
+    result = dict(samples=samples, median={key: median(row[key] for row in samples) for key in keys})
+    write(args.output, result)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -103,6 +167,7 @@ def main():
     reg.add_argument('--executable', type=Path, required=True)
     reg.add_argument('--work-dir', type=Path, required=True)
     reg.add_argument('--extended', action='store_true')
+    reg.add_argument('--strict-history', action='store_true', help='Also require historical search decisions and counts')
     reg.add_argument('--all-starts', action='store_true')
     reg.add_argument('--dataset', choices=tuple(read(CATALOG)['datasets']))
     reg.add_argument('--case')
@@ -115,6 +180,9 @@ def main():
         if command == 'run':
             sub.add_argument('--model', type=Path, required=True)
             sub.add_argument('--map', type=Path, required=True)
+    sub = commands.add_parser('benchmark')
+    for name in ('executable', 'input', 'output'): sub.add_argument('--'+name, type=Path, required=True)
+    sub.add_argument('--case', default='first-stage-float32')
     sub = commands.add_parser('summarize'); sub.add_argument('--run', type=Path, required=True)
     sub = commands.add_parser('compare')
     for name in ('left', 'right', 'output'): sub.add_argument('--'+name, type=Path, required=True)
@@ -122,6 +190,7 @@ def main():
     if args.command == 'regression' and args.case and not args.dataset:
         parser.error('--case requires --dataset')
     if args.command == 'regression': result = regression(args)
+    elif args.command == 'benchmark': result = benchmark(args)
     elif args.command == 'physical-smoke': result = physical_smoke(args.executable)
     elif args.command == 'summarize': result = summarize(args.run)
     elif args.command == 'compare':

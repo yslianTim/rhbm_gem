@@ -13,20 +13,13 @@ double Difference(const Vector & a,const Vector & b) {return ((a-b).array().abs(
 template<class Design>
 std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
 {
-    Matrix r(0,x.cols()),target(0,rhs.cols());
-    constexpr Eigen::Index tile=8192;
-    for (Eigen::Index first=0;first<x.rows();first+=tile)
+    TiledQR reduced(x.cols(),rhs.cols());
+    for(Eigen::Index first=0;first<x.rows();first+=derivative_tile_rows)
     {
-        const Eigen::Index n=std::min(tile,x.rows()-first),prior=r.rows();
-        Matrix a(prior+n,x.cols()),b(prior+n,rhs.cols());
-        a.topRows(prior)=r; b.topRows(prior)=target;
-        a.bottomRows(n)=Matrix(x.middleRows(first,n)); b.bottomRows(n)=rhs.middleRows(first,n);
-        const Eigen::HouseholderQR<Matrix> qr(a);
-        const Matrix transformed=qr.householderQ().adjoint()*b;
-        const Eigen::Index keep=std::min(a.rows(),a.cols());
-        r=qr.matrixQR().topRows(keep).template triangularView<Eigen::Upper>(); target=transformed.topRows(keep);
+        const auto count=std::min(derivative_tile_rows,x.rows()-first);
+        reduced.Append(Matrix(x.middleRows(first,count)),rhs.middleRows(first,count));
     }
-    return {std::move(r),std::move(target)};
+    return {std::move(reduced.r),std::move(reduced.target)};
 }
 Eigen::JacobiSVD<Matrix> Decompose(const Matrix & r,Eigen::Index rows)
 {
@@ -155,48 +148,6 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
     return out;
 }
-Vector ComputeLocalCorrection(const Evaluation & e,const Differential & d,const EvaluationContext & context,double absolute)
-{
-    if(!e.valid || !d.valid) return {};
-    const auto reduced=Reduce(d.jacobian,Matrix(-e.residual/context.scale));
-    auto svd=Decompose(reduced.first,context.rank.rows);
-    if(absolute>=0 && svd.singularValues()(0)>0) svd.setThreshold(absolute/svd.singularValues()(0));
-    if(svd.rank()!=d.jacobian.cols()) return {};
-    return svd.solve(reduced.second.col(0));
-}
-
-Differential DifferentiateProfile(const Evaluation & e,double scale,const EvaluationContext * context,double free_design_threshold)
-{
-    Differential out;
-    if (!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
-    std::vector<Eigen::Index> free;
-    for (Eigen::Index k=0;k<e.beta.size();++k) if (k%2 || e.beta(k)>0) free.push_back(k);
-    const Eigen::Index n=e.x.rows(),m=e.beta.size()/2,p=static_cast<Eigen::Index>(free.size());
-    Sparse z(n,p); std::vector<Eigen::Triplet<double>> entries;
-    Matrix t=Matrix::Zero(p,m),raw=Matrix::Zero(n,m);
-    for (Eigen::Index k=0;k<2*m;++k) for (Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
-        raw(entry.row(),k/2)+=entry.value()*e.beta(k);
-    for (Eigen::Index col=0;col<p;++col)
-    {
-        const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
-        if (!(norm>0)) {out.reason="zero-free-column"; return out;}
-        for (Sparse::InnerIterator entry(e.x,k);entry;++entry) entries.emplace_back(entry.row(),col,entry.value()/norm);
-        t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
-    }
-    z.setFromTriplets(entries.begin(),entries.end());
-    const auto reduced=Reduce(z,raw); auto svd=Decompose(reduced.first,context ? context->rank.rows : n);
-    if(free_design_threshold>=0 && svd.singularValues()(0)>0) svd.setThreshold(free_design_threshold/svd.singularValues()(0));
-    if (svd.rank()!=p) {out.reason="rank-deficient-free-design"; return out;}
-    const Matrix coefficients=reduced.first.triangularView<Eigen::Upper>().solve(reduced.second);
-    // R^{-1} R^{-T} T via orthogonal factors; never form X^T X.
-    const Matrix adjoint=reduced.first.transpose().triangularView<Eigen::Lower>().solve(t);
-    const Matrix correction=reduced.first.triangularView<Eigen::Upper>().solve(adjoint);
-    out.projected=(raw-z*coefficients)/scale;
-    out.jacobian=out.projected-z*correction/scale;
-    out.valid=out.jacobian.allFinite() && out.projected.allFinite();
-    out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
-}
-
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
     const auto reference=EvaluateProfile(domain,y,e.eta,true,&policy);
