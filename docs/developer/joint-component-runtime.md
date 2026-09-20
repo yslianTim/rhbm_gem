@@ -30,8 +30,9 @@ scale and linear/rank policy match exactly. Offline audit directions do not
 affect runtime assessment. Constant rows or different contexts require separate
 assessments. This is scoped result reuse,
 not a persistent cache. A fallback state's evidence is assessed at that state's
-actual coefficients and widths. Search decisions and search evaluation counts
-are unchanged; assessment work and timing are separate from search work.
+actual coefficients and widths. Assessment reuse does not change search decisions or counts; assessment work
+and timing are separate from search work. Orthogonal backend row reduction can
+change the search trajectory within the numerical parity contract below.
 
 The Map/Model builder includes all non-hydrogen contributors and rejects partial
 non-hydrogen selection. It uses the actual Map geometry and `sphere-fma-v1`,
@@ -103,6 +104,40 @@ unchanged. `joint_component_benchmark DATASET CASE` measures the public API in a
 fresh process and reports construction, search, assessment, assembly, total time
 and process peak RSS. It uses only the installed public API and can also be built
 against the baseline library.
+
+## Tiled numerical backend
+
+All production components use 8192-row tiles. The first derivative pass reduces
+the normalized free design and raw width derivative. The second generates the
+projected derivative and full residual-corrected Jacobian by tile, retaining only
+compact QR factors, transformed residuals and column norms. LM pivots the compact
+Jacobian factor and retains the original full residual norm for its objective,
+actual reduction and stopping calculations. Rank thresholds still use the
+original context rows/columns, not the reduced factor dimensions.
+
+Derivative/LM dense workspace is O(tile * atoms + atoms²), in addition to sparse
+designs, sparse factorization storage and O(rows) residual vectors. This is not a
+bound on all sparse fill-in or on the parent-global assembled assessment as the
+number of atoms grows. No component edges are cut and no dense runtime fallback
+is used. Dense derivatives exist only in test support as a parity reference.
+
+The fixture runner defaults to backend numerical comparison: trusted-state
+availability, runtime checks and limitations remain fixed; converged identifiable
+A/C/B endpoints use scaled 1e-10 and normalized objectives use 1e-12. For a failed
+convergence check, objective may not worsen by more than 1e-12 and same-state
+parity is checked at both historical and actual endpoints. Changed active faces
+are reported explicitly; a free-face rank is compared across endpoints only
+when their active faces match. Dense/tiled ranks at each identical state must
+always match. Search counts, native stop codes and trial sequences are recorded
+but are not required to be identical. Guarded acceptance and budgets remain
+mandatory. `--strict-history` retains the older exact-trajectory comparison for
+baseline/ownership-only validation.
+
+Each same-state comparison checks projected/full derivatives at relative 1e-8,
+spectra at 1e-10 relative to their largest singular value, local correction at
+scaled 1e-10 and gradient at 1e-13 + 2e-9 * abs(reference). Rank/availability must
+agree. Unavailable corrections and missing trusted states remain explicit
+limitations. No fixture packages or numerical tolerances are regenerated.
 
 ## Routine regression
 
@@ -190,4 +225,6 @@ The [evidence index](joint-component-evidence.md) records the retired research
 workflows, limitations and retrieval commits. No ordinary regression requires
 the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. First-stage `mdpde_experiment solve`, `forward`
 and `refine`, production second-stage and the separate fold-168 regression
-remain supported. Memory/backend changes are separate future work.
+remain supported. Formal workflow adoption and result persistence remain separate
+future work. See [tiled backend acceptance](joint-component-tiled-backend.md) for
+validation and measured costs.
