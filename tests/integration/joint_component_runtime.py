@@ -17,6 +17,19 @@ def execute(executable, *args):
     subprocess.run([str(executable), *map(str, args)], check=True)
 
 
+def runtime_expected(expected):
+    out = {k: v for k, v in expected.items() if k not in ('qualification_checks', 'qualification_failure')}
+    checks = expected.get('qualification_checks')
+    if checks is not None:
+        out['runtime_checks'] = {k: v for k, v in checks.items() if k != 'derivative'}
+    required = ('inner', 'b_gradient', 'local_correction', 'identified')
+    values = [checks.get(k) for k in required] if checks is not None else []
+    out['runtime_convergence'] = ('unavailable' if not expected['usable_state'] or checks is None
+                                  else 'failed' if any(v is False for v in values)
+                                  else 'passed' if all(v is True for v in values) else 'unavailable')
+    return out
+
+
 def regression(args):
     catalog = read(args.catalog)
     results = []
@@ -43,7 +56,7 @@ def regression(args):
             if state is not None:
                 y = data['y64' if case.endswith('double') else 'y32']
                 require(replay_passed(data, y, state, max(1., np.linalg.norm(y))), 'Independent endpoint replay failed')
-            delta = differences(cases[case]['expected'], actual['record'])
+            delta = differences(runtime_expected(cases[case]['expected']), actual['record'])
             require(actual['api_contract_passed'] and not delta, dataset+'/'+case+': '+str(delta[:20]))
             results.append(dict(dataset=dataset, case=case, passed=True))
     require(results, 'No regression cases selected')

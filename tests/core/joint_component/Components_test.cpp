@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "support/JointComponentChecks.hpp"
-#include "support/JointLocalEvidence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <fstream>
 
@@ -182,7 +181,7 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
     EXPECT_TRUE(result.at("components").at(0).at("search_success").as_bool());
     EXPECT_FALSE(result.at("components").at(1).at("usable_state").as_bool());
     EXPECT_FALSE(result.at("prediction_available").as_bool()); EXPECT_TRUE(result.at("prediction").is_null());
-    EXPECT_FALSE(result.at("joint_qualified").as_bool());
+    EXPECT_NE(result.at("runtime_convergence"),"passed");
     for(std::size_t r=0;r<81;++r) EXPECT_EQ(result.at("available_row_mask").at(r).as_bool(),r<40 || r==80);
     const auto failed_first=p::FitComponent(part.components[1],f.y,initial,c);
     const auto healthy_second=p::FitComponent(part.components[0],f.y,initial,c);
@@ -200,7 +199,7 @@ TEST(JointComponentChecksTest, BudgetAndInvalidStartRetainHonestAvailability)
     EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_TRUE(exhausted.at("usable_state").as_bool());
     EXPECT_EQ(exhausted.at("stop_reason"),"profile-budget");
     const auto assembled=p::Assemble(f.domain,f.y,part,c,boost::json::array{healthy,exhausted});
-    EXPECT_TRUE(assembled.at("prediction_available").as_bool()); EXPECT_FALSE(assembled.at("joint_qualified").as_bool());
+    EXPECT_TRUE(assembled.at("prediction_available").as_bool()); EXPECT_NE(assembled.at("runtime_convergence"),"passed");
     EXPECT_TRUE(assembled.at("search_stopped_without_convergence").as_bool());
     Vector invalid=initial; invalid(1)=0;
     const auto failure=p::FitComponent(part.components[1],f.y,invalid,c);
@@ -222,38 +221,4 @@ TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfile
     EXPECT_FALSE(fit.at("components").at(1).at("usable_state").as_bool());
     EXPECT_FALSE(fit.at("prediction_available").as_bool());
     RecordProperty("fit_availability",boost::json::serialize(fit));
-}
-
-TEST(JointComponentChecksTest, LocalAuditUsesActualStateAndDiscardsSiblingDirections)
-{
-    const TwoBlocks f;
-    auto parent=p::MakeContext(f.y,2);
-    const auto part=p::BuildPartition(f.domain,parent.atom_ids);
-    const auto & view=part.components[0];
-    auto fit=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
-    ASSERT_TRUE(fit.at("usable_state").as_bool());
-    const auto y=p::Select(f.y,view.rows);
-    auto child=p::ComponentContext(parent,view,true);
-    child.audit.directions=Eigen::MatrixXd::Zero(1,3);
-    const auto before=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
-    (void)p::FitComponent(part.components[1],f.y,Vector::Constant(2,.55),parent);
-    child.audit.directions=Eigen::MatrixXd::Constant(1,3,1e-100);
-    const auto after=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
-    const auto rerun=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
-    const auto reverse=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,rerun,child);
-    EXPECT_EQ(Science(fit),Science(rerun));
-    EXPECT_EQ(Science(before.fit),Science(reverse.fit));
-    EXPECT_EQ(before.scope,reverse.scope);
-    EXPECT_EQ(before.fit,after.fit);
-    EXPECT_EQ(before.scope,after.scope);
-    EXPECT_EQ(before.context.audit.directions,after.context.audit.directions);
-    EXPECT_EQ(before.context.scale,parent.scale);
-    EXPECT_EQ(before.context.rank.rows,view.domain.rows);
-    EXPECT_EQ(before.fit.at("primary").at("beta"),fit.at("last_trusted_state").at("beta"));
-    ASSERT_TRUE(before.scope.at("weak_direction_available").as_bool());
-    EXPECT_DOUBLE_EQ(before.context.audit.directions.col(0).norm(),1);
-    fit["usable_state"]=false;
-    const auto missing=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
-    EXPECT_FALSE(missing.fit.at("primary").at("valid").as_bool());
-    EXPECT_FALSE(missing.scope.at("weak_direction_available").as_bool());
 }

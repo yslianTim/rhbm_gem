@@ -285,7 +285,7 @@ j::object FitComponent(const ComponentView & view,const Vector & y,const Vector 
     const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
     const auto result=runtime::SolveComponent(view,y,initial_b,parent);
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
-    auto assessment=runtime_json::Assessment(result.assessment);
+    auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
     struct rusage usage{}; getrusage(RUSAGE_SELF,&usage);
 #ifdef __APPLE__
@@ -302,6 +302,8 @@ j::object FitComponent(const ComponentView & view,const Vector & y,const Vector 
     if(result.trusted_trial) fit["last_trusted_state"]=runtime_json::Trial(result.search.trials[*result.trusted_trial]);
     else if(result.trusted_state) fit["last_trusted_state"]=runtime_json::Endpoint(*result.trusted_state);
     if(result.endpoint_trust) fit["endpoint_trust"]=runtime_json::Trust(*result.endpoint_trust);
+    fit["search_endpoint_eta"]=Values(result.search.eta);
+    if(!result.trusted_state) {fit["runtime_convergence"]="unavailable"; fit["runtime_failure"]="missing-trusted-state";}
     fit["search_success"]=result.search_success; return fit;
 }
 j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartition & partition,
@@ -326,13 +328,13 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     }
     const auto assembly=runtime::AssembleComponents(domain,y,partition,context,children);
     j::array mask; for(bool value:assembly.row_mask) mask.push_back(value);
-    j::object out{{"schema_version",1},{"experiment","exact-component-equivalence"},{"variant","guarded-components"},
+    j::object out{{"schema_version",2},{"experiment","exact-component-equivalence"},{"variant","guarded-components"},
         {"execution_complete",true},{"search_stopped_without_convergence",!assembly.completed},{"prediction_available",assembly.available},
         {"objective_available",assembly.available},{"available_row_mask",mask},{"failed_components",failed},
         {"profile_evaluations",evaluations},{"search_reference_evaluations",references},{"accepted_updates",updates},
-        {"joint_qualified",false},{"context",ContextEvidence(context)},{"row_count",domain.rows},{"residual_scale",context.scale}};
+        {"runtime_convergence","unavailable"},{"context",ContextEvidence(context)},{"row_count",domain.rows},{"residual_scale",context.scale}};
     if(!assembly.available)
-    {out["qualification_failure"]="missing-trusted-component-state"; out["prediction"]=nullptr; out["objective"]=nullptr; return out;}
+    {out["runtime_failure"]="missing-trusted-component-state"; out["prediction"]=nullptr; out["objective"]=nullptr; return out;}
     auto assessment=runtime_json::Assessment(assembly.assessment);
     for(auto & field:assessment) out[field.key()]=std::move(field.value());
     out["assembled_state"]=j::object{{"eta",Values(assembly.eta)},{"b",Values(assembly.eta.array().exp())},{"beta",Values(assembly.beta)},
@@ -347,7 +349,12 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         if(assembly.profile_control.valid) out["assembled_profile_difference"]=assembly.profile_difference;
     }
     out["assembled_profile_agrees"]=assembly.profile_agrees;
-    out["joint_qualified"]=assembly.completed && assembly.profile_agrees && assembly.assessment.qualified;
+    auto evidence=runtime::AssessmentEvidence(assembly.assessment,rhbm_gem::core::JointEvidenceScope::AssembledGlobal);
+    evidence.push_back({"assembled-profile",assembly.profile_agrees ? rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Failed,
+        rhbm_gem::core::JointEvidenceScope::AssembledGlobal,{},{},{}});
+    auto convergence=runtime::ConvergenceStatus(evidence,rhbm_gem::core::JointEvidenceScope::AssembledGlobal,true);
+    for(const auto & fit:fits) convergence=runtime::MergeConvergenceStatus(convergence,runtime_json::ParseStatus(fit.at("runtime_convergence")));
+    out["runtime_convergence"]=runtime_json::Status(convergence);
     out["assembly_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
 }
 j::object FitComponents(const Domain & domain,const Vector & y,const Vector & initial_b,

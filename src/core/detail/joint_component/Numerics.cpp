@@ -119,6 +119,9 @@ Evaluation Basis(const Domain & domain,const Vector & y,const Vector & eta)
 Evaluation EvaluateProfile(const Domain & domain,const Vector & y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(reference) ++AssessmentWorkForTesting().reference_evaluations;
+#endif
     auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
     const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks);
@@ -313,11 +316,9 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
     return a.scale==b.scale && a.rank.rows==b.rank.rows && a.rank.design_columns==b.rank.design_columns &&
         a.rank.width_columns==b.rank.width_columns && a.linear.rank_relative==b.linear.rank_relative &&
         a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
-        a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids &&
-        a.audit.directions.rows()==b.audit.directions.rows() && a.audit.directions.cols()==b.audit.directions.cols() &&
-        (a.audit.directions.array()==b.audit.directions.array()).all();
+        a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
-Assessment AssessEvaluated(const Domain & domain,const Vector & y,const Evaluation & endpoint,const Evaluation & reference,
+Assessment AssessEvaluated(const Domain &,const Vector & y,const Evaluation & endpoint,const Evaluation & reference,
     const EvaluationContext & policy,bool supplied)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -330,6 +331,7 @@ Assessment AssessEvaluated(const Domain & domain,const Vector & y,const Evaluati
     if(!out.primary.valid || !reference.valid) {out.failure="inner-solve"; return out;}
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
     out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()));
+    out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
     const auto differential=DifferentiateProfile(endpoint,scale,context);
     if(!differential.valid) {out.failure=differential.reason; return out;}
     const auto width_reduced=Reduce(differential.projected,Matrix(y.size(),0));
@@ -350,36 +352,10 @@ Assessment AssessEvaluated(const Domain & domain,const Vector & y,const Evaluati
     const auto correction_svd=Decompose(correction_reduced.first,context->rank.rows);
     const Vector correction=correction_svd.solve(correction_reduced.second.col(0)); out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
-    std::vector<Vector> directions{Vector::Ones(eta.size()).normalized(),Vector(eta.size()),out.weak_directions.col(0)};
-    for(Eigen::Index k=0;k<eta.size();++k) directions[1](k)=k%2 ? -1 : 1;
-    directions[1].normalize();
-    if(context->audit.directions.size())
-    {directions.clear(); for(Eigen::Index k=0;k<context->audit.directions.cols();++k) directions.push_back(context->audit.directions.col(k));}
-    bool verified=true;
-    for(std::size_t k=0;k<directions.size();++k) for(double h:{1e-4,5e-5})
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentWorkForTesting().directional_evaluations+=2;
-#endif
-        const auto plus=EvaluateProfile(domain,y,eta+h*directions[k],true,context),minus=EvaluateProfile(domain,y,eta-h*directions[k],true,context);
-        bool passed=false,same_face=false; double error=std::numeric_limits<double>::infinity();
-        if(plus.valid && minus.valid)
-        {
-            same_face=plus.certificate.active_atoms==endpoint.certificate.active_atoms && minus.certificate.active_atoms==endpoint.certificate.active_atoms;
-            const Vector analytic=differential.jacobian*directions[k];
-            const Vector finite=(plus.residual-minus.residual)/(2*h*scale);
-            error=(finite-analytic).norm()/std::max({1e-12,finite.norm(),analytic.norm()});
-            passed=same_face && error<=1e-6;
-        }
-        verified &= passed; out.derivatives.push_back({k,h,error,same_face,passed,plus.valid,minus.valid});
-    }
-    out.derivative_verified=verified;
-    out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
     out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;
     out.identified=widths.rank()==eta.size() && correction_svd.rank()==eta.size();
-    out.qualified=out.inner && out.gradient && out.local && out.identified && verified;
-    out.failure=!out.inner ? "inner-solve" : !verified ? "derivative-unverified" : !out.identified ? "width-unidentified" :
+    out.failure=!out.inner ? "inner-solve" : !out.identified ? "width-unidentified" :
         !out.gradient || !out.local ? "b-not-stationary" : "none";
     return out;
 }

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from joint_runtime_support import differences, scientific, unpack, read
-from joint_component_runtime import CATALOG, compare
+from joint_component_runtime import CATALOG, compare, runtime_expected
 import joint_fixture_records as records
 import joint_offline_support as runner
 import numpy as np
@@ -27,6 +27,27 @@ class JointRuntimeSupportTest(unittest.TestCase):
         self.assertEqual(scientific({'search_seconds': 2, 'process_peak_rss_bytes': 1,
                                      'state': {'objective': .2}, 'regular': False}),
                          {'state': {'objective': .2}, 'regular': False})
+
+    def test_runtime_projection_preserves_search_and_separates_derivative_audit(self):
+        expected = {'usable_state': True, 'search_success': False,
+                    'qualification_checks': dict(inner=True, b_gradient=True, local_correction=True,
+                                                 identified=True, derivative=False),
+                    'qualification_failure': 'derivative-unverified'}
+        original = copy.deepcopy(expected)
+        runtime = runtime_expected(expected)
+        self.assertEqual(expected, original)
+        self.assertEqual(runtime['runtime_convergence'], 'passed')
+        self.assertFalse(runtime['search_success'])
+        self.assertNotIn('derivative', runtime['runtime_checks'])
+        expected['qualification_checks']['local_correction'] = False
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'failed')
+        expected['usable_state'] = False
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+        expected = copy.deepcopy(original)
+        del expected['qualification_checks']['local_correction']
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+        expected['qualification_checks'] = {}
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
 
     def test_fixture_is_self_contained_and_restores_modified_member(self):
         with tempfile.TemporaryDirectory() as tmp:

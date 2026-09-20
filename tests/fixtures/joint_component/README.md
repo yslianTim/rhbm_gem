@@ -43,6 +43,13 @@ These frozen expectations do not make the runtime return an offline certificate;
 its offline evidence remains `NotRun`. `cases.json` retains exact per-case checks
 and failure/availability lists for the other stored starts and precisions.
 
+The runtime reader projects the historical qualification assertions onto the
+non-derivative runtime checks; it does not rewrite these packages or treat the
+old derivative-dependent failure summary as a runtime convergence result.
+`joint_component_two_step_regression` checks the original qualification checks
+and failure reasons for all eight default cases in the optional offline lane.
+The four full offline certificate controls remain separate from that comparison.
+
 See the [runtime guide](../../../docs/developer/joint-component-runtime.md) and
 [evidence index](../../../docs/developer/joint-component-evidence.md).
 

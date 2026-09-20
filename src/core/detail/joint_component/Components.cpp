@@ -107,12 +107,11 @@ ComponentResult AssessComponentSearch(const Domain & domain,const Vector & y,con
     }
     if(out.trusted_state)
     {
-        auto local_context=context; local_context.audit.directions.resize(0,0);
         const auto & state=*out.trusted_state;
         const bool same=state.eta.size()==endpoint.eta.size() && state.beta.size()==endpoint.beta.size() &&
             (state.eta.array()==endpoint.eta.array()).all() && (state.beta.array()==endpoint.beta.array()).all();
-        if(same && SameAssessmentPolicy(context,local_context)) out.trusted_assessment=out.assessment;
-        else out.trusted_assessment=AssessProfile(domain,y,state.eta,local_context,&state.beta);
+        if(same) out.trusted_assessment=out.assessment;
+        else out.trusted_assessment=AssessProfile(domain,y,state.eta,context,&state.beta);
     }
     out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;

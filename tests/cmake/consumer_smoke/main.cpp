@@ -45,6 +45,9 @@ int main()
     if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
     const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
     if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
+    if(joint.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
+        unobserved.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
+        unobserved.components[0].RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable) return 4;
     rhbm_gem::ModelObject model_object;
     (void)model_object;
     rhbm_gem::core::FitOptions fit_options;

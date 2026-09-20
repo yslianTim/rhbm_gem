@@ -70,7 +70,7 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const auto fit=FitComponent(partition.components[0],y,initial,context);
     j::object record;
     for(const char * key:{"search_success","usable_state","stop_reason","accepted_updates","profile_evaluations",
-        "last_trusted_state","qualification_checks","qualification_failure"})
+        "last_trusted_state","runtime_checks","runtime_convergence"})
         if(fit.contains(key)) record[key]=fit.at(key);
     j::array trials;
     for(const auto & t:fit.at("trials").as_array())
@@ -91,6 +91,12 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const bool available=fit.at("usable_state").as_bool();
     if(result.components.size()!=1 || result.components[0].state.has_value()!=available || result.search_completed!=fit.at("search_success").as_bool())
         throw std::runtime_error("Public runtime availability differs from frozen component search.");
+    if(runtime_json::Status(result.components[0].RuntimeConvergence())!=fit.at("runtime_convergence").as_string() ||
+        runtime_json::Status(result.RuntimeConvergence())!=fit.at("runtime_convergence").as_string())
+        throw std::runtime_error("Public runtime convergence differs from the single-component evidence.");
+    for(const auto & component:result.components) for(const auto & check:component.evidence)
+        if(check.name=="two-step-derivative" && check.status!=core::JointCheckStatus::NotRun)
+            throw std::runtime_error("Runtime executed an offline derivative audit.");
     if(result.regular_certificate!=core::JointCheckStatus::NotRun) throw std::runtime_error("Runtime promoted an offline certificate.");
     if(available)
     {

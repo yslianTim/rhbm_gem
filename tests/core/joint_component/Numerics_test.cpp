@@ -95,11 +95,11 @@ TEST(JointTestNumericsTest, RecoveryAgreesWithDirectJointAndFixedB)
     Sample sample; const p::Domain domain(sample.grid,sample.atoms);
     const Vector widths=Eigen::Vector2d(.48,.59);
     const auto fit=p::Fit(domain,sample.y,widths);
-    ASSERT_TRUE(fit.at("joint_qualified").as_bool())<<boost::json::serialize(fit);
+    ASSERT_EQ(fit.at("runtime_convergence"),"passed")<<boost::json::serialize(fit);
     const auto beta=Read(fit.at("primary").at("beta")),b=Read(fit.at("primary").at("b"));
     EXPECT_LT((beta-Eigen::Vector4d(2,-.3,1.5,.4)).norm(),1e-10);
     EXPECT_LT((b-Eigen::Vector2d(.42,.67)).norm(),1e-10);
-    EXPECT_EQ(fit.at("directional_evaluations"),12);
+    EXPECT_EQ(fit.at("directional_evaluations"),0);
     const auto e=p::Evaluate(domain,sample.y,widths.array().log());
     const auto fixed=p::Evaluate(domain,sample.y,widths.array().log(),true);
     ASSERT_TRUE(fixed.valid); EXPECT_LT((e.beta-fixed.beta).norm(),1e-10);
@@ -135,11 +135,11 @@ TEST(JointTestNumericsTest, RankFailureInvalidBAndUninformativeWidthCannotQualif
     const Vector eta=Vector::Constant(2,std::log(.5));
     const auto invalid=p::Evaluate(bad,sample.y,eta); EXPECT_FALSE(invalid.valid);
     EXPECT_FALSE(p::Differentiate(invalid,1).valid);
-    EXPECT_FALSE(p::Fit(bad,sample.y,Vector::Constant(2,.5)).at("joint_qualified").as_bool());
+    EXPECT_NE(p::Fit(bad,sample.y,Vector::Constant(2,.5)).at("runtime_convergence"),"passed");
     EXPECT_FALSE(p::Evaluate(good,sample.y,Vector::Constant(2,1000)).valid);
     EXPECT_FALSE(p::Evaluate(good,sample.y,Vector::Constant(2,-1000)).valid);
     const auto zero=p::Fit(good,Vector::Zero(sample.y.size()),Vector::Constant(2,.5));
-    EXPECT_FALSE(zero.at("joint_qualified").as_bool());
+    EXPECT_NE(zero.at("runtime_convergence"),"passed");
     EXPECT_TRUE(zero.at("primary").at("kkt_passed").as_bool());
     EXPECT_EQ(zero.at("primary").at("rss"),0.0);
     EXPECT_EQ(zero.at("width_spectrum").at("rank"),0);

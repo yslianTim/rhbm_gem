@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 import subprocess
-from joint_runtime_support import read, write, require, unpack
+from joint_runtime_support import read, write, require, unpack, differences
 from joint_component_runtime import CATALOG
 import joint_fixture_records as records
 from joint_offline_support import certificate, validate_audit, replay_passed
@@ -43,12 +43,15 @@ def main():
     parser.add_argument('--executable', type=Path, required=True)
     parser.add_argument('--catalog', type=Path, default=CATALOG)
     parser.add_argument('--work-dir', type=Path, required=True)
+    parser.add_argument('--two-step-only', action='store_true')
     parser.add_argument('--dataset', choices=tuple(read(CATALOG)['datasets']))
     parser.add_argument('--case', default='first-stage-double')
     args = parser.parse_args()
     cases = [(args.dataset, args.case)] if args.dataset else [
         ('baseline', 'first-stage-double'), ('near-0.02', 'narrower-double'),
         ('weak-1e-4', 'first-stage-double'), ('active-a', 'first-stage-double')]
+    if args.two_step_only and not args.dataset:
+        cases = [(dataset, case) for dataset, entry in read(args.catalog)['datasets'].items() for case in entry['default_cases']]
     summary = []
     import tempfile
     for dataset, case in cases:
@@ -58,6 +61,14 @@ def main():
         args.work_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix=dataset+'-', dir=args.work_dir) as temp:
             output = Path(temp)/'audit'
+            if args.two_step_only:
+                subprocess.run([str(args.executable), 'two-step-fixture', str(source), case, str(output)], check=True)
+                expected = read(source/'cases.json')[case]['expected']
+                expected = {k: v for k, v in expected.items() if k in ('qualification_checks', 'qualification_failure')}
+                actual = read(output/'0.json')
+                require(not differences(expected, actual), 'Historical two-step evidence changed: '+dataset+'/'+case)
+                summary.append(dict(dataset=dataset, case=case, passed=True))
+                continue
             subprocess.run([str(args.executable), 'fixture', str(source), case, str(output)], check=True)
             cert = certify_local(data, case, output/'0')
             expected = read(source/'cases.json')[case]['offline_expected']

@@ -26,9 +26,9 @@ j::object State(const core::JointState & s)
 {return {{"valid",true},{"beta",Values(s.ac)},{"eta",Values(s.log_b)},{"b",Values(s.b)}};}
 j::object ComponentFit(const core::JointComponentResult & c,const std::string & name,const std::string & dataset,double scale)
 {
-    j::object out{{"component_id",c.id},{"case",name},{"dataset",dataset},{"residual_scale",scale},
+    j::object out{{"schema_version",2},{"component_id",c.id},{"case",name},{"dataset",dataset},{"residual_scale",scale},
         {"execution_complete",true},{"search_stopped_without_convergence",!c.search_completed},{"search_success",c.search_completed},
-        {"usable_state",c.state.has_value()},{"joint_qualified",false},{"stop_reason",c.stop_reason},
+        {"usable_state",c.state.has_value()},{"runtime_convergence",runtime_json::Status(c.RuntimeConvergence())},{"stop_reason",c.stop_reason},
         {"profile_evaluations",c.profile_evaluations},{"search_reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"trials",j::array{}},{"last_trusted_state",nullptr},
         {"primary",j::object{{"valid",false}}}};
@@ -119,9 +119,9 @@ void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::pat
             std::abs(state.certificate.objective/(context.scale*context.scale)-*fit.objective)<=1e-12;
     }
     Write(target/"monolithic-fit.json",mono); Write(target/"assembled-fit.json",assembled);
-    Write(target/"runtime.json",j::object{{"initial_b",Values(initial)},{"search_completed",fit.search_completed},
+    Write(target/"runtime.json",j::object{{"schema_version",2},{"initial_b",Values(initial)},{"search_completed",fit.search_completed},
         {"prediction_available",fit.prediction.has_value()},{"objective",fit.objective ? runtime_json::Number(*fit.objective) : j::value(nullptr)},
-        {"regular_certificate","not-run"},{"monolithic_parity_passed",monolithic_parity},{"prediction_reassembly_difference",prediction_difference},
+        {"runtime_convergence",runtime_json::Status(fit.RuntimeConvergence())},{"regular_certificate","not-run"},{"monolithic_parity_passed",monolithic_parity},{"prediction_reassembly_difference",prediction_difference},
         {"initialization_seconds",fit.costs.initialization_seconds},{"search_seconds",fit.costs.search_seconds},
         {"search_reference_seconds",fit.costs.search_reference_seconds},{"assessment_seconds",fit.costs.assessment_seconds},{"assembly_seconds",fit.costs.assembly_seconds}});
     Write(root/"completion.json",j::object{{"complete",true},{"cases",j::array{name}},{"requires_regular_parity",physical},

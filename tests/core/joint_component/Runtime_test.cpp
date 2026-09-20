@@ -184,7 +184,7 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     const auto fit=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
-    EXPECT_EQ(n::AssessmentWorkForTesting().directional_evaluations,12);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,fit.components[0].reference_evaluations+1);
     input.row_ids.push_back("constant"); input.observations.push_back(7);
     n::AssessmentWorkForTesting()={};
     const auto constant=core::FitJointComponents(core::JointProblem(input),{.55});
@@ -217,7 +217,7 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     auto policy=data.context; policy.rank.rows+=100; check(data.domain,data.y,policy,1);
     policy=data.context; policy.scale*=2; check(data.domain,data.y,policy,1);
     policy=data.context; policy.linear.release_factor*=2; check(data.domain,data.y,policy,1);
-    policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,1);
+    policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,0);
     auto y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
     auto domain=data.domain; domain.atoms[0][1].square+=.001; check(domain,data.y,data.context,1);
     fits[0].trusted_state->beta(0)+=.1; check(data.domain,data.y,data.context,1);
@@ -242,7 +242,56 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     const auto local=n::SolveComponent(view,data.y,n::Vector::Constant(2,.55),data.context);
     const auto directed=n::AssessComponentSearch(view.domain,y,context,local.search);
     ASSERT_TRUE(directed.trusted_assessment);
-    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(*directed.trusted_assessment),
-        second_stage_test::matched::runtime_json::Assessment(n::AssessProfile(view.domain,y,
-            directed.trusted_state->eta,n::ChildContext(data.context,view,true),&directed.trusted_state->beta)));
+    const auto fresh=n::AssessProfile(view.domain,y,directed.trusted_state->eta,
+        n::ChildContext(data.context,view,true),&directed.trusted_state->beta);
+    EXPECT_EQ(directed.trusted_assessment->primary.beta,fresh.primary.beta);
+    EXPECT_EQ(directed.trusted_assessment->correction,fresh.correction);
+    EXPECT_EQ(directed.trusted_assessment->weak_directions,fresh.weak_directions);
+}
+
+TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination)
+{
+    using Status=core::JointCheckStatus;
+    auto fit=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
+    ASSERT_EQ(fit.RuntimeConvergence(),Status::Passed);
+    for(auto & component:fit.components)
+    {
+        component.search_completed=false; component.stop_reason="profile-budget";
+        EXPECT_EQ(component.RuntimeConvergence(),Status::Passed);
+        for(const auto & check:component.evidence)
+            if(check.name=="two-step-derivative" || check.name=="richardson" || check.name=="precision-50-100" ||
+                check.name=="boundary-audit" || check.name=="regular-certificate")
+                EXPECT_EQ(check.status,Status::NotRun);
+    }
+    fit.search_completed=false;
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Passed);
+    EXPECT_EQ(fit.regular_certificate,Status::NotRun);
+    auto & evidence=fit.components[0].evidence;
+    evidence[0].status=Status::NotRun;
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::NotRun);
+    evidence[1].status=Status::Unavailable;
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
+    evidence[2].status=Status::Failed;
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
+    fit.components[0].state.reset();
+    EXPECT_EQ(fit.components[0].RuntimeConvergence(),Status::Unavailable);
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
+}
+
+TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConverge)
+{
+    using Status=core::JointCheckStatus;
+    const auto fit=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
+    auto component=fit.components[0];
+    component.evidence.clear(); EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
+    component.evidence=fit.evidence; EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
+    auto global=fit;
+    for(auto & check:global.evidence) if(check.name=="assembled-profile") check.status=Status::Failed;
+    EXPECT_EQ(global.RuntimeConvergence(),Status::Failed);
+    global=fit; global.evidence=fit.components[0].evidence;
+    EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
+    global=fit; global.prediction.reset(); EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
+    global=fit; global.available_row_mask[0]=false; EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
+    global=fit; global.components.clear(); EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
+    EXPECT_EQ(core::JointFitResult{}.RuntimeConvergence(),Status::Unavailable);
 }

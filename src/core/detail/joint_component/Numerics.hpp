@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
 #include <memory>
 #include <optional>
@@ -136,12 +137,6 @@ struct SearchResult
     double seconds{},reference_seconds{};
 };
 SearchResult SearchProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &);
-struct DerivativeCheck
-{
-    std::size_t direction{};
-    double h{},error{unavailable};
-    bool same_face{},passed{},plus_valid{},minus_valid{};
-};
 struct Assessment
 {
     Endpoint primary,reference;
@@ -149,10 +144,12 @@ struct Assessment
     Matrix weak_directions;
     Vector correction;
     double coefficient_difference{unavailable};
-    std::vector<DerivativeCheck> derivatives;
-    bool qualified{},derivative_verified{},inner{},gradient{},local{},identified{};
+    bool inner{},gradient{},local{},identified{};
     std::string failure;
 };
+std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
+JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
+JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 Assessment AssessProfile(const Domain &,const Vector &,const Vector &,const EvaluationContext &,const Vector * = nullptr);
 // Evaluations belong to this exact domain, observations and numerical policy.
 Assessment AssessEvaluated(const Domain &,const Vector &,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
@@ -166,7 +163,7 @@ struct AssessmentReuse
     const Assessment & assessment;
 };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct AssessmentWork {int assessments{},directional_evaluations{};};
+struct AssessmentWork {int assessments{},reference_evaluations{};};
 AssessmentWork & AssessmentWorkForTesting();
 #endif
 struct ComponentView
@@ -187,7 +184,7 @@ struct ComponentResult
 {
     SearchResult search;
     Assessment assessment; // Historical search-endpoint diagnostics.
-    std::optional<Assessment> trusted_assessment; // Actual state, component-local directions.
+    std::optional<Assessment> trusted_assessment; // Actual returned state.
     std::optional<Endpoint> trusted_state;
     std::optional<std::size_t> trusted_trial;
     double assessment_seconds{};

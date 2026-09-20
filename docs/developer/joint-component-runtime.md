@@ -16,7 +16,7 @@ auto repeated = rhbm_gem::core::FitJointComponents(problem, initial_b);
 observations, identities and squared-distance memberships. V1 uses equal-weight
 LS, A nonnegative, C signed, log-B, structural 2.5 Angstrom support and Guarded
 search (200 profile evaluations / 100 accepted updates per component). Search
-reference/replay, LM settings and endpoint assessment are unchanged by cleanup.
+reference/replay and LM settings are unchanged by endpoint assessment cleanup.
 
 Endpoint evaluations and reference solves are passed into assessment and trust
 replay instead of being repeated. A component returns both its historical search
@@ -26,8 +26,9 @@ and retains an independently reprofiled consistency control.
 
 Within one immutable problem, a full single component can share its assessment
 with assembly only when observations, structural support, identities, state,
-scale, linear/rank policy and audit directions match exactly. Constant rows or
-different contexts require separate assessments. This is scoped result reuse,
+scale and linear/rank policy match exactly. Offline audit directions do not
+affect runtime assessment. Constant rows or different contexts require separate
+assessments. This is scoped result reuse,
 not a persistent cache. A fallback state's evidence is assessed at that state's
 actual coefficients and widths. Search decisions and search evaluation counts
 are unchanged; assessment work and timing are separate from search work.
@@ -57,9 +58,33 @@ Component `state` is the actual last trusted state used by assembly. Search
 completion, usable state and evidence status are separate. A missing component
 prevents complete prediction/objective; the row mask retains available rows,
 including constant rows. Assembly does not reprofile or zero-fill missing states.
-Richardson, multiprecision, boundary and regular certificates remain `NotRun`
-until an offline tool supplies evidence. Operational runtime checks are not
-regular certification.
+Two-step derivative, Richardson, multiprecision, boundary and regular certificates
+are `NotRun` in runtime results. Offline tools produce separate evidence without
+mutating the runtime result. Operational runtime checks are not regular
+certification.
+
+`component.RuntimeConvergence()` and `result.RuntimeConvergence()` derive their
+status from the returned evidence; they do not run numerical work or store another
+success flag. Component convergence requires an actual trusted state and all five
+checks: inner/reference agreement, A/C KKT (including feasibility), log-B gradient,
+local correction and numerical identifiability. Existing thresholds remain
+`1e-10` for coefficient agreement, KKT and local correction, and `1e-12` for both
+primary/reference width gradients. Full profile derivatives, including the
+nonzero-residual correction, remain in the numerical core.
+
+Global convergence additionally requires every component to converge, complete
+assembly, global evidence and independently reprofiled assembly consistency.
+Missing required states or assembly give `Unavailable`. Otherwise, required
+checks combine in this order: any `Failed`, any missing/`Unavailable`, any
+`NotRun`, then `Passed`. Only evidence from the required scope participates.
+Search completion is independent: a budget/untrusted-trial stop can leave a
+trusted endpoint whose runtime checks pass; its stop reason is still reported.
+
+For the frozen representative cases, baseline and near-0.02 pass runtime
+convergence. Weak-1e-4 also passes runtime convergence while its offline derivative
+evidence remains resolution-unverified. Active-a fails local correction,
+zero-signal fails width identification, and duplicate has no usable state. None
+of these runtime results claims an offline regular certificate.
 
 ## Routine regression
 
@@ -76,6 +101,16 @@ physical double/float32 and CIF/MRC tests exercise fresh initialization. The
 [fixture catalog](../../tests/fixtures/joint_component/README.md) is self-contained
 and uses independent pre-extraction records plus scalar reference controls.
 The Python runner sets numerical thread limits before importing NumPy.
+
+Runtime search/assembly reports use schema version 2: `runtime_convergence`,
+`runtime_checks` and `runtime_failure` replace the mixed `joint_qualified` and
+`qualification_*` fields. `search_endpoint_eta` preserves the identity needed
+for historical endpoint comparisons. Runtime directional audit evaluations are
+zero. Immutable fixture packages/hashes remain unchanged: the ordinary runner
+compares search/state and non-derivative assertions; the optional two-step runner
+checks the original derivative/qualification conclusions separately. Missing
+evidence must never be interpreted as passing. Legacy `joint_qualified` is
+produced only by offline assessment and retains its derivative-dependent meaning.
 
 `joint_component_runtime` provides `run MODEL MAP OUTPUT`, `physical OUTPUT`,
 `physical-inputs OUTPUT`, and `fixture DATASET CASE OUTPUT_JSON`. The Python
@@ -106,8 +141,9 @@ python3 tests/integration/joint_component_runtime.py regression \
   --dataset baseline --all-starts
 ```
 
-Offline precision code is linked only into `joint_component_audit` and
-`joint_offline_tests`, never the library or ordinary test executable. Tests
+Offline two-step, local-audit preparation and precision code are linked only into
+`joint_component_audit` and `joint_offline_tests`, never the library or ordinary
+test executable. Tests
 cover baseline, near-0.02/narrower, weak-1e-4 and active-a; qualification failures
 must match their historical scopes. Kernel/Jacobian changes require derivative
 audits; constraint changes also require boundary controls. Backend changes
@@ -117,6 +153,10 @@ require rank/precision controls and the extended lane.
 python3 tests/integration/joint_component_audit.py \
   --executable build/bin/joint_component_audit --work-dir build/joint-audits
 build/bin/joint_component_audit local-bundle INPUT_JSON OUTPUT_DIRECTORY
+
+# The eight default historical two-step/qualification controls, without precision scans:
+python3 tests/integration/joint_component_audit.py --two-step-only \
+  --executable build/bin/joint_component_audit --work-dir build/joint-two-step
 ```
 
 A standalone bundle carries immutable parent observations/context, component

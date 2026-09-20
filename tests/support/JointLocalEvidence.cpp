@@ -1,4 +1,5 @@
 #include "support/JointLocalEvidence.hpp"
+#include "support/JointDerivativeAudit.hpp"
 #include <cmath>
 #include <limits>
 
@@ -26,7 +27,7 @@ LocalAuditState PrepareLocalAudit(const joint_abc::Domain & domain,const Vector 
     const auto & state=search.at("last_trusted_state");
     const Vector eta=Parse(state.at("eta")),beta=Parse(state.at("beta"));
     out.scope["state"]=j::object{{"eta",state.at("eta")},{"beta",state.at("beta")}};
-    const auto assessment=joint_abc::Assess(domain,y,eta,out.context,&beta);
+    const auto assessment=AssessWithDerivativeAudit(domain,y,eta,out.context,&beta);
     for(const auto & field:assessment) out.fit[field.key()]=field.value();
     out.fit["assembled_state_preserved"]=true;
     const auto control=joint_abc::Evaluate(domain,y,eta,false,&out.context);

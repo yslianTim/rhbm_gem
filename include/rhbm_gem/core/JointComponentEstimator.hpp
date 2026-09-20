@@ -79,6 +79,8 @@ struct JointComponentResult
     std::vector<JointCheck> evidence;
     std::vector<JointRankEvidence> ranks;
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
+    // Actual-state numerical evidence only; independent of search termination and offline audits.
+    JointCheckStatus RuntimeConvergence() const;
 };
 struct JointFitCosts
 {
@@ -100,6 +102,8 @@ struct JointFitResult
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
+    // Actual-state numerical evidence only; independent of search termination and offline audits.
+    JointCheckStatus RuntimeConvergence() const;
 };
 // V1 includes every non-hydrogen atom. A partial non-hydrogen selection is rejected.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);

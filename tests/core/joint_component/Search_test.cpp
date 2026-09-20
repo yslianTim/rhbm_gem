@@ -38,7 +38,7 @@ struct RejectOnce
 TEST(JointComponentSearchTest, GuardedSearchOnlyAcceptsReplayedStates)
 {
     Sample s; const p::Domain domain(s.grid,s.atoms); const Vector b=Eigen::Vector2d(.48,.59);
-    const auto fit=p::Fit(domain,s.y,b); ASSERT_TRUE(fit.at("joint_qualified").as_bool());
+    const auto fit=p::Fit(domain,s.y,b); ASSERT_EQ(fit.at("runtime_convergence"),"passed");
     for(const auto & trial:fit.at("trials").as_array()) if(trial.at("accepted").as_bool())
         EXPECT_TRUE(trial.at("trust").at("passed").as_bool());
     EXPECT_LE(j::value_to<int>(fit.at("profile_evaluations")),200);

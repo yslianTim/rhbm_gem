@@ -232,7 +232,7 @@ add_dependencies(tests_all rhbm_tests)
 add_library(joint_test_support STATIC
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
-    support/JointLocalEvidence.cpp support/JointFixtureSupport.cpp)
+    support/JointFixtureSupport.cpp)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem CompilerFlags)
 target_include_directories(joint_test_support PUBLIC "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(rhbm_tests PRIVATE joint_test_support)
@@ -248,7 +248,8 @@ add_dependencies(tests_all joint_component_runtime)
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
-        support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp)
+        support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp
+        support/JointLocalEvidence.cpp support/JointDerivativeAudit.cpp)
     target_link_libraries(joint_offline_support PUBLIC joint_test_support)
     add_executable(joint_component_audit experiments/joint_component_audit.cpp)
     target_link_libraries(joint_component_audit PRIVATE joint_offline_support)
@@ -357,7 +358,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         add_test(NAME joint_component_offline_regression
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
                 --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-offline")
-        set_tests_properties(joint_component_offline_regression PROPERTIES LABELS "domain:integration;intent:algorithm;joint:offline")
+        add_test(NAME joint_component_two_step_regression
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
+                --two-step-only --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-two-step")
+        set_tests_properties(joint_component_offline_regression joint_component_two_step_regression PROPERTIES LABELS "domain:integration;intent:algorithm;joint:offline")
     endif()
     if(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS)
         add_test(NAME joint_component_extended_regression

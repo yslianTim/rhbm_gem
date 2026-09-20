@@ -70,10 +70,30 @@ inline j::object Trial(const r::Trial & t)
     }
     return out;
 }
+inline const char * Status(rhbm_gem::core::JointCheckStatus status)
+{
+    switch(status)
+    {
+    case rhbm_gem::core::JointCheckStatus::Passed: return "passed";
+    case rhbm_gem::core::JointCheckStatus::Failed: return "failed";
+    case rhbm_gem::core::JointCheckStatus::Unavailable: return "unavailable";
+    case rhbm_gem::core::JointCheckStatus::NotRun: return "not-run";
+    }
+    return "unavailable";
+}
+inline rhbm_gem::core::JointCheckStatus ParseStatus(const j::value & value)
+{
+    using S=rhbm_gem::core::JointCheckStatus;
+    for(const auto status:{S::Passed,S::Failed,S::Unavailable,S::NotRun})
+        if(value==Status(status)) return status;
+    throw std::invalid_argument("Unknown runtime convergence status.");
+}
 inline j::object Assessment(const r::Assessment & a)
 {
-    j::object out{{"joint_qualified",a.qualified},{"primary",Endpoint(a.primary)},{"reference",Endpoint(a.reference)},
-        {"endpoint_evaluations",2},{"directional_evaluations",2*a.derivatives.size()},{"qualification_failure",a.failure}};
+    const auto evidence=r::AssessmentEvidence(a,rhbm_gem::core::JointEvidenceScope::ComponentLocal);
+    j::object out{{"runtime_convergence",Status(a.primary.valid ? r::ConvergenceStatus(evidence,rhbm_gem::core::JointEvidenceScope::ComponentLocal) : rhbm_gem::core::JointCheckStatus::Unavailable)},
+        {"primary",Endpoint(a.primary)},{"reference",Endpoint(a.reference)},
+        {"endpoint_evaluations",2},{"directional_evaluations",0},{"runtime_failure",a.failure}};
     if(!a.design) return out;
     out["scaled_reference_difference"]=Number(a.coefficient_difference); out["design_spectrum"]=DesignSpectrum(*a.design);
     if(!a.widths) return out;
@@ -83,18 +103,14 @@ inline j::object Assessment(const r::Assessment & a)
     widths["weak_directions"]=weak; out["width_spectrum"]=widths;
     out["local_correction"]=Values(a.correction); out["local_correction_inf"]=Number(a.correction.lpNorm<Eigen::Infinity>());
     out["profile_jacobian_spectrum"]=Spectrum(*a.jacobian);
-    j::array checks;
-    for(const auto & d:a.derivatives) checks.push_back(j::object{{"direction",d.direction},{"h",d.h},{"relative_l2_difference",Number(d.error)},
-        {"same_active_face",d.same_face},{"passed",d.passed},{"plus_valid",d.plus_valid},{"minus_valid",d.minus_valid}});
-    out["derivative_checks"]=checks; out["derivative_verified"]=a.derivative_verified;
-    out["qualification_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},{"local_correction",a.local},
-        {"identified",a.identified},{"derivative",a.derivative_verified}};
+    out["runtime_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},{"local_correction",a.local},
+        {"identified",a.identified}};
     return out;
 }
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)
 {
     j::array trials; for(const auto & t:s.trials) trials.push_back(Trial(t));
-    j::object out{{"schema_version",1},{"experiment","joint-abc-profile"},{"alpha",0},{"execution_complete",true},{"joint_qualified",false},
+    j::object out{{"schema_version",2},{"experiment","joint-abc-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
         {"initial",Endpoint(s.initial)},{"lm_status",s.lm_status},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
         {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"trials",trials},{"row_count",rows},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},

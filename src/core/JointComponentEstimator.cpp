@@ -14,6 +14,7 @@
 #include <chrono>
 #include <limits>
 #include <set>
+#include <string_view>
 #include <stdexcept>
 
 namespace rhbm_gem::core {
@@ -37,7 +38,9 @@ std::vector<const AtomObject *> Contributors(const ModelObject & model)
 }
 JointState State(const n::Endpoint & e,double scale)
 {return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale)};}
-std::vector<JointCheck> Evidence(const n::Assessment & a,JointEvidenceScope scope)
+}
+namespace joint_component {
+std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceScope scope)
 {
     using Status=JointCheckStatus;
     auto check=[scope](std::string name,bool available,bool pass,std::optional<double> value={},std::optional<double> threshold={}) {
@@ -45,7 +48,7 @@ std::vector<JointCheck> Evidence(const n::Assessment & a,JointEvidenceScope scop
     };
     const bool valid=a.primary.valid && a.reference.valid;
     std::vector<JointCheck> out;
-    out.push_back(check("inner",a.design.has_value(),a.design && a.design->rank==a.primary.beta.size() && a.coefficient_difference<=1e-10,
+    out.push_back(check("inner",a.design.has_value(),a.inner,
         std::isfinite(a.coefficient_difference) ? std::optional<double>(a.coefficient_difference) : std::nullopt,1e-10));
     out.push_back(check("kkt",a.primary.certificate.available,a.primary.certificate.kkt_passed,
         a.primary.certificate.available ? std::optional<double>(a.primary.certificate.projected_kkt) : std::nullopt,1e-10));
@@ -55,18 +58,45 @@ std::vector<JointCheck> Evidence(const n::Assessment & a,JointEvidenceScope scop
     out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
         a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
     out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
-    double derivative_error{}; bool same_face=true;
-    for(const auto & d:a.derivatives)
-    {derivative_error=std::isfinite(d.error) ? std::max(derivative_error,d.error) : std::numeric_limits<double>::infinity(); same_face &= d.same_face;}
-    out.push_back(check("two-step-derivative",!a.derivatives.empty(),a.derivative_verified,
-        !a.derivatives.empty() && std::isfinite(derivative_error) ? std::optional<double>(derivative_error) : std::nullopt,1e-6));
-    if(!a.derivatives.empty() && !same_face) out.back().reason="active-face-not-preserved";
-    for(const char * name:{"richardson","precision-50-100","boundary-audit","regular-certificate"})
+    for(const char * name:{"two-step-derivative","richardson","precision-50-100","boundary-audit","regular-certificate"})
         out.push_back({name,Status::NotRun,scope,{},{},"offline-audit-not-run"});
     for(auto & evidence:out) if(evidence.status==Status::Unavailable)
         evidence.reason=a.failure.empty() ? "missing-trusted-state" : a.failure;
     return out;
 }
+JointCheckStatus MergeConvergenceStatus(JointCheckStatus a,JointCheckStatus b)
+{
+    for(const auto status:{JointCheckStatus::Failed,JointCheckStatus::Unavailable,JointCheckStatus::NotRun})
+        if(a==status || b==status) return status;
+    return JointCheckStatus::Passed;
+}
+JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,JointEvidenceScope scope,bool assembled)
+{
+    auto status=JointCheckStatus::Passed;
+    for(const char * name:{"inner","kkt","width-stationarity","local-correction","numerical-identifiability","assembled-profile"})
+    {
+        if(!assembled && std::string_view(name)=="assembled-profile") continue;
+        const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
+        status=MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
+    }
+    return status;
+}
+}
+JointCheckStatus JointComponentResult::RuntimeConvergence() const
+{
+    return state ? joint_component::ConvergenceStatus(evidence,JointEvidenceScope::ComponentLocal) : JointCheckStatus::Unavailable;
+}
+JointCheckStatus JointFitResult::RuntimeConvergence() const
+{
+    if(!assembled_state || !prediction || !objective || components.empty() ||
+        std::any_of(components.begin(),components.end(),[](const auto & c){return !c.state;}) ||
+        !std::all_of(available_row_mask.begin(),available_row_mask.end(),[](bool available){return available;}))
+        return JointCheckStatus::Unavailable;
+    auto status=joint_component::ConvergenceStatus(evidence,JointEvidenceScope::AssembledGlobal,true);
+    for(const auto & component:components) status=joint_component::MergeConvergenceStatus(status,component.RuntimeConvergence());
+    return status;
+}
+namespace {
 std::vector<JointRankEvidence> Ranks(const n::Assessment & a,JointEvidenceScope scope)
 {
     std::vector<JointRankEvidence> out;
@@ -157,10 +187,10 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         if(result.trusted_state)
         {
             component.state=State(*result.trusted_state,data.context.scale);
-            component.evidence=Evidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
+            component.evidence=n::AssessmentEvidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
             component.ranks=Ranks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
         }
-        else component.evidence=Evidence({},JointEvidenceScope::ComponentLocal);
+        else component.evidence=n::AssessmentEvidence({},JointEvidenceScope::ComponentLocal);
         out.costs.search_seconds+=result.search.seconds;
         out.costs.search_reference_seconds+=result.search.reference_seconds;
         out.costs.assessment_seconds+=Seconds(component_start)-result.search.seconds;
@@ -173,12 +203,12 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     {
         const auto & view=data.partition.components[0];
         // A single full component has identity row/atom mappings in this immutable snapshot.
-        reuse_context=n::ChildContext(data.context,view,true); reuse_context->audit.directions.resize(0,0);
+        reuse_context=n::ChildContext(data.context,view,true);
         reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*results[0].trusted_assessment});
     }
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
-    out.evidence=Evidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
+    out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.ranks=Ranks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     if(assembly.available)
     {
