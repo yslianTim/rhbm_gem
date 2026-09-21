@@ -1,0 +1,70 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-v1-default
+      Start  1: rhbm_tests_joint_component
+ 1/25 Test  #1: rhbm_tests_joint_component ............   Passed    0.22 sec
+      Start  2: rhbm_tests_core_command
+ 2/25 Test  #2: rhbm_tests_core_command ...............   Passed    2.87 sec
+      Start  3: rhbm_tests_core_sampler
+ 3/25 Test  #3: rhbm_tests_core_sampler ...............   Passed    0.09 sec
+      Start  4: rhbm_tests_core_qscore
+ 4/25 Test  #4: rhbm_tests_core_qscore ................   Passed    0.10 sec
+      Start  5: rhbm_tests_core_estimator
+ 5/25 Test  #5: rhbm_tests_core_estimator .............   Passed   18.45 sec
+      Start  6: rhbm_tests_core_contract
+ 6/25 Test  #6: rhbm_tests_core_contract ..............   Passed    0.16 sec
+      Start  7: rhbm_tests_data_runtime
+ 7/25 Test  #7: rhbm_tests_data_runtime ...............   Passed    0.12 sec
+      Start  8: rhbm_tests_data_schema
+ 8/25 Test  #8: rhbm_tests_data_schema ................   Passed    0.28 sec
+      Start  9: rhbm_tests_utils_algorithm
+ 9/25 Test  #9: rhbm_tests_utils_algorithm ............   Passed    0.09 sec
+      Start 10: rhbm_tests_utils_math
+10/25 Test #10: rhbm_tests_utils_math .................   Passed    0.09 sec
+      Start 11: rhbm_tests_utils_domain
+11/25 Test #11: rhbm_tests_utils_domain ...............   Passed    1.16 sec
+      Start 12: rhbm_tests_utils_hrl
+12/25 Test #12: rhbm_tests_utils_hrl ..................   Passed    0.37 sec
+      Start 13: rhbm_tests_integration_command
+13/25 Test #13: rhbm_tests_integration_command ........   Passed    0.29 sec
+      Start 14: joint_component_evidence_test
+14/25 Test #14: joint_component_evidence_test .........   Passed    0.74 sec
+      Start 15: joint_component_runtime_runner_test
+15/25 Test #15: joint_component_runtime_runner_test ...   Passed    0.39 sec
+      Start 16: joint_component_regression
+16/25 Test #16: joint_component_regression ............   Passed   10.83 sec
+      Start 17: joint_component_physical_smoke
+17/25 Test #17: joint_component_physical_smoke ........   Passed    4.35 sec
+      Start 18: endpoint_refinement_runner_test
+18/25 Test #18: endpoint_refinement_runner_test .......   Passed    0.26 sec
+      Start 19: second_stage_audit_parser_test
+19/25 Test #19: second_stage_audit_parser_test ........   Passed    0.41 sec
+      Start 20: fold_168_regression_runner_test
+20/25 Test #20: fold_168_regression_runner_test .......   Passed    1.34 sec
+      Start 21: cli_quickstart_smoke_test
+21/25 Test #21: cli_quickstart_smoke_test .............   Passed    3.77 sec
+      Start 22: joint_workflow_cli_smoke_test
+22/25 Test #22: joint_workflow_cli_smoke_test .........   Passed    1.28 sec
+      Start 23: command_scaffold_smoke_test
+23/25 Test #23: command_scaffold_smoke_test ...........   Passed    0.26 sec
+      Start 24: bindings_runtime_smoke_test
+24/25 Test #24: bindings_runtime_smoke_test ...........   Passed    0.34 sec
+      Start 25: python_examples_smoke_test
+25/25 Test #25: python_examples_smoke_test ............   Passed    1.12 sec
+
+100% tests passed out of 25
+
+Label Time Summary:
+domain:core           =  21.89 sec*proc (6 tests)
+domain:data           =   0.41 sec*proc (2 tests)
+domain:integration    =  25.39 sec*proc (13 tests)
+domain:utils          =   1.70 sec*proc (4 tests)
+intent:algorithm      =  37.64 sec*proc (13 tests)
+intent:bindings       =   1.46 sec*proc (2 tests)
+intent:command        =   8.21 sec*proc (4 tests)
+intent:contract       =   0.64 sec*proc (3 tests)
+intent:io             =   0.12 sec*proc (1 test)
+intent:sampling       =   0.09 sec*proc (1 test)
+intent:schema         =   0.28 sec*proc (1 test)
+intent:validation     =   4.03 sec*proc (2 tests)
+joint:runtime         =  16.52 sec*proc (5 tests)
+
+Total Test time (real) =  49.47 sec

@@ -1,0 +1,616 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "tested_commit": "7c0b7a4543fdc43390ca59b3aa3b5d9267fbaac7",
+  "baseline_commit": "64127ccae4997d0d3a035c638a760359a3f5651f",
+  "accepted_at": "2026-09-21T01:58:13.233475+00:00",
+  "platform": {
+    "os": "macOS 26.6.2",
+    "architecture": "arm64",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "cmake": "4.4.3",
+    "python": "3.14.7",
+    "eigen": "5.0.1",
+    "boost": "1.92.0",
+    "sqlite": "3.51.0",
+    "cli11": "2.7.2",
+    "pybind11": "3.1.0",
+    "gtest": "1.18.0",
+    "openmp": "5.1",
+    "root": "6.40.04"
+  },
+  "lanes": {
+    "default": {
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e601fd9b727d59ec9668e08a1a3949ddef2365eca859c688ae4737767435c450",
+        "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+        "build_sha256": "fadcfe039f1d599e2566addbab634e697e07b33928f624f7d00a6b7ccd123405"
+      },
+      "settings": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_SHARED_LIBS": "ON",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_ROOT_MODE": "AUTO"
+      },
+      "clean_tree_at_start": true,
+      "commands": [
+        {
+          "command": [
+            "cmake",
+            "-S",
+            "/Users/yslian/Project/em_map_analysis",
+            "-B",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON",
+            "-DRHBM_GEM_ENABLE_UMAP=ON",
+            "-DRHBM_GEM_DEP_PROVIDER=SYSTEM",
+            "-DFETCHCONTENT_BASE_DIR=/Users/yslian/Project/em_map_analysis/build/release/_deps",
+            "-DBUILD_TESTING=ON",
+            "-DBUILD_PYTHON_BINDINGS=ON",
+            "-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF",
+            "-DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=OFF"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/default-configure.log",
+          "log_sha256": "b690911c5d8061601d15fa7360c70d5bf8f575a63ab4c47671f92e36e15e2033"
+        },
+        {
+          "command": [
+            "cmake",
+            "--build",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default",
+            "--target",
+            "tests_all",
+            "-j",
+            "6"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/default-build.log",
+          "log_sha256": "c2ed93ffd93c840755c0e91392ae593b1b52de9b7aaf6c208123feaceb1dde2e"
+        },
+        {
+          "command": [
+            "ctest",
+            "--test-dir",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default",
+            "--output-on-failure",
+            "--output-junit",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-acceptance/default-tests.xml"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/default-tests.log",
+          "log_sha256": "28841cec7ab3e3ed43016418fd4d1c492f11b495ed9e39cf634b4409a11c882b"
+        },
+        {
+          "command": [
+            "cmake",
+            "--build",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default",
+            "--target",
+            "lint_repo"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/default-guards.log",
+          "log_sha256": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c"
+        }
+      ],
+      "tests": [
+        {
+          "name": "rhbm_tests_joint_component",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_command",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_sampler",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_qscore",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_estimator",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_contract",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_data_runtime",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_data_schema",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_algorithm",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_math",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_domain",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_hrl",
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_integration_command",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_evidence_test",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_runtime_runner_test",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_regression",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_physical_smoke",
+          "status": "passed"
+        },
+        {
+          "name": "endpoint_refinement_runner_test",
+          "status": "passed"
+        },
+        {
+          "name": "second_stage_audit_parser_test",
+          "status": "passed"
+        },
+        {
+          "name": "fold_168_regression_runner_test",
+          "status": "passed"
+        },
+        {
+          "name": "cli_quickstart_smoke_test",
+          "status": "passed"
+        },
+        {
+          "name": "joint_workflow_cli_smoke_test",
+          "status": "passed"
+        },
+        {
+          "name": "command_scaffold_smoke_test",
+          "status": "passed"
+        },
+        {
+          "name": "bindings_runtime_smoke_test",
+          "status": "passed"
+        },
+        {
+          "name": "python_examples_smoke_test",
+          "status": "passed"
+        }
+      ]
+    },
+    "offline": {
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e601fd9b727d59ec9668e08a1a3949ddef2365eca859c688ae4737767435c450",
+        "configuration_sha256": "c85747cfd8a92b5e49eab229c1ad1bece651a0ad7986f884b8d5d78654678358",
+        "build_sha256": "1ce366481e7df0c6d7db71dd2975a635aedd036249e2c8ceac6a3e35e9fd2f9c"
+      },
+      "settings": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_SHARED_LIBS": "ON",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "ON",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "ON",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_ROOT_MODE": "AUTO"
+      },
+      "clean_tree_at_start": true,
+      "commands": [
+        {
+          "command": [
+            "cmake",
+            "-S",
+            "/Users/yslian/Project/em_map_analysis",
+            "-B",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON",
+            "-DRHBM_GEM_ENABLE_UMAP=ON",
+            "-DRHBM_GEM_DEP_PROVIDER=SYSTEM",
+            "-DFETCHCONTENT_BASE_DIR=/Users/yslian/Project/em_map_analysis/build/release/_deps",
+            "-DBUILD_TESTING=ON",
+            "-DBUILD_PYTHON_BINDINGS=ON",
+            "-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON",
+            "-DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/offline-configure.log",
+          "log_sha256": "54ad66f90b7a9b51d75ae0b568552811effe99041ac2f8f33aabadbdb3577517"
+        },
+        {
+          "command": [
+            "cmake",
+            "--build",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline",
+            "--target",
+            "tests_all",
+            "-j",
+            "6"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/offline-build.log",
+          "log_sha256": "053eec848d2dc9f5a27d052c6666bd89cc6b3e8281f9bea1a7347779318c0cca"
+        },
+        {
+          "command": [
+            "ctest",
+            "--test-dir",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline",
+            "-L",
+            "joint:extended|joint:offline",
+            "--output-on-failure",
+            "--output-junit",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-acceptance/offline-tests.xml"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/offline-tests.log",
+          "log_sha256": "e6d5726f8d16e27480ec2ae862e44993e8bdc8a6f29b21f7d7f1b1b5196515aa"
+        }
+      ],
+      "tests": [
+        {
+          "name": "joint_component_offline_tests",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_offline_regression",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_two_step_regression",
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_extended_regression",
+          "status": "passed"
+        }
+      ]
+    },
+    "installed": {
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e601fd9b727d59ec9668e08a1a3949ddef2365eca859c688ae4737767435c450",
+        "configuration_sha256": "f0669013733bae0fd28b4f424d314b6f2741a564e97cc23a9d117d71e8b87e62",
+        "build_sha256": "1104030dd58a7bfa3fda69ed3839dec8d9e10e1027940cd3a3cb54af184005c1"
+      },
+      "settings": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "BUILD_PYTHON_BINDINGS": "OFF",
+        "BUILD_SHARED_LIBS": "ON",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_ROOT_MODE": "AUTO"
+      },
+      "clean_tree_at_start": true,
+      "commands": [
+        {
+          "command": [
+            "cmake",
+            "-S",
+            "/Users/yslian/Project/em_map_analysis",
+            "-B",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-installed",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON",
+            "-DRHBM_GEM_ENABLE_UMAP=ON",
+            "-DRHBM_GEM_DEP_PROVIDER=SYSTEM",
+            "-DFETCHCONTENT_BASE_DIR=/Users/yslian/Project/em_map_analysis/build/release/_deps",
+            "-DBUILD_TESTING=OFF",
+            "-DBUILD_PYTHON_BINDINGS=OFF",
+            "-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF",
+            "-DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=OFF"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/installed-configure.log",
+          "log_sha256": "bee78e32d51300031cb22a8c6dedc31afe70e8832c7d1a374b5657f52e22a9b3"
+        },
+        {
+          "command": [
+            "cmake",
+            "--build",
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-installed",
+            "--target",
+            "lint_install_smoke",
+            "-j",
+            "6"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/installed-install-consumer.log",
+          "log_sha256": "c2cc811528087822974af6c087fdd1cb5fd2ee7abd7f9fae0ce82e32604cdbcb"
+        }
+      ],
+      "consumer_executed": true,
+      "consumer_runtime_convergence": "unavailable",
+      "consumer_export_matches_build": true
+    },
+    "source": {
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e601fd9b727d59ec9668e08a1a3949ddef2365eca859c688ae4737767435c450",
+        "configuration_sha256": "56b451dbf3ee67febe0028558972f3a3546f759e490be86ca58a33034461d703",
+        "build_sha256": "6490fbffef3f02069927cb55b2540b111ed1996a4ace0a59a2420b84e3fc56c6"
+      },
+      "settings": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "BUILD_PYTHON_BINDINGS": "OFF",
+        "BUILD_SHARED_LIBS": "ON",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_ROOT_MODE": "AUTO"
+      },
+      "clean_tree_at_start": true,
+      "commands": [
+        {
+          "command": [
+            "cmake",
+            "-S",
+            "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-v1-source-23a1h7z9",
+            "-B",
+            "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-v1-source-23a1h7z9/build/acceptance",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON",
+            "-DRHBM_GEM_ENABLE_UMAP=ON",
+            "-DRHBM_GEM_DEP_PROVIDER=SYSTEM",
+            "-DFETCHCONTENT_BASE_DIR=/Users/yslian/Project/em_map_analysis/build/release/_deps",
+            "-DBUILD_TESTING=OFF",
+            "-DBUILD_PYTHON_BINDINGS=OFF",
+            "-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF",
+            "-DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=OFF"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/source-configure.log",
+          "log_sha256": "33da1d2f8daaf93655115f7fb5b6b697a2d51ce3a95275bba865d97404a82283"
+        },
+        {
+          "command": [
+            "cmake",
+            "--build",
+            "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-v1-source-23a1h7z9/build/acceptance",
+            "--target",
+            "lint_install_smoke",
+            "-j",
+            "6"
+          ],
+          "exit_code": 0,
+          "local_log": "build/joint-v1-acceptance/source-install-consumer.log",
+          "log_sha256": "ac01f11bb90250e7b32f7a9bc06396f8bc0273ed8662f7077a8d9f435e88dfd9"
+        }
+      ],
+      "consumer_executed": true,
+      "consumer_runtime_convergence": "unavailable",
+      "consumer_export_matches_build": true
+    }
+  },
+  "source_package": {
+    "no_git_metadata": true,
+    "archive_sha256": "7ddae8d42e287feb0788945bedd76dfff4c0b4a576a2617f5ab320c74b15688e",
+    "same_source_fingerprint": true
+  },
+  "fixtures": {
+    "catalog_sha256": "eb8a08c3f6f7583f01b9c7a9a757865e130ef3a72e9bb33d2fd4dec1954ee39a",
+    "archives": {
+      "heterogeneous-168.tar.gz": "4c17ae3bc5f076f0444d3bfaef0bf7c1af244089016c804d49354b135731bfd2",
+      "baseline.tar.gz": "936a86ba9fc76b42756881bc45f35be6660302e5851166ba5455ff4091f15c01",
+      "weak-1e-2.tar.gz": "910badcf108802a21d35fa55485d35f8cd83544ddff3812f9deb3808133cb5d0",
+      "weak-1e-4.tar.gz": "e4ca6d43baad004991c4a977c175e0d4fccc46d6827d0cdaa0f447ee8638e1e5",
+      "active-a.tar.gz": "75315b5e0c386f3d40ce99bb6f9305682368251c159a8ddfaf10e61db8228c65",
+      "zero-signal.tar.gz": "8b14359b78106f27073a81cc23fee1909a41209b6c8261f2a5086cd1f7453e0b",
+      "near-0.10.tar.gz": "1d782360f194fccfeef801cc75594aed2c9b6a8fb064ff6030534efd5ba8a2af",
+      "near-0.02.tar.gz": "7705ce83f0d95a30b37b0ba8cb42c7b7ecea58095d9ac850851a53aed10d329b",
+      "duplicate.tar.gz": "366843b0506bc567ed4d768912fd336f00f52fee3f39e6d6ed2fa1aa7bdd13ce"
+    },
+    "unchanged_from_baseline": true
+  },
+  "offline_scopes": [
+    {
+      "dataset": "baseline",
+      "case": "first-stage-double",
+      "regular": true
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-double",
+      "regular": true
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "first-stage-double",
+      "regular": false
+    },
+    {
+      "dataset": "active-a",
+      "case": "first-stage-double",
+      "regular": false
+    }
+  ],
+  "two_step_scopes": [
+    {
+      "dataset": "baseline",
+      "case": "first-stage-double",
+      "passed": true
+    },
+    {
+      "dataset": "baseline",
+      "case": "first-stage-float32",
+      "passed": true
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "first-stage-double",
+      "passed": true
+    },
+    {
+      "dataset": "active-a",
+      "case": "first-stage-double",
+      "passed": true
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "first-stage-double",
+      "passed": true
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-double",
+      "passed": true
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-float32",
+      "passed": true
+    },
+    {
+      "dataset": "duplicate",
+      "case": "first-stage-double",
+      "passed": true
+    }
+  ],
+  "runtime_cases": [
+    {
+      "dataset": "baseline",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "baseline",
+      "case": "first-stage-float32",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "weak-1e-4",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "active-a",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "zero-signal",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": false
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "near-0.02",
+      "case": "narrower-float32",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "duplicate",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": null
+    }
+  ],
+  "extended_cases": [
+    {
+      "dataset": "heterogeneous-168",
+      "case": "first-stage-float32",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "weak-1e-2",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    },
+    {
+      "dataset": "near-0.10",
+      "case": "first-stage-double",
+      "passed": true,
+      "endpoint_same_active_face": true
+    }
+  ],
+  "contracts": {
+    "estimator": "guarded-joint-ls-v1",
+    "objective": "parent-normalized-half-rss-v1",
+    "support": "sphere-fma-v1",
+    "units": "joint-kernel-map-units-v1",
+    "production_json": 2,
+    "sqlite": 17,
+    "old_joint_json": "reject-without-migration",
+    "parameters_scaled_tolerance": 1e-10,
+    "objective_tolerance": 1e-12
+  },
+  "limits": [
+    "macOS arm64 Release only; no cross-platform claim",
+    "runtime convergence is not offline regular certification",
+    "weak-1e-4 retains offline derivative resolution limit",
+    "active-a retains local-correction failure; zero-signal retains width-identification failure",
+    "duplicate retains unavailable state",
+    "no real-data applicability or end-to-end resource limit claim",
+    "no tag, package publication, default-estimator change or fixture regeneration"
+  ]
+}
