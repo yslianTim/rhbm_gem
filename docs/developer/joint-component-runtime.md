@@ -34,17 +34,43 @@ actual coefficients and widths. Assessment reuse does not change search decision
 and timing are separate from search work. Orthogonal backend row reduction can
 change the search trajectory within the numerical parity contract below.
 
-The Map/Model builder includes all non-hydrogen contributors and rejects partial
-non-hydrogen selection. It uses the actual Map geometry and `sphere-fma-v1`,
-retaining negative/zero observations and every structural membership, including
-zero coefficients and numerically invisible basis values.
+The Map/Model builder uses selected non-hydrogen atoms as targets S. Their
+2.5 Angstrom spheres fix the unique observation rows V. It intersects every
+non-hydrogen atom's support with V, retaining targets (even without observations)
+and every intersecting unselected halo contributor. Contributors follow model
+order. Halo never adds rows or recursively adds its neighbors. Atom centers
+outside the map are eligible if their support intersects V. Empty non-hydrogen
+selection is rejected. The existing `sphere-fma-v1` arithmetic and negative/zero
+observations are retained. Structural partition runs after closure; a shared
+halo has one parameter vector and can connect separate target regions.
 
-`EstimateJointComponents` runs deterministic Fibonacci sampling, alpha training
-and first-stage MDPDE in a model copy. Only B initializes joint fitting. Raw
-samples and first-stage results are copied back; selection, second-stage and
-group results are preserved. Invalid widths yield explicit initialization
-failure. No Peeling result, truth, historical fit or certificate initializes the
-public estimator.
+`JointProblemInput.selection_domain` is optional for hand-built frozen inputs
+(null means selection not recorded). The Map/Model builder always records
+`fixed-selected-voxel-closure-v1`, ordered unique `target_indices`, both radii
+(2.5 Angstrom), and `all-non-hydrogen` contributor eligibility. Halo indices are
+the complement within the problem's atom identities. This establishes completeness
+only for the supplied catalogue and truncated support model.
+
+`EstimateJointComponents` uses a full model copy and sequential per-atom
+Fibonacci sampling, alpha training and first-stage MDPDE for all contributors.
+Only B initializes joint fitting. Its initialization data scope is
+`contributor-local-sampling-may-read-outside-target-domain`: interpolation and
+sampling can read beyond V, while the joint objective cannot. Supplied widths
+use `caller-provided-widths`. Global map normalization is also separate from V.
+Raw samples and first-stage results are copied back only for successfully
+initialized targets; halo history, original selection, second-stage and group
+results are preserved. Initialization records retain atom-specific reasons and
+nonfinite diagnostics as unavailable, not replacement coefficients.
+
+An incorrectly sized initial-width vector remains a whole-input failure.
+Otherwise invalid widths/initialization exceptions block only their structural
+component, which retains mappings, stop reason and unavailable evidence; other
+components continue. `initialization.valid` describes all widths, not whether
+any component can run. Missing component states still prevent global assembly.
+No Peeling result, truth, historical fit or certificate initializes the estimator.
+`costs.construction_seconds` measures the Map/Model builder; initialization timing
+includes the model copy and setup. Direct frozen-input fitting has zero builder
+and initializer costs.
 
 A/C order is `[A0, C0, A1, C1, ...]`; widths follow atom identities. Public
 component, assembled-state and result objectives are
@@ -251,8 +277,8 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON uses schema 2 (distinct from fixture and offline report
-schemas). See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schema-2).
+Production outcome JSON uses schema 3 (distinct from fixture and offline report
+schemas). See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schema-3).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values and `JointSoftwareProvenance`. `CaptureJointAnalysisResult` records the
 current library's version/source/configuration/build identity. The decoder and
@@ -274,3 +300,12 @@ observation scale is separate. Unknown normalization cannot support conversion.
 The v1 freeze is an acceptance baseline for fixed-position, all-non-hydrogen,
 structural-support, equal-weight Guarded joint LS. It does not change the default
 two-stage estimator, certify every endpoint, or establish real-data applicability.
+
+## Partial-selection acceptance
+
+See [partial-selection acceptance](joint-component-partial-selection-acceptance.md)
+for the structural/identifiable controls, weak-halo limitations and complete-process
+resource measurements. The original v1 freeze remains a historical baseline.
+Partial selection does not change kernel, numerical thresholds, budgets or the
+all-component convergence requirements. Weak or rank-deficient halo atoms are
+not removed or frozen to make target estimates pass.

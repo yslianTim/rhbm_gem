@@ -43,6 +43,8 @@ int main()
 
     rhbm_gem::core::JointProblemInput input;
     input.atom_ids={"unobserved"}; input.support.resize(1);
+    input.selection_domain=rhbm_gem::JointSelectionDomain{};
+    input.selection_domain->target_indices={0};
     const rhbm_gem::core::JointProblem problem(std::move(input));
     const auto joint=rhbm_gem::core::FitJointComponents(problem,{0.});
     if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
@@ -52,8 +54,9 @@ int main()
     rhbm_gem::WriteJointAnalysisResult(saved,"consumer-joint.json","consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)),{});
-    if(payload.find("\"schema_version\":2")==std::string::npos ||
-        payload.find("joint-kernel-map-units-v1")==std::string::npos) return 7;
+    if(payload.find("\"schema_version\":3")==std::string::npos ||
+        payload.find("joint-kernel-map-units-v1")==std::string::npos ||
+        payload.find("fixed-selected-voxel-closure-v1")==std::string::npos) return 7;
     rhbm_gem::ModelObject saved_model;
     saved_model.EditAnalysis().SetJointResult(saved);
     if(!saved_model.GetAnalysisView().GetJointResult()) return 5;

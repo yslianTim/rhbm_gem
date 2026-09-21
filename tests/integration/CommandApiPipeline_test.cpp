@@ -235,6 +235,12 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     rgc::MapSimulationRequest simulation;
     simulation.model_file_path=directory.path()/"input.cif";
     std::filesystem::copy_file(command_test::TestDataPath("test_model.cif"),simulation.model_file_path);
+    {
+        std::ifstream original(simulation.model_file_path);
+        std::string text((std::istreambuf_iterator<char>(original)),{});
+        text.insert(text.rfind('#'),"ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n");
+        std::ofstream model(simulation.model_file_path); model << text;
+    }
     simulation.output_dir=directory.path(); simulation.grid_spacing=.3;
     simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
     simulation.blurring_width_list={.5}; simulation.verbosity=0;
@@ -242,7 +248,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     const auto map_path=FindGeneratedMap(directory.path()); ASSERT_FALSE(map_path.empty());
     rgc::PotentialAnalysisRequest request;
     request.model_file_path=simulation.model_file_path; request.map_file_path=map_path;
-    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
+    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS; request.only_backbone=true;
     request.database_path=directory.path()/"joint.sqlite"; request.saved_key_tag="joint/model";
     request.verbosity=0;
     for(bool normalization:{false,true})
@@ -254,6 +260,9 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
         const auto & saved=*loaded->GetAnalysisView().GetJointResult();
         ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
+        ASSERT_TRUE(saved.selection_domain); EXPECT_EQ(saved.selection_domain->target_indices,(std::vector<std::size_t>{0}));
+        EXPECT_EQ(saved.atom_ids,(std::vector<std::string>{"1","2"}));
+        EXPECT_EQ(loaded->GetSelectedAtomCount(),1);
         EXPECT_EQ(saved.metadata.map_normalization->requested,normalization);
         EXPECT_EQ(saved.metadata.map_normalization->applied,normalization);
         EXPECT_EQ(saved.metadata.model_sha256,rg::FileSha256(request.model_file_path));
@@ -261,7 +270,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         const double sd=rg::ReadMap(map_path)->GetMapValueSD();
         EXPECT_DOUBLE_EQ(saved.metadata.map_normalization->divisor,normalization ? sd : 1);
         auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
-        model->SelectAllAtoms(); if(normalization) map->MapValueArrayNormalization();
+        model->SelectAllAtoms(); model->ApplyBackboneSelection(true); if(normalization) map->MapValueArrayNormalization();
         const auto direct=rgc::EstimateJointComponents(*map,*model);
         auto expected=rgc::CaptureJointAnalysisResult(direct,saved.metadata); expected.costs=saved.costs;
         EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
@@ -272,7 +281,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         if(option==0) invalid.only_backbone=true;
         if(option==1) invalid.asymmetry_flag=true;
         if(option==2) invalid.sampling_method=SphereSamplingMethod::VolumeUniformRandom;
-        EXPECT_FALSE(rgc::RunCommand(invalid).succeeded);
+        EXPECT_EQ(rgc::RunCommand(invalid).succeeded,option!=2);
     }
     {
         auto zero_map=rg::ReadMap(map_path);

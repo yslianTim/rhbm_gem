@@ -228,6 +228,7 @@ def assert_joint_workflow() -> None:
         simulation = m.MapSimulationRequest()
         local_model = root / "input.cif"
         shutil.copyfile(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif", local_model)
+        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] + "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n#\n")
         simulation.model_file_path = local_model
         simulation.output_dir = root
         simulation.potential_model_choice = m.PotentialModel.SINGLE_GAUS
@@ -237,6 +238,7 @@ def assert_joint_workflow() -> None:
         assert m.RunCommand(simulation).succeeded
         analysis = m.PotentialAnalysisRequest()
         analysis.estimator = m.PotentialEstimator.JOINT_COMPONENTS
+        analysis.only_backbone = True
         analysis.model_file_path = simulation.model_file_path
         analysis.map_file_path = next(root.glob("*.map"))
         analysis.database_path = root / "joint.sqlite"
@@ -255,7 +257,9 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 2
+        assert saved["schema_version"] == 3
+        assert saved["selection_domain"]["target_indices"] == [0]
+        assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash
         assert saved["metadata"]["map_sha256"] == map_hash
         assert saved["metadata"]["map_normalization"] == {"requested": False, "applied": False, "divisor": 1}

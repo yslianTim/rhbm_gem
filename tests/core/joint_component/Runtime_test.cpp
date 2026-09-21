@@ -44,7 +44,9 @@ TEST(JointComponentRuntimeTest, ImmutableSnapshotAndPartialFailure)
     EXPECT_EQ(fit.available_row_mask.size(),81); EXPECT_TRUE(fit.available_row_mask.back());
     EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
     const auto invalid=core::FitJointComponents(problem,{.55,0,.55});
-    EXPECT_FALSE(invalid.initialization.valid); EXPECT_TRUE(invalid.components.empty());
+    EXPECT_FALSE(invalid.initialization.valid); ASSERT_EQ(invalid.components.size(),3);
+    EXPECT_TRUE(invalid.components[0].state); EXPECT_FALSE(invalid.components[1].state);
+    EXPECT_EQ(invalid.components[1].stop_reason,"invalid-initial-widths");
     EXPECT_FALSE(invalid.objective.has_value());
 }
 TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)

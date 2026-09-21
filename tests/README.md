@@ -171,7 +171,7 @@ require external numerical datasets; see the audit guide's verification tiers.
 
 ## Joint v1 acceptance
 
-The production outcome codec accepts joint JSON schema 2 inside SQLite v17.
+The production outcome codec accepts joint JSON schema 3 inside SQLite v17.
 Metadata tests cover actual normalization divisors, input/build fingerprints,
 coefficient units and rejection of old documents. CLI, C++ and Python workflow
 checks export after deleting their temporary model/map inputs. The installed
@@ -183,3 +183,10 @@ Release acceptance runs all default CTests with Python bindings, then the existi
 consumer execution. A source copy without Git metadata must also build/install
 and run the consumer. Keep the frozen fixture packages and current parity
 thresholds unchanged; no historical matrix replay is required.
+
+Partial-selection structural tests use an exhaustive full-grid/catalogue reference,
+plus matched, omitted-halo, bridge and failure-isolation controls. Reproduce small
+complete-process measurements with `tests/integration/joint_partial_selection.py
+--executable BUILD/bin/joint_partial_selection --output REPORT.json` (three serial
+independent processes per case). These measurements include builder and initializer
+costs and do not establish a maximum supported problem size.

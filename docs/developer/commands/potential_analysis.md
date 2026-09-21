@@ -158,9 +158,11 @@ The saved estimator contract is `guarded-joint-ls-v1`; the objective contract is
 Public C++ value types are shared across runtime and saved results; consumers
 should rebuild against the updated library.
 
-Joint uses all non-hydrogen atoms, deterministic Fibonacci initialization and one
-worker. Hydrogen is excluded regardless of `--exclude-hydrogen`; backbone-only,
-asymmetry and non-Fibonacci sampling requests are rejected. `-j` values greater
+Joint uses selected non-hydrogen targets and the complete fixed-domain halo
+closure, deterministic Fibonacci initialization and one worker. Hydrogen is
+excluded regardless of `--exclude-hydrogen`. Backbone-only and asymmetry flags
+select targets; unselected non-hydrogen atoms remain eligible contributors.
+Non-Fibonacci initialization requests are rejected. `-j` values greater
 than one produce a notice that joint uses one worker. The second-stage refinement
 option applies only to the two-stage estimator. Map normalization and Q-score
 preprocessing retain the existing command semantics: simulation skips map
@@ -201,10 +203,10 @@ Invalid input/problem construction and persistence errors fail the command.
 `NotRun` offline evidence never implies passing certification.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
-`joint_atoms_<sanitized-key>.csv`. JSON schema 2 includes metadata, identities,
+`joint_atoms_<sanitized-key>.csv`. JSON schema 3 includes metadata, identities,
 row mappings/mask, initial values, actual states, objectives, cost counters,
-checks, ranks and captured convergence. CSV has one row per non-hydrogen atom:
-`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate`.
+checks, ranks and captured convergence. CSV has one row per fitted contributor (including unavailable targets):
+`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole`.
 A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
 Available but unconverged states are retained. Missing estimates have empty CSV
 fields and null JSON states. Initialization diagnostics with nonfinite numbers
@@ -220,7 +222,7 @@ SQLite v17 accepts empty databases and valid v17 databases only. Older versions,
 including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schema 2)
+### Provenance and map units (joint JSON schema 3)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.
@@ -244,10 +246,29 @@ units U*Angstrom, and B and geometry use Angstrom. U denotes the supplied fittin
 scale, not an assumed physical calibration. To return to input-map scale,
 multiply both A and C by `divisor`; B is unchanged. `observation_scale` normalizes
 the objective only and must not be used for this conversion. CSV retains fitted
-coefficients and its existing columns; keep its companion JSON for units and
+coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Only production joint JSON schema 2 is accepted. Older joint JSON is rejected
+Only production joint JSON schema 3 is accepted. Older joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
 The enclosing SQLite schema remains v17; non-joint records are unaffected.
 Consumers must rebuild against the updated public C++ value types.
+
+### Selected-domain and initialization metadata
+
+`selection_domain` records `contract: fixed-selected-voxel-closure-v1`, ordered
+unique `target_indices` into `atom_ids`, `observation_radius: 2.5`,
+`support_radius: 2.5`, and `contributor_policy: all-non-hydrogen`. All other
+contributors are halo atoms. `row_ids` are the fixed target observations. A
+hand-built input without selection metadata retains null; no roles are inferred.
+CSV `SelectionRole` is `target`, `halo`, or `not-recorded`. All contributor states
+and diagnostics are saved, regardless of role or convergence.
+
+`initialization.data_scope` is `caller-provided-widths` or
+`contributor-local-sampling-may-read-outside-target-domain`. Each initialization
+atom retains its reason; a failed component retains an unavailable state while
+independent valid components can run. `initialization.valid` still means all
+initial widths are valid. `costs.construction_seconds` records builder time;
+initializer time includes model-copy setup. Neither storage nor export recomputes
+roles, initialization or numerical evidence. Original selection and halo legacy
+analysis are preserved; successful target first-stage data can be updated.

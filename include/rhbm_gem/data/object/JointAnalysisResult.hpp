@@ -33,6 +33,7 @@ struct JointAnalysisResult
 {
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
+    std::optional<JointSelectionDomain> selection_domain;
     JointInitialization initialization;
     JointFitCosts costs;
     std::vector<JointAnalysisComponent> components;

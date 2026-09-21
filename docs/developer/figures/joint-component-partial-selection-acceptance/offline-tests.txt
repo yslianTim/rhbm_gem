@@ -1,0 +1,20 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-v1-offline
+    Start  1: joint_component_offline_tests
+1/4 Test  #1: joint_component_offline_tests .........   Passed   16.87 sec
+    Start 19: joint_component_offline_regression
+2/4 Test #19: joint_component_offline_regression ....   Passed  191.82 sec
+    Start 20: joint_component_two_step_regression
+3/4 Test #20: joint_component_two_step_regression ...   Passed    4.57 sec
+    Start 21: joint_component_extended_regression
+4/4 Test #21: joint_component_extended_regression ...   Passed   97.70 sec
+
+100% tests passed out of 4
+
+Label Time Summary:
+domain:core           =  16.87 sec*proc (1 test)
+domain:integration    = 294.09 sec*proc (3 tests)
+intent:algorithm      = 310.96 sec*proc (4 tests)
+joint:extended        =  97.70 sec*proc (1 test)
+joint:offline         = 213.27 sec*proc (3 tests)
+
+Total Test time (real) = 310.99 sec

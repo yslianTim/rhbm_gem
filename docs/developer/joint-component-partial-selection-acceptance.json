@@ -1,0 +1,3291 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "accepted_at": "2026-09-21T07:12:11.586156+00:00",
+  "tested_revision": {
+    "kind": "uncommitted-working-tree",
+    "base_commit": "bb72080c4878ee2333ad3e084f5e7a9d687abf33",
+    "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+    "changed_code_and_test_sha256": {
+      "include/rhbm_gem/core/JointComponentEstimator.hpp": "98ecd133d10f629e64b835a427d0e9a8861e14cce2df2c4e4c9fc3462a7d8f0e",
+      "include/rhbm_gem/data/object/JointAnalysisResult.hpp": "8e1278c1343cc2ffb95187d031f2591b94c72b90088767abdb7734417f83ff08",
+      "include/rhbm_gem/utils/domain/JointEstimationTypes.hpp": "9bf43d7dc17c684a4085a031c3771a49aa5d085c2a400704ad37ee39ec7da05f",
+      "src/core/JointComponentEstimator.cpp": "7b05785a487f57263ddf3d32bc37a9e7def4b7adb711e85d082cc6d7d55354c2",
+      "src/core/command/PotentialAnalysisCommand.cpp": "eb9fdcfab2ce7b2a2bba1ee330837d8dea554c2df4f4f30121b70a4986c98c00",
+      "src/data/io/JointAnalysisFileIO.cpp": "163ffeac50d7f91ee9c9ef65ee09e57b5ff0931c1219a241b6e4dc6591d71011",
+      "src/data/io/detail/JointResultJson.cpp": "843db2fe79e95991f989c95de685968f3f0a6d39378ecd0dbbbbc86b9d47cdda",
+      "tests/CMakeLists.txt": "0d1b094830be968ff4cb4fde7ea2ab4338f1a597f2b33dff597c864a2d2db3ca",
+      "tests/README.md": "eac3f1d8b84adbaffb2b981e72fa3966cb9b5ce58f2a259872fa6a0df3440c90",
+      "tests/cmake/consumer_smoke/main.cpp": "8c6d25df977f2efc0d852780c9d5951c8d871f43e779fcc0e2c97754867de6e4",
+      "tests/core/joint_component/PartialSelection_test.cpp": "02cca83274e189a8e9afe1de8a1e2cfa145f29ded227e83bd40a85ff27a2ce70",
+      "tests/core/joint_component/Runtime_test.cpp": "05f6e18c4b503c208e72faefe0db7f8f629f7d95c9cabe474d59e36d0886c76f",
+      "tests/data/DataObjectPersistence_test.cpp": "998e87c34fcd03537d5f0cd5582d57ede4891c84186e1ba0cde498667a292d2d",
+      "tests/experiments/joint_partial_selection.cpp": "14979ad97b4196f109646adc182fa59ea58c12dcfb63dec254b0e03f506b6bf3",
+      "tests/integration/CommandApiPipeline_test.cpp": "683e84b260aeb050de016de5db0a9e77720e62be91220102bc3df9ffea5d877d",
+      "tests/integration/joint_partial_selection.py": "5ef15fbfa366dced2b79c43dc547b7e0265b5b5db3f6885102f23c082a442989",
+      "tests/integration/joint_workflow_cli_smoke.py": "a04998bcc57babd45ebcd9cd67d221958526946548e3c30dcaf34124cda746a8",
+      "tests/integration/python_bindings_runtime_smoke.py": "558489ffb204d20ba45d9ed3573724e84e1fedc49a00e515dc9a2722b5d6aaf4",
+      "tests/support/JointPartialSelection.hpp": "cee697acc892c57d0073b23b4eb006b6695c967d2129e04bea1f62eba675b657"
+    }
+  },
+  "scope": "Selected-domain closure, contributor initialization with component failure isolation, schema-3 outcome roles and small partial-selection acceptance.",
+  "unchanged": "guarded-joint-ls-v1, parent-normalized-half-rss-v1, sphere-fma-v1, support 2.5 Angstrom, numerical thresholds/budgets and frozen fixtures",
+  "lanes": {
+    "default": {
+      "status": "passed",
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+        "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+        "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+      },
+      "settings": {
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_SHARED_LIBS": "ON",
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "RHBM_GEM_BINARY_DIR": "/Users/yslian/Project/em_map_analysis/build/joint-v1-default",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_FOLD_168_MAP": "",
+        "RHBM_GEM_FOLD_168_MODEL": "",
+        "RHBM_GEM_IS_TOP_LEVEL": "ON",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_PYTHON_INSTALL_DIR": "",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT": "SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE": "AUTO",
+        "RHBM_GEM_SOURCE_DIR": "/Users/yslian/Project/em_map_analysis",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS": "SYSTEM;FETCH",
+        "RHBM_GEM_OPENMP_MODE-STRINGS": "AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS": "SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS": "AUTO;ON;OFF"
+      },
+      "tests": [
+        {
+          "name": "rhbm_tests_joint_component",
+          "seconds": 1.13855,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_command",
+          "seconds": 1.55846,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_sampler",
+          "seconds": 0.0899382,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_qscore",
+          "seconds": 0.0982387,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_estimator",
+          "seconds": 18.3914,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_core_contract",
+          "seconds": 0.14557,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_data_runtime",
+          "seconds": 0.199352,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_data_schema",
+          "seconds": 0.293607,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_algorithm",
+          "seconds": 0.0851733,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_math",
+          "seconds": 0.0884579,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_domain",
+          "seconds": 0.367661,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_utils_hrl",
+          "seconds": 0.371589,
+          "status": "passed"
+        },
+        {
+          "name": "rhbm_tests_integration_command",
+          "seconds": 0.351839,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_evidence_test",
+          "seconds": 0.399963,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_runtime_runner_test",
+          "seconds": 0.379906,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_regression",
+          "seconds": 8.19399,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_physical_smoke",
+          "seconds": 3.7781,
+          "status": "passed"
+        },
+        {
+          "name": "endpoint_refinement_runner_test",
+          "seconds": 0.170372,
+          "status": "passed"
+        },
+        {
+          "name": "second_stage_audit_parser_test",
+          "seconds": 0.287527,
+          "status": "passed"
+        },
+        {
+          "name": "fold_168_regression_runner_test",
+          "seconds": 0.898232,
+          "status": "passed"
+        },
+        {
+          "name": "cli_quickstart_smoke_test",
+          "seconds": 1.8533,
+          "status": "passed"
+        },
+        {
+          "name": "joint_workflow_cli_smoke_test",
+          "seconds": 1.11095,
+          "status": "passed"
+        },
+        {
+          "name": "command_scaffold_smoke_test",
+          "seconds": 0.179897,
+          "status": "passed"
+        },
+        {
+          "name": "bindings_runtime_smoke_test",
+          "seconds": 0.424058,
+          "status": "passed"
+        },
+        {
+          "name": "python_examples_smoke_test",
+          "seconds": 0.8741,
+          "status": "passed"
+        }
+      ],
+      "supplement": "Final joint component group rerun includes all ten partial-selection tests, full-selection initializer parity, initialization exception isolation, and group/bond history preservation. Documentation layout checks and repository guards also passed.",
+      "commands": [
+        [
+          "cmake",
+          "--build",
+          "build/joint-v1-default",
+          "--target",
+          "tests_all",
+          "-j",
+          "4"
+        ],
+        [
+          "ctest",
+          "--test-dir",
+          "build/joint-v1-default",
+          "--output-on-failure"
+        ],
+        [
+          "ctest",
+          "--test-dir",
+          "build/joint-v1-default",
+          "-R",
+          "^rhbm_tests_joint_component$",
+          "--output-on-failure"
+        ]
+      ]
+    },
+    "offline": {
+      "status": "passed",
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+        "configuration_sha256": "c85747cfd8a92b5e49eab229c1ad1bece651a0ad7986f884b8d5d78654678358",
+        "build_sha256": "bef9cd1a62f58a703f7dba1dc7c9fc731a06b06b4adc437dd4101db73ad38806"
+      },
+      "settings": {
+        "BUILD_PYTHON_BINDINGS": "ON",
+        "BUILD_SHARED_LIBS": "ON",
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "RHBM_GEM_BINARY_DIR": "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "ON",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "ON",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_FOLD_168_MAP": "",
+        "RHBM_GEM_FOLD_168_MODEL": "",
+        "RHBM_GEM_IS_TOP_LEVEL": "ON",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_PYTHON_INSTALL_DIR": "",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT": "SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE": "AUTO",
+        "RHBM_GEM_SOURCE_DIR": "/Users/yslian/Project/em_map_analysis",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS": "SYSTEM;FETCH",
+        "RHBM_GEM_OPENMP_MODE-STRINGS": "AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS": "SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS": "AUTO;ON;OFF"
+      },
+      "tests": [
+        {
+          "name": "joint_component_offline_tests",
+          "seconds": 16.8748,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_offline_regression",
+          "seconds": 191.82,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_two_step_regression",
+          "seconds": 4.57227,
+          "status": "passed"
+        },
+        {
+          "name": "joint_component_extended_regression",
+          "seconds": 97.6966,
+          "status": "passed"
+        }
+      ],
+      "commands": [
+        [
+          "cmake",
+          "--build",
+          "build/joint-v1-offline",
+          "--target",
+          "tests_all",
+          "-j",
+          "4"
+        ],
+        [
+          "ctest",
+          "--test-dir",
+          "build/joint-v1-offline",
+          "-L",
+          "joint:extended|joint:offline",
+          "--output-on-failure"
+        ]
+      ]
+    },
+    "installed": {
+      "status": "passed",
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+        "configuration_sha256": "f0669013733bae0fd28b4f424d314b6f2741a564e97cc23a9d117d71e8b87e62",
+        "build_sha256": "55fcf8527f6a650f40386f38402c0a9a74e4540c59cbc281f599ef060abd7f40"
+      },
+      "settings": {
+        "BUILD_PYTHON_BINDINGS": "OFF",
+        "BUILD_SHARED_LIBS": "ON",
+        "BUILD_TESTING": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "RHBM_GEM_BINARY_DIR": "/Users/yslian/Project/em_map_analysis/build/joint-v1-installed",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_FOLD_168_MAP": "",
+        "RHBM_GEM_FOLD_168_MODEL": "",
+        "RHBM_GEM_IS_TOP_LEVEL": "ON",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_PYTHON_INSTALL_DIR": "",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT": "SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE": "AUTO",
+        "RHBM_GEM_SOURCE_DIR": "/Users/yslian/Project/em_map_analysis",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS": "SYSTEM;FETCH",
+        "RHBM_GEM_OPENMP_MODE-STRINGS": "AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS": "SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS": "AUTO;ON;OFF"
+      },
+      "consumer": "Compiled, executed, and exported schema-3 JSON/CSV with selected-domain metadata.",
+      "commands": [
+        [
+          "cmake",
+          "--build",
+          "build/joint-v1-installed",
+          "--target",
+          "lint_install_smoke",
+          "-j",
+          "4"
+        ]
+      ]
+    },
+    "source": {
+      "status": "passed",
+      "software": {
+        "version": "2.0.0",
+        "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+        "configuration_sha256": "e48a3438a1db626e1cc9bedb140d9c7665794b64c5e9bedad2dbb82fabb89095",
+        "build_sha256": "698f7e2edec53f904a80a6a013eee81e7b6e422b48266d9c92ca744fd416c95a"
+      },
+      "settings": {
+        "BUILD_PYTHON_BINDINGS": "OFF",
+        "BUILD_SHARED_LIBS": "ON",
+        "BUILD_TESTING": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "RHBM_GEM_BINARY_DIR": "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-partial-source-qhft22gw/build/acceptance",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS": "OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT": "OFF",
+        "RHBM_GEM_ENABLE_UMAP": "ON",
+        "RHBM_GEM_FOLD_168_MAP": "",
+        "RHBM_GEM_FOLD_168_MODEL": "",
+        "RHBM_GEM_IS_TOP_LEVEL": "ON",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_PYTHON_INSTALL_DIR": "",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT": "SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE": "AUTO",
+        "RHBM_GEM_SOURCE_DIR": "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-partial-source-qhft22gw",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS": "SYSTEM;FETCH",
+        "RHBM_GEM_OPENMP_MODE-STRINGS": "AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS": "SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS": "AUTO;ON;OFF"
+      },
+      "consumer": "Compiled, executed, and exported schema-3 JSON/CSV with selected-domain metadata.",
+      "commands": [
+        [
+          "cmake",
+          "-S",
+          "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-partial-source-qhft22gw",
+          "-B",
+          "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-partial-source-qhft22gw/build/acceptance",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON",
+          "-DRHBM_GEM_ENABLE_UMAP=ON",
+          "-DRHBM_GEM_DEP_PROVIDER=SYSTEM",
+          "-DFETCHCONTENT_BASE_DIR=/Users/yslian/Project/em_map_analysis/build/release/_deps",
+          "-DBUILD_TESTING=OFF",
+          "-DBUILD_PYTHON_BINDINGS=OFF",
+          "-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF",
+          "-DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=OFF"
+        ],
+        [
+          "cmake",
+          "--build",
+          "/var/folders/3v/l5hxv3h56vsgz2x4sptfhvrw0000gn/T/rhbm-joint-partial-source-qhft22gw/build/acceptance",
+          "--target",
+          "lint_install_smoke",
+          "-j",
+          "4"
+        ]
+      ]
+    }
+  },
+  "logs_sha256": {
+    "default-tests": "b58abb2aaadd34bfe804ab6634ee1bfc05e9320a9294ed6c23cdedbdd9979879",
+    "joint-tests": "d9af903525b3c74f03619235e53b3b6e7dba69bf364e0be6969b6574aed64b6d",
+    "offline-tests": "f60377d0150655d7309fccffe9ed78e67838a0d58aa0a0fc8c144c4e9ed14d4d",
+    "installed": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+    "source": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+    "guards": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+    "documentation-tests": "62b3474ad3d0cd0012126505aa943ca9f6bbd7eb8db534a637758518ea8b7d82"
+  },
+  "resources": {
+    "schema_version": 1,
+    "measurement": "serial-independent-processes",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "fixture_sha256": "cee697acc892c57d0073b23b4eb006b6695c967d2129e04bea1f62eba675b657",
+    "scope": "Map/Model builder, model copy, contributor initialization, fitting and assembly; fixture generation precedes timing but contributes to process peak RSS; matched/omitted controls run after timing and RSS capture",
+    "limits": "Small synthetic cases only; no maximum supported component size or total memory/time bound established.",
+    "cases": {
+      "all": {
+        "runs": [
+          {
+            "case": "all",
+            "targets": 2,
+            "halo": 0,
+            "rows": 3345,
+            "memberships": 4938,
+            "largest_component": 2,
+            "total_seconds": 0.022878084,
+            "process_peak_rss_bytes": 26132480,
+            "costs": {
+              "construction_seconds": 0.001276417,
+              "initialization_seconds": 0.009012542,
+              "search_seconds": 0.009969792,
+              "search_reference_seconds": 0.004330749,
+              "assessment_seconds": 0.00162175,
+              "assembly_seconds": 0.000968541
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 2.3456786234841047e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000001,
+                    0.1999999999999999,
+                    2.299999999999999,
+                    0.15000000000000016
+                  ],
+                  "b": [
+                    0.5,
+                    0.5499999999999999
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556205
+                  ],
+                  "width_gradient": [
+                    -5.208582849383728e-17,
+                    -4.731563806447416e-17
+                  ],
+                  "objective": 2.3456786234841047e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 1.1652666344579611e-12,
+                    "singular_values": [
+                      1.5688772438661127,
+                      0.8891125921902652,
+                      0.7278210792657537,
+                      0.4673108908041993
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.3109329778039046
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 7.563796567558077e-13,
+                    "singular_values": [
+                      1.0183650643695303,
+                      0.9812912899193812
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.31093297780390455
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.996802888650546e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1102230246251564e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.2420752194942728e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.7408236177628084e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "all",
+            "targets": 2,
+            "halo": 0,
+            "rows": 3345,
+            "memberships": 4938,
+            "largest_component": 2,
+            "total_seconds": 0.022864458,
+            "process_peak_rss_bytes": 26116096,
+            "costs": {
+              "construction_seconds": 0.001360958,
+              "initialization_seconds": 0.008843208,
+              "search_seconds": 0.010195792,
+              "search_reference_seconds": 0.004416957,
+              "assessment_seconds": 0.001523333,
+              "assembly_seconds": 0.000908833
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 2.3456786234841047e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000001,
+                    0.1999999999999999,
+                    2.299999999999999,
+                    0.15000000000000016
+                  ],
+                  "b": [
+                    0.5,
+                    0.5499999999999999
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556205
+                  ],
+                  "width_gradient": [
+                    -5.208582849383728e-17,
+                    -4.731563806447416e-17
+                  ],
+                  "objective": 2.3456786234841047e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 1.1652666344579611e-12,
+                    "singular_values": [
+                      1.5688772438661127,
+                      0.8891125921902652,
+                      0.7278210792657537,
+                      0.4673108908041993
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.3109329778039046
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 7.563796567558077e-13,
+                    "singular_values": [
+                      1.0183650643695303,
+                      0.9812912899193812
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.31093297780390455
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.996802888650546e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1102230246251564e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.2420752194942728e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.7408236177628084e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "all",
+            "targets": 2,
+            "halo": 0,
+            "rows": 3345,
+            "memberships": 4938,
+            "largest_component": 2,
+            "total_seconds": 0.022306709,
+            "process_peak_rss_bytes": 26001408,
+            "costs": {
+              "construction_seconds": 0.001235791,
+              "initialization_seconds": 0.008400042,
+              "search_seconds": 0.010174875,
+              "search_reference_seconds": 0.004337042,
+              "assessment_seconds": 0.0015585830000000003,
+              "assembly_seconds": 0.000913708
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 2.3456786234841047e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000001,
+                    0.1999999999999999,
+                    2.299999999999999,
+                    0.15000000000000016
+                  ],
+                  "b": [
+                    0.5,
+                    0.5499999999999999
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556205
+                  ],
+                  "width_gradient": [
+                    -5.208582849383728e-17,
+                    -4.731563806447416e-17
+                  ],
+                  "objective": 2.3456786234841047e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 1.1652666344579611e-12,
+                    "singular_values": [
+                      1.5688772438661127,
+                      0.8891125921902652,
+                      0.7278210792657537,
+                      0.4673108908041993
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.3109329778039046
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 7.563796567558077e-13,
+                    "singular_values": [
+                      1.0183650643695303,
+                      0.9812912899193812
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 2.447763731386069e-13,
+                    "singular_values": [
+                      0.32955897843232634,
+                      0.31093297780390455
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.996802888650546e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1102230246251564e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.2420752194942728e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.7408236177628084e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "median_total_seconds": 0.022864458,
+        "median_peak_rss_bytes": 26116096
+      },
+      "partial": {
+        "runs": [
+          {
+            "case": "partial",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 4062,
+            "largest_component": 2,
+            "total_seconds": 0.020039667,
+            "process_peak_rss_bytes": 25264128,
+            "matched_control": {
+              "complete_objective": 8.139650467647788e-32,
+              "omitted_objective": 0.0734728039712892,
+              "complete_target_A_error": 2.6645352591003757e-15,
+              "omitted_target_A_error": 1.9093601064864494,
+              "complete_target_B_error": 0.0,
+              "omitted_target_B_error": 0.13556021562017873,
+              "complete_target_C_error": -1.1102230246251565e-16,
+              "omitted_target_C_error": 0.12438846020606853
+            },
+            "costs": {
+              "construction_seconds": 0.000948,
+              "initialization_seconds": 0.008929625,
+              "search_seconds": 0.00814225,
+              "search_reference_seconds": 0.003568334,
+              "assessment_seconds": 0.001245833,
+              "assembly_seconds": 0.000746958
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 1.341772424181072e-31,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000002,
+                    0.19999999999999987,
+                    2.3000000000000016,
+                    0.15000000000000005
+                  ],
+                  "b": [
+                    0.49999999999999994,
+                    0.55
+                  ],
+                  "log_b": [
+                    -0.6931471805599454,
+                    -0.5978370007556204
+                  ],
+                  "width_gradient": [
+                    -2.723530793193728e-16,
+                    -1.4993424184165352e-16
+                  ],
+                  "objective": 1.341772424181072e-31
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 8.80575209041064e-13,
+                    "singular_values": [
+                      1.6062204063625083,
+                      0.8864485210750072,
+                      0.7184530308167093,
+                      0.34364264604218375
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.609173172493593e-13,
+                    "singular_values": [
+                      1.0231458165046063,
+                      0.9763056069536435
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.700743415417172e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.3878993118306634e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1498154621395745e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "partial",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 4062,
+            "largest_component": 2,
+            "total_seconds": 0.019254208,
+            "process_peak_rss_bytes": 25182208,
+            "matched_control": {
+              "complete_objective": 8.139650467647788e-32,
+              "omitted_objective": 0.0734728039712892,
+              "complete_target_A_error": 2.6645352591003757e-15,
+              "omitted_target_A_error": 1.9093601064864494,
+              "complete_target_B_error": 0.0,
+              "omitted_target_B_error": 0.13556021562017873,
+              "complete_target_C_error": -1.1102230246251565e-16,
+              "omitted_target_C_error": 0.12438846020606853
+            },
+            "costs": {
+              "construction_seconds": 0.00110425,
+              "initialization_seconds": 0.008093,
+              "search_seconds": 0.008013583,
+              "search_reference_seconds": 0.0035734179999999996,
+              "assessment_seconds": 0.0012679170000000003,
+              "assembly_seconds": 0.000749709
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 1.341772424181072e-31,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000002,
+                    0.19999999999999987,
+                    2.3000000000000016,
+                    0.15000000000000005
+                  ],
+                  "b": [
+                    0.49999999999999994,
+                    0.55
+                  ],
+                  "log_b": [
+                    -0.6931471805599454,
+                    -0.5978370007556204
+                  ],
+                  "width_gradient": [
+                    -2.723530793193728e-16,
+                    -1.4993424184165352e-16
+                  ],
+                  "objective": 1.341772424181072e-31
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 8.80575209041064e-13,
+                    "singular_values": [
+                      1.6062204063625083,
+                      0.8864485210750072,
+                      0.7184530308167093,
+                      0.34364264604218375
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.609173172493593e-13,
+                    "singular_values": [
+                      1.0231458165046063,
+                      0.9763056069536435
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.700743415417172e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.3878993118306634e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1498154621395745e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "partial",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 4062,
+            "largest_component": 2,
+            "total_seconds": 0.019662125,
+            "process_peak_rss_bytes": 25198592,
+            "matched_control": {
+              "complete_objective": 8.139650467647788e-32,
+              "omitted_objective": 0.0734728039712892,
+              "complete_target_A_error": 2.6645352591003757e-15,
+              "omitted_target_A_error": 1.9093601064864494,
+              "complete_target_B_error": 0.0,
+              "omitted_target_B_error": 0.13556021562017873,
+              "complete_target_C_error": -1.1102230246251565e-16,
+              "omitted_target_C_error": 0.12438846020606853
+            },
+            "costs": {
+              "construction_seconds": 0.00089025,
+              "initialization_seconds": 0.008488708,
+              "search_seconds": 0.00824775,
+              "search_reference_seconds": 0.0035807919999999993,
+              "assessment_seconds": 0.0012518340000000005,
+              "assembly_seconds": 0.000757333
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.6253572115936031,
+                0.6474521477225953
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    6.001627269464146,
+                    0.6318366283187691,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.829986320890191,
+                    0.6253572115936031,
+                    0.0
+                  ],
+                  "alpha": 0.1,
+                  "sample_count": 160,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    6.418132875084717,
+                    0.6824482403859756,
+                    0.0
+                  ],
+                  "mdpde": [
+                    5.5509928901869365,
+                    0.6474521477225953,
+                    0.0
+                  ],
+                  "alpha": 0.6,
+                  "sample_count": 161,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": true,
+            "objective": 1.341772424181072e-31,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.000000000000002,
+                    0.19999999999999987,
+                    2.3000000000000016,
+                    0.15000000000000005
+                  ],
+                  "b": [
+                    0.49999999999999994,
+                    0.55
+                  ],
+                  "log_b": [
+                    -0.6931471805599454,
+                    -0.5978370007556204
+                  ],
+                  "width_gradient": [
+                    -2.723530793193728e-16,
+                    -1.4993424184165352e-16
+                  ],
+                  "objective": 1.341772424181072e-31
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 8.80575209041064e-13,
+                    "singular_values": [
+                      1.6062204063625083,
+                      0.8864485210750072,
+                      0.7184530308167093,
+                      0.34364264604218375
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.609173172493593e-13,
+                    "singular_values": [
+                      1.0231458165046063,
+                      0.9763056069536435
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 1.817246531423408e-13,
+                    "singular_values": [
+                      0.3314763386698577,
+                      0.28630706911866116
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.700743415417172e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.3878993118306634e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.1498154621395745e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "median_total_seconds": 0.019662125,
+        "median_peak_rss_bytes": 25198592
+      },
+      "bridge": {
+        "runs": [
+          {
+            "case": "bridge",
+            "targets": 2,
+            "halo": 1,
+            "rows": 4874,
+            "memberships": 6086,
+            "largest_component": 3,
+            "total_seconds": 0.033539625,
+            "process_peak_rss_bytes": 27066368,
+            "costs": {
+              "construction_seconds": 0.001728916,
+              "initialization_seconds": 0.015999,
+              "search_seconds": 0.012295625,
+              "search_reference_seconds": 0.004799251,
+              "assessment_seconds": 0.002294333000000001,
+              "assembly_seconds": 0.001195792
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5923340363826465,
+                0.6246704631466967,
+                0.6434357270921363
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.363195137556074,
+                    0.5983052737842987,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.256641570704438,
+                    0.5923340363826465,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    4.241132490509039,
+                    0.6303282650588878,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.140290105864318,
+                    0.6246704631466967,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "3",
+                  "ols": [
+                    4.564030614074573,
+                    0.6901770070793253,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.7448978553494463,
+                    0.6434357270921363,
+                    0.0
+                  ],
+                  "alpha": 0.8999999999999999,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": false,
+            "objective": 3.6834954694586337e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "unrepresentable-step",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.0000000000000004,
+                    0.2000000000000001,
+                    2.2999999999999994,
+                    0.15,
+                    2.6000000000000005,
+                    0.1
+                  ],
+                  "b": [
+                    0.5,
+                    0.55,
+                    0.6
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556204,
+                    -0.5108256237659907
+                  ],
+                  "width_gradient": [
+                    -8.080311759889897e-17,
+                    5.180776479559027e-17,
+                    -4.8867418780844135e-18
+                  ],
+                  "objective": 3.6834954694586337e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 6,
+                    "threshold": 1.5273501979000431e-12,
+                    "singular_values": [
+                      1.4112789868951348,
+                      1.2474654823486424,
+                      1.125225160115978,
+                      0.6893747581187653,
+                      0.6600635200565755,
+                      0.5244696587011533
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 1.1159996095251072e-12,
+                    "singular_values": [
+                      1.0311890491593951,
+                      1.0025700573940772,
+                      0.9651437327727816
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.4062824978585316e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.220446049250313e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.992869509905449e-16,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.3458516013011882e-17,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "bridge",
+            "targets": 2,
+            "halo": 1,
+            "rows": 4874,
+            "memberships": 6086,
+            "largest_component": 3,
+            "total_seconds": 0.033609625,
+            "process_peak_rss_bytes": 27115520,
+            "costs": {
+              "construction_seconds": 0.001660917,
+              "initialization_seconds": 0.0161225,
+              "search_seconds": 0.012267,
+              "search_reference_seconds": 0.004825833999999999,
+              "assessment_seconds": 0.0023555829999999996,
+              "assembly_seconds": 0.0011705
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5923340363826465,
+                0.6246704631466967,
+                0.6434357270921363
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.363195137556074,
+                    0.5983052737842987,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.256641570704438,
+                    0.5923340363826465,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    4.241132490509039,
+                    0.6303282650588878,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.140290105864318,
+                    0.6246704631466967,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "3",
+                  "ols": [
+                    4.564030614074573,
+                    0.6901770070793253,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.7448978553494463,
+                    0.6434357270921363,
+                    0.0
+                  ],
+                  "alpha": 0.8999999999999999,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": false,
+            "objective": 3.6834954694586337e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "unrepresentable-step",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.0000000000000004,
+                    0.2000000000000001,
+                    2.2999999999999994,
+                    0.15,
+                    2.6000000000000005,
+                    0.1
+                  ],
+                  "b": [
+                    0.5,
+                    0.55,
+                    0.6
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556204,
+                    -0.5108256237659907
+                  ],
+                  "width_gradient": [
+                    -8.080311759889897e-17,
+                    5.180776479559027e-17,
+                    -4.8867418780844135e-18
+                  ],
+                  "objective": 3.6834954694586337e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 6,
+                    "threshold": 1.5273501979000431e-12,
+                    "singular_values": [
+                      1.4112789868951348,
+                      1.2474654823486424,
+                      1.125225160115978,
+                      0.6893747581187653,
+                      0.6600635200565755,
+                      0.5244696587011533
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 1.1159996095251072e-12,
+                    "singular_values": [
+                      1.0311890491593951,
+                      1.0025700573940772,
+                      0.9651437327727816
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.4062824978585316e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.220446049250313e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.992869509905449e-16,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.3458516013011882e-17,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "bridge",
+            "targets": 2,
+            "halo": 1,
+            "rows": 4874,
+            "memberships": 6086,
+            "largest_component": 3,
+            "total_seconds": 0.033642958,
+            "process_peak_rss_bytes": 27148288,
+            "costs": {
+              "construction_seconds": 0.001789584,
+              "initialization_seconds": 0.01616375,
+              "search_seconds": 0.012191583,
+              "search_reference_seconds": 0.004818834,
+              "assessment_seconds": 0.0022065839999999993,
+              "assembly_seconds": 0.001255084
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5923340363826465,
+                0.6246704631466967,
+                0.6434357270921363
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.363195137556074,
+                    0.5983052737842987,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.256641570704438,
+                    0.5923340363826465,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    4.241132490509039,
+                    0.6303282650588878,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.140290105864318,
+                    0.6246704631466967,
+                    0.0
+                  ],
+                  "alpha": 0.2,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "3",
+                  "ols": [
+                    4.564030614074573,
+                    0.6901770070793253,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.7448978553494463,
+                    0.6434357270921363,
+                    0.0
+                  ],
+                  "alpha": 0.8999999999999999,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "passed",
+            "search_completed": false,
+            "objective": 3.6834954694586337e-32,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "unrepresentable-step",
+                "runtime_convergence": "passed",
+                "state": {
+                  "ac": [
+                    2.0000000000000004,
+                    0.2000000000000001,
+                    2.2999999999999994,
+                    0.15,
+                    2.6000000000000005,
+                    0.1
+                  ],
+                  "b": [
+                    0.5,
+                    0.55,
+                    0.6
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.5978370007556204,
+                    -0.5108256237659907
+                  ],
+                  "width_gradient": [
+                    -8.080311759889897e-17,
+                    5.180776479559027e-17,
+                    -4.8867418780844135e-18
+                  ],
+                  "objective": 3.6834954694586337e-32
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 6,
+                    "threshold": 1.5273501979000431e-12,
+                    "singular_values": [
+                      1.4112789868951348,
+                      1.2474654823486424,
+                      1.125225160115978,
+                      0.6893747581187653,
+                      0.6600635200565755,
+                      0.5244696587011533
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 1.1159996095251072e-12,
+                    "singular_values": [
+                      1.0311890491593951,
+                      1.0025700573940772,
+                      0.9651437327727816
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 3,
+                    "threshold": 3.996150319460379e-13,
+                    "singular_values": [
+                      0.3692462267057499,
+                      0.3540682244104008,
+                      0.19544594622343925
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 1.4062824978585316e-15,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.220446049250313e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.992869509905449e-16,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 2.3458516013011882e-17,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "median_total_seconds": 0.033609625,
+        "median_peak_rss_bytes": 27115520
+      },
+      "weak": {
+        "runs": [
+          {
+            "case": "weak",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 2490,
+            "largest_component": 2,
+            "total_seconds": 0.057271083,
+            "process_peak_rss_bytes": 25296896,
+            "costs": {
+              "construction_seconds": 0.000821667,
+              "initialization_seconds": 0.012947833,
+              "search_seconds": 0.04211525,
+              "search_reference_seconds": 0.018632334999999993,
+              "assessment_seconds": 0.0008563749999999995,
+              "assembly_seconds": 0.000498833
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5887477918718339,
+                0.3589682425783044
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    3.507939882150777,
+                    0.35896824257830445,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.5079398821507772,
+                    0.3589682425783044,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "failed",
+            "search_completed": true,
+            "objective": 1.3739869008035527e-23,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "failed",
+                "state": {
+                  "ac": [
+                    2.0000000000000018,
+                    0.19999999999999996,
+                    0.013204011337350928,
+                    0.149999999537091
+                  ],
+                  "b": [
+                    0.5,
+                    0.4486217116387566
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.8015752594074727
+                  ],
+                  "width_gradient": [
+                    -4.295139565341269e-16,
+                    7.863317810399695e-22
+                  ],
+                  "objective": 1.3739869008035527e-23
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 7.641448980179739e-13,
+                    "singular_values": [
+                      1.3938447460392114,
+                      1.236504295105472,
+                      0.6781267877837485,
+                      0.26153013557656857
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5000687671048741e-10
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.482284634891933e-13,
+                    "singular_values": [
+                      1.0000006091064522,
+                      0.9999993908931732
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5001385555279644e-10
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 8.140419636693364e-11,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.276796596521859e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "failed",
+                    "value": 0.034938864843796054,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "weak",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 2490,
+            "largest_component": 2,
+            "total_seconds": 0.056089625,
+            "process_peak_rss_bytes": 25214976,
+            "costs": {
+              "construction_seconds": 0.00077325,
+              "initialization_seconds": 0.012474292,
+              "search_seconds": 0.041464,
+              "search_reference_seconds": 0.018330664999999993,
+              "assessment_seconds": 0.0008509160000000002,
+              "assembly_seconds": 0.000495542
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5887477918718339,
+                0.3589682425783044
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    3.507939882150777,
+                    0.35896824257830445,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.5079398821507772,
+                    0.3589682425783044,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "failed",
+            "search_completed": true,
+            "objective": 1.3739869008035527e-23,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "failed",
+                "state": {
+                  "ac": [
+                    2.0000000000000018,
+                    0.19999999999999996,
+                    0.013204011337350928,
+                    0.149999999537091
+                  ],
+                  "b": [
+                    0.5,
+                    0.4486217116387566
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.8015752594074727
+                  ],
+                  "width_gradient": [
+                    -4.295139565341269e-16,
+                    7.863317810399695e-22
+                  ],
+                  "objective": 1.3739869008035527e-23
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 7.641448980179739e-13,
+                    "singular_values": [
+                      1.3938447460392114,
+                      1.236504295105472,
+                      0.6781267877837485,
+                      0.26153013557656857
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5000687671048741e-10
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.482284634891933e-13,
+                    "singular_values": [
+                      1.0000006091064522,
+                      0.9999993908931732
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5001385555279644e-10
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 8.140419636693364e-11,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.276796596521859e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "failed",
+                    "value": 0.034938864843796054,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "case": "weak",
+            "targets": 1,
+            "halo": 1,
+            "rows": 2469,
+            "memberships": 2490,
+            "largest_component": 2,
+            "total_seconds": 0.056432167,
+            "process_peak_rss_bytes": 25395200,
+            "costs": {
+              "construction_seconds": 0.000777,
+              "initialization_seconds": 0.01253025,
+              "search_seconds": 0.041755292,
+              "search_reference_seconds": 0.018437375,
+              "assessment_seconds": 0.000847582999999999,
+              "assembly_seconds": 0.000495166
+            },
+            "initialization": {
+              "valid": true,
+              "reason": "valid-widths",
+              "b": [
+                0.5887477918718339,
+                0.3589682425783044
+              ],
+              "atoms": [
+                {
+                  "id": "1",
+                  "ols": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "mdpde": [
+                    4.160333421095684,
+                    0.5887477918718339,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                },
+                {
+                  "id": "2",
+                  "ols": [
+                    3.507939882150777,
+                    0.35896824257830445,
+                    0.0
+                  ],
+                  "mdpde": [
+                    3.5079398821507772,
+                    0.3589682425783044,
+                    0.0
+                  ],
+                  "alpha": 0.0,
+                  "sample_count": 200,
+                  "native_status": 0,
+                  "reason": "valid-width"
+                }
+              ],
+              "data_scope": "contributor-local-sampling-may-read-outside-target-domain"
+            },
+            "software": {
+              "version": "2.0.0",
+              "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+              "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+              "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+            },
+            "runtime_convergence": "failed",
+            "search_completed": true,
+            "objective": 1.3739869008035527e-23,
+            "components": [
+              {
+                "id": "1",
+                "stop_reason": "native-lm-stop",
+                "runtime_convergence": "failed",
+                "state": {
+                  "ac": [
+                    2.0000000000000018,
+                    0.19999999999999996,
+                    0.013204011337350928,
+                    0.149999999537091
+                  ],
+                  "b": [
+                    0.5,
+                    0.4486217116387566
+                  ],
+                  "log_b": [
+                    -0.6931471805599453,
+                    -0.8015752594074727
+                  ],
+                  "width_gradient": [
+                    -4.295139565341269e-16,
+                    7.863317810399695e-22
+                  ],
+                  "objective": 1.3739869008035527e-23
+                },
+                "ranks": [
+                  {
+                    "name": "design",
+                    "scope": "component-local",
+                    "rank": 4,
+                    "threshold": 7.641448980179739e-13,
+                    "singular_values": [
+                      1.3938447460392114,
+                      1.236504295105472,
+                      0.6781267877837485,
+                      0.26153013557656857
+                    ]
+                  },
+                  {
+                    "name": "projected-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5000687671048741e-10
+                    ]
+                  },
+                  {
+                    "name": "normalized-width",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 5.482284634891933e-13,
+                    "singular_values": [
+                      1.0000006091064522,
+                      0.9999993908931732
+                    ]
+                  },
+                  {
+                    "name": "jacobian",
+                    "scope": "component-local",
+                    "rank": 2,
+                    "threshold": 3.0045903078749705e-13,
+                    "singular_values": [
+                      0.5480547505446222,
+                      1.5001385555279644e-10
+                    ]
+                  }
+                ],
+                "evidence": [
+                  {
+                    "name": "inner",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 8.140419636693364e-11,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "kkt",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 4.440892098500626e-16,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "width-stationarity",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": 3.276796596521859e-15,
+                    "threshold": 1e-12,
+                    "reason": ""
+                  },
+                  {
+                    "name": "local-correction",
+                    "scope": "component-local",
+                    "status": "failed",
+                    "value": 0.034938864843796054,
+                    "threshold": 1e-10,
+                    "reason": ""
+                  },
+                  {
+                    "name": "numerical-identifiability",
+                    "scope": "component-local",
+                    "status": "passed",
+                    "value": null,
+                    "threshold": null,
+                    "reason": ""
+                  },
+                  {
+                    "name": "two-step-derivative",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "richardson",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "precision-50-100",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "boundary-audit",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  },
+                  {
+                    "name": "regular-certificate",
+                    "scope": "component-local",
+                    "status": "not-run",
+                    "value": null,
+                    "threshold": null,
+                    "reason": "offline-audit-not-run"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "median_total_seconds": 0.056432167,
+        "median_peak_rss_bytes": 25296896
+      }
+    }
+  },
+  "source_package": {
+    "construction": "Tracked files plus new implementation/test files copied outside any Git repository; installed system dependencies and cached pinned UMAP sources reused.",
+    "file_manifest_sha256": "d720ea8b45920e6831cb895702ac20b436f66a9f08c384696d87611c14dbe92c"
+  },
+  "limitations": [
+    "Initialization and command-wide normalization may depend on data outside target rows.",
+    "Halo states remain part of all-component evidence; no target-only convergence or halo freezing.",
+    "Only 2-3-contributor synthetic Map/Model cases measured; no maximum size, end-to-end memory/time limit, real-data accuracy or cross-platform claim.",
+    "Build/test lanes overlapped; their elapsed times are diagnostics. Final resource measurements ran after builds and CTests completed.",
+    "Base commit plus working-tree source fingerprint identifies tested code; no new code commit or release was created."
+  ]
+}

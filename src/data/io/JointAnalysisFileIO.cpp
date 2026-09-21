@@ -1,5 +1,6 @@
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "detail/JointResultJson.hpp"
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <limits>
@@ -25,7 +26,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         csv_file.exceptions(std::ios::failbit|std::ios::badbit);
         json_file.open(json_path); csv_file.open(csv_path);
         json_file << json << '\n';
-        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate\n"
+        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
         for(const auto & component:result.components)
@@ -43,7 +44,9 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             csv_file << ',' << (component && component->state.has_value()) << ',' << (component && component->search_completed)
                 << ',' << CsvText(component ? component->stop_reason : result.initialization.reason)
                 << ',' << joint_result_io::StatusText(component ? component->runtime_convergence : JointCheckStatus::Unavailable)
-                << ',' << joint_result_io::StatusText(component ? component->regular_certificate : result.regular_certificate) << '\n';
+                << ',' << joint_result_io::StatusText(component ? component->regular_certificate : result.regular_certificate)
+                << ',' << (!result.selection_domain ? "not-recorded" :
+                    std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom) ? "target" : "halo") << '\n';
         }
         json_file.close(); csv_file.close();
     }

@@ -18,6 +18,7 @@ def main() -> int:
         root = Path(directory)
         local_model = root / "input.cif"
         shutil.copyfile(model, local_model)
+        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] + "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n#\n")
         model = local_model
 
         def run(*args: object, succeeds: bool = True) -> None:
@@ -29,13 +30,13 @@ def main() -> int:
         map_path = next(root.glob("*.map"))
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
-        run("potential_analysis", "--estimator", "joint-components", "-a", model,
+        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
         model.write_text(model.read_text() + "\n# provenance test\n")
-        run("potential_analysis", "--estimator", "joint-components", "-a", model,
+        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
             "-m", map_path, "-d", database, "-k", "changed", "--map-normalization", "false", "-v", "0")
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_path.unlink()
@@ -47,7 +48,13 @@ def main() -> int:
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 2
+        assert saved["schema_version"] == 3
+        assert saved["selection_domain"]["target_indices"] == [0]
+        assert saved["atom_ids"] == ["1", "2"]
+        assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
+        csv = (root / "joint_atoms_example.csv").read_text().splitlines()
+        assert csv[0].endswith(",SelectionRole")
+        assert csv[1].endswith(",target") and csv[2].endswith(",halo")
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash
         assert metadata["map_sha256"] == map_hash

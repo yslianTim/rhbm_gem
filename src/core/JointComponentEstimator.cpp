@@ -24,18 +24,28 @@ namespace n=joint_component;
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::vector<double> Values(const n::Vector & v) {return {v.data(),v.data()+v.size()};}
-std::vector<const AtomObject *> Contributors(const ModelObject & model)
+std::vector<const AtomObject *> EligibleAtoms(const ModelObject & model)
 {
-    std::set<const AtomObject *> selected;
-    for(const auto * atom:model.GetSelectedAtoms()) if(atom->GetElement()!=Element::HYDROGEN) selected.insert(atom);
     std::vector<const AtomObject *> atoms;
-    for(const auto & atom:model.GetAtomList()) if(atom->GetElement()!=Element::HYDROGEN)
-    {
-        if(!selected.contains(atom.get())) throw std::invalid_argument("Joint fitting requires all non-hydrogen contributors; partial selection is unsupported.");
-        atoms.push_back(atom.get());
-    }
-    if(atoms.empty()) throw std::invalid_argument("Joint fitting requires at least one non-hydrogen atom.");
+    for(const auto & atom:model.GetAtomList()) if(atom->GetElement()!=Element::HYDROGEN) atoms.push_back(atom.get());
     return atoms;
+}
+template<class Visit> void VisitSupport(const MapObject & map,const AtomObject & atom,Visit visit)
+{
+    const auto dims=map.GetGridSize(); const auto spacing=map.GetGridSpacing(),origin=map.GetOrigin();
+    const auto position=atom.GetPosition(); std::array<int,3> lo{},hi{};
+    for(std::size_t k=0;k<3;++k)
+    {
+        if(!std::isfinite(position[k])) throw std::invalid_argument("Nonfinite atom position.");
+        lo[k]=static_cast<int>(std::clamp(std::floor((position[k]-2.5-origin[k])/spacing[k]),0.,static_cast<double>(dims[k])));
+        hi[k]=static_cast<int>(std::clamp(std::floor((position[k]+2.5-origin[k])/spacing[k]),-1.,static_cast<double>(dims[k]-1)));
+    }
+    for(int z=lo[2];z<=hi[2];++z) for(int y=lo[1];y<=hi[1];++y) for(int x=lo[0];x<=hi[0];++x)
+    {
+        const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dims[0])*(static_cast<std::size_t>(y)+static_cast<std::size_t>(dims[1])*static_cast<std::size_t>(z));
+        const double square=simulation::SupportSquare(simulation::GridPosition({x,y,z},spacing,origin),position);
+        if(square<=6.25) visit(index,square);
+    }
 }
 JointState State(const n::Endpoint & e,double scale)
 {return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale)};}
@@ -112,6 +122,8 @@ JointProblem::JointProblem(JointProblemInput input)
     if(input.atom_ids.empty() || input.support.size()!=input.atom_ids.size() || input.row_ids.size()!=input.observations.size() ||
         std::set<std::string>(input.row_ids.begin(),input.row_ids.end()).size()!=input.row_ids.size())
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
+    if(input.selection_domain && !input.selection_domain->IsValid(input.atom_ids.size()))
+        throw std::invalid_argument("Invalid joint selection domain.");
     for(const auto & atom:input.support) for(const auto & s:atom)
         if(s.row>=input.observations.size()) throw std::invalid_argument("Invalid joint contributor row.");
     auto data=std::make_shared<n::ProblemData>(std::make_shared<const JointProblemInput>(std::move(input)));
@@ -124,33 +136,33 @@ const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
 JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 {
-    const auto atoms=Contributors(model); JointProblemInput input;
+    const auto atoms=EligibleAtoms(model); JointProblemInput input;
+    std::set<const AtomObject *> selected;
+    for(const auto * atom:model.GetSelectedAtoms()) if(atom->GetElement()!=Element::HYDROGEN) selected.insert(atom);
+    if(selected.empty()) throw std::invalid_argument("Joint fitting requires at least one selected non-hydrogen atom.");
     const auto dims=map.GetGridSize(); const auto spacing=map.GetGridSpacing(),origin=map.GetOrigin();
     for(std::size_t k=0;k<3;++k) if(dims[k]<=0 || !std::isfinite(spacing[k]) || spacing[k]<=0 || !std::isfinite(origin[k]))
         throw std::invalid_argument("Invalid joint map geometry.");
-    input.support.resize(atoms.size());
     std::vector<std::size_t> rows;
-    for(std::size_t a=0;a<atoms.size();++a)
-    {
-        input.atom_ids.push_back(std::to_string(atoms[a]->GetSerialID()));
-        const auto position=atoms[a]->GetPosition(); std::array<int,3> lo{},hi{};
-        for(std::size_t k=0;k<3;++k)
-        {
-            if(!std::isfinite(position[k])) throw std::invalid_argument("Nonfinite atom position.");
-            lo[k]=static_cast<int>(std::clamp(std::floor((position[k]-2.5-origin[k])/spacing[k]),0.,static_cast<double>(dims[k])));
-            hi[k]=static_cast<int>(std::clamp(std::floor((position[k]+2.5-origin[k])/spacing[k]),-1.,static_cast<double>(dims[k]-1)));
-        }
-        for(int z=lo[2];z<=hi[2];++z) for(int y=lo[1];y<=hi[1];++y) for(int x=lo[0];x<=hi[0];++x)
-        {
-            const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dims[0])*(static_cast<std::size_t>(y)+static_cast<std::size_t>(dims[1])*static_cast<std::size_t>(z));
-            const double square=simulation::SupportSquare(simulation::GridPosition({x,y,z},spacing,origin),position);
-            if(square<=6.25) {rows.push_back(index); input.support[a].push_back({index,square});}
-        }
-    }
+    for(const auto * atom:atoms) if(selected.contains(atom))
+        VisitSupport(map,*atom,[&](auto index,double) {rows.push_back(index);});
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
-    for(auto & atom:input.support) for(auto & s:atom)
-        s.row=static_cast<std::size_t>(std::lower_bound(rows.begin(),rows.end(),s.row)-rows.begin());
+    input.selection_domain.emplace();
+    for(const auto * atom:atoms)
+    {
+        std::vector<JointSupport> support;
+        VisitSupport(map,*atom,[&](auto index,double square) {
+            const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+            if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+        });
+        if(selected.contains(atom) || !support.empty())
+        {
+            if(selected.contains(atom)) input.selection_domain->target_indices.push_back(input.atom_ids.size());
+            input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
+            input.support.push_back(std::move(support));
+        }
+    }
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
@@ -160,7 +172,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
-    if(!out.initialization.valid)
+    if(initial_b.size()!=data.domain.atoms.size())
     {
         out.available_row_mask.assign(data.input->observations.size(),false);
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
@@ -171,7 +183,13 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     for(const auto & view:data.partition.components)
     {
         const auto component_start=Clock::now();
-        auto result=n::SolveComponent(view,data.y,b,data.context);
+        n::ComponentResult result;
+        const bool valid=std::all_of(view.atoms.begin(),view.atoms.end(),[&](auto a) {
+            return std::isfinite(initial_b[static_cast<std::size_t>(a)]) && initial_b[static_cast<std::size_t>(a)]>0;
+        });
+        if(valid) result=n::SolveComponent(view,data.y,b,data.context);
+        else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}
+
         JointComponentResult component; component.id=view.id; component.stop_reason=result.search.stop_reason;
         for(auto a:view.atoms) component.atoms.push_back(static_cast<std::size_t>(a));
         for(auto row:view.rows) component.rows.push_back(static_cast<std::size_t>(row));
@@ -184,7 +202,12 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
             component.evidence=n::AssessmentEvidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
             component.ranks=Ranks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
         }
-        else component.evidence=n::AssessmentEvidence({},JointEvidenceScope::ComponentLocal);
+        else
+        {
+            n::Assessment missing;
+            missing.failure=result.search.stop_reason;
+            component.evidence=n::AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
+        }
         out.costs.search_seconds+=result.search.seconds;
         out.costs.search_reference_seconds+=result.search.reference_seconds;
         out.costs.assessment_seconds+=Seconds(component_start)-result.search.seconds;
@@ -224,6 +247,7 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         RHBM_GEM_SIMULATION_BUILD_SHA256};
     out.metadata=std::move(metadata);
     out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
+    out.selection_domain=fit.problem->Input().selection_domain;
     out.initialization=fit.initialization; out.costs=fit.costs;
     for (const auto & component:fit.components)
     {
@@ -240,44 +264,56 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
 }
 JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
 {
+    const auto construction_start=Clock::now();
     const auto problem=BuildJointProblem(map,model);
-    ModelObject initializer(model); const auto atoms=Contributors(initializer);
-    JointInitialization initialization; const auto initialization_start=Clock::now();
-    try
+    const double construction_seconds=Seconds(construction_start);
+    const auto initialization_start=Clock::now();
+    ModelObject initializer(model);
+    const auto & input=problem.Input();
+    JointInitialization initialization;
+    initialization.data_scope="contributor-local-sampling-may-read-outside-target-domain";
+    FitOptions options; options.thread_size=1; options.quiet_mode=true; options.exclude_hydrogen=true;
+    for(std::size_t a=0;a<input.atom_ids.size();++a)
     {
-        initializer.ApplyElementSelection(Element::HYDROGEN,true);
-        initializer.EditAnalysis().InitializeFromSelection();
-        RunPotentialSamplingWorkflow(map,initializer,SphereSamplingMethod::FibonacciDeterministic,1);
-        initializer.EditAnalysis().InitializeLocalFittingSeedModels();
-        FitOptions options; options.thread_size=1; options.quiet_mode=true; options.exclude_hydrogen=true;
-        RunLocalAlphaTraining(initializer,options,FittingStage::First);
-        RunFixedOffsetLocalFitting(initializer,options,FittingStage::First);
-        for(const auto * atom:atoms)
+        auto * atom=initializer.FindAtomPtr(std::stoi(input.atom_ids[a]));
+        JointInitializationAtom record; record.id=input.atom_ids[a];
+        record.ols.fill(std::numeric_limits<double>::quiet_NaN()); record.mdpde=record.ols;
+        record.alpha=std::numeric_limits<double>::quiet_NaN();
+        double width=std::numeric_limits<double>::quiet_NaN();
+        try
         {
-            const auto view=AtomLocalPotentialView::For(*atom); const auto & local=view.GetGaussianResult(FittingStage::First);
-            JointInitializationAtom record; record.id=std::to_string(atom->GetSerialID());
+            initializer.SelectAtoms([&](const auto & candidate) {return &candidate==atom;});
+            auto analysis=initializer.EditAnalysis();
+            analysis.InitializeFromSelection();
+            analysis.InitializeLocalFittingSeedModels();
+            analysis.SetAtomLocalRawSamplingEntries(*atom,SampleAtomMapValues(map,*atom,SphereSamplingMethod::FibonacciDeterministic));
+            const auto view=AtomLocalPotentialView::For(*atom);
+            record.sample_count=view.GetSamplingEntries(FittingStage::First).size();
+            RunLocalAlphaTraining(initializer,options,FittingStage::First);
+            record.alpha=view.GetAlphaR(FittingStage::First);
+            const auto local=EstimateLocalGaussian(view.GetSamplingEntries(FittingStage::First),record.alpha,options,
+                view.GetGaussianResult(FittingStage::First).mdpde.GetModel());
+            analysis.SetAtomLocalGaussianResult(FittingStage::First,*atom,local);
             const auto ols=local.ols.GetModel().ToVector(),mdpde=local.mdpde.GetModel().ToVector();
             for(std::size_t k=0;k<3;++k) {record.ols[k]=ols(static_cast<Eigen::Index>(k)); record.mdpde[k]=mdpde(static_cast<Eigen::Index>(k));}
-            record.alpha=local.alpha_r; record.sample_count=view.GetSamplingEntries(FittingStage::First).size();
             if(local.fit_result) record.native_status=static_cast<int>(local.fit_result->status);
-            initialization.b.push_back(local.mdpde.GetModel().GetWidth()); initialization.atoms.push_back(std::move(record));
+            width=local.mdpde.GetModel().GetWidth();
+            record.reason=std::isfinite(width) && width>0 ? "valid-width" : "invalid-width";
+            if(record.reason=="valid-width" && std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),a))
+            {
+                const auto * destination=model.FindAtomPtr(atom->GetSerialID());
+                model.EditAnalysis().SetAtomLocalRawSamplingEntries(*destination,view.GetRawSamplingEntries(false));
+                model.EditAnalysis().SetAtomLocalGaussianResult(FittingStage::First,*destination,local);
+            }
         }
-    }
-    catch(const std::exception & error)
-    {
-        JointFitResult out; out.problem=problem; initialization.reason=error.what(); out.initialization=std::move(initialization);
-        out.costs.initialization_seconds=Seconds(initialization_start);
-        out.observation_scale=problem.ObservationScale(); out.available_row_mask.assign(problem.Input().observations.size(),false); return out;
-    }
-    for(const auto * atom:atoms)
-    {
-        const auto view=AtomLocalPotentialView::For(*atom);
-        const auto * destination=model.FindAtomPtr(atom->GetSerialID());
-        model.EditAnalysis().SetAtomLocalRawSamplingEntries(*destination,view.GetRawSamplingEntries(false));
-        model.EditAnalysis().SetAtomLocalGaussianResult(FittingStage::First,*destination,view.GetGaussianResult(FittingStage::First));
+        catch(const std::exception & error) {width=std::numeric_limits<double>::quiet_NaN(); record.reason=std::string("initialization-exception: ")+error.what();}
+        initialization.b.push_back(width); initialization.atoms.push_back(std::move(record));
     }
     const double initialization_seconds=Seconds(initialization_start);
     auto out=FitJointComponents(problem,initialization.b); out.costs.initialization_seconds=initialization_seconds;
-    out.initialization.atoms=std::move(initialization.atoms); return out;
+    out.costs.construction_seconds=construction_seconds;
+    out.initialization.atoms=std::move(initialization.atoms);
+    out.initialization.data_scope=std::move(initialization.data_scope);
+    return out;
 }
 }

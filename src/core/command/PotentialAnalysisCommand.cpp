@@ -66,8 +66,6 @@ void NormalizeAndValidateRequest(
     runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
-        if (request.only_backbone) runner.AddFieldValidationError(&PotentialAnalysisRequest::only_backbone,"Joint fitting requires all non-hydrogen atoms.");
-        if (request.asymmetry_flag) runner.AddFieldValidationError(&PotentialAnalysisRequest::asymmetry_flag,"Joint fitting does not support partial selection.");
         if (request.sampling_method!=SphereSamplingMethod::FibonacciDeterministic)
             runner.AddFieldValidationError(&PotentialAnalysisRequest::sampling_method,"Joint initialization requires Fibonacci sampling.");
         if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
@@ -166,6 +164,9 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
             Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
                 ", runtime_convergence="+std::string(joint_result_io::StatusText(component.RuntimeConvergence())));
         }
+        const auto targets=fit.problem->Input().selection_domain->target_indices.size();
+        Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
+            std::to_string(fit.problem->Input().atom_ids.size()-targets));
         Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
             ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
             ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.RuntimeConvergence()))+

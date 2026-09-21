@@ -489,6 +489,7 @@ rg::JointAnalysisResult SavedJointExample()
     result.metadata.map_normalization=rg::JointMapNormalization{true,true,2.5};
     result.atom_ids={"1","2"}; result.row_ids={"voxel-1","constant"}; result.available_row_mask={true,true};
     result.initialization={true,"",{.5,.6},{}};
+    result.selection_domain=rg::JointSelectionDomain{}; result.selection_domain->target_indices={0};
     rg::JointAnalysisComponent component;
     component.id="component-0"; component.atoms={0,1}; component.rows={0};
     component.stop_reason="budget"; component.search_completed=false;
@@ -537,7 +538,7 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     EXPECT_THROW(io::Encode(invalid),std::invalid_argument);
     auto json=boost::json::parse(io::Encode(record)).as_object();
     json["schema_version"]=99; EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::invalid_argument);
-    json["schema_version"]=2; json.erase("runtime_convergence");
+    json["schema_version"]=3; json.erase("runtime_convergence");
     EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::exception);
     record.components[0].state.reset(); record.assembled_state.reset(); record.objective.reset();
     record.runtime_convergence=rg::JointCheckStatus::Unavailable;
@@ -581,7 +582,7 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     malformed=boost::json::parse(io::Encode(record)).as_object();
     malformed.at("metadata").as_object().erase("map_sha256");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::exception);
-    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=1;
+    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=2;
     const auto old_text=boost::json::serialize(old);
     EXPECT_THROW(io::Decode(old_text),std::invalid_argument);
     data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json='"+old_text+"' WHERE key_tag='model';");
@@ -593,4 +594,36 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     auto wrong_units=boost::json::parse(io::Encode(record)).as_object();
     wrong_units.at("metadata").as_object().at("units").as_object()["B"]="angstrom^2";
     EXPECT_THROW(io::Decode(boost::json::serialize(wrong_units)),std::invalid_argument);
+}
+
+TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
+{
+    namespace io=rg::joint_result_io;
+    const command_test::ScopedTempDir dir{"joint_selection"};
+    const auto path=dir.path()/"results.sqlite";
+    rg::DataRepository repository{path}; auto model=data_test::MakeModelWithBond();
+    const auto saved=SavedJointExample(); model->EditAnalysis().SetJointResult(saved); repository.SaveModel(*model,"model");
+    for(int variant=0;variant<7;++variant)
+    {
+        auto bad=saved;
+        if(variant==0) bad.selection_domain->target_indices={0,0};
+        if(variant==1) bad.selection_domain->target_indices={1,0};
+        if(variant==2) bad.selection_domain->target_indices={2};
+        if(variant==3) bad.selection_domain->target_indices.clear();
+        if(variant==4) bad.selection_domain->support_radius=3;
+        if(variant==5) bad.selection_domain->contract="other";
+        if(variant==6) bad.initialization.data_scope="unknown";
+        model->EditAnalysis().SetJointResult(bad);
+        EXPECT_THROW(repository.SaveModel(*model,"model"),std::invalid_argument);
+        EXPECT_EQ(io::Encode(*repository.LoadModel("model")->GetAnalysisView().GetJointResult()),io::Encode(saved));
+    }
+    rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
+    std::ifstream csv(dir.path()/"out.csv"); std::string line;
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo"));
+    auto raw=saved; raw.selection_domain.reset();
+    rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv");
+    std::ifstream raw_csv(dir.path()/"raw.csv"); std::getline(raw_csv,line); std::getline(raw_csv,line);
+    EXPECT_TRUE(line.ends_with(",not-recorded"));
 }

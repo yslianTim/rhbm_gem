@@ -184,6 +184,7 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/Components_test.cpp
     core/joint_component/Observation_test.cpp
     core/joint_component/Runtime_test.cpp
+    core/joint_component/PartialSelection_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -245,6 +246,10 @@ target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATIO
 add_executable(joint_component_runtime experiments/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
 target_link_libraries(joint_component_runtime PRIVATE joint_test_support)
 add_dependencies(tests_all joint_component_runtime)
+
+add_executable(joint_partial_selection experiments/joint_partial_selection.cpp)
+target_link_libraries(joint_partial_selection PRIVATE joint_test_support)
+add_dependencies(tests_all joint_partial_selection)
 
 add_executable(joint_component_benchmark experiments/joint_component_benchmark.cpp)
 target_link_libraries(joint_component_benchmark PRIVATE rhbm_gem CompilerFlags)

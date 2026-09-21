@@ -19,6 +19,7 @@ struct JointProblemInput
     std::vector<double> observations;
     std::vector<std::vector<JointSupport>> support;
     std::vector<std::string> atom_ids,row_ids;
+    std::optional<JointSelectionDomain> selection_domain;
 };
 // Owns a validated immutable snapshot. Construction never reads historical fits.
 class JointProblem
@@ -64,10 +65,11 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
-// V1 includes every non-hydrogen atom. A partial non-hydrogen selection is rejected.
+// Selected non-hydrogen atoms fix the rows; all non-hydrogen contributors on
+// those rows are fitted, including unselected halo atoms.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
-// Updates first-stage analysis only. Joint estimates are returned, not written
+// Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
 // into the existing second-stage or group-fitting result fields.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 }

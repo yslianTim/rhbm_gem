@@ -124,17 +124,18 @@ Object Initialization(const JointInitialization & x)
     j::array atoms;
     for(const auto & a:x.atoms) atoms.emplace_back(Object{{"id",a.id},{"ols",Diagnostics(a.ols)},{"mdpde",Diagnostics(a.mdpde)},
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
-        {"native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)}});
-    return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.b)},{"atoms",std::move(atoms)}};
+        {"native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason}});
+    return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.b)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
 {
     const auto & o=v.as_object(); JointInitialization x;
     x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.b=DiagnosticValues(o.at("b"));
+    x.data_scope=Read<std::string>(o,"data_scope");
     for(const auto & item:o.at("atoms").as_array())
     {
         const auto & a=item.as_object(); JointInitializationAtom atom;
-        atom.id=Read<std::string>(a,"id");
+        atom.id=Read<std::string>(a,"id"); atom.reason=Read<std::string>(a,"reason");
         const auto ols=DiagnosticValues(a.at("ols")),mdpde=DiagnosticValues(a.at("mdpde"));
         if(ols.size()!=3 || mdpde.size()!=3) throw std::invalid_argument("Invalid joint initialization dimensions.");
         std::copy(ols.begin(),ols.end(),atom.ols.begin()); std::copy(mdpde.begin(),mdpde.end(),atom.mdpde.begin());
@@ -230,10 +231,31 @@ void ValidateState(const JointState & x,std::size_t atoms)
     for(double b:x.b) Require(b>0,"nonpositive width");
     Require(std::isfinite(x.objective),"nonfinite objective");
 }
+j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
+{
+    if(!domain) return nullptr;
+    return Object{{"contract",domain->contract},{"target_indices",j::value_from(domain->target_indices)},
+        {"observation_radius",domain->observation_radius},{"support_radius",domain->support_radius},
+        {"contributor_policy",domain->contributor_policy}};
+}
+std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
+{
+    if(value.is_null()) return std::nullopt;
+    const auto & o=value.as_object();
+    return JointSelectionDomain{Read<std::string>(o,"contract"),Read<std::vector<std::size_t>>(o,"target_indices"),
+        Read<double>(o,"observation_radius"),Read<double>(o,"support_radius"),Read<std::string>(o,"contributor_policy")};
+}
 void Validate(const JointAnalysisResult & x)
 {
     ValidateMetadata(x.metadata);
     const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
+    Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
+    Require(x.initialization.data_scope=="caller-provided-widths" ||
+        x.initialization.data_scope=="contributor-local-sampling-may-read-outside-target-domain","initialization data scope");
+    std::set<std::string> initialized;
+    for(const auto & atom:x.initialization.atoms)
+        Require(std::find(x.atom_ids.begin(),x.atom_ids.end(),atom.id)!=x.atom_ids.end() && initialized.insert(atom.id).second,
+            "initialization atom identity");
     Require(atoms>0 && std::set<std::string>(x.atom_ids.begin(),x.atom_ids.end()).size()==atoms,"atom identities");
     Require(std::set<std::string>(x.row_ids.begin(),x.row_ids.end()).size()==rows,"row identities");
     Require(x.available_row_mask.size()==rows,"row mask dimensions");
@@ -268,10 +290,10 @@ std::string Encode(const JointAnalysisResult & x)
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         {"runtime_convergence",StatusText(c.runtime_convergence)}});
-    Object out{{"schema_version",2},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
-        {"support_contract","sphere-fma-v1"},{"metadata",Metadata(m)},
+    Object out{{"schema_version",3},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+        {"support_contract","sphere-fma-v1"},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
-        {"costs",Object{{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
+        {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
         {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},{"objective",Number(x.objective)},
         {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},{"ranks",Ranks(x.ranks)},
@@ -283,18 +305,20 @@ JointAnalysisResult Decode(std::string_view text)
 {
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
-    Require(Read<int>(o,"schema_version")==2,"unsupported result schema version (expected 2; regenerate older joint outcomes)");
+    Require(Read<int>(o,"schema_version")==3,"unsupported result schema version (expected 3; regenerate older joint outcomes)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
         Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
     JointAnalysisResult x;
     x.metadata=ReadMetadata(o.at("metadata").as_object());
+    x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
     x.initialization=ReadInitialization(o.at("initialization"));
     const auto & t=o.at("costs").as_object();
     x.costs={Read<double>(t,"initialization_seconds"),Read<double>(t,"search_seconds"),Read<double>(t,"search_reference_seconds"),
         Read<double>(t,"assessment_seconds"),Read<double>(t,"assembly_seconds")};
+    x.costs.construction_seconds=Read<double>(t,"construction_seconds");
     for(const auto & item:o.at("components").as_array())
     {
         const auto & c=item.as_object(); JointAnalysisComponent component;
