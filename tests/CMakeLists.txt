@@ -262,6 +262,8 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     target_link_libraries(joint_offline_support PUBLIC joint_test_support)
     add_executable(joint_component_audit experiments/joint_component_audit.cpp)
     target_link_libraries(joint_component_audit PRIVATE joint_offline_support)
+    add_executable(joint_validation experiments/joint_validation.cpp)
+    target_link_libraries(joint_validation PRIVATE joint_offline_support)
     add_executable(joint_offline_tests core/joint_component/Precision_test.cpp
         core/joint_component/OfflineComponents_test.cpp)
     target_link_libraries(joint_offline_tests PRIVATE joint_offline_support ${GTEST_MAIN_TARGET})
@@ -364,6 +366,9 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     set_tests_properties(joint_component_evidence_test joint_component_runtime_runner_test joint_component_regression joint_component_physical_smoke
         PROPERTIES LABELS "domain:integration;intent:algorithm;joint:runtime")
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
+        add_test(NAME joint_validation_runner_test
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_validation_test.py")
+        set_tests_properties(joint_validation_runner_test PROPERTIES LABELS "domain:integration;intent:algorithm;joint:offline")
         add_test(NAME joint_component_offline_regression
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
                 --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-offline")

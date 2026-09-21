@@ -19,6 +19,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <stdexcept>
@@ -1257,7 +1258,9 @@ void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & r
     std::set<std::string> expected;
     for (const auto & atom:model.GetAtomList())
         if (atom->GetElement()!=Element::HYDROGEN) expected.insert(std::to_string(atom->GetSerialID()));
-    if (expected!=std::set<std::string>(result.atom_ids.begin(),result.atom_ids.end()))
+    // A selected-domain result contains only contributors, not the full catalogue.
+    const std::set<std::string> contributors(result.atom_ids.begin(),result.atom_ids.end());
+    if (!std::includes(expected.begin(),expected.end(),contributors.begin(),contributors.end()))
         throw std::invalid_argument("Joint result atom identities do not match the saved model.");
 }
 

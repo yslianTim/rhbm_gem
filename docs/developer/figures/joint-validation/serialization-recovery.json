@@ -1,0 +1,45 @@
+{
+  "reason": "Experiment wrapper used default rather than precise Boost.JSON parsing; production decoder was already precise.",
+  "weak": [
+    {
+      "start": 0,
+      "original_sha256": "f3b29f5f9be53cc972df2929b316b1b55c05cf156f720be9f3a47d761dbe1d80",
+      "final_sha256": "b10bb902cd2687e2f7539e93a49a3711e9a7048614a0bb52f55dde7de6476801",
+      "snapshot_sha256": "aa606e91fc7530baa0637fc1f9963f9c232992ff54bd6a9f10e7c8ef2129a3ea",
+      "runtime_status": "failed",
+      "unchanged_internal_coefficients": true
+    },
+    {
+      "start": 1,
+      "original_sha256": "cd60a587a7e05deb500a63809071b3ac8f9183c4a1e7166b5ad8027843157753",
+      "final_sha256": "22d7ea41728f0b36accb5afc23db27796a36b1f45e16a12e851968d1fcef9d67",
+      "snapshot_sha256": "aa606e91fc7530baa0637fc1f9963f9c232992ff54bd6a9f10e7c8ef2129a3ea",
+      "runtime_status": "unavailable",
+      "unchanged_internal_coefficients": null
+    },
+    {
+      "start": 2,
+      "original_sha256": "1ce19593dc17eb75c0f79d31514c923933ad17effce825a05df9303fa52be12f",
+      "final_sha256": "da3701e254dd7f34f51987deb9ed000ddbb9c0ff97859975d5398e239ffd0584",
+      "snapshot_sha256": "aa606e91fc7530baa0637fc1f9963f9c232992ff54bd6a9f10e7c8ef2129a3ea",
+      "runtime_status": "failed",
+      "unchanged_internal_coefficients": true
+    }
+  ],
+  "statistical": {
+    "inputs": 326,
+    "outcomes": 450,
+    "identical_input_hashes": true,
+    "identical_observation_hashes": true,
+    "identical_numerical_statuses": true,
+    "runtime_counts": {
+      "passed": 65,
+      "failed": 385
+    },
+    "maximum_parameter_representation_difference": 4.440892098500626e-16,
+    "maximum_parameter_representation_difference_ulps": 1.0,
+    "original_receipt_sha256": "47e34b8a4272b1bb3e3d8daa97c82dac549c2c27519cc9c31b1eac29ec193bfa",
+    "final_receipt_sha256": "be5c7148e2bda31fc288902165f487bd508528a73cc4b28674680bf31942cfd7"
+  },
+  "policy": "Original records retained; no results overwritten, no repeated seed pooled as an independent sample; reruns charged to original A/B budgets."
+}

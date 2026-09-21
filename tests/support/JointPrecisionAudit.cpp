@@ -355,6 +355,26 @@ j::object PrecisionNormalization(const Vector & y)
     const P100 b=std::max(P100(1),P100(Promote<P100>(y).norm()));
     return {{"parent_rows",y.size()},{"scale50",String(a)},{"scale100",String(b)}};
 }
+namespace {
+template<class T> j::object ProfileChange(const joint_abc::Domain & domain,const Vector & y,const Vector & base_eta,const Vector & eta)
+{
+    const auto response=Promote<T>(y);
+    const T scale=std::max(T(1),T(response.norm()));
+    const auto base_x=Design(domain,Promote<T>(base_eta)),x=Design(domain,Promote<T>(eta));
+    const auto base=Constrained(base_x,response,{},scale),fit=Constrained(x,response,{},scale);
+    if(!base.valid || !fit.valid) return {{"valid",false}};
+    const T objective=fit.residual.squaredNorm()/(2*scale*scale);
+    const T delta=(fit.residual.squaredNorm()-base.residual.squaredNorm())/(2*scale*scale);
+    return {{"valid",true},{"objective",String(objective)},{"objective_change",String(delta)},
+        {"prediction_change_norm",String(T((fit.residual-base.residual).norm()))},
+        {"beta",Values(Demote(fit.beta))},{"kkt",String(fit.kkt)}};
+}
+}
+j::object PrecisionProfileChange(const joint_abc::Domain & domain,const Vector & y,const Vector & base_eta,const Vector & eta)
+{
+    return {{"precision50",ProfileChange<P50>(domain,y,base_eta,eta)},
+        {"precision100",ProfileChange<P100>(domain,y,base_eta,eta)}};
+}
 j::object PrecisionAudit(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext * context,bool blocks)
 {
     const auto start=std::chrono::steady_clock::now();

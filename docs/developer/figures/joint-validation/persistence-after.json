@@ -1,0 +1,17 @@
+{
+  "unit": {
+    "command": [
+      "build/joint-v1-default/bin/RHBM-GEM-TEST",
+      "--gtest_filter=DataObjectPersistenceTest.*Joint*"
+    ],
+    "exit_code": 0
+  },
+  "cli": {
+    "command": [
+      "python3",
+      "tests/integration/joint_workflow_cli_smoke.py",
+      "build/joint-v1-default/bin/RHBM-GEM"
+    ],
+    "exit_code": 0
+  }
+}

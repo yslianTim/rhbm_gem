@@ -46,6 +46,22 @@ TEST(JointOfflineAuditTest, HighPrecisionReferenceIsIndependentAndStable)
     EXPECT_TRUE(result.at("derivative_passed").as_bool())<<j::serialize(result);
 }
 
+TEST(JointOfflineAuditTest, PrecisionProfileChangeUsesTheSameObservations)
+{
+    Sample s; const p::Domain domain(s.grid,s.atoms);
+    const Vector eta=Eigen::Vector2d(.42,.67).array().log(),original=s.y;
+    const auto zero=m::certification::PrecisionProfileChange(domain,s.y,eta,eta);
+    const auto shifted=m::certification::PrecisionProfileChange(domain,s.y,eta,eta+Vector::Constant(2,.01));
+    for(const char * precision:{"precision50","precision100"})
+    {
+        ASSERT_TRUE(zero.at(precision).at("valid").as_bool());
+        EXPECT_EQ(std::stod(j::value_to<std::string>(zero.at(precision).at("objective_change"))),0.);
+        ASSERT_TRUE(shifted.at(precision).at("valid").as_bool());
+        EXPECT_GT(std::stod(j::value_to<std::string>(shifted.at(precision).at("objective_change"))),0.);
+    }
+    EXPECT_EQ((original-s.y).norm(),0.);
+}
+
 TEST(JointOfflineAuditTest, BoundaryReductionPreservesFeasibleCompensationScans)
 {
     m::unique_grid::Grid grid; std::vector<m::Atom> atoms;

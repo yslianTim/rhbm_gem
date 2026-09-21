@@ -190,3 +190,11 @@ complete-process measurements with `tests/integration/joint_partial_selection.py
 --executable BUILD/bin/joint_partial_selection --output REPORT.json` (three serial
 independent processes per case). These measurements include builder and initializer
 costs and do not establish a maximum supported problem size.
+
+The opt-in `joint_validation` target (requires `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`)
+and `tests/integration/joint_validation.py` run the bounded weak-halo, paired
+noise/mismatch and complete-command resource experiments. The runner enforces
+per-process-group RSS/time limits and stage budgets, saves failures separately
+from runtime convergence, and never promotes offline results into production
+outcomes. See the [capability assessment](../docs/developer/joint-capabilities-limitations.md)
+for commands, external input hashes and the actual measured envelope.

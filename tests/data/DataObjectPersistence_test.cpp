@@ -530,6 +530,38 @@ TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomical
     EXPECT_EQ(data_test::CountRows(path,"model_joint_result"),0);
 }
 
+TEST(DataObjectPersistenceTest, JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds)
+{
+    const command_test::ScopedTempDir dir{"joint_subset"};
+    const auto path=dir.path()/"results.sqlite";
+    std::vector<std::unique_ptr<rg::AtomObject>> atoms;
+    for(int id=1;id<=4;++id)
+    {
+        auto atom=std::make_unique<rg::AtomObject>(); atom->SetSerialID(id);
+        atom->SetElement(id==4 ? Element::HYDROGEN : Element::CARBON);
+        atom->SetPosition(id==3 ? 12. : static_cast<double>(id),0,0);
+        atoms.push_back(std::move(atom));
+    }
+    rg::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+    const auto record=SavedJointExample(); model.EditAnalysis().SetJointResult(record);
+    rg::DataRepository repository{path};
+    ASSERT_NO_THROW(repository.SaveModel(model,"subset"));
+    auto loaded=repository.LoadModel("subset");
+    ASSERT_EQ(loaded->GetAtomList().size(),4u);
+    ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(rg::joint_result_io::Encode(*loaded->GetAnalysisView().GetJointResult()),rg::joint_result_io::Encode(record));
+    for(const std::string id:{"999","4","1"})
+    {
+        auto invalid=record; invalid.atom_ids[1]=id;
+        model.EditAnalysis().SetJointResult(invalid);
+        EXPECT_THROW(repository.SaveModel(model,"subset"),std::invalid_argument);
+        EXPECT_EQ(rg::joint_result_io::Encode(*repository.LoadModel("subset")->GetAnalysisView().GetJointResult()),rg::joint_result_io::Encode(record));
+    }
+    data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json=replace(result_json,'\"atom_ids\":[\"1\",\"2\"]','\"atom_ids\":[\"1\",\"4\"]');");
+    EXPECT_THROW(repository.LoadModel("subset"),std::invalid_argument);
+}
+
 TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMissingValues)
 {
     namespace io=rg::joint_result_io;

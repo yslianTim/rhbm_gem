@@ -14,4 +14,5 @@ Start here if you are changing the codebase, validating build configurations, or
 8. See the [endpoint refinement experiment](endpoint-refinement-experiment.md) for branch-preserving solver qualification, same-state operator comparisons, and gated recovery validation.
    The [production failed-only refinement](failed-only-refinement.md) documents its default, qualification contract and validation.
 9. The [joint estimator v1 acceptance and frozen baseline](joint-component-v1-acceptance.md) records final integration validation and metadata contracts. For joint estimation, start with the [joint component runtime API and regression guide](joint-component-runtime.md). The [evidence index](joint-component-evidence.md) records retired comparisons, numerical contracts, representative counterexamples and historical retrieval instructions.
-10. Read [`docs/developer/release-compliance.md`](/docs/developer/release-compliance.md) before preparing source or binary releases.
+10. The [joint capability and limitations assessment](joint-capabilities-limitations.md) links the bounded weak-halo, noise/mismatch and end-to-end resource evidence, including reproduction and the contributor-subset persistence regression.
+11. Read [`docs/developer/release-compliance.md`](/docs/developer/release-compliance.md) before preparing source or binary releases.

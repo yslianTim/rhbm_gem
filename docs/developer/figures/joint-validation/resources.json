@@ -1,0 +1,1791 @@
+{
+  "catalogue-1000": {
+    "kind": "catalogue",
+    "count": 1000,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.7357891659994493,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 230998016,
+          "samples": 7,
+          "maximum_sampling_gap_seconds": 0.1050612920007552,
+          "os_process_peak_rss_bytes": 233472000
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.21149845800027833,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 24772608,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10184837499764399,
+          "os_process_peak_rss_bytes": 23855104
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.006111208,
+          "initialization_seconds": 0.006108542,
+          "search_seconds": 0.002025458,
+          "search_reference_seconds": 0.000766084,
+          "assessment_seconds": 0.0003334589999999999,
+          "assembly_seconds": 0.000194375
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "4033d3b37cae835bf3d7db61c62b5f25aff1b34b0f4f81358dd38805c350ad9d",
+          "map_sha256": "77e837f4ca3cbd7c7907a7544661132c4737d095c6c015b844a81a2fc42dc830"
+        },
+        "output_bytes": 233340,
+        "total_command_seconds": 0.9472876239997277,
+        "outside_estimator_seconds": 0.9325145819997277,
+        "sampled_tree_peak_rss_bytes": 230998016,
+        "os_process_peak_rss_bytes": 233472000
+      },
+      {
+        "repetition": 2,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.7652192090026801,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 231243776,
+          "samples": 7,
+          "maximum_sampling_gap_seconds": 0.11007083299773512,
+          "os_process_peak_rss_bytes": 233390080
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-2",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.11372662499707076,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1196032,
+          "samples": 1,
+          "maximum_sampling_gap_seconds": 0.003304874997411389,
+          "os_process_peak_rss_bytes": 23805952
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.006320125,
+          "initialization_seconds": 0.006310166,
+          "search_seconds": 0.002145875,
+          "search_reference_seconds": 0.000817792,
+          "assessment_seconds": 0.00036737499999999965,
+          "assembly_seconds": 0.000205417
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "4033d3b37cae835bf3d7db61c62b5f25aff1b34b0f4f81358dd38805c350ad9d",
+          "map_sha256": "77e837f4ca3cbd7c7907a7544661132c4737d095c6c015b844a81a2fc42dc830"
+        },
+        "output_bytes": 233341,
+        "total_command_seconds": 0.8789458339997509,
+        "outside_estimator_seconds": 0.8635968759997509,
+        "sampled_tree_peak_rss_bytes": 231243776,
+        "os_process_peak_rss_bytes": 233390080
+      },
+      {
+        "repetition": 3,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.7564218340012303,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 234061824,
+          "samples": 7,
+          "maximum_sampling_gap_seconds": 0.11005841600126587,
+          "os_process_peak_rss_bytes": 233472000
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/run-3",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.11523308399773668,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1310720,
+          "samples": 1,
+          "maximum_sampling_gap_seconds": 0.004562083999189781,
+          "os_process_peak_rss_bytes": 23887872
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.006018416,
+          "initialization_seconds": 0.006026,
+          "search_seconds": 0.002044709,
+          "search_reference_seconds": 0.000776292,
+          "assessment_seconds": 0.00033054100000000017,
+          "assembly_seconds": 0.00019375
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "4033d3b37cae835bf3d7db61c62b5f25aff1b34b0f4f81358dd38805c350ad9d",
+          "map_sha256": "77e837f4ca3cbd7c7907a7544661132c4737d095c6c015b844a81a2fc42dc830"
+        },
+        "output_bytes": 233337,
+        "total_command_seconds": 0.871654917998967,
+        "outside_estimator_seconds": 0.857041501998967,
+        "sampled_tree_peak_rss_bytes": 234061824,
+        "os_process_peak_rss_bytes": 233472000
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "1000",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.7351075000005949,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228605952,
+      "samples": 7,
+      "maximum_sampling_gap_seconds": 0.10508683300213306,
+      "os_process_peak_rss_bytes": 227721216
+    },
+    "input_hashes": {
+      "model": "4033d3b37cae835bf3d7db61c62b5f25aff1b34b0f4f81358dd38805c350ad9d",
+      "map": "77e837f4ca3cbd7c7907a7544661132c4737d095c6c015b844a81a2fc42dc830"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-1000/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.31521854199672816,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 230572032,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.10505920799914747,
+      "os_process_peak_rss_bytes": 230211584
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "model_atoms": 1000,
+      "catalogue": 1000,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  },
+  "catalogue-10000": {
+    "kind": "catalogue",
+    "count": 10000,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 1.0474825000019337,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 243499008,
+          "samples": 10,
+          "maximum_sampling_gap_seconds": 0.1050644579991058,
+          "os_process_peak_rss_bytes": 250626048
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.21452720899833366,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1310720,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10506358299971907,
+          "os_process_peak_rss_bytes": 29114368
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.060235041,
+          "initialization_seconds": 0.00969525,
+          "search_seconds": 0.002021292,
+          "search_reference_seconds": 0.0007720820000000001,
+          "assessment_seconds": 0.00033712499999999975,
+          "assembly_seconds": 0.000193375
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "a1eaac127b2c04b6c06f4cadd2ff4707c8a69ade3336c9005cafc5b8f3747d8e",
+          "map_sha256": "45db2760fe4070725f30a432da866d46a1ef82e61aa11b4d57654d140241da2e"
+        },
+        "output_bytes": 987017,
+        "total_command_seconds": 1.2620097090002673,
+        "outside_estimator_seconds": 1.1895276260002674,
+        "sampled_tree_peak_rss_bytes": 243499008,
+        "os_process_peak_rss_bytes": 250626048
+      },
+      {
+        "repetition": 2,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.985093749997759,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 243466240,
+          "samples": 9,
+          "maximum_sampling_gap_seconds": 0.11004441600016435,
+          "os_process_peak_rss_bytes": 250658816
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-2",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.22399141600180883,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1196032,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.11003837500174996,
+          "os_process_peak_rss_bytes": 29016064
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.058565,
+          "initialization_seconds": 0.008712,
+          "search_seconds": 0.001992208,
+          "search_reference_seconds": 0.000766168,
+          "assessment_seconds": 0.00033291699999999985,
+          "assembly_seconds": 0.00019325
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "a1eaac127b2c04b6c06f4cadd2ff4707c8a69ade3336c9005cafc5b8f3747d8e",
+          "map_sha256": "45db2760fe4070725f30a432da866d46a1ef82e61aa11b4d57654d140241da2e"
+        },
+        "output_bytes": 987001,
+        "total_command_seconds": 1.2090851659995678,
+        "outside_estimator_seconds": 1.1392897909995678,
+        "sampled_tree_peak_rss_bytes": 243466240,
+        "os_process_peak_rss_bytes": 250658816
+      },
+      {
+        "repetition": 3,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.9945229170007224,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 243466240,
+          "samples": 9,
+          "maximum_sampling_gap_seconds": 0.11007099999915226,
+          "os_process_peak_rss_bytes": 250265600
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/run-3",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.2059567500000412,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1277952,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10021345800123527,
+          "os_process_peak_rss_bytes": 29114368
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.058179667,
+          "initialization_seconds": 0.008676209,
+          "search_seconds": 0.001993375,
+          "search_reference_seconds": 0.0007665820000000001,
+          "assessment_seconds": 0.0003283330000000001,
+          "assembly_seconds": 0.000194291
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "a1eaac127b2c04b6c06f4cadd2ff4707c8a69ade3336c9005cafc5b8f3747d8e",
+          "map_sha256": "45db2760fe4070725f30a432da866d46a1ef82e61aa11b4d57654d140241da2e"
+        },
+        "output_bytes": 987017,
+        "total_command_seconds": 1.2004796670007636,
+        "outside_estimator_seconds": 1.1311077920007635,
+        "sampled_tree_peak_rss_bytes": 243466240,
+        "os_process_peak_rss_bytes": 250265600
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "10000",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.6317481660007616,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228622336,
+      "samples": 6,
+      "maximum_sampling_gap_seconds": 0.10505337500217138,
+      "os_process_peak_rss_bytes": 227737600
+    },
+    "input_hashes": {
+      "model": "a1eaac127b2c04b6c06f4cadd2ff4707c8a69ade3336c9005cafc5b8f3747d8e",
+      "map": "45db2760fe4070725f30a432da866d46a1ef82e61aa11b4d57654d140241da2e"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-10000/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.4228168330009794,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 241500160,
+      "samples": 4,
+      "maximum_sampling_gap_seconds": 0.1050387920004141,
+      "os_process_peak_rss_bytes": 241680384
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "model_atoms": 10000,
+      "catalogue": 10000,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  },
+  "catalogue-37406": {
+    "kind": "catalogue",
+    "count": 37406,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 2.9259433340012038,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 279019520,
+          "samples": 24,
+          "maximum_sampling_gap_seconds": 0.31501462500091293,
+          "os_process_peak_rss_bytes": 277970944
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.2144678330005263,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 29245440,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10503391700331122,
+          "os_process_peak_rss_bytes": 45465600
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.226676208,
+          "initialization_seconds": 0.023025625,
+          "search_seconds": 0.002023667,
+          "search_reference_seconds": 0.0007699989999999999,
+          "assessment_seconds": 0.0003382910000000001,
+          "assembly_seconds": 0.000194542
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "3308a9812339a1a88439862c5ef4d0f9ba3983682413d58a5d96449602cb0fcd",
+          "map_sha256": "64497a19b867bc4d4b179a24ccd58b3ac0f28f2fd0fbe5af955c479420117329"
+        },
+        "output_bytes": 3354507,
+        "total_command_seconds": 3.14041116700173,
+        "outside_estimator_seconds": 2.88815283400173,
+        "sampled_tree_peak_rss_bytes": 279019520,
+        "os_process_peak_rss_bytes": 277970944
+      },
+      {
+        "repetition": 2,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 1.9647345000012137,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 282722304,
+          "samples": 18,
+          "maximum_sampling_gap_seconds": 0.11008104199936497,
+          "os_process_peak_rss_bytes": 303857664
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-2",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.216403916998388,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 27197440,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10046529199826182,
+          "os_process_peak_rss_bytes": 45400064
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.216460542,
+          "initialization_seconds": 0.021211666,
+          "search_seconds": 0.002020333,
+          "search_reference_seconds": 0.0007730409999999999,
+          "assessment_seconds": 0.00033445900000000006,
+          "assembly_seconds": 0.000194334
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "3308a9812339a1a88439862c5ef4d0f9ba3983682413d58a5d96449602cb0fcd",
+          "map_sha256": "64497a19b867bc4d4b179a24ccd58b3ac0f28f2fd0fbe5af955c479420117329"
+        },
+        "output_bytes": 3354508,
+        "total_command_seconds": 2.1811384169996018,
+        "outside_estimator_seconds": 1.9409170829996016,
+        "sampled_tree_peak_rss_bytes": 282722304,
+        "os_process_peak_rss_bytes": 303857664
+      },
+      {
+        "repetition": 3,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 1.9695382089994382,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 295665664,
+          "samples": 18,
+          "maximum_sampling_gap_seconds": 0.1100810839998303,
+          "os_process_peak_rss_bytes": 304005120
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/run-3",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.22443637499964098,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 45629440,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.10909637499935343,
+          "os_process_peak_rss_bytes": 45400064
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.217049208,
+          "initialization_seconds": 0.021746333,
+          "search_seconds": 0.002039458,
+          "search_reference_seconds": 0.000769916,
+          "assessment_seconds": 0.00033370799999999983,
+          "assembly_seconds": 0.0001975
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "3308a9812339a1a88439862c5ef4d0f9ba3983682413d58a5d96449602cb0fcd",
+          "map_sha256": "64497a19b867bc4d4b179a24ccd58b3ac0f28f2fd0fbe5af955c479420117329"
+        },
+        "output_bytes": 3354496,
+        "total_command_seconds": 2.193974583999079,
+        "outside_estimator_seconds": 1.9526083769990792,
+        "sampled_tree_peak_rss_bytes": 295665664,
+        "os_process_peak_rss_bytes": 304005120
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "37406",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 1.2514027500001248,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228638720,
+      "samples": 12,
+      "maximum_sampling_gap_seconds": 0.10507666700141272,
+      "os_process_peak_rss_bytes": 227753984
+    },
+    "input_hashes": {
+      "model": "3308a9812339a1a88439862c5ef4d0f9ba3983682413d58a5d96449602cb0fcd",
+      "map": "64497a19b867bc4d4b179a24ccd58b3ac0f28f2fd0fbe5af955c479420117329"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/catalogue-37406/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.6285181249986636,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 281116672,
+      "samples": 6,
+      "maximum_sampling_gap_seconds": 0.10508654200020828,
+      "os_process_peak_rss_bytes": 280494080
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "model_atoms": 37406,
+      "catalogue": 37406,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  },
+  "single-128": {
+    "kind": "single",
+    "count": 128,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 19.525667624999187,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 339001344,
+          "samples": 185,
+          "maximum_sampling_gap_seconds": 0.31999570799962385,
+          "os_process_peak_rss_bytes": 337838080
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.21411900000020978,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 40271872,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.1050414589990396,
+          "os_process_peak_rss_bytes": 42270720
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.017554167,
+          "initialization_seconds": 0.19463375,
+          "search_seconds": 15.16485625,
+          "search_reference_seconds": 6.316218835000001,
+          "assessment_seconds": 3.146463875000002,
+          "assembly_seconds": 0.127638458
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "bebd3b8460a5e52256c58c44df7a7377514655e3798e9e7c3550f0ed1bb0f609",
+          "map_sha256": "e5db6ef35438e5624390d25c4e3aa95c572c53a99fff901d7b22e1359f40dad3"
+        },
+        "output_bytes": 3096245,
+        "total_command_seconds": 19.739786624999397,
+        "outside_estimator_seconds": 1.0886401249993938,
+        "sampled_tree_peak_rss_bytes": 339001344,
+        "os_process_peak_rss_bytes": 337838080
+      },
+      {
+        "repetition": 2,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 17.46913549999954,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 385400832,
+          "samples": 161,
+          "maximum_sampling_gap_seconds": 0.11008066599970334,
+          "os_process_peak_rss_bytes": 384237568
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-2/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-2",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.22382958300295286,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1310720,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.11003549999804818,
+          "os_process_peak_rss_bytes": 42221568
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.016396625,
+          "initialization_seconds": 0.179685292,
+          "search_seconds": 13.477062,
+          "search_reference_seconds": 5.544607543,
+          "assessment_seconds": 3.007770582999999,
+          "assembly_seconds": 0.123026125
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "bebd3b8460a5e52256c58c44df7a7377514655e3798e9e7c3550f0ed1bb0f609",
+          "map_sha256": "e5db6ef35438e5624390d25c4e3aa95c572c53a99fff901d7b22e1359f40dad3"
+        },
+        "output_bytes": 3096238,
+        "total_command_seconds": 17.69296508300249,
+        "outside_estimator_seconds": 0.889024458002492,
+        "sampled_tree_peak_rss_bytes": 385400832,
+        "os_process_peak_rss_bytes": 384237568
+      },
+      {
+        "repetition": 3,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 17.53525154199815,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 385335296,
+          "samples": 160,
+          "maximum_sampling_gap_seconds": 0.11009104199911235,
+          "os_process_peak_rss_bytes": 384172032
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-3/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/run-3",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.22577262499908102,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 39469056,
+          "samples": 2,
+          "maximum_sampling_gap_seconds": 0.11004474999936065,
+          "os_process_peak_rss_bytes": 42287104
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "initialization_valid": true,
+        "invalid_initialization_reasons": {},
+        "stop_reasons": {
+          "native-lm-stop": 1
+        },
+        "costs": {
+          "construction_seconds": 0.016390083,
+          "initialization_seconds": 0.179231667,
+          "search_seconds": 13.45180875,
+          "search_reference_seconds": 5.543895041000001,
+          "assessment_seconds": 3.005776292000002,
+          "assembly_seconds": 0.122562708
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "018a3660e5aea98d6a0f0e8687969585e9cbe6a60cf915f84aac64d013a3c744"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "bebd3b8460a5e52256c58c44df7a7377514655e3798e9e7c3550f0ed1bb0f609",
+          "map_sha256": "e5db6ef35438e5624390d25c4e3aa95c572c53a99fff901d7b22e1359f40dad3"
+        },
+        "output_bytes": 3096246,
+        "total_command_seconds": 17.76102416699723,
+        "outside_estimator_seconds": 0.9852546669972284,
+        "sampled_tree_peak_rss_bytes": 385335296,
+        "os_process_peak_rss_bytes": 384172032
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "single",
+        "128",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.4224815840025258,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228655104,
+      "samples": 4,
+      "maximum_sampling_gap_seconds": 0.10505183299756027,
+      "os_process_peak_rss_bytes": 227770368
+    },
+    "input_hashes": {
+      "model": "bebd3b8460a5e52256c58c44df7a7377514655e3798e9e7c3550f0ed1bb0f609",
+      "map": "e5db6ef35438e5624390d25c4e3aa95c572c53a99fff901d7b22e1359f40dad3"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-128/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.31614745799743105,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 229294080,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.10508362499967916,
+      "os_process_peak_rss_bytes": 240680960
+    },
+    "census": {
+      "targets": 128,
+      "contributors": 128,
+      "rows": 51939,
+      "memberships": 65920,
+      "component_sizes": [
+        128
+      ],
+      "model_atoms": 128,
+      "catalogue": 128,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  },
+  "single-512": {
+    "kind": "single",
+    "count": 512,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "time-limit",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 600.0300597909991,
+          "exit_code": -15,
+          "sampled_tree_peak_rss_bytes": 795607040,
+          "samples": 5752,
+          "maximum_sampling_gap_seconds": 0.2632387919984467,
+          "os_process_peak_rss_bytes": null
+        },
+        "status": "time-limit",
+        "total_command_seconds": 600.0300597909991,
+        "sampled_tree_peak_rss_bytes": 795607040,
+        "os_process_peak_rss_bytes": null,
+        "partial_output_bytes": 0,
+        "runtime_convergence": null
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "single",
+        "512",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.3175069579992851,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228638720,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.10506766599792172,
+      "os_process_peak_rss_bytes": 227753984
+    },
+    "input_hashes": {
+      "model": "b546663dc208b827efba931c8a44dd67e2e211e38cfab005e77cbba4b139525d",
+      "map": "8a7114a5f1a195d4081dae623276d5b05fecb21fe0c77c3597f5120a3278f83a"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.3160438749982859,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 229851136,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.10506670799804851,
+      "os_process_peak_rss_bytes": 275677184
+    },
+    "census": {
+      "targets": 512,
+      "contributors": 512,
+      "rows": 186694,
+      "memberships": 263680,
+      "component_sizes": [
+        512
+      ],
+      "model_atoms": 512,
+      "catalogue": 512,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "time-limit"
+  },
+  "user-2192": {
+    "kind": "user",
+    "count": 2192,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/data/6z6u.cif",
+            "-m",
+            "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/user-2192/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "time-limit",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 600.0364767089995,
+          "exit_code": -15,
+          "sampled_tree_peak_rss_bytes": 2050883584,
+          "samples": 5524,
+          "maximum_sampling_gap_seconds": 0.13684229200225673,
+          "os_process_peak_rss_bytes": null
+        },
+        "status": "time-limit",
+        "total_command_seconds": 600.0364767089995,
+        "sampled_tree_peak_rss_bytes": 2050883584,
+        "os_process_peak_rss_bytes": null,
+        "partial_output_bytes": 0,
+        "runtime_convergence": null
+      }
+    ],
+    "input_hashes": {
+      "model": "349ca6da5546b7d8bae53e6edaca9a65985b69f8e6c24316378c4ea04404a4aa",
+      "map": "6d7771a9fd584e562550da473d624307b22d20396f11a2a79a064bff2551682a"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/data/6z6u.cif",
+        "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/user-2192/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 1.4617360829979589,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 453066752,
+      "samples": 14,
+      "maximum_sampling_gap_seconds": 0.10511341600067681,
+      "os_process_peak_rss_bytes": 454115328
+    },
+    "census": {
+      "targets": 1559,
+      "contributors": 2192,
+      "rows": 262801,
+      "memberships": 866216,
+      "component_sizes": [
+        2167,
+        25
+      ],
+      "model_atoms": 70190,
+      "catalogue": 37406,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "time-limit"
+  },
+  "single-2167": {
+    "kind": "single",
+    "count": 2167,
+    "runs": [],
+    "status": "not-run-larger-family-limit"
+  },
+  "multi-2167": {
+    "kind": "multi",
+    "count": 2167,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "time-limit",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 600.0318851670017,
+          "exit_code": -15,
+          "sampled_tree_peak_rss_bytes": 1646526464,
+          "samples": 5516,
+          "maximum_sampling_gap_seconds": 0.1302844579986413,
+          "os_process_peak_rss_bytes": null
+        },
+        "status": "time-limit",
+        "total_command_seconds": 600.0318851670017,
+        "sampled_tree_peak_rss_bytes": 1646526464,
+        "os_process_peak_rss_bytes": null,
+        "partial_output_bytes": 0,
+        "runtime_convergence": null
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "multi",
+        "2167",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.4302632500002801,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228605952,
+      "samples": 4,
+      "maximum_sampling_gap_seconds": 0.11004429199965671,
+      "os_process_peak_rss_bytes": 227721216
+    },
+    "input_hashes": {
+      "model": "45f335dfb4da88e19823e3b067417511ff6351cc13c905d1357dbacc13d4d96d",
+      "map": "9ffb14eb2ffafec2a57907f345298e5cc02b03b16d3031b1516dcb8477225023"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.6581182080008148,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 351666176,
+      "samples": 6,
+      "maximum_sampling_gap_seconds": 0.11008616699837148,
+      "os_process_peak_rss_bytes": 382976000
+    },
+    "census": {
+      "targets": 2167,
+      "contributors": 2167,
+      "rows": 856379,
+      "memberships": 1116005,
+      "component_sizes": [
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        23,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32
+      ],
+      "model_atoms": 2167,
+      "catalogue": 2167,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "time-limit"
+  }
+}

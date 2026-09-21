@@ -1,0 +1,616 @@
+{
+  "catalogue-1000": {
+    "kind": "catalogue",
+    "count": 1000,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "process-failure",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.7887035409985401,
+          "exit_code": 1,
+          "sampled_tree_peak_rss_bytes": 230998016,
+          "samples": 6,
+          "maximum_sampling_gap_seconds": 0.15230712500124355,
+          "os_process_peak_rss_bytes": 233226240
+        },
+        "status": "process-failure",
+        "total_command_seconds": 0.7887035409985401,
+        "sampled_tree_peak_rss_bytes": 230998016,
+        "os_process_peak_rss_bytes": 233226240
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "1000",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.5231401249984629,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228573184,
+      "samples": 4,
+      "maximum_sampling_gap_seconds": 0.12740191600096296,
+      "os_process_peak_rss_bytes": 227688448
+    },
+    "input_hashes": {
+      "model": "676d5e6f848495e07ee65522d9908d1961e1acd6a5a6a103ef90f5837f543e75",
+      "map": "77e837f4ca3cbd7c7907a7544661132c4737d095c6c015b844a81a2fc42dc830"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-1000/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.38624075000188896,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 230785024,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.13453529099933803,
+      "os_process_peak_rss_bytes": 230162432
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "catalogue": 1000,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "process-failure"
+  },
+  "catalogue-10000": {
+    "kind": "catalogue",
+    "count": 10000,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "process-failure",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 1.1286701249991893,
+          "exit_code": 1,
+          "sampled_tree_peak_rss_bytes": 242794496,
+          "samples": 9,
+          "maximum_sampling_gap_seconds": 0.12959141600003932,
+          "os_process_peak_rss_bytes": 249921536
+        },
+        "status": "process-failure",
+        "total_command_seconds": 1.1286701249991893,
+        "sampled_tree_peak_rss_bytes": 242794496,
+        "os_process_peak_rss_bytes": 249921536
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "10000",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.6706253749980533,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228573184,
+      "samples": 5,
+      "maximum_sampling_gap_seconds": 0.13763262499924167,
+      "os_process_peak_rss_bytes": 227688448
+    },
+    "input_hashes": {
+      "model": "6b1f85b9629b9bf8339e5649b7c934dd858e3a2896cfb7fb965081ac8ae3bd28",
+      "map": "45db2760fe4070725f30a432da866d46a1ef82e61aa11b4d57654d140241da2e"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-10000/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.3794942499989702,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 242843648,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.1265344159983215,
+      "os_process_peak_rss_bytes": 242253824
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "catalogue": 10000,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "process-failure"
+  },
+  "catalogue-37406": {
+    "kind": "catalogue",
+    "count": 37406,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "process-failure",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 2.0052185419990565,
+          "exit_code": 1,
+          "sampled_tree_peak_rss_bytes": 300433408,
+          "samples": 16,
+          "maximum_sampling_gap_seconds": 0.14860337500067544,
+          "os_process_peak_rss_bytes": 303775744
+        },
+        "status": "process-failure",
+        "total_command_seconds": 2.0052185419990565,
+        "sampled_tree_peak_rss_bytes": 300433408,
+        "os_process_peak_rss_bytes": 303775744
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "catalogue",
+        "37406",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 1.249717040998803,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228687872,
+      "samples": 10,
+      "maximum_sampling_gap_seconds": 0.12683287500112783,
+      "os_process_peak_rss_bytes": 227803136
+    },
+    "input_hashes": {
+      "model": "6d42ec158e63db44457dae966bb66b56dd4d72e19496fd9b4ec19853fcbed336",
+      "map": "64497a19b867bc4d4b179a24ccd58b3ac0f28f2fd0fbe5af955c479420117329"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/catalogue-37406/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.639889874997607,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 282394624,
+      "samples": 5,
+      "maximum_sampling_gap_seconds": 0.13585312500072177,
+      "os_process_peak_rss_bytes": 281870336
+    },
+    "census": {
+      "targets": 2,
+      "contributors": 2,
+      "rows": 681,
+      "memberships": 1025,
+      "component_sizes": [
+        2
+      ],
+      "catalogue": 37406,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "process-failure"
+  },
+  "single-128": {
+    "kind": "single",
+    "count": 128,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 15.000721374999557,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 348045312,
+          "samples": 119,
+          "maximum_sampling_gap_seconds": 0.1690255840003374,
+          "os_process_peak_rss_bytes": 346882048
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.13009770899952855,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1327104,
+          "samples": 1,
+          "maximum_sampling_gap_seconds": 0.004141041998082073,
+          "os_process_peak_rss_bytes": 29687808
+        },
+        "runtime_convergence": "passed",
+        "state_available": true,
+        "costs": {
+          "construction_seconds": 0.010859666,
+          "initialization_seconds": 0.420695209,
+          "search_seconds": 11.530841625,
+          "search_reference_seconds": 4.536708540999999,
+          "assessment_seconds": 2.1307459579999986,
+          "assembly_seconds": 0.165434875
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+        },
+        "component_statuses": {
+          "passed": 1
+        },
+        "failure_reasons": {},
+        "input_hashes": {
+          "model_sha256": "64148087ce507e91f0fb533f051c11aa96fffddc07ca4709c18c961db4a99758",
+          "map_sha256": "78f4ab8289e8baa8592d841934b0f9f226b252557234d9ac02059408f6faa4d8"
+        },
+        "output_bytes": 1498666,
+        "total_command_seconds": 15.130819083999086,
+        "sampled_tree_peak_rss_bytes": 348045312,
+        "os_process_peak_rss_bytes": 346882048
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "single",
+        "128",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.38365083299868274,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228589568,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.12749937500120723,
+      "os_process_peak_rss_bytes": 227704832
+    },
+    "input_hashes": {
+      "model": "64148087ce507e91f0fb533f051c11aa96fffddc07ca4709c18c961db4a99758",
+      "map": "78f4ab8289e8baa8592d841934b0f9f226b252557234d9ac02059408f6faa4d8"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-128/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.25621816599959857,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 229392384,
+      "samples": 2,
+      "maximum_sampling_gap_seconds": 0.1247342499991646,
+      "os_process_peak_rss_bytes": 234553344
+    },
+    "census": {
+      "targets": 128,
+      "contributors": 128,
+      "rows": 13889,
+      "memberships": 65920,
+      "component_sizes": [
+        128
+      ],
+      "catalogue": 128,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  },
+  "single-512": {
+    "kind": "single",
+    "count": 512,
+    "runs": [
+      {
+        "repetition": 1,
+        "analysis": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "potential_analysis",
+            "--estimator",
+            "joint-components",
+            "-a",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/input.cif",
+            "-m",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/input.map",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "--exclude-hydrogen",
+            "true",
+            "--asymmetry",
+            "false",
+            "--only-backbone",
+            "false",
+            "--map-normalization",
+            "false",
+            "-j",
+            "1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 2.2365487499992014,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 261324800,
+          "samples": 18,
+          "maximum_sampling_gap_seconds": 0.13047316700249212,
+          "os_process_peak_rss_bytes": 264208384
+        },
+        "status": "completed",
+        "export": {
+          "command": [
+            "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+            "result_dump",
+            "--printer",
+            "joint",
+            "-d",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/run-1/result.sqlite",
+            "-k",
+            "validation",
+            "-o",
+            "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/run-1",
+            "-v",
+            "0"
+          ],
+          "status": "completed",
+          "sample_interval_seconds": 0.1,
+          "wall_seconds": 0.13374633399871527,
+          "exit_code": 0,
+          "sampled_tree_peak_rss_bytes": 1294336,
+          "samples": 1,
+          "maximum_sampling_gap_seconds": 0.004075875000125961,
+          "os_process_peak_rss_bytes": 38862848
+        },
+        "runtime_convergence": "unavailable",
+        "state_available": false,
+        "costs": {
+          "construction_seconds": 0.038275792,
+          "initialization_seconds": 1.222954125,
+          "search_seconds": 0.0,
+          "search_reference_seconds": 0.0,
+          "assessment_seconds": 8.225e-05,
+          "assembly_seconds": 2.875e-06
+        },
+        "software": {
+          "version": "2.0.0",
+          "source_sha256": "e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34",
+          "configuration_sha256": "9a5a7d2b026a379ff78f119b3afbe42277cedafa43f576cef84c2a49ce4b4f53",
+          "build_sha256": "bae267bf8697db1025dc21da107a96589df016cc0aaad0d3abae8bff6d8ab06e"
+        },
+        "component_statuses": {
+          "unavailable": 1
+        },
+        "failure_reasons": {
+          "inner:unavailable": 1,
+          "kkt:unavailable": 1,
+          "width-stationarity:unavailable": 1,
+          "local-correction:unavailable": 1,
+          "numerical-identifiability:unavailable": 1
+        },
+        "input_hashes": {
+          "model_sha256": "f97580718ab5ede22eaa1a3f8ba7c3da0464bb1820ac7542d1db52b7ca2a01ec",
+          "map_sha256": "1a9f694c855cfab7504c0591e1eb72fb4cd1fe57760422f5220b02d81a64c07f"
+        },
+        "output_bytes": 3655154,
+        "total_command_seconds": 2.3702950839979167,
+        "sampled_tree_peak_rss_bytes": 261324800,
+        "os_process_peak_rss_bytes": 264208384
+      }
+    ],
+    "generation": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "single",
+        "512",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.3697387920001347,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 228589568,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.1234215829972527,
+      "os_process_peak_rss_bytes": 227704832
+    },
+    "input_hashes": {
+      "model": "f97580718ab5ede22eaa1a3f8ba7c3da0464bb1820ac7542d1db52b7ca2a01ec",
+      "map": "1a9f694c855cfab7504c0591e1eb72fb4cd1fe57760422f5220b02d81a64c07f"
+    },
+    "inspection": {
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-offline/bin/joint_validation",
+        "inspect",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/input.cif",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/input.map",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c/single-512/census.json"
+      ],
+      "status": "completed",
+      "sample_interval_seconds": 0.1,
+      "wall_seconds": 0.3802287910002633,
+      "exit_code": 0,
+      "sampled_tree_peak_rss_bytes": 230080512,
+      "samples": 3,
+      "maximum_sampling_gap_seconds": 0.12889395800084458,
+      "os_process_peak_rss_bytes": 250003456
+    },
+    "census": {
+      "targets": 512,
+      "contributors": 512,
+      "rows": 30393,
+      "memberships": 263680,
+      "component_sizes": [
+        512
+      ],
+      "catalogue": 512,
+      "map_size": [
+        258,
+        258,
+        258
+      ]
+    },
+    "status": "completed"
+  }
+}

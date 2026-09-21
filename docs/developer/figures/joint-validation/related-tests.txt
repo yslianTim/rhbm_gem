@@ -1,0 +1,37 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-v1-default
+      Start  1: rhbm_tests_joint_component
+ 1/10 Test  #1: rhbm_tests_joint_component ............   Passed    0.31 sec
+      Start  2: rhbm_tests_core_command
+ 2/10 Test  #2: rhbm_tests_core_command ...............   Passed    1.87 sec
+      Start  7: rhbm_tests_data_runtime
+ 3/10 Test  #7: rhbm_tests_data_runtime ...............   Passed    0.12 sec
+      Start  8: rhbm_tests_data_schema
+ 4/10 Test  #8: rhbm_tests_data_schema ................   Passed    0.30 sec
+      Start 13: rhbm_tests_integration_command
+ 5/10 Test #13: rhbm_tests_integration_command ........   Passed    0.35 sec
+      Start 14: joint_component_evidence_test
+ 6/10 Test #14: joint_component_evidence_test .........   Passed    0.22 sec
+      Start 15: joint_component_runtime_runner_test
+ 7/10 Test #15: joint_component_runtime_runner_test ...   Passed    0.18 sec
+      Start 16: joint_component_regression
+ 8/10 Test #16: joint_component_regression ............   Passed    6.47 sec
+      Start 17: joint_component_physical_smoke
+ 9/10 Test #17: joint_component_physical_smoke ........   Passed    2.78 sec
+      Start 22: joint_workflow_cli_smoke_test
+10/10 Test #22: joint_workflow_cli_smoke_test .........   Passed    0.72 sec
+
+100% tests passed out of 10
+
+Label Time Summary:
+domain:core           =   2.18 sec*proc (2 tests)
+domain:data           =   0.43 sec*proc (2 tests)
+domain:integration    =  10.72 sec*proc (6 tests)
+intent:algorithm      =   9.96 sec*proc (5 tests)
+intent:command        =   2.95 sec*proc (3 tests)
+intent:contract       =   0.31 sec*proc (1 test)
+intent:io             =   0.12 sec*proc (1 test)
+intent:schema         =   0.30 sec*proc (1 test)
+intent:validation     =   1.87 sec*proc (1 test)
+joint:runtime         =   9.96 sec*proc (5 tests)
+
+Total Test time (real) =  13.35 sec

@@ -1,0 +1,21 @@
+{
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "builds": {
+    "joint-v1-default": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+      "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+      "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "OFF",
+      "CMAKE_GENERATOR": "Ninja",
+      "cmake_cache_sha256": "9814622b2dd54461313e436721d4edf1ac0038387facec8e0241e9bab51c8bcd"
+    },
+    "joint-v1-offline": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CXX_COMPILER": "/usr/bin/c++",
+      "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+      "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS": "ON",
+      "CMAKE_GENERATOR": "Ninja",
+      "cmake_cache_sha256": "3d226a63b404db94b6b0357d38eb9973fd658de70c967d0b32fbcc7d8e62b38b"
+    }
+  }
+}

@@ -1,0 +1,209 @@
+Start testing: Sep 21 17:58 CST
+----------------------------------------------------------
+1/25 Testing: rhbm_tests_joint_component
+1/25 Test: rhbm_tests_joint_component
+Command: "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM-TEST" "--gtest_color=yes" "--gtest_filter=*JointTestNumericsTest.*:*JointComponentNumericsTest.*:*JointComponentSearchTest.*:*JointComponentChecksTest.*:*JointComponentObservationTest.*:*JointComponentRuntimeTest.*:*JointRuntimeTest.*:*JointComponentPartialSelectionTest.*"
+Directory: /Users/yslian/Project/em_map_analysis/build/joint-v1-default/tests
+"rhbm_tests_joint_component" start time: Sep 21 17:58 CST
+Output:
+----------------------------------------------------------
+Running main() from /private/tmp/googletest-20260810-2300-tbptpn/googletest-1.18.0/googletest/src/gtest_main.cc
+[0;33mNote: Google Test filter = *JointTestNumericsTest.*:*JointComponentNumericsTest.*:*JointComponentSearchTest.*:*JointComponentChecksTest.*:*JointComponentObservationTest.*:*JointComponentRuntimeTest.*:*JointRuntimeTest.*:*JointComponentPartialSelectionTest.*
+[m[0;32m[==========] [mRunning 57 tests from 8 test suites.
+[0;32m[----------] [mGlobal test environment set-up.
+[0;32m[----------] [m6 tests from JointTestNumericsTest
+[0;32m[ RUN      ] [mJointTestNumericsTest.LogWidthBasisIncludesCenterNearZeroAndFixedCutoff
+[0;32m[       OK ] [mJointTestNumericsTest.LogWidthBasisIncludesCenterNearZeroAndFixedCutoff (0 ms)
+[0;32m[ RUN      ] [mJointTestNumericsTest.FullJacobianAndEnvelopeGradientAtNonzeroResidual
+[0;32m[       OK ] [mJointTestNumericsTest.FullJacobianAndEnvelopeGradientAtNonzeroResidual (5 ms)
+[0;32m[ RUN      ] [mJointTestNumericsTest.RecoveryAgreesWithDirectJointAndFixedB
+[0;32m[       OK ] [mJointTestNumericsTest.RecoveryAgreesWithDirectJointAndFixedB (7 ms)
+[0;32m[ RUN      ] [mJointTestNumericsTest.BoundaryAndChangingActiveFaceRebuildDerivative
+[0;32m[       OK ] [mJointTestNumericsTest.BoundaryAndChangingActiveFaceRebuildDerivative (0 ms)
+[0;32m[ RUN      ] [mJointTestNumericsTest.RankFailureInvalidBAndUninformativeWidthCannotQualify
+[0;32m[       OK ] [mJointTestNumericsTest.RankFailureInvalidBAndUninformativeWidthCannotQualify (1 ms)
+[0;32m[ RUN      ] [mJointTestNumericsTest.TiledDerivativeMatchesDenseAcrossTileBoundaries
+[0;32m[       OK ] [mJointTestNumericsTest.TiledDerivativeMatchesDenseAcrossTileBoundaries (20 ms)
+[0;32m[----------] [m6 tests from JointTestNumericsTest (35 ms total)
+
+[0;32m[----------] [m1 test from JointComponentNumericsTest
+[0;32m[ RUN      ] [mJointComponentNumericsTest.TrueWidthDoubleAndFloat32LinearControls
+[0;32m[       OK ] [mJointComponentNumericsTest.TrueWidthDoubleAndFloat32LinearControls (0 ms)
+[0;32m[----------] [m1 test from JointComponentNumericsTest (0 ms total)
+
+[0;32m[----------] [m6 tests from JointComponentSearchTest
+[0;32m[ RUN      ] [mJointComponentSearchTest.GuardedSearchOnlyAcceptsReplayedStates
+[0;32m[       OK ] [mJointComponentSearchTest.GuardedSearchOnlyAcceptsReplayedStates (1 ms)
+[0;32m[ RUN      ] [mJointComponentSearchTest.InvalidTrialShrinksWithoutChangingAcceptedState
+[0;32m[       OK ] [mJointComponentSearchTest.InvalidTrialShrinksWithoutChangingAcceptedState (0 ms)
+[0;32m[ RUN      ] [mJointComponentSearchTest.ExplicitSupportArithmeticKeepsStrictBoundary
+[0;32m[       OK ] [mJointComponentSearchTest.ExplicitSupportArithmeticKeepsStrictBoundary (0 ms)
+[0;32m[ RUN      ] [mJointComponentSearchTest.EffectiveWidthsFollowAllModelSemantics
+[0;32m[       OK ] [mJointComponentSearchTest.EffectiveWidthsFollowAllModelSemantics (0 ms)
+[0;32m[ RUN      ] [mJointComponentSearchTest.BudgetAndUnrepresentableStepsReturnWithoutAnUpdate
+[0;32m[       OK ] [mJointComponentSearchTest.BudgetAndUnrepresentableStepsReturnWithoutAnUpdate (0 ms)
+[0;32m[ RUN      ] [mJointComponentSearchTest.CompactLinearizationPreservesStepAndFullResidualReduction
+[0;32m[       OK ] [mJointComponentSearchTest.CompactLinearizationPreservesStepAndFullResidualReduction (0 ms)
+[0;32m[----------] [m6 tests from JointComponentSearchTest (2 ms total)
+
+[0;32m[----------] [m13 tests from JointComponentChecksTest
+[0;32m[ RUN      ] [mJointComponentChecksTest.StructuralGraphPreservesBridgeChainConstantAndUnobserved
+[0;32m[       OK ] [mJointComponentChecksTest.StructuralGraphPreservesBridgeChainConstantAndUnobserved (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.SharedParentScaleAndDirectionsAreNotRenormalized
+[0;32m[       OK ] [mJointComponentChecksTest.SharedParentScaleAndDirectionsAreNotRenormalized (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.PartitionIDsSurviveStoragePermutationAndRejectMalformedCSR
+[0;32m[       OK ] [mJointComponentChecksTest.PartitionIDsSurviveStoragePermutationAndRejectMalformedCSR (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.RegisteredAuditDoesNotShrinkWithAComponent
+[0;32m[       OK ] [mJointComponentChecksTest.RegisteredAuditDoesNotShrinkWithAComponent (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.EvaluationUsesParentScaleForBothKKTAndWidthGradient
+[0;32m[       OK ] [mJointComponentChecksTest.EvaluationUsesParentScaleForBothKKTAndWidthGradient (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.ZeroObservationsAndUnderflowDoNotChangeStructuralPartition
+[0;32m[       OK ] [mJointComponentChecksTest.ZeroObservationsAndUnderflowDoNotChangeStructuralPartition (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.SameStateIncludesResidualTermAndConstantRows
+[0;32m[       OK ] [mJointComponentChecksTest.SameStateIncludesResidualTermAndConstantRows (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.FiniteUntrustedStateKeepsRawParityWithoutProfileClaims
+[0;32m[       OK ] [mJointComponentChecksTest.FiniteUntrustedStateKeepsRawParityWithoutProfileClaims (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.BlockBackendSharesConstrainedActiveSet
+[0;32m[       OK ] [mJointComponentChecksTest.BlockBackendSharesConstrainedActiveSet (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.RankEvidenceUsesGlobalDimensionsAndCurrentSpectrum
+[0;32m[       OK ] [mJointComponentChecksTest.RankEvidenceUsesGlobalDimensionsAndCurrentSpectrum (0 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.FailureIsolationDoesNotFillMissingRowsWithZero
+[0;32m[       OK ] [mJointComponentChecksTest.FailureIsolationDoesNotFillMissingRowsWithZero (1 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.BudgetAndInvalidStartRetainHonestAvailability
+[0;32m[       OK ] [mJointComponentChecksTest.BudgetAndInvalidStartRetainHonestAvailability (1 ms)
+[0;32m[ RUN      ] [mJointComponentChecksTest.UnobservedAtomsKeepRawPredictionButDisableProfileClaims
+[0;32m[       OK ] [mJointComponentChecksTest.UnobservedAtomsKeepRawPredictionButDisableProfileClaims (0 ms)
+[0;32m[----------] [m13 tests from JointComponentChecksTest (4 ms total)
+
+[0;32m[----------] [m5 tests from JointComponentObservationTest
+[0;32m[ RUN      ] [mJointComponentObservationTest.CompactStencilMatchesSamplerWithAnisotropicGridAndClampedEdges
+[0;32m[       OK ] [mJointComponentObservationTest.CompactStencilMatchesSamplerWithAnisotropicGridAndClampedEdges (0 ms)
+[0;32m[ RUN      ] [mJointComponentObservationTest.KernelMatchesGeneratorIncludingBothCutoffsAndChargeSigns
+[0;32m[       OK ] [mJointComponentObservationTest.KernelMatchesGeneratorIncludingBothCutoffsAndChargeSigns (0 ms)
+[0;32m[ RUN      ] [mJointComponentObservationTest.StencilIncludesContributorsBeyondSampleCenterCutoff
+[0;32m[       OK ] [mJointComponentObservationTest.StencilIncludesContributorsBeyondSampleCenterCutoff (0 ms)
+[0;32m[ RUN      ] [mJointComponentObservationTest.QuantizationHappensAfterContributorSum
+[0;32m[       OK ] [mJointComponentObservationTest.QuantizationHappensAfterContributorSum (0 ms)
+[0;32m[ RUN      ] [mJointComponentObservationTest.WidthDerivativesIncludeChargeCoupling
+[0;32m[       OK ] [mJointComponentObservationTest.WidthDerivativesIncludeChargeCoupling (0 ms)
+[0;32m[----------] [m5 tests from JointComponentObservationTest (0 ms total)
+
+[0;32m[----------] [m14 tests from JointComponentRuntimeTest
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.ImmutableSnapshotAndPartialFailure
+[0;32m[       OK ] [mJointComponentRuntimeTest.ImmutableSnapshotAndPartialFailure (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.TypedSearchPreservesFrozenAdapterResults
+[0;32m[       OK ] [mJointComponentRuntimeTest.TypedSearchPreservesFrozenAdapterResults (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.GeometrySelectionAndNegativeObservations
+[0;32m[       OK ] [mJointComponentRuntimeTest.GeometrySelectionAndNegativeObservations (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.FreshInitializationPreservesSecondStageAndSelection
+[==>...............................................] 4%[====>.............................................] 8%[======>...........................................] 12%[========>.........................................] 16%[==========>.......................................] 20%[============>.....................................] 24%[==============>...................................] 28%[================>.................................] 32%[==================>...............................] 36%[====================>.............................] 40%[======================>...........................] 44%[========================>.........................] 48%[==========================>.......................] 52%[============================>.....................] 56%[==============================>...................] 60%[================================>.................] 64%[==================================>...............] 68%[====================================>.............] 72%[======================================>...........] 76%[========================================>.........] 80%[==========================================>.......] 84%[============================================>.....] 88%[==============================================>...] 92%[================================================>.] 96%[==================================================] 100%
+MapObject Summary:
+ o=====================================================o
+ |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |
+ o=====================================================o
+ | Grid size    |         25 |         25 |         25 |
+ | Grid Spacing |        0.3 |        0.3 |        0.3 |
+ | Origin (A)   |       -3.6 |       -3.6 |       -3.6 |
+ | Map Length(A)|        7.5 |        7.5 |        7.5 |
+ |-----------------------------------------------------|
+ | Map value min  |                                  0 |
+ | Map value max  |                            3.36685 |
+ | Map value mean |                          0.0323237 |
+ | Map value s.d. |                           0.151741 |
+ o=====================================================o
+
+[0;32m[       OK ] [mJointComponentRuntimeTest.FreshInitializationPreservesSecondStageAndSelection (11 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.InnerEvidenceRemainsAvailableNearBoundary
+[0;32m[       OK ] [mJointComponentRuntimeTest.InnerEvidenceRemainsAvailableNearBoundary (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.PublicObjectivesUseParentScaleAndIncludeConstantRows
+[0;32m[       OK ] [mJointComponentRuntimeTest.PublicObjectivesUseParentScaleAndIncludeConstantRows (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.AssemblyPreservesSuppliedCoefficientsInsteadOfReprofiling
+[0;32m[       OK ] [mJointComponentRuntimeTest.AssemblyPreservesSuppliedCoefficientsInsteadOfReprofiling (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.AssessmentWorkIsSharedOnlyForIdenticalScopes
+[0;32m[       OK ] [mJointComponentRuntimeTest.AssessmentWorkIsSharedOnlyForIdenticalScopes (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.ReusedAssemblyMatchesFreshAssessmentAndRejectsChangedInputs
+[0;32m[       OK ] [mJointComponentRuntimeTest.ReusedAssemblyMatchesFreshAssessmentAndRejectsChangedInputs (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.ActualAssessmentFollowsFallbackAndLocalDirections
+[0;32m[       OK ] [mJointComponentRuntimeTest.ActualAssessmentFollowsFallbackAndLocalDirections (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination
+[0;32m[       OK ] [mJointComponentRuntimeTest.RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.MissingOrWrongScopeEvidenceCannotVacuouslyConverge
+[0;32m[       OK ] [mJointComponentRuntimeTest.MissingOrWrongScopeEvidenceCannotVacuouslyConverge (0 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.SavedOutcomesPreserveActualResultsWithoutProblemOrPrediction
+[0;32m[       OK ] [mJointComponentRuntimeTest.SavedOutcomesPreserveActualResultsWithoutProblemOrPrediction (1 ms)
+[0;32m[ RUN      ] [mJointComponentRuntimeTest.PositiveMapScalingPreservesKernelCoefficientUnits
+[0;32m[       OK ] [mJointComponentRuntimeTest.PositiveMapScalingPreservesKernelCoefficientUnits (0 ms)
+[0;32m[----------] [m14 tests from JointComponentRuntimeTest (19 ms total)
+
+[0;32m[----------] [m2 tests from JointRuntimeTest
+[0;32m[ RUN      ] [mJointRuntimeTest.SnapshotViewsRetainStorageWithoutDuplicatingObservationsOrMemberships
+[0;32m[       OK ] [mJointRuntimeTest.SnapshotViewsRetainStorageWithoutDuplicatingObservationsOrMemberships (0 ms)
+[0;32m[ RUN      ] [mJointRuntimeTest.ManyComponentsShareOneParentMapping
+[0;32m[       OK ] [mJointRuntimeTest.ManyComponentsShareOneParentMapping (1 ms)
+[0;32m[----------] [m2 tests from JointRuntimeTest (1 ms total)
+
+[0;32m[----------] [m10 tests from JointComponentPartialSelectionTest
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.FullCatalogueReferenceAndFixedRows
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.FullCatalogueReferenceAndFixedRows (5 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.BoundariesClippingAndNonrecursiveHalo
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.BoundariesClippingAndNonrecursiveHalo (0 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.BridgeAndMonolithicEquivalence
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.BridgeAndMonolithicEquivalence (14 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.IdentifiableRecoveryOmissionAndOutsideDomain
+[Warning] MapObject::SetMapValueArray - MapObject already has a map value array. The map value array will be replaced by new inserted data.
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.IdentifiableRecoveryOmissionAndOutsideDomain (24 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.WeakHaloAndInvalidWidthsAreNotSuccess
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.WeakHaloAndInvalidWidthsAreNotSuccess (1 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.InitializationPreservesHaloHistoryAndRoles
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.InitializationPreservesHaloHistoryAndRoles (19 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.InitializationExceptionsRemainLocal
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.InitializationExceptionsRemainLocal (8 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.ZeroSignalRankDeficiencyAndInsufficientRows
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.ZeroSignalRankDeficiencyAndInsufficientRows (7 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.FullSelectionInitializerMatchesV1Workflow
+[=========================>........................] 50%[==================================================] 100%
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.FullSelectionInitializerMatchesV1Workflow (26 ms)
+[0;32m[ RUN      ] [mJointComponentPartialSelectionTest.OriginalBondSelectionIsPreserved
+[0;32m[       OK ] [mJointComponentPartialSelectionTest.OriginalBondSelectionIsPreserved (64 ms)
+[0;32m[----------] [m10 tests from JointComponentPartialSelectionTest (172 ms total)
+
+[0;32m[----------] [mGlobal test environment tear-down
+[0;32m[==========] [m57 tests from 8 test suites ran. (236 ms total)
+[0;32m[  PASSED  ] [m57 tests.
+<end of output>
+Test time =   0.35 sec
+----------------------------------------------------------
+Test Passed.
+"rhbm_tests_joint_component" end time: Sep 21 17:58 CST
+"rhbm_tests_joint_component" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/25 Testing: joint_workflow_cli_smoke_test
+22/25 Test: joint_workflow_cli_smoke_test
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/yslian/Project/em_map_analysis/tests/integration/joint_workflow_cli_smoke.py" "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM"
+Directory: /Users/yslian/Project/em_map_analysis/build/joint-v1-default/tests
+"joint_workflow_cli_smoke_test" start time: Sep 21 17:58 CST
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.77 sec
+----------------------------------------------------------
+Test Passed.
+"joint_workflow_cli_smoke_test" end time: Sep 21 17:58 CST
+"joint_workflow_cli_smoke_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Sep 21 17:58 CST
+
+domain:core =   0.35 sec*proc
+
+domain:integration =   0.77 sec*proc
+
+intent:algorithm =   0.35 sec*proc
+
+intent:command =   0.77 sec*proc
+
+intent:contract =   0.35 sec*proc
+
+joint:runtime =   0.35 sec*proc
+

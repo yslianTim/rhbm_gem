@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "files": {
+    "build-environment.json": "d8837a4ee0c0c71db5939ff6e960f48b0aada5d570143d7c45d1ff752bc86427",
+    "campaign.json": "7969208650b8d1f7f3b96b62f2113aae78d5f926e3edf44a549a073b9cc28e03",
+    "diagnostic-profiles.json": "5f7ee7a8174d60cb2e096d47f3c64d9f1b500b7e37e524c0d785bf028ebd61de",
+    "final-joint-cli-tests.txt": "7156e19cfa63de6af95baf8bc640ea5ad30cd84791b939ff93a7960f06e8e29f",
+    "noise-runs.json": "2563f31c9deb55afae708a1e075ba2ff435c218d674451e02baa4b03a6b4a693",
+    "noise-summary.json": "ae28b667b21b8f1658174516e665368faadcdcd09873911254626ea697a2ce24",
+    "noise-table.md": "c47aa3a10d522d271b5cb3ab4343dd9a824cf049e9d3b515f391b8fdf58a986c",
+    "offline-tests.txt": "f22a1ee1d386d5b3328ce0f9c0b7979d3a11ff6c5a81238b4700c52208c6d19c",
+    "persistence-after.json": "3464ed1978faaa60309a0028dad6aadd472b2e3ec5464d93b74705a215d04075",
+    "persistence-before.json": "4f8d7fda54e8a7829e31856ecdd6578a46cca520787e93b2d31683686cb8651d",
+    "persistence-cli-after.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "persistence-cli-before.txt": "e1d92112e65a7e9f061adee8f8927c14dcd0033b9f29b3392638b1c6d101d59b",
+    "persistence-final-unit.txt": "3f89d6bc2ce4b82b5dc7f7ea8a0d599c40deaa48da1171332ab378a416ac1997",
+    "persistence-unit-before.txt": "0322ffa5450fbf2cfa53fb00e209e396444c3d69861391116b6d757c791dbe96",
+    "related-tests.txt": "42bcd24b245a523baad9534a9e8af8d522d2a4375895435aee6073f01a5ff7ec",
+    "resource-preflight.json": "8e6278d78517c041a6413959bade235ef9f517e9b06140dc44bae4d6bc5ff1bb",
+    "resources.json": "7c33f2c020c30e62dd0d1671e3d9be493e5ce81ded6bc1a8cabed2d98ceab96c",
+    "runner-tests.txt": "38e96d24425ab6af9ae738fafdaf927ab857e0f868b733bb24e0c361767b2016",
+    "serialization-recovery.json": "9a61e5cc42a428cbb73e01fcbd1d584e722dfad2f3e0e36365b086aad90e418b",
+    "source-index.json": "ea3691502501d1389881ecc734ca23baedb16c21297e93f9d6c507c8c2013bde",
+    "validation.json": "baff175670c7920df5ac2387738522b3de7c47b594a01f84cdcef07f8fa8e13e",
+    "weak-halo.json": "d92ff6ce25108f5aa78bcd5d9ea1301140dd88a2d42278b2b0f65b9bd04aae65",
+    "weak-snapshot.json": "a06e8efc666c8c8584a4aca890a010a7fe7359849c3633aa0e5b36a0e4fa91a5"
+  },
+  "raw_output_directory": "/Users/yslian/Project/em_map_analysis/build/joint-validation",
+  "report_sources": {
+    "joint_validation_report.py": "9e5dbf73618f4bb315035e641dc9fd5d514ff2bbbbc1e16e8ca9574bac4dcc75"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "raw_root": "/Users/yslian/Project/em_map_analysis/build/joint-validation",
+  "archived_executed_copies": {
+    "executed-source-before-fix": {
+      "executed-source-before-fix/tests/integration/joint_validation.py": "141be9dc4d9a362d408200dd2b118cf88563452ec5a17cc14a0e66c251611d1b",
+      "executed-source-before-fix/tests/experiments/joint_validation.cpp": "c14726d15068a91539cb3d496a417e53ba3a6072426775567dcdba7a2903e141",
+      "executed-source-before-fix/tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+      "executed-source-before-fix/tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+    },
+    "executed-source-final": {
+      "executed-source-final/tests/integration/joint_validation.py": "fe37f3c2e41fe03d8915e7fc7ea8427405fae03987d1e5ca2fad38037ea9acc3",
+      "executed-source-final/tests/experiments/joint_validation.cpp": "bab1efa36612bd5ddc8b839c55a816d9b6ddcd61c609e61befe671095c169598",
+      "executed-source-final/tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+      "executed-source-final/tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+    }
+  },
+  "current_reproduction_sources": {
+    "tests/experiments/joint_validation.cpp": "9e9b019b202087e1bba51ad1c8b47efd65ab15819f6a2a330d0d64cd4b5a9b82",
+    "tests/integration/joint_validation.py": "0ad77cb123d8dc46e36bf6d10d777a0f206077cdca848984673915f476f22fd8",
+    "tests/integration/joint_validation_test.py": "13caff3a516b1c76ed3dd62fe0d516370b46484f8dfa2a4f9262ca89456a9cd6",
+    "tests/integration/joint_validation_report.py": "9e5dbf73618f4bb315035e641dc9fd5d514ff2bbbbc1e16e8ca9574bac4dcc75",
+    "tests/integration/joint_validation_profile.py": "59f4739c5c5c2ad1fc649a4e8a9576136f799a17d8dc9a4b2e92043a6a097fd0",
+    "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+    "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+  }
+}

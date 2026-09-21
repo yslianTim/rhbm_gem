@@ -18,7 +18,9 @@ def main() -> int:
         root = Path(directory)
         local_model = root / "input.cif"
         shutil.copyfile(model, local_model)
-        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] + "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n#\n")
+        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] +
+            "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n"
+            "ATOM 3 C CB . ALA A 2 12.0 0.0 0.0 1.0 0.0 1\n#\n")
         model = local_model
 
         def run(*args: object, succeeds: bool = True) -> None:

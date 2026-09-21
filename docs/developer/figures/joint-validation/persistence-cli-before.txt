@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/Users/yslian/Project/em_map_analysis/tests/integration/joint_workflow_cli_smoke.py", line 85, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/yslian/Project/em_map_analysis/tests/integration/joint_workflow_cli_smoke.py", line 35, in main
+    run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yslian/Project/em_map_analysis/tests/integration/joint_workflow_cli_smoke.py", line 28, in run
+    assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [Error] PotentialAnalysisCommand : Joint result atom identities do not match the saved model.
+[Error] Command execution failed. Aborting command execution.
+

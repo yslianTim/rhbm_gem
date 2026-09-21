@@ -1,0 +1,270 @@
+{
+  "limits": {
+    "process_seconds": 600,
+    "rss_bytes": 4294967296,
+    "sample_seconds": 0.1,
+    "stage_seconds": {
+      "a": 1200,
+      "b": 1200,
+      "c": 4800
+    },
+    "total_seconds": 7200
+  },
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "stages": {
+    "a": {
+      "status": "finished",
+      "wall_seconds": 76.36660995799684,
+      "started_utc": "2026-09-21T09:55:36Z",
+      "budget_seconds": 1161.3137970000025,
+      "previous_attempt": {
+        "status": "finished",
+        "wall_seconds": 38.68620299999748,
+        "started_utc": "2026-09-21T08:58:52Z",
+        "budget_seconds": 1200,
+        "source_hashes": {
+          "tests/experiments/joint_validation.cpp": "c14726d15068a91539cb3d496a417e53ba3a6072426775567dcdba7a2903e141",
+          "tests/integration/joint_validation.py": "141be9dc4d9a362d408200dd2b118cf88563452ec5a17cc14a0e66c251611d1b",
+          "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+          "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+        },
+        "executable_sha256": "6c8b457149858c5e8233e0d2283bff8386b442212a2605ab5cbd143a6784e43b"
+      },
+      "stage_directory": "a-final",
+      "resource_directory": null,
+      "source_hashes": {
+        "tests/experiments/joint_validation.cpp": "9e9b019b202087e1bba51ad1c8b47efd65ab15819f6a2a330d0d64cd4b5a9b82",
+        "tests/integration/joint_validation.py": "0ad77cb123d8dc46e36bf6d10d777a0f206077cdca848984673915f476f22fd8",
+        "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+        "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+      },
+      "executable_sha256": "de92fed930c6eb42f71ca5804347104ff400a602eaef39dba883acfca72815a7",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54"
+    },
+    "b": {
+      "status": "finished",
+      "wall_seconds": 101.57049683400328,
+      "started_utc": "2026-09-21T09:56:41Z",
+      "budget_seconds": 1147.6285290829983,
+      "previous_attempt": {
+        "status": "finished",
+        "wall_seconds": 52.371470917001716,
+        "started_utc": "2026-09-21T08:59:53Z",
+        "budget_seconds": 1200,
+        "source_hashes": {
+          "tests/experiments/joint_validation.cpp": "c14726d15068a91539cb3d496a417e53ba3a6072426775567dcdba7a2903e141",
+          "tests/integration/joint_validation.py": "141be9dc4d9a362d408200dd2b118cf88563452ec5a17cc14a0e66c251611d1b",
+          "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+          "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+        },
+        "executable_sha256": "6c8b457149858c5e8233e0d2283bff8386b442212a2605ab5cbd143a6784e43b"
+      },
+      "stage_directory": "b-final",
+      "resource_directory": null,
+      "source_hashes": {
+        "tests/experiments/joint_validation.cpp": "9e9b019b202087e1bba51ad1c8b47efd65ab15819f6a2a330d0d64cd4b5a9b82",
+        "tests/integration/joint_validation.py": "0ad77cb123d8dc46e36bf6d10d777a0f206077cdca848984673915f476f22fd8",
+        "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+        "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+      },
+      "executable_sha256": "de92fed930c6eb42f71ca5804347104ff400a602eaef39dba883acfca72815a7",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54"
+    },
+    "c": {
+      "status": "finished",
+      "wall_seconds": 2002.3652213749992,
+      "started_utc": "2026-09-21T09:16:26Z",
+      "budget_seconds": 4771.490881500002,
+      "previous_attempt": {
+        "status": "running",
+        "wall_seconds": 28.509118499998294,
+        "started_utc": "2026-09-21T09:02:32Z",
+        "budget_seconds": 4800,
+        "source_hashes": {
+          "tests/experiments/joint_validation.cpp": "c14726d15068a91539cb3d496a417e53ba3a6072426775567dcdba7a2903e141",
+          "tests/integration/joint_validation.py": "141be9dc4d9a362d408200dd2b118cf88563452ec5a17cc14a0e66c251611d1b",
+          "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+          "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+        },
+        "executable_sha256": "6c8b457149858c5e8233e0d2283bff8386b442212a2605ab5cbd143a6784e43b"
+      },
+      "resource_directory": "c-final",
+      "source_hashes": {
+        "tests/experiments/joint_validation.cpp": "bab1efa36612bd5ddc8b839c55a816d9b6ddcd61c609e61befe671095c169598",
+        "tests/integration/joint_validation.py": "fe37f3c2e41fe03d8915e7fc7ea8427405fae03987d1e5ca2fad38037ea9acc3",
+        "tests/support/JointPrecisionAudit.cpp": "c68a777e5a1af063f986986fce85de84f232fc7304ba18179532b1352d343569",
+        "tests/support/JointPrecisionAudit.hpp": "020c205571669796ca9c72cf7292d7550d892e159b7f041e0d11bbdada0c8a0d"
+      },
+      "executable_sha256": "639f706a1e5e8109e56b1119c3fe3b6879e91d48647621b1acfb9355ebd654f9",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54"
+    }
+  },
+  "base_commit": "6b5b020721e64ac3d99333635dace3d193de0ea6",
+  "diagnostic_profiles": [
+    {
+      "case": "single-512",
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+        "potential_analysis",
+        "--estimator",
+        "joint-components",
+        "-a",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.cif",
+        "-m",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/single-512/input.map",
+        "-d",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/profiles/single-512/diagnostic.sqlite",
+        "-k",
+        "diagnostic",
+        "--exclude-hydrogen",
+        "true",
+        "--asymmetry",
+        "false",
+        "--only-backbone",
+        "false",
+        "--map-normalization",
+        "false",
+        "-j",
+        "1",
+        "-v",
+        "0"
+      ],
+      "status": "intentional-diagnostic-stop",
+      "wall_seconds": 32.098064000001614,
+      "scope": "diagnostic sampling only; not an uninstrumented performance repetition",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54",
+      "model_sha256": "b546663dc208b827efba931c8a44dd67e2e211e38cfab005e77cbba4b139525d",
+      "map_sha256": "8a7114a5f1a195d4081dae623276d5b05fecb21fe0c77c3597f5120a3278f83a",
+      "source_sha256": "59f4739c5c5c2ad1fc649a4e8a9576136f799a17d8dc9a4b2e92043a6a097fd0",
+      "runner_sha256": "fe37f3c2e41fe03d8915e7fc7ea8427405fae03987d1e5ca2fad38037ea9acc3",
+      "sample_at_seconds": [
+        5,
+        15,
+        25
+      ],
+      "sample_duration_seconds": 1,
+      "exit_code": -15,
+      "sampled_tree_peak_rss_bytes": 561463296,
+      "sample_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "stack_sha256": {
+        "stack-25.txt": "5779722821a26b95cd1ed0f3af2ad904756c827f82b130cfe64c61cf87e07c1f",
+        "stack-15.txt": "abc8d18bc9ad597b19b62c764105aca27706e6f3e7cda0d3458c8e79ffc71c14",
+        "stack-5.txt": "d3b6cd7084c9f69a0f9419c4039f86f6c0a8d3dd243d682c184d2f3619d572b4"
+      }
+    },
+    {
+      "case": "user-2192",
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+        "potential_analysis",
+        "--estimator",
+        "joint-components",
+        "-a",
+        "/Users/yslian/data/6z6u.cif",
+        "-m",
+        "/Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map",
+        "-d",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/profiles/user-2192/diagnostic.sqlite",
+        "-k",
+        "diagnostic",
+        "--exclude-hydrogen",
+        "true",
+        "--asymmetry",
+        "false",
+        "--only-backbone",
+        "false",
+        "--map-normalization",
+        "false",
+        "-j",
+        "1",
+        "-v",
+        "0"
+      ],
+      "status": "intentional-diagnostic-stop",
+      "wall_seconds": 32.08061466700019,
+      "scope": "diagnostic sampling only; not an uninstrumented performance repetition",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54",
+      "model_sha256": "349ca6da5546b7d8bae53e6edaca9a65985b69f8e6c24316378c4ea04404a4aa",
+      "map_sha256": "6d7771a9fd584e562550da473d624307b22d20396f11a2a79a064bff2551682a",
+      "source_sha256": "59f4739c5c5c2ad1fc649a4e8a9576136f799a17d8dc9a4b2e92043a6a097fd0",
+      "runner_sha256": "fe37f3c2e41fe03d8915e7fc7ea8427405fae03987d1e5ca2fad38037ea9acc3",
+      "sample_at_seconds": [
+        5,
+        15,
+        25
+      ],
+      "sample_duration_seconds": 1,
+      "exit_code": -15,
+      "sampled_tree_peak_rss_bytes": 864190464,
+      "sample_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "stack_sha256": {
+        "stack-25.txt": "70583e2b99e05524af7c698cda7e614db3361d1682d69dd997fbe4ff66541715",
+        "stack-15.txt": "c0f3222e0488674cb887a23a35a142effc1fe45440b5f141638d68fbba45c2fc",
+        "stack-5.txt": "cd0f818be4e4b5e5a632e5b0202751cc39b1ad2dcc34dee0abfeadaea1f5898d"
+      }
+    },
+    {
+      "case": "multi-2167",
+      "command": [
+        "/Users/yslian/Project/em_map_analysis/build/joint-v1-default/bin/RHBM-GEM",
+        "potential_analysis",
+        "--estimator",
+        "joint-components",
+        "-a",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.cif",
+        "-m",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/c-final/multi-2167/input.map",
+        "-d",
+        "/Users/yslian/Project/em_map_analysis/build/joint-validation/profiles/multi-2167/diagnostic.sqlite",
+        "-k",
+        "diagnostic",
+        "--exclude-hydrogen",
+        "true",
+        "--asymmetry",
+        "false",
+        "--only-backbone",
+        "false",
+        "--map-normalization",
+        "false",
+        "-j",
+        "1",
+        "-v",
+        "0"
+      ],
+      "status": "intentional-diagnostic-stop",
+      "wall_seconds": 32.08026645800055,
+      "scope": "diagnostic sampling only; not an uninstrumented performance repetition",
+      "cli_sha256": "880ed0987653702d332c21bc32e4328a79d54fc079f2ce927c4cc518e6cf8b54",
+      "model_sha256": "45f335dfb4da88e19823e3b067417511ff6351cc13c905d1357dbacc13d4d96d",
+      "map_sha256": "9ffb14eb2ffafec2a57907f345298e5cc02b03b16d3031b1516dcb8477225023",
+      "source_sha256": "59f4739c5c5c2ad1fc649a4e8a9576136f799a17d8dc9a4b2e92043a6a097fd0",
+      "runner_sha256": "fe37f3c2e41fe03d8915e7fc7ea8427405fae03987d1e5ca2fad38037ea9acc3",
+      "sample_at_seconds": [
+        5,
+        15,
+        25
+      ],
+      "sample_duration_seconds": 1,
+      "exit_code": -15,
+      "sampled_tree_peak_rss_bytes": 1190330368,
+      "sample_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "stack_sha256": {
+        "stack-25.txt": "e4312e9fe91225d3bb7cb31a403559acb7095e72d34c8a4b41350c8bbed6b7d0",
+        "stack-15.txt": "e91215fa6639abdeb8b9eb3c53d57d0fca6ffe60ed47bed2f977d6b0c1500eff",
+        "stack-5.txt": "70699c490115201912a55bf0018c0e398c45b14f39463387cc20bde931907c07"
+      }
+    }
+  ]
+}

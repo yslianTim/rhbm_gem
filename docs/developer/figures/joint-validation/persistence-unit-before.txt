@@ -1,0 +1,20 @@
+Running main() from /private/tmp/googletest-20260810-2300-tbptpn/googletest-1.18.0/googletest/src/gtest_main.cc
+Note: Google Test filter = DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DataObjectPersistenceTest
+[ RUN      ] DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds
+/Users/yslian/Project/em_map_analysis/tests/data/DataObjectPersistence_test.cpp:549: Failure
+Expected: repository.SaveModel(model,"subset") doesn't throw an exception.
+  Actual: it throws std::invalid_argument with description "Joint result atom identities do not match the saved model.".
+
+[  FAILED  ] DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds (7 ms)
+[----------] 1 test from DataObjectPersistenceTest (7 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (7 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds
+
+ 1 FAILED TEST

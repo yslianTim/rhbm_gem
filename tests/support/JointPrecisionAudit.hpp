@@ -11,4 +11,7 @@ boost::json::object PrecisionAudit(const joint_abc::Domain &, const Eigen::Vecto
 boost::json::object BoundaryAudit(const joint_abc::Domain &, const Eigen::VectorXd &,
     const Eigen::VectorXd & eta, const Eigen::VectorXd & beta,
     const joint_abc::EvaluationContext * = nullptr);
+// Independently reprofile unchanged observations at two widths, at 50/100 digits.
+boost::json::object PrecisionProfileChange(const joint_abc::Domain &, const Eigen::VectorXd &,
+    const Eigen::VectorXd & base_eta, const Eigen::VectorXd & eta);
 } // namespace second_stage_test::matched::certification
