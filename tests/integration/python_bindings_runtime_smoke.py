@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import shutil
 import json
 import os
 import tempfile
@@ -224,7 +226,9 @@ def assert_joint_workflow() -> None:
     with tempfile.TemporaryDirectory(prefix="rhbm_joint_python_") as directory:
         root = Path(directory)
         simulation = m.MapSimulationRequest()
-        simulation.model_file_path = PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif"
+        local_model = root / "input.cif"
+        shutil.copyfile(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif", local_model)
+        simulation.model_file_path = local_model
         simulation.output_dir = root
         simulation.potential_model_choice = m.PotentialModel.SINGLE_GAUS
         simulation.blurring_width_list = [.5]
@@ -239,6 +243,11 @@ def assert_joint_workflow() -> None:
         analysis.map_normalization_flag = False
         analysis.verbosity = 0
         assert m.RunCommand(analysis).succeeded
+        model_hash = hashlib.sha256(local_model.read_bytes()).hexdigest()
+        map_path = Path(analysis.map_file_path)
+        map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
+        local_model.unlink()
+        map_path.unlink()
         export = m.ResultDumpRequest()
         export.database_path = analysis.database_path
         export.model_key_tag_list = [analysis.saved_key_tag]
@@ -246,6 +255,11 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
+        assert saved["schema_version"] == 2
+        assert saved["metadata"]["model_sha256"] == model_hash
+        assert saved["metadata"]["map_sha256"] == map_hash
+        assert saved["metadata"]["map_normalization"] == {"requested": False, "applied": False, "divisor": 1}
+        assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert saved["regular_certificate"] == "not-run"
         assert saved["assembled_state"] is not None
         assert saved["runtime_convergence"] in {"passed", "failed", "unavailable", "not-run"}

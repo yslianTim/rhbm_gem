@@ -13,7 +13,6 @@ struct SimulationSource
     std::string model_sha256;
 };
 
-std::string FileSha256(const std::filesystem::path & path);
 void WriteSimulationArtifacts(const std::filesystem::path & output, const MapObject & map,
     const SimulationAtomPreparationResult & atoms, const MapSimulationRequest & request,
     double blurring_width, int actual_job_count, const SimulationSource & source);

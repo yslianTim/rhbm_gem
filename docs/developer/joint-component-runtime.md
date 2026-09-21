@@ -248,3 +248,29 @@ storage validates the document structure but neither recomputes convergence nor
 runs an audit. These saved documents are not standalone numerical audit bundles.
 Model copying retains the outcome; analysis `Clear()` and `ClearJointResult()`
 remove it, while `ClearTransientFitStates()` does not.
+
+### Saved provenance and units
+
+Production outcome JSON uses schema 2 (distinct from fixture and offline report
+schemas). See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schema-2).
+`JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
+values and `JointSoftwareProvenance`. `CaptureJointAnalysisResult` records the
+current library's version/source/configuration/build identity. The decoder and
+exporter preserve saved identity without recalculation. Direct in-memory callers
+leave unknown input hashes and normalization null; capture does not open paths.
+
+`MapObject::MapValueArrayNormalization()` returns `std::optional<double>`: the
+actual divisor if applied, or nullopt when zero SD skips normalization. Existing
+callers may ignore the return. A caller retaining provenance records its requested
+flag, whether the returned divisor exists, and `divisor.value_or(1)`; a command
+that skips normalization records `applied=false, divisor=1`.
+
+B and geometry use Angstrom, A uses fitted-map-unit*Angstrom^3, and C uses
+fitted-map-unit*Angstrom. Multiply A/C by the recorded divisor to recover input-map
+scale. These are kernel coefficient units, not an assertion of physical map
+calibration; C is not a constant background offset. The objective's parent
+observation scale is separate. Unknown normalization cannot support conversion.
+
+The v1 freeze is an acceptance baseline for fixed-position, all-non-hydrogen,
+structural-support, equal-weight Guarded joint LS. It does not change the default
+two-stage estimator, certify every endpoint, or establish real-data applicability.

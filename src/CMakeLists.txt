@@ -94,6 +94,7 @@ target_sources(rhbm_gem PRIVATE
     utils/domain/ComponentHelper.cpp
     utils/domain/ComponentKeySystem.cpp
     utils/domain/FilePathHelper.cpp
+    utils/domain/FileFingerprint.cpp
     utils/domain/LocalPainter.cpp
     utils/domain/Logger.cpp
     utils/domain/ROOTHelper.cpp

@@ -482,6 +482,19 @@ function(rhbm_guard_run_install_smoke)
             "stdout:\n${BUILD_STDOUT}\n"
             "stderr:\n${BUILD_STDERR}\n")
     endif()
+    execute_process(
+        COMMAND "${CONSUMER_BUILD_DIR}/rhbm_gem_consumer_smoke"
+        WORKING_DIRECTORY "${CONSUMER_BUILD_DIR}"
+        RESULT_VARIABLE RUN_RESULT
+        OUTPUT_VARIABLE RUN_STDOUT
+        ERROR_VARIABLE RUN_STDERR
+    )
+    if(NOT RUN_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Install consumer smoke test failed at execution step.\n"
+            "stdout:\n${RUN_STDOUT}\n"
+            "stderr:\n${RUN_STDERR}\n")
+    endif()
 endfunction()
 
 rhbm_guard_require_project_source_dir()

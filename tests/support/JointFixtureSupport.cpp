@@ -1,15 +1,14 @@
+#include "utils/domain/FileFingerprint.hpp"
 #include "support/JointFixtureSupport.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/command/detail/SimulationManifest.hpp"
 #include <fstream>
 #include <sstream>
 namespace second_stage_test::matched::joint_abc {
 namespace {
 namespace j=boost::json;
 namespace fs=std::filesystem;
-namespace sim=rhbm_gem::core::simulation;
 using Vector=Eigen::VectorXd;
 j::value Read(const fs::path & path)
 {
@@ -88,8 +87,8 @@ FrozenFixture LoadFixture(const fs::path & path)
 {
     const auto snapshot=Read(path/"snapshot.json"),dataset=Read(path/"dataset.json");
     for(const auto & [file,key]:std::vector<std::pair<std::string,std::string>>{{"voxels.csv","voxels_sha256"},{"contributors.csv","contributors_sha256"}})
-        if(sim::FileSha256(path/file)!=j::value_to<std::string>(snapshot.at(key))) throw std::runtime_error("Snapshot hash mismatch.");
-    FrozenFixture in; in.hash=sim::FileSha256(path/"snapshot.json"); in.name=j::value_to<std::string>(dataset.at("name"));
+        if(rhbm_gem::FileSha256(path/file)!=j::value_to<std::string>(snapshot.at(key))) throw std::runtime_error("Snapshot hash mismatch.");
+    FrozenFixture in; in.hash=rhbm_gem::FileSha256(path/"snapshot.json"); in.name=j::value_to<std::string>(dataset.at("name"));
     const auto voxels=Table(path/"voxels.csv"),contributors=Table(path/"contributors.csv");
     in.domain.rows=static_cast<Eigen::Index>(voxels.size()); std::vector<std::vector<Support>> support(j::value_to<std::size_t>(snapshot.at("atoms")));
     if(j::value_to<std::size_t>(snapshot.at("rows"))!=voxels.size() || j::value_to<std::size_t>(snapshot.at("memberships"))!=contributors.size()) throw std::runtime_error("Snapshot population mismatch.");

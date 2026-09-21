@@ -3,12 +3,25 @@
 
 namespace rhbm_gem {
 
+struct JointMapNormalization
+{
+    bool requested{}, applied{};
+    double divisor{1};
+};
+struct JointSoftwareProvenance
+{
+    std::string version, source_sha256, configuration_sha256, build_sha256;
+};
 struct JointAnalysisMetadata
 {
     std::string model_path, map_path;
     std::array<int,3> grid_size{};
     std::array<double,3> grid_spacing{}, origin{};
-    bool map_normalization_applied{}, simulation{};
+    bool simulation{};
+    // Unknown for callers that supply only an in-memory problem.
+    std::optional<JointMapNormalization> map_normalization;
+    std::optional<std::string> model_sha256, map_sha256;
+    std::optional<JointSoftwareProvenance> software;
 };
 struct JointAnalysisComponent : JointComponentData
 {

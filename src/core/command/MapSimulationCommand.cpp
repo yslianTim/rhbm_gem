@@ -1,3 +1,4 @@
+#include "utils/domain/FileFingerprint.hpp"
 #include "detail/CommandRunner.hpp"
 #include "detail/MapSimulation.hpp"
 #include "detail/SimulationManifest.hpp"
@@ -45,13 +46,13 @@ void NormalizeAndValidateRequest(
 
 bool ExecutePreparedRequest(const MapSimulationRequest & request)
 {
-    const auto model_sha256{ simulation::FileSha256(request.model_file_path) };
+    const auto model_sha256{ rhbm_gem::FileSha256(request.model_file_path) };
     std::unique_ptr<ModelObject> model_object;
     try
     {
         model_object = ReadModel(request.model_file_path);
         model_object->SetKeyTag("model");
-        if (simulation::FileSha256(request.model_file_path) != model_sha256)
+        if (rhbm_gem::FileSha256(request.model_file_path) != model_sha256)
             throw std::runtime_error("Model file changed while preparing simulation input.");
     }
     catch(const std::exception & e)

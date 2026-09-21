@@ -2,6 +2,9 @@
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
+#include <filesystem>
+#include <fstream>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -44,6 +47,13 @@ int main()
     const auto joint=rhbm_gem::core::FitJointComponents(problem,{0.});
     if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
     const auto saved=rhbm_gem::core::CaptureJointAnalysisResult(joint);
+    if(!saved.metadata.software || saved.metadata.software->source_sha256.size()!=64 ||
+        saved.metadata.model_sha256 || saved.metadata.map_sha256 || saved.metadata.map_normalization) return 6;
+    rhbm_gem::WriteJointAnalysisResult(saved,"consumer-joint.json","consumer-joint.csv");
+    std::ifstream json("consumer-joint.json");
+    const std::string payload((std::istreambuf_iterator<char>(json)),{});
+    if(payload.find("\"schema_version\":2")==std::string::npos ||
+        payload.find("joint-kernel-map-units-v1")==std::string::npos) return 7;
     rhbm_gem::ModelObject saved_model;
     saved_model.EditAnalysis().SetJointResult(saved);
     if(!saved_model.GetAnalysisView().GetJointResult()) return 5;

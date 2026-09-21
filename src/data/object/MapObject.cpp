@@ -250,20 +250,22 @@ void MapObject::CalculateMapValueSD()
         m_map_value_array.get(), m_voxel_size, m_map_value_mean);
 }
 
-void MapObject::MapValueArrayNormalization()
+std::optional<double> MapObject::MapValueArrayNormalization()
 {
     if (m_map_value_sd == 0.0)
     {
         Logger::Log(LogLevel::Warning,
                     "MapObject::MapValueArrayNormalization - "
                     "The standard deviation of map value array is zero, skip normalization.");
-        return;
+        return std::nullopt;
     }
+    const double divisor = m_map_value_sd;
     for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)
     {
         m_map_value_array[i] /= m_map_value_sd;
     }
     RecomputeStatistics();
+    return divisor;
 }
 
 } // namespace rhbm_gem

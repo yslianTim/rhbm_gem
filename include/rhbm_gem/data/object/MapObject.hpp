@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace rhbm_gem {
@@ -47,7 +48,8 @@ public:
     double GetMapValueSD() const { return m_map_value_sd; }
     void SetMapValueArray(std::unique_ptr<double[]> map_value_array);
     void ClearMapValueArray();
-    void MapValueArrayNormalization();
+    // Returns the actual divisor, or nullopt when zero SD prevents normalization.
+    std::optional<double> MapValueArrayNormalization();
 
 private:
     void RecomputeStatistics();

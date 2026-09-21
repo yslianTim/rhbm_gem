@@ -1,3 +1,4 @@
+#include "utils/domain/FileFingerprint.hpp"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
 
@@ -265,8 +266,8 @@ TEST_F(MapSimulationTest, ManifestReconstructsSavedVoxelsAndRecordsExactSettings
         if (entry.path().extension() != ".map") continue;
         const auto manifest{ ReadManifest(entry.path()) };
         EXPECT_EQ(manifest.at("schema_version").as_int64(), 2);
-        EXPECT_EQ(manifest.at("source").at("model_sha256").as_string(), simulation::FileSha256(request.model_file_path));
-        EXPECT_EQ(manifest.at("output").at("map_sha256").as_string(), simulation::FileSha256(entry.path()));
+        EXPECT_EQ(manifest.at("source").at("model_sha256").as_string(), rhbm_gem::FileSha256(request.model_file_path));
+        EXPECT_EQ(manifest.at("output").at("map_sha256").as_string(), rhbm_gem::FileSha256(entry.path()));
         EXPECT_EQ(manifest.at("output").at("map_file").as_string(), entry.path().filename().string());
         EXPECT_EQ(manifest.at("atom_count").as_int64(), 5);
         EXPECT_EQ(manifest.at("fallback_charge_count").as_int64(), 2);
@@ -343,7 +344,7 @@ TEST_F(MapSimulationTest, SavedMapsAreIdenticalAcrossRunsAndChargeModeHistory)
         else EXPECT_EQ(bytes, partial_map_bytes);
         const auto manifest{ ReadManifest(path) };
         EXPECT_EQ(manifest.at("settings").at("charge_mode").as_string(), "partial");
-        EXPECT_EQ(manifest.at("output").at("map_sha256").as_string(), simulation::FileSha256(path));
+        EXPECT_EQ(manifest.at("output").at("map_sha256").as_string(), rhbm_gem::FileSha256(path));
     }
     EXPECT_EQ(std::distance(std::filesystem::directory_iterator(temp.path()), std::filesystem::directory_iterator()), 2);
 }
@@ -361,7 +362,7 @@ TEST_F(MapSimulationTest, ManifestEscapesAtomIdentityWithoutLosingCharacters)
     const auto actual{ simulation::PopulateMapValueArray(*map, atoms, request, 1.0) };
     const auto output{ temp.path() / "escaped.map" };
     simulation::WriteSimulationArtifacts(output, *map, atoms, request, 1.0, actual,
-        { model->GetPdbID(), simulation::FileSha256(request.model_file_path) });
+        { model->GetPdbID(), rhbm_gem::FileSha256(request.model_file_path) });
     EXPECT_EQ(ReadManifest(output).at("atoms").as_array()[0].at("atom_id").as_string(), identity);
 }
 
@@ -454,7 +455,8 @@ TEST_F(MapSimulationTest, FileHashesMatchStandardSha256Vectors)
     command_test::ScopedTempDir temp("simulation_sha256");
     const auto path{ temp.path() / "hash_input" };
     { std::ofstream file(path); }
-    EXPECT_EQ(simulation::FileSha256(path), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    EXPECT_EQ(rhbm_gem::FileSha256(path), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     { std::ofstream file(path); file << "abc"; }
-    EXPECT_EQ(simulation::FileSha256(path), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    EXPECT_EQ(rhbm_gem::FileSha256(path), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    EXPECT_THROW(rhbm_gem::FileSha256(temp.path()/"missing"),std::runtime_error);
 }

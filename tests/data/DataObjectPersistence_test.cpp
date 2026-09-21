@@ -484,6 +484,9 @@ namespace {
 rg::JointAnalysisResult SavedJointExample()
 {
     rg::JointAnalysisResult result;
+    result.metadata.model_sha256=std::string(64,'a'); result.metadata.map_sha256=std::string(64,'b');
+    result.metadata.software=rg::JointSoftwareProvenance{"saved-version",std::string(64,'c'),std::string(64,'d'),std::string(64,'e')};
+    result.metadata.map_normalization=rg::JointMapNormalization{true,true,2.5};
     result.atom_ids={"1","2"}; result.row_ids={"voxel-1","constant"}; result.available_row_mask={true,true};
     result.initialization={true,"",{.5,.6},{}};
     rg::JointAnalysisComponent component;
@@ -534,7 +537,7 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     EXPECT_THROW(io::Encode(invalid),std::invalid_argument);
     auto json=boost::json::parse(io::Encode(record)).as_object();
     json["schema_version"]=99; EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::invalid_argument);
-    json["schema_version"]=1; json.erase("runtime_convergence");
+    json["schema_version"]=2; json.erase("runtime_convergence");
     EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::exception);
     record.components[0].state.reset(); record.assembled_state.reset(); record.objective.reset();
     record.runtime_convergence=rg::JointCheckStatus::Unavailable;
@@ -549,4 +552,45 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     std::getline(csv,header); std::getline(csv,line);
     EXPECT_NE(line.find("\"1\",\"component-0\",,,,0,0,"),std::string::npos);
     EXPECT_THROW(rg::WriteJointAnalysisResult(decoded,dir.path()/"missing"/"result.json",dir.path()/"atoms.csv"),std::runtime_error);
+}
+
+TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites)
+{
+    namespace io=rg::joint_result_io;
+    const command_test::ScopedTempDir dir{"joint_metadata"};
+    const auto path=dir.path()/"results.sqlite";
+    rg::DataRepository repository{path}; auto model=data_test::MakeModelWithBond();
+    const auto record=SavedJointExample(); model->EditAnalysis().SetJointResult(record);
+    repository.SaveModel(*model,"model");
+    for(int variant=0;variant<6;++variant)
+    {
+        auto invalid=record;
+        if(variant==0) invalid.metadata.map_sha256="not-a-hash";
+        if(variant==1) invalid.metadata.map_normalization->divisor=0;
+        if(variant==2) invalid.metadata.map_normalization->requested=false;
+        if(variant==3) invalid.metadata.simulation=true;
+        if(variant==4) invalid.metadata.map_normalization->applied=false;
+        if(variant==5) invalid.metadata.software->build_sha256="";
+        model->EditAnalysis().SetJointResult(invalid);
+        EXPECT_THROW(repository.SaveModel(*model,"model"),std::invalid_argument);
+        EXPECT_EQ(io::Encode(*repository.LoadModel("model")->GetAnalysisView().GetJointResult()),io::Encode(record));
+    }
+    auto malformed=boost::json::parse(io::Encode(record)).as_object();
+    malformed.at("metadata").as_object().at("map_normalization").as_object()["divisor"]=0;
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+    malformed=boost::json::parse(io::Encode(record)).as_object();
+    malformed.at("metadata").as_object().erase("map_sha256");
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::exception);
+    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=1;
+    const auto old_text=boost::json::serialize(old);
+    EXPECT_THROW(io::Decode(old_text),std::invalid_argument);
+    data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json='"+old_text+"' WHERE key_tag='model';");
+    std::ifstream before_file(path,std::ios::binary);
+    const std::string before((std::istreambuf_iterator<char>(before_file)),{});
+    EXPECT_THROW(repository.LoadModel("model"),std::invalid_argument);
+    std::ifstream after_file(path,std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(after_file)),{}),before);
+    auto wrong_units=boost::json::parse(io::Encode(record)).as_object();
+    wrong_units.at("metadata").as_object().at("units").as_object()["B"]="angstrom^2";
+    EXPECT_THROW(io::Decode(boost::json::serialize(wrong_units)),std::invalid_argument);
 }

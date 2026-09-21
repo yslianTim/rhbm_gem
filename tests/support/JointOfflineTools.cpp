@@ -1,9 +1,9 @@
+#include "utils/domain/FileFingerprint.hpp"
 #include "support/JointOfflineTools.hpp"
 #include "support/JointComponentChecks.hpp"
 #include "support/JointOfflineAudit.hpp"
 #include "support/JointLocalEvidence.hpp"
 #include "support/JointPrecisionAudit.hpp"
-#include "core/command/detail/SimulationManifest.hpp"
 #include <filesystem>
 #include <fstream>
 
@@ -11,7 +11,6 @@ namespace second_stage_test::matched::joint_abc {
 namespace {
 namespace j=boost::json;
 namespace fs=std::filesystem;
-namespace sim=rhbm_gem::core::simulation;
 using Vector=Eigen::VectorXd;
 j::value Read(const fs::path & path)
 {
@@ -140,6 +139,6 @@ void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string
     fs::create_directories(output); Write(output/"fit.json",fit);
     LocalAuditFit(view,y,fit,context,output/"audit");
     Write(output/"completion.json",j::object{{"complete",true},{"component_id",view.id},
-        {"snapshot_sha256",context.snapshot_hash},{"input_bundle_sha256",sim::FileSha256(bundle_path)}});
+        {"snapshot_sha256",context.snapshot_hash},{"input_bundle_sha256",rhbm_gem::FileSha256(bundle_path)}});
 }
 }

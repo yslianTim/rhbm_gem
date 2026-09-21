@@ -147,6 +147,81 @@ JointInitialization ReadInitialization(const j::value & v)
 }
 void Require(bool condition, const char * message)
 {if(!condition) throw std::invalid_argument(std::string("Invalid joint result: ")+message);}
+bool IsSha256(const std::string & value)
+{
+    return value.size()==64 && std::all_of(value.begin(),value.end(),[](char c) {
+        return (c>='0' && c<='9') || (c>='a' && c<='f');
+    });
+}
+j::value OptionalText(const std::optional<std::string> & value)
+{return value ? j::value(*value) : j::value(nullptr);}
+std::optional<std::string> ReadOptionalText(const j::value & value)
+{return value.is_null() ? std::nullopt : std::optional<std::string>(j::value_to<std::string>(value));}
+Object Units()
+{
+    return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
+        {"geometry","angstrom"},{"A","fit-map-unit*angstrom^3"},{"B","angstrom"},
+        {"C","fit-map-unit*angstrom"}};
+}
+Object Metadata(const JointAnalysisMetadata & m)
+{
+    j::value normalization=nullptr,software=nullptr;
+    if(m.map_normalization)
+    {
+        const auto & n=*m.map_normalization;
+        normalization=Object{{"requested",n.requested},{"applied",n.applied},{"divisor",n.divisor}};
+    }
+    if(m.software)
+    {
+        const auto & p=*m.software;
+        software=Object{{"version",p.version},{"source_sha256",p.source_sha256},
+            {"configuration_sha256",p.configuration_sha256},{"build_sha256",p.build_sha256}};
+    }
+    return {{"model_path",m.model_path},{"map_path",m.map_path},
+        {"grid_size",j::value_from(m.grid_size)},{"grid_spacing",j::value_from(m.grid_spacing)},
+        {"origin",j::value_from(m.origin)},{"simulation",m.simulation},
+        {"map_normalization",std::move(normalization)},{"model_sha256",OptionalText(m.model_sha256)},
+        {"map_sha256",OptionalText(m.map_sha256)},{"software",std::move(software)},{"units",Units()}};
+}
+JointAnalysisMetadata ReadMetadata(const Object & m)
+{
+    JointAnalysisMetadata out;
+    out.model_path=Read<std::string>(m,"model_path"); out.map_path=Read<std::string>(m,"map_path");
+    out.grid_size=Read<std::array<int,3>>(m,"grid_size");
+    out.grid_spacing=Read<std::array<double,3>>(m,"grid_spacing");
+    out.origin=Read<std::array<double,3>>(m,"origin"); out.simulation=Read<bool>(m,"simulation");
+    out.model_sha256=ReadOptionalText(m.at("model_sha256")); out.map_sha256=ReadOptionalText(m.at("map_sha256"));
+    Require(m.at("units")==Units(),"unsupported unit contract");
+    if(!m.at("map_normalization").is_null())
+    {
+        const auto & n=m.at("map_normalization").as_object();
+        out.map_normalization=JointMapNormalization{Read<bool>(n,"requested"),Read<bool>(n,"applied"),Read<double>(n,"divisor")};
+    }
+    if(!m.at("software").is_null())
+    {
+        const auto & p=m.at("software").as_object();
+        out.software=JointSoftwareProvenance{Read<std::string>(p,"version"),Read<std::string>(p,"source_sha256"),
+            Read<std::string>(p,"configuration_sha256"),Read<std::string>(p,"build_sha256")};
+    }
+    return out;
+}
+void ValidateMetadata(const JointAnalysisMetadata & m)
+{
+    for(const auto * hash:{&m.model_sha256,&m.map_sha256})
+        Require(!*hash || IsSha256(**hash),"invalid input SHA-256");
+    if(m.software)
+    {
+        const auto & p=*m.software;
+        Require(!p.version.empty() && IsSha256(p.source_sha256) && IsSha256(p.configuration_sha256) &&
+            IsSha256(p.build_sha256),"invalid software provenance");
+    }
+    if(m.map_normalization)
+    {
+        const auto & n=*m.map_normalization;
+        Require(std::isfinite(n.divisor) && n.divisor>0,"invalid normalization divisor");
+        Require(n.applied ? n.requested && !m.simulation : n.divisor==1,"inconsistent normalization");
+    }
+}
 void ValidateState(const JointState & x,std::size_t atoms)
 {
     Require(x.ac.size()==2*atoms && x.b.size()==atoms && x.log_b.size()==atoms && x.width_gradient.size()==atoms,"state dimensions");
@@ -157,6 +232,7 @@ void ValidateState(const JointState & x,std::size_t atoms)
 }
 void Validate(const JointAnalysisResult & x)
 {
+    ValidateMetadata(x.metadata);
     const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
     Require(atoms>0 && std::set<std::string>(x.atom_ids.begin(),x.atom_ids.end()).size()==atoms,"atom identities");
     Require(std::set<std::string>(x.row_ids.begin(),x.row_ids.end()).size()==rows,"row identities");
@@ -192,10 +268,8 @@ std::string Encode(const JointAnalysisResult & x)
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         {"runtime_convergence",StatusText(c.runtime_convergence)}});
-    Object out{{"schema_version",1},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
-        {"support_contract","sphere-fma-v1"},{"metadata",Object{{"model_path",m.model_path},{"map_path",m.map_path},
-            {"grid_size",j::value_from(m.grid_size)},{"grid_spacing",j::value_from(m.grid_spacing)},{"origin",j::value_from(m.origin)},
-            {"map_normalization_applied",m.map_normalization_applied},{"simulation",m.simulation}}},
+    Object out{{"schema_version",2},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+        {"support_contract","sphere-fma-v1"},{"metadata",Metadata(m)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
@@ -209,15 +283,13 @@ JointAnalysisResult Decode(std::string_view text)
 {
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
-    Require(Read<int>(o,"schema_version")==1,"unsupported result schema version");
+    Require(Read<int>(o,"schema_version")==2,"unsupported result schema version (expected 2; regenerate older joint outcomes)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
         Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
     JointAnalysisResult x;
-    const auto & m=o.at("metadata").as_object();
-    x.metadata={Read<std::string>(m,"model_path"),Read<std::string>(m,"map_path"),Read<std::array<int,3>>(m,"grid_size"),
-        Read<std::array<double,3>>(m,"grid_spacing"),Read<std::array<double,3>>(m,"origin"),Read<bool>(m,"map_normalization_applied"),Read<bool>(m,"simulation")};
+    x.metadata=ReadMetadata(o.at("metadata").as_object());
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
     x.initialization=ReadInitialization(o.at("initialization"));
     const auto & t=o.at("costs").as_object();

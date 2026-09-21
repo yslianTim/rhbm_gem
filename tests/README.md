@@ -168,3 +168,18 @@ require external numerical datasets; see the audit guide's verification tiers.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.
+
+## Joint v1 acceptance
+
+The production outcome codec accepts joint JSON schema 2 inside SQLite v17.
+Metadata tests cover actual normalization divisors, input/build fingerprints,
+coefficient units and rejection of old documents. CLI, C++ and Python workflow
+checks export after deleting their temporary model/map inputs. The installed
+consumer smoke target now executes the linked program and checks its exit status,
+including capture/export with unknown in-memory input provenance.
+
+Release acceptance runs all default CTests with Python bindings, then the existing
+`joint:extended|joint:offline` lane, plus a testing-disabled installation and
+consumer execution. A source copy without Git metadata must also build/install
+and run the consumer. Keep the frozen fixture packages and current parity
+thresholds unchanged; no historical matrix replay is required.

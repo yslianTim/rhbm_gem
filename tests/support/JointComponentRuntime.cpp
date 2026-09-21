@@ -1,3 +1,4 @@
+#include "utils/domain/FileFingerprint.hpp"
 #include "support/JointComponentRuntime.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -60,7 +61,7 @@ void Snapshot(const core::JointProblem & problem,const rhbm_gem::MapObject & map
         {"grid_size",j::value_from(map.GetGridSize())},{"spacing",j::value_from(map.GetGridSpacing())},{"origin",j::value_from(map.GetOrigin())}});
     Write(root/"snapshot.json",j::object{{"schema_version",1},{"support_policy","sphere-fma-v1"},
         {"rows",input.observations.size()},{"atoms",input.atom_ids.size()},{"memberships",count},{"row_offsets",offsets},
-        {"voxels_sha256",sim::FileSha256(root/"voxels.csv")},{"contributors_sha256",sim::FileSha256(root/"contributors.csv")}});
+        {"voxels_sha256",rhbm_gem::FileSha256(root/"voxels.csv")},{"contributors_sha256",rhbm_gem::FileSha256(root/"contributors.csv")}});
 }
 void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::path & root,const std::string & precision,bool physical)
 {
@@ -78,7 +79,7 @@ void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::pat
     const auto problem=*first.problem; const auto & data=core::JointProblemAccess::Get(problem);
     const std::string dataset=physical ? "physical-two" : "fresh-map";
     Snapshot(problem,map,model,root,dataset);
-    auto context=data.context; context.snapshot_hash=sim::FileSha256(root/"snapshot.json");
+    auto context=data.context; context.snapshot_hash=rhbm_gem::FileSha256(root/"snapshot.json");
     Write(root/"census.json",Census(data.domain,data.partition,context));
     if(physical && data.partition.components.size()!=2) throw std::runtime_error("Physical fixture did not produce two structural components.");
     const auto & initial=first.initialization.b;

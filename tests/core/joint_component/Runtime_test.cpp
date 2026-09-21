@@ -365,6 +365,10 @@ TEST(JointComponentRuntimeTest, SavedOutcomesPreserveActualResultsWithoutProblem
         if(variant==3) initial[0]=std::numeric_limits<double>::quiet_NaN();
         const auto fit=core::FitJointComponents(core::JointProblem(input),initial);
         const auto saved=core::CaptureJointAnalysisResult(fit);
+        ASSERT_TRUE(saved.metadata.software);
+        EXPECT_FALSE(saved.metadata.model_sha256); EXPECT_FALSE(saved.metadata.map_sha256);
+        EXPECT_FALSE(saved.metadata.map_normalization);
+        EXPECT_EQ(saved.metadata.software->source_sha256.size(),64);
         const auto encoded=io::Encode(saved);
         const auto decoded=io::Decode(encoded);
         EXPECT_EQ(io::Encode(decoded),encoded);
@@ -384,4 +388,25 @@ TEST(JointComponentRuntimeTest, SavedOutcomesPreserveActualResultsWithoutProblem
         EXPECT_EQ(encoded.find("\"observations\""),std::string::npos);
         if(variant==3) EXPECT_TRUE(std::isnan(decoded.initialization.b[0]));
     }
+}
+
+TEST(JointComponentRuntimeTest, PositiveMapScalingPreservesKernelCoefficientUnits)
+{
+    auto input=Snapshot();
+    const auto original=core::FitJointComponents(core::JointProblem(input),{.55,.55});
+    constexpr double divisor=3.25;
+    for(auto & y:input.observations) y/=divisor;
+    const auto normalized=core::FitJointComponents(core::JointProblem(input),{.55,.55});
+    ASSERT_EQ(original.RuntimeConvergence(),core::JointCheckStatus::Passed);
+    ASSERT_EQ(normalized.RuntimeConvergence(),core::JointCheckStatus::Passed);
+    ASSERT_TRUE(original.assembled_state); ASSERT_TRUE(normalized.assembled_state);
+    for(std::size_t i=0;i<original.assembled_state->ac.size();++i)
+        EXPECT_NEAR(original.assembled_state->ac[i],divisor*normalized.assembled_state->ac[i],
+            1e-10*(1+std::abs(original.assembled_state->ac[i])));
+    for(std::size_t i=0;i<original.assembled_state->b.size();++i)
+        EXPECT_NEAR(original.assembled_state->b[i],normalized.assembled_state->b[i],1e-10);
+    ASSERT_TRUE(original.prediction); ASSERT_TRUE(normalized.prediction);
+    for(std::size_t i=0;i<original.prediction->size();++i)
+        EXPECT_NEAR((*original.prediction)[i],divisor*(*normalized.prediction)[i],
+            1e-10*(1+std::abs((*original.prediction)[i])));
 }

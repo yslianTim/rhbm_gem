@@ -201,7 +201,7 @@ Invalid input/problem construction and persistence errors fail the command.
 `NotRun` offline evidence never implies passing certification.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
-`joint_atoms_<sanitized-key>.csv`. JSON schema 1 includes metadata, identities,
+`joint_atoms_<sanitized-key>.csv`. JSON schema 2 includes metadata, identities,
 row mappings/mask, initial values, actual states, objectives, cost counters,
 checks, ranks and captured convergence. CSV has one row per non-hydrogen atom:
 `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate`.
@@ -219,3 +219,35 @@ remain usable. No joint values are copied into legacy second-stage/group fields.
 SQLite v17 accepts empty databases and valid v17 databases only. Older versions,
 including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
+
+### Provenance and map units (joint JSON schema 2)
+
+`metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
+checked before and after loading. Paths remain descriptive, not content identity.
+`metadata.software` records the library version and source, configuration and
+build SHA-256 fingerprints from the existing build-time generator. Loading or
+exporting a saved outcome preserves these values; it does not stamp the reader's
+version or access either input file.
+
+`metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
+`fit_map = input_map / divisor`, with no mean subtraction. An applied operation
+records the actual pre-normalization standard deviation, including SD=1. Disabled
+normalization, zero-SD maps and simulation requests use `applied=false, divisor=1`;
+`requested` preserves the user's flag, and `simulation` identifies that bypass.
+Pure in-memory API callers may leave the normalization record and input hashes
+null; unknown provenance does not imply an identity transform.
+
+The fixed `metadata.units` contract is `joint-kernel-map-units-v1`. For fitted map
+unit U, the volume-normalized Gaussian has units Angstrom^-3 and the charge basis
+`erf(r/(sqrt(2)*B))/r` has units Angstrom^-1. Thus A has units U*Angstrom^3, C has
+units U*Angstrom, and B and geometry use Angstrom. U denotes the supplied fitting
+scale, not an assumed physical calibration. To return to input-map scale,
+multiply both A and C by `divisor`; B is unchanged. `observation_scale` normalizes
+the objective only and must not be used for this conversion. CSV retains fitted
+coefficients and its existing columns; keep its companion JSON for units and
+provenance. No conversion is performed during export.
+
+Only production joint JSON schema 2 is accepted. Older joint JSON is rejected
+with a request to regenerate the outcome, without migration or database writes.
+The enclosing SQLite schema remains v17; non-joint records are unaffected.
+Consumers must rebuild against the updated public C++ value types.

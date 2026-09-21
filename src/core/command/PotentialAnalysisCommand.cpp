@@ -1,4 +1,5 @@
 #include "detail/CommandRunner.hpp"
+#include "utils/domain/FileFingerprint.hpp"
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
@@ -76,12 +77,22 @@ void NormalizeAndValidateRequest(
 
 bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
 {
+    JointAnalysisMetadata metadata;
+    const bool joint=request.estimator==PotentialEstimator::JOINT_COMPONENTS;
     std::unique_ptr<ModelObject> model_object;
     std::unique_ptr<MapObject> map_object;
     try
     {
+        if (joint)
+        {
+            metadata.model_sha256=FileSha256(request.model_file_path);
+            metadata.map_sha256=FileSha256(request.map_file_path);
+        }
         model_object = ReadModel(request.model_file_path);
         map_object = ReadMap(request.map_file_path);
+        if (joint && (FileSha256(request.model_file_path)!=*metadata.model_sha256 ||
+                      FileSha256(request.map_file_path)!=*metadata.map_sha256))
+            throw std::runtime_error("Model/map file changed while preparing joint input.");
     }
     catch (const std::exception & e)
     {
@@ -98,9 +109,12 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     {
         model_object->ApplySimulationMetadata(request.simulated_map_resolution);
     }
+    JointMapNormalization normalization{request.map_normalization_flag,false,1};
     if (!request.simulation_flag && request.map_normalization_flag)
     {
-        map_object->MapValueArrayNormalization();
+        const auto divisor=map_object->MapValueArrayNormalization();
+        normalization.applied=divisor.has_value();
+        normalization.divisor=divisor.value_or(1);
     }
 
     try
@@ -138,11 +152,10 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
         const auto fit=EstimateJointComponents(*map_object,*model_object);
-        JointAnalysisMetadata metadata;
         metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
         metadata.grid_size=map_object->GetGridSize(); metadata.grid_spacing=map_object->GetGridSpacing();
         metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
-        metadata.map_normalization_applied=!request.simulation_flag && request.map_normalization_flag;
+        metadata.map_normalization=normalization;
         model_object->EditAnalysis().SetJointResult(CaptureJointAnalysisResult(fit,std::move(metadata)));
         DataRepository repository{request.database_path};
         repository.SaveModel(*model_object,request.saved_key_tag);

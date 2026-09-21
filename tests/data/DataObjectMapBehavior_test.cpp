@@ -12,7 +12,9 @@ TEST(DataObjectMapBehaviorTest, NormalizeMapObjectNormalizesMapValues)
     const auto original_sd{ map.GetMapValueSD() };
     ASSERT_GT(original_sd, 0.0);
 
-    map.MapValueArrayNormalization();
+    const auto divisor=map.MapValueArrayNormalization();
+    ASSERT_TRUE(divisor);
+    EXPECT_DOUBLE_EQ(*divisor,original_sd);
 
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5);
     EXPECT_NEAR(map.GetMapValueSD(), 1.0, 1.0e-5);
@@ -49,4 +51,17 @@ TEST(DataObjectMapBehaviorTest, ClearMapValueArrayResetsValuesAndStatistics)
     EXPECT_DOUBLE_EQ(map.GetMapValueMax(), 0.0);
     EXPECT_DOUBLE_EQ(map.GetMapValueMean(), 0.0);
     EXPECT_DOUBLE_EQ(map.GetMapValueSD(), 0.0);
+}
+
+TEST(DataObjectMapBehaviorTest, NormalizationReportsUnitSdAndSkippedConstantMap)
+{
+    auto values=std::make_unique<double[]>(3); values[0]=2; values[1]=3; values[2]=4;
+    rhbm_gem::MapObject map({3,1,1},{1,1,1},{0,0,0},std::move(values));
+    const auto divisor=map.MapValueArrayNormalization();
+    ASSERT_TRUE(divisor); EXPECT_DOUBLE_EQ(*divisor,1);
+    EXPECT_DOUBLE_EQ(map.GetMapValueMean(),3); // No mean subtraction.
+    values=std::make_unique<double[]>(3); values[0]=values[1]=values[2]=3;
+    map.SetMapValueArray(std::move(values));
+    EXPECT_FALSE(map.MapValueArrayNormalization());
+    EXPECT_DOUBLE_EQ(map.GetMapValue(0),3);
 }

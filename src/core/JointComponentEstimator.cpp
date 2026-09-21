@@ -1,3 +1,4 @@
+#include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -218,6 +219,9 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
 {
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
     JointAnalysisResult out;
+    metadata.software=JointSoftwareProvenance{RHBM_GEM_SIMULATION_VERSION,
+        RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
+        RHBM_GEM_SIMULATION_BUILD_SHA256};
     out.metadata=std::move(metadata);
     out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
     out.initialization=fit.initialization; out.costs=fit.costs;
