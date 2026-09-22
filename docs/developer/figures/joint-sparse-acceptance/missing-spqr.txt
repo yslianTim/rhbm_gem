@@ -1,0 +1,27 @@
+-- The C compiler identification is AppleClang 21.0.0.21000101
+-- The CXX compiler identification is AppleClang 21.0.0.21000101
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Dependency provider: SYSTEM
+-- Found SQLite3: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libsqlite3.tbd (found version "3.51.0")
+-- Found Boost: /opt/homebrew/lib/cmake/Boost-1.92.0/BoostConfig.cmake (found suitable version "1.92.0", minimum required is "1.90")
+-- UMAP support disabled by RHBM_GEM_ENABLE_UMAP=OFF
+-- Using system Boost package
+-- AppleClang detected, probing OpenMP in: /opt/homebrew/opt/libomp
+-- OpenMP found (version 5.1). Enabling OpenMP features.
+-- ROOT features disabled by RHBM_GEM_ROOT_MODE=OFF
+CMake Error at src/CMakeLists.txt:146 (find_package):
+  find_package for module SPQR called with REQUIRED, but
+  CMAKE_DISABLE_FIND_PACKAGE_SPQR is enabled.  A REQUIRED package cannot be
+  disabled.
+
+
+-- Configuring incomplete, errors occurred!

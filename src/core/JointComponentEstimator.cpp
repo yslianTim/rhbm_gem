@@ -262,12 +262,8 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
     out.runtime_convergence=fit.RuntimeConvergence(); out.regular_certificate=fit.regular_certificate;
     return out;
 }
-JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
+JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)
 {
-    const auto construction_start=Clock::now();
-    const auto problem=BuildJointProblem(map,model);
-    const double construction_seconds=Seconds(construction_start);
-    const auto initialization_start=Clock::now();
     ModelObject initializer(model);
     const auto & input=problem.Input();
     JointInitialization initialization;
@@ -309,6 +305,15 @@ JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
         catch(const std::exception & error) {width=std::numeric_limits<double>::quiet_NaN(); record.reason=std::string("initialization-exception: ")+error.what();}
         initialization.b.push_back(width); initialization.atoms.push_back(std::move(record));
     }
+    return initialization;
+}
+JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
+{
+    const auto construction_start=Clock::now();
+    const auto problem=BuildJointProblem(map,model);
+    const double construction_seconds=Seconds(construction_start);
+    const auto initialization_start=Clock::now();
+    auto initialization=n::InitializeContributors(map,model,problem);
     const double initialization_seconds=Seconds(initialization_start);
     auto out=FitJointComponents(problem,initialization.b); out.costs.initialization_seconds=initialization_seconds;
     out.costs.construction_seconds=construction_seconds;

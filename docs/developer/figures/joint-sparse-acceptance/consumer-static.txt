@@ -1,0 +1,62 @@
+-- The CXX compiler identification is AppleClang 21.0.0.21000101
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- The C compiler identification is AppleClang 21.0.0.21000101
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Found OpenMP_C: -Xclang -fopenmp (found version "5.1")
+-- Found OpenMP: TRUE (found version "5.1") found components: C
+-- SuiteSparse_config version: 7.14.1
+-- SuiteSparse_config include: /opt/homebrew/include/suitesparse
+-- SuiteSparse_config library: /opt/homebrew/lib/libsuitesparseconfig.7.14.1.dylib
+-- SuiteSparse_config static:  /opt/homebrew/lib/libsuitesparseconfig.a
+-- AMD version: 3.3.4
+-- AMD include: /opt/homebrew/include/suitesparse
+-- AMD library: /opt/homebrew/lib/libamd.3.3.4.dylib
+-- AMD static:  /opt/homebrew/lib/libamd.a
+-- COLAMD version: 3.3.5
+-- COLAMD include: /opt/homebrew/include/suitesparse
+-- COLAMD library: /opt/homebrew/lib/libcolamd.3.3.5.dylib
+-- COLAMD static:  /opt/homebrew/lib/libcolamd.a
+-- CAMD version: 3.3.5
+-- CAMD include: /opt/homebrew/include/suitesparse
+-- CAMD library: /opt/homebrew/lib/libcamd.3.3.5.dylib
+-- CAMD static:  /opt/homebrew/lib/libcamd.a
+-- CCOLAMD version: 3.3.5
+-- CCOLAMD include: /opt/homebrew/include/suitesparse
+-- CCOLAMD library: /opt/homebrew/lib/libccolamd.3.3.5.dylib
+-- CCOLAMD static:  /opt/homebrew/lib/libccolamd.a
+-- CHOLMOD version: 5.3.5
+-- CHOLMOD include: /opt/homebrew/include/suitesparse
+-- CHOLMOD library: /opt/homebrew/lib/libcholmod.5.3.5.dylib
+-- CHOLMOD static:  /opt/homebrew/lib/libcholmod.a
+-- SPQR version: 4.3.6
+-- SPQR include: /opt/homebrew/include/suitesparse
+-- SPQR library: /opt/homebrew/lib/libspqr.4.3.6.dylib
+-- SPQR static:  /opt/homebrew/lib/libspqr.a
+-- Found SQLite3: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libsqlite3.tbd (found version "3.51.0")
+CMake Warning (policy) at /opt/homebrew/share/cmake/Modules/CMakeFindDependencyMacro.cmake:93 (find_package):
+  Policy CMP0167 is not set: The FindBoost module is removed.  Run "cmake
+  --help-policy CMP0167" for policy details.  Use the cmake_policy command to
+  set the policy and suppress this warning.
+Call Stack (most recent call first):
+  /opt/homebrew/share/cmake/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /Users/yslian/Project/em_map_analysis/build/joint-sparse-prefix-static/lib/cmake/RHBM_GEM/RHBM_GEMConfig.cmake:73 (find_dependency)
+  CMakeLists.txt:4 (find_package)
+This warning is for project developers.  Use -Wno-author or -Wno-policy to
+suppress it.
+
+-- Found Boost: /opt/homebrew/lib/cmake/Boost-1.92.0/BoostConfig.cmake (found suitable version "1.92.0", minimum required is "1.90")
+-- Found OpenMP_CXX: -Xclang -fopenmp (found version "5.1")
+-- Found OpenMP: TRUE (found version "5.1") found components: CXX
+-- Configuring done (3.5s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/yslian/Project/em_map_analysis/build/joint-sparse-consumer-static
+[1/2] Building CXX object CMakeFiles/rhbm_gem_consumer_smoke.dir/main.cpp.o
+[2/2] Linking CXX executable rhbm_gem_consumer_smoke

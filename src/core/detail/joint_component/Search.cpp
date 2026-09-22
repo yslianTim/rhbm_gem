@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "SparseFactor.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
 #include <chrono>
@@ -19,6 +20,7 @@ struct Profile
     std::string failure;
     int references{};
     double reference_seconds{};
+    LinearWorkspace workspace;
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
         double radius,double damping,double actual,double predicted,double ratio,bool proposed)
@@ -44,7 +46,7 @@ struct Profile
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
         const auto start=std::chrono::steady_clock::now();
-        cached=EvaluateProfile(domain,y,eta,false,&context); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,&workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start); trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
@@ -72,7 +74,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const EvaluationContext & context)
 {
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{},0,0,{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;

@@ -1,6 +1,8 @@
 #include "Numerics.hpp"
+#include "SparseFactor.hpp"
 #include "TiledDerivative.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <numbers>
 
@@ -116,14 +118,19 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 }
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
-    const std::vector<LinearBlock> * blocks)
+    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
-    auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
+    if(workspace) workspace->Bind(&domain,y.data(),context ? &context->linear : nullptr);
+    const auto matrix_started=std::chrono::steady_clock::now();
+    auto out=Basis(domain,y,eta);
+    SparseWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();
+    if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
-    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks);
+    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks,workspace);
+    if(!reference) out.factor=solved.factor;
     out.beta=solved.beta; out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
     out.certificate.linear_solves=solved.solves; out.certificate.free_rank=solved.rank;
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;

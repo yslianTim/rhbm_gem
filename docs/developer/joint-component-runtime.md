@@ -133,7 +133,9 @@ against the baseline library.
 
 ## Tiled numerical backend
 
-All production components use 8192-row tiles. The first derivative pass reduces
+The default EIGEN backend uses 8192-row tiles. The optional
+[SPQR backend](joint-component-sparse-backend.md) replaces free-design
+factorization while retaining tiled Jacobian reduction. The first derivative pass reduces
 the normalized free design and raw width derivative. The second generates the
 projected derivative and full residual-corrected Jacobian by tile, retaining only
 compact QR factors, transformed residuals and column norms. LM pivots the compact

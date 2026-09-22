@@ -1,0 +1,13 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-sparse-eigen
+    Start 2: rhbm_tests_joint_component
+1/1 Test #2: rhbm_tests_joint_component .......   Passed    0.83 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+domain:core         =   0.83 sec*proc (1 test)
+intent:algorithm    =   0.83 sec*proc (1 test)
+intent:contract     =   0.83 sec*proc (1 test)
+joint:runtime       =   0.83 sec*proc (1 test)
+
+Total Test time (real) =   0.84 sec

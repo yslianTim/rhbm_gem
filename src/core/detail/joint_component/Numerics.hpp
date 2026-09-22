@@ -48,16 +48,19 @@ EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "",const AuditPlan & = {});
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
 BasisValues EvaluateKernel(double,double,double);
+class LinearWorkspace;
+class FreeDesignFactor;
 struct LinearResult
 {
     Vector beta;
+    std::shared_ptr<FreeDesignFactor> factor;
     bool valid{};
     std::string reason;
     int rank{},solves{},releases{},block_factorizations{};
 };
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
 LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
-    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr);
+    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr);
 LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
 std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
 struct Certificate
@@ -76,7 +79,7 @@ struct Endpoint
     bool valid{};
     std::string reason;
 };
-struct Evaluation : Endpoint {Vector residual; Sparse x,derivative;};
+struct Evaluation : Endpoint {Vector residual; Sparse x,derivative; std::shared_ptr<FreeDesignFactor> factor;};
 struct Spectrum
 {
     bool available{true};
@@ -88,7 +91,7 @@ struct Spectrum
 Spectrum DesignSpectrum(const Sparse &,const Vector &);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
-Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr);
+Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 struct TrustEvidence
 {

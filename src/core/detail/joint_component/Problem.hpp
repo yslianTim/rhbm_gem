@@ -2,6 +2,7 @@
 #include "Numerics.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 namespace rhbm_gem::core::joint_component {
+JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
 struct ProblemData
 {
     std::shared_ptr<const JointProblemInput> input;

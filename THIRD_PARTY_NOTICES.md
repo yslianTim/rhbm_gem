@@ -52,3 +52,16 @@ this project or of any third-party component.
 - If shipping binaries, include attribution/notice documents and the applicable upstream third-party license texts in the package and/or accompanying documentation.
 - If enabling optional system integrations such as ROOT, OpenMP, or Python, verify the selected local packages' license terms separately because they are not bundled by this repository.
 - If distributing large data artifacts (for example `.sqlite` datasets), verify data-source-specific license terms separately from software license compliance.
+
+## Optional joint SPQR backend
+
+`RHBM_GEM_JOINT_SPARSE_BACKEND=SPQR` links the separately installed SuiteSparseQR
+(SPQR 4.x) and its transitive dependencies (including CHOLMOD and BLAS).
+SPQR: Copyright 2008–2023 Timothy A. Davis. Licensed under GPL-2.0-or-later;
+alternative licenses are available from the author. Used by permission.
+Source and license: https://github.com/DrTimothyAldenDavis/SuiteSparse/tree/dev/SPQR
+Availability: https://www.suitesparse.com
+CHOLMOD modules carry LGPL-2.1-or-later or GPL-2.0-or-later licenses, depending
+on the module; see https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/CHOLMOD/Doc/License.txt.
+Redistributions using this optional backend must retain the installed libraries'
+license and copyright notices. The default EIGEN build does not link SPQR.

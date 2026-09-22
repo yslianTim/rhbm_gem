@@ -9,6 +9,15 @@ import joint_validation as v
 from joint_validation_report import parameter_stats, statistical_summary, wilson
 
 class ValidationTest(unittest.TestCase):
+    def test_sparse_parity_requires_matching_rank_and_available_coefficients(self):
+        from joint_sparse_validation import parity
+        row=dict(valid=True,free_rank=2,kkt_passed=True,active_atoms=[],beta=[1.,2.],objective=.1,relative_residual=.1,b_gradient=[0.])
+        a=dict(primary=row,reference=row)
+        self.assertTrue(parity(a,a)['primary']['passed'])
+        self.assertFalse(parity(a,dict(primary={**row,'free_rank':1}))['primary']['passed'])
+        self.assertFalse(parity(a,dict(primary={**row,'beta':[None,None]}))['primary']['passed'])
+        self.assertFalse(parity(a,{})['primary']['available'])
+
     def test_empty_statistics_and_zero_failure_uncertainty(self):
         self.assertIsNone(parameter_stats([])['bias'])
         self.assertGreater(wilson(0,20)[1],.1)

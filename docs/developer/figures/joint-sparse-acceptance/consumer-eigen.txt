@@ -1,0 +1,26 @@
+-- The CXX compiler identification is AppleClang 21.0.0.21000101
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found SQLite3: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libsqlite3.tbd (found version "3.51.0")
+CMake Warning (policy) at /opt/homebrew/share/cmake/Modules/CMakeFindDependencyMacro.cmake:93 (find_package):
+  Policy CMP0167 is not set: The FindBoost module is removed.  Run "cmake
+  --help-policy CMP0167" for policy details.  Use the cmake_policy command to
+  set the policy and suppress this warning.
+Call Stack (most recent call first):
+  /opt/homebrew/share/cmake/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /Users/yslian/Project/em_map_analysis/build/joint-sparse-prefix-eigen/lib/cmake/RHBM_GEM/RHBM_GEMConfig.cmake:73 (find_dependency)
+  CMakeLists.txt:4 (find_package)
+This warning is for project developers.  Use -Wno-author or -Wno-policy to
+suppress it.
+
+-- Found Boost: /opt/homebrew/lib/cmake/Boost-1.92.0/BoostConfig.cmake (found suitable version "1.92.0", minimum required is "1.90")
+-- Found OpenMP_CXX: -Xclang -fopenmp (found version "5.1")
+-- Found OpenMP: TRUE (found version "5.1") found components: CXX
+-- Configuring done (3.7s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/yslian/Project/em_map_analysis/build/joint-sparse-consumer-eigen
+[1/2] Building CXX object CMakeFiles/rhbm_gem_consumer_smoke.dir/main.cpp.o
+[2/2] Linking CXX executable rhbm_gem_consumer_smoke

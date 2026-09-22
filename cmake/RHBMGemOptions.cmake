@@ -13,6 +13,9 @@ function(rhbm_gem_normalize_cache_enum cache_var description)
 endfunction()
 
 # Core build options
+set(RHBM_GEM_JOINT_SPARSE_BACKEND "EIGEN" CACHE STRING "Joint sparse backend: EIGEN or SPQR")
+rhbm_gem_normalize_cache_enum(RHBM_GEM_JOINT_SPARSE_BACKEND
+    "Joint sparse backend: EIGEN or SPQR" EIGEN SPQR)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)

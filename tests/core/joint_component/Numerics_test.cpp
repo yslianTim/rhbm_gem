@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <cmath>
@@ -210,4 +211,128 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
             EXPECT_LT((reduced.jacobian_norms-dense.jacobian.colwise().blueNorm().transpose()).norm()/dense.jacobian.norm(),1e-10);
         }
     }
+}
+
+
+TEST(JointComponentNumericsTest, SparseWorkspaceChecksPatternScopePolicyAndGeneration)
+{
+    namespace n=p::runtime;
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
+    Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
+    n::Sparse x=dense.sparseView(); n::LinearWorkspace workspace;
+    n::LinearPolicy policy{1e-14}; int domain{},other{};
+    workspace.Bind(&domain,&domain,&policy); n::SparseWorkForTesting()={};
+    auto first=workspace.Factor(x,{0,1},1e-14);
+    ASSERT_EQ(first->Rank(),2);
+    const Matrix rhs=Matrix::Ones(6,1);
+    EXPECT_LT((first->LeastSquares(rhs)-dense.colPivHouseholderQr().solve(rhs)).norm(),1e-12);
+    Matrix compact=first->Compact();
+    EXPECT_LT((compact.transpose()*compact-dense.transpose()*dense).norm(),1e-12);
+    x.valuePtr()[0]+=.1;
+    auto second=workspace.Factor(x,{0,1},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,1);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric,2);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic_reuses,1);
+    EXPECT_FALSE(first->Matches(x,{0,1}));
+    EXPECT_THROW(first->LeastSquares(rhs),std::logic_error);
+    EXPECT_TRUE(second->Matches(x,{0,1}));
+    x.coeffRef(0,1)=.2; x.makeCompressed();
+    workspace.Factor(x,{0,1},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,2);
+    workspace.Factor(x,{2,3},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,3);
+    policy.release_factor=64; workspace.Bind(&domain,&domain,&policy);
+    workspace.Factor(x,{2,3},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,4);
+    workspace.Bind(&other,&domain,&policy); workspace.Factor(x,{2,3},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,5);
+    x.valuePtr()[0]=0;
+    workspace.Factor(x,{2,3},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,5); // Stored zero does not change CSC pattern.
+    x.prune(0.); workspace.Factor(x,{2,3},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,6);
+    workspace.Factor(x,{2,3},0.);
+    EXPECT_EQ(n::SparseWorkForTesting().symbolic,7);
+}
+
+TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatchDenseOracle)
+{
+    namespace n=p::runtime;
+    Matrix x(9,4); x<<1,2,0,0,2,0,1,0,0,3,0,1,1,0,4,0,0,1,2,3,2,0,0,1,1,1,1,1,3,2,1,0,0,0,0,0;
+    const Vector truth=Eigen::Vector4d(2,-.3,1.5,.4);
+    Vector y=x*truth; y(4)+=.03; y(8)=2;
+    Vector w(9); w<<1,.5,0,2,1,3,.2,1,1;
+    const n::Sparse sparse=x.sparseView();
+    const auto primary=n::SolveLinear(sparse,y,w),reference=n::SolveLinear(sparse,y,w,true),dense=n::SolveLinear(x,y,w,true);
+    ASSERT_TRUE(primary.valid && reference.valid && dense.valid);
+    EXPECT_EQ(primary.rank,dense.rank); EXPECT_EQ(reference.rank,dense.rank);
+    EXPECT_LT((primary.beta-dense.beta).norm(),1e-10);
+    EXPECT_LT((reference.beta-dense.beta).norm(),1e-10);
+    if(n::SparseBackendEnabled())
+    {
+        const auto before=n::SparseWorkForTesting().reference;
+        const auto numeric=n::SparseWorkForTesting().numeric;
+        ASSERT_TRUE(primary.factor);
+        n::SolveLinear(sparse,y,w,true);
+        EXPECT_EQ(n::SparseWorkForTesting().reference,before+1);
+        EXPECT_EQ(n::SparseWorkForTesting().numeric,numeric);
+        EXPECT_EQ(primary.factor->Rank(),primary.rank);
+    }
+}
+
+TEST(JointComponentNumericsTest, SparseDerivativeReusesOnlyTheCanonicalCurrentFace)
+{
+    namespace n=p::runtime;
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
+    Sample sample; const p::Domain domain(sample.grid,sample.atoms);
+    const auto context=p::MakeContext(sample.y,2); const Vector eta=Eigen::Vector2d(.55,.51).array().log();
+    n::LinearWorkspace workspace;
+    auto e=n::EvaluateProfile(domain,sample.y,eta,false,&context,nullptr,&workspace);
+    ASSERT_TRUE(e.valid); ASSERT_TRUE(e.factor);
+    n::SparseWorkForTesting()={};
+    ASSERT_TRUE(n::PrepareDerivative(e,context.scale,&context).valid);
+    EXPECT_EQ(n::SparseWorkForTesting().factor_reuses,1);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric,0);
+    e.beta(0)=0; // A free-set flag is not the canonical derivative face.
+    ASSERT_TRUE(n::PrepareDerivative(e,context.scale,&context).valid);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric,1);
+    const auto raw=n::EvaluateState(domain,sample.y,eta,e.beta,context);
+    const auto copy=raw.beta;
+    ASSERT_TRUE(n::PrepareDerivative(raw,context.scale,&context).valid);
+    EXPECT_EQ(raw.beta,copy);
+}
+
+TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)
+{
+    namespace n=p::runtime;
+    for(double delta:{1e-8,1e-12,1e-15,0.})
+    {
+        Matrix x=Matrix::Zero(9,4);
+        x(0,0)=1; x(1,1)=1; x(2,2)=1; x(0,3)=1; x(3,3)=delta;
+        const Vector y=x*Eigen::Vector4d(2,.2,1,.3),w=Vector::Ones(9);
+        const n::Sparse sparse=x.sparseView();
+        const auto reference=n::SolveLinear(sparse,y,w,true),dense=n::SolveLinear(x,y,w,true);
+        EXPECT_EQ(reference.rank,dense.rank)<<delta;
+        EXPECT_EQ(reference.valid,dense.valid)<<delta;
+        if(reference.valid) EXPECT_LT((x*reference.beta-x*dense.beta).norm(),1e-10);
+    }
+}
+
+TEST(JointComponentNumericsTest, SparseCancellationRetainsTiledDerivativePrecision)
+{
+    namespace n=p::runtime;
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
+    Sample sample; const p::Domain domain(sample.grid,sample.atoms);
+    const auto context=p::MakeContext(sample.y,2);
+    auto e=n::EvaluateProfile(domain,sample.y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
+    ASSERT_TRUE(e.valid);
+    e.derivative=e.x; // Each raw width column now lies in the free design span.
+    n::SparseWorkForTesting()={};
+    const auto prepared=n::PrepareDerivative(e,context.scale,&context);
+    ASSERT_TRUE(prepared.valid);
+    EXPECT_EQ(n::SparseWorkForTesting().cancellation_reductions,1);
+    const auto dense=p::DenseDifferentiate(e,context.scale,&context);
+    Matrix projected,jacobian; prepared.Rows(0,e.x.rows(),projected,jacobian);
+    EXPECT_LT((projected-dense.projected).norm(),1e-12);
+    EXPECT_LT((jacobian-dense.jacobian).norm(),1e-12);
 }

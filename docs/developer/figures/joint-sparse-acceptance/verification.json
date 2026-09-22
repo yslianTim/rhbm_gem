@@ -1,0 +1,421 @@
+{
+  "baseline_commit": "ceb6155992b9c891ab3fa878e875c6b10aa0590f",
+  "logs": {
+    "eigen-tests.txt": {
+      "sha256": "5a695655c802701312e32b6eb25f30c4fcafdfb0759afbb1b7a81158a9981160",
+      "summary": [
+        "100% tests passed out of 27"
+      ]
+    },
+    "spqr-final-tests.txt": {
+      "sha256": "6049805cd92671a9045ca13683fbccddbaa11298935efb9b3cb580f6dc48d1f9",
+      "summary": [
+        "100% tests passed out of 27"
+      ]
+    },
+    "final-sparse-unit.txt": {
+      "sha256": "d5ea929f3b4b6463f0e6fc5aca2c6c38ee06d3cc57a7c5f1df65327d6de667fb",
+      "summary": [
+        "100% tests passed out of 1"
+      ]
+    },
+    "final-eigen-unit.txt": {
+      "sha256": "12679abdd59819e6ab5f6775508bb1ed80f0cf4c7e4ffbd21e468f456ad34d2f",
+      "summary": [
+        "100% tests passed out of 2"
+      ]
+    },
+    "final-sync-tests.txt": {
+      "sha256": "c96392aeb1c8e10cacc0c8d038b1a167c82a8d82b72b6f61f3561166a06a93c8",
+      "summary": [
+        "100% tests passed out of 1"
+      ]
+    },
+    "final-runner-tests.txt": {
+      "sha256": "49c3c2f702c814a28fb1a8f66619313057c2ba32f4a8edf63bc250f7ce24a49c",
+      "summary": [
+        "Ran 9 tests in 0.508s",
+        "OK"
+      ]
+    },
+    "missing-spqr.txt": {
+      "sha256": "e7f2f185178f6174811d856ead0e38bd3839b49bc7d3650ecc277e708b26c8c7",
+      "summary": []
+    },
+    "consumer-eigen.txt": {
+      "sha256": "db2dd406f9c966a629cc00b08e3b98a6435742147587dd9808627b9c05a256c5",
+      "summary": []
+    },
+    "consumer-spqr.txt": {
+      "sha256": "d87c27b84615b60ac51bbf7debef1b4038bedcf534803e08b3bb19b89adddca4",
+      "summary": []
+    },
+    "consumer-static.txt": {
+      "sha256": "125a14f7fe2dd314817b0c268707820b6c66890d2327cb768f66e651abfb8676",
+      "summary": []
+    },
+    "final-sync-shared.txt": {
+      "sha256": "23626764ea6e4ad7cb65a0922ab1464f8bb7e268308c7e3bacc3d9bf6f67dcdd",
+      "summary": []
+    },
+    "final-sync-static.txt": {
+      "sha256": "2f7328f94a49858a9d7baa42b33c5b4d73dcb33369c860da81c9e39d7beeba81",
+      "summary": []
+    },
+    "final-sync-install-eigen.txt": {
+      "sha256": "047b426b71067edc6c1062389f8883a582f1449b35856bfe08d0f5c5a4cf7789",
+      "summary": []
+    },
+    "final-core-test-eigen.txt": {
+      "sha256": "3733d961988ff63feb519805e5fe3ab297098aeefb11f788e39d097c1b9b9f07",
+      "summary": [
+        "100% tests passed out of 1"
+      ]
+    },
+    "final-core-test-spqr.txt": {
+      "sha256": "bce571e96ea7efbe8b75768f3f70b9bb1cb78d84febd3ea219b27606fbe5a561",
+      "summary": [
+        "100% tests passed out of 1"
+      ]
+    },
+    "repository-guards.txt": {
+      "sha256": "186fc32a2f1075c715486eac30161d11b3ba519ea55f2a3a5069aec123f89df3",
+      "summary": []
+    },
+    "gitless-configure.txt": {
+      "sha256": "318fc05f33d0d031c449ee7f3b9f5634a6302520c2dca23c672e1efedc7e8c7a",
+      "summary": []
+    },
+    "gitless-build.txt": {
+      "sha256": "3aa249a2a6224865419ab055870d98dea9cb9f02a97a95d5935e84db1298f506",
+      "summary": []
+    },
+    "gitless-consumer.txt": {
+      "sha256": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+      "summary": []
+    },
+    "final-install-eigen.txt": {
+      "sha256": "7136055ed3ac9d70219750f617b3d6c6f2ba12a6b2fdd88fda7c8bddb736aa2f",
+      "summary": []
+    },
+    "final-install-spqr-shared.txt": {
+      "sha256": "7cdf7a2de47107105e6e56c5d46932230ebdcb0380b6c0f5c781d1f0f4ee1dbb",
+      "summary": []
+    },
+    "final-install-spqr-static.txt": {
+      "sha256": "195183a788de706d7706127712949094a14115fa0d9fc7ee4bf62a116bd874f6",
+      "summary": []
+    }
+  },
+  "builds": {
+    "baseline": {
+      "version": "2.0.0",
+      "source_sha256": "89f96f22cdc08ebea6b69831315bb0e7b5aff5b4d1f79c373dc95644045e2bfe",
+      "config_sha256": "69916e2876b0bfb3b5d2c4bbc183e81d0ecb7496440161d8bedf1a23c9c10304",
+      "build_sha256": "53387b4824007b19181bffc433df3db76943ec1681bab12ae85aa8c8f2b45ea9",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=ON",
+        "BUILD_TESTING:BOOL=ON",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/usr/local",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-baseline",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=ON",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=ON",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-evidence/baseline-source",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "eigen": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "da6c2fa4104d079dd75078945a94a7e6a65bf4bc1db93d8fbbed0d2527ff38f7",
+      "build_sha256": "774c980cf401ebe6e0a8fb1546e8d14c3f95d196c0c8146666edde773ba0e754",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=ON",
+        "BUILD_TESTING:BOOL=ON",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/usr/local",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-eigen",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=ON",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=ON",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND:STRING=EIGEN",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND-STRINGS:INTERNAL=EIGEN;SPQR",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "spqr": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "ff932ae95f43e708bdd3dd65c92e2f143af935f2e88ee13ae4948550f6cb693b",
+      "build_sha256": "63fb1ce310db1a3b4cbf5546543f82c7168033b47513fefe9842ec9a7c47764f",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=ON",
+        "BUILD_TESTING:BOOL=ON",
+        "CHOLMOD_DIR:PATH=/opt/homebrew/lib/cmake/CHOLMOD",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/usr/local",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-spqr",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=ON",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=ON",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND:STRING=SPQR",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis",
+        "SPQR_DIR:PATH=/opt/homebrew/lib/cmake/SPQR",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND-STRINGS:INTERNAL=EIGEN;SPQR",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "install-eigen": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "6dbe3d0b157118e42650cdaac08c938a197804bb04a63e2f235265783136e0e2",
+      "build_sha256": "f117a26f28064c9b61edff67818234966220277aa635ed28bf41c91e7f537f90",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=ON",
+        "BUILD_TESTING:BOOL=OFF",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/Users/yslian/Project/em_map_analysis/build/joint-sparse-prefix-eigen",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-install-eigen",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND:STRING=EIGEN",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND-STRINGS:INTERNAL=EIGEN;SPQR",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "install-spqr": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "182a58ea4aa5c3eeac65dbe5efd690477e75ea27236d86eef42ed26b4fa53f4a",
+      "build_sha256": "80b263eb3d42e5a050251569db721a13cb45bf15f0488f0b96aa1fb09343de02",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=ON",
+        "BUILD_TESTING:BOOL=OFF",
+        "CHOLMOD_DIR:PATH=/opt/homebrew/lib/cmake/CHOLMOD",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/Users/yslian/Project/em_map_analysis/build/joint-sparse-prefix-spqr",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-install-spqr",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND:STRING=SPQR",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-package-source",
+        "SPQR_DIR:PATH=/opt/homebrew/lib/cmake/SPQR",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND-STRINGS:INTERNAL=EIGEN;SPQR",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "static-spqr": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "7cecb1c1ac9cc13213411490d2d4e531cfd4e223706e3e84bd80d4322ae8de08",
+      "build_sha256": "222a6031f444bbe355855d9c3af7437902eb61eef4753802c021255c801af764",
+      "options": [
+        "BUILD_PYTHON_BINDINGS:BOOL=OFF",
+        "BUILD_SHARED_LIBS:BOOL=OFF",
+        "BUILD_TESTING:BOOL=OFF",
+        "CHOLMOD_DIR:PATH=/opt/homebrew/lib/cmake/CHOLMOD",
+        "CMAKE_BUILD_TYPE:STRING=Release",
+        "CMAKE_INSTALL_PREFIX:PATH=/Users/yslian/Project/em_map_analysis/build/joint-sparse-prefix-static",
+        "RHBM_GEM_BINARY_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-static-spqr",
+        "RHBM_GEM_DEP_PROVIDER:STRING=SYSTEM",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE:BOOL=OFF",
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS:BOOL=OFF",
+        "RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT:BOOL=OFF",
+        "RHBM_GEM_ENABLE_UMAP:BOOL=OFF",
+        "RHBM_GEM_FOLD_168_MAP:FILEPATH=",
+        "RHBM_GEM_FOLD_168_MODEL:FILEPATH=",
+        "RHBM_GEM_IS_TOP_LEVEL:STATIC=ON",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND:STRING=SPQR",
+        "RHBM_GEM_OPENMP_MODE:STRING=ON",
+        "RHBM_GEM_PYTHON_INSTALL_DIR:PATH=",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT:STRING=SITE_PREFIX",
+        "RHBM_GEM_ROOT_MODE:STRING=OFF",
+        "RHBM_GEM_SOURCE_DIR:STATIC=/Users/yslian/Project/em_map_analysis/build/joint-sparse-package-source",
+        "SPQR_DIR:PATH=/opt/homebrew/lib/cmake/SPQR",
+        "RHBM_GEM_DEP_PROVIDER-STRINGS:INTERNAL=SYSTEM;FETCH",
+        "RHBM_GEM_JOINT_SPARSE_BACKEND-STRINGS:INTERNAL=EIGEN;SPQR",
+        "RHBM_GEM_OPENMP_MODE-STRINGS:INTERNAL=AUTO;ON;OFF",
+        "RHBM_GEM_PYTHON_INSTALL_LAYOUT-STRINGS:INTERNAL=SITE_PREFIX;LIBDIR",
+        "RHBM_GEM_ROOT_MODE-STRINGS:INTERNAL=AUTO;ON;OFF"
+      ]
+    },
+    "gitless": {
+      "version": "2.0.0",
+      "source_sha256": "9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0",
+      "config_sha256": "2d854fcb225d3550b271ab895e65c2b6cd73994c777c6e08963cd55b24b4951a",
+      "build_sha256": "14d30ab116d44baeffa9d2af4ef62684fa1132237dff71c91430de843bc66226",
+      "configure_command": "cmake -S <Git-free source> -B build/joint-sparse-gitless -G Ninja -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM -DBUILD_TESTING=OFF -DBUILD_PYTHON_BINDINGS=OFF -DRHBM_GEM_ENABLE_UMAP=OFF -DRHBM_GEM_ROOT_MODE=OFF -DRHBM_GEM_OPENMP_MODE=ON -DRHBM_GEM_JOINT_SPARSE_BACKEND=SPQR",
+      "verification_command": "cmake --build build/joint-sparse-gitless --target lint_install_smoke"
+    }
+  },
+  "hardware": {
+    "cpu": "Apple M1",
+    "memory_bytes": 17179869184,
+    "logical_cpus": 8
+  },
+  "gitless_source": {
+    "source": "/private/tmp/rhbm-joint-sparse-source-au5u2g6n",
+    "git_discovery_exit_code": 128,
+    "git_discovery_stderr": "fatal: not a git repository (or any of the parent directories): .git\n"
+  },
+  "gitless_install_consumer_exit_code": 0,
+  "installations": {
+    "eigen": {
+      "install_exit_code": 0,
+      "consumer_exit_code": 0
+    },
+    "spqr-shared": {
+      "install_exit_code": 0,
+      "consumer_exit_code": 0
+    },
+    "spqr-static": {
+      "install_exit_code": 0,
+      "consumer_exit_code": 0
+    }
+  },
+  "measured_production_binaries_unchanged": true,
+  "changed_code_and_notice_sha256": {
+    "src/core/detail/joint_component/SparseFactor.cpp": "66b46ff34fe3e9204930da31205cdce5e1a73514218b6280796071a1194bb33b",
+    "src/core/detail/joint_component/SparseFactor.hpp": "d156747e9f5d915f92e6b54ae5d2b9ce5611fc5e9af4b9861dc0f9bdfa0b2f87",
+    "tests/experiments/joint_sparse_benchmark.cpp": "38e53f9542a58c7c3fc84eff1ef8e5dab34f256619cebbbb88da30352b387a8f",
+    "tests/integration/joint_sparse_validation.py": "0547a631def71c0adae6a9b597ed4c20845bd872ff527be7a48da4035c777503",
+    "THIRD_PARTY_NOTICES.md": "912575f4aebf78bf08ed53a4bf7c8ab29b60f2972c3d1fb409761e8bfb8106a1",
+    "cmake/RHBMGemOptions.cmake": "b5aff402900c2834a32f37babb2c63fb2d86663f9ca0924f5893109d99311cbe",
+    "cmake/RHBM_GEMConfig.cmake.in": "8e6764fd25ed2802377b04856ac7b4772ec62b90163ad56840fd59da7f8993c7",
+    "cmake/SimulationBuildInfo.cmake": "ee900cb56a78e96953481a7e3f50637decf37ae6e542277e4ce56603ee9898e7",
+    "src/CMakeLists.txt": "b56b12f280d81a8a70c3151c6d732ed69279283030b42e54938a6cc113ce6ef6",
+    "src/core/JointComponentEstimator.cpp": "42c9ecdc2d2f09e3570ef520f9920c7241cedc1123bff442d2fc8a227a11bc72",
+    "src/core/detail/joint_component/LinearSolve.cpp": "d4c4e8fdf3be6f55453e218e650902346ecb4984379fc733d5a8581028533420",
+    "src/core/detail/joint_component/Numerics.cpp": "d1e2ed7468d3006039c8e3dcce709b4c4bf24841652d4ab1a3ae3ecddc66efc4",
+    "src/core/detail/joint_component/Numerics.hpp": "ddfee97c8bf005db7342178e37ad8e2a22491c5f6398fe3d95ec18ad8bd72dbe",
+    "src/core/detail/joint_component/Problem.hpp": "9c57a31c1a63388ff1585b267963733ffc8a420648d0e8e40e0095f7d3108ba0",
+    "src/core/detail/joint_component/Search.cpp": "c57a13f5b6bb97f5bd07cc533b84af9ea67d23496cd1692246a7ba34681b1df0",
+    "src/core/detail/joint_component/TiledDerivative.cpp": "7a320390eaafc3e94b971de847ff937dac41647a43815306ab8a814e7ea9c18b",
+    "tests/CMakeLists.txt": "84d2c3c012c949c874468a76011bf39172a5b9967182d37b68f2d1f57a68071f",
+    "tests/core/joint_component/Numerics_test.cpp": "63c0b8df325327062d60913edf2a95ca61f809924ad196d865e9573534ccfe07",
+    "tests/integration/joint_validation_test.py": "3c679c414c735123e3906595b61d7a8543af1c0d877d867f6d702c28b9a33cfc"
+  },
+  "artifact_sha256": {
+    "final-core-test-spqr.txt": "bce571e96ea7efbe8b75768f3f70b9bb1cb78d84febd3ea219b27606fbe5a561",
+    "consumer-static.txt": "125a14f7fe2dd314817b0c268707820b6c66890d2327cb768f66e651abfb8676",
+    "gitless-consumer.txt": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+    "measurements.json.gz": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4",
+    "final-install-eigen.txt": "7136055ed3ac9d70219750f617b3d6c6f2ba12a6b2fdd88fda7c8bddb736aa2f",
+    "consumer-eigen.txt": "db2dd406f9c966a629cc00b08e3b98a6435742147587dd9808627b9c05a256c5",
+    "repository-guards.txt": "186fc32a2f1075c715486eac30161d11b3ba519ea55f2a3a5069aec123f89df3",
+    "final-runner-tests.txt": "49c3c2f702c814a28fb1a8f66619313057c2ba32f4a8edf63bc250f7ce24a49c",
+    "gitless-configure.txt": "318fc05f33d0d031c449ee7f3b9f5634a6302520c2dca23c672e1efedc7e8c7a",
+    "command-exports.tar.gz": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626",
+    "eigen-tests.txt": "5a695655c802701312e32b6eb25f30c4fcafdfb0759afbb1b7a81158a9981160",
+    "missing-spqr.txt": "e7f2f185178f6174811d856ead0e38bd3839b49bc7d3650ecc277e708b26c8c7",
+    "benchmark-source.cpp.txt": "38e53f9542a58c7c3fc84eff1ef8e5dab34f256619cebbbb88da30352b387a8f",
+    "numerical-comparison.json": "b1361c76d9192aa0dd6e6920b53b500eea0a250d18f9e9158ff1eb037082bc2d",
+    "final-install-spqr-shared.txt": "7cdf7a2de47107105e6e56c5d46932230ebdcb0380b6c0f5c781d1f0f4ee1dbb",
+    "final-install-spqr-static.txt": "195183a788de706d7706127712949094a14115fa0d9fc7ee4bf62a116bd874f6",
+    "final-core-test-eigen.txt": "3733d961988ff63feb519805e5fe3ab297098aeefb11f788e39d097c1b9b9f07",
+    "consumer-spqr.txt": "d87c27b84615b60ac51bbf7debef1b4038bedcf534803e08b3bb19b89adddca4",
+    "runner-source.py.txt": "a518bbd87e400ae59489f65309d011876ec764ec8a3491653dba8debaff74f6a",
+    "gitless-build.txt": "3aa249a2a6224865419ab055870d98dea9cb9f02a97a95d5935e84db1298f506",
+    "spqr-final-tests.txt": "6049805cd92671a9045ca13683fbccddbaa11298935efb9b3cb580f6dc48d1f9",
+    "late-profile/stdout.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "late-profile/stack-540.txt": "66a13e3678fb15c07994e2b7109689ca7d1de54766860a07c1324eb22d4e30f0",
+    "late-profile/stack-120.txt": "1ad3d28e7dbe0f10e9c89c8ec9b097f83b445ab31e319bf3fc5651ef3163ce18",
+    "late-profile/stack-300.txt": "61090e95f3b4bfad6de68586a651b875c4c29022721befd7ebe14a0810923a83",
+    "late-profile/stderr.txt": "d776a6bffb5737e387ee9c6c8899305e5ef0017eaef0b4926374da97c45266e7",
+    "late-profile/receipt.json": "e0fd2ff1dd1c4de15d0de5f4d644f7f888ee1efc02dc9b65e5a26780f7223141"
+  },
+  "numerical_controls": "All available cross-sample fixed-state and completed endpoint comparisons pass original tolerances; unavailable 6Z6U primary states match rank/reason. No completed 512/6Z6U endpoint is inferred.",
+  "decision": {
+    "sparse_factorization_improvement": true,
+    "single_512_complete_command_gate": "time-limit",
+    "spqr_default": false
+  },
+  "gitless_installed_checks": {
+    "schema_version": 3,
+    "public_headers_have_no_suitesparse_types": true,
+    "library_has_no_dense_test_oracle_symbols": true
+  }
+}

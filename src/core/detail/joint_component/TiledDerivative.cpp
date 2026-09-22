@@ -1,4 +1,6 @@
 #include "TiledDerivative.hpp"
+#include "SparseFactor.hpp"
+#include <chrono>
 #include <cmath>
 
 namespace rhbm_gem::core::joint_component {
@@ -27,6 +29,47 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
         t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
     }
     out.free_design.setFromTriplets(entries.begin(),entries.end()); out.raw.setFromTriplets(raw.begin(),raw.end());
+    if(SparseBackendEnabled())
+    {
+        const auto started=std::chrono::steady_clock::now();
+        LinearWorkspace workspace;
+        const Sparse design=out.free_design;
+        auto factor=e.factor;
+        try {
+            if(!factor || !factor->Matches(design,free)) factor=workspace.Factor(design,free,0);
+            else ++SparseWorkForTesting().factor_reuses;
+            const Matrix compact=factor->Compact();
+            Eigen::JacobiSVD<Matrix> svd(compact,Eigen::ComputeThinU|Eigen::ComputeThinV);
+            svd.setThreshold(std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(context ? context->rank.rows : n,p)));
+            if(absolute>=0 && svd.singularValues()(0)>0) svd.setThreshold(absolute/svd.singularValues()(0));
+            if(svd.rank()!=p) {out.reason="rank-deficient-free-design"; return out;}
+            out.coefficients.resize(p,m); out.correction.resize(p,m);
+            for(Eigen::Index first=0;first<m;first+=16)
+            {
+                const auto count=std::min<Eigen::Index>(16,m-first);
+                out.coefficients.middleCols(first,count)=factor->LeastSquares(Matrix(out.raw.middleCols(first,count)));
+                out.correction.middleCols(first,count)=factor->NormalSolve(t.middleCols(first,count));
+            }
+        } catch(const std::runtime_error &) {out.reason="sparse-derivative-failed"; return out;}
+        SparseWorkForTesting().derivative_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+        out.valid=out.coefficients.allFinite() && out.correction.allFinite();
+        if(!out.valid) {out.reason="nonfinite-derivative"; return out;}
+        // Near-complete cancellation amplifies QR ordering roundoff in the
+        // normalized width spectrum. Retain the existing tiled arithmetic in
+        // that regime; this changes computation, never acceptance thresholds.
+        bool cancellation=false;
+        constexpr double relative_roundoff=64*std::numeric_limits<double>::epsilon()/1e-10;
+        for(Eigen::Index k=0;k<m;++k)
+        {
+            const Vector raw_column=Vector(out.raw.col(k));
+            const double norm=raw_column.norm();
+            if(norm>0 && (raw_column-out.free_design*out.coefficients.col(k)).norm()<=relative_roundoff*norm)
+            {cancellation=true; break;}
+        }
+        if(!cancellation) {out.reason="full-profile-derivative"; return out;}
+        ++SparseWorkForTesting().cancellation_reductions;
+        out.valid=false;
+    }
     TiledQR qr(p,m);
     for(Eigen::Index first=0;first<n;first+=tile)
     {

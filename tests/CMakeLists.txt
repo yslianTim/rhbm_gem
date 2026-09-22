@@ -251,6 +251,10 @@ add_executable(joint_partial_selection experiments/joint_partial_selection.cpp)
 target_link_libraries(joint_partial_selection PRIVATE joint_test_support)
 add_dependencies(tests_all joint_partial_selection)
 
+add_executable(joint_sparse_benchmark experiments/joint_sparse_benchmark.cpp)
+target_link_libraries(joint_sparse_benchmark PRIVATE joint_test_support)
+add_dependencies(tests_all joint_sparse_benchmark)
+
 add_executable(joint_component_benchmark experiments/joint_component_benchmark.cpp)
 target_link_libraries(joint_component_benchmark PRIVATE rhbm_gem CompilerFlags)
 add_dependencies(tests_all joint_component_benchmark)

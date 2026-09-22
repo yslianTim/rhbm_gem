@@ -1,4 +1,6 @@
 #include "Numerics.hpp"
+#include "SparseFactor.hpp"
+#include <chrono>
 #include <Eigen/SparseQR>
 #include <algorithm>
 #include <cmath>
@@ -17,6 +19,12 @@ bool Finite(const Sparse & x)
 Eigen::VectorXd ColumnNorms(const Eigen::MatrixXd & x) { return x.colwise().norm(); }
 Eigen::VectorXd ColumnNorms(const Sparse & x)
 {
+    if(SparseBackendEnabled())
+    {
+        Eigen::VectorXd out(x.cols());
+        for(Eigen::Index k=0;k<x.cols();++k) out(k)=x.col(k).norm();
+        return out;
+    }
     Eigen::VectorXd out=Eigen::VectorXd::Zero(x.cols());
     for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e) out(k)+=e.value()*e.value();
     return out.cwiseSqrt();
@@ -25,6 +33,7 @@ Eigen::VectorXd ColumnNorms(const Sparse & x)
 std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
     const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,VectorRef y)
 {
+    if(SparseBackendEnabled()) return SparseReferenceQR(x,weights,scales,y);
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
     Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
     constexpr Eigen::Index tile=8192;
@@ -148,7 +157,8 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
                 maximum=std::max(maximum,std::sqrt(squared));
             }
             const Eigen::VectorXd rhs=w.cwiseSqrt().array()*response.array();
-            auto reduced=ReduceSparseRows(selected,rhs); f.reduced=std::move(reduced.first); f.rhs=std::move(reduced.second);
+            if(SparseBackendEnabled()) {f.reduced=std::move(selected); f.rhs=rhs;}
+            else {auto reduced=ReduceSparseRows(selected,rhs); f.reduced=std::move(reduced.first); f.rhs=std::move(reduced.second);}
         }
         factors.push_back(std::move(f));
     }
@@ -164,10 +174,21 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
         }
         else
         {
-            Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
-            qr.setPivotThreshold(absolute); qr.compute(f.reduced);
-            if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
-            out.rank+=static_cast<int>(qr.rank()); solution=qr.solve(f.rhs);
+            if(SparseBackendEnabled())
+            {
+                LinearWorkspace workspace;
+                try {
+                    const auto factor=workspace.Factor(f.reduced,f.positions,absolute);
+                    out.rank+=factor->Rank(); solution=factor->LeastSquares(f.rhs);
+                } catch(const std::runtime_error &) {out.valid=false; return out;}
+            }
+            else
+            {
+                Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
+                qr.setPivotThreshold(absolute); qr.compute(f.reduced);
+                if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
+                out.rank+=static_cast<int>(qr.rank()); solution=qr.solve(f.rhs);
+            }
         }
         ++out.factorizations;
         for(std::size_t k=0;k<f.positions.size();++k) out.solution(f.positions[k])=solution(static_cast<Eigen::Index>(k));
@@ -177,8 +198,10 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
 template<class Matrix>
 LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
     const Eigen::VectorXd & weights, bool use_svd, bool blocked_svd, const Eigen::SparseMatrix<double> * sparse_design,
-    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr)
+    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr,LinearWorkspace * workspace=nullptr)
 {
+    LinearWorkspace local_workspace;
+    if(!workspace) workspace=&local_workspace;
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
         !Finite(x) || !y.allFinite() || !weights.allFinite() || (weights.array()<0).any()) return out;
@@ -194,7 +217,8 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
         sparse_z=*sparse_design;
         for (int k=0;k<sparse_z.outerSize();++k)
             for (Eigen::SparseMatrix<double>::InnerIterator entry(sparse_z,k);entry;++entry)
-                entry.valueRef()*=std::sqrt(weights(entry.row()))/scales(k);
+                if(SparseBackendEnabled()) entry.valueRef()=(entry.value()*std::sqrt(weights(entry.row())))/scales(k);
+                else entry.valueRef()*=std::sqrt(weights(entry.row()))/scales(k);
     }
     else if constexpr (!std::is_same_v<Matrix,Sparse>) z=weights.cwiseSqrt().asDiagonal()*x*scales.cwiseInverse().asDiagonal();
     Eigen::VectorXd rhs{weights.cwiseSqrt().array()*y.array()};
@@ -246,13 +270,25 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             }
             selected.finalize();
             if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
-            Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
-            // SparseQR uses an absolute pivot threshold. The scale is the
-            // largest norm of the weighted, column-normalized design.
-            const auto reduced{ReduceSparseRows(selected,rhs)};
-            qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
-            if (qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
-            out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
+            if(SparseBackendEnabled())
+            {
+                try {
+                    out.factor=workspace->Factor(selected,columns,rank_threshold*maximum_norm);
+                    out.rank=out.factor->Rank();
+                    if(out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
+                    solution=out.factor->LeastSquares(rhs);
+                } catch(const std::runtime_error &) {out.reason="sparse-factorization-failed"; return out;}
+            }
+            else
+            {
+                Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
+                // SparseQR uses an absolute pivot threshold. The scale is the
+                // largest norm of the weighted, column-normalized design.
+                const auto reduced{ReduceSparseRows(selected,rhs)};
+                qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
+                if (qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
+                out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
+            }
         }
         else if (use_svd && blocked_svd)
         {
@@ -262,8 +298,10 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             const Eigen::HouseholderQR<Eigen::MatrixXd> reduction(a);
             const Eigen::MatrixXd r{reduction.matrixQR().topRows(a.cols()).triangularView<Eigen::Upper>()};
             const Eigen::VectorXd transformed{reduction.householderQ().adjoint()*rhs};
+            const auto svd_started=std::chrono::steady_clock::now();
             Eigen::JacobiSVD<Eigen::MatrixXd> svd(r,Eigen::ComputeFullU|Eigen::ComputeFullV);
             svd.setThreshold(rank_threshold); out.rank=static_cast<int>(svd.rank()); solution=svd.solve(transformed.head(a.cols()));
+            SparseWorkForTesting().reference_svd_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-svd_started).count();
         }
         else if (use_svd)
         {
@@ -317,8 +355,8 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
 
 
 } // namespace
-LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
-{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks);}
+LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace)
+{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks,workspace);}
 LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache)
 {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
 }

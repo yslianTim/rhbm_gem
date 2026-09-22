@@ -1,0 +1,183 @@
+[0/2] Re-checking globbed directories...
+[1/97] Generating ../generated/Release/SimulationBuildInfo.hpp
+[2/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/EstimatorTester.cpp.o
+[3/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/SparseFactor.cpp.o
+[4/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/TiledDerivative.cpp.o
+[5/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Numerics.cpp.o
+[6/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/LinearSolve.cpp.o
+[7/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Components.cpp.o
+[8/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/JointComponentEstimator.cpp.o
+[9/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/gaussian_fit/GaussianModelOperations.cpp.o
+[10/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Search.cpp.o
+[11/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/GaussianEstimator.cpp.o
+[12/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp.o
+[13/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/SecondStageState.cpp.o
+[14/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/observation/SecondStageObservation.cpp.o
+[15/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/CandidateEvaluation.cpp.o
+[16/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/ComponentAssembly.cpp.o
+[17/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/CouplingGraph.cpp.o
+[18/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/JointFitting.cpp.o
+[19/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/CandidateTransaction.cpp.o
+[20/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/SuspiciousUpdate.cpp.o
+[21/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/CandidateTransactionLocal.cpp.o
+[22/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/ObjectiveEvaluation.cpp.o
+[23/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/FixedPointRecovery.cpp.o
+[24/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/Quarantine.cpp.o
+[25/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/IterationProposal.cpp.o
+[26/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/CandidateTransactionBoundary.cpp.o
+[27/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/DependencyPolish.cpp.o
+[28/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/observation/SecondStageLogging.cpp.o
+[29/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/observation/PerformanceCounters.cpp.o
+[30/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/ConvergenceCertificate.cpp.o
+[31/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/QScoreHelper.cpp.o
+[32/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/MapSampler.cpp.o
+[33/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/TestDataFactory.cpp.o
+[34/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/second_stage/IterationProcess.cpp.o
+[35/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/painter/AtomPainter.cpp.o
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/AtomPainter.cpp:196:10: warning: unused variable 'apply_selection' [-Wunused-variable]
+  196 |     bool apply_selection{ false };
+      |          ^~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/AtomPainter.cpp:197:10: warning: unused variable 'use_peeling_sampling_entries' [-Wunused-variable]
+  197 |     bool use_peeling_sampling_entries{ true };
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+[36/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/painter/ComparisonPainter.cpp.o
+[37/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/painter/GausPainter.cpp.o
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:148:56: warning: unused parameter 'model_object' [-Wunused-parameter]
+  148 | void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::string & name)
+      |                                                        ^
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:419:18: warning: unused variable 'x_axis_title' [-Wunused-variable]
+  419 |     const char * x_axis_title[3]{
+      |                  ^~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:422:18: warning: unused variable 'y_axis_title' [-Wunused-variable]
+  422 |     const char * y_axis_title[3]{
+      |                  ^~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:414:54: warning: unused parameter 'model_object' [-Wunused-parameter]
+  414 | void GausPainter::PaintGausScatterPlot(ModelObject * model_object, const std::string & name)
+      |                                                      ^
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:530:18: warning: unused variable 'x_axis_title' [-Wunused-variable]
+  530 |     const char * x_axis_title[plot_size]{
+      |                  ^~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:533:18: warning: unused variable 'y_axis_title' [-Wunused-variable]
+  533 |     const char * y_axis_title[plot_size]{
+      |                  ^~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:536:15: warning: unused variable 'par_x' [-Wunused-variable]
+  536 |     const int par_x[plot_size]{ 0, 2, 2 };
+      |               ^~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:537:15: warning: unused variable 'par_y' [-Wunused-variable]
+  537 |     const int par_y[plot_size]{ 1, 0, 1 };
+      |               ^~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:524:59: warning: unused parameter 'model_object' [-Wunused-parameter]
+  524 | void GausPainter::PaintGroupGausScatterPlot(ModelObject * model_object, const std::string & name)
+      |                                                           ^
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:881:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+  881 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:1156:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+ 1156 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:1536:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+ 1536 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:1539:18: warning: unused variable 'standard_residue_list' [-Wunused-variable]
+ 1539 |     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:1540:10: warning: unused variable 'show_outlier' [-Wunused-variable]
+ 1540 |     bool show_outlier{ false };
+      |          ^~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:1768:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+ 1768 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:2224:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+ 2224 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/GausPainter.cpp:52:8: warning: unused function 'CountOutlierAtoms' [-Wunused-function]
+   52 | size_t CountOutlierAtoms(
+      |        ^~~~~~~~~~~~~~~~~
+17 warnings generated.
+[38/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/painter/DemoPainter.cpp.o
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/DemoPainter.cpp:457:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+  457 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/DemoPainter.cpp:1018:10: warning: unused variable 'entry_iter' [-Wunused-variable]
+ 1018 |     auto entry_iter{ model_object->GetAnalysisView() };
+      |          ^~~~~~~~~~
+2 warnings generated.
+[39/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/painter/detail/PotentialPlotBuilder.cpp.o
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/detail/PotentialPlotBuilder.cpp:43:17: warning: unused function 'BuildLocalDatasetSeries' [-Wunused-function]
+   43 | SeriesPointList BuildLocalDatasetSeries(
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/core/painter/detail/PotentialPlotBuilder.cpp:66:23: warning: unused function 'CollectComponentAtomGroupKeys' [-Wunused-function]
+   66 | std::vector<GroupKey> CollectComponentAtomGroupKeys(
+      |                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+[40/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/detail/LocalFittingFeatures.cpp.o
+[41/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/RHBMTestCommand.cpp.o
+[42/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/detail/RHBMTestPlotting.cpp.o
+[43/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/MapSimulationCommand.cpp.o
+[44/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/CommandSystem.cpp.o
+[45/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/detail/MapSimulation.cpp.o
+[46/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/PotentialAnalysisCommand.cpp.o
+[47/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/PotentialDisplayCommand.cpp.o
+[48/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/ResultDumpCommand.cpp.o
+[49/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/detail/AtomClassifier.cpp.o
+[50/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/detail/SimulationManifest.cpp.o
+[51/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/AtomObject.cpp.o
+[52/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/JointAnalysisFileIO.cpp.o
+[53/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/AtomLocalPotentialView.cpp.o
+[54/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/ModelMapFileIO.cpp.o
+[55/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/DataRepository.cpp.o
+[56/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/detail/JointResultJson.cpp.o
+[57/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/BondObject.cpp.o
+[58/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/ModelImportState.cpp.o
+[59/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/ChemicalComponentEntry.cpp.o
+[60/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/detail/ModelDerivedState.cpp.o
+[61/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/detail/ModelObjectParts.cpp.o
+[62/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/ModelAnalysisView.cpp.o
+[63/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/ModelAnalysisEditor.cpp.o
+[64/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/MapObject.cpp.o
+[65/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/CCP4Format.cpp.o
+[66/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/detail/ModelAnalysisData.cpp.o
+[67/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/MapHelper.cpp.o
+[68/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/MrcFormat.cpp.o
+[69/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/object/ModelObject.cpp.o
+[70/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/PdbFormat.cpp.o
+[71/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/AtomKeySystem.cpp.o
+[72/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/file/CifFormat.cpp.o
+[73/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/AtomSelector.cpp.o
+[74/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/BondKeySystem.cpp.o
+[75/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/data/io/sqlite/ModelObjectStorage.cpp.o
+[76/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/ComponentKeySystem.cpp.o
+[77/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/ComponentHelper.cpp.o
+[78/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/FilePathHelper.cpp.o
+[79/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/ChemicalDataHelper.cpp.o
+[80/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/FileFingerprint.cpp.o
+[81/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/Logger.cpp.o
+[82/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/LocalPainter.cpp.o
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/utils/domain/LocalPainter.cpp:67:27: warning: unused function 'ExpandDegenerateRange' [-Wunused-function]
+   67 | std::pair<double, double> ExpandDegenerateRange(double min_value, double max_value)
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/utils/domain/LocalPainter.cpp:98:21: warning: unused function 'CollectPanelYValues' [-Wunused-function]
+   98 | std::vector<double> CollectPanelYValues(const LinePlotPanel & panel)
+      |                     ^~~~~~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/utils/domain/LocalPainter.cpp:108:21: warning: unused function 'CollectAllXValues' [-Wunused-function]
+  108 | std::vector<double> CollectAllXValues(const LinePlotRequest & request)
+      |                     ^~~~~~~~~~~~~~~~~
+/private/tmp/rhbm-joint-sparse-source-au5u2g6n/src/utils/domain/LocalPainter.cpp:121:42: warning: unused function 'ResolveLineAxisRange' [-Wunused-function]
+  121 | std::optional<std::pair<double, double>> ResolveLineAxisRange(
+      |                                          ^~~~~~~~~~~~~~~~~~~~
+4 warnings generated.
+[83/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/SampleFilter.cpp.o
+[84/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/domain/ROOTHelper.cpp.o
+[85/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/math/ElectricPotential.cpp.o
+[86/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/math/SphereSampler.cpp.o
+[87/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/math/GaussianModel3D.cpp.o
+[88/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/hrl/LocalPotentialSeries.cpp.o
+[89/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/math/GridSampler.cpp.o
+[90/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/hrl/RHBMTrainer.cpp.o
+[91/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/hrl/LinearizationService.cpp.o
+[92/97] Building CXX object src/CMakeFiles/rhbm_gem_cli.dir/main.cpp.o
+[93/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/hrl/MDPDEEndpointRefinement.cpp.o
+[94/97] Building CXX object src/CMakeFiles/rhbm_gem.dir/utils/hrl/RHBMHelper.cpp.o
+[95/97] Linking CXX shared library src/librhbm_gem.dylib
+[96/97] Linking CXX executable bin/RHBM-GEM

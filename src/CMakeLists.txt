@@ -25,6 +25,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/Numerics.cpp
     core/detail/joint_component/TiledDerivative.cpp
     core/detail/joint_component/LinearSolve.cpp
+    core/detail/joint_component/SparseFactor.cpp
     core/detail/joint_component/Search.cpp
     core/detail/joint_component/Components.cpp
     core/JointComponentEstimator.cpp
@@ -140,6 +141,36 @@ target_include_directories(rhbm_gem PRIVATE
 )
 
 target_link_libraries(rhbm_gem PUBLIC rhbm_gem_dependencies)
+if(RHBM_GEM_JOINT_SPARSE_BACKEND STREQUAL "SPQR")
+    rhbm_gem_prepare_openmp_for_appleclang()
+    find_package(SPQR 4 CONFIG REQUIRED)
+    if(NOT SPQR_VERSION VERSION_LESS "5")
+        message(FATAL_ERROR "Joint SPQR backend requires SPQR 4.x")
+    endif()
+    target_link_libraries(rhbm_gem PRIVATE SuiteSparse::SPQR SuiteSparse::CHOLMOD)
+    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_JOINT_SPQR)
+    set(RHBM_GEM_SPQR_BLAS_LINK "unreported-by-package")
+    if(TARGET SuiteSparse::SPQR_static)
+        get_target_property(RHBM_GEM_SPQR_BLAS_LINK SuiteSparse::SPQR_static INTERFACE_LINK_LIBRARIES)
+        string(GENEX_STRIP "${RHBM_GEM_SPQR_BLAS_LINK}" RHBM_GEM_SPQR_BLAS_LINK)
+    endif()
+    set(RHBM_GEM_SPQR_BLAS_VERSION "${BLAS_VERSION}")
+    if(APPLE)
+        get_target_property(_spqr_library SuiteSparse::SPQR IMPORTED_LOCATION_RELEASE)
+        if(NOT _spqr_library)
+            get_target_property(_spqr_library SuiteSparse::SPQR IMPORTED_LOCATION)
+        endif()
+        execute_process(COMMAND /usr/bin/otool -L "${_spqr_library}"
+            OUTPUT_VARIABLE _spqr_links ERROR_QUIET)
+        string(REGEX MATCH "[^\n]*(Accelerate|libblas|libopenblas)[^\n]*" RHBM_GEM_SPQR_BLAS_VERSION "${_spqr_links}")
+        string(STRIP "${RHBM_GEM_SPQR_BLAS_VERSION}" RHBM_GEM_SPQR_BLAS_VERSION)
+        unset(_spqr_library)
+        unset(_spqr_links)
+    endif()
+    if(NOT RHBM_GEM_SPQR_BLAS_VERSION)
+        set(RHBM_GEM_SPQR_BLAS_VERSION "unreported-by-package")
+    endif()
+endif()
 target_link_libraries(rhbm_gem PRIVATE "$<BUILD_INTERFACE:CompilerFlags>")
 include(SimulationBuildInfo)
 if(RHBM_GEM_ENABLE_UMAP)

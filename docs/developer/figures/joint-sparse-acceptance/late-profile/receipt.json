@@ -1,0 +1,55 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/joint-sparse-spqr/bin/RHBM-GEM",
+    "potential_analysis",
+    "--estimator",
+    "joint-components",
+    "-a",
+    "/Users/yslian/Project/em_map_analysis/build/joint-sparse-measurements/inputs/single-512/input.cif",
+    "-m",
+    "/Users/yslian/Project/em_map_analysis/build/joint-sparse-measurements/inputs/single-512/input.map",
+    "-d",
+    "/Users/yslian/Project/em_map_analysis/build/joint-sparse-measurements/late-profile/diagnostic.sqlite",
+    "-k",
+    "validation",
+    "--exclude-hydrogen",
+    "true",
+    "--asymmetry",
+    "false",
+    "--only-backbone",
+    "false",
+    "--map-normalization",
+    "false",
+    "-j",
+    "1",
+    "-v",
+    "0"
+  ],
+  "status": "time-limit",
+  "sample_at_seconds": [
+    120,
+    300,
+    540
+  ],
+  "scope": "diagnostic only; excluded from timing repetitions",
+  "cli_sha256": "bc5462263b3d96410bb71174f4e895d252c98f406489ba15985cce5f2e6e37c8",
+  "binaries": {
+    "RHBM-GEM": "bc5462263b3d96410bb71174f4e895d252c98f406489ba15985cce5f2e6e37c8",
+    "joint_sparse_benchmark": "6a14ed1452edba09429b693fd5bb9cd99946ab18c5e34fabc5a9c1c357ad3aaf",
+    "librhbm_gem.dylib": "dc7814f83da4ee461db6d12c4b4ba6b416e17b2b492e2dc456ec7189ab0b8207"
+  },
+  "runner_sha256": "0547a631def71c0adae6a9b597ed4c20845bd872ff527be7a48da4035c777503",
+  "wall_seconds": 600.1199410830013,
+  "exit_code": -15,
+  "sampled_tree_peak_rss_bytes": 1758871552,
+  "sample_exit_codes": [
+    0,
+    0,
+    0
+  ],
+  "stack_sha256": {
+    "stack-540.txt": "66a13e3678fb15c07994e2b7109689ca7d1de54766860a07c1324eb22d4e30f0",
+    "stack-120.txt": "1ad3d28e7dbe0f10e9c89c8ec9b097f83b445ab31e319bf3fc5651ef3163ce18",
+    "stack-300.txt": "61090e95f3b4bfad6de68586a651b875c4c29022721befd7ebe14a0810923a83"
+  }
+}

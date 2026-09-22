@@ -1,0 +1,13 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-sparse-spqr
+    Start 2: rhbm_tests_joint_component
+1/1 Test #2: rhbm_tests_joint_component .......   Passed    1.28 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+domain:core         =   1.28 sec*proc (1 test)
+intent:algorithm    =   1.28 sec*proc (1 test)
+intent:contract     =   1.28 sec*proc (1 test)
+joint:runtime       =   1.28 sec*proc (1 test)
+
+Total Test time (real) =   1.29 sec

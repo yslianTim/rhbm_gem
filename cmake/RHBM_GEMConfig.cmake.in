@@ -1,6 +1,27 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
+if("@RHBM_GEM_JOINT_SPARSE_BACKEND@" STREQUAL "SPQR" AND NOT "@BUILD_SHARED_LIBS@")
+    # The upstream static dependency package may require OpenMP's C target.
+    if(NOT CMAKE_C_COMPILER_LOADED)
+        enable_language(C)
+    endif()
+    if(APPLE AND NOT DEFINED OpenMP_ROOT)
+        foreach(_root "$ENV{HOMEBREW_PREFIX}/opt/libomp" "/opt/homebrew/opt/libomp" "/usr/local/opt/libomp")
+            if(EXISTS "${_root}/include/omp.h")
+                set(OpenMP_ROOT "${_root}")
+                break()
+            endif()
+        endforeach()
+        unset(_root)
+    endif()
+    find_dependency(SPQR 4 CONFIG REQUIRED)
+    if(NOT SPQR_VERSION VERSION_LESS "5")
+        set(RHBM_GEM_FOUND FALSE)
+        set(RHBM_GEM_NOT_FOUND_MESSAGE "Joint SPQR backend requires SPQR 4.x")
+        return()
+    endif()
+endif()
 
 if("@RHBM_GEM_DEP_PROVIDER@" STREQUAL "SYSTEM")
     find_dependency(Eigen3 @RHBM_GEM_EIGEN3_VERSION_RANGE@ CONFIG REQUIRED)

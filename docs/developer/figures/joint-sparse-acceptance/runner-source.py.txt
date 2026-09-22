@@ -1,0 +1,155 @@
+"""Bounded sparse-backend comparisons; inputs and numerical gates remain unchanged."""
+from __future__ import annotations
+import argparse
+import os
+from pathlib import Path
+import platform
+import signal
+import statistics
+import subprocess
+import time
+from types import SimpleNamespace
+import joint_validation as v
+from joint_runtime_support import unpack
+
+
+def profile(args):
+    receipt=v.read(args.work_dir/'receipt.json')
+    if not receipt.get('finished'): raise SystemExit('Complete timing before diagnostic profiling.')
+    measured=receipt['commands']['single-512']['candidate'][0]
+    if measured['status']!='time-limit': raise SystemExit('Late profiling requires the measured time-limit case.')
+    root=args.work_dir/'late-profile'
+    if root.exists(): raise SystemExit('Retain the existing diagnostic attempt.')
+    cli=args.candidate/'bin/RHBM-GEM'
+    if v.sha(cli)!=receipt['binaries']['candidate']['RHBM-GEM']: raise SystemExit('Executable changed.')
+    command=list(measured['analysis']['command'])
+    command[command.index('-d')+1]=str(root/'diagnostic.sqlite')
+    for option,key in [('-a','model_sha256'),('-m','map_sha256')]:
+        if v.sha(command[command.index(option)+1])!=receipt['inputs']['single-512'][key]:
+            raise SystemExit('Diagnostic inputs changed.')
+    root.mkdir(parents=True)
+    record=dict(command=command,status='running',sample_at_seconds=[120,300,540],
+                scope='diagnostic only; excluded from timing repetitions',cli_sha256=v.sha(cli))
+    started=time.monotonic(); times=list(record['sample_at_seconds']); samplers=[]; peak=0
+    with (root/'stdout.txt').open('w') as stdout,(root/'stderr.txt').open('w') as stderr:
+        process=subprocess.Popen(command,stdout=stdout,stderr=stderr,env=v.ENV,start_new_session=True)
+        try:
+            while process.poll() is None:
+                elapsed=time.monotonic()-started;peak=max(peak,v.process_tree_rss(process.pid))
+                if elapsed>=600 or peak>4*1024**3:
+                    record['status']='time-limit' if elapsed>=600 else 'rss-limit';break
+                if times and elapsed>=times[0]:
+                    second=times.pop(0)
+                    samplers.append(subprocess.Popen(['/usr/bin/sample',str(process.pid),'1','-file',str(root/f'stack-{second}.txt')],stdout=stderr,stderr=stderr))
+                    print(f'late diagnostic sample: {second}s',flush=True)
+                time.sleep(.1)
+            if record['status']=='running':record['status']='completed' if process.returncode==0 else 'process-failure'
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid,signal.SIGTERM)
+                try:process.wait(timeout=2)
+                except subprocess.TimeoutExpired:os.killpg(process.pid,signal.SIGKILL);process.wait()
+            for sampler in samplers:
+                try:sampler.wait(timeout=5)
+                except subprocess.TimeoutExpired:sampler.kill();sampler.wait()
+            record.update(wall_seconds=time.monotonic()-started,exit_code=process.returncode,
+                          sampled_tree_peak_rss_bytes=peak,sample_exit_codes=[s.returncode for s in samplers],
+                          stack_sha256={p.name:v.sha(p) for p in root.glob('stack-*.txt')})
+            v.write(root/'receipt.json',record)
+
+
+def parity(a, b):
+    checks = {}
+    for role in ('primary', 'reference'):
+        if role not in a or role not in b:
+            checks[role] = dict(available=False)
+            continue
+        x, y = a[role], b[role]
+        same = all(x.get(k) == y.get(k) for k in ('valid', 'free_rank', 'kkt_passed', 'active_atoms'))
+        available = x['valid'] and y['valid'] and len(x['beta']) == len(y['beta']) and all(i is not None for i in x['beta']+y['beta'])
+        error = max((abs(i-j)/(1+max(abs(i),abs(j))) for i,j in zip(x['beta'],y['beta'])), default=0.) if available else None
+        objective = abs(x['objective']-y['objective']) if available else None
+        gradient = available and len(x['b_gradient'])==len(y['b_gradient']) and all(
+            i is not None and z is not None and abs(i-z)<=1e-13+2e-9*abs(i) for i,z in zip(x['b_gradient'],y['b_gradient']))
+        checks[role] = dict(available=available, same_status_rank_face=same, coefficient_error=error,
+                            objective_difference=objective, gradient_passed=gradient,
+                            passed=same and available and error<=1e-10 and objective<=1e-12 and gradient)
+    return checks
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--baseline', type=Path, required=True)
+    parser.add_argument('--candidate', type=Path, required=True)
+    parser.add_argument('--work-dir', type=Path, required=True)
+    parser.add_argument('--profile-only', action='store_true', help='macOS late sampling of a completed campaign timeout')
+    parser.add_argument('--model', type=Path, default=Path('/Users/yslian/data/6z6u.cif'))
+    parser.add_argument('--map', type=Path, default=Path('/Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map'))
+    args=parser.parse_args()
+    args.work_dir=args.work_dir.resolve();args.baseline=args.baseline.resolve();args.candidate=args.candidate.resolve()
+    if args.profile_only:
+        profile(args);return
+    receipt=args.work_dir/'receipt.json'
+    if receipt.exists(): raise SystemExit('Use a new work directory; previous attempts must be retained.')
+    args.work_dir.mkdir(parents=True,exist_ok=True)
+    v.process_tree_rss(os.getpid())
+    deadline=time.monotonic()+4800
+    report=dict(platform=platform.platform(),limits=dict(seconds_per_process_or_pipeline=600,rss_bytes=4*1024**3,campaign_seconds=4800),
+                binaries={},inputs={},fixed={},commands={})
+    for name,root in [('baseline',args.baseline),('candidate',args.candidate)]:
+        report['binaries'][name]={p.name:v.sha(p) for p in [root/'bin/RHBM-GEM',root/'bin/joint_sparse_benchmark',*list((root/'src').glob('librhbm_gem.*'))] if p.is_file()}
+    report['linked_libraries']={}
+    if platform.system()=='Darwin':
+        for name,root in [('baseline',args.baseline),('candidate',args.candidate)]:
+            report['linked_libraries'][name]=subprocess.check_output(['otool','-L',str(root/'src/librhbm_gem.dylib')],text=True)
+    report['build_configurations']={name:(root/'generated/Release/SimulationConfiguration-CXX.txt').read_text()
+                                    for name,root in [('baseline',args.baseline),('candidate',args.candidate)]}
+    def save():v.write(receipt,report)
+    inputs={}
+    for count in (128,512):
+        name=f'single-{count}';directory=args.work_dir/'inputs'/name
+        generation=v.monitored([args.candidate/'bin/joint_validation','single',count,directory],directory/'generation',deadline)
+        if generation['status']!='completed': raise RuntimeError('Input generation failed')
+        inputs[name]=(directory/'input.cif',directory/'input.map')
+    inputs['6z6u']=(args.model,args.map)
+    for name,(model,map_path) in inputs.items():
+        widths=args.work_dir/'inputs'/name/'widths.json'
+        prep=v.monitored([args.candidate/'bin/joint_sparse_benchmark','prepare',model,map_path,widths],widths.parent/'prepare',deadline)
+        if prep['status']!='completed': raise RuntimeError('Production initialization failed')
+        report['inputs'][name]=dict(model_sha256=v.sha(model),map_sha256=v.sha(map_path),widths_sha256=v.sha(widths))
+    dataset=unpack(v.ROOT/'tests/fixtures/joint_component/catalog.json','heterogeneous-168',args.work_dir/'inputs')
+    report['inputs']['heterogeneous-168']={p.name:v.sha(p) for p in dataset.iterdir() if p.is_file()}
+    save()
+    for name in ('single-128','heterogeneous-168','single-512','6z6u'):
+        case=report['fixed'][name]={}
+        for backend,root in [('baseline',args.baseline),('candidate',args.candidate)]:
+            runs=case[backend]=[]
+            for repetition in (1,2,3):
+                directory=args.work_dir/'fixed'/name/backend/str(repetition); output=directory/'state.json'
+                if name=='heterogeneous-168': command=[root/'bin/joint_sparse_benchmark','fixture',dataset,'first-stage-float32',output]
+                else: command=[root/'bin/joint_sparse_benchmark','initial',*inputs[name],args.work_dir/'inputs'/name/'widths.json',output]
+                process=v.monitored(command,directory,deadline)
+                row=dict(process=process)
+                if output.exists():row['result']=v.read(output)
+                runs.append(row);save()
+                print(f'{name} {backend} fixed {repetition}: {process["status"]}',flush=True)
+                if process['status']!='completed':break
+        if case['baseline'] and case['candidate']:
+            case['parity']=parity(case['baseline'][0].get('result',{}),case['candidate'][0].get('result',{}))
+        for backend in ('baseline','candidate'):
+            completed=[r['result'] for r in case[backend] if r['process']['status']=='completed']
+            if len(completed)==3:
+                case[backend+'_medians']={k:statistics.median(r[k] for r in completed) for k in ('primary_seconds','reference_seconds','derivative_seconds','repeat_primary_seconds','peak_rss_bytes')}
+        save()
+    for name in ('single-128','single-512'):
+        case=report['commands'][name]={}
+        for backend,root in [('baseline',args.baseline),('candidate',args.candidate)]:
+            runs=case[backend]=[]
+            command_args=SimpleNamespace(work_dir=args.work_dir,stage_dir='commands/'+backend,cli=root/'bin/RHBM-GEM')
+            for repetition in (1,2,3):
+                row=v.resource_run(command_args,name,*inputs[name],repetition,deadline);runs.append(row);save()
+                print(f'{name} {backend} command {repetition}: {row["status"]}',flush=True)
+                if row['status']!='completed':break
+    report['finished']=True;save()
+
+if __name__=='__main__':main()
