@@ -2,6 +2,10 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/StageSummary.hpp"
+#include "data/detail/JointStageAdapter.hpp"
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
@@ -46,80 +50,55 @@ constexpr std::array<Spot, 5> kLocalMDPDESummarySpotList{
 
 struct GaussianModelParameterSamples
 {
-    std::vector<double> amplitude_list{};
-    std::vector<double> width_list{};
-    std::vector<double> offset_list{};
+    std::vector<double> amplitude_list, width_list, offset_list;
+    std::size_t unavailable{}, not_converged{};
 };
+} // namespace
 
-std::string BuildLocalMDPDESpotSummary(const ModelObject & model_object)
+std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
 {
-    std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
+    std::map<Spot, GaussianModelParameterSamples> spots;
+    const bool joint = model_object.GetAnalysisView().GetJointResult().has_value();
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
-        const auto spot{ atom->GetSpot() };
-        if (std::find(
-                kLocalMDPDESummarySpotList.begin(),
-                kLocalMDPDESummarySpotList.end(),
-                spot) == kLocalMDPDESummarySpotList.end())
-        {
+        const auto spot = atom->GetSpot();
+        if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
+            kLocalMDPDESummarySpotList.end()) continue;
+        const auto view = AtomLocalPotentialView::For(*atom);
+        if (joint && view.IsAvailable() && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target)
             continue;
-        }
-        const auto & local_mdpde{
-            AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(FittingStage::Second)
-        };
-        auto & sample_list{ spot_sample_map[spot] };
-        sample_list.amplitude_list.emplace_back(local_mdpde.GetAmplitude());
-        sample_list.width_list.emplace_back(local_mdpde.GetWidth());
-        sample_list.offset_list.emplace_back(local_mdpde.GetOffset());
+        auto & samples = spots[spot];
+        if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
+        const auto & estimate = view.GetStageEstimate(FittingStage::Second);
+        if (joint && estimate.convergence != JointCheckStatus::Passed) ++samples.not_converged;
+        const auto & point = *estimate.point;
+        samples.amplitude_list.push_back(point.GetAmplitude());
+        samples.width_list.push_back(point.GetWidth());
+        samples.offset_list.push_back(point.GetOffset());
     }
-
-    if (spot_sample_map.empty())
-    {
-        return "Second-stage local MDPDE summary by Spot: no matching selected atoms available.";
-    }
-
     std::ostringstream summary;
-    summary << "Second-stage local MDPDE summary by Spot:\n"
-        << "|---Spot---|------Amplitude------|--------Width--------|-------Offset--------|\n"
-        << "|          |   mean   |   s.d.   |   mean   |   s.d.   |   mean   |   s.d.   |";
-    for (const auto spot : kLocalMDPDESummarySpotList)
+    summary << "Second-stage estimate summary by Spot:\nEstimator: "
+        << (joint ? "joint-components" : "two-stage")
+        << "\nPopulation: selected targets; s.d.: between-atom dispersion"
+        << "\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C charge coefficient mean / s.d. |";
+    for (const auto & [spot, samples] : spots)
     {
-        const auto sample_iter{ spot_sample_map.find(spot) };
-        if (sample_iter == spot_sample_map.end()) continue;
-        const auto & sample_list{ sample_iter->second };
-        const auto amplitude_mean{ array_helper::ComputeMean(
-            sample_list.amplitude_list.data(), sample_list.amplitude_list.size()) };
-        const auto width_mean{ array_helper::ComputeMean(
-            sample_list.width_list.data(), sample_list.width_list.size()) };
-        const auto offset_mean{ array_helper::ComputeMean(
-            sample_list.offset_list.data(), sample_list.offset_list.size()) };
-
-        summary << "\n| " << std::left << std::setw(8)
-            << ChemicalDataHelper::GetLabel(spot)
-            << " | " << std::right << std::fixed << std::setprecision(2)
-            << std::setw(8) << amplitude_mean
-            << " | " << std::setw(8)
-            << array_helper::ComputeStandardDeviation(
-                sample_list.amplitude_list.data(),
-                sample_list.amplitude_list.size(),
-                amplitude_mean)
-            << " | " << std::setw(8) << width_mean
-            << " | " << std::setw(8)
-            << array_helper::ComputeStandardDeviation(
-                sample_list.width_list.data(),
-                sample_list.width_list.size(),
-                width_mean)
-            << " | " << std::setw(8) << offset_mean
-            << " | " << std::setw(8)
-            << array_helper::ComputeStandardDeviation(
-                sample_list.offset_list.data(),
-                sample_list.offset_list.size(),
-                offset_mean)
-            << " |";
+        summary << "\n| " << ChemicalDataHelper::GetLabel(spot) << " | " << samples.amplitude_list.size()
+            << " | " << samples.not_converged << " | " << samples.unavailable;
+        for (const auto * values : {&samples.amplitude_list, &samples.width_list, &samples.offset_list})
+        {
+            if (values->empty()) { summary << " | unavailable"; continue; }
+            const auto mean = array_helper::ComputeMean(values->data(), values->size());
+            summary << " | " << std::fixed << std::setprecision(2) << mean << " / "
+                << array_helper::ComputeStandardDeviation(values->data(), values->size(), mean);
+        }
+        summary << " |";
     }
+    if (spots.empty()) summary << "\nNo matching selected targets available.";
     return summary.str();
 }
 
+namespace {
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
@@ -517,12 +496,9 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
 
     detail::RunSecondStageIterations(model_object, options);
 
+    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model_object));
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info, BuildLocalMDPDESpotSummary(model_object));
-    }
 }
 
 void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
@@ -551,7 +527,10 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     fit.costs.initialization_seconds = initialization_seconds;
     fit.initialization.atoms = initialization.atoms;
     fit.initialization.data_scope = initialization.data_scope;
-    model.EditAnalysis().SetJointResult(CaptureJointAnalysisResult(fit));
+    const auto snapshot = CaptureJointAnalysisResult(fit);
+    data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
+    model.EditAnalysis().SetJointResult(snapshot);
+    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
 }
 
 } // namespace rhbm_gem::core

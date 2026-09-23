@@ -31,3 +31,16 @@ command/CLI smoke, sampler and estimator regression. A final targeted rerun afte
 adding First target/halo provenance passed both Joint and CLI smoke. The new
 instrumented test verifies one raw sampling and one formal First per contributor,
 unchanged selections, and exact equality with a direct fit of the same problem/B0.
+
+## 3. Joint endpoints and Second summary
+
+A data-only adapter maps component-local A/C/B through contributor identities to
+neutral Second estimates. It retains target/halo roles, component convergence and
+one source ID per workflow; missing states replace any previous point with an
+explicit unavailable reason. Summary reads the common point interface before
+group fitting, excludes halo and labels C and between-atom dispersion correctly.
+
+Validation: all six related tests/groups passed (Joint, estimator, commands,
+command integration, frozen regression and CLI smoke). The new adapter test
+permutes identities/mappings and verifies target-only summary and stale-state
+removal. No solver settings or numeric algorithms changed.

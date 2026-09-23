@@ -7,6 +7,8 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include <map>
+#include "data/detail/JointStageAdapter.hpp"
+#include "core/detail/StageSummary.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -325,4 +327,34 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         EXPECT_EQ(result.components[c].state->objective, direct.components[c].state->objective);
     }
     EXPECT_THROW(core::RunPotentialFittingWorkflow(*f.model, options), std::invalid_argument);
+}
+
+TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissingStates)
+{
+    auto f = joint_partial_test::Make("all");
+    auto result = core::CaptureJointAnalysisResult(core::FitJointComponents(core::BuildJointProblem(*f.map, *f.model), f.b));
+    ASSERT_EQ(result.atom_ids.size(), 2);
+    std::swap(result.atom_ids[0], result.atom_ids[1]);
+    auto & component = result.components.front();
+    ASSERT_TRUE(component.state);
+    component.atoms = {1, 0};
+    result.selection_domain->target_indices = {1};
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "test-run");
+    f.model->EditAnalysis().SetJointResult(result);
+    const auto target = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1));
+    const auto halo = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
+    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetAmplitude(), component.state->ac[0]);
+    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetOffset(), component.state->ac[1]);
+    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(), component.state->b[0]);
+    EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
+    auto summary = core::BuildSecondStageSpotSummary(*f.model);
+    EXPECT_NE(summary.find("joint-components"), std::string::npos);
+    EXPECT_NE(summary.find("| CA | 1 |"), std::string::npos);
+    EXPECT_EQ(summary.find("| CB |"), std::string::npos);
+    component.state.reset(); component.stop_reason = "invalid-initial-widths";
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "next-run");
+    EXPECT_FALSE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
+    EXPECT_EQ(target.GetStageEstimate(rhbm_gem::FittingStage::Second).reason, "invalid-initial-widths");
+    summary = core::BuildSecondStageSpotSummary(*f.model);
+    EXPECT_NE(summary.find("| CA | 0 | 0 | 1"), std::string::npos);
 }
