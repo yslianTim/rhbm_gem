@@ -89,6 +89,7 @@ public:
         const GroupGaussianResult & result)
     {
         auto & group{ EnsureGroup(group_key) };
+        group.parameter_summary.reset();
         group.mean = result.mean;
         group.mdpde = result.mdpde;
         group.prior = result.prior;
@@ -101,8 +102,11 @@ public:
     }
     void SetParameterSummary(GroupKey key, GroupParameterSummary value)
     {
-        if (value.inference) SetGaussianResult(key, *value.inference);
-        EnsureGroup(key).parameter_summary = std::move(value);
+        auto & group = EnsureGroup(key);
+        if (value.inference) std::vector<GroupGaussianMemberResult>{}.swap(value.inference->member_results);
+        group.mean = GaussianModel3D{0, 0}; group.mdpde = GaussianModel3D{0, 0};
+        group.prior = GaussianModel3DWithUncertainty{GaussianModel3D{0, 0}, {}};
+        group.parameter_summary = std::move(value);
     }
     void ClearResult(GroupKey key)
     {
@@ -119,32 +123,44 @@ public:
 
     const GaussianModel3D & GetMean(GroupKey group_key) const
     {
-        return RequireGroup(group_key).mean;
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->descriptive_mean ?
+            *group.parameter_summary->descriptive_mean : group.mean;
     }
 
     const GaussianModel3D & GetMDPDE(GroupKey group_key) const
     {
-        return RequireGroup(group_key).mdpde;
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->inference ?
+            group.parameter_summary->inference->mdpde : group.mdpde;
     }
 
     const GaussianModel3D & GetPrior(GroupKey group_key) const
     {
-        return RequireGroup(group_key).prior.GetModel();
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->inference ?
+            group.parameter_summary->inference->prior.GetModel() : group.prior.GetModel();
     }
 
     const GaussianModel3DUncertainty & GetPriorStandardDeviation(GroupKey group_key) const
     {
-        return RequireGroup(group_key).prior.GetStandardDeviationModel();
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->inference ?
+            group.parameter_summary->inference->prior.GetStandardDeviationModel() : group.prior.GetStandardDeviationModel();
     }
 
     GaussianModel3DWithUncertainty GetPriorWithUncertainty(GroupKey group_key) const
     {
-        return RequireGroup(group_key).prior;
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->inference ?
+            group.parameter_summary->inference->prior : group.prior;
     }
 
     double GetAlphaG(GroupKey group_key) const
     {
-        return RequireGroup(group_key).alpha_g;
+        const auto & group = RequireGroup(group_key);
+        return group.parameter_summary && group.parameter_summary->inference ?
+            group.parameter_summary->inference->alpha_g : group.alpha_g;
     }
 
 private:

@@ -22,7 +22,7 @@ public:
     bool HasGroupedAnalysisData() const;
     bool HasAtomGroup(GroupKey group_key) const;
     bool HasAtomGroupPrior(GroupKey group_key) const;
-    const std::optional<GroupParameterSummary> & GetGroupParameterSummary(GroupKey group_key) const;
+    std::optional<GroupParameterSummary> GetGroupParameterSummary(GroupKey group_key) const;
     const GaussianModel3D & GetAtomGroupMean(GroupKey group_key) const;
     const GaussianModel3D & GetAtomGroupMDPDE(GroupKey group_key) const;
     const GaussianModel3D & GetAtomGroupPrior(GroupKey group_key) const;

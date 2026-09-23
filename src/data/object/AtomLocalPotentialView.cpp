@@ -108,7 +108,7 @@ const std::optional<GroupParameterEvidence> & AtomLocalPotentialView::GetGroupEv
     return RequireEntry("Group evidence").GroupEvidence();
 }
 
-const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(FittingStage stage) const
+LocalGaussianResult AtomLocalPotentialView::GetGaussianResult(FittingStage stage) const
 {
     if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
         throw std::runtime_error("OLS/MDPDE diagnostics unavailable for Joint stage.");
@@ -117,7 +117,9 @@ const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(FittingSta
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(FittingStage stage) const
 {
-    return GetGaussianResult(stage).ols.GetModel();
+    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
+        throw std::runtime_error("OLS diagnostics unavailable for Joint stage.");
+    return RequireEntry("Local Gaussian result").OLSModel(stage);
 }
 
 const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGroupMemberResult() const
@@ -127,7 +129,9 @@ const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGrou
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(FittingStage stage) const
 {
-    return GetGaussianResult(stage).mdpde.GetModel();
+    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
+        throw std::runtime_error("MDPDE diagnostics unavailable for Joint stage.");
+    return RequireEntry("Local Gaussian result").MDPDEModel(stage);
 }
 
 LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool apply_selection) const
@@ -229,7 +233,9 @@ int AtomLocalPotentialView::GetNeighborCountForPeeling() const
 
 double AtomLocalPotentialView::GetAlphaR(FittingStage stage) const
 {
-    return GetGaussianResult(stage).alpha_r;
+    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
+        throw std::runtime_error("MDPDE alpha unavailable for Joint stage.");
+    return RequireEntry("Local Gaussian result").AlphaR(stage);
 }
 
 } // namespace rhbm_gem

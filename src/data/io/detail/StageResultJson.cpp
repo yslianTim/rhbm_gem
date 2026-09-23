@@ -4,6 +4,7 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <boost/json.hpp>
 #include <cmath>
@@ -103,7 +104,7 @@ std::string Encode(const ModelObject & model)
             {"peeling",peeling},{"evidence",e->GroupEvidence() ? Pack(*e->GroupEvidence()):V{}},{"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
     }
     const auto & g=data.AtomGroupEntry();
-    for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"summary",g.GetParameterSummary(key) ? Pack(*g.GetParameterSummary(key)):V{}}}); }
+    for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"summary",g.GetParameterSummary(key) ? Pack(*model.GetAnalysisView().GetGroupParameterSummary(key)):V{}}}); }
     return j::serialize(O{{"version",1},{"atoms",atoms},{"groups",groups}});
 }
 void Decode(ModelObject & model, const std::string & text)
@@ -119,7 +120,9 @@ void Decode(ModelObject & model, const std::string & text)
         auto & e=data.EnsureAtomLocalEntry(*atom);
         e.SetStageEstimate(FittingStage::First,Stage(o.at("first"))); e.SetStageEstimate(FittingStage::Second,Stage(o.at("second")));
         const bool geometry=Read<bool>(o,"geometry"); e.SetSampleGeometryAvailable(geometry);
-        e.SetRawSamplingEntries(Samples(o.at("raw"),geometry)); e.SetPeelingSamplingEntries(Samples(o.at("peeled"),geometry));
+        e.SetRawSamplingEntries(Samples(o.at("raw"),geometry));
+        if(e.StageEstimate(FittingStage::Second).source.method != EstimateMethod::JointComponents)
+            e.SetPeelingSamplingEntries(Samples(o.at("peeled"),geometry));
         if(!o.at("peeling").is_null()) { const auto & p=o.at("peeling").as_object(); PostFitPeelingResult r; r.source=Source(p.at("source")); r.mode=Read<std::string>(p,"mode"); r.neighbor_count=Read<std::size_t>(p,"neighbors"); for(const auto & sample:p.at("samples").as_array()) { const auto & s=sample.as_object(); PeelingSampleEstimate x; x.reason=Read<std::string>(s,"reason"); if(!s.at("response").is_null()) x.response=Number(s.at("response")); r.samples.push_back(x); } e.SetPostFitPeeling(std::move(r)); }
         if(!o.at("evidence").is_null()) e.SetGroupEvidence(Evidence(o.at("evidence")));
         e.ClearGroupMemberResult(); if(!o.at("posterior").is_null()) e.SetGroupMemberResult(Member(o.at("posterior")));
@@ -132,7 +135,16 @@ void Decode(ModelObject & model, const std::string & text)
         if(!keys.insert(key).second) throw std::invalid_argument("Duplicate neutral group.");
         std::set<int> members;
         for(const int id:Read<std::vector<int>>(o,"members")) {auto * atom=model.FindAtomPtr(id); if(!atom || !members.insert(id).second) throw std::invalid_argument("Invalid group member identity."); groups.AddMember(key,*atom);}
-        if(!o.at("summary").is_null()) { auto s=Summary(o.at("summary")); for(int id:s.member_ids) if(!members.contains(id)) throw std::invalid_argument("Posterior outside fitted group."); groups.SetParameterSummary(key,std::move(s)); }
+        if(!o.at("summary").is_null()) { auto s=Summary(o.at("summary")); for(int id:s.member_ids) if(!members.contains(id)) throw std::invalid_argument("Posterior outside fitted group."); if (s.inference)
+            {
+                for (std::size_t index=0; index<s.member_ids.size(); ++index)
+                {
+                    const auto * entry=data.FindAtomLocalEntry(*model.FindAtomPtr(s.member_ids[index]));
+                    if (!entry || !entry->GroupMemberResult() || Pack(*entry->GroupMemberResult()) != Pack(s.inference->member_results[index]))
+                        throw std::invalid_argument("Legacy group/member posterior mismatch.");
+                }
+            }
+            groups.SetParameterSummary(key,std::move(s)); }
     }
     Validate(model);
 }
@@ -158,7 +170,7 @@ void MapSnapshot(ModelObject & model)
     for(const auto & id:data.joint_result->atom_ids)
     {
         auto * atom=model.FindAtomPtr(std::stoi(id)); auto & e=data.EnsureAtomLocalEntry(*atom);
-        e.ClearPostFitPeeling(); e.SetPeelingSamplingEntries({}); e.ClearGroupMemberResult();
+        e.ClearPeeling(); e.ClearGroupMemberResult();
         const auto & stage=e.StageEstimate(FittingStage::Second);
         GroupParameterEvidence evidence; evidence.atom_id=id; evidence.component_id=stage.source.component_id; evidence.source_id=stage.source.run_id; evidence.reason="not-recorded";
         e.SetGroupEvidence(evidence);
@@ -185,7 +197,7 @@ void Validate(const ModelObject & model)
         const auto & summary=groups.GetParameterSummary(key); if(!summary) continue;
         if(summary->eligible_count!=summary->member_ids.size()) throw std::invalid_argument("Group eligibility count mismatch.");
         if(!summary->inference) continue;
-        const auto & members=summary->inference->member_results;
+        const auto members=model.GetAnalysisView().GetGroupParameterSummary(key)->inference->member_results;
         if(members.size()!=summary->member_ids.size()) throw std::invalid_argument("Group posterior count mismatch.");
         for(std::size_t i=0;i<members.size();++i)
         {

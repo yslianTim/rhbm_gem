@@ -1,6 +1,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #include "data/detail/ModelAnalysisData.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -29,22 +30,31 @@ bool ModelAnalysisView::HasAtomGroup(GroupKey group_key) const
         .AtomGroupEntry().HasGroup(group_key);
 }
 
-const std::optional<GroupParameterSummary> & ModelAnalysisView::GetGroupParameterSummary(GroupKey key) const
+std::optional<GroupParameterSummary> ModelAnalysisView::GetGroupParameterSummary(GroupKey key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(key);
+    const auto & data = ModelAnalysisData::Of(m_model_object);
+    auto summary = data.AtomGroupEntry().GetParameterSummary(key);
+    if (summary && summary->inference)
+        for (const auto id : summary->member_ids)
+        {
+            const auto * entry = data.FindAtomLocalEntry(*m_model_object.FindAtomPtr(id));
+            if (!entry || !entry->GroupMemberResult()) throw std::runtime_error("Group posterior unavailable.");
+            summary->inference->member_results.push_back(*entry->GroupMemberResult());
+        }
+    return summary;
 }
 
 bool ModelAnalysisView::HasAtomGroupPrior(GroupKey key) const
 {
     if (!HasAtomGroup(key)) return false;
-    const auto & summary = GetGroupParameterSummary(key);
+    const auto & summary = ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(key);
     return summary ? summary->inference.has_value() :
         ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetPrior(key).GetWidth() > 0;
 }
 
 const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(GroupKey group_key) const
 {
-    const auto & summary=GetGroupParameterSummary(group_key);
+    const auto & summary=ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(group_key);
     if (summary)
     {
         if (!summary->descriptive_mean) throw std::runtime_error("Group descriptive mean unavailable.");
@@ -56,7 +66,7 @@ const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(GroupKey group_key) 
 
 const GaussianModel3D & ModelAnalysisView::GetAtomGroupMDPDE(GroupKey group_key) const
 {
-    const auto & summary=GetGroupParameterSummary(group_key);
+    const auto & summary=ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(group_key);
     if (summary && !summary->inference) throw std::runtime_error("Group MDPDE unavailable.");
     return ModelAnalysisData::Of(m_model_object)
         .AtomGroupEntry().GetMDPDE(group_key);
@@ -64,7 +74,7 @@ const GaussianModel3D & ModelAnalysisView::GetAtomGroupMDPDE(GroupKey group_key)
 
 const GaussianModel3D & ModelAnalysisView::GetAtomGroupPrior(GroupKey group_key) const
 {
-    const auto & summary=GetGroupParameterSummary(group_key);
+    const auto & summary=ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(group_key);
     if (summary && !summary->inference) throw std::runtime_error("Group prior unavailable.");
     return ModelAnalysisData::Of(m_model_object)
         .AtomGroupEntry().GetPrior(group_key);
@@ -72,7 +82,7 @@ const GaussianModel3D & ModelAnalysisView::GetAtomGroupPrior(GroupKey group_key)
 
 GaussianModel3DWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(GroupKey group_key) const
 {
-    const auto & summary=GetGroupParameterSummary(group_key);
+    const auto & summary=ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(group_key);
     if (summary && !summary->inference) throw std::runtime_error("Group prior uncertainty unavailable.");
     return ModelAnalysisData::Of(m_model_object)
         .AtomGroupEntry().GetPriorWithUncertainty(group_key);

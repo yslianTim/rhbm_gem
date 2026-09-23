@@ -62,6 +62,14 @@ struct PostFitPeelingResult
     std::vector<PeelingSampleEstimate> samples;
 };
 
+struct LocalFitDiagnostics
+{
+    RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
+    double sigma_square{};
+    RHBMBetaDiagnostics iterations;
+    std::optional<RHBMEndpointRefinementDiagnostics> refinement;
+};
+
 struct LocalGaussianResult
 {
     double alpha_r{ 0.0 };
@@ -74,6 +82,7 @@ struct LocalGaussianResult
         GaussianModel3DUncertainty{}
     };
     std::optional<RHBMBetaEstimateResult> fit_result{};
+    std::optional<LocalFitDiagnostics> diagnostics{};
 };
 
 struct GroupGaussianMemberResult

@@ -1783,3 +1783,40 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     EXPECT_THROW(editor.ApplySecondStageEstimates(invalid), std::invalid_argument);
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 3);
 }
+
+TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCannotBeOverwrittenIndependently)
+{
+    auto model = data_test::MakeModelWithBond();
+    const auto & atom = *model->GetAtomList().front();
+    auto editor = model->EditAnalysis();
+    rg::LocalGaussianResult local;
+    local.mdpde = {rg::GaussianModel3D{2, .5, .1}, {}};
+    local.fit_result = rg::RHBMBetaEstimateResult{};
+    local.fit_result->diagnostics.iterations = 7;
+    editor.SetAtomLocalGaussianResult(rg::FittingStage::Second, atom, local);
+    const auto view = rg::AtomLocalPotentialView::For(atom);
+    editor.ClearTransientFitStates();
+    ASSERT_TRUE(view.GetGaussianResult(rg::FittingStage::Second).diagnostics);
+    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::Second).diagnostics->iterations.iterations, 7);
+    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::Second).fit_result);
+    auto stage = view.GetStageEstimate(rg::FittingStage::Second);
+    stage.point = stage.point->WithAmplitude(4);
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, stage);
+    EXPECT_EQ(view.GetFinalModel(rg::FittingStage::Second).ToVector(), view.GetEstimateMDPDE(rg::FittingStage::Second).ToVector());
+    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::Second).mdpde.GetModel().ToVector(), stage.point->ToVector());
+    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::Second).diagnostics);
+    stage.source.method = rg::EstimateMethod::JointComponents;
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, stage);
+    editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
+    rg::PostFitPeelingResult peeling;
+    peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
+    peeling.samples = {{1, {}}, {2, {}}}; peeling.neighbor_count = 3;
+    editor.SetAtomPostFitPeeling(atom, peeling);
+    EXPECT_THROW(editor.SetAtomLocalPeelingSamplingEntries(atom, {}), std::invalid_argument);
+    EXPECT_THROW(editor.SetAtomLocalNeighborCountForPeeling(atom, 99), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(*view.GetLocalFittingPeelingRatio(0, 1), .5);
+    EXPECT_EQ(view.GetSamplingEntries(rg::FittingStage::Second)[1].response, 2);
+    EXPECT_EQ(view.GetNeighborCountForPeeling(), 3);
+    rg::ModelObject copied(*model);
+    EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).GetLocalFittingPeelingRatio(0,1), .5);
+}

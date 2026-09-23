@@ -171,16 +171,8 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
     const auto & raw = entry.RawSamplingEntries();
     if (raw.size() != value.samples.size()) throw std::invalid_argument("Peeling/raw sample count mismatch.");
-    LocalPotentialSampleList available;
-    for (std::size_t i = 0; i < raw.size(); ++i)
-    {
-        if (!value.samples[i].response) continue;
-        auto sample = raw[i];
-        sample.response = *value.samples[i].response;
-        available.push_back(sample);
-    }
-    entry.SetPeelingSamplingEntries(std::move(available));
-    entry.SetNeighborCountForPeeling(static_cast<int>(value.neighbor_count));
+    if (!SameSource(value.source, entry.StageEstimate(FittingStage::Second).source))
+        throw std::invalid_argument("Peeling source mismatch.");
     entry.SetPostFitPeeling(std::move(value));
 }
 
@@ -198,6 +190,8 @@ void ModelAnalysisEditor::ApplyAtomGroupParameterSummary(GroupKey key, GroupPara
     const auto & members = groups.GetMembers(key);
     if (value.inference && value.inference->member_results.size() != value.member_ids.size())
         throw std::invalid_argument("Parameter posterior identity count mismatch.");
+    if (std::set<int>(value.member_ids.begin(), value.member_ids.end()).size() != value.member_ids.size())
+        throw std::invalid_argument("Duplicate parameter posterior identity.");
     for (const auto id : value.member_ids)
         if (std::none_of(members.begin(), members.end(), [id](const auto * atom) { return atom->GetSerialID() == id; }))
             throw std::invalid_argument("Parameter posterior identity outside group.");

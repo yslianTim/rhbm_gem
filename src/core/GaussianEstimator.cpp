@@ -230,7 +230,7 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
         {
             const auto local_view{ AtomLocalPotentialView::For(*atom) };
             group_member_models.emplace_back(
-                local_view.GetGaussianResult(FittingStage::Second).mdpde.GetModel());
+                local_view.GetEstimateMDPDE(FittingStage::Second));
         }
         model_group_list.emplace_back(std::move(group_member_models));
     }
@@ -274,7 +274,7 @@ void RunFixedOffsetLocalFitting(
         auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::For(atom) };
         LocalPotentialSampleList sample_entries{ local_view.GetSamplingEntries(stage) };
-        GaussianModel3D offset_model{ local_view.GetGaussianResult(stage).mdpde.GetModel() };
+        GaussianModel3D offset_model{ local_view.GetEstimateMDPDE(stage) };
         local_results[i] =
             EstimateLocalGaussian(
                 sample_entries,

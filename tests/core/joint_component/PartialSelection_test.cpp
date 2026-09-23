@@ -569,6 +569,10 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
     const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
     const auto before = first.GetGroupMemberResult()->posterior.GetModel().ToVector();
     const auto second = first.GetFinalModel(FittingStage::Second).ToVector();
+    auto detached_summary = model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
+    detached_summary->inference->member_results.front().posterior = {};
+    EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), before);
+    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->inference->member_results.front().posterior.GetModel().ToVector(), before);
     EXPECT_FALSE(first.GetGroupMemberResult()->charge_inferred);
     EXPECT_EQ(first.GetGroupMemberResult()->evidence_source_id, "evidence-test");
     {
