@@ -46,8 +46,8 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 18);
-    for (const auto table_name : std::array<std::string_view, 11>{
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 19);
+    for (const auto table_name : std::array<std::string_view, 9>{
              "model_object",
              "model_joint_result",
              "model_chain_map",
@@ -56,9 +56,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
              "model_component_bond",
              "model_atom",
              "model_bond",
-             "model_atom_local_potential",
-             "model_atom_posterior",
-             "model_atom_group_potential" })
+             "model_stage_result" })
     {
         EXPECT_TRUE(data_test::HasTable(database_path, std::string(table_name)));
     }
@@ -69,56 +67,6 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
     EXPECT_FALSE(data_test::HasTable(database_path, "model_bond_group_potential"));
 
     EXPECT_NO_THROW((void)rg::DataRepository(database_path));
-}
-
-TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsRawAndPeelingSamplingEntryColumns)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_sampling_columns" };
-    const auto database_path{ temp_dir.path() / "sampling.sqlite" };
-    { rg::DataRepository repository{ database_path }; }
-
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "raw_distance_and_map_value_list"));
-    EXPECT_TRUE(data_test::HasColumn(
-        database_path,
-        "model_atom_local_potential",
-        "peeling_distance_and_map_value_list"));
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "raw_sampling_size"));
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path, "model_atom_local_potential", "peeling_sampling_size"));
-    EXPECT_FALSE(data_test::HasColumn(
-        database_path, "model_atom_group_potential", "member_size"));
-}
-
-TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColumns)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_columns" };
-    const auto database_path{ temp_dir.path() / "gaussian.sqlite" };
-    { rg::DataRepository repository{ database_path }; }
-
-    for (const auto suffix : { "1st", "2nd" })
-    {
-        EXPECT_TRUE(data_test::HasColumn(
-            database_path,
-            "model_atom_local_potential",
-            "intercept_estimate_ols_" + std::string(suffix)));
-        EXPECT_FALSE(data_test::HasColumn(
-            database_path,
-            "model_atom_group_potential",
-            "intercept_estimate_prior_" + std::string(suffix)));
-    }
-    for (const auto column : {
-             "amplitude_estimate_ols_3rd", "width_estimate_ols_3rd", "intercept_estimate_ols_3rd",
-             "amplitude_estimate_mdpde_3rd", "width_estimate_mdpde_3rd", "intercept_estimate_mdpde_3rd",
-             "alpha_r_3rd" })
-    {
-        EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_local_potential", column));
-    }
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "is_selected"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond", "is_selected"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaIsRejectedWithoutModification)
@@ -189,29 +137,18 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourteenAndFifteenSchemasAreRejectedW
     ExpectVersionedDatabaseRejectedWithoutMutation(15);
 }
 
-TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSingleGroupGaussianResult)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_single_group_result" };
-    const auto database_path{ temp_dir.path() / "group.sqlite" };
-    { rg::DataRepository repository{ database_path }; }
-
-    for (const auto column : {
-             "amplitude_estimate_mean", "width_estimate_mean", "intercept_estimate_mean",
-             "amplitude_estimate_mdpde", "width_estimate_mdpde", "intercept_estimate_mdpde",
-             "amplitude_estimate_prior", "width_estimate_prior", "intercept_estimate_prior",
-             "amplitude_variance_prior", "width_variance_prior", "intercept_variance_prior",
-             "alpha_g" })
-    {
-        EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", column));
-        for (const auto suffix : { "_1st", "_2nd", "_3rd" })
-        {
-            EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential",
-                std::string(column) + suffix));
-        }
-    }
-}
-
 TEST(DataObjectSchemaLifecycleTest, VersionSixteenSchemaIsRejectedWithoutModification)
 {
     ExpectVersionedDatabaseRejectedWithoutMutation(16);
+}
+
+TEST(DataObjectSchemaLifecycleTest, CanonicalAnalysisReplacesLegacyTables)
+{
+    const command_test::ScopedTempDir dir{"canonical_analysis_tables"}; const auto path=dir.path()/"model.sqlite";
+    {rg::DataRepository repo(path);}
+    EXPECT_TRUE(data_test::HasColumn(path,"model_stage_result","result_json"));
+    for(const auto table:{"model_atom_local_potential","model_atom_posterior","model_atom_group_potential"})
+        EXPECT_FALSE(data_test::HasTable(path,table));
+    EXPECT_TRUE(data_test::HasColumn(path,"model_atom","is_selected"));
+    EXPECT_TRUE(data_test::HasColumn(path,"model_bond","is_selected"));
 }

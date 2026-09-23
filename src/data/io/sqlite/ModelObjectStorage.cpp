@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -145,71 +146,6 @@ inline constexpr std::string_view kCreateModelBondTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_atom_local_potential (
-        key_tag TEXT,
-        serial_id INTEGER,
-        raw_distance_and_map_value_list BLOB,
-        peeling_distance_and_map_value_list BLOB,
-        amplitude_estimate_ols_1st DOUBLE,
-        width_estimate_ols_1st DOUBLE,
-        intercept_estimate_ols_1st DOUBLE,
-        amplitude_estimate_mdpde_1st DOUBLE,
-        width_estimate_mdpde_1st DOUBLE,
-        intercept_estimate_mdpde_1st DOUBLE,
-        alpha_r_1st DOUBLE,
-        amplitude_estimate_ols_2nd DOUBLE,
-        width_estimate_ols_2nd DOUBLE,
-        intercept_estimate_ols_2nd DOUBLE,
-        amplitude_estimate_mdpde_2nd DOUBLE,
-        width_estimate_mdpde_2nd DOUBLE,
-        intercept_estimate_mdpde_2nd DOUBLE,
-        alpha_r_2nd DOUBLE,
-        neighbor_count_for_peeling INTEGER DEFAULT 0,
-        PRIMARY KEY (key_tag, serial_id),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
-inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_atom_posterior (
-        key_tag TEXT,
-        serial_id INTEGER,
-        amplitude_estimate_posterior DOUBLE,
-        width_estimate_posterior DOUBLE,
-        intercept_estimate_posterior DOUBLE,
-        amplitude_variance_posterior DOUBLE,
-        width_variance_posterior DOUBLE,
-        intercept_variance_posterior DOUBLE,
-        outlier_tag INTEGER,
-        statistical_distance DOUBLE,
-        PRIMARY KEY (key_tag, serial_id),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
-inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
-    CREATE TABLE IF NOT EXISTS model_atom_group_potential (
-        key_tag TEXT,
-        group_key INTEGER,
-        amplitude_estimate_mean DOUBLE,
-        width_estimate_mean DOUBLE,
-        intercept_estimate_mean DOUBLE,
-        amplitude_estimate_mdpde DOUBLE,
-        width_estimate_mdpde DOUBLE,
-        intercept_estimate_mdpde DOUBLE,
-        amplitude_estimate_prior DOUBLE,
-        width_estimate_prior DOUBLE,
-        intercept_estimate_prior DOUBLE,
-        amplitude_variance_prior DOUBLE,
-        width_variance_prior DOUBLE,
-        intercept_variance_prior DOUBLE,
-        alpha_g DOUBLE,
-        PRIMARY KEY (key_tag, group_key),
-        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
-    )
-)sql";
-
 inline constexpr std::string_view kCreateJointResultTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_joint_result (
         key_tag TEXT PRIMARY KEY,
@@ -217,8 +153,10 @@ inline constexpr std::string_view kCreateJointResultTableSql = R"sql(
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
+inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
+inline constexpr auto kDeleteRowsForKeySqlSuffix = " WHERE key_tag = ?;"sv;
 
-inline constexpr std::array<std::string_view, 11> kCreateModelTableSqlList{
+inline constexpr std::array<std::string_view, 8> kCreateModelTableSqlList{
     kCreateJointResultTableSql,
     kCreateModelObjectTableSql,
     kCreateModelChainMapTableSql,
@@ -226,13 +164,10 @@ inline constexpr std::array<std::string_view, 11> kCreateModelTableSqlList{
     kCreateModelComponentAtomTableSql,
     kCreateModelComponentBondTableSql,
     kCreateModelAtomTableSql,
-    kCreateModelBondTableSql,
-    kCreateModelAtomLocalTableSql,
-    kCreateModelAtomPosteriorTableSql,
-    kCreateModelAtomGroupTableSql
+    kCreateModelBondTableSql
 };
 
-inline constexpr std::array<std::string_view, 11> kModelTablesScopedByKey{
+inline constexpr std::array<std::string_view, 8> kModelTablesScopedByKey{
     "model_stage_result",
     "model_joint_result",
     "model_chain_map",
@@ -240,10 +175,7 @@ inline constexpr std::array<std::string_view, 11> kModelTablesScopedByKey{
     "model_component_atom",
     "model_component_bond",
     "model_atom",
-    "model_bond",
-    "model_atom_local_potential",
-    "model_atom_posterior",
-    "model_atom_group_potential"
+    "model_bond"
 };
 
 inline constexpr auto kUpsertModelObjectSql = R"sql(
@@ -304,45 +236,6 @@ inline constexpr auto kInsertModelBondSql = R"sql(
         bond_key, bond_type, bond_order, is_special_bond, is_selected
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
-
-inline constexpr auto kInsertModelAtomLocalSql = R"sql(
-    INSERT OR REPLACE INTO model_atom_local_potential (
-        key_tag, serial_id, raw_distance_and_map_value_list,
-        peeling_distance_and_map_value_list,
-        amplitude_estimate_ols_1st, width_estimate_ols_1st, intercept_estimate_ols_1st,
-        amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st,
-        intercept_estimate_mdpde_1st, alpha_r_1st,
-        amplitude_estimate_ols_2nd, width_estimate_ols_2nd, intercept_estimate_ols_2nd,
-        amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd,
-        intercept_estimate_mdpde_2nd, alpha_r_2nd,
-        neighbor_count_for_peeling
-    ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
-inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
-    INSERT OR REPLACE INTO model_atom_posterior (
-        key_tag, serial_id,
-        amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
-        amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
-        outlier_tag, statistical_distance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
-inline constexpr auto kInsertModelAtomGroupSql = R"sql(
-    INSERT OR REPLACE INTO model_atom_group_potential (
-        key_tag, group_key,
-        amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
-        amplitude_variance_prior, width_variance_prior,
-        intercept_variance_prior, alpha_g
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
-inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
-inline constexpr auto kDeleteRowsForKeySqlSuffix = " WHERE key_tag = ?;"sv;
 
 inline constexpr auto kSelectModelObjectSql = R"sql(
     SELECT key_tag, pdb_id, emd_id, map_resolution, resolution_method,
@@ -957,149 +850,9 @@ LoadedModelStructure LoadStructure(
     return structure;
 }
 
-void SaveAtomLocalPotentialEntryList(
-    SQLiteWrapper & database,
-    const ModelObject & model_obj,
-    const std::string & key_tag)
+double LegacyUncertainty(SQLiteWrapper & database, int index)
 {
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomLocalSql) };
-    for (const auto & atom_object : model_obj.GetAtomList())
-    {
-        auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
-        if (entry == nullptr) continue;
-
-        batch.Execute([&](SQLiteWrapper & statement_db)
-        {
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<LocalPotentialSampleList>(
-                3, entry->RawSamplingEntries());
-            statement_db.Bind<LocalPotentialSampleList>(
-                4, entry->PeelingSamplingEntries());
-            const auto bind_gaussian_result = [&entry, &statement_db](
-                int first_parameter_index,
-                FittingStage stage)
-            {
-                if (entry->StageEstimate(stage).source.method == EstimateMethod::JointComponents) return;
-                const auto & gaussian_result{ entry->GaussianResult(stage) };
-                statement_db.Bind<double>(
-                    first_parameter_index,
-                    gaussian_result.ols.GetModel().GetAmplitude());
-                statement_db.Bind<double>(
-                    first_parameter_index + 1,
-                    gaussian_result.ols.GetModel().GetWidth());
-                statement_db.Bind<double>(
-                    first_parameter_index + 2,
-                    gaussian_result.ols.GetModel().GetOffset());
-                statement_db.Bind<double>(
-                    first_parameter_index + 3,
-                    gaussian_result.mdpde.GetModel().GetAmplitude());
-                statement_db.Bind<double>(
-                    first_parameter_index + 4,
-                    gaussian_result.mdpde.GetModel().GetWidth());
-                statement_db.Bind<double>(
-                    first_parameter_index + 5,
-                    gaussian_result.mdpde.GetModel().GetOffset());
-                statement_db.Bind<double>(
-                    first_parameter_index + 6,
-                    gaussian_result.alpha_r);
-            };
-            bind_gaussian_result(5, FittingStage::First);
-            bind_gaussian_result(12, FittingStage::Second);
-            statement_db.Bind<int>(19, entry->NeighborCountForPeeling());
-        });
-    }
-}
-
-void SaveAtomLocalPotentialEntrySubList(
-    SQLiteWrapper & database,
-    const ModelObject & model_obj,
-    const std::string & key_tag)
-{
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomPosteriorSql) };
-    for (const auto & atom_object : model_obj.GetAtomList())
-    {
-        auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
-        if (entry == nullptr) continue;
-        if (entry->StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) continue;
-        const auto & member_result{ entry->GroupMemberResult() };
-        if (!member_result.has_value()) continue;
-        const auto & posterior{ member_result->posterior };
-
-        batch.Execute([&](SQLiteWrapper & statement_db)
-        {
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<double>(3, posterior.GetModel().GetAmplitude());
-            statement_db.Bind<double>(4, posterior.GetModel().GetWidth());
-            statement_db.Bind<double>(5, posterior.GetModel().GetOffset());
-            statement_db.Bind<double>(
-                6,
-                posterior.GetStandardDeviationModel().GetAmplitude());
-            statement_db.Bind<double>(
-                7,
-                posterior.GetStandardDeviationModel().GetWidth());
-            statement_db.Bind<double>(
-                8,
-                posterior.GetStandardDeviationModel().GetOffset());
-            statement_db.Bind<int>(9, static_cast<int>(member_result->is_outlier));
-            statement_db.Bind<double>(10, member_result->statistical_distance);
-        });
-    }
-}
-
-void SaveAtomGroupPotentialEntryList(
-    SQLiteWrapper & database,
-    const AtomGroupPotentialEntry & group_entry,
-    const std::string & key_tag)
-{
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto group_key :
-        group_entry.CollectGroupKeys())
-    {
-        if (group_entry.GetParameterSummary(group_key)) continue;
-        batch.Execute([&](SQLiteWrapper & statement_db)
-        {
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<GroupKey>(2, group_key);
-            const auto & mean{ group_entry.GetMean(group_key) };
-            const auto & mdpde{ group_entry.GetMDPDE(group_key) };
-            const auto & prior{ group_entry.GetPrior(group_key) };
-            const auto & prior_standard_deviation{
-                group_entry.GetPriorStandardDeviation(group_key)
-            };
-            statement_db.Bind<double>(
-                3, mean.GetAmplitude());
-            statement_db.Bind<double>(
-                4, mean.GetWidth());
-            statement_db.Bind<double>(
-                5, mean.GetOffset());
-            statement_db.Bind<double>(
-                6, mdpde.GetAmplitude());
-            statement_db.Bind<double>(
-                7, mdpde.GetWidth());
-            statement_db.Bind<double>(
-                8, mdpde.GetOffset());
-            statement_db.Bind<double>(
-                9, prior.GetAmplitude());
-            statement_db.Bind<double>(
-                10, prior.GetWidth());
-            statement_db.Bind<double>(
-                11, prior.GetOffset());
-            statement_db.Bind<double>(
-                12,
-                prior_standard_deviation.GetAmplitude());
-            statement_db.Bind<double>(
-                13,
-                prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(
-                14,
-                prior_standard_deviation.GetOffset());
-            statement_db.Bind<double>(
-                15,
-                group_entry.GetAlphaG(group_key));
-        });
-    }
+    return database.IsNull(index) ? std::numeric_limits<double>::quiet_NaN() : database.GetColumn<double>(index);
 }
 
 void LoadAtomLocalPotentialEntrySubList(
@@ -1132,9 +885,9 @@ void LoadAtomLocalPotentialEntrySubList(
                 database.GetColumn<double>(2),
                 database.GetColumn<double>(3) },
             GaussianModel3DUncertainty{
-                database.GetColumn<double>(4),
-                database.GetColumn<double>(5),
-                database.GetColumn<double>(6) }
+                LegacyUncertainty(database,4),
+                LegacyUncertainty(database,5),
+                LegacyUncertainty(database,6) }
         };
         entry->SetGroupMemberResult(GroupGaussianMemberResult{
             posterior,
@@ -1177,6 +930,7 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         const auto read_gaussian_result = [&database](int first_column_index)
         {
             LocalGaussianResult gaussian_result;
+            gaussian_result.uncertainty_recorded=false;
             gaussian_result.ols = GaussianModel3DWithUncertainty{
                 GaussianModel3D{
                     database.GetColumn<double>(first_column_index),
@@ -1209,7 +963,7 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
     return entry_map;
 }
 
-void LoadAtomGroupPotentialEntryList(
+std::vector<GroupKey> LoadAtomGroupPotentialEntryList(
     SQLiteWrapper & database,
     ModelObject & model_obj,
     const std::string & key_tag)
@@ -1246,20 +1000,22 @@ void LoadAtomGroupPotentialEntryList(
                 database.GetColumn<double>(8),
                 database.GetColumn<double>(9) },
             GaussianModel3DUncertainty{
-                database.GetColumn<double>(10),
-                database.GetColumn<double>(11),
-                database.GetColumn<double>(12) }
+                LegacyUncertainty(database,10),
+                LegacyUncertainty(database,11),
+                LegacyUncertainty(database,12) }
         };
         group_result.alpha_g =
             database.GetColumn<double>(13);
         group_entry.SetGaussianResult(group_key, group_result);
     }
 
+    const auto stored_keys=group_entry.CollectGroupKeys();
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
         group_entry.AddMember(group_key, *atom);
     }
+    return stored_keys;
 }
 
 void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & result)
@@ -1296,23 +1052,7 @@ void LoadJointResult(SQLiteWrapper & database, ModelObject & model, const std::s
     ModelAnalysisData::Of(model).joint_result=std::move(result);
 }
 
-void SaveAnalysis(
-    SQLiteWrapper & database,
-    const ModelObject & model_obj,
-    const std::string & key_tag)
-{
-    SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
-    const auto & analysis_data{ ModelAnalysisData::Of(model_obj) };
-
-    const auto & group_entry{ analysis_data.AtomGroupEntry() };
-    if (group_entry.GroupCount() > 0)
-    {
-        SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag);
-        SaveAtomGroupPotentialEntryList(database, group_entry, key_tag);
-    }
-}
-
-void LoadAnalysis(
+std::vector<GroupKey> LoadAnalysis(
     SQLiteWrapper & database,
     ModelObject & model_obj,
     const std::string & key_tag)
@@ -1334,17 +1074,16 @@ void LoadAnalysis(
             *atom_object, std::move(iter->second));
     }
 
-    LoadAtomGroupPotentialEntryList(database, model_obj, key_tag);
+    return LoadAtomGroupPotentialEntryList(database, model_obj, key_tag);
 }
 
 } // namespace
 
 namespace model_storage {
 
-void UpgradeStageSchema(SQLiteWrapper & database)
+void CreateStageTable(SQLiteWrapper & database)
 {
-    database.Execute("CREATE TABLE model_stage_result (key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL, FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE);");
-    database.Execute("PRAGMA user_version = 18;");
+    database.Execute("CREATE TABLE IF NOT EXISTS model_stage_result (key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL, FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE);");
 }
 
 void CreateTables(SQLiteWrapper & database)
@@ -1353,6 +1092,8 @@ void CreateTables(SQLiteWrapper & database)
     {
         database.Execute(std::string(create_sql));
     }
+    CreateStageTable(database);
+    database.Execute("PRAGMA user_version=19;");
 }
 
 void Save(
@@ -1360,27 +1101,22 @@ void Save(
     const ModelObject & input_model,
     const std::string & key_tag)
 {
-    std::unique_ptr<ModelObject> snapshot_model;
     std::optional<std::string> joint_json;
     const auto & joint=ModelAnalysisData::Of(input_model).joint_result;
     if(joint)
     {
         ValidateJointAtoms(input_model,*joint);
         joint_json = joint_result_io::Encode(*joint);
-        bool has_neutral=false;
-        for(const auto & id:joint->atom_ids) {const auto * e=ModelAnalysisData::Of(input_model).FindAtomLocalEntry(*input_model.FindAtomPtr(std::stoi(id))); if(e && e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) has_neutral=true;}
-        if(!has_neutral) {snapshot_model=std::make_unique<ModelObject>(input_model); stage_result_io::MapSnapshot(*snapshot_model);}
     }
-    const auto & model_obj=snapshot_model ? *snapshot_model:input_model;
+    const auto & model_obj=input_model;
+    const auto neutral = stage_result_io::Encode(model_obj);
     for (const auto table_name : kModelTablesScopedByKey)
     {
         DeleteRowsForKey(database, std::string(table_name), key_tag);
     }
 
     SaveStructure(database, model_obj, key_tag);
-    SaveAnalysis(database, model_obj, key_tag);
     if (joint_json) SaveJointResult(database, *joint_json, key_tag);
-    const auto neutral = stage_result_io::Encode(model_obj);
     SQLiteStatementBatch batch{database, "INSERT INTO model_stage_result (key_tag,result_json) VALUES (?,?);"};
     batch.Execute([&](SQLiteWrapper & statement) { statement.Bind<std::string>(1,key_tag); statement.Bind<std::string>(2,neutral); });
 }
@@ -1403,7 +1139,14 @@ std::unique_ptr<ModelObject> Load(
             { bond.GetAtomSerialID1(), bond.GetAtomSerialID2() });
     });
     LoadModelObjectRow(database, *model_object, key_tag);
-    LoadAnalysis(database, *model_object, key_tag);
+    bool legacy=false;
+    {
+        database.Prepare("PRAGMA user_version;"); SQLiteWrapper::StatementGuard guard(database);
+        if(database.StepNext()!=SQLiteWrapper::StepRow()) throw std::runtime_error("Missing schema version.");
+        legacy=database.GetColumn<int>(0)<19;
+    }
+    std::vector<GroupKey> legacy_groups;
+    if(legacy) legacy_groups=LoadAnalysis(database, *model_object, key_tag);
     LoadJointResult(database, *model_object, key_tag);
     bool neutral_table = false;
     {
@@ -1420,9 +1163,38 @@ std::unique_ptr<ModelObject> Load(
         if(rc==SQLiteWrapper::StepRow()) neutral=database.GetColumn<std::string>(0);
         else if(rc!=SQLiteWrapper::StepDone()) throw std::runtime_error("Failed to read stage results.");
     }
-    if(neutral) stage_result_io::Decode(*model_object,*neutral);
-    else stage_result_io::AdaptLegacy(*model_object);
+    if(neutral) stage_result_io::Decode(*model_object,*neutral,legacy ? 1:2,legacy_groups);
+    else if(legacy) stage_result_io::AdaptLegacy(*model_object);
+    else throw std::invalid_argument("Missing canonical analysis document.");
     return model_object;
+}
+
+void UpgradeStageSchema(SQLiteWrapper & database)
+{
+    // The caller owns the transaction, including its eventual model write.
+    std::vector<std::string> keys;
+    {
+        database.Prepare("SELECT key_tag FROM model_object ORDER BY key_tag;");
+        SQLiteWrapper::StatementGuard guard(database);
+        while(true) {
+            const auto rc=database.StepNext();
+            if(rc==SQLiteWrapper::StepDone()) break;
+            if(rc!=SQLiteWrapper::StepRow()) throw std::runtime_error("Failed to enumerate legacy models.");
+            keys.push_back(database.GetColumn<std::string>(0));
+        }
+    }
+    CreateStageTable(database);
+    for(const auto & key:keys)
+    {
+        const auto model=Load(database,key);
+        const auto document=stage_result_io::Encode(*model);
+        SQLiteStatementBatch batch{database,"INSERT OR REPLACE INTO model_stage_result (key_tag,result_json) VALUES (?,?);"};
+        batch.Execute([&](SQLiteWrapper & db) {db.Bind<std::string>(1,key); db.Bind<std::string>(2,document);});
+    }
+    database.Execute("DROP TABLE model_atom_local_potential;");
+    database.Execute("DROP TABLE model_atom_posterior;");
+    database.Execute("DROP TABLE model_atom_group_potential;");
+    database.Execute("PRAGMA user_version=19;");
 }
 
 } // namespace model_storage

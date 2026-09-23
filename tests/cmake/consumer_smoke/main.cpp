@@ -60,6 +60,18 @@ int main()
     rhbm_gem::ModelObject saved_model;
     saved_model.EditAnalysis().SetJointResult(saved);
     if(!saved_model.GetAnalysisView().GetJointResult()) return 5;
+    auto imported=saved; imported.atom_ids={"1"};
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> imported_atoms;
+    auto imported_atom=std::make_unique<rhbm_gem::AtomObject>();
+    imported_atom->SetSerialID(1); imported_atom->SetElement(Element::CARBON);
+    imported_atoms.push_back(std::move(imported_atom));
+    rhbm_gem::ModelObject imported_model(std::move(imported_atoms));
+    imported_model.EditAnalysis().ApplyJointResult(std::move(imported),"consumer-import");
+    rhbm_gem::DataRepository repository("consumer-analysis.sqlite");
+    repository.SaveModel(imported_model,"import");
+    const auto loaded=repository.LoadModel("import");
+    if(!loaded->GetAnalysisView().GetJointResult() ||
+        rhbm_gem::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetStageEstimate(rhbm_gem::FittingStage::Second).point.has_value()) return 8;
     const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
     if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
     if(joint.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||

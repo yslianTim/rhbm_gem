@@ -83,6 +83,7 @@ struct LocalGaussianResult
     };
     std::optional<RHBMBetaEstimateResult> fit_result{};
     std::optional<LocalFitDiagnostics> diagnostics{};
+    bool uncertainty_recorded{ true };
 };
 
 struct GroupGaussianMemberResult

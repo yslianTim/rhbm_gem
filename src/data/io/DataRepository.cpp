@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 18;
+constexpr int kCurrentSchemaVersion = 19;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -264,8 +264,10 @@ void ValidateModelRootForeignKey(
 
 void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
-    const bool neutral = QueryUserVersion(database) == 18;
+    const bool canonical = QueryUserVersion(database) == 19;
+    const bool neutral = QueryUserVersion(database) >= 18;
     std::vector<std::string_view> expected(kModelTableNames.begin(), kModelTableNames.end());
+    if(canonical) std::erase_if(expected,[](auto name) {return name=="model_atom_local_potential" || name=="model_atom_posterior" || name=="model_atom_group_potential";});
     if (neutral) { expected.push_back("model_stage_result"); std::sort(expected.begin(),expected.end()); }
 
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
@@ -315,29 +317,32 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     ValidateColumns(database, "model_bond", {
         "key_tag", "atom_serial_id_1", "atom_serial_id_2", "bond_key",
         "bond_type", "bond_order", "is_special_bond", "is_selected" });
-    ValidateColumns(database, "model_atom_local_potential", {
-        "key_tag", "serial_id", "raw_distance_and_map_value_list",
-        "peeling_distance_and_map_value_list", "amplitude_estimate_ols_1st",
-        "width_estimate_ols_1st", "intercept_estimate_ols_1st",
-        "amplitude_estimate_mdpde_1st", "width_estimate_mdpde_1st",
-        "intercept_estimate_mdpde_1st", "alpha_r_1st",
-        "amplitude_estimate_ols_2nd", "width_estimate_ols_2nd",
-        "intercept_estimate_ols_2nd", "amplitude_estimate_mdpde_2nd",
-        "width_estimate_mdpde_2nd", "intercept_estimate_mdpde_2nd",
-        "alpha_r_2nd", "neighbor_count_for_peeling" });
-    ValidateColumns(database, "model_atom_posterior", {
-        "key_tag", "serial_id", "amplitude_estimate_posterior",
-        "width_estimate_posterior", "intercept_estimate_posterior",
-        "amplitude_variance_posterior", "width_variance_posterior",
-        "intercept_variance_posterior", "outlier_tag", "statistical_distance" });
-    ValidateColumns(database, "model_atom_group_potential", {
-        "key_tag", "group_key", "amplitude_estimate_mean",
-        "width_estimate_mean", "intercept_estimate_mean",
-        "amplitude_estimate_mdpde", "width_estimate_mdpde",
-        "intercept_estimate_mdpde", "amplitude_estimate_prior",
-        "width_estimate_prior", "intercept_estimate_prior",
-        "amplitude_variance_prior", "width_variance_prior",
-        "intercept_variance_prior", "alpha_g" });
+    if (!canonical)
+    {
+        ValidateColumns(database, "model_atom_local_potential", {
+            "key_tag", "serial_id", "raw_distance_and_map_value_list",
+            "peeling_distance_and_map_value_list", "amplitude_estimate_ols_1st",
+            "width_estimate_ols_1st", "intercept_estimate_ols_1st",
+            "amplitude_estimate_mdpde_1st", "width_estimate_mdpde_1st",
+            "intercept_estimate_mdpde_1st", "alpha_r_1st",
+            "amplitude_estimate_ols_2nd", "width_estimate_ols_2nd",
+            "intercept_estimate_ols_2nd", "amplitude_estimate_mdpde_2nd",
+            "width_estimate_mdpde_2nd", "intercept_estimate_mdpde_2nd",
+            "alpha_r_2nd", "neighbor_count_for_peeling" });
+        ValidateColumns(database, "model_atom_posterior", {
+            "key_tag", "serial_id", "amplitude_estimate_posterior",
+            "width_estimate_posterior", "intercept_estimate_posterior",
+            "amplitude_variance_posterior", "width_variance_posterior",
+            "intercept_variance_posterior", "outlier_tag", "statistical_distance" });
+        ValidateColumns(database, "model_atom_group_potential", {
+            "key_tag", "group_key", "amplitude_estimate_mean",
+            "width_estimate_mean", "intercept_estimate_mean",
+            "amplitude_estimate_mdpde", "width_estimate_mdpde",
+            "intercept_estimate_mdpde", "amplitude_estimate_prior",
+            "width_estimate_prior", "intercept_estimate_prior",
+            "amplitude_variance_prior", "width_variance_prior",
+            "intercept_variance_prior", "alpha_g" });
+    }
 
     ValidateColumns(database, "model_joint_result", { "key_tag", "result_json" });
     ValidatePrimaryKey(database, "model_joint_result", { "key_tag" });
@@ -354,17 +359,21 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     ValidatePrimaryKey(database, "model_atom", { "key_tag", "serial_id" });
     ValidatePrimaryKey(database, "model_bond", {
         "key_tag", "atom_serial_id_1", "atom_serial_id_2" });
-    ValidatePrimaryKey(database, "model_atom_local_potential", {
-        "key_tag", "serial_id" });
-    ValidatePrimaryKey(database, "model_atom_posterior", { "key_tag", "serial_id" });
-    ValidatePrimaryKey(database, "model_atom_group_potential", {
-        "key_tag", "group_key" });
+    if (!canonical)
+    {
+        ValidatePrimaryKey(database, "model_atom_local_potential", {
+            "key_tag", "serial_id" });
+        ValidatePrimaryKey(database, "model_atom_posterior", { "key_tag", "serial_id" });
+        ValidatePrimaryKey(database, "model_atom_group_potential", {
+            "key_tag", "group_key" });
+    }
 
     ValidateSelectionColumn(database, "model_atom");
     ValidateSelectionColumn(database, "model_bond");
     for (const auto table_name : kModelChildTableNames)
     {
-        ValidateModelRootForeignKey(database, table_name);
+        if(std::find(expected.begin(),expected.end(),table_name)!=expected.end())
+            ValidateModelRootForeignKey(database, table_name);
     }
 }
 
@@ -375,17 +384,16 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     {
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         rhbm_gem::model_storage::CreateTables(database);
-        rhbm_gem::model_storage::UpgradeStageSchema(database);
         ValidateCurrentSchema(database);
         return;
     }
-    if (user_version == 17 || user_version == kCurrentSchemaVersion)
+    if (user_version == 17 || user_version == 18 || user_version == kCurrentSchemaVersion)
     {
         ValidateCurrentSchema(database);
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v17/v18.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v17/v18/v19.");
 }
 
 } // namespace
@@ -431,7 +439,7 @@ void DataRepository::SaveModel(
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-    if (QueryUserVersion(*m_database) == 17) model_storage::UpgradeStageSchema(*m_database);
+    if (QueryUserVersion(*m_database) < 19) model_storage::UpgradeStageSchema(*m_database);
     model_storage::Save(*m_database, model_object, key_tag);
     transaction.Commit();
 }

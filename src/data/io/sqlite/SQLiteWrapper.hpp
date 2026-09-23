@@ -133,6 +133,8 @@ public:
     SQLiteWrapper(const SQLiteWrapper &) = delete;
     SQLiteWrapper & operator=(const SQLiteWrapper &) = delete;
 
+    bool IsNull(int index) const { return sqlite3_column_type(m_statement_ptr,index)==SQLITE_NULL; }
+
     static int StepDone() { return SQLITE_DONE; }
     static int StepRow() { return SQLITE_ROW; }
     std::string ErrorMessage() const { return std::string(sqlite3_errmsg(m_database_ptr)); }

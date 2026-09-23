@@ -15,7 +15,10 @@ class ModelAnalysisEditor
     ModelObject & m_model_object;
 
 public:
+    // Attach diagnostics to already-published stages; saving validates consistency.
     void SetJointResult(JointAnalysisResult result);
+    // Publish snapshot endpoints atomically, then retain the diagnostic snapshot.
+    void ApplyJointResult(JointAnalysisResult result, const std::string & run_id);
     void ClearJointResult();
     void UpdateJointMetadata(JointAnalysisMetadata metadata);
     void ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates);

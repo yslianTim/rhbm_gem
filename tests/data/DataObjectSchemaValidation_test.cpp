@@ -15,16 +15,17 @@ template <typename MutateFn>
 void ExpectCurrentSchemaValidationFailure(
     const char * temp_dir_name,
     const char * database_name,
-    MutateFn mutate_database)
+    MutateFn mutate_database, bool legacy=false)
 {
     const command_test::ScopedTempDir temp_dir{ temp_dir_name };
     const auto database_path{ temp_dir.path() / database_name };
-    { rg::DataRepository repository{ database_path }; }
-    ASSERT_EQ(data_test::GetUserVersion(database_path), 18);
+    if(legacy) data_test::CreateLegacyAnalysisDatabase(database_path);
+    else { rg::DataRepository repository{ database_path }; }
+    ASSERT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:19);
 
     mutate_database(database_path);
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 18);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:19);
 }
 
 void RecreateChainMapTable(
@@ -43,7 +44,7 @@ void RecreateChainMapTable(
 
 } // namespace
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingPeelingNeighborCountColumnThrows)
+TEST(DataObjectSchemaValidationTest, LegacySchemaMissingPeelingNeighborCountColumnThrows)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_missing_neighbor_count",
@@ -54,10 +55,10 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingPeelingNeighborCountCol
                 database_path,
                 "ALTER TABLE model_atom_local_potential "
                 "DROP COLUMN neighbor_count_for_peeling;");
-        });
+        },true);
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingLocalGaussianStageColumnThrows)
+TEST(DataObjectSchemaValidationTest, LegacySchemaMissingLocalGaussianStageColumnThrows)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_missing_local_stage",
@@ -67,10 +68,10 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingLocalGaussianStageColum
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
                 "ALTER TABLE model_atom_local_potential DROP COLUMN alpha_r_2nd;");
-        });
+        },true);
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColumn)
+TEST(DataObjectSchemaValidationTest, LegacySchemaRejectsLegacyLocalGaussianColumn)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_legacy_local_column",
@@ -81,10 +82,10 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColu
                 database_path,
                 "ALTER TABLE model_atom_local_potential "
                 "ADD COLUMN alpha_r DOUBLE DEFAULT 0.0;");
-        });
+        },true);
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianColumnThrows)
+TEST(DataObjectSchemaValidationTest, LegacySchemaMissingGroupGaussianColumnThrows)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_missing_group_result",
@@ -94,10 +95,10 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianColumnThro
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
                 "ALTER TABLE model_atom_group_potential DROP COLUMN alpha_g;");
-        });
+        },true);
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyGroupGaussianColumn)
+TEST(DataObjectSchemaValidationTest, LegacySchemaRejectsLegacyGroupGaussianColumn)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_legacy_group_column",
@@ -108,7 +109,7 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyGroupGaussianColu
                 database_path,
                 "ALTER TABLE model_atom_group_potential "
                 "ADD COLUMN member_size INTEGER;");
-        });
+        },true);
 }
 
 TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingRequiredTableThrows)
@@ -119,7 +120,7 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingRequiredTableThrows)
         [](const std::filesystem::path & database_path)
         {
             data_test::ExecuteSqlWithForeignKeysOff(
-                database_path, "DROP TABLE model_atom_posterior;");
+                database_path, "DROP TABLE model_stage_result;");
         });
 }
 
@@ -237,7 +238,7 @@ TEST(DataObjectSchemaValidationTest, DeletingModelRootCascadesPayloadRows)
     EXPECT_EQ(data_test::CountRows(database_path, "model_bond"), 0);
 }
 
-TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsGroupStageColumn)
+TEST(DataObjectSchemaValidationTest, LegacySchemaRejectsGroupStageColumn)
 {
     ExpectCurrentSchemaValidationFailure(
         "data_schema_group_stage_column",
@@ -246,7 +247,7 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsGroupStageColumn)
         {
             data_test::ExecuteSql(database_path,
                 "ALTER TABLE model_atom_group_potential ADD COLUMN alpha_g_3rd DOUBLE;");
-        });
+        },true);
 }
 
 TEST(DataObjectSchemaValidationTest, JointResultPayloadMustBeNotNull)

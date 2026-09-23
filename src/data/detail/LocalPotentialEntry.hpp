@@ -19,6 +19,7 @@ class LocalPotentialEntry
     {
         LocalStageEstimate estimate;
         double alpha_r{};
+        bool uncertainty_recorded{ false };
         GaussianModel3DWithUncertainty ols{GaussianModel3D{0, 0}, {}};
         GaussianModel3DUncertainty mdpde_uncertainty;
         // Seeds/invalid native outcomes are not published final points.
@@ -65,6 +66,7 @@ public:
         }
         else record.unfitted_model = model;
         record.alpha_r = value.alpha_r;
+        record.uncertainty_recorded = value.uncertainty_recorded;
         record.ols = std::move(value.ols);
         record.mdpde_uncertainty = value.mdpde.GetStandardDeviationModel();
         record.diagnostics = std::move(value.diagnostics);
@@ -86,10 +88,10 @@ public:
         if (value.point) record.unfitted_model.reset();
         record.estimate = std::move(value);
     }
-    LocalGaussianResult GaussianResult(FittingStage stage) const
+    LocalGaussianResult GaussianResult(FittingStage stage, bool include_transient = true) const
     {
         const auto & r = Record(stage);
-        return {r.alpha_r, r.ols, {MDPDEModel(stage), r.mdpde_uncertainty}, r.fit_result, r.diagnostics};
+        return {r.alpha_r, r.ols, {MDPDEModel(stage), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
     }
     const GaussianModel3D & MDPDEModel(FittingStage stage) const
     {

@@ -46,11 +46,16 @@ def main() -> int:
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
+            assert stages["version"] == 2
             assert len(stages["atoms"]) == 2
+            assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
+            for group in stages["groups"]:
+                if group["summary"] and group["summary"]["inference"]:
+                    assert "members" not in group["summary"]["inference"]
             assert all(atom["second"]["source"]["method"] == 3 for atom in stages["atoms"])
             for atom in stages["atoms"]:
                 if atom["second"]["source"]["role"] == 1:  # target
@@ -58,7 +63,7 @@ def main() -> int:
                 else:
                     assert atom["peeling"] is None
                     assert atom["evidence"] is None
-            assert connection.execute("SELECT COUNT(*) FROM model_atom_local_potential WHERE key_tag='example' AND amplitude_estimate_mdpde_2nd IS NOT NULL").fetchone()[0] == 0
+            assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 3
         assert saved["selection_domain"]["target_indices"] == [0]

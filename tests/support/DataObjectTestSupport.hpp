@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -18,6 +19,17 @@
 namespace data_test {
 
 namespace rg = rhbm_gem;
+
+// Authentic v18 output produced before the v19 writer replaced legacy tables.
+inline void CreateLegacyAnalysisDatabase(const std::filesystem::path & path, int version=18)
+{
+    const auto fixture=std::filesystem::path(__FILE__).parent_path().parent_path()/"fixtures"/"analysis-v18.sql";
+    std::ifstream input(fixture);
+    const std::string sql(std::istreambuf_iterator<char>(input),{});
+    if(sql.empty()) throw std::runtime_error("Missing legacy fixture.");
+    rg::SQLiteWrapper db(path); db.Execute("PRAGMA foreign_keys=OFF;"); db.Execute(sql); db.Execute("PRAGMA foreign_keys=ON;");
+    if(version==17) {db.Execute("DROP TABLE model_stage_result;"); db.Execute("PRAGMA user_version=17;");}
+}
 
 inline std::shared_ptr<rg::ModelObject> LoadFixtureModel(
     const std::filesystem::path & model_path,

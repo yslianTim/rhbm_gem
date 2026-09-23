@@ -1,18 +1,11 @@
 #pragma once
 
-#include <limits>
+#include <cstdint>
 #include <sqlite3.h>
-#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace rhbm_gem {
-
-static_assert(sizeof(double) == 8, "SQLite sampling BLOB requires 64-bit double.");
-static_assert(
-    std::numeric_limits<double>::is_iec559,
-    "SQLite sampling BLOB requires IEEE-754 double.");
 
 template<typename T>
 struct SQLiteBinder
@@ -106,36 +99,6 @@ struct SQLiteBinder<std::string_view>
     {
         return sqlite3_bind_text(stmt, index, value.data(),
                                  static_cast<int>(value.size()), SQLITE_TRANSIENT);
-    }
-};
-
-// LocalPotentialSampleList specialization
-template<>
-struct SQLiteBinder<LocalPotentialSampleList>
-{
-    static int Bind(sqlite3_stmt * stmt, int index, const LocalPotentialSampleList & value)
-    {
-        if(value.empty())
-        {
-            return sqlite3_bind_blob(stmt, index, nullptr, 0, SQLITE_STATIC);
-        }
-
-        std::vector<double> contiguous;
-        contiguous.reserve(value.size() * 3);
-        for(const auto & sample : value)
-        {
-            contiguous.push_back(sample.point.distance);
-            contiguous.push_back(sample.response);
-            contiguous.push_back(sample.point.is_selected ? 1.0 : 0.0);
-        }
-
-        return sqlite3_bind_blob(
-            stmt,
-            index,
-            reinterpret_cast<const void*>(contiguous.data()),
-            static_cast<int>(contiguous.size() * sizeof(double)),
-            SQLITE_TRANSIENT
-        );
     }
 };
 

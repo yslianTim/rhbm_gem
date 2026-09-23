@@ -1,6 +1,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -116,6 +117,12 @@ void InvalidateStageChange(ModelAnalysisData & data, int id,
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
     m_model_object{ model_object }
 {
+}
+
+void ModelAnalysisEditor::ApplyJointResult(JointAnalysisResult result, const std::string & run_id)
+{
+    ApplySecondStageEstimates(data_internal::BuildJointStageEstimates(result,run_id));
+    SetJointResult(std::move(result));
 }
 
 void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
