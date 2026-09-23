@@ -57,6 +57,11 @@ public:
         return m_group_map.size();
     }
 
+    void ClearMembers()
+    {
+        for (auto & [key, bucket] : m_group_map) { (void)key; bucket.members.clear(); }
+    }
+
     void AddMember(GroupKey group_key, AtomObject & member)
     {
         EnsureGroup(group_key).members.emplace_back(&member);

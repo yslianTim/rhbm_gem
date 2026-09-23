@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stdexcept>
+#include <cmath>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <string>
 #include <string_view>
 
@@ -8,6 +10,16 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem::painter_internal {
+
+// Empty or constant subsets need a non-degenerate frame; no data points are added.
+inline auto ComputePlotRange(const std::vector<double> & values, double margin, double minimum_range=0.1)
+{
+    auto range=array_helper::ComputeScalingRangeTuple(values,margin,minimum_range);
+    auto & [low,high]=range;
+    if (!std::isfinite(low) || !std::isfinite(high)) return decltype(range){0.0,1.0};
+    if (!(high>low)) {const double pad=std::max(0.5,std::abs(low)*0.05); low-=pad; high+=pad;}
+    return range;
+}
 
 inline void RequireLocalAnalyzedModel(
     const ModelObject & model_object,

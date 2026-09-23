@@ -46,8 +46,6 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
         {
             Logger::ProgressBar(model_count, model_size);
             inputs.model_objects.emplace_back(repository.LoadModel(key));
-            if (inputs.model_objects.back()->GetAnalysisView().GetJointResult())
-                throw std::invalid_argument("Joint result display is not supported; use result_dump --printer joint.");
             model_count++;
         }
 
@@ -62,8 +60,6 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 ref_model_objects.emplace_back(repository.LoadModel(key_tag));
-                if (ref_model_objects.back()->GetAnalysisView().GetJointResult())
-                    throw std::invalid_argument("Joint result comparison is not supported; use result_dump --printer joint.");
                 ref_model_count++;
             }
         }
@@ -103,7 +99,9 @@ void ApplyModelSelection(rhbm_gem::ModelObject & model_object, AtomSelector & se
                        atom.GetChainID(),
                        atom.GetResidue(),
                        atom.GetElement())
-                && rhbm_gem::AtomLocalPotentialView::For(atom).IsAvailable();
+                && rhbm_gem::AtomLocalPotentialView::For(atom).IsAvailable()
+                && (rhbm_gem::AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second).source.method != EstimateMethod::JointComponents
+                    || rhbm_gem::AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second).source.role == FittingRole::Target);
         });
 }
 

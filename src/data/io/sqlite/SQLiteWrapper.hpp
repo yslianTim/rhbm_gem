@@ -39,6 +39,7 @@ public:
     {
         SQLiteWrapper & m_db;
         int m_exception_count;
+        bool m_active{ true };
 
     public:
         explicit TransactionGuard(SQLiteWrapper & db) :
@@ -47,8 +48,15 @@ public:
             m_db.Execute("BEGIN TRANSACTION;");
         }
 
+        void Commit()
+        {
+            m_db.Execute("COMMIT;");
+            m_active = false;
+        }
+
         ~TransactionGuard() noexcept
         {
+            if (!m_active) return;
             try
             {
                 if (std::uncaught_exceptions() > m_exception_count)

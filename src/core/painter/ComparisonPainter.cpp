@@ -123,7 +123,8 @@ void ComparisonPainter::Run()
                 + std::to_string(m_model_object_list.size()));
 
     if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end() &&
-        m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end())
+        m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end() &&
+        m_ref_model_object_list_map.contains("amber95"))
     {
         PaintGroupGausEstimateComparison("figure_4_ab.pdf");
         PaintGausEstimateResidueClassDenseComparison("figure_4_sup.pdf");
@@ -132,6 +133,7 @@ void ComparisonPainter::Run()
     for (auto & model_object : m_model_object_list)
     {
         auto plot_name{ "figure_method_charge_"+ model_object->GetPdbID() +".pdf" };
+        if (!m_ref_model_object_list_map.contains("with_charge") || m_ref_model_object_list_map.at("with_charge").empty()) continue;
         auto & ref_model_object_list{ m_ref_model_object_list_map.at("with_charge") };
         if (model_object->GetPdbID() == ref_model_object_list.at(0)->GetPdbID())
         {
@@ -207,13 +209,13 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
 
     for (size_t i = 0; i < col_size; i++)
     {
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array[i], 0.16) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array[i], 0.16) };
         x_min[i] = std::get<0>(x_range);
         x_max[i] = std::get<1>(x_range);
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array[j], 0.24) };
+        auto y_range{ painter_internal::ComputePlotRange(y_array[j], 0.24) };
         y_min[j] = std::get<0>(y_range);
         y_max[j] = std::get<1>(y_range);
     }
@@ -251,7 +253,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
         }
     }
 
-    auto x_range_sim{ array_helper::ComputeScalingRangeTuple(x_array_sim, 0.1) };
+    auto x_range_sim{ painter_internal::ComputePlotRange(x_array_sim, 0.1) };
     auto x_min_sim{ std::get<0>(x_range_sim) };
     auto x_max_sim{ std::get<1>(x_range_sim) };
     double y_min_sim[2]{ 0.0 };
@@ -336,7 +338,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     std::unique_ptr<TH2> frame_sim[2];
     for (int i = 0; i < 2; i++)
     {
-        auto y_range_sim{ array_helper::ComputeScalingRangeTuple(y_array_sim[i], 0.2) };
+        auto y_range_sim{ painter_internal::ComputePlotRange(y_array_sim[i], 0.2) };
         y_min_sim[i] = std::get<0>(y_range_sim);
         y_max_sim[i] = std::get<1>(y_range_sim);
     }
@@ -536,7 +538,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
         auto x_max{ std::get<1>(x_range) };
         x_min = (x_min <= 0.4) ? 0.45 : x_min;
 
-        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.45) };
+        auto y_range{ painter_internal::ComputePlotRange(y_array, 0.45) };
         auto y_min{ std::get<0>(y_range) };
         auto y_max{ std::get<1>(y_range) };
         y_min = (y_min <= 0.0) ? 0.1 : y_min;
@@ -699,7 +701,7 @@ void ComparisonPainter::PainMapValueComparison(
                 PotentialPlotBuilder::CreateMapValueScatterGraph(
                     atom_key, ref_model_object, model_object, 15, 0.0, 1.5)
             };
-            r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
+            if (graph->GetN() >= 2) r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
             auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
             function->SetParameters(intercept[i], slope[i]);
             scatter_graph[i] = graph.get();
@@ -714,11 +716,11 @@ void ComparisonPainter::PainMapValueComparison(
             }
         }
 
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array, 0.05) };
         double x_min{ std::get<0>(x_range) };
         double x_max{ std::get<1>(x_range) };
 
-        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2) };
+        auto y_range{ painter_internal::ComputePlotRange(y_array, 0.2) };
         double y_min{ std::get<0>(y_range) };
         double y_max{ std::get<1>(y_range) };
 
@@ -728,6 +730,7 @@ void ComparisonPainter::PainMapValueComparison(
         std::unique_ptr<TPaveText> fit_info_text[col_size];
         for (size_t i = 0; i < col_size; i++)
         {
+            if (scatter_graph[i]->GetN() < 2) continue;
             auto element_color{ painter_internal::GetMainChainElementColor(i) };
             auto element_marker{ painter_internal::GetMainChainElementOpenMarker(i) };
             auto element_label{ painter_internal::GetMainChainElementLabel(i) };
@@ -836,8 +839,8 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(group_key)) continue;
-            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            if (!entry_view.HasAtomGroupPrior(group_key)) continue;
+            if (!entry_view.HasAtomGroupPrior(ref_group_key)) continue;
             y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id);
             y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(par_id);
@@ -891,8 +894,8 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(group_key)) continue;
-            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            if (!entry_view.HasAtomGroupPrior(group_key)) continue;
+            if (!entry_view.HasAtomGroupPrior(ref_group_key)) continue;
             x_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1);
             y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0);
             x_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)

@@ -2,6 +2,7 @@
 
 #include "SQLiteWrapper.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include "data/io/detail/StageResultJson.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
@@ -231,7 +232,8 @@ inline constexpr std::array<std::string_view, 11> kCreateModelTableSqlList{
     kCreateModelAtomGroupTableSql
 };
 
-inline constexpr std::array<std::string_view, 10> kModelTablesScopedByKey{
+inline constexpr std::array<std::string_view, 11> kModelTablesScopedByKey{
+    "model_stage_result",
     "model_joint_result",
     "model_chain_map",
     "model_component",
@@ -978,6 +980,7 @@ void SaveAtomLocalPotentialEntryList(
                 int first_parameter_index,
                 FittingStage stage)
             {
+                if (entry->StageEstimate(stage).source.method == EstimateMethod::JointComponents) return;
                 const auto & gaussian_result{ entry->GaussianResult(stage) };
                 statement_db.Bind<double>(
                     first_parameter_index,
@@ -1018,6 +1021,7 @@ void SaveAtomLocalPotentialEntrySubList(
     {
         auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
+        if (entry->StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) continue;
         const auto & member_result{ entry->GroupMemberResult() };
         if (!member_result.has_value()) continue;
         const auto & posterior{ member_result->posterior };
@@ -1053,6 +1057,7 @@ void SaveAtomGroupPotentialEntryList(
     for (const auto group_key :
         group_entry.CollectGroupKeys())
     {
+        if (group_entry.GetParameterSummary(group_key)) continue;
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
@@ -1161,6 +1166,7 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
 
         auto entry{ std::make_unique<LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
+        entry->SetSampleGeometryAvailable(false);
         entry->SetRawSamplingEntries(
             database.GetColumn<LocalPotentialSampleList>(1));
         entry->SetPeelingSamplingEntries(
@@ -1336,6 +1342,12 @@ void LoadAnalysis(
 
 namespace model_storage {
 
+void UpgradeStageSchema(SQLiteWrapper & database)
+{
+    database.Execute("CREATE TABLE model_stage_result (key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL, FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE);");
+    database.Execute("PRAGMA user_version = 18;");
+}
+
 void CreateTables(SQLiteWrapper & database)
 {
     for (const auto create_sql : kCreateModelTableSqlList)
@@ -1346,9 +1358,20 @@ void CreateTables(SQLiteWrapper & database)
 
 void Save(
     SQLiteWrapper & database,
-    const ModelObject & model_obj,
+    const ModelObject & input_model,
     const std::string & key_tag)
 {
+    std::unique_ptr<ModelObject> snapshot_model;
+    const auto & joint=ModelAnalysisData::Of(input_model).joint_result;
+    if(joint)
+    {
+        ValidateJointAtoms(input_model,*joint);
+        (void)joint_result_io::Encode(*joint);
+        bool has_neutral=false;
+        for(const auto & id:joint->atom_ids) {const auto * e=ModelAnalysisData::Of(input_model).FindAtomLocalEntry(*input_model.FindAtomPtr(std::stoi(id))); if(e && e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) has_neutral=true;}
+        if(!has_neutral) {snapshot_model=std::make_unique<ModelObject>(input_model); stage_result_io::MapSnapshot(*snapshot_model);}
+    }
+    const auto & model_obj=snapshot_model ? *snapshot_model:input_model;
     for (const auto table_name : kModelTablesScopedByKey)
     {
         DeleteRowsForKey(database, std::string(table_name), key_tag);
@@ -1357,6 +1380,9 @@ void Save(
     SaveStructure(database, model_obj, key_tag);
     SaveAnalysis(database, model_obj, key_tag);
     SaveJointResult(database, model_obj, key_tag);
+    const auto neutral = stage_result_io::Encode(model_obj);
+    SQLiteStatementBatch batch{database, "INSERT INTO model_stage_result (key_tag,result_json) VALUES (?,?);"};
+    batch.Execute([&](SQLiteWrapper & statement) { statement.Bind<std::string>(1,key_tag); statement.Bind<std::string>(2,neutral); });
 }
 
 std::unique_ptr<ModelObject> Load(
@@ -1379,6 +1405,23 @@ std::unique_ptr<ModelObject> Load(
     LoadModelObjectRow(database, *model_object, key_tag);
     LoadAnalysis(database, *model_object, key_tag);
     LoadJointResult(database, *model_object, key_tag);
+    bool neutral_table = false;
+    {
+        database.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='model_stage_result';");
+        SQLiteWrapper::StatementGuard guard(database);
+        if (database.StepNext() == SQLiteWrapper::StepRow()) neutral_table = database.GetColumn<int>(0) == 1;
+    }
+    std::optional<std::string> neutral;
+    if (neutral_table)
+    {
+        database.Prepare("SELECT result_json FROM model_stage_result WHERE key_tag=?;");
+        SQLiteWrapper::StatementGuard guard(database); database.Bind<std::string>(1,key_tag);
+        const auto rc=database.StepNext();
+        if(rc==SQLiteWrapper::StepRow()) neutral=database.GetColumn<std::string>(0);
+        else if(rc!=SQLiteWrapper::StepDone()) throw std::runtime_error("Failed to read stage results.");
+    }
+    if(neutral) stage_result_io::Decode(*model_object,*neutral);
+    else stage_result_io::AdaptLegacy(*model_object);
     return model_object;
 }
 

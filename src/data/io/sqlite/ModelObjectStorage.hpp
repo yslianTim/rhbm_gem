@@ -11,6 +11,7 @@ class ModelObject;
 namespace model_storage {
 
 void CreateTables(SQLiteWrapper & database);
+void UpgradeStageSchema(SQLiteWrapper & database);
 void Save(SQLiteWrapper & database, const ModelObject & obj, const std::string & key_tag);
 std::unique_ptr<ModelObject> Load(SQLiteWrapper & database, const std::string & key_tag);
 

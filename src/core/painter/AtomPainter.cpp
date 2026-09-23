@@ -69,7 +69,7 @@ void AtomPainter::AddModel(ModelObject & data_object)
     painter_internal::RequireLocalAnalyzedModel(data_object, "AtomPainter");
     if (m_output_label.empty())
     {
-        m_output_label = data_object.GetKeyTag();
+        m_output_label = path_helper::EnsureSanitizedTag(data_object.GetKeyTag());
     }
     for (auto * atom : data_object.GetSelectedAtoms())
     {
@@ -172,7 +172,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     map_value_hist->Draw("CANDLE2 SAME");
 
     const auto & estimate{
-        atom_entry.GetEstimateMDPDE(FittingStage::Second)
+        atom_entry.GetFinalModel(FittingStage::Second)
     };
     auto amplitude{ estimate.GetAmplitude() };
     auto width{ estimate.GetWidth() };
@@ -216,12 +216,37 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     for (auto atom_object : m_atom_object_list)
     {
         const auto entry_view{ AtomLocalPotentialView::For(*atom_object) };
+        if (!entry_view.IsAvailable() || entry_view.GetStageEstimate(FittingStage::Second).source.role == FittingRole::Halo) continue;
+        if (entry_view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents)
+        {
+            canvas->Clear(); canvas->cd();
+            auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
+            auto raw=builder->CreateDistanceToMapValueGraph(false,false);
+            auto peeled=builder->CreateDistanceToMapValueGraph(false,true);
+            raw->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Map response").c_str());
+            root_helper::SetMarkerAttribute(raw.get(),20,0.7f,kGray+1);
+            if (raw->GetN()>0) raw->Draw("AP");
+            else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Map response");
+            root_helper::SetMarkerAttribute(peeled.get(),20,0.7f,kBlue);
+            peeled->Draw("P SAME");
+            auto curve=builder->CreateAtomLocalGausFunctionFinal();
+            auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
+            if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
+            if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Grid-consistent peeling (covered samples)","p");
+            if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
+            else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetStageEstimate(FittingStage::Second).reason).c_str(), "");
+            legend->Draw();
+            root_helper::PrintCanvasPad(canvas.get(),file_path);
+            canvas->Clear();
+            continue;
+        }
+        if (!entry_view.HasFinalModel(FittingStage::Second)) continue;
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(
             apply_selection, use_peeling_sampling_entries) };
         auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(
             20, 1000, apply_selection, use_peeling_sampling_entries) };
-        auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionMDPDE() };
+        auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionFinal() };
         auto gaus_function_ols{ plot_builder->CreateAtomLocalGausFunctionOLS() };
         auto linear_model_mdpde{ plot_builder->CreateAtomLocalLinearModelFunctionMDPDE() };
         auto linear_model_ols{ plot_builder->CreateAtomLocalLinearModelFunctionOLS() };
@@ -267,7 +292,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
         root_helper::SetFillAttribute(result_text.get(), 4000);
         const auto & estimate_mdpde{
-            entry_view.GetEstimateMDPDE(FittingStage::Second)
+            entry_view.GetFinalModel(FittingStage::Second)
         };
         auto amplitude_prior{ estimate_mdpde.GetAmplitude() };
         auto width_prior{ estimate_mdpde.GetWidth() };

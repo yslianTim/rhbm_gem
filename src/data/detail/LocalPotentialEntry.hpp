@@ -69,6 +69,7 @@ public:
     }
     const std::optional<PostFitPeelingResult> & PostFitPeeling() const { return m_post_fit_peeling; }
     void SetPostFitPeeling(PostFitPeelingResult value) { m_post_fit_peeling = std::move(value); }
+    void ClearPostFitPeeling() { m_post_fit_peeling.reset(); }
     bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
     void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }
     void SetGroupMemberResult(GroupGaussianMemberResult value)

@@ -69,3 +69,51 @@ The existing independent observation-stencil oracle passes after extraction.
 - Group inference consumes only eligible parameter evidence and its covariance. Information-form WEB shares the original sample-domain core; no local MDPDE runs in this route. The correlation approximation is `block-diagonal-by-atom`. Posterior and unchanged Second are distinct; C remains descriptive with no inferred C uncertainty.
 - Alpha training uses eligible members. Descriptive statistics retain all target points. Single-member and singular group covariance yield no substitute posterior. Results are written by atom identity, including exclusions in the middle of a group.
 - Validation: seven affected CTest groups passed (Joint, estimator, data runtime, HRL, core commands, command integration and frozen Joint regression). Final Joint group passed after adding degeneracy tests. Added dense full-component covariance reference (including nuisance C), zero variance/rank/df/boundary/convergence gates, sample-vs-information WEB equivalence, and posterior independence from raw samples with sensitivity to changed evidence. Empty samples are sufficient for the new group route. `git diff --check` passed.
+
+## Stage 6 — persistence and downstream analysis
+
+- SQLite v18 stores neutral stage/source/role, uncertainty, evidence, posterior,
+  paired peeling coverage and actual sample geometry separately from legacy
+  method columns. Joint Second never occupies MDPDE/OLS columns. Snapshot and
+  common Second identities/values are checked within the save transaction.
+- v17 reads do not mutate the database. First write upgrades and saves in one
+  transaction; failed validation rolls back schema and records. Legacy Joint
+  snapshots expose recorded Second points without inventing peeling, uncertainty
+  or posterior. Legacy samples explicitly lack geometry.
+- Display, painters, Gaussian/position/outlier exports and feature construction
+  consume common results and respect fitted target/halo roles. Curves identify
+  Joint, charge coefficient and available uncertainty correctly. Dataset-specific
+  Demo figures are explicitly skipped when their required named inputs are absent.
+- UMAP retains its three features and standardization. Missing required features
+  exclude rows with reasons; fewer than three valid rows fail. Ancillary missing
+  fields remain empty, and a metadata JSON records estimator, features, peeling
+  mode, normalization and exclusions.
+- New tests cover precise round-trip of points/covariance/sample coordinates and
+  unavailable states, snapshot/Second mismatch rollback, byte-identical v17 reads,
+  successful and failed migration, legacy snapshot adaptation, and persisted group
+  posterior identity. Command tests delete original map/model files before display
+  and export, exercise all painter choices and missing components, and verify Joint
+  UMAP target/coverage exclusions with six valid embedded rows.
+
+Final acceptance (2026-09-23):
+
+| Configuration/check | Result |
+| --- | --- |
+| EIGEN, ROOT/UMAP disabled, complete general CTest suite | 23/23 passed |
+| ROOT and UMAP enabled, complete general CTest suite | 23/23 passed |
+| SPQR: Joint component, frozen regression, estimator and HRL groups | 4/4 passed |
+| Frozen Joint regression | Passed in both general suites and SPQR |
+| `lint_repo` | Passed |
+| Installed consumer smoke (`lint_install_smoke`) | Passed with ROOT/UMAP build |
+| `git diff --check` | Passed |
+
+The general suite excludes separately labelled offline/extended research runs;
+those are not claimed as final acceptance evidence. Solver objective, support,
+search budget and convergence thresholds were not changed.
+
+Unavailable data remain intentional and inspectable: fixed-domain stencil gaps
+or missing contributor states block individual peeling samples; old sample blobs
+lack geometry; nonconvergence, boundary amplitudes, rank/df/variance failures block
+uncertainty; insufficient eligible members or singular group covariance block
+posterior. Historical unrecorded derivatives stay NotRun. No replacement local
+fit, fabricated zero, inferred charge error bar or substitute posterior is used.

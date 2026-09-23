@@ -46,9 +46,14 @@ def main() -> int:
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 17
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 18
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
+            stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
+            assert len(stages["atoms"]) == 2
+            assert all(atom["second"]["source"]["method"] == 3 for atom in stages["atoms"])
+            assert all(atom["peeling"]["mode"] == "grid-consistent" for atom in stages["atoms"])
+            assert connection.execute("SELECT COUNT(*) FROM model_atom_local_potential WHERE key_tag='example' AND amplitude_estimate_mdpde_2nd IS NOT NULL").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 3
         assert saved["selection_domain"]["target_indices"] == [0]
@@ -71,13 +76,13 @@ def main() -> int:
         assert saved["components"] and saved["assembled_state"] is not None
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
-        run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", succeeds=False)
+        run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)
         help_text = subprocess.run([executable, "--help"], capture_output=True, text=True, check=True).stdout
         if "umap_embedding" in help_text:
             rejected = subprocess.run([executable, "umap_embedding", "-d", str(database), "--model-key", "example"],
                                       capture_output=True, text=True)
             assert rejected.returncode != 0
-            assert "Joint result UMAP is not supported" in rejected.stdout + rejected.stderr
+            assert "at least 3 data rows" in rejected.stdout + rejected.stderr
     return 0
 
 

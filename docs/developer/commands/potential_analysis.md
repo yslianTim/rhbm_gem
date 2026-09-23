@@ -148,15 +148,17 @@ Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 
 ## Joint component opt-in
 
-`--estimator joint-components` selects the installed `EstimateJointComponents`
-runtime directly. `--estimator two-stage` remains the default. The joint branch
-runs its own first-stage initialization once and never runs Peeling, second-stage
-fitting, group fitting, or per-atom acceptance after the joint solve.
+`--estimator joint-components` selects the map-aware `RunPotentialFittingWorkflow`.
+It builds a fixed contributor workset, shares sampling and formal First fitting,
+then passes only First B to `FitJointComponents`. The standalone
+`EstimateJointComponents` convenience API remains available, but the command does
+not call it. Joint points are mapped by identity into estimator-neutral Second
+records, followed by the target summary, grid-consistent post-fit peeling and
+parameter-evidence group inference. The model-only overload remains two-stage;
+Joint requires map geometry.
 
-The saved estimator contract is `guarded-joint-ls-v1`; the objective contract is
-`parent-normalized-half-rss-v1` and support is `sphere-fma-v1`.
-Public C++ value types are shared across runtime and saved results; consumers
-should rebuild against the updated library.
+The solver contracts remain `guarded-joint-ls-v1`,
+`parent-normalized-half-rss-v1`, and `sphere-fma-v1`.
 
 Joint uses selected non-hydrogen targets and the complete fixed-domain halo
 closure, deterministic Fibonacci initialization and one worker. Hydrogen is
@@ -173,7 +175,7 @@ rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
-request.database_path = "joint.sqlite"; // new v17 database
+request.database_path = "joint.sqlite"; // new v18 database
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```
@@ -214,12 +216,14 @@ use null; they are not converted to zero. Numeric serialization preserves finite
 double values on reload.
 
 Export needs only the saved model. It fails on missing joint records, colliding
-sanitized keys or write errors. Legacy Gaussian/outlier export, display,
-comparison and UMAP reject joint models; atom-position and map-value dumping
-remain usable. No joint values are copied into legacy second-stage/group fields.
+sanitized keys or write errors. Gaussian/outlier export, display, comparison and UMAP consume the common stage
+contract and enable only available data. Joint values are not written to OLS or
+local MDPDE columns. UMAP excludes rows missing required features and needs at
+least three valid targets.
 
-SQLite v17 accepts empty databases and valid v17 databases only. Older versions,
-including v16, remain unchanged on rejection. A saved key holds one joint outcome;
+SQLite v18 is created for new databases. Reading v17 does not modify it; the first
+Save upgrades and writes in one transaction, rolling back on failure. Older
+versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
 ### Provenance and map units (joint JSON schema 3)
@@ -251,7 +255,10 @@ provenance. No conversion is performed during export.
 
 Only production joint JSON schema 3 is accepted. Older joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-The enclosing SQLite schema remains v17; non-joint records are unaffected.
+The Joint snapshot JSON remains schema 3; SQLite v18 additionally stores neutral
+stages, uncertainty, posterior evidence and sample geometry in `model_stage_result`.
+Legacy sample BLOBs have unavailable geometry; old Joint snapshots do not gain
+recomputed uncertainty, peeling or posterior.
 Consumers must rebuild against the updated public C++ value types.
 
 ### Selected-domain and initialization metadata

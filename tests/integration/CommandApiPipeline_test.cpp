@@ -320,12 +320,24 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     ASSERT_TRUE(rgc::RunCommand(dump).succeeded);
     EXPECT_TRUE(std::filesystem::exists(dump.output_dir/"joint_result_joint_model.json"));
     EXPECT_TRUE(std::filesystem::exists(dump.output_dir/"joint_atoms_joint_model.csv"));
-    dump.printer_choice=rgc::PrinterType::GAUS_ESTIMATES; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
-    dump.printer_choice=rgc::PrinterType::ATOM_OUTLIER; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+    dump.printer_choice=rgc::PrinterType::GAUS_ESTIMATES; EXPECT_TRUE(rgc::RunCommand(dump).succeeded);
+    dump.printer_choice=rgc::PrinterType::ATOM_OUTLIER; EXPECT_TRUE(rgc::RunCommand(dump).succeeded);
     dump.printer_choice=rgc::PrinterType::ATOM_POSITION; EXPECT_TRUE(rgc::RunCommand(dump).succeeded);
     rgc::PotentialDisplayRequest display; display.database_path=request.database_path;
     display.model_key_tag_list={request.saved_key_tag}; display.verbosity=0;
-    EXPECT_FALSE(rgc::RunCommand(display).succeeded);
+    display.painter_choice=rgc::PainterType::ATOM;
+    display.output_dir=directory.path()/"display";
+    EXPECT_TRUE(rgc::RunCommand(display).succeeded);
+#ifdef HAVE_ROOT
+    EXPECT_GT(command_test::CountFilesWithExtension(display.output_dir,".pdf"),0u);
+    for (const auto painter : {rgc::PainterType::GAUS,rgc::PainterType::COMPARISON,rgc::PainterType::DEMO})
+    {
+        display.painter_choice=painter;
+        display.verbosity=0;
+        display.reference_model_groups={{"with_charge",{request.saved_key_tag}},{"no_charge",{request.saved_key_tag}}};
+        EXPECT_TRUE(rgc::RunCommand(display).succeeded) << static_cast<int>(painter);
+    }
+#endif
 #ifdef RHBM_GEM_ENABLE_UMAP
     rgc::UmapEmbeddingRequest umap; umap.database_path=request.database_path;
     umap.model_key_tag=request.saved_key_tag; umap.verbosity=0;
@@ -333,6 +345,20 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
 #endif
     rg::DataRepository repository{request.database_path};
     auto loaded=repository.LoadModel(request.saved_key_tag);
+    {
+        rgc::JointProblemInput missing_input; missing_input.atom_ids={"1","2"}; missing_input.support.resize(2);
+        missing_input.selection_domain=rg::JointSelectionDomain{}; missing_input.selection_domain->target_indices={0};
+        auto missing_snapshot=rgc::CaptureJointAnalysisResult(rgc::FitJointComponents(rgc::JointProblem(missing_input),{0.5,0.5}));
+        rg::ModelObject missing_model(*loaded); missing_model.EditAnalysis().Clear(); missing_model.EditAnalysis().SetJointResult(missing_snapshot);
+        repository.SaveModel(missing_model,"missing");
+        display.model_key_tag_list={"missing"}; display.painter_choice=rgc::PainterType::ATOM; display.reference_model_groups.clear();
+        EXPECT_TRUE(rgc::RunCommand(display).succeeded);
+        dump.model_key_tag_list={"missing"}; dump.printer_choice=rgc::PrinterType::GAUS_ESTIMATES;
+        EXPECT_TRUE(rgc::RunCommand(dump).succeeded);
+#ifdef RHBM_GEM_ENABLE_UMAP
+        umap.model_key_tag="missing"; EXPECT_FALSE(rgc::RunCommand(umap).succeeded);
+#endif
+    }
     repository.SaveModel(*loaded,"joint_model");
     dump.printer_choice=rgc::PrinterType::JOINT_ESTIMATES;
     dump.model_key_tag_list={request.saved_key_tag,"joint_model"};

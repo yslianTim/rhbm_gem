@@ -235,7 +235,7 @@ TEST(DataObjectPersistenceTest, InvalidV14SamplingBlobLengthIsRejected)
 
     rg::DataRepository repository{ database_path };
     EXPECT_THROW((void)repository.LoadModel("model"), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 17);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 18);
     EXPECT_EQ(
         data_test::CountRows(
             database_path, "model_atom_local_potential", "model"),
@@ -658,4 +658,88 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv");
     std::ifstream raw_csv(dir.path()/"raw.csv"); std::getline(raw_csv,line); std::getline(raw_csv,line);
     EXPECT_TRUE(line.ends_with(",not-recorded"));
+}
+
+#include "support/JointPartialSelection.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/core/GaussianEstimator.hpp>
+TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAndUnavailableStates)
+{
+    const command_test::ScopedTempDir dir{"joint_neutral_roundtrip"};
+    auto f=joint_partial_test::Make("partial");
+    rg::core::FitOptions options; options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode=true;
+    rg::core::RunPotentialFittingWorkflow(*f.map,*f.model,options);
+    rg::DataRepository repository(dir.path()/"result.sqlite");
+    repository.SaveModel(*f.model,"joint");
+    auto loaded=repository.LoadModel("joint");
+    for(int id:{1,2})
+    {
+        const auto before=rg::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
+        const auto after=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(id));
+        const auto & a=before.GetStageEstimate(rg::FittingStage::Second);
+        const auto & b=after.GetStageEstimate(rg::FittingStage::Second);
+        ASSERT_TRUE(b.point); EXPECT_EQ(a.point->ToVector(),b.point->ToVector());
+        EXPECT_EQ(a.source.run_id,b.source.run_id); EXPECT_EQ(a.source.role,b.source.role);
+        EXPECT_EQ(a.uncertainty.status,b.uncertainty.status); EXPECT_EQ(a.uncertainty.reason,b.uncertainty.reason);
+        EXPECT_EQ(a.uncertainty.covariance.has_value(),b.uncertainty.covariance.has_value());
+        if(a.uncertainty.covariance) EXPECT_EQ(*a.uncertainty.covariance,*b.uncertainty.covariance);
+        ASSERT_TRUE(after.GetPostFitPeeling()); EXPECT_EQ(before.GetPostFitPeeling()->mode,after.GetPostFitPeeling()->mode);
+        const auto raw=before.GetRawSamplingEntries(false), saved=after.GetRawSamplingEntries(false);
+        ASSERT_EQ(raw.size(),saved.size()); EXPECT_TRUE(after.HasSampleGeometry());
+        for(std::size_t i=0;i<raw.size();++i) {EXPECT_EQ(raw[i].point.position,saved[i].point.position); EXPECT_EQ(raw[i].response,saved[i].response); EXPECT_EQ(before.GetPostFitPeeling()->samples[i].response,after.GetPostFitPeeling()->samples[i].response); EXPECT_EQ(before.GetPostFitPeeling()->samples[i].reason,after.GetPostFitPeeling()->samples[i].reason);}
+        EXPECT_EQ(before.GetGroupEvidence()->status,after.GetGroupEvidence()->status);
+        EXPECT_THROW(after.GetEstimateMDPDE(rg::FittingStage::Second),std::runtime_error);
+    }
+    {
+        rg::SQLiteWrapper db(dir.path()/"result.sqlite");
+        db.Prepare("SELECT amplitude_estimate_mdpde_2nd IS NULL FROM model_atom_local_potential WHERE key_tag='joint';");
+        rg::SQLiteWrapper::StatementGuard guard(db); ASSERT_EQ(db.StepNext(),rg::SQLiteWrapper::StepRow()); EXPECT_EQ(db.GetColumn<int>(0),1);
+    }
+    auto * target=f.model->FindAtomPtr(1);
+    auto changed=rg::AtomLocalPotentialView::For(*target).GetStageEstimate(rg::FittingStage::Second);
+    const auto original=*changed.point; changed.point=original.WithAmplitude(original.GetAmplitude()+1);
+    f.model->EditAnalysis().SetAtomStageEstimate(rg::FittingStage::Second,*target,changed);
+    EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
+    const auto preserved=repository.LoadModel("joint");
+    EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1)).GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());
+}
+
+TEST(DataObjectPersistenceTest, V17ReadsRemainUnmodifiedAndFirstSaveUpgradeRollsBackAtomically)
+{
+    const command_test::ScopedTempDir dir{"v17_transactional_upgrade"}; const auto path=dir.path()/"legacy.sqlite";
+    auto model=data_test::MakeModelWithBond(); model->SelectAllAtoms(); model->EditAnalysis().InitializeFromSelection();
+    model->EditAnalysis().SetAtomLocalRawSamplingEntries(*model->FindAtomPtr(1),{{2.0,{0.3,{1,2,3},true}}});
+    {rg::DataRepository repository(path); repository.SaveModel(*model,"old");}
+    data_test::ExecuteSql(path,"DROP TABLE model_stage_result;"); data_test::ExecuteSql(path,"PRAGMA user_version=17;");
+    const auto read_bytes=[&]() { std::ifstream file(path,std::ios::binary); return std::string(std::istreambuf_iterator<char>(file),{}); };
+    const auto before=read_bytes();
+    rg::DataRepository repository(path); auto legacy=repository.LoadModel("old");
+    EXPECT_EQ(read_bytes(),before);
+    EXPECT_EQ(data_test::GetUserVersion(path),17); EXPECT_FALSE(data_test::HasTable(path,"model_stage_result"));
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*legacy->FindAtomPtr(1)).HasSampleGeometry());
+    auto & entry=rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*model->FindAtomPtr(1));
+    auto stage=entry.StageEstimate(rg::FittingStage::Second); stage.source.atom_id="wrong-identity"; entry.SetStageEstimate(rg::FittingStage::Second,stage);
+    EXPECT_THROW(repository.SaveModel(*model,"new"),std::invalid_argument);
+    EXPECT_EQ(data_test::GetUserVersion(path),17); EXPECT_FALSE(data_test::HasTable(path,"model_stage_result"));
+    EXPECT_EQ(data_test::CountRows(path,"model_object","old"),1);
+    repository.SaveModel(*legacy,"new");
+    EXPECT_EQ(data_test::GetUserVersion(path),18); EXPECT_TRUE(data_test::HasTable(path,"model_stage_result"));
+    EXPECT_EQ(data_test::CountRows(path,"model_object","old"),1);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*repository.LoadModel("new")->FindAtomPtr(1)).HasSampleGeometry());
+}
+
+TEST(DataObjectPersistenceTest, LegacyJointSnapshotMapsPointsWithoutInventingDerivedEvidence)
+{
+    const command_test::ScopedTempDir dir{"legacy_joint_adaptation"}; const auto path=dir.path()/"legacy.sqlite";
+    auto model=data_test::MakeModelWithBond(); const auto snapshot=SavedJointExample();
+    model->EditAnalysis().SetJointResult(snapshot);
+    { rg::DataRepository repository(path); repository.SaveModel(*model,"joint"); }
+    data_test::ExecuteSql(path,"DROP TABLE model_stage_result;"); data_test::ExecuteSql(path,"PRAGMA user_version=17;");
+    rg::DataRepository repository(path); const auto loaded=repository.LoadModel("joint");
+    const auto target=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+    EXPECT_DOUBLE_EQ(target.GetFinalModel(rg::FittingStage::Second).GetAmplitude(),snapshot.components[0].state->ac[0]);
+    EXPECT_EQ(target.GetStageEstimate(rg::FittingStage::Second).uncertainty.status,rg::EvidenceStatus::NotRun);
+    EXPECT_FALSE(target.GetPostFitPeeling()); EXPECT_FALSE(target.GetGroupMemberResult()); EXPECT_FALSE(target.HasSampleGeometry());
+    EXPECT_FALSE(target.GetLocalFittingPeelingRatio(1,2)); EXPECT_EQ(data_test::GetUserVersion(path),17);
 }

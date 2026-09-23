@@ -1,5 +1,7 @@
 #include "detail/CommandRunner.hpp"
 #include "core/command/detail/LocalFittingFeatures.hpp"
+#include <boost/json.hpp>
+#include <map>
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -165,6 +167,9 @@ struct PreparedUmapInput
     std::vector<std::string_view> constant_features;
     int effective_neighbors{ 0 };
     std::filesystem::path output_path;
+    std::map<std::string, std::size_t> exclusions;
+    std::string estimator, peeling_mode, map_normalization;
+    std::size_t excluded_rows{};
 };
 
 std::string FormatFeatureLocation(
@@ -217,6 +222,8 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     feature_rows.reserve(source_rows.size());
     configured_spot_indices.reserve(source_rows.size());
     elements.reserve(source_rows.size());
+    std::size_t excluded_rows=0;
+    std::map<std::string,std::size_t> exclusions;
     std::array<long double, kInputFeatureCount> means{};
     std::array<long double, kInputFeatureCount> sum_squared_differences{};
 
@@ -227,18 +234,17 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         };
         if (kFilterUmapInputBySpot && !configured_spot_index) continue;
 
+        bool valid=true;
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
-            if (!std::isfinite(row.features[feature]))
+            if (kFeatureDefinitions[feature].include_in_umap && !std::isfinite(row.features[feature]))
             {
-                error_message = FormatFeatureLocation(
-                    request.model_key_tag,
-                    row.serial_id,
-                    kFeatureDefinitions[feature].name)
-                    + ": expected a finite value from the saved model.";
-                return std::nullopt;
+                const std::string reason="unavailable: " + std::string(kFeatureDefinitions[feature].name);
+                ++exclusions[reason]; valid=false;
+                Logger::Log(LogLevel::Warning, FormatFeatureLocation(request.model_key_tag,row.serial_id,kFeatureDefinitions[feature].name) + ": excluded; required feature unavailable.");
             }
         }
+        if (!valid) { ++excluded_rows; continue; }
 
         elements.push_back(model_object.FindAtomPtr(row.serial_id)->GetElement());
         feature_rows.emplace_back(std::move(row));
@@ -346,6 +352,17 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         request.num_neighbors,
         static_cast<int>(prepared.feature_rows.size() - 1));
     prepared.output_path = BuildOutputPath(request);
+    prepared.exclusions = std::move(exclusions);
+    prepared.excluded_rows=excluded_rows;
+    const auto & joint=model_object.GetAnalysisView().GetJointResult();
+    prepared.estimator=joint ? "joint-components" : "two-stage";
+    prepared.peeling_mode=joint ? "grid-consistent" : "iterative";
+    prepared.map_normalization="unavailable";
+    if(joint && joint->metadata.map_normalization)
+    {
+        const auto & n=*joint->metadata.map_normalization;
+        prepared.map_normalization=boost::json::serialize(boost::json::object{{"requested",n.requested},{"applied",n.applied},{"divisor",n.divisor}});
+    }
     return prepared;
 }
 
@@ -413,6 +430,7 @@ bool WriteEmbedding(
             ++feature)
         {
             output << ',';
+            if (!std::isfinite(row.features[feature])) continue;
             if (detail::kLocalFittingFeatureIsIntegral[feature])
             {
                 output << static_cast<long long>(row.features[feature]);
@@ -427,6 +445,16 @@ bool WriteEmbedding(
             << '\n';
     }
     output.close();
+    boost::json::array features;
+    for(const auto & feature:kFeatureDefinitions) if(feature.include_in_umap) features.push_back(boost::json::value(feature.name));
+    boost::json::object exclusions;
+    for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
+    std::ofstream metadata(prepared.output_path.string()+".metadata.json");
+    metadata << boost::json::serialize(boost::json::object{{"estimator",prepared.estimator},{"features",features},
+        {"peeling_mode",prepared.peeling_mode},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
+        {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
+    metadata.close();
+    if(!metadata) { error_message="Failed to write UMAP metadata."; return false; }
     if (!output)
     {
         error_message = "Failed while writing UMAP output file '"
@@ -757,8 +785,6 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
                 try
                 {
                     model_object = repository.LoadModel(prepared_request.model_key_tag);
-                    if (model_object->GetAnalysisView().GetJointResult())
-                        throw std::invalid_argument("Joint result UMAP is not supported; use result_dump --printer joint.");
                 }
                 catch (const std::exception & error)
                 {

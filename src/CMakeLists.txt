@@ -74,6 +74,7 @@ target_sources(rhbm_gem PRIVATE
     data/object/AtomObject.cpp
     data/io/JointAnalysisFileIO.cpp
     data/io/detail/JointResultJson.cpp
+    data/io/detail/StageResultJson.cpp
     data/io/DataRepository.cpp
     data/io/ModelMapFileIO.cpp
     data/io/file/ModelImportState.cpp

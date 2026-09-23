@@ -70,7 +70,14 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
     for (auto * atom : atom_list)
     {
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        const auto & second_model{ local_view.GetEstimateMDPDE(FittingStage::Second) };
+        if (local_view.IsAvailable() && local_view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents && local_view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
+        if (!local_view.IsAvailable())
+        {
+            LocalFittingFeatureRow row; row.serial_id=atom->GetSerialID(); row.residue=ChemicalDataHelper::GetLabel(atom->GetResidue()); row.spot=atom->GetAtomID();
+            row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
+        }
+        const auto & second = local_view.GetStageEstimate(FittingStage::Second).point;
+        const double missing=std::numeric_limits<double>::quiet_NaN();
 
         const auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::RangeSearch(
             kd_tree_root.get(), atom, 2.0)
@@ -81,12 +88,13 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         for (const auto * comparison_atom : comparison_atoms)
         {
             if (comparison_atom == atom) continue;
-            const auto & comparison_model{
-                AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(FittingStage::Second)
-            };
-            if (comparison_model.GetAmplitude() > second_model.GetAmplitude()) amplitude_rank++;
-            if (comparison_model.GetWidth() > second_model.GetWidth()) width_rank++;
-            if (comparison_model.GetOffset() > second_model.GetOffset()) offset_rank++;
+            const auto comparison=AtomLocalPotentialView::For(*comparison_atom);
+            if (!second || !comparison.IsAvailable() || !comparison.HasFinalModel(FittingStage::Second) ||
+                comparison.GetStageEstimate(FittingStage::Second).source.role == FittingRole::Halo) continue;
+            const auto & comparison_model=comparison.GetFinalModel(FittingStage::Second);
+            if (comparison_model.GetAmplitude() > second->GetAmplitude()) amplitude_rank++;
+            if (comparison_model.GetWidth() > second->GetWidth()) width_rank++;
+            if (comparison_model.GetOffset() > second->GetOffset()) offset_rank++;
         }
 
         const auto signal_peeling_ratio{
@@ -108,10 +116,8 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         closest_neighbors.erase(
             std::remove(closest_neighbors.begin(), closest_neighbors.end(), atom),
             closest_neighbors.end());
-        const auto & closest_position{ closest_neighbors.at(0)->GetPositionRef() };
-        const auto distance_to_closest_neighbor{
-            array_helper::ComputeNorm(closest_position, position)
-        };
+        const double distance_to_closest_neighbor = closest_neighbors.empty() ? missing :
+            array_helper::ComputeNorm(closest_neighbors.front()->GetPositionRef(), position);
 
         double neighbor_distance_sum{ 0.0 };
         for (const auto * neighbor : neighbors)
@@ -133,12 +139,12 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             distance_to_closest_neighbor,
             OptionalFeatureValue(signal_peeling_ratio),
             OptionalFeatureValue(tail_peeling_ratio),
-            second_model.GetAmplitude(),
-            second_model.GetWidth(),
-            second_model.GetOffset(),
-            static_cast<double>(amplitude_rank),
-            static_cast<double>(width_rank),
-            static_cast<double>(offset_rank),
+            second ? second->GetAmplitude() : missing,
+            second ? second->GetWidth() : missing,
+            second ? second->GetOffset() : missing,
+            second ? static_cast<double>(amplitude_rank) : missing,
+            second ? static_cast<double>(width_rank) : missing,
+            second ? static_cast<double>(offset_rank) : missing,
         };
         rows.emplace_back(std::move(row));
     }

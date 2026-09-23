@@ -563,23 +563,7 @@ TEST(UmapEmbeddingCommandTest, RejectsIncompleteOrNonFiniteSavedAnalysis)
 
     FeatureModelOptions missing_analysis;
     missing_analysis.include_analysis = false;
-    cases.push_back({ "missing_analysis", missing_analysis, "not available" });
-
-    FeatureModelOptions missing_raw;
-    missing_raw.omit_raw_samples = true;
-    cases.push_back({ "missing_raw", missing_raw, "signal peeling ratio" });
-
-    FeatureModelOptions missing_peeling;
-    missing_peeling.omit_peeling_samples = true;
-    cases.push_back({ "missing_peeling", missing_peeling, "signal peeling ratio" });
-
-    FeatureModelOptions invalid_ratio;
-    invalid_ratio.invalid_signal_ratio = true;
-    cases.push_back({ "invalid_ratio", invalid_ratio, "signal peeling ratio" });
-
-    FeatureModelOptions infinite_amplitude;
-    infinite_amplitude.infinite_amplitude = true;
-    cases.push_back({ "infinite", infinite_amplitude, "amplitude 2nd" });
+    cases.push_back({ "missing_analysis", missing_analysis, "at least 3 data rows" });
 
     FeatureModelOptions too_short;
     too_short.atom_count = 2;
@@ -782,4 +766,74 @@ TEST(UmapEmbeddingCommandTest, CliUsesDatabaseAndModelKeyAndRejectsOldInputFlag)
         "--model-key", "cli",
         "--folder", (temp_dir.path() / "old_flag_output").string(),
     }), 0);
+}
+
+TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAncillaryFields)
+{
+    command_test::ScopedTempDir dir{"umap_feature_availability"};
+    for(int scenario=0;scenario<4;++scenario)
+    {
+        FeatureModelOptions options;
+        options.omit_raw_samples=scenario==0;
+        options.omit_peeling_samples=scenario==1;
+        options.invalid_signal_ratio=scenario==2;
+        options.infinite_amplitude=scenario==3;
+        const auto path=dir.path()/(std::to_string(scenario)+".sqlite");
+        SeedFeatureDatabase(path,"model",options);
+        const auto request=MakeRequest(path,dir.path()/std::to_string(scenario));
+        EXPECT_TRUE(RunCommand(request).succeeded);
+        EXPECT_TRUE(std::filesystem::exists(request.output_dir/"umap_embedding_model.csv.metadata.json"));
+    }
+}
+
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include "data/detail/JointStageAdapter.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
+#include <boost/json.hpp>
+TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
+{
+    command_test::ScopedTempDir dir{"joint_umap_saved"}; auto model=BuildFeatureModel();
+    JointProblemInput input; input.selection_domain=rg::JointSelectionDomain{};
+    std::vector<double> widths;
+    for(std::size_t a=0;a<model->GetAtomList().size();++a)
+    {
+        input.atom_ids.push_back(std::to_string(model->GetAtomList()[a]->GetSerialID()));
+        input.support.emplace_back(); widths.push_back(0.5);
+        if(a!=0) input.selection_domain->target_indices.push_back(a);
+        for(int k=0;k<12;++k)
+        {
+            const double square=0.02+0.1*k;
+            const auto kernel=rhbm_gem::core::joint_component::EvaluateKernel(square,0.5,2.5);
+            input.support.back().push_back({input.observations.size(),square});
+            input.row_ids.push_back(std::to_string(input.observations.size()));
+            input.observations.push_back(2*kernel.gaussian-0.1*kernel.charge);
+        }
+    }
+    auto snapshot=CaptureJointAnalysisResult(FitJointComponents(JointProblem(input),widths));
+    snapshot.metadata.map_normalization=rg::JointMapNormalization{false,false,1};
+    rg::data_internal::ApplyJointStageEstimates(*model,snapshot,"saved-joint-umap");
+    model->EditAnalysis().SetJointResult(snapshot);
+    for(const auto & atom:model->GetAtomList())
+    {
+        const auto view=rg::AtomLocalPotentialView::For(*atom);
+        rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
+        for(const auto & sample:view.GetPeelingSamplingEntries(false)) peeling.samples.push_back({sample.response,{}});
+        if(atom->GetSerialID()==1) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
+        model->EditAnalysis().SetAtomPostFitPeeling(*atom,peeling);
+    }
+    const auto path=dir.path()/"joint.sqlite";
+    {rg::DataRepository repository(path); repository.SaveModel(*model,"model");}
+    model.reset();
+    const auto request=MakeRequest(path,dir.path()/"output");
+    ASSERT_TRUE(RunCommand(request).succeeded);
+    const auto csv=ReadLines(request.output_dir/"umap_embedding_model.csv");
+    ASSERT_EQ(csv.size(),7); // six valid targets + header; one halo and one coverage exclusion.
+    const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
+    const auto metadata=boost::json::parse(metadata_lines.at(0));
+    EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
+    EXPECT_EQ(metadata.at("included_rows").as_int64(),6);
+    EXPECT_EQ(metadata.at("features").as_array().size(),3);
+    EXPECT_FALSE(metadata.at("exclusions").as_object().empty());
 }

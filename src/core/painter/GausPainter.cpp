@@ -179,7 +179,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         const auto average_prior{
             PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_iter, atom_key)
         };
-        if (atom_list.empty() || !average_prior.has_value()) continue;
+        if (atom_list.empty()) continue;
         for (auto atom : atom_list)
         {
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
@@ -194,13 +194,14 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
+        if (!average_prior) continue;
         gaus_function[k] = plot_builder->CreateComponentAtomAverageGausFunctionPrior(atom_key);
         amplitude_prior[k] = average_prior->GetDisplayParameter(0);
         width_prior[k] = average_prior->GetDisplayParameter(1);
         offset_prior[k] = average_prior->GetModel().GetOffset();
     }
 
-    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
+    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.15) };
     auto x_min{ 0.01 };
     auto x_max{ 1.49 };
     auto y_min{ std::get<0>(y_range) };
@@ -240,8 +241,11 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetLineAttribute(line_ref.get(), 2, 1, kBlack);
             line_ref->Draw();
 
-            root_helper::SetLineAttribute(gaus_function[i].get(), 2, 2, kRed);
-            gaus_function[i]->Draw("SAME");
+            if (gaus_function[i])
+            {
+                root_helper::SetLineAttribute(gaus_function[i].get(), 2, 2, kRed);
+                gaus_function[i]->Draw("SAME");
+            }
 
             element_text[i] = root_helper::CreatePaveText(0.70, 0.75, 0.99, 0.99, "nbNDC ARC", true);
             root_helper::SetPaveTextDefaultStyle(element_text[i].get());
@@ -255,9 +259,10 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetPaveTextDefaultStyle(result_text[i].get());
             root_helper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
-            result_text[i]->AddText(
+            if (gaus_function[i]) result_text[i]->AddText(
                 Form("#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
                     amplitude_prior[i], width_prior[i], offset_prior[i]));
+            else result_text[i]->AddText("Group prior unavailable");
             result_text[i]->Draw();
         }
     }
@@ -354,11 +359,11 @@ void GausPainter::PaintAtomXYPosition(
         y_array.emplace_back(graph->GetPointY(p));
     }
 
-    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.1) };
+    auto x_range{ painter_internal::ComputePlotRange(x_array, 0.1) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.1) };
+    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.1) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -463,12 +468,13 @@ void GausPainter::PaintGausScatterPlot(ModelObject * model_object, const std::st
             graph_map.emplace(element_type, std::move(graph));
         }
 
-        //auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
+        //auto x_range{ painter_internal::ComputePlotRange(x_array, 0.2, 1.0) };
         auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.1, 0.999) };
+        if (!(std::get<1>(x_range)>std::get<0>(x_range))) x_range=painter_internal::ComputePlotRange(x_array,0.2);
         double x_min{ std::get<0>(x_range) };
         double x_max{ std::get<1>(x_range) };
 
-        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
+        auto y_range{ painter_internal::ComputePlotRange(y_array, 0.2, 0.1) };
         //auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.1, 0.999) };
         double y_min{ std::get<0>(y_range) };
         double y_max{ std::get<1>(y_range) };
@@ -600,11 +606,11 @@ void GausPainter::PaintGroupGausScatterPlot(ModelObject * model_object, const st
             correlation_graph_map[spot] = std::move(correlation_graph);
         }
 
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array, 0.2, 1.0) };
         double x_min{ std::get<0>(x_range) };
         double x_max{ std::get<1>(x_range) };
 
-        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
+        auto y_range{ painter_internal::ComputePlotRange(y_array, 0.2, 0.1) };
         double y_min{ std::get<0>(y_range) };
         double y_max{ std::get<1>(y_range) };
 
@@ -912,7 +918,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             if (atom_entry.element_type == Element::HYDROGEN) continue;
             if (atom_entry.atom_id == "OXT") continue;
             auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
-            if (!entry_iter.HasAtomGroup(group_key)) continue;
+            if (!entry_iter.HasAtomGroupPrior(group_key)) continue;
             if (entry_iter.GetAtomObjectList(group_key).empty()) continue;
 
             auto amplitude_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, 0) };
@@ -971,7 +977,8 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
             result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
-            result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", offset_prior, offset_error));
+            if (std::isfinite(offset_error)) result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", offset_prior, offset_error));
+            else result_text->AddText(Form("C median = %.2f (descriptive)", offset_prior));
             result_text->Draw();
 
             pad[2]->cd();
@@ -1079,7 +1086,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             frame->GetYaxis()->CenterTitle();
             frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
             frame->GetYaxis()->SetTitle("Map Value");
-            auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.1) };
+            auto y_range{ painter_internal::ComputePlotRange(y_array, 0.1) };
             auto x_min_tmp{ 0.01 };
             auto x_max_tmp{ 1.49 };
             auto y_min_tmp{ std::get<0>(y_range) };
@@ -1097,10 +1104,10 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
                 plot_builder->CreateAtomGroupGausFunctionMean(group_key)
             };
             auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
-            root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-            root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
-            gaus_prior->Draw("SAME");
-            gaus_mean->Draw("SAME");
+            if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+            if (gaus_mean) root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
+            if (gaus_prior) gaus_prior->Draw("SAME");
+            if (gaus_mean) gaus_mean->Draw("SAME");
 
             auto legend{ root_helper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
             root_helper::SetLegendDefaultStyle(legend.get());
@@ -1112,10 +1119,10 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             //    "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
             //legend->AddEntry(map_value_graph_list.at(0).get(),
             //    "Members of Value", "l");
-            legend->AddEntry(gaus_prior.get(),
+            if (gaus_prior) legend->AddEntry(gaus_prior.get(),
                 Form("Group prior, #alpha_{g} = %.1f",
                     entry_iter.GetAtomAlphaG(group_key)), "l");
-            legend->AddEntry(gaus_mean.get(),
+            if (gaus_mean) legend->AddEntry(gaus_mean.get(),
                 "Group mean", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
                 "Map Value", "l");
@@ -1260,8 +1267,8 @@ void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::s
         }
 
         auto scaling{ 0.3 };
-        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
-        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
+        auto amplitude_range{ painter_internal::ComputePlotRange(amplitude_array, scaling) };
+        auto width_range{ painter_internal::ComputePlotRange(width_array, scaling) };
         auto element_count{ element_list.size() };
         std::vector<std::string> element_label_list;
         element_label_list.reserve(element_count);
@@ -1459,7 +1466,7 @@ void GausPainter::PaintAverageQScoreToSequenceSummary(
         {
             x_array.emplace_back(gaus_graph->GetPointX(p));
         }
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array, 0.05) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
 
@@ -1570,8 +1577,11 @@ void GausPainter::PaintGroupFittingComparison(
             size_t member_id;
             if (!data_internal::IsMainChainMember(spot, member_id)) continue;
             auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
+            gaus_prior_map[spot]=nullptr;
+            for (auto & map : map_value_graph_list_map) map[spot].clear();
+            if (!entry_iter.HasAtomGroup(group_key)) continue;
             auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
-            gaus_prior_map.emplace(spot, std::move(gaus_prior));
+            gaus_prior_map[spot]=std::move(gaus_prior);
 
             auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> raw_map_value_graph_list;
@@ -1616,12 +1626,12 @@ void GausPainter::PaintGroupFittingComparison(
 
         double y_min[row_size]{ 0.0 };
         double y_max[row_size]{ 0.0 };
-        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.20) };
+        auto y_range{ painter_internal::ComputePlotRange(global_y_array, 0.20) };
         y_min[0] = std::get<0>(y_range);
         y_max[0] = std::get<1>(y_range);
         y_min[1] = std::get<0>(y_range);
         y_max[1] = std::get<1>(y_range);
-        auto neighbor_y_range{ array_helper::ComputeScalingRangeTuple(neighbor_y_array, 0.20) };
+        auto neighbor_y_range{ painter_internal::ComputePlotRange(neighbor_y_array, 0.20) };
         y_min[2] = std::get<0>(neighbor_y_range);
         y_max[2] = std::get<1>(neighbor_y_range);
 
@@ -1666,10 +1676,10 @@ void GausPainter::PaintGroupFittingComparison(
                 }
 
                 auto & gaus_prior{ gaus_prior_map.at(spot) };
-                root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-                if (j != 0) gaus_prior->Draw("SAME");
+                if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+                if (j != 0 && gaus_prior) gaus_prior->Draw("SAME");
 
-                if (j != 0)
+                if (j != 0 && gaus_prior)
                 {
                     result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
                     root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
@@ -1717,9 +1727,9 @@ void GausPainter::PaintGroupFittingComparison(
         root_helper::SetFillAttribute(legend.get(), 4000);
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
-        legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
+        if (gaus_prior_map.contains(Spot::CA) && gaus_prior_map.at(Spot::CA)) legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
             "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
-        legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
+        if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();
 
@@ -1851,7 +1861,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
 
         double y_min{ 0.0 };
         double y_max{ 0.0 };
-        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.20) };
+        auto y_range{ painter_internal::ComputePlotRange(global_y_array, 0.20) };
         y_min = std::get<0>(y_range);
         y_max = std::get<1>(y_range);
 
@@ -1882,6 +1892,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
+                if (!map_value_graph_list_map.contains(residue)) continue;
                 const auto & map_value_graph_list{ map_value_graph_list_map.at(residue) };
                 for (auto & graph : map_value_graph_list)
                 {
@@ -1899,17 +1910,17 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
 
                 auto & gaus_mean{ gaus_mean_map.at(residue) };
                 auto & gaus_prior{ gaus_prior_map.at(residue) };
-                root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
-                root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-                gaus_prior->Draw("SAME");
-                gaus_mean->Draw("SAME");
+                if (gaus_mean) root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
+                if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+                if (gaus_prior) gaus_prior->Draw("SAME");
+                if (gaus_mean) gaus_mean->Draw("SAME");
 
                 result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
                 root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
                 root_helper::SetLineAttribute(result_text[i][j].get(), 1, 0);
                 root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
                 root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
-                result_text[i][j]->AddText(
+                if (gaus_prior) result_text[i][j]->AddText(
                     Form("A = %.2f,   #tau = %.2f,   c = %.2f",
                         gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
                 );
@@ -1951,12 +1962,12 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetFillAttribute(legend.get(), 4000);
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
-        legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with selected #alpha_{r} and #alpha_{g}", "l");
+        if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
+            "Group prior (available evidence)", "l");
             //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
-        legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with #alpha_{r} = #alpha_{g} = 0", "l");
-        legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
+        if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
+            "Group mean", "l");
+        if (map_value_graph_list_map.contains(Residue::ALA) && !map_value_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();
 
@@ -2058,11 +2069,11 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ array_helper::ComputeScalingRangeTuple(y_array[j], 0.2, 0.1) };
+            auto y_range{ painter_internal::ComputePlotRange(y_array[j], 0.2, 0.1) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array, 0.05) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
 
@@ -2328,8 +2339,8 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     }
 
     auto scaling{ 0.3 };
-    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
+    auto amplitude_range{ painter_internal::ComputePlotRange(amplitude_array, scaling) };
+    auto width_range{ painter_internal::ComputePlotRange(width_array, scaling) };
     auto spot_count{ spot_list.size() };
     std::vector<std::string> spot_label_list;
     spot_label_list.reserve(spot_count);

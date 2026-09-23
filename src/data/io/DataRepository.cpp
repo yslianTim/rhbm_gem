@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 17;
+constexpr int kCurrentSchemaVersion = 18;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -264,8 +264,12 @@ void ValidateModelRootForeignKey(
 
 void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
+    const bool neutral = QueryUserVersion(database) == 18;
+    std::vector<std::string_view> expected(kModelTableNames.begin(), kModelTableNames.end());
+    if (neutral) { expected.push_back("model_stage_result"); std::sort(expected.begin(),expected.end()); }
+
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
-        != static_cast<int>(kModelTableNames.size()))
+        != static_cast<int>(expected.size()))
     {
         throw std::runtime_error("Schema v17 contains an unexpected schema object.");
     }
@@ -274,12 +278,20 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     if (!std::equal(
             table_names.begin(),
             table_names.end(),
-            kModelTableNames.begin(),
-            kModelTableNames.end()))
+            expected.begin(),
+            expected.end()))
     {
         throw std::runtime_error("Schema v17 contains an unexpected table set.");
     }
 
+    if (neutral)
+    {
+        ValidateColumns(database,"model_stage_result",{"key_tag","result_json"});
+        ValidatePrimaryKey(database,"model_stage_result",{"key_tag"});
+        ValidateModelRootForeignKey(database,"model_stage_result");
+        if(QueryTableInfo(database,"model_stage_result").at(1).not_null!=1)
+            throw std::runtime_error("Schema v18 requires NOT NULL stage result JSON.");
+    }
     ValidateColumns(database, "model_object", {
         "key_tag", "pdb_id", "emd_id", "map_resolution", "resolution_method",
         "standard_average_qscore", "reference_height", "reference_offset" });
@@ -363,17 +375,17 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     {
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         rhbm_gem::model_storage::CreateTables(database);
+        rhbm_gem::model_storage::UpgradeStageSchema(database);
         ValidateCurrentSchema(database);
-        database.Execute("PRAGMA user_version = 17;");
         return;
     }
-    if (user_version == kCurrentSchemaVersion)
+    if (user_version == 17 || user_version == kCurrentSchemaVersion)
     {
         ValidateCurrentSchema(database);
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v17.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v17/v18.");
 }
 
 } // namespace
@@ -419,7 +431,9 @@ void DataRepository::SaveModel(
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
+    if (QueryUserVersion(*m_database) == 17) model_storage::UpgradeStageSchema(*m_database);
     model_storage::Save(*m_database, model_object, key_tag);
+    transaction.Commit();
 }
 
 } // namespace rhbm_gem

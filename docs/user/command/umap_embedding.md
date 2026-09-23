@@ -26,22 +26,22 @@ fallback downloads.
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use the currently
-supported SQLite schema (schema v17). `--model-key` must identify exactly one
+supported SQLite schema (schema v17 or v18). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
-Joint component results are not supported by UMAP; export them with `result_dump --printer joint`.
+Both estimators are supported. Joint analysis uses only the original fitted
+targets, excluding halo contributors. At least three rows must have all three
+required features: neighbor distance sum, closest-neighbor distance and tail
+peeling ratio. Missing required values exclude the row with a reported reason;
+fewer than three remaining rows fails the command. Missing ancillary values are
+written as empty CSV fields. A zero response denominator or incomplete Joint
+interpolation coverage makes a peeling ratio unavailable, not zero.
 
-The saved model must contain at least three selected atoms and complete persisted
-local-fitting analysis for every selected atom:
-
-- raw and peeling samples sufficient to calculate both `[0, 1)` Å and
-  `[1, 2]` Å peeling ratios;
-- the peeling neighbor count;
-- finite second-stage MDPDE amplitude, width, and offset.
-
-Missing samples, an undefined ratio, or any non-finite reconstructed feature
-makes the model incomplete and fails the command. No atom is silently skipped.
+The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
+map normalization (null when unknown), standardization, included/excluded row
+counts and exclusions by reason. The existing standardization uses only retained
+rows; constant columns remain zero.
 
 For each selected atom, the command reconstructs the same 10 features used by
 the local-fitting CSV:
@@ -62,7 +62,7 @@ in the entire owning model, including unselected atoms and excluding the current
 atom by identity, without a radius limit. It is the Euclidean distance in Å;
 distinct atoms at the same position have distance zero. A selected hydrogen atom
 also queries non-hydrogen neighbors. This feature always excludes hydrogen
-candidates and assumes an eligible neighbor exists.
+candidates; no eligible neighbor makes the feature unavailable.
 
 Each peeling ratio is
 `(raw sum - peeling sum) / raw sum`, using samples with finite distances within
@@ -130,7 +130,7 @@ uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
 The CSV contains the identifiers `serial id,residue,spot`, all 12 reconstructed
-features, and `umap x,umap y`: 17 columns in total. Its name is
+features, and `umap x,umap y`: 15 columns in total. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 

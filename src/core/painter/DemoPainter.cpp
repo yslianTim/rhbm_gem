@@ -280,6 +280,11 @@ void DemoPainter::Run()
         }
     };
 
+    if (!demo_model_object && std::none_of(demo_fsc_model_list.begin(),demo_fsc_model_list.end(),[](const auto * model) { return model != nullptr; }))
+    {
+        Logger::Log(LogLevel::Info,"Demo figures unavailable: none of their configured model inputs is present.");
+        return;
+    }
     PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
 
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
@@ -354,11 +359,11 @@ void DemoPainter::PainMapValueComparisonSingle(
         }
     }
 
-    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
+    auto x_range{ painter_internal::ComputePlotRange(x_array, 0.05) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2) };
+    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.2) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -472,7 +477,7 @@ void DemoPainter::PaintAtomMapValueExample(
     double width_prior;
     std::vector<double> y_array;
         auto group_key{ data_internal::GetMainChainGroupKey(0, Residue::ALA) };
-    if (!entry_iter.HasAtomGroup(group_key)) return;
+    if (!entry_iter.HasAtomGroupPrior(group_key)) return;
     for (auto atom : entry_iter.GetAtomObjectList(group_key))
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
@@ -492,7 +497,7 @@ void DemoPainter::PaintAtomMapValueExample(
     width_prior = entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(1);
 
 
-    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
+    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.15) };
     auto x_min{ 0.01 };
     auto x_max{ 1.49 };
     auto y_min{ std::get<0>(y_range) };
@@ -615,8 +620,8 @@ void DemoPainter::PaintGroupGausMainChainSummary(
             root_helper::SetLineAttribute(width_graph[j][k].get(), 1, 1, element_color);
             root_helper::SetLineAttribute(correlation_graph[j][k].get(), 1, 1, element_color);
         }
-        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, 0.2) };
-        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, 0.1) };
+        auto amplitude_range{ painter_internal::ComputePlotRange(amplitude_array, 0.2) };
+        auto width_range{ painter_internal::ComputePlotRange(width_array, 0.1) };
 
         frame[0][j] = root_helper::CreateHist2D(("frame0"+std::to_string(j)).data(),"", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
         frame[1][j] = root_helper::CreateHist2D(("frame1"+std::to_string(j)).data(),"", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
@@ -627,7 +632,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     auto width_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
     auto correlation_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
 
-    auto width_range_total{ array_helper::ComputeScalingRangeTuple(width_array_total, 0.2) };
+    auto width_range_total{ painter_internal::ComputePlotRange(width_array_total, 0.2) };
     for (int j = 0; j < pad_size_y; j++)
     {
         frame[2][j]->GetXaxis()->SetLimits(std::get<0>(width_range_total), std::get<1>(width_range_total));
@@ -761,8 +766,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
         root_helper::SetLineAttribute(width_graph[k].get(), 1, 1, element_color);
         root_helper::SetLineAttribute(correlation_graph[k].get(), 1, 1, element_color);
     }
-    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, 0.2) };
-    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, 0.1) };
+    auto amplitude_range{ painter_internal::ComputePlotRange(amplitude_array, 0.2) };
+    auto width_range{ painter_internal::ComputePlotRange(width_array, 0.1) };
 
     frame[0] = root_helper::CreateHist2D("frame0","", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
     frame[1] = root_helper::CreateHist2D("frame1","", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
@@ -932,11 +937,11 @@ void DemoPainter::PaintGroupGausToFSC(
         root_helper::SetLineAttribute(fit_function[i].get(), 2, 2, kRed);
     }
 
-    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2) };
+    auto x_range{ painter_internal::ComputePlotRange(x_array, 0.2) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.3) };
+    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.3) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
     
@@ -1048,11 +1053,11 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         y_pos_array.emplace_back(graph_position->GetPointY(p));
     }
 
-    auto x_pos_range{ array_helper::ComputeScalingRangeTuple(x_pos_array, 0.1) };
+    auto x_pos_range{ painter_internal::ComputePlotRange(x_pos_array, 0.1) };
     double x_pos_min{ std::get<0>(x_pos_range) };
     double x_pos_max{ std::get<1>(x_pos_range) };
 
-    auto y_pos_range{ array_helper::ComputeScalingRangeTuple(y_pos_array, 0.1) };
+    auto y_pos_range{ painter_internal::ComputePlotRange(y_pos_array, 0.1) };
     double y_pos_min{ std::get<0>(y_pos_range) };
     double y_pos_max{ std::get<1>(y_pos_range) };
 
@@ -1064,7 +1069,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
             auto group_key{ data_internal::GetMainChainGroupKey(i, residue) };
-            if (!entry_iter.HasAtomGroup(group_key)) continue;
+            if (!entry_iter.HasAtomGroupPrior(group_key)) continue;
             auto gaus_graph{ plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
             {
@@ -1079,7 +1084,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     double x_max[pad_size - 1];
     for (int i = 0; i < pad_size - 1; i++)
     {
-        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array[i], 0.1) };
+        auto x_range{ painter_internal::ComputePlotRange(x_array[i], 0.1) };
         x_min[i] = std::get<0>(x_range);
         x_max[i] = std::get<1>(x_range);
     }
@@ -1253,7 +1258,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
                 auto group_key{ data_internal::GetMainChainGroupKey(element_id, residue) };
-                if (!entry_iter.HasAtomGroup(group_key)) continue;
+                if (!entry_iter.HasAtomGroupPrior(group_key)) continue;
                 auto graph{ (par_id == 0) ?
                     plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) :
                     plot_builder->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 1) };
@@ -1292,7 +1297,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (int j = 0; j < row_size; j++)
         {
             auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array[i][j], 0.0, 0.005, 0.995) };
-            //auto y_range{ array_helper::ComputeScalingRangeTuple(y_array[i][j], 0.15) };
+            //auto y_range{ painter_internal::ComputePlotRange(y_array[i][j], 0.15) };
             auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array[i][j], 0.5, 0.005, 0.995) };
             summary_hist[i][j] = root_helper::CreateHist2D(
                 Form("summary_hist_%d_%d", i, j), "",
@@ -1462,7 +1467,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
             y_array.emplace_back(gaus_graph[i]->GetPointY(p));
         }
     }
-    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.01) };
+    auto x_range{ painter_internal::ComputePlotRange(x_array, 0.01) };
     auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2) };
     auto frame{ root_helper::CreateHist2D(
         "frame","",
@@ -1566,7 +1571,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
             y_array.emplace_back(gaus_graph[i]->GetPointY(p));
         }
     }
-    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.01) };
+    auto x_range{ painter_internal::ComputePlotRange(x_array, 0.01) };
     auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2) };
     auto frame{ root_helper::CreateHist2D(
         "frame","",
@@ -1678,7 +1683,7 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
         root_helper::SetLineAttribute(width_graph[j].get(), line_style_list[j], 1, color_list[j]);
     }
 
-    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, 0.2) };
+    auto width_range{ painter_internal::ComputePlotRange(width_array, 0.2) };
     frame = root_helper::CreateHist2D("frame_total","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
     frame->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
     frame->GetYaxis()->SetTitle("Width #font[2]{#tau}");
@@ -1765,7 +1770,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             auto & group_key_list{ group_key_list_map[i].at(spot) };
             for (auto it = group_key_list.begin(); it != group_key_list.end(); )
             {
-                if (!entry_iter.HasAtomGroup(*it))
+                if (!entry_iter.HasAtomGroupPrior(*it))
                 {
                     it = group_key_list.erase(it);
                 }
@@ -1819,10 +1824,10 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     auto scaling{ 0.3 };
     std::tuple<double, double> range[row_size];
     std::tuple<double, double> range_last[row_size];
-    range[0] = array_helper::ComputeScalingRangeTuple(y_array[0], scaling);
-    range[1] = array_helper::ComputeScalingRangeTuple(y_array[1], scaling);
-    range_last[0] = array_helper::ComputeScalingRangeTuple(y_array_last[0], scaling);
-    range_last[1] = array_helper::ComputeScalingRangeTuple(y_array_last[1], scaling);
+    range[0] = painter_internal::ComputePlotRange(y_array[0], scaling);
+    range[1] = painter_internal::ComputePlotRange(y_array[1], scaling);
+    range_last[0] = painter_internal::ComputePlotRange(y_array_last[0], scaling);
+    range_last[1] = painter_internal::ComputePlotRange(y_array_last[1], scaling);
     auto spot_count{ spot_list.size() };
     std::vector<std::string> spot_label_list;
     spot_label_list.reserve(spot_count);

@@ -7,6 +7,8 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include <map>
+#include <rhbm_gem/data/io/DataRepository.hpp>
+#include "support/CommandTestHelpers.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
@@ -565,6 +567,19 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
     const auto second = first.GetFinalModel(FittingStage::Second).ToVector();
     EXPECT_FALSE(first.GetGroupMemberResult()->charge_inferred);
     EXPECT_EQ(first.GetGroupMemberResult()->evidence_source_id, "evidence-test");
+    {
+        const command_test::ScopedTempDir directory{"joint_posterior_roundtrip"};
+        DataRepository repository(directory.path()/"posterior.sqlite"); repository.SaveModel(model,"model");
+        const auto loaded=repository.LoadModel("model");
+        const auto saved=AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+        ASSERT_TRUE(saved.GetGroupMemberResult());
+        EXPECT_EQ(saved.GetGroupMemberResult()->posterior.GetModel().ToVector(),before);
+        EXPECT_EQ(*saved.GetGroupMemberResult()->parameter_covariance,*first.GetGroupMemberResult()->parameter_covariance);
+        EXPECT_FALSE(saved.GetGroupMemberResult()->charge_inferred);
+        EXPECT_TRUE(std::isnan(saved.GetGroupMemberResult()->posterior.GetStandardDeviationModel().GetOffset()));
+        ASSERT_TRUE(loaded->GetAnalysisView().GetGroupParameterSummary(keys[0])->inference);
+        EXPECT_EQ(loaded->GetAnalysisView().GetGroupParameterSummary(keys[0])->member_ids,summary.member_ids);
+    }
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     core::RunGroupPotentialFitting(model, options);
     EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), before);

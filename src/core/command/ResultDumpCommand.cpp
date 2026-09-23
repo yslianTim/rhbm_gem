@@ -269,19 +269,22 @@ void RunGausEstimatesDumping(
             return;
         }
 
-        outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
+        outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot,ChargeCoefficient,PeakIntensity,Estimator,Status\n";
         for (auto * atom : model_object->GetSelectedAtoms())
         {
-            const auto entry{ AtomLocalPotentialView::For(*atom) };
-            const auto & estimate{
-                entry.GetEstimateMDPDE(FittingStage::Second)
-            };
-            outfile << atom->GetSerialID() << ',' << estimate.GetAmplitude() << ','
-                    << estimate.GetWidth() << ',' << atom->GetPosition().at(0) << ','
-                    << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
-                    << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
-                    << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
-                    << atom->GetAtomID() << '\n';
+            const auto entry=AtomLocalPotentialView::For(*atom);
+            if (!entry.IsAvailable()) continue;
+            const auto & stage=entry.GetStageEstimate(FittingStage::Second);
+            if (stage.source.method==EstimateMethod::JointComponents && stage.source.role!=FittingRole::Target) continue;
+            outfile << atom->GetSerialID() << ',';
+            if(stage.point) outfile << stage.point->GetAmplitude();
+            outfile << ','; if(stage.point) outfile << stage.point->GetWidth();
+            outfile << ',' << atom->GetPosition().at(0) << ',' << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
+                << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ',' << ChemicalDataHelper::GetLabel(atom->GetElement()) << ',' << atom->GetAtomID() << ',';
+            if(stage.point) outfile << stage.point->GetOffset();
+            outfile << ','; if(stage.point) outfile << stage.point->Intensity();
+            outfile << ',' << (stage.source.method==EstimateMethod::JointComponents ? "joint-components":"two-stage")
+                << ',' << (stage.point ? "available":"unavailable") << '\n';
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
@@ -329,7 +332,7 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
-                if (!entry_view.HasAtomGroup(group_key)) continue;
+                if (!entry_view.HasAtomGroupPrior(group_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
                         << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0) << ','
                         << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1) << '\n';
@@ -385,11 +388,6 @@ bool ExecutePreparedRequest(const ResultDumpRequest & request)
         }
         return true;
     }
-    if (request.printer_choice==PrinterType::GAUS_ESTIMATES || request.printer_choice==PrinterType::ATOM_OUTLIER)
-        for (const auto & model:inputs->model_objects)
-            if (model->GetAnalysisView().GetJointResult())
-                throw std::invalid_argument("Joint results require '--printer joint'; legacy Gaussian/outlier export is unsupported.");
-
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
