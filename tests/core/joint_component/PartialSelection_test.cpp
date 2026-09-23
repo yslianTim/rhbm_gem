@@ -5,6 +5,8 @@
 #include "support/JointPartialSelection.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
+#include <map>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -278,4 +280,49 @@ TEST(JointComponentPartialSelectionTest, OriginalBondSelectionIsPreserved)
         EXPECT_EQ(model->GetSelectedAtomCount(),1);
         EXPECT_EQ(fit.initialization.atoms.size(),2);
     }
+}
+
+TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWithoutChangingSelection)
+{
+    auto f = joint_partial_test::Make("partial");
+    const auto selected = f.model->GetSelectedAtoms();
+    const auto bonds = f.model->GetSelectedBonds();
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    std::map<std::pair<int, std::string>, int> calls;
+    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
+        ++calls[{id, std::string(phase)}];
+    };
+    core::FitOptions options;
+    options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode = true;
+    core::RunPotentialFittingWorkflow(*f.map, *f.model, options);
+    core::detail::FirstStageObserverForTesting() = {};
+    ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
+    const auto & result = *f.model->GetAnalysisView().GetJointResult();
+    EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
+    EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
+    EXPECT_EQ(result.row_ids, problem.Input().row_ids);
+    ASSERT_EQ(result.initialization.atoms.size(), problem.Input().atom_ids.size());
+    for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
+    {
+        const auto id = std::stoi(result.atom_ids[i]);
+        EXPECT_EQ((calls[{id, "raw"}]), 1);
+        EXPECT_EQ((calls[{id, "first"}]), 1);
+        const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
+        EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
+        EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
+        EXPECT_TRUE(view.GetPeelingSamplingEntries(false).empty());
+        EXPECT_FALSE(view.GetGroupMemberResult());
+    }
+    const auto direct = core::FitJointComponents(problem, result.initialization.b);
+    ASSERT_EQ(result.components.size(), direct.components.size());
+    for (std::size_t c = 0; c < direct.components.size(); ++c)
+    {
+        ASSERT_EQ(result.components[c].state.has_value(), direct.components[c].state.has_value());
+        if (!direct.components[c].state) continue;
+        EXPECT_EQ(result.components[c].state->ac, direct.components[c].state->ac);
+        EXPECT_EQ(result.components[c].state->b, direct.components[c].state->b);
+        EXPECT_EQ(result.components[c].state->objective, direct.components[c].state->objective);
+    }
+    EXPECT_THROW(core::RunPotentialFittingWorkflow(*f.model, options), std::invalid_argument);
 }

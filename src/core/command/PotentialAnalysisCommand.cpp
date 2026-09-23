@@ -12,6 +12,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -147,46 +148,18 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->ApplyBackboneSelection(request.only_backbone);
-    if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
-    {
-        const auto fit=EstimateJointComponents(*map_object,*model_object);
-        metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
-        metadata.grid_size=map_object->GetGridSize(); metadata.grid_spacing=map_object->GetGridSpacing();
-        metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
-        metadata.map_normalization=normalization;
-        model_object->EditAnalysis().SetJointResult(CaptureJointAnalysisResult(fit,std::move(metadata)));
-        DataRepository repository{request.database_path};
-        repository.SaveModel(*model_object,request.saved_key_tag);
-        std::size_t available=0;
-        for (const auto & component:fit.components)
-        {
-            available+=component.state.has_value();
-            Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
-                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.RuntimeConvergence())));
-        }
-        const auto targets=fit.problem->Input().selection_domain->target_indices.size();
-        Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
-            std::to_string(fit.problem->Input().atom_ids.size()-targets));
-        Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
-            ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
-            ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.RuntimeConvergence()))+
-            ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
-        if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
-        model_object->EditAnalysis().ClearTransientFitStates();
-        return true;
-    }
-    model_object->EditAnalysis().InitializeFromSelection();
+
     Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
-    Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
-    RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
-    options.thread_size = request.job_count;
+    options.thread_size = joint ? 1 : request.job_count;
+    options.estimator = request.estimator;
+    options.sampling_method = request.sampling_method;
     options.exclude_hydrogen = request.exclude_hydrogen;
     options.enable_second_stage_failed_only_refinement = request.enable_second_stage_failed_only_refinement;
     try
     {
-        RunPotentialFittingWorkflow(*model_object, options);
+        RunPotentialFittingWorkflow(*map_object, *model_object, options);
     }
     catch (const std::exception & e)
     {
@@ -195,8 +168,41 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
         return false;
     }
 
+    Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
+    if (joint)
+    {
+        auto fit=*model_object->GetAnalysisView().GetJointResult();
+        metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
+        metadata.grid_size=map_object->GetGridSize(); metadata.grid_spacing=map_object->GetGridSpacing();
+        metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
+        metadata.map_normalization=normalization;
+        metadata.software=fit.metadata.software;
+        fit.metadata=std::move(metadata);
+        model_object->EditAnalysis().SetJointResult(fit);
+
+    }
+
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);
+    if (joint)
+    {
+        const auto & fit=*model_object->GetAnalysisView().GetJointResult();
+        std::size_t available=0;
+        for (const auto & component:fit.components)
+        {
+            available+=component.state.has_value();
+            Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
+                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence)));
+        }
+        const auto targets=fit.selection_domain->target_indices.size();
+        Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
+            std::to_string(fit.atom_ids.size()-targets));
+        Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
+            ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
+            ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+
+            ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
+        if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
+    }
     model_object->EditAnalysis().ClearTransientFitStates();
     return true;
 }

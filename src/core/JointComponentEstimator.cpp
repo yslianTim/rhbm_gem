@@ -1,6 +1,7 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
@@ -265,45 +266,18 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
 JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)
 {
     ModelObject initializer(model);
-    const auto & input=problem.Input();
-    JointInitialization initialization;
-    initialization.data_scope="contributor-local-sampling-may-read-outside-target-domain";
-    FitOptions options; options.thread_size=1; options.quiet_mode=true; options.exclude_hydrogen=true;
-    for(std::size_t a=0;a<input.atom_ids.size();++a)
+    const auto workset = detail::MakeJointFittingWorkset(initializer, problem);
+    FitOptions options; options.thread_size = 1; options.quiet_mode = true; options.exclude_hydrogen = true;
+    const auto initialization = detail::RunContributorFirstStage(map, initializer, workset, options);
+    for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
-        auto * atom=initializer.FindAtomPtr(std::stoi(input.atom_ids[a]));
-        JointInitializationAtom record; record.id=input.atom_ids[a];
-        record.ols.fill(std::numeric_limits<double>::quiet_NaN()); record.mdpde=record.ols;
-        record.alpha=std::numeric_limits<double>::quiet_NaN();
-        double width=std::numeric_limits<double>::quiet_NaN();
-        try
-        {
-            initializer.SelectAtoms([&](const auto & candidate) {return &candidate==atom;});
-            auto analysis=initializer.EditAnalysis();
-            analysis.InitializeFromSelection();
-            analysis.InitializeLocalFittingSeedModels();
-            analysis.SetAtomLocalRawSamplingEntries(*atom,SampleAtomMapValues(map,*atom,SphereSamplingMethod::FibonacciDeterministic));
-            const auto view=AtomLocalPotentialView::For(*atom);
-            record.sample_count=view.GetSamplingEntries(FittingStage::First).size();
-            RunLocalAlphaTraining(initializer,options,FittingStage::First);
-            record.alpha=view.GetAlphaR(FittingStage::First);
-            const auto local=EstimateLocalGaussian(view.GetSamplingEntries(FittingStage::First),record.alpha,options,
-                view.GetGaussianResult(FittingStage::First).mdpde.GetModel());
-            analysis.SetAtomLocalGaussianResult(FittingStage::First,*atom,local);
-            const auto ols=local.ols.GetModel().ToVector(),mdpde=local.mdpde.GetModel().ToVector();
-            for(std::size_t k=0;k<3;++k) {record.ols[k]=ols(static_cast<Eigen::Index>(k)); record.mdpde[k]=mdpde(static_cast<Eigen::Index>(k));}
-            if(local.fit_result) record.native_status=static_cast<int>(local.fit_result->status);
-            width=local.mdpde.GetModel().GetWidth();
-            record.reason=std::isfinite(width) && width>0 ? "valid-width" : "invalid-width";
-            if(record.reason=="valid-width" && std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),a))
-            {
-                const auto * destination=model.FindAtomPtr(atom->GetSerialID());
-                model.EditAnalysis().SetAtomLocalRawSamplingEntries(*destination,view.GetRawSamplingEntries(false));
-                model.EditAnalysis().SetAtomLocalGaussianResult(FittingStage::First,*destination,local);
-            }
-        }
-        catch(const std::exception & error) {width=std::numeric_limits<double>::quiet_NaN(); record.reason=std::string("initialization-exception: ")+error.what();}
-        initialization.b.push_back(width); initialization.atoms.push_back(std::move(record));
+        if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;
+        const auto * source = workset.contributors[i];
+        const auto * target = model.FindAtomPtr(source->GetSerialID());
+        const auto view = AtomLocalPotentialView::For(*source);
+        model.EditAnalysis().SetAtomLocalRawSamplingEntries(*target, view.GetRawSamplingEntries(false));
+        model.EditAnalysis().SetAtomLocalGaussianResult(FittingStage::First, *target,
+            view.GetGaussianResult(FittingStage::First));
     }
     return initialization;
 }

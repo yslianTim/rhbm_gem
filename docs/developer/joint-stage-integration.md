@@ -17,3 +17,17 @@ After the change: the same eight groups, core contracts and the frozen
 `joint_component_regression` passed (10/10). `tests_all` built successfully;
 `git diff --check` passed. The availability test exercises seed/unavailable,
 real zero amplitude, method-specific rejection and transient-state clearing.
+
+## 2. Shared sampling and First initialization
+
+The map-aware fitting workflow prepares one immutable Joint problem, initializes
+contributors using explicit identities, and calls `FitJointComponents` directly.
+The standalone wrapper delegates to the same First implementation on its private
+copy and preserves its historical writeback contract. Two-stage keeps its existing
+sampling and numerical path. The model-only workflow rejects Joint requests.
+
+Validation: seven focused CTest groups passed, including frozen Joint regression,
+command/CLI smoke, sampler and estimator regression. A final targeted rerun after
+adding First target/halo provenance passed both Joint and CLI smoke. The new
+instrumented test verifies one raw sampling and one formal First per contributor,
+unchanged selections, and exact equality with a direct fit of the same problem/B0.

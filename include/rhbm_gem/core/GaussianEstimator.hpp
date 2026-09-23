@@ -10,6 +10,8 @@
 
 namespace rhbm_gem {
 class ModelObject;
+class MapObject;
+class AtomObject;
 
 namespace core {
 
@@ -54,6 +56,12 @@ void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
     FittingStage stage);
+
+void RunLocalAlphaTraining(ModelObject &, const FitOptions &, FittingStage,
+    const std::vector<AtomObject *> & atoms);
+void RunFixedOffsetLocalFitting(ModelObject &, const FitOptions &, FittingStage,
+    const std::vector<AtomObject *> & atoms);
+void RunPotentialFittingWorkflow(MapObject &, ModelObject &, const FitOptions &);
 
 void RunGroupPotentialFitting(
     ModelObject & model_object,

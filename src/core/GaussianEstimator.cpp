@@ -1,4 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/MapSampler.hpp>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/FirstStageInitialization.hpp"
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
@@ -6,6 +9,7 @@
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <cstddef>
 #include <iomanip>
@@ -237,10 +241,18 @@ void RunFixedOffsetLocalFitting(
     const FitOptions & options,
     FittingStage stage)
 {
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
+    RunFixedOffsetLocalFitting(model_object, options, stage, model_object.GetSelectedAtoms());
+}
+
+void RunFixedOffsetLocalFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage,
+    const std::vector<AtomObject *> & atom_list)
+{
     const auto selected_atom_size{ atom_list.size() };
     auto analysis{ model_object.EditAnalysis() };
-    analysis.EnsureSelectedAtomLocalPotentials();
     std::vector<LocalGaussianResult> local_results(selected_atom_size);
     size_t atom_count{ 0 };
     if (!options.quiet_mode)
@@ -398,9 +410,17 @@ void RunLocalAlphaTraining(
     const FitOptions & options,
     FittingStage stage)
 {
+    model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
+    RunLocalAlphaTraining(model_object, options, stage, model_object.GetSelectedAtoms());
+}
+
+void RunLocalAlphaTraining(
+    ModelObject & model_object,
+    const FitOptions & options,
+    FittingStage stage,
+    const std::vector<AtomObject *> & atom_list)
+{
     auto analysis{ model_object.EditAnalysis() };
-    analysis.EnsureSelectedAtomLocalPotentials();
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto alpha_min{ MakeTrainingOptions(options).alpha_min };
 
     size_t count{ 0 };
@@ -488,6 +508,8 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
+    if (options.estimator != PotentialEstimator::TWO_STAGE)
+        throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
     model_object.EditAnalysis().InitializeLocalFittingSeedModels();
 
     RunLocalAlphaTraining(model_object, options, FittingStage::First);
@@ -501,6 +523,35 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     {
         Logger::Log(LogLevel::Info, BuildLocalMDPDESpotSummary(model_object));
     }
+}
+
+void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
+{
+    if (options.estimator == PotentialEstimator::TWO_STAGE)
+    {
+        model.EditAnalysis().InitializeFromSelection();
+        RunPotentialSamplingWorkflow(map, model, options.sampling_method, options.thread_size);
+        RunPotentialFittingWorkflow(model, options);
+        return;
+    }
+    if (options.sampling_method != SphereSamplingMethod::FibonacciDeterministic)
+        throw std::invalid_argument("Joint initialization requires Fibonacci sampling.");
+    const auto construction_start = std::chrono::steady_clock::now();
+    const auto problem = BuildJointProblem(map, model);
+    const auto construction_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - construction_start).count();
+    const auto initialization_start = std::chrono::steady_clock::now();
+    const auto workset = detail::MakeJointFittingWorkset(model, problem);
+    model.EditAnalysis().InitializeFromSelection();
+    const auto initialization = detail::RunContributorFirstStage(map, model, workset, options);
+    const auto initialization_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - initialization_start).count();
+    auto fit = FitJointComponents(problem, initialization.b);
+    fit.costs.construction_seconds = construction_seconds;
+    fit.costs.initialization_seconds = initialization_seconds;
+    fit.initialization.atoms = initialization.atoms;
+    fit.initialization.data_scope = initialization.data_scope;
+    model.EditAnalysis().SetJointResult(CaptureJointAnalysisResult(fit));
 }
 
 } // namespace rhbm_gem::core
