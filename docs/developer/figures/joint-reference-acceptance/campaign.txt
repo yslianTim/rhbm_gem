@@ -1,0 +1,109 @@
+command single-128 baseline 1 completed
+command single-128 candidate 1 completed
+command single-128 baseline 2 completed
+command single-128 candidate 2 completed
+command single-128 baseline 3 completed
+command single-128 candidate 3 completed
+running analysis: 30s, sampled peak 1429 MiB
+running analysis: 60s, sampled peak 1698 MiB
+running analysis: 90s, sampled peak 2062 MiB
+running analysis: 120s, sampled peak 2560 MiB
+running analysis: 150s, sampled peak 2560 MiB
+running analysis: 180s, sampled peak 2560 MiB
+running analysis: 211s, sampled peak 2560 MiB
+running analysis: 241s, sampled peak 2560 MiB
+running analysis: 271s, sampled peak 2560 MiB
+running analysis: 301s, sampled peak 2560 MiB
+command single-512 baseline 1 completed
+running analysis: 30s, sampled peak 1218 MiB
+running analysis: 60s, sampled peak 1514 MiB
+running analysis: 90s, sampled peak 1552 MiB
+running analysis: 120s, sampled peak 1718 MiB
+running analysis: 150s, sampled peak 1718 MiB
+running analysis: 180s, sampled peak 1718 MiB
+running analysis: 210s, sampled peak 1718 MiB
+running analysis: 240s, sampled peak 1718 MiB
+running analysis: 270s, sampled peak 1718 MiB
+running analysis: 301s, sampled peak 1718 MiB
+command single-512 candidate 1 completed
+running analysis: 30s, sampled peak 1289 MiB
+running analysis: 60s, sampled peak 1773 MiB
+running analysis: 90s, sampled peak 1773 MiB
+running analysis: 120s, sampled peak 1773 MiB
+running analysis: 150s, sampled peak 1773 MiB
+running analysis: 181s, sampled peak 1773 MiB
+running analysis: 211s, sampled peak 1773 MiB
+running analysis: 241s, sampled peak 1773 MiB
+running analysis: 271s, sampled peak 1773 MiB
+running analysis: 301s, sampled peak 1773 MiB
+command single-512 baseline 2 completed
+running analysis: 30s, sampled peak 1056 MiB
+running analysis: 60s, sampled peak 1346 MiB
+running analysis: 90s, sampled peak 1346 MiB
+running analysis: 120s, sampled peak 1346 MiB
+running analysis: 150s, sampled peak 1346 MiB
+running analysis: 180s, sampled peak 1346 MiB
+running analysis: 210s, sampled peak 1346 MiB
+running analysis: 240s, sampled peak 1346 MiB
+running analysis: 270s, sampled peak 1346 MiB
+command single-512 candidate 2 completed
+running analysis: 30s, sampled peak 1050 MiB
+running analysis: 60s, sampled peak 1249 MiB
+running analysis: 90s, sampled peak 1261 MiB
+running analysis: 120s, sampled peak 1302 MiB
+running analysis: 150s, sampled peak 1302 MiB
+running analysis: 180s, sampled peak 1302 MiB
+running analysis: 210s, sampled peak 1302 MiB
+running analysis: 240s, sampled peak 1302 MiB
+running analysis: 270s, sampled peak 1302 MiB
+running analysis: 300s, sampled peak 1302 MiB
+command single-512 baseline 3 completed
+running analysis: 30s, sampled peak 830 MiB
+running analysis: 60s, sampled peak 1290 MiB
+running analysis: 90s, sampled peak 1290 MiB
+running analysis: 120s, sampled peak 1290 MiB
+running analysis: 150s, sampled peak 1290 MiB
+running analysis: 180s, sampled peak 1290 MiB
+running analysis: 210s, sampled peak 1290 MiB
+running analysis: 240s, sampled peak 1290 MiB
+running analysis: 270s, sampled peak 1290 MiB
+command single-512 candidate 3 completed
+audit spqr single-128 legacy completed
+audit spqr single-128 values completed
+audit spqr single-128 auto completed
+audit spqr heterogeneous-168 legacy completed
+audit spqr heterogeneous-168 values completed
+audit spqr heterogeneous-168 auto completed
+running legacy: 30s, sampled peak 1054 MiB
+running legacy: 60s, sampled peak 1054 MiB
+running legacy: 90s, sampled peak 1054 MiB
+running legacy: 120s, sampled peak 1054 MiB
+audit spqr single-512 legacy completed
+running values: 30s, sampled peak 1225 MiB
+running values: 60s, sampled peak 1225 MiB
+running values: 90s, sampled peak 1225 MiB
+running values: 120s, sampled peak 1225 MiB
+audit spqr single-512 values completed
+running auto: 30s, sampled peak 1210 MiB
+audit spqr single-512 auto completed
+audit eigen single-128 legacy completed
+audit eigen single-128 values completed
+audit eigen single-128 auto completed
+audit eigen heterogeneous-168 legacy completed
+audit eigen heterogeneous-168 values completed
+audit eigen heterogeneous-168 auto completed
+running legacy: 30s, sampled peak 485 MiB
+running legacy: 60s, sampled peak 485 MiB
+running legacy: 90s, sampled peak 546 MiB
+running legacy: 120s, sampled peak 546 MiB
+running legacy: 150s, sampled peak 546 MiB
+audit eigen single-512 legacy completed
+running values: 30s, sampled peak 548 MiB
+running values: 60s, sampled peak 548 MiB
+running values: 90s, sampled peak 548 MiB
+running values: 120s, sampled peak 548 MiB
+running values: 150s, sampled peak 548 MiB
+audit eigen single-512 values completed
+running auto: 30s, sampled peak 603 MiB
+running auto: 60s, sampled peak 632 MiB
+audit eigen single-512 auto completed

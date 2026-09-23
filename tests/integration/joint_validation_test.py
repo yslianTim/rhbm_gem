@@ -9,6 +9,67 @@ import joint_validation as v
 from joint_validation_report import parameter_stats, statistical_summary, wilson
 
 class ValidationTest(unittest.TestCase):
+    def test_reference_source_mismatch_fails_before_launch(self):
+        from joint_reference_validation import build_info
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); (root/'generated/Release').mkdir(parents=True)
+            (root/'generated/Release/SimulationBuildInfo.hpp').write_text('wrong source')
+            with self.assertRaisesRegex(ValueError,'source fingerprint mismatch'):
+                build_info(root,'expected')
+
+    def test_reference_missing_export_is_not_a_completed_result(self):
+        from joint_reference_validation import exports
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError,'Missing completed-command export'):
+                exports(Path(tmp))
+
+    def test_reference_censored_or_missing_samples_have_no_speed_measurement(self):
+        from joint_reference_validation import command_group
+        for rows in ([],[dict(status='time-limit')]*3,[dict(status='not-run-budget')]*2):
+            result,states=command_group(rows,Path('.'),True)
+            self.assertFalse(result['passed']); self.assertFalse(result['complete'])
+            self.assertIsNone(result['median_seconds']); self.assertEqual(states,[])
+
+    def test_reference_objective_is_not_normalized_twice(self):
+        from joint_reference_validation import endpoint_comparison
+        state=dict(ac=[1.,0.],b=[.5],objective=0.)
+        a=dict(assembled_state=state,atom_ids=['a'],components=[],observation_scale=1e6)
+        self.assertTrue(endpoint_comparison(a,a)['passed'])
+        b={**a,'assembled_state':{**state,'objective':1e-8}}
+        self.assertFalse(endpoint_comparison(a,b)['passed'])
+        self.assertEqual(endpoint_comparison(a,b)['normalized_objective_difference'],1e-8)
+
+    def test_reference_requires_three_distinct_samples_and_zero_search_references(self):
+        from unittest.mock import patch
+        import joint_reference_validation as r
+        outcome=dict(runtime_convergence='passed',costs=dict(search_reference_seconds=0),components=[dict(reference_evaluations=0)])
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);rows=[]
+            for k in (1,2,3):
+                directory=root/str(k);directory.mkdir()
+                for name in r.EXPORTS:(directory/name).write_text('fixture')
+                rows.append(dict(status='completed',repetition=k,directory=str(k),case='single-128',total_command_seconds=1.,
+                                 export_hashes={n:v.sha(directory/n) for n in r.EXPORTS}))
+            with patch.object(r,'exports',return_value=outcome),patch.object(r.v,'read',return_value=dict(b=[.5])):
+                self.assertTrue(r.command_group(rows,root,True)[0]['passed'])
+                self.assertFalse(r.command_group(rows[:2],root,True)[0]['passed'])
+                self.assertFalse(r.command_group([rows[0]]*3,root,True)[0]['passed'])
+                outcome['components'][0]['reference_evaluations']=1
+                self.assertFalse(r.command_group(rows,root,True)[0]['passed'])
+
+    def test_reference_reaggregation_is_repeatable_and_rejects_corruption(self):
+        from unittest.mock import patch
+        from joint_reference_validation import summarize
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); path=root/'evidence.txt';path.write_text('original')
+            r=dict(finished=True,historical=dict(compact_gate_passed=True),commands={},audits={},files={'evidence.txt':v.sha(path)})
+            with patch('joint_reference_validation.historical',return_value=r['historical']):
+                self.assertEqual(summarize(r,root),summarize(r,root))
+                self.assertFalse(summarize(r,root)['latest_512_passed'])
+            path.write_text('changed')
+            with self.assertRaisesRegex(ValueError,'Evidence hash mismatch'):
+                summarize(r,root)
+
     def test_compact_svd_checks_weak_spectrum_and_threshold_not_only_residual(self):
         import json
         from joint_compact_validation import svd_parity

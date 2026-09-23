@@ -1,0 +1,53 @@
+{
+  "historical-inputs.tar.gz": {
+    "sha256": "33dbafe83bc6727138f56edb7dba7590737a370cb56c80215861b62b07436689",
+    "bytes": 10493974,
+    "roots": [
+      "historical/inputs"
+    ]
+  },
+  "historical-audits.tar.gz": {
+    "sha256": "172b309da56c6d88664253e6f3d2a11bc9d3490bbf691b6ef0900c2086fb778f",
+    "bytes": 98380219,
+    "roots": [
+      "historical/audits"
+    ]
+  },
+  "historical-results.tar.gz": {
+    "sha256": "398118a2eeca2fc0001daf04371b999a10896a13182bdd5667267265e499bd16",
+    "bytes": 12281158,
+    "roots": [
+      "historical/baseline-controls",
+      "historical/commands",
+      "historical/fixed",
+      "historical/receipt.json",
+      "historical/replay",
+      "historical/summary.json"
+    ]
+  },
+  "incremental-inputs.tar.gz": {
+    "sha256": "e19d80da2d82055b4fad8dcf4080cb75c3d4936ec6bf26d30bed8975598e4cff",
+    "bytes": 10493883,
+    "roots": [
+      "inputs"
+    ]
+  },
+  "incremental-audits.tar.gz": {
+    "sha256": "dceb54598c51f8f4ce0f79f77e74159789f3d2076b8c4918c6ff23c2e2f40081",
+    "bytes": 89237357,
+    "roots": [
+      "audits"
+    ]
+  },
+  "incremental-results.tar.gz": {
+    "sha256": "7cdff3ce4537b37b58d24641dfa2341854c2bc4fc1a40efb14a8bde7ab54d471",
+    "bytes": 15930939,
+    "roots": [
+      "commands",
+      "initialization",
+      "receipt.json",
+      "summary.json",
+      "verification"
+    ]
+  }
+}

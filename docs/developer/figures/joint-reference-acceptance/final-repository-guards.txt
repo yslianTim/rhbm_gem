@@ -1,0 +1,8 @@
+Running repository lint checks (style/structure/hygiene)
+-- Running guard: logging_style
+-- Running guard: parameterless_void
+-- Running guard: repository_hygiene
+-- Running guard: fixture_tracking
+-- Running guard: structure
+-- Running guard: absolute_paths
+Built target lint_repo

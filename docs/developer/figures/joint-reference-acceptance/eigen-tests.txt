@@ -1,0 +1,75 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-compact-eigen
+      Start  1: joint_component_offline_tests
+ 1/27 Test  #1: joint_component_offline_tests .........   Passed   16.05 sec
+      Start  2: rhbm_tests_joint_component
+ 2/27 Test  #2: rhbm_tests_joint_component ............   Passed    0.23 sec
+      Start  3: rhbm_tests_core_command
+ 3/27 Test  #3: rhbm_tests_core_command ...............   Passed    0.44 sec
+      Start  4: rhbm_tests_core_sampler
+ 4/27 Test  #4: rhbm_tests_core_sampler ...............   Passed    0.01 sec
+      Start  5: rhbm_tests_core_qscore
+ 5/27 Test  #5: rhbm_tests_core_qscore ................   Passed    0.02 sec
+      Start  6: rhbm_tests_core_estimator
+ 6/27 Test  #6: rhbm_tests_core_estimator .............   Passed   18.04 sec
+      Start  7: rhbm_tests_core_contract
+ 7/27 Test  #7: rhbm_tests_core_contract ..............   Passed    0.09 sec
+      Start  8: rhbm_tests_data_runtime
+ 8/27 Test  #8: rhbm_tests_data_runtime ...............   Passed    0.05 sec
+      Start  9: rhbm_tests_data_schema
+ 9/27 Test  #9: rhbm_tests_data_schema ................   Passed    0.28 sec
+      Start 10: rhbm_tests_utils_algorithm
+10/27 Test #10: rhbm_tests_utils_algorithm ............   Passed    0.01 sec
+      Start 11: rhbm_tests_utils_math
+11/27 Test #11: rhbm_tests_utils_math .................   Passed    0.01 sec
+      Start 12: rhbm_tests_utils_domain
+12/27 Test #12: rhbm_tests_utils_domain ...............   Passed    0.05 sec
+      Start 13: rhbm_tests_utils_hrl
+13/27 Test #13: rhbm_tests_utils_hrl ..................   Passed    0.28 sec
+      Start 14: rhbm_tests_integration_command
+14/27 Test #14: rhbm_tests_integration_command ........   Passed    0.28 sec
+      Start 15: joint_component_evidence_test
+15/27 Test #15: joint_component_evidence_test .........   Passed    0.18 sec
+      Start 16: joint_component_runtime_runner_test
+16/27 Test #16: joint_component_runtime_runner_test ...   Passed    0.18 sec
+      Start 17: joint_component_regression
+17/27 Test #17: joint_component_regression ............   Passed    5.15 sec
+      Start 18: joint_component_physical_smoke
+18/27 Test #18: joint_component_physical_smoke ........   Passed    2.28 sec
+      Start 19: joint_component_offline_regression
+19/27 Test #19: joint_component_offline_regression ....   Passed  188.67 sec
+      Start 20: joint_component_two_step_regression
+20/27 Test #20: joint_component_two_step_regression ...   Passed    3.33 sec
+      Start 21: joint_component_extended_regression
+21/27 Test #21: joint_component_extended_regression ...   Passed   74.14 sec
+      Start 22: endpoint_refinement_runner_test
+22/27 Test #22: endpoint_refinement_runner_test .......   Passed    0.12 sec
+      Start 23: second_stage_audit_parser_test
+23/27 Test #23: second_stage_audit_parser_test ........   Passed    0.17 sec
+      Start 24: fold_168_regression_runner_test
+24/27 Test #24: fold_168_regression_runner_test .......   Passed    0.49 sec
+      Start 25: cli_quickstart_smoke_test
+25/27 Test #25: cli_quickstart_smoke_test .............   Passed    3.06 sec
+      Start 26: joint_workflow_cli_smoke_test
+26/27 Test #26: joint_workflow_cli_smoke_test .........   Passed    0.62 sec
+      Start 27: command_scaffold_smoke_test
+27/27 Test #27: command_scaffold_smoke_test ...........   Passed    0.13 sec
+
+100% tests passed out of 27
+
+Label Time Summary:
+domain:core           =  34.89 sec*proc (7 tests)
+domain:data           =   0.33 sec*proc (2 tests)
+domain:integration    = 278.81 sec*proc (14 tests)
+domain:utils          =   0.35 sec*proc (4 tests)
+intent:algorithm      = 309.37 sec*proc (17 tests)
+intent:command        =   4.39 sec*proc (4 tests)
+intent:contract       =   0.45 sec*proc (3 tests)
+intent:io             =   0.05 sec*proc (1 test)
+intent:sampling       =   0.01 sec*proc (1 test)
+intent:schema         =   0.28 sec*proc (1 test)
+intent:validation     =   0.49 sec*proc (2 tests)
+joint:extended        =  74.14 sec*proc (1 test)
+joint:offline         = 208.05 sec*proc (3 tests)
+joint:runtime         =   8.03 sec*proc (5 tests)
+
+Total Test time (real) = 314.43 sec

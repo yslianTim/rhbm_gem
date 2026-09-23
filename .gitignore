@@ -70,3 +70,4 @@ scripts/user/local/
 
 # Reproducible compact SVD acceptance evidence
 !docs/developer/figures/joint-compact-acceptance/*.gz
+!docs/developer/figures/joint-reference-acceptance/*.gz

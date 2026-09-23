@@ -1,0 +1,14 @@
+[  1%] Generating ../generated/Release/SimulationBuildInfo.hpp
+[  3%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/TiledDerivative.cpp.o
+[  3%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Numerics.cpp.o
+[  4%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/LinearSolve.cpp.o
+[  5%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/CompactSvd.cpp.o
+[  6%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/SparseFactor.cpp.o
+[  7%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Search.cpp.o
+[  8%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/detail/joint_component/Components.cpp.o
+[  9%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/JointComponentEstimator.cpp.o
+[ 10%] Building CXX object src/CMakeFiles/rhbm_gem.dir/core/command/detail/SimulationManifest.cpp.o
+[ 11%] Linking CXX shared library librhbm_gem.dylib
+[ 97%] Built target rhbm_gem
+[ 98%] Linking CXX executable ../bin/RHBM-GEM
+[100%] Built target rhbm_gem_cli

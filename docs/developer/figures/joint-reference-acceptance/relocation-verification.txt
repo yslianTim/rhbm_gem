@@ -1,0 +1,4 @@
+All six archive hashes verified.
+All manifested evidence files verified after extraction into build/joint-reference-relocated.
+Reaggregated summary is exactly equal to the saved summary.
+Historical compact, latest numerical and latest 512 gates all passed.

@@ -1,0 +1,11 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-compact-spqr
+    Start 7: rhbm_tests_core_contract
+1/1 Test #7: rhbm_tests_core_contract .........   Passed    0.13 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+domain:core        =   0.13 sec*proc (1 test)
+intent:contract    =   0.13 sec*proc (1 test)
+
+Total Test time (real) =   0.14 sec

@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "e32919f3",
+  "candidate_commit": "c9e0f8c9",
+  "production_source_sha256": "62d178d17643a4a8195aceac17a5e4ced5af59cfb79a7e288f87bdd5d82c2de1",
+  "tests": {
+    "backends": [
+      "SPQR",
+      "EIGEN"
+    ],
+    "ctests_per_backend": 27,
+    "runner_tests": 18,
+    "all_passed": true
+  },
+  "testing_disabled": {
+    "build_passed": true,
+    "single_128_runtime_convergence": "passed",
+    "atom_count": 128,
+    "search_reference_seconds": 0.0
+  },
+  "logs": {
+    "testing-disabled-smoke.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repository-guards.txt": "ef7cea8fe8a267fa9155f8cdc40c55496e0ff1f0d88c781b1b69441a72405721",
+    "eigen-tests.txt": "b72b504eaf4ecc168c19db5e77299584450c4fb1aaed1a90b89f6b1db2e8e425",
+    "spqr-tests.txt": "b632ea7810133ae6de30b824dd7c66d49fce35d609d4ca18eb6a431f0fa619c8",
+    "runner-tests.txt": "f28d27693fa3d768781b75826550be1eb2ee62ddcfb5cc16a123a5d07dca6316",
+    "testing-disabled-build.txt": "dd04842fb9942ea6c6eb7572b9b595f15e6f2b2213192a2f8b5efba524b831e9"
+  },
+  "harness_sha256": {
+    "tests/integration/joint_reference_validation.py": "4d6223f94c311b97d8d165ad4131d14be020f7f91da5c6db75a9ecc461a659be",
+    "tests/integration/joint_validation_test.py": "cc4b2212ccccb71e124c737e4a3120c52013268e53a99859656588fe141e8047"
+  }
+}
