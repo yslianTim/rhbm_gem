@@ -31,6 +31,8 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/Components.cpp
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
+    core/PotentialFittingWorkflow.cpp
+    core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
     core/detail/JointUncertainty.cpp
     core/detail/JointGroupFitting.cpp

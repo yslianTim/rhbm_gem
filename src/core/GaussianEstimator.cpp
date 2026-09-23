@@ -1,27 +1,13 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/MapSampler.hpp>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/StageSummary.hpp"
-#include "core/detail/PostFitPeeling.hpp"
-#include "core/detail/JointUncertainty.hpp"
-#include "data/detail/JointStageAdapter.hpp"
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include "core/detail/GroupPotentialFitting.hpp"
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
-#include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
-#include <set>
-#include <chrono>
-#include <array>
 #include <cstddef>
-#include <iomanip>
-#include <map>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,7 +20,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -47,81 +32,6 @@ namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
-constexpr std::array<Spot, 5> kLocalMDPDESummarySpotList{
-    Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
-};
-
-struct GaussianModelParameterSamples
-{
-    std::vector<double> amplitude_list, width_list, offset_list;
-    std::size_t unavailable{}, not_converged{};
-};
-} // namespace
-
-StageProvenance CollectStageProvenance(const std::vector<const AtomObject *> & atoms)
-{
-    std::set<std::string> methods, modes;
-    for (const auto * atom : atoms)
-    {
-        const auto view = AtomLocalPotentialView::For(*atom);
-        if (!view.IsAvailable()) { methods.insert("unknown"); modes.insert("unknown"); continue; }
-        const auto method = view.GetStageEstimate(FittingStage::Second).source.method;
-        methods.insert(method == EstimateMethod::JointComponents ? "joint-components" :
-            method == EstimateMethod::Peeling ? "two-stage" : "unknown");
-        if (view.GetPostFitPeeling()) modes.insert(view.GetPostFitPeeling()->mode);
-        else modes.insert(method == EstimateMethod::Peeling && !view.GetPeelingSamplingEntries().empty() ? "iterative" : "unknown");
-    }
-    const auto label = [](const auto & values) -> std::string {
-        return values.empty() ? "unknown" : values.size() == 1 ? *values.begin() : "mixed";
-    };
-    return {label(methods), label(modes)};
-}
-
-std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
-{
-    std::map<Spot, GaussianModelParameterSamples> spots;
-    std::vector<const AtomObject *> population;
-    for (const auto * atom : model_object.GetSelectedAtoms())
-    {
-        const auto spot = atom->GetSpot();
-        if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
-            kLocalMDPDESummarySpotList.end()) continue;
-        const auto view = AtomLocalPotentialView::For(*atom);
-        const bool joint = view.IsAvailable() && view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents;
-        if (joint && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
-        population.push_back(atom);
-        auto & samples = spots[spot];
-        if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
-        const auto & estimate = view.GetStageEstimate(FittingStage::Second);
-        if (joint && estimate.convergence != JointCheckStatus::Passed) ++samples.not_converged;
-        const auto & point = *estimate.point;
-        samples.amplitude_list.push_back(point.GetAmplitude());
-        samples.width_list.push_back(point.GetWidth());
-        samples.offset_list.push_back(point.GetOffset());
-    }
-    std::ostringstream summary;
-    summary << "Second-stage estimate summary by Spot:\nEstimator: "
-        << CollectStageProvenance(population).estimator
-        << "\nPopulation: selected targets; s.d.: between-atom dispersion"
-        << "\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C charge coefficient mean / s.d. |";
-    for (const auto & [spot, samples] : spots)
-    {
-        summary << "\n| " << ChemicalDataHelper::GetLabel(spot) << " | " << samples.amplitude_list.size()
-            << " | " << samples.not_converged << " | " << samples.unavailable;
-        for (const auto * values : {&samples.amplitude_list, &samples.width_list, &samples.offset_list})
-        {
-            if (values->empty()) { summary << " | unavailable"; continue; }
-            const auto mean = array_helper::ComputeMean(values->data(), values->size());
-            summary << " | " << std::fixed << std::setprecision(2) << mean << " / "
-                << array_helper::ComputeStandardDeviation(values->data(), values->size(), mean);
-        }
-        summary << " |";
-    }
-    if (spots.empty()) summary << "\nNo matching selected targets available.";
-    return summary.str();
-}
-
-namespace {
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
@@ -209,7 +119,9 @@ GroupGaussianResult DecodeGroupGaussianResult(
     };
 }
 
-void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
+} // namespace
+
+void detail::RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -239,7 +151,6 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     analysis.InitializeGroupAlpha(alpha_g);
 }
 
-} // namespace
 
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
@@ -273,14 +184,9 @@ void RunFixedOffsetLocalFitting(
     {
         auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::For(atom) };
-        LocalPotentialSampleList sample_entries{ local_view.GetSamplingEntries(stage) };
-        GaussianModel3D offset_model{ local_view.GetEstimateMDPDE(stage) };
-        local_results[i] =
-            EstimateLocalGaussian(
-                sample_entries,
-                local_view.GetAlphaR(stage),
-                options,
-                offset_model);
+        local_results[i] = stage == FittingStage::First ? detail::FitFirstStageAtom(atom, options) :
+            EstimateLocalGaussian(local_view.GetSamplingEntries(stage), local_view.GetAlphaR(stage),
+                options, local_view.GetEstimateMDPDE(stage));
 
         if (!options.quiet_mode)
         {
@@ -513,65 +419,5 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 }
 
-void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
-{
-    if (options.estimator != PotentialEstimator::TWO_STAGE)
-        throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
-    model_object.EditAnalysis().InitializeLocalFittingSeedModels();
-
-    RunLocalAlphaTraining(model_object, options, FittingStage::First);
-    RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
-
-    detail::RunSecondStageIterations(model_object, options);
-
-    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model_object));
-    RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options);
-}
-
-void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
-{
-    if (options.estimator == PotentialEstimator::TWO_STAGE)
-    {
-        model.EditAnalysis().InitializeFromSelection();
-        RunPotentialSamplingWorkflow(map, model, options.sampling_method, options.thread_size);
-        RunPotentialFittingWorkflow(model, options);
-        return;
-    }
-    if (options.sampling_method != SphereSamplingMethod::FibonacciDeterministic)
-        throw std::invalid_argument("Joint initialization requires Fibonacci sampling.");
-    const auto construction_start = std::chrono::steady_clock::now();
-    const auto problem = BuildJointProblem(map, model);
-    const auto construction_seconds = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - construction_start).count();
-    const auto initialization_start = std::chrono::steady_clock::now();
-    const auto workset = detail::MakeJointFittingWorkset(model, problem);
-    model.EditAnalysis().InitializeFromSelection();
-    const auto initialization = detail::RunContributorFirstStage(map, model, workset, options);
-    const auto initialization_seconds = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - initialization_start).count();
-    auto snapshot = [&] {
-        auto fit = FitJointComponents(problem, initialization.b);
-        fit.costs.construction_seconds = construction_seconds;
-        fit.costs.initialization_seconds = initialization_seconds;
-        fit.initialization.atoms = initialization.atoms;
-        fit.initialization.data_scope = initialization.data_scope;
-        return CaptureJointAnalysisResult(fit);
-    }();
-    data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
-    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices))
-        model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
-    for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
-    {
-        auto & atom = *model.FindAtomPtr(id);
-        auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
-        stage.uncertainty = std::move(uncertainty);
-        model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, stage);
-        model.EditAnalysis().SetAtomGroupEvidence(atom, detail::BuildJointParameterEvidence(stage));
-    }
-    model.EditAnalysis().SetJointResult(std::move(snapshot));
-    RunGroupPotentialFitting(model, options);
-}
 
 } // namespace rhbm_gem::core

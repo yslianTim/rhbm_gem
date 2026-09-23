@@ -1,4 +1,4 @@
-#include "JointUncertainty.hpp"
+#include "GroupPotentialFitting.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>

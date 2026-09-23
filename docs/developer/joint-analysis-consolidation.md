@@ -99,3 +99,26 @@ explicit all-contributor postprocessing agree exactly on targets. Dense covarian
 reference, coverage/negative contribution tests and frozen Joint regression pass.
 CLI/persistence tests now explicitly require absent halo diagnostics. Numerical
 tolerances are unchanged; `git diff --check` passed.
+
+## S4 — workflow responsibilities
+
+`PotentialFittingWorkflow.cpp` owns orchestration and `StageSummary.cpp` owns
+reporting. Group training/inference declarations live in
+`GroupPotentialFitting.hpp`, separate from uncertainty.
+
+The explicit-workset First executor has two fixed modes: prepared-sample batch
+training/fitting with the existing parallel behavior, and map-sampled contributor
+initialization with per-atom exception isolation. Both use the same formal
+First-atom fitting operation. Batch mode does not construct unused Joint
+initialization diagnostics. The standalone wrapper still works on a model copy
+and writes successful target First results back, preserving selection, Second,
+group results and halo history; raw replacement invalidates peeling as in S1.
+
+An additional test runs prepared-sample First on an unselected halo workset and
+checks that the selected atom remains untouched, exactly one formal fit occurs,
+and no sampling occurs. Existing exact First/direct-fit and standalone failure
+isolation tests remain the numerical acceptance criteria.
+
+S4 validation: `tests_all` built; all 25 default CTests passed, including
+sampling, two-stage, standalone, CLI and Python binding/pipeline regression.
+The explicit workset observer test passes; `git diff --check` passed.

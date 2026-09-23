@@ -680,3 +680,29 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->metadata.model_path, "metadata-only");
     EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).HasFinalModel(rhbm_gem::FittingStage::Second));
 }
+
+TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheExplicitWorkset)
+{
+    auto f = joint_partial_test::Make("partial");
+    auto editor = f.model->EditAnalysis();
+    editor.InitializeFromSelection();
+    rhbm_gem::LocalGaussianResult seed;
+    seed.mdpde = {rhbm_gem::GaussianModel3D{7, .73, 0}, {}};
+    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First, *f.model->FindAtomPtr(1), seed);
+    seed.mdpde = {rhbm_gem::GaussianModel3D{0, 1, 0}, {}};
+    const auto & halo = *f.model->FindAtomPtr(2);
+    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First, halo, seed);
+    editor.SetAtomLocalRawSamplingEntries(halo, core::SampleAtomMapValues(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
+    const auto selected = f.model->GetSelectedAtoms();
+    std::map<std::pair<int, std::string>, int> calls;
+    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) { ++calls[{id, std::string(phase)}]; };
+    const core::detail::FittingWorkset workset{{f.model->FindAtomPtr(2)}, {false}};
+    core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
+    core::detail::RunFirstStage(*f.model, workset, options, core::detail::FirstStageMode::ExistingSamplesBatch);
+    core::detail::FirstStageObserverForTesting() = {};
+    EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
+    EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
+    EXPECT_EQ((calls[{2, "first"}]), 1);
+    EXPECT_EQ((calls[{1, "first"}]), 0);
+    EXPECT_EQ((calls[{2, "raw"}]), 0);
+}

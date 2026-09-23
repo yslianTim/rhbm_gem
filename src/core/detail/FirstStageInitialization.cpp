@@ -34,9 +34,29 @@ FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem &
     return workset;
 }
 
-JointInitialization RunContributorFirstStage(MapObject & map, ModelObject & model,
-    const FittingWorkset & workset, const FitOptions & options)
+LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if (FirstStageObserverForTesting()) FirstStageObserverForTesting()(atom.GetSerialID(), "first");
+#endif
+    const auto view = AtomLocalPotentialView::For(atom);
+    return EstimateLocalGaussian(view.GetSamplingEntries(FittingStage::First), view.GetAlphaR(FittingStage::First),
+        options, view.GetEstimateMDPDE(FittingStage::First));
+}
+
+JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & workset,
+    const FitOptions & options, FirstStageMode mode, MapObject * sampling_map)
+{
+    if (workset.target_mask.size() != workset.contributors.size())
+        throw std::invalid_argument("First-stage workset role count mismatch.");
+    if (mode == FirstStageMode::ExistingSamplesBatch)
+    {
+        RunLocalAlphaTraining(model, options, FittingStage::First, workset.contributors);
+        RunFixedOffsetLocalFitting(model, options, FittingStage::First, workset.contributors);
+        return {};
+    }
+    if (!sampling_map) throw std::invalid_argument("Contributor sampling requires a map.");
+    auto & map = *sampling_map;
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();
@@ -64,12 +84,7 @@ JointInitialization RunContributorFirstStage(MapObject & map, ModelObject & mode
             const std::vector<AtomObject *> atoms{atom};
             RunLocalAlphaTraining(model, options, FittingStage::First, atoms);
             record.alpha = view.GetAlphaR(FittingStage::First);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if (FirstStageObserverForTesting()) FirstStageObserverForTesting()(atom->GetSerialID(), "first");
-#endif
-            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom,
-                EstimateLocalGaussian(view.GetSamplingEntries(FittingStage::First), record.alpha,
-                    options, seed.mdpde.GetModel()));
+            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, FitFirstStageAtom(*atom, options));
             auto first = view.GetStageEstimate(FittingStage::First);
             first.source.role = workset.target_mask[index] ? FittingRole::Target : FittingRole::Halo;
             editor.SetAtomStageEstimate(FittingStage::First, *atom, first);

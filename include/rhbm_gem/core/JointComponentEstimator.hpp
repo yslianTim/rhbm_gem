@@ -70,7 +70,8 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnal
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
 // Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
-// into the existing second-stage or group-fitting result fields.
+// into the existing second-stage or group-fitting result fields. Replacing raw samples
+// invalidates sample-derived peeling, while fixed Second and group results are retained.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 }
 }
