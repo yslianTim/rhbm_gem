@@ -32,6 +32,7 @@ target_sources(rhbm_gem PRIVATE
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
     core/detail/FirstStageInitialization.cpp
+    core/detail/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/detail/second_stage/SecondStageState.cpp

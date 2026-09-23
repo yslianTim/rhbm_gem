@@ -45,7 +45,20 @@ void ModelAnalysisEditor::SetAtomStageEstimate(FittingStage stage, const AtomObj
 
 void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value)
 {
-    EnsureAtomLocalPotential(m_model_object, atom).SetPostFitPeeling(std::move(value));
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
+    const auto & raw = entry.RawSamplingEntries();
+    if (raw.size() != value.samples.size()) throw std::invalid_argument("Peeling/raw sample count mismatch.");
+    LocalPotentialSampleList available;
+    for (std::size_t i = 0; i < raw.size(); ++i)
+    {
+        if (!value.samples[i].response) continue;
+        auto sample = raw[i];
+        sample.response = *value.samples[i].response;
+        available.push_back(sample);
+    }
+    entry.SetPeelingSamplingEntries(std::move(available));
+    entry.SetNeighborCountForPeeling(static_cast<int>(value.neighbor_count));
+    entry.SetPostFitPeeling(std::move(value));
 }
 
 void ModelAnalysisEditor::ClearJointResult()

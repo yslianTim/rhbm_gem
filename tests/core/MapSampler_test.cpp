@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/MapSampler.hpp>
+#include "core/detail/MapInterpolation.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -171,4 +172,25 @@ TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
             detached_atom,
             SphereSamplingMethod::FibonacciDeterministic),
         std::runtime_error);
+}
+
+TEST(MapSamplerTest, SharedTricubicStencilPreservesClampAndEffectiveWeights)
+{
+    const auto map = MakeMapObject();
+    for (const auto & position : std::vector<std::array<double, 3>>{{0, 0, 0}, {0.3, 0.6, 0.8}, {1, 1, 1}})
+    {
+        const auto stencil = detail::MakeTricubicStencil(map, position);
+        const double value = detail::InterpolateTricubic(stencil, [&](const auto & p) {
+            return map.GetMapValue(p[0], p[1], p[2]);
+        });
+        double reference = 0, weight_sum = 0;
+        for (const auto & [node, weight] : detail::TricubicWeights(stencil))
+        {
+            EXPECT_LT(node, map.GetMapValueArraySize());
+            reference += weight * map.GetMapValue(node);
+            weight_sum += weight;
+        }
+        EXPECT_NEAR(value, reference, 1e-13);
+        EXPECT_NEAR(weight_sum, 1, 1e-14);
+    }
 }

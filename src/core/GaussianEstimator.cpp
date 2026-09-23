@@ -3,6 +3,7 @@
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/StageSummary.hpp"
+#include "core/detail/PostFitPeeling.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -531,6 +532,8 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     model.EditAnalysis().SetJointResult(snapshot);
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
+    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem))
+        model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
 }
 
 } // namespace rhbm_gem::core

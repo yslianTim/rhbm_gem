@@ -75,7 +75,7 @@ JointInitialization RunContributorFirstStage(MapObject & map, ModelObject & mode
             editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
             const auto & local = view.GetGaussianResult(FittingStage::First);
             const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
-            for (std::size_t k = 0; k < 3; ++k) { record.ols[k] = ols(k); record.mdpde[k] = mdpde(k); }
+            for (std::size_t k = 0; k < 3; ++k) { record.ols[k] = ols(static_cast<Eigen::Index>(k)); record.mdpde[k] = mdpde(static_cast<Eigen::Index>(k)); }
             if (local.fit_result) record.native_status = static_cast<int>(local.fit_result->status);
             width = local.mdpde.GetModel().GetWidth();
             record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";

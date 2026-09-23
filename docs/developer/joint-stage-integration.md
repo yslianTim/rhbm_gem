@@ -44,3 +44,20 @@ Validation: all six related tests/groups passed (Joint, estimator, commands,
 command integration, frozen regression and CLI smoke). The new adapter test
 permutes identities/mappings and verifies target-only summary and stale-state
 removal. No solver settings or numeric algorithms changed.
+
+## 4. Grid-consistent post-fit peeling
+
+Sampling and model subtraction now share the original nested tricubic arithmetic
+and clamped stencil. The pure conversion subtracts fitted neighbors on the fixed
+Joint rows, including halo, and preserves each raw sample. Per-sample responses
+are optional, with explicit outside-domain or missing-contributor reasons.
+Ratios require complete paired coverage in their interval and never clamp signed
+results. Neighbor counts include contributors affecting interpolation nodes.
+
+Validation: sampler, estimator, data runtime, commands, command integration,
+frozen Joint regression and CLI smoke passed. The final Joint group rerun also
+passed after correcting a new fixture to use binary-exact spacing: tiny nonzero
+weights at decimal-grid nodes correctly retain conservative coverage rejection.
+Tests cover signed C, zero A, negative responses, zero denominator, distant halo,
+clamping, partial coverage, missing state, and unchanged raw/Second parameters.
+The existing independent observation-stencil oracle passes after extraction.

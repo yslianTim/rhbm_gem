@@ -58,6 +58,7 @@ struct PostFitPeelingResult
 {
     EstimateSource source;
     std::string mode{ "grid-consistent" };
+    std::size_t neighbor_count{};
     // One entry per raw sample, including samples without coverage.
     std::vector<PeelingSampleEstimate> samples;
 };

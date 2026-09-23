@@ -9,6 +9,9 @@
 #include <map>
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/StageSummary.hpp"
+#include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/MapInterpolation.hpp"
+#include "support/ForwardModelExperiment.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -313,7 +316,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
         EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
-        EXPECT_TRUE(view.GetPeelingSamplingEntries(false).empty());
+        ASSERT_TRUE(view.GetPostFitPeeling());
+        EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
     const auto direct = core::FitJointComponents(problem, result.initialization.b);
@@ -357,4 +361,99 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_EQ(target.GetStageEstimate(rhbm_gem::FittingStage::Second).reason, "invalid-initial-widths");
     summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("| CA | 0 | 0 | 1"), std::string::npos);
+}
+
+TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetainsMissingCoverage)
+{
+    auto f = joint_partial_test::Make("partial");
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    ASSERT_TRUE(snapshot.components.front().state);
+    // Make the neighbor contribution strictly negative, including zero Gaussian A.
+    snapshot.components.front().state->ac[2] = 0;
+    snapshot.components.front().state->ac[3] = -0.4;
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "peeling-test");
+    auto * atom = f.model->FindAtomPtr(1);
+    auto editor = f.model->EditAnalysis();
+    const SamplingPointList points{
+        {0.2, {0.13, 0.07, 0.02}, false},
+        {2.4, {2.4, 0, 0}, true},
+        {2.9, {2.9, 0, 0}, true}};
+    const auto raw = second_stage_test::SampleExperimentPoints(*f.map, points);
+    editor.SetAtomLocalRawSamplingEntries(*atom, raw);
+    const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
+    const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
+    const auto outputs = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
+    const auto & output = outputs.at(1);
+    ASSERT_EQ(output.samples.size(), raw.size());
+    ASSERT_TRUE(output.samples[0].response);
+    EXPECT_GT(*output.samples[0].response, raw[0].response);
+    const auto & neighbor = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2))
+        .GetFinalModel(rhbm_gem::FittingStage::Second);
+    const auto stencil = core::detail::MakeTricubicStencil(*f.map, points[0].position);
+    const double neighbor_prediction = core::detail::InterpolateTricubic(stencil, [&](const auto & node) {
+        const auto position = core::simulation::GridPosition(node, f.map->GetGridSpacing(), f.map->GetOrigin());
+        const double squared = core::simulation::SupportSquare(position, f.model->FindAtomPtr(2)->GetPosition());
+        return squared <= 6.25 ? neighbor.ResponseAtDistance(std::sqrt(squared)) : 0.0;
+    });
+    EXPECT_NEAR(*output.samples[0].response, raw[0].response - neighbor_prediction, 1e-12);
+    EXPECT_FALSE(output.samples[2].response);
+    EXPECT_EQ(output.samples[2].reason, "outside-joint-domain");
+    editor.SetAtomPostFitPeeling(*atom, output);
+    ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
+    EXPECT_LT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0, 3));
+    EXPECT_EQ(view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector(), before);
+    const auto after = view.GetRawSamplingEntries(false);
+    for (std::size_t i = 0; i < raw.size(); ++i)
+    {
+        EXPECT_EQ(after[i].response, raw[i].response);
+        EXPECT_EQ(after[i].point.position, raw[i].point.position);
+        EXPECT_EQ(after[i].point.is_selected, raw[i].point.is_selected);
+    }
+    auto missing = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2)).GetStageEstimate(rhbm_gem::FittingStage::Second);
+    missing.point.reset(); missing.reason = "missing-state";
+    editor.SetAtomStageEstimate(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(2), missing);
+    const auto incomplete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
+    EXPECT_FALSE(incomplete.at(1).samples[0].response);
+    EXPECT_EQ(incomplete.at(1).samples[0].reason, "missing-contributor-state");
+}
+
+TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterpolationStencil)
+{
+    auto f = joint_partial_test::Make("weak");
+    // Binary-exact spacing makes the y/z zero-weight stencil nodes exact.
+    f.map = std::make_unique<rhbm_gem::MapObject>(std::array<int, 3>{49, 25, 25},
+        std::array<double, 3>{.25, .25, .25}, std::array<double, 3>{-6, -3, -3},
+        std::make_unique<double[]>(49 * 25 * 25));
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    auto editor = f.model->EditAnalysis();
+    for (std::size_t i = 0; i < f.a.size(); ++i)
+    {
+        rhbm_gem::LocalStageEstimate estimate;
+        estimate.point = rhbm_gem::GaussianModel3D{f.a[i], f.b[i], f.c[i]};
+        estimate.source.method = rhbm_gem::EstimateMethod::JointComponents;
+        editor.SetAtomStageEstimate(rhbm_gem::FittingStage::Second,
+            *f.model->FindAtomPtr(static_cast<int>(i + 1)), estimate);
+    }
+    auto * target = f.model->FindAtomPtr(1);
+    const SamplingPointList points{{2.11, {2.11, 0, 0}, true}};
+    auto raw = second_stage_test::SampleExperimentPoints(*f.map, points);
+    editor.SetAtomLocalRawSamplingEntries(*target, raw);
+    auto result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem).at(1);
+    ASSERT_TRUE(result.samples[0].response) << result.samples[0].reason;
+    // Halo center 4.8 A away, with zero analytic support at the sample position.
+    // Its contribution at the 2.5 A stencil node must still be subtracted.
+    EXPECT_GT(std::abs(*result.samples[0].response - raw[0].response), 1e-6);
+    EXPECT_EQ(result.neighbor_count, 1);
+    raw[0].response = 0;
+    editor.SetAtomLocalRawSamplingEntries(*target, raw);
+    result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem).at(1);
+    editor.SetAtomPostFitPeeling(*target, result);
+    EXPECT_FALSE(rhbm_gem::AtomLocalPotentialView::For(*target).GetLocalFittingPeelingRatio(0, 3));
+    raw[0].response = -100;
+    editor.SetAtomLocalRawSamplingEntries(*target, raw);
+    result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem).at(1);
+    ASSERT_TRUE(result.samples[0].response);
+    EXPECT_LT(*result.samples[0].response, 0);
 }
