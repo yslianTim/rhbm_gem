@@ -18,8 +18,6 @@ struct Profile
     std::vector<joint_component::Trial> trace;
     int evaluations{},derivatives{};
     std::string failure;
-    int references{};
-    double reference_seconds{};
     LinearWorkspace workspace;
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
@@ -32,9 +30,8 @@ struct Profile
         bool trusted=cached.valid;
         if(proposed || context.audit.trial_details)
         {
-            const auto start=std::chrono::steady_clock::now();
-            auto evidence=CheckTrust(domain,y,cached,context); ++references;
-            reference_seconds+=Seconds(start); trusted=evidence.passed; row.trust=std::move(evidence);
+            auto evidence=CheckReplay(domain,y,cached,context);
+            trusted=evidence.passed; row.trust=std::move(evidence);
         }
         if(!trusted) failure="untrusted-trial";
         return trusted;
@@ -74,7 +71,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const EvaluationContext & context)
 {
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{},0,0,{}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -100,7 +97,6 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
-    out.references=profile.references; out.reference_seconds=profile.reference_seconds;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
     out.seconds=Seconds(start); return out;
 }

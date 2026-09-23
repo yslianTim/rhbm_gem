@@ -5,6 +5,11 @@ procedures below describe the frozen baseline, not the current daily workflow.
 Use the [runtime guide](joint-component-runtime.md) for current commands and the
 [evidence index](joint-component-evidence.md) for archived evidence.
 
+The trial-time reference policy below belongs to that historical baseline.
+Current runtime uses KKT plus scalar replay during search and reference solves
+for endpoint/fallback certification, as documented in the runtime guide.
+Standalone offline reference audits and archived results remain unchanged.
+
 This testing-only experiment extends the frozen `ecf55f45` coverage results. It does not replace production fitting, change the statistical objective, or reinterpret the earlier uniform-width fixture. The original coverage reports remain immutable.
 
 ## Inputs and objective

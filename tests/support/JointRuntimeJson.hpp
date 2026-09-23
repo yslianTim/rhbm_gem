@@ -48,10 +48,12 @@ inline j::object MatrixSpectrum(const r::Spectrum & s)
 }
 inline j::object Trust(const r::TrustEvidence & t)
 {
-    j::object out{{"reference",Endpoint(t.reference)},{"passed",t.passed},{"reason",t.reason}};
+    j::object out{{"reference",t.reference ? j::value(Endpoint(*t.reference)) : j::value(nullptr)},
+        {"passed",t.passed},{"reason",t.reason}};
+    out["scaled_coefficient_difference"]=Number(t.coefficient_difference);
     if(t.design) out["design_spectrum"]=DesignSpectrum(*t.design);
     if(!t.primary_valid) return out;
-    out["scaled_coefficient_difference"]=Number(t.coefficient_difference); out["prediction_passed"]=t.prediction_passed;
+    out["prediction_passed"]=t.prediction_passed;
     out["gradient_passed"]=t.gradient_passed; out["kkt_replay_difference"]=Number(t.kkt_difference);
     out["maximum_prediction_difference"]=Number(t.prediction_difference);
     out["maximum_gradient_difference"]=Number(t.gradient_difference); out["maximum_cancellation_ratio"]=Number(t.cancellation_ratio); return out;

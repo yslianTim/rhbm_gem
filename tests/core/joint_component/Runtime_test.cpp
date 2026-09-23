@@ -187,16 +187,123 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     const auto fit=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    EXPECT_EQ(fit.components[0].reference_evaluations,0);
+    EXPECT_EQ(fit.costs.search_reference_seconds,0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,fit.components[0].reference_evaluations+1);
     input.row_ids.push_back("constant"); input.observations.push_back(7);
     n::AssessmentWorkForTesting()={};
     const auto constant=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(constant.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,2);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,2);
     n::AssessmentWorkForTesting()={};
     const auto multiple=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
     ASSERT_TRUE(multiple.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,3);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,3);
+}
+
+TEST(JointComponentRuntimeTest, SearchReplaysWithoutReferenceIncludingInitialAndDetailedTrials)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
+    for(bool details:{false,true}) for(int budget:{0,100})
+    {
+        auto context=n::ChildContext(data.context,view,true);
+        context.audit.trial_details=details; context.update_budget=budget;
+        n::AssessmentWorkForTesting()={};
+        const auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
+        EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
+        EXPECT_EQ(search.references,0); EXPECT_EQ(search.reference_seconds,0);
+        ASSERT_TRUE(search.initial_accepted);
+        if(budget==0) {EXPECT_EQ(search.accepted,0); EXPECT_EQ(search.stop_reason,"accepted-update-budget");}
+        else EXPECT_GT(search.accepted,1);
+        for(const auto & trial:search.trials)
+        {
+            if(trial.accepted || (details && trial.lm)) ASSERT_TRUE(trial.trust);
+            if(trial.accepted) EXPECT_TRUE(trial.trust->passed);
+            if(!trial.trust) continue;
+            EXPECT_FALSE(trial.trust->reference);
+            const auto json=second_stage_test::matched::runtime_json::Trust(*trial.trust);
+            EXPECT_TRUE(json.at("reference").is_null());
+            EXPECT_TRUE(json.at("scaled_coefficient_difference").is_null());
+        }
+        const auto fit=n::AssessComponentSearch(view.domain,y,context,search);
+        ASSERT_TRUE(fit.trusted_state); ASSERT_TRUE(fit.endpoint_trust);
+        EXPECT_TRUE(fit.endpoint_trust->passed); EXPECT_TRUE(fit.endpoint_trust->reference);
+        EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,1);
+        if(budget==0) {EXPECT_FALSE(fit.search_success); EXPECT_EQ(fit.search.stop_reason,"accepted-update-budget");}
+    }
+}
+
+TEST(JointComponentRuntimeTest, ReplayAndReferenceRejectIndependentDisagreements)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
+    const auto context=n::ChildContext(data.context,view,true);
+    const auto e=n::EvaluateProfile(view.domain,y,n::Vector::Constant(1,std::log(.55)),false,&context);
+    ASSERT_TRUE(e.valid); EXPECT_TRUE(n::CheckReplay(view.domain,y,e,context).passed);
+    auto bad=e; bad.valid=false;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.certificate.available=false;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.certificate.kkt_passed=false;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.certificate.feasible=false;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.gradient(0)+=.01;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).gradient_passed);
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.x.coeffRef(0,0)+=.01;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).prediction_passed);
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    bad=e; bad.certificate.projected_kkt+=1e-11;
+    EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
+    const auto reference=n::EvaluateProfile(view.domain,y,e.eta,true,&context);
+    EXPECT_TRUE(n::CheckTrust(view.domain,y,e,context,reference).passed);
+    bad=reference; bad.valid=false;
+    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
+    bad=reference; bad.beta(0)+=.01;
+    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
+    bad=reference; bad.gradient(0)+=.01;
+    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
+    bad=reference; bad.certificate.kkt_passed=false;
+    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
+}
+
+TEST(JointComponentRuntimeTest, FallbackCertifiesSavedCoefficientsNewestFirst)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
+    const auto context=n::ChildContext(data.context,view,true);
+    auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
+    std::vector<std::size_t> accepted;
+    for(std::size_t k=0;k<search.trials.size();++k) if(search.trials[k].accepted) accepted.push_back(k);
+    ASSERT_GT(accepted.size(),1);
+    const auto expected=search.trials[accepted[accepted.size()-2]].endpoint;
+    search.trials[accepted.back()].endpoint.beta(0)+=1;
+    search.eta=n::Vector::Constant(1,1000); search.stopped=false;
+    const auto fit=n::AssessComponentSearch(view.domain,y,context,search);
+    ASSERT_TRUE(fit.trusted_state && fit.trusted_assessment);
+    EXPECT_EQ(fit.trusted_trial,accepted[accepted.size()-2]);
+    EXPECT_EQ(fit.trusted_state->eta,expected.eta); EXPECT_EQ(fit.trusted_state->beta,expected.beta);
+    EXPECT_EQ(fit.trusted_assessment->primary.beta,expected.beta);
+    EXPECT_LE(fit.trusted_assessment->coefficient_difference,1e-10);
+    EXPECT_FALSE(fit.search_success); EXPECT_TRUE(fit.search.stopped);
+    EXPECT_EQ(fit.search.stop_reason,"endpoint-certification-failed");
+    EXPECT_FALSE(fit.assessment.primary.valid);
+    for(auto k:accepted) search.trials[k].endpoint.beta(0)=-1;
+    const auto failed=n::AssessComponentSearch(view.domain,y,context,search);
+    EXPECT_FALSE(failed.trusted_state); EXPECT_FALSE(failed.trusted_assessment);
+    EXPECT_FALSE(failed.search_success);
+    // Even the initial state is eligible, but it must pass fresh certification.
+    search.trials[accepted.front()].endpoint=search.initial;
+    search.stopped=true; search.stop_reason="profile-budget";
+    const auto initial=n::AssessComponentSearch(view.domain,y,context,search);
+    ASSERT_TRUE(initial.trusted_state && initial.trusted_assessment);
+    EXPECT_EQ(initial.trusted_trial,accepted.front());
+    EXPECT_EQ(initial.trusted_state->beta,search.initial.beta);
+    EXPECT_EQ(initial.search.stop_reason,"profile-budget"); EXPECT_FALSE(initial.search_success);
 }
 
 TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsChangedInputs)

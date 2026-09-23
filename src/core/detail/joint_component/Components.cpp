@@ -100,23 +100,35 @@ ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const Ev
     const auto endpoint=EvaluateProfile(domain,y,out.search.eta,false,&context);
     const auto reference=EvaluateProfile(domain,y,out.search.eta,true,&context);
     out.assessment=AssessEvaluated(domain,y,endpoint,reference,context);
-    for(std::size_t k=0;k<out.search.trials.size();++k)
-    {
-        const auto & trial=out.search.trials[k];
-        if(trial.accepted && trial.trust && trial.trust->passed) {out.trusted_state=trial.endpoint; out.trusted_trial=k;}
-    }
-    if(out.trusted_state && out.assessment.primary.valid)
+    const bool accepted=std::any_of(out.search.trials.begin(),out.search.trials.end(),[](const Trial & trial) {
+        return trial.accepted && trial.trust && trial.trust->passed;
+    });
+    if(accepted)
     {
         out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
-        if(out.endpoint_trust->passed) {out.trusted_state=out.assessment.primary; out.trusted_trial.reset();}
-    }
-    if(out.trusted_state)
-    {
-        const auto & state=*out.trusted_state;
-        const bool same=state.eta.size()==endpoint.eta.size() && state.beta.size()==endpoint.beta.size() &&
-            (state.eta.array()==endpoint.eta.array()).all() && (state.beta.array()==endpoint.beta.array()).all();
-        if(same) out.trusted_assessment=out.assessment;
-        else out.trusted_assessment=AssessProfile(domain,y,state.eta,context,&state.beta);
+        if(out.endpoint_trust->passed)
+        {out.trusted_state=endpoint; out.trusted_assessment=out.assessment;}
+        else
+        {
+            if(!out.search.stopped) out.search.stop_reason="endpoint-certification-failed";
+            out.search.stopped=true;
+            auto fallback_reference=reference;
+            for(std::size_t k=out.search.trials.size();k>0;--k)
+            {
+                const auto & trial=out.search.trials[k-1];
+                if(!trial.accepted || !trial.trust || !trial.trust->passed) continue;
+                const auto & state=trial.endpoint;
+                const auto candidate=EvaluateState(domain,y,state.eta,state.beta,context);
+                if(!CheckReplay(domain,y,candidate,context).passed) continue;
+                if(state.eta.size()!=fallback_reference.eta.size() ||
+                    !(state.eta.array()==fallback_reference.eta.array()).all())
+                    fallback_reference=EvaluateProfile(domain,y,state.eta,true,&context);
+                if(!CheckTrust(domain,y,candidate,context,fallback_reference).passed) continue;
+                out.trusted_state=state; out.trusted_trial=k-1;
+                out.trusted_assessment=AssessEvaluated(domain,y,candidate,fallback_reference,context,true);
+                break;
+            }
+        }
     }
     out.assessment_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-audit_start).count();
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;

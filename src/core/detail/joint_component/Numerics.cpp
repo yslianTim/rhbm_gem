@@ -162,8 +162,23 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
+    auto out=CheckReplay(domain,y,e,policy); out.reference=reference;
+    if(!out.primary_valid) return out;
+    out.coefficient_difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
+        std::numeric_limits<double>::infinity();
+    const bool reference_gradient_ok=reference.valid && reference.gradient.size()==e.gradient.size() &&
+        ((reference.gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
+    out.gradient_passed &= reference_gradient_ok;
+    out.passed=out.passed && reference.valid && reference.certificate.kkt_passed &&
+        out.coefficient_difference<=1e-10 && reference_gradient_ok;
+    if(!reference.valid) out.reason="invalid-reference";
+    else if(out.reason=="trusted" && !out.passed) out.reason="reference-disagreement";
+    return out;
+}
+TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
+{
     const auto * context=&policy;
-    TrustEvidence out; out.reference=reference; out.primary_valid=e.valid;
+    TrustEvidence out; out.primary_valid=e.valid;
     if (!e.valid)
     {
         out.reason="invalid-primary";
@@ -171,8 +186,9 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
             out.design=DesignSpectrum(e.x,Vector::Ones(y.size()));
         return out;
     }
-    const double difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
-        std::numeric_limits<double>::infinity(),scale=context ? context->scale : std::max(1.0,y.norm());
+    if(!e.certificate.available || !e.certificate.feasible || !e.certificate.kkt_passed)
+    {out.reason="kkt-failed"; return out;}
+    const double scale=context->scale;
     Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
     // Independent scalar forward and compensated summation, using frozen support.
     auto add=[&](Eigen::Index row,double value) {
@@ -211,17 +227,16 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
     const bool prediction_ok=((prediction-original_prediction).array().abs()<=
         2e-12+2e-13*original_prediction.array().abs()).all();
     const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
-    const bool reference_gradient_ok=reference.valid && ((reference.gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
     const double kkt_difference=std::abs(kkt-e.certificate.projected_kkt);
-    out.coefficient_difference=difference; out.prediction_passed=prediction_ok;
-    out.gradient_passed=gradient_ok && reference_gradient_ok;
+    out.prediction_passed=prediction_ok;
+    out.gradient_passed=gradient_ok;
     out.kkt_difference=kkt_difference;
     out.prediction_difference=(prediction-original_prediction).lpNorm<Eigen::Infinity>();
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
     if (context->audit.trial_details) out.design=DesignSpectrum(e.x,Vector::Ones(y.size()));
-    out.passed=difference<=1e-10 && prediction_ok && gradient_ok && reference_gradient_ok && kkt_difference<=1e-13;
-    out.reason=out.passed ? "trusted" : !reference.valid ? "invalid-reference" : "replay-disagreement";
+    out.passed=prediction_ok && gradient_ok && kkt_difference<=1e-13;
+    out.reason=out.passed ? "trusted" : "replay-disagreement";
     return out;
 }
 

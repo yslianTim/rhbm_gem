@@ -95,13 +95,14 @@ Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const Ev
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 struct TrustEvidence
 {
-    Endpoint reference;
+    std::optional<Endpoint> reference;
     bool primary_valid{},passed{},prediction_passed{},gradient_passed{};
     std::string reason;
     double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
         gradient_difference{unavailable},cancellation_ratio{unavailable};
     std::optional<Spectrum> design;
 };
+TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
 struct LmTrial
