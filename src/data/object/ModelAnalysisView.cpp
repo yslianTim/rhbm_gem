@@ -29,6 +29,19 @@ bool ModelAnalysisView::HasAtomGroup(GroupKey group_key) const
         .AtomGroupEntry().HasGroup(group_key);
 }
 
+const std::optional<GroupParameterSummary> & ModelAnalysisView::GetGroupParameterSummary(GroupKey key) const
+{
+    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetParameterSummary(key);
+}
+
+bool ModelAnalysisView::HasAtomGroupPrior(GroupKey key) const
+{
+    if (!HasAtomGroup(key)) return false;
+    const auto & summary = GetGroupParameterSummary(key);
+    return summary ? summary->inference.has_value() :
+        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetPrior(key).GetWidth() > 0;
+}
+
 const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(GroupKey group_key) const
 {
     return ModelAnalysisData::Of(m_model_object)

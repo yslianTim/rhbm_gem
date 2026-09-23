@@ -42,6 +42,13 @@ RHBMWebEstimateResult EstimateWEB(
     const RHBMExecutionOptions & options = {}
 );
 
+RHBMWebEstimateResult EstimateWEBFromInformation(
+    const std::vector<RHBMInformation> & information,
+    const RHBMParameterVector & mu_mdpde,
+    const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
+    const RHBMExecutionOptions & options = {}
+);
+
 RHBMGroupEstimationResult EstimateGroup(
     double alpha_g,
     const RHBMGroupEstimationInput & input,

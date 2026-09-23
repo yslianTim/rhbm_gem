@@ -9,6 +9,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <stdexcept>
+#include <algorithm>
 #include <utility>
 
 namespace rhbm_gem {
@@ -59,6 +60,28 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     entry.SetPeelingSamplingEntries(std::move(available));
     entry.SetNeighborCountForPeeling(static_cast<int>(value.neighbor_count));
     entry.SetPostFitPeeling(std::move(value));
+}
+
+void ModelAnalysisEditor::SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value)
+{
+    EnsureAtomLocalPotential(m_model_object, atom).SetGroupEvidence(std::move(value));
+}
+
+void ModelAnalysisEditor::ApplyAtomGroupParameterSummary(GroupKey key, GroupParameterSummary value)
+{
+    auto & groups = ModelAnalysisData::Of(m_model_object).AtomGroupEntry();
+    const auto & members = groups.GetMembers(key);
+    if (value.inference && value.inference->member_results.size() != value.member_ids.size())
+        throw std::invalid_argument("Parameter posterior identity count mismatch.");
+    for (const auto id : value.member_ids)
+        if (std::none_of(members.begin(), members.end(), [id](const auto * atom) { return atom->GetSerialID() == id; }))
+            throw std::invalid_argument("Parameter posterior identity outside group.");
+    for (const auto * atom : members) EnsureAtomLocalPotential(m_model_object, *atom).ClearGroupMemberResult();
+    if (value.inference)
+        for (std::size_t i = 0; i < value.member_ids.size(); ++i)
+            EnsureAtomLocalPotential(m_model_object, *m_model_object.FindAtomPtr(value.member_ids[i]))
+                .SetGroupMemberResult(value.inference->member_results[i]);
+    groups.SetParameterSummary(key, std::move(value));
 }
 
 void ModelAnalysisEditor::ClearJointResult()

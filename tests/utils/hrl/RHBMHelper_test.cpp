@@ -736,3 +736,27 @@ TEST(RHBMHelperTest, CalculateOutlierMemberFlagMatchesThresholdRule)
     EXPECT_TRUE(flags(1));
     EXPECT_TRUE(flags(2));
 }
+
+TEST(RHBMHelperTest, InformationFormMatchesSampleDomainWEB)
+{
+    std::vector<rg::RHBMMemberDataset> datasets;
+    std::vector<rg::RHBMDiagonalMatrix> noise;
+    std::vector<rg::RHBMInformation> information;
+    std::vector<rg::RHBMMemberCovarianceMatrix> priors;
+    for (int i = 0; i < 4; ++i)
+    {
+        Eigen::MatrixXd x(3, 2); x << 1, i + 1, 1, 2, 1, -1;
+        const auto y = MakeVector({1.0 + i, 3.0, 2.0 - i});
+        const auto variance = MakeDiagonal({0.5, 2.0, 1.0});
+        datasets.push_back({x, y}); noise.push_back(variance);
+        information.push_back({x.transpose() * variance.inverse() * x, x.transpose() * variance.inverse() * y});
+        priors.push_back(Eigen::Matrix2d::Identity() * (i + 1));
+    }
+    const auto center = MakeVector({2.0, 1.0});
+    const auto sample = rg::rhbm_helper::EstimateWEB(datasets, noise, center, priors);
+    const auto parameter = rg::rhbm_helper::EstimateWEBFromInformation(information, center, priors);
+    EXPECT_TRUE(sample.mu_prior.isApprox(parameter.mu_prior, 1e-12));
+    EXPECT_TRUE(sample.beta_posterior_matrix.isApprox(parameter.beta_posterior_matrix, 1e-12));
+    for (std::size_t i = 0; i < priors.size(); ++i)
+        EXPECT_TRUE(sample.capital_sigma_posterior_list[i].isApprox(parameter.capital_sigma_posterior_list[i], 1e-12));
+}

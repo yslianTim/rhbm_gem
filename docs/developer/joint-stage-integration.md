@@ -61,3 +61,11 @@ weights at decimal-grid nodes correctly retain conservative coverage rejection.
 Tests cover signed C, zero A, negative responses, zero denominator, distant halo,
 clamping, partial coverage, missing state, and unchanged raw/Second parameters.
 The existing independent observation-stencil oracle passes after extraction.
+
+## Stage 5 — parameter evidence and group inference
+
+- Full-component raw `(A,C,log B)` Jacobian is column-scaled, reduced by tiled QR, and factored by SVD. Marginal blocks retain charge and neighbor coupling; residual variance uses `RSS/(N-3m)` and original dimensions set the rank threshold.
+- Uncertainty requires runtime convergence, interior positive amplitudes, full rank and positive finite residual variance/degrees of freedom. Zero amplitude, missing state, nonconvergence, rank and variance failures retain Second points and explicit reasons.
+- Group inference consumes only eligible parameter evidence and its covariance. Information-form WEB shares the original sample-domain core; no local MDPDE runs in this route. The correlation approximation is `block-diagonal-by-atom`. Posterior and unchanged Second are distinct; C remains descriptive with no inferred C uncertainty.
+- Alpha training uses eligible members. Descriptive statistics retain all target points. Single-member and singular group covariance yield no substitute posterior. Results are written by atom identity, including exclusions in the middle of a group.
+- Validation: seven affected CTest groups passed (Joint, estimator, data runtime, HRL, core commands, command integration and frozen Joint regression). Final Joint group passed after adding degeneracy tests. Added dense full-component covariance reference (including nuisance C), zero variance/rank/df/boundary/convergence gates, sample-vs-information WEB equivalence, and posterior independence from raw samples with sensitivity to changed evidence. Empty samples are sufficient for the new group route. `git diff --check` passed.

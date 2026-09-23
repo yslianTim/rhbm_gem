@@ -18,6 +18,8 @@ public:
     void ClearJointResult();
     void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
+    void SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value);
+    void ApplyAtomGroupParameterSummary(GroupKey key, GroupParameterSummary value);
     void Clear();
     void ClearTransientFitStates();
     void InitializeFromSelection();

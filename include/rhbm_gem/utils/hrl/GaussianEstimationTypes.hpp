@@ -19,7 +19,6 @@ enum class FittingStage
 
 enum class EstimateMethod { Unspecified, LocalMDPDE, Peeling, JointComponents };
 enum class FittingRole { NotRecorded, Target, Halo };
-enum class EvidenceStatus { NotRun, Available, Unavailable, Ineligible };
 
 struct EstimateSource
 {
@@ -82,6 +81,9 @@ struct GroupGaussianMemberResult
     GaussianModel3DWithUncertainty posterior{};
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
+    std::string evidence_source_id;
+    bool charge_inferred{ true };
+    std::optional<Eigen::Matrix2d> parameter_covariance;
 };
 
 struct GroupGaussianMemberInput
@@ -101,6 +103,17 @@ struct GroupGaussianResult
         GaussianModel3DUncertainty{}
     };
     std::vector<GroupGaussianMemberResult> member_results{};
+};
+
+struct GroupParameterSummary
+{
+    EvidenceStatus status{ EvidenceStatus::NotRun };
+    std::string reason, source_id;
+    std::string correlation_policy{ "block-diagonal-by-atom" };
+    std::size_t point_count{}, eligible_count{}, excluded_count{};
+    std::optional<GaussianModel3D> descriptive_mean;
+    std::optional<GroupGaussianResult> inference;
+    std::vector<int> member_ids;
 };
 
 } // namespace rhbm_gem

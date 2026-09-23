@@ -285,6 +285,8 @@ ModelObject::ModelObject(const ModelObject & other) :
             result.prior = source_entry.GetPriorWithUncertainty(group_key);
             result.alpha_g = source_entry.GetAlphaG(group_key);
             cloned_entry.SetGaussianResult(group_key, result);
+            if (source_entry.GetParameterSummary(group_key))
+                cloned_entry.SetParameterSummary(group_key, *source_entry.GetParameterSummary(group_key));
             cloned_entry.ReserveMembers(
                 group_key,
                 source_entry.GetMemberCount(group_key));

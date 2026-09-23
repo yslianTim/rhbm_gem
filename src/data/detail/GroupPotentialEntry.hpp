@@ -24,6 +24,7 @@ class AtomGroupPotentialEntry
             GaussianModel3DUncertainty{}
         };
         double alpha_g{ 0.0 };
+        std::optional<GroupParameterSummary> parameter_summary;
     };
 
     using GroupMap = std::unordered_map<GroupKey, GroupPotentialBucket>;
@@ -89,6 +90,15 @@ public:
         group.alpha_g = result.alpha_g;
     }
 
+    const std::optional<GroupParameterSummary> & GetParameterSummary(GroupKey key) const
+    {
+        return RequireGroup(key).parameter_summary;
+    }
+    void SetParameterSummary(GroupKey key, GroupParameterSummary value)
+    {
+        if (value.inference) SetGaussianResult(key, *value.inference);
+        EnsureGroup(key).parameter_summary = std::move(value);
+    }
     void SetAlphaG(GroupKey group_key, double alpha_g)
     {
         EnsureGroup(group_key).alpha_g = alpha_g;

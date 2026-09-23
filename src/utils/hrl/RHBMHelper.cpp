@@ -283,8 +283,9 @@ RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     const RHBMBetaMatrix & beta_matrix,
     const RHBMParameterVector & mu,
     const Eigen::ArrayXd & omega_array,
-    double omega_sum)
+    double omega_sum, bool * available = nullptr)
 {
+    if (available) *available = true;
     numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
     eigen_validation::RequireRows(beta_matrix, mu.rows(), "beta_matrix",
         "Member covariance input is invalid.");
@@ -298,6 +299,7 @@ RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     };
     if (denominator <= 0.0)
     {
+        if (available) *available = false;
         return RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
     }
 
@@ -315,6 +317,7 @@ RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     }
     catch (const std::invalid_argument &)
     {
+        if (available) *available = false;
         capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
     }
     return capital_lambda;
@@ -757,7 +760,8 @@ RHBMMuEstimateResult rhbm_helper::EstimateMuMDPDE(
                 beta_matrix,
                 result.mu_mdpde,
                 result.omega_array,
-                result.omega_sum
+                result.omega_sum,
+                &result.covariance_available
             );
             if ((result.mu_mdpde - mu_in_previous_iter).squaredNorm() < options.tolerance)
             {
@@ -794,12 +798,40 @@ RHBMWebEstimateResult rhbm_helper::EstimateWEB(
     const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
     const RHBMExecutionOptions & options)
 {
-    if (member_datasets.empty())
-    {
-        throw std::invalid_argument("member_datasets must not be empty.");
-    }
-    if (capital_sigma_list.size() != member_datasets.size() ||
+    if (member_datasets.empty() || capital_sigma_list.size() != member_datasets.size() ||
         member_capital_lambda_list.size() != member_datasets.size())
+        throw std::invalid_argument("WEB inputs must have consistent nonempty member counts.");
+    eigen_validation::RequireNonEmpty(mu_mdpde, "mu_mdpde");
+    // Preserve the legacy single-member behavior without reading its datasets.
+    if (member_datasets.size() == 1)
+        return EstimateWEBFromInformation(std::vector<RHBMInformation>(1), mu_mdpde, member_capital_lambda_list, options);
+    return RunWithTemporaryEigenThreadCount(options.thread_size, [&]() {
+        std::vector<RHBMInformation> information;
+        for (std::size_t i = 0; i < member_datasets.size(); ++i)
+        {
+            const auto & dataset = member_datasets[i];
+            const auto & covariance = capital_sigma_list[i];
+            ValidateDatasetShape(dataset.X, dataset.y, "EstimateWEB dataset is invalid.");
+            ValidateDiagonalAgainstSize(covariance, dataset.y.size(), "capital_sigma", "EstimateWEB covariance input is invalid.");
+            const auto inverse = eigen_helper::GetInverseDiagonalMatrix(covariance);
+            information.push_back({dataset.X.transpose() * inverse * dataset.X,
+                dataset.X.transpose() * inverse * dataset.y});
+        }
+        return EstimateWEBFromInformation(information, mu_mdpde, member_capital_lambda_list, options);
+    });
+}
+
+RHBMWebEstimateResult rhbm_helper::EstimateWEBFromInformation(
+    const std::vector<RHBMInformation> & information,
+    const RHBMParameterVector & mu_mdpde,
+    const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
+    const RHBMExecutionOptions & options)
+{
+    if (information.empty())
+    {
+        throw std::invalid_argument("information must not be empty.");
+    }
+    if (member_capital_lambda_list.size() != information.size())
     {
         throw std::invalid_argument("WEB inputs must have consistent member counts.");
     }
@@ -809,7 +841,7 @@ RHBMWebEstimateResult rhbm_helper::EstimateWEB(
     {
         RHBMWebEstimateResult result;
         const auto basis_size{ static_cast<int>(mu_mdpde.rows()) };
-        const auto member_size{ static_cast<int>(member_datasets.size()) };
+        const auto member_size{ static_cast<int>(information.size()) };
         result.mu_prior = RHBMParameterVector::Zero(basis_size);
         result.beta_posterior_matrix = RHBMBetaPosteriorMatrix::Zero(basis_size, member_size);
         result.capital_sigma_posterior_list.clear();
@@ -824,23 +856,14 @@ RHBMWebEstimateResult rhbm_helper::EstimateWEB(
         RHBMGroupCovarianceMatrix denominator{ RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size) };
         for (std::size_t i = 0; i < static_cast<std::size_t>(member_size); i++)
         {
-            const auto & dataset{ member_datasets.at(i) };
-            const auto & capital_sigma{ capital_sigma_list.at(i) };
-            const auto & member_capital_lambda{ member_capital_lambda_list.at(i) };
-            ValidateDatasetShape(dataset.X, dataset.y, "EstimateWEB dataset is invalid.");
-            ValidateDiagonalAgainstSize(capital_sigma, dataset.y.size(), "capital_sigma",
-                "EstimateWEB covariance input is invalid.");
-            ValidateSquareBasisMatrix(member_capital_lambda, basis_size, "member_capital_lambda",
-                "EstimateWEB member covariance input is invalid.");
-
-            const auto inv_capital_sigma{ eigen_helper::GetInverseDiagonalMatrix(capital_sigma) };
-            const auto inv_member_capital_lambda{ eigen_helper::GetInverseMatrix(member_capital_lambda) };
-            const RHBMGroupCovarianceMatrix gram_matrix{
-                dataset.X.transpose() * inv_capital_sigma * dataset.X
-            };
-            const RHBMParameterVector moment_matrix{
-                dataset.X.transpose() * inv_capital_sigma * dataset.y
-            };
+            const auto & gram_matrix = information.at(i).precision;
+            const auto & moment_matrix = information.at(i).moment;
+            const auto & member_capital_lambda = member_capital_lambda_list.at(i);
+            ValidateSquareBasisMatrix(gram_matrix, basis_size, "precision", "Invalid information matrix.");
+            eigen_validation::RequireVectorSize(moment_matrix, basis_size, "moment", "Invalid information vector.");
+            eigen_validation::RequireFinite(moment_matrix, "moment");
+            ValidateSquareBasisMatrix(member_capital_lambda, basis_size, "member_capital_lambda", "EstimateWEB member covariance input is invalid.");
+            const auto inv_member_capital_lambda = eigen_helper::GetInverseMatrix(member_capital_lambda);
             const RHBMGroupCovarianceMatrix inv_capital_sigma_posterior{
                 gram_matrix + inv_member_capital_lambda
             };

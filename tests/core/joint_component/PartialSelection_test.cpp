@@ -10,6 +10,7 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/JointUncertainty.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "support/ForwardModelExperiment.hpp"
 #include "data/io/detail/JointResultJson.hpp"
@@ -456,4 +457,141 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem).at(1);
     ASSERT_TRUE(result.samples[0].response);
     EXPECT_LT(*result.samples[0].response, 0);
+}
+
+TEST(JointComponentPartialSelectionTest, FullComponentUncertaintyMatchesDenseReferenceAndReportsGates)
+{
+    auto f = joint_partial_test::Make("all");
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    auto & component = snapshot.components.front();
+    ASSERT_TRUE(component.state);
+    component.runtime_convergence = core::JointCheckStatus::Passed;
+    // A fixed, slightly perturbed endpoint gives a known nonzero residual variance.
+    component.state->ac[0] += 0.01;
+    const auto & input = problem.Input();
+    Eigen::MatrixXd jacobian = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(input.observations.size()), 6);
+    Eigen::VectorXd residual = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input.observations.size()));
+    for (std::size_t a = 0; a < 2; ++a)
+        for (const auto & support : input.support[a])
+        {
+            const auto k = n::EvaluateKernel(support.squared_distance, component.state->b[a], 2.5);
+            const auto A = component.state->ac[2*a], C = component.state->ac[2*a+1];
+            jacobian.row(static_cast<Eigen::Index>(support.row)).segment<3>(static_cast<Eigen::Index>(3*a)) << k.gaussian, k.charge,
+                A*k.gaussian_log_width + C*k.charge_log_width;
+            residual(static_cast<Eigen::Index>(support.row)) += A*k.gaussian + C*k.charge;
+        }
+    for (std::size_t r = 0; r < input.observations.size(); ++r) residual(static_cast<Eigen::Index>(r)) -= input.observations[r];
+    const Eigen::MatrixXd dense = (jacobian.transpose()*jacobian).inverse() *
+        (residual.squaredNorm() / static_cast<double>(input.observations.size()-6));
+    auto uncertainty = core::detail::ComputeJointUncertainty(problem, snapshot);
+    for (int a = 0; a < 2; ++a)
+    {
+        ASSERT_EQ(uncertainty.at(a+1).status, rhbm_gem::EvidenceStatus::Available);
+        ASSERT_TRUE(uncertainty.at(a+1).covariance);
+        EXPECT_TRUE(uncertainty.at(a+1).covariance->isApprox(dense.block<3,3>(3*a,3*a), 1e-8));
+    }
+    auto exact = input;
+    // Use identical arithmetic to the service when constructing a zero-residual fixture.
+    std::fill(exact.observations.begin(), exact.observations.end(), 0.0);
+    for (std::size_t a = 0; a < 2; ++a)
+        for (const auto & support : exact.support[a])
+        {
+            const auto k = n::EvaluateKernel(support.squared_distance, component.state->b[a], 2.5);
+            exact.observations[support.row] += component.state->ac[2*a]*k.gaussian + component.state->ac[2*a+1]*k.charge;
+        }
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(core::JointProblem(exact), snapshot).at(1).reason,
+        "residual-variance-unavailable");
+    auto deficient = input; deficient.support[1] = deficient.support[0];
+    auto deficient_snapshot = snapshot;
+    deficient_snapshot.components[0].state->b[1] = deficient_snapshot.components[0].state->b[0];
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(core::JointProblem(deficient), deficient_snapshot).at(1).reason,
+        "rank-deficient-jacobian");
+    auto short_snapshot = snapshot; short_snapshot.components[0].rows.resize(6);
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, short_snapshot).at(1).reason,
+        "insufficient-residual-degrees-of-freedom");
+    component.runtime_convergence = core::JointCheckStatus::Failed;
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(1).reason, "component-not-converged");
+    component.runtime_convergence = core::JointCheckStatus::Passed;
+    component.state->ac[0] = 0;
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(2).reason, "active-amplitude-boundary");
+    component.state.reset();
+    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(1).reason, "missing-component-state");
+    rhbm_gem::LocalStageEstimate stage;
+    stage.source.role = rhbm_gem::FittingRole::Target;
+    stage.point = rhbm_gem::GaussianModel3D(0, 0.5);
+    const auto evidence = core::detail::BuildJointParameterEvidence(stage);
+    EXPECT_EQ(evidence.reason, "nonpositive-amplitude");
+    EXPECT_FALSE(evidence.estimate);
+}
+
+TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSamplesAndPreservesSecond)
+{
+    using namespace rhbm_gem;
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (int i = 1; i <= 5; ++i)
+    {
+        auto atom = std::make_unique<AtomObject>();
+        atom->SetSerialID(i); atom->SetElement(Element::CARBON);
+        atom->SetChainID("A"); atom->SetComponentID("ALA"); atom->SetAtomID("CA");
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    auto editor = model.EditAnalysis(); editor.InitializeFromSelection();
+    for (int i = 1; i <= 5; ++i)
+    {
+        LocalStageEstimate stage;
+        stage.source = {EstimateMethod::JointComponents, std::to_string(i), "component", "evidence-test", FittingRole::Target};
+        stage.point = GaussianModel3D(2 + i*0.2, 0.5 + 0.02*(i*i % 7), -0.1*i);
+        stage.uncertainty.status = EvidenceStatus::Available;
+        stage.uncertainty.method = "iid-ls-linearized";
+        stage.uncertainty.covariance = Eigen::Matrix3d::Identity()*0.001;
+        if (i == 3) stage.uncertainty.status = EvidenceStatus::Unavailable;
+        auto & atom = *model.FindAtomPtr(i);
+        editor.SetAtomStageEstimate(FittingStage::Second, atom, stage);
+        editor.SetAtomGroupEvidence(atom, core::detail::BuildJointParameterEvidence(stage));
+    }
+    core::FitOptions options; options.estimator = core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode = true;
+    core::RunGroupPotentialFitting(model, options);
+    const auto keys = model.GetAnalysisView().CollectAtomGroupKeys();
+    ASSERT_EQ(keys.size(), 1);
+    const auto summary = *model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
+    ASSERT_EQ(summary.status, EvidenceStatus::Available) << summary.reason;
+    EXPECT_EQ(summary.point_count, 5); EXPECT_EQ(summary.eligible_count, 4); EXPECT_EQ(summary.excluded_count, 1);
+    EXPECT_EQ(summary.member_ids, (std::vector<int>{1,2,4,5}));
+    EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(3)).GetGroupMemberResult());
+    const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
+    const auto before = first.GetGroupMemberResult()->posterior.GetModel().ToVector();
+    const auto second = first.GetFinalModel(FittingStage::Second).ToVector();
+    EXPECT_FALSE(first.GetGroupMemberResult()->charge_inferred);
+    EXPECT_EQ(first.GetGroupMemberResult()->evidence_source_id, "evidence-test");
+    editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), before);
+    EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), second);
+    auto changed = *first.GetGroupEvidence(); changed.covariance = *changed.covariance * 10;
+    editor.SetAtomGroupEvidence(*model.FindAtomPtr(1), changed);
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_FALSE(first.GetGroupMemberResult()->posterior.GetModel().ToVector().isApprox(before, 1e-9));
+    for (int i = 2; i <= 5; ++i)
+    {
+        auto evidence = *AtomLocalPotentialView::For(*model.FindAtomPtr(i)).GetGroupEvidence();
+        evidence.status = EvidenceStatus::Unavailable;
+        editor.SetAtomGroupEvidence(*model.FindAtomPtr(i), evidence);
+    }
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->reason, "single-member");
+    EXPECT_FALSE(first.GetGroupMemberResult());
+    EXPECT_FALSE(model.GetAnalysisView().HasAtomGroupPrior(keys[0]));
+    for (int i = 1; i <= 5; ++i)
+    {
+        auto evidence = *AtomLocalPotentialView::For(*model.FindAtomPtr(i)).GetGroupEvidence();
+        evidence.status = EvidenceStatus::Available;
+        evidence.estimate = Eigen::Vector2d(1, 4);
+        evidence.covariance = Eigen::Matrix2d::Identity() * 0.01;
+        editor.SetAtomGroupEvidence(*model.FindAtomPtr(i), evidence);
+    }
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->reason, "singular-group-covariance");
+    EXPECT_FALSE(first.GetGroupMemberResult());
 }

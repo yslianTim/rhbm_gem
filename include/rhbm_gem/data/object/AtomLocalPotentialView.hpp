@@ -24,6 +24,7 @@ public:
     const GaussianModel3D & GetFinalModel(FittingStage stage) const;
     const std::optional<PostFitPeelingResult> & GetPostFitPeeling() const;
     bool HasSampleGeometry() const;
+    const std::optional<GroupParameterEvidence> & GetGroupEvidence() const;
     const LocalGaussianResult & GetGaussianResult(FittingStage stage) const;
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;

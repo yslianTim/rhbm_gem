@@ -4,6 +4,7 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/JointUncertainty.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -435,6 +436,8 @@ void RunLocalAlphaTraining(
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
+    if (options.estimator == PotentialEstimator::JOINT_COMPONENTS)
+    { detail::RunJointGroupPotentialFitting(model_object, options); return; }
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     analysis.EnsureSelectedAtomLocalPotentials();
@@ -534,6 +537,15 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
+    for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot))
+    {
+        auto & atom = *model.FindAtomPtr(id);
+        auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
+        stage.uncertainty = std::move(uncertainty);
+        model.EditAnalysis().SetAtomGroupEvidence(atom, detail::BuildJointParameterEvidence(stage));
+        model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, std::move(stage));
+    }
+    RunGroupPotentialFitting(model, options);
 }
 
 } // namespace rhbm_gem::core

@@ -21,6 +21,7 @@ class LocalPotentialEntry
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
     bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
+    std::optional<GroupParameterEvidence> m_group_evidence;
     int m_neighbor_count_for_peeling{ 0 };
 
 public:
@@ -74,6 +75,8 @@ public:
     {
         m_group_member_result = std::move(value);
     }
+    const std::optional<GroupParameterEvidence> & GroupEvidence() const { return m_group_evidence; }
+    void SetGroupEvidence(GroupParameterEvidence value) { m_group_evidence = std::move(value); }
     void ClearGroupMemberResult()
     {
         m_group_member_result.reset();

@@ -103,6 +103,11 @@ bool AtomLocalPotentialView::HasSampleGeometry() const
     return IsAvailable() && RequireEntry("Sample geometry").SampleGeometryAvailable();
 }
 
+const std::optional<GroupParameterEvidence> & AtomLocalPotentialView::GetGroupEvidence() const
+{
+    return RequireEntry("Group evidence").GroupEvidence();
+}
+
 const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(FittingStage stage) const
 {
     if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
