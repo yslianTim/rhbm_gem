@@ -347,7 +347,6 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     component.atoms = {1, 0};
     result.selection_domain->target_indices = {1};
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "test-run");
-    f.model->EditAnalysis().SetJointResult(result);
     const auto target = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1));
     const auto halo = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
     EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetAmplitude(), component.state->ac[0]);
@@ -358,6 +357,9 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
     EXPECT_NE(summary.find("| CA | 1 |"), std::string::npos);
     EXPECT_EQ(summary.find("| CB |"), std::string::npos);
+    f.model->EditAnalysis().SetJointResult(result);
+    f.model->EditAnalysis().ClearJointResult();
+    EXPECT_TRUE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
     component.state.reset(); component.stop_reason = "invalid-initial-widths";
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "next-run");
     EXPECT_FALSE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
@@ -540,6 +542,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
     }
     ModelObject model(std::move(atoms)); model.SelectAllAtoms();
     auto editor = model.EditAnalysis(); editor.InitializeFromSelection();
+    std::map<int, LocalStageEstimate> stages;
     for (int i = 1; i <= 5; ++i)
     {
         LocalStageEstimate stage;
@@ -549,10 +552,11 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
         stage.uncertainty.method = "iid-ls-linearized";
         stage.uncertainty.covariance = Eigen::Matrix3d::Identity()*0.001;
         if (i == 3) stage.uncertainty.status = EvidenceStatus::Unavailable;
-        auto & atom = *model.FindAtomPtr(i);
-        editor.SetAtomStageEstimate(FittingStage::Second, atom, stage);
-        editor.SetAtomGroupEvidence(atom, core::detail::BuildJointParameterEvidence(stage));
+        stages[i] = std::move(stage);
     }
+    editor.ApplySecondStageEstimates(stages);
+    for (const auto & [id, stage] : stages)
+        editor.SetAtomGroupEvidence(*model.FindAtomPtr(id), core::detail::BuildJointParameterEvidence(stage));
     core::FitOptions options; options.estimator = core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode = true;
     core::RunGroupPotentialFitting(model, options);
     const auto keys = model.GetAnalysisView().CollectAtomGroupKeys();
@@ -579,6 +583,18 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
         EXPECT_TRUE(std::isnan(saved.GetGroupMemberResult()->posterior.GetStandardDeviationModel().GetOffset()));
         ASSERT_TRUE(loaded->GetAnalysisView().GetGroupParameterSummary(keys[0])->inference);
         EXPECT_EQ(loaded->GetAnalysisView().GetGroupParameterSummary(keys[0])->member_ids,summary.member_ids);
+    }
+    {
+        ModelObject changed_model(model);
+        auto changed_editor = changed_model.EditAnalysis();
+        const auto changed_view = AtomLocalPotentialView::For(*changed_model.FindAtomPtr(1));
+        auto stage = changed_view.GetStageEstimate(FittingStage::Second);
+        stage.uncertainty.covariance = *stage.uncertainty.covariance * 2;
+        changed_editor.SetAtomStageEstimate(FittingStage::Second, *changed_model.FindAtomPtr(1), stage);
+        EXPECT_FALSE(changed_view.GetGroupEvidence());
+        EXPECT_FALSE(changed_view.GetGroupMemberResult());
+        EXPECT_FALSE(changed_model.GetAnalysisView().GetGroupParameterSummary(keys[0]));
+        EXPECT_FALSE(AtomLocalPotentialView::For(*changed_model.FindAtomPtr(2)).GetGroupMemberResult());
     }
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     core::RunGroupPotentialFitting(model, options);
@@ -609,4 +625,17 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
     core::RunGroupPotentialFitting(model, options);
     EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->reason, "singular-group-covariance");
     EXPECT_FALSE(first.GetGroupMemberResult());
+}
+
+TEST(JointComponentPartialSelectionTest, SummaryReportsMixedSourcesWithoutSnapshot)
+{
+    auto f = joint_partial_test::Make("all");
+    const auto result = core::CaptureJointAnalysisResult(core::FitJointComponents(core::BuildJointProblem(*f.map, *f.model), f.b));
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "mixed-test");
+    auto editor = f.model->EditAnalysis();
+    auto local = rhbm_gem::LocalGaussianResult{};
+    local.mdpde = {rhbm_gem::GaussianModel3D{2, .5, 0}, {}};
+    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(2), local);
+    EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
+    EXPECT_NE(core::BuildSecondStageSpotSummary(*f.model).find("Estimator: mixed"), std::string::npos);
 }

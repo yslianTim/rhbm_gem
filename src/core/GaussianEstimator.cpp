@@ -15,6 +15,7 @@
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <algorithm>
+#include <set>
 #include <chrono>
 #include <array>
 #include <cstddef>
@@ -57,18 +58,38 @@ struct GaussianModelParameterSamples
 };
 } // namespace
 
+StageProvenance CollectStageProvenance(const std::vector<const AtomObject *> & atoms)
+{
+    std::set<std::string> methods, modes;
+    for (const auto * atom : atoms)
+    {
+        const auto view = AtomLocalPotentialView::For(*atom);
+        if (!view.IsAvailable()) { methods.insert("unknown"); modes.insert("unknown"); continue; }
+        const auto method = view.GetStageEstimate(FittingStage::Second).source.method;
+        methods.insert(method == EstimateMethod::JointComponents ? "joint-components" :
+            method == EstimateMethod::Peeling ? "two-stage" : "unknown");
+        if (view.GetPostFitPeeling()) modes.insert(view.GetPostFitPeeling()->mode);
+        else modes.insert(method == EstimateMethod::Peeling && !view.GetPeelingSamplingEntries().empty() ? "iterative" : "unknown");
+    }
+    const auto label = [](const auto & values) -> std::string {
+        return values.empty() ? "unknown" : values.size() == 1 ? *values.begin() : "mixed";
+    };
+    return {label(methods), label(modes)};
+}
+
 std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
 {
     std::map<Spot, GaussianModelParameterSamples> spots;
-    const bool joint = model_object.GetAnalysisView().GetJointResult().has_value();
+    std::vector<const AtomObject *> population;
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
         const auto spot = atom->GetSpot();
         if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
             kLocalMDPDESummarySpotList.end()) continue;
         const auto view = AtomLocalPotentialView::For(*atom);
-        if (joint && view.IsAvailable() && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target)
-            continue;
+        const bool joint = view.IsAvailable() && view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents;
+        if (joint && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
+        population.push_back(atom);
         auto & samples = spots[spot];
         if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
         const auto & estimate = view.GetStageEstimate(FittingStage::Second);
@@ -80,7 +101,7 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     }
     std::ostringstream summary;
     summary << "Second-stage estimate summary by Spot:\nEstimator: "
-        << (joint ? "joint-components" : "two-stage")
+        << CollectStageProvenance(population).estimator
         << "\nPopulation: selected targets; s.d.: between-atom dispersion"
         << "\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C charge coefficient mean / s.d. |";
     for (const auto & [spot, samples] : spots)
@@ -545,8 +566,8 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
         auto & atom = *model.FindAtomPtr(id);
         auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
         stage.uncertainty = std::move(uncertainty);
+        model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, stage);
         model.EditAnalysis().SetAtomGroupEvidence(atom, detail::BuildJointParameterEvidence(stage));
-        model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, std::move(stage));
     }
     RunGroupPotentialFitting(model, options);
 }

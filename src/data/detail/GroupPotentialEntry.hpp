@@ -104,6 +104,14 @@ public:
         if (value.inference) SetGaussianResult(key, *value.inference);
         EnsureGroup(key).parameter_summary = std::move(value);
     }
+    void ClearResult(GroupKey key)
+    {
+        auto & group = RequireGroup(key);
+        group.mean = GaussianModel3D{0, 0};
+        group.mdpde = GaussianModel3D{0, 0};
+        group.prior = GaussianModel3DWithUncertainty{GaussianModel3D{0, 0}, {}};
+        group.parameter_summary.reset();
+    }
     void SetAlphaG(GroupKey group_key, double alpha_g)
     {
         EnsureGroup(group_key).alpha_g = alpha_g;

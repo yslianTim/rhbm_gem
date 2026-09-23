@@ -1546,11 +1546,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesLocalFittingStageResu
     const auto & group_result{
         rg::AtomLocalPotentialView::For(*selected_atom).GetGroupMemberResult()
     };
-    ASSERT_TRUE(group_result.has_value());
-    EXPECT_DOUBLE_EQ(group_result->posterior.GetModel().GetWidth(),
-        source_group_result.posterior.GetModel().GetWidth());
-    EXPECT_TRUE(group_result->is_outlier);
-    EXPECT_DOUBLE_EQ(group_result->statistical_distance, source_group_result.statistical_distance);
+    EXPECT_FALSE(group_result.has_value()); // Replacing Second invalidates its previous posterior.
     EXPECT_TRUE(copied_result.fit_result.has_value());
 
     EXPECT_DOUBLE_EQ(
@@ -1718,4 +1714,72 @@ TEST(DataObjectModelAnalysisTest, StageAvailabilitySeparatesSeedsZeroAmplitudeAn
     EXPECT_THROW(view.GetAlphaR(rg::FittingStage::Second), std::runtime_error);
     editor.ClearTransientFitStates();
     EXPECT_TRUE(view.HasFinalModel(rg::FittingStage::Second));
+}
+
+TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTheRun)
+{
+    auto model = data_test::MakeModelWithBond();
+    model->SelectAllAtoms();
+    auto editor = model->EditAnalysis();
+    editor.InitializeFromSelection();
+    std::map<int, rg::LocalStageEstimate> stages;
+    for (const auto & atom : model->GetAtomList())
+    {
+        auto & stage = stages[atom->GetSerialID()];
+        stage.source = {rg::EstimateMethod::JointComponents, {}, "component", "same-run", rg::FittingRole::Target};
+        stage.point = rg::GaussianModel3D{2, .5, -.1};
+        stage.reason.clear();
+    }
+    editor.ApplySecondStageEstimates(stages);
+    for (const auto & atom : model->GetAtomList())
+    {
+        editor.SetAtomLocalRawSamplingEntries(*atom, {{2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}}});
+        const auto view = rg::AtomLocalPotentialView::For(*atom);
+        auto stage = view.GetStageEstimate(rg::FittingStage::Second);
+        stage.uncertainty.status = rg::EvidenceStatus::Available;
+        stage.uncertainty.method = "iid-ls-linearized";
+        stage.uncertainty.covariance = Eigen::Matrix3d::Identity();
+        editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
+        rg::GroupParameterEvidence evidence;
+        evidence.atom_id = stage.source.atom_id; evidence.source_id = "same-run"; evidence.component_id = "component";
+        editor.SetAtomGroupEvidence(*atom, evidence);
+        rg::PostFitPeelingResult peeling;
+        peeling.source = stage.source; peeling.samples = {{1, {}}, {2, {}}};
+        editor.SetAtomPostFitPeeling(*atom, peeling);
+    }
+    for (const auto key : model->GetAnalysisView().CollectAtomGroupKeys())
+    {
+        rg::GroupGaussianResult group;
+        group.member_results.resize(model->GetAnalysisView().GetAtomObjectList(key).size());
+        editor.ApplyAtomGroupGaussianResult(key, group);
+    }
+    const auto * atom = model->GetSelectedAtoms().front();
+    const auto view = rg::AtomLocalPotentialView::For(*atom);
+    auto stage = view.GetStageEstimate(rg::FittingStage::Second);
+    stage.uncertainty.covariance = 2 * Eigen::Matrix3d::Identity();
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
+    EXPECT_FALSE(view.GetGroupEvidence());
+    EXPECT_FALSE(view.GetGroupMemberResult());
+    ASSERT_TRUE(view.GetPostFitPeeling());
+    const auto point = view.GetFinalModel(rg::FittingStage::Second).ToVector();
+    auto raw = view.GetRawSamplingEntries(false);
+    std::reverse(raw.begin(), raw.end());
+    editor.SetAtomLocalRawSamplingEntries(*atom, raw);
+    EXPECT_FALSE(view.GetPostFitPeeling());
+    EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
+    EXPECT_EQ(view.GetFinalModel(rg::FittingStage::Second).ToVector(), point);
+    stage.point = stage.point->WithAmplitude(3);
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
+    for (const auto & member : model->GetAtomList())
+    {
+        const auto other = rg::AtomLocalPotentialView::For(*member);
+        EXPECT_FALSE(other.GetPostFitPeeling());
+        EXPECT_FALSE(other.GetGroupEvidence());
+        EXPECT_FALSE(other.GetGroupMemberResult());
+        EXPECT_FALSE(other.GetStageEstimate(rg::FittingStage::Second).uncertainty.covariance);
+    }
+    auto invalid = stages;
+    invalid[999] = stages.begin()->second;
+    EXPECT_THROW(editor.ApplySecondStageEstimates(invalid), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 3);
 }

@@ -3,6 +3,7 @@
 #include "LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -61,18 +62,6 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
 void ApplyJointStageEstimates(ModelObject & model, const JointAnalysisResult & result, const std::string & run_id)
 {
     const auto estimates = BuildJointStageEstimates(result, run_id);
-    for (const auto & [id, estimate] : estimates)
-    {
-        (void)estimate;
-        const auto * atom = model.FindAtomPtr(id);
-        if (!atom || atom->GetElement() == Element::HYDROGEN)
-            throw std::invalid_argument("Joint contributor does not belong to model.");
-    }
-    for (const auto & [id, estimate] : estimates)
-    {
-        auto & entry = ModelAnalysisData::Of(model).EnsureAtomLocalEntry(*model.FindAtomPtr(id));
-        entry.SetStageEstimate(FittingStage::Second, estimate);
-        entry.ClearGroupMemberResult();
-    }
+    model.EditAnalysis().ApplySecondStageEstimates(estimates);
 }
 }

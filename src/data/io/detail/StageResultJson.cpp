@@ -150,7 +150,9 @@ void AdaptLegacy(ModelObject & model)
 void MapSnapshot(ModelObject & model)
 {
     auto & data=ModelAnalysisData::Of(model);
-    data_internal::ApplyJointStageEstimates(model,*data.joint_result,"legacy-joint-snapshot");
+    const auto snapshot = *data.joint_result;
+    data_internal::ApplyJointStageEstimates(model,snapshot,"legacy-joint-snapshot");
+    data.joint_result = snapshot;
     auto & groups=data.AtomGroupEntry(); groups.ClearMembers();
     for(const auto key:groups.CollectGroupKeys()) {GroupParameterSummary s; s.reason="not-recorded"; s.source_id="legacy-joint-snapshot"; groups.SetParameterSummary(key,s);}
     for(const auto & id:data.joint_result->atom_ids)

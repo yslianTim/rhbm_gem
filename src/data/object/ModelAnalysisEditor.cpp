@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <stdexcept>
 #include <algorithm>
+#include <set>
 #include <utility>
 
 namespace rhbm_gem {
@@ -24,6 +25,90 @@ LocalPotentialEntry & EnsureAtomLocalPotential(
     const AtomObject & atom_object)
 {
     return ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(atom_object);
+}
+
+bool SameSource(const EstimateSource & a, const EstimateSource & b)
+{
+    return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
+        a.run_id == b.run_id && a.role == b.role;
+}
+
+bool SameEndpoint(const LocalStageEstimate & a, const LocalStageEstimate & b)
+{
+    return SameSource(a.source, b.source) && a.point.has_value() == b.point.has_value() &&
+        (!a.point || a.point->ToVector() == b.point->ToVector()) &&
+        a.convergence == b.convergence && a.reason == b.reason;
+}
+
+bool SameUncertainty(const StageUncertainty & a, const StageUncertainty & b)
+{
+    return a.status == b.status && a.method == b.method && a.reason == b.reason &&
+        a.residual_variance == b.residual_variance && a.rank == b.rank &&
+        a.degrees_of_freedom == b.degrees_of_freedom && a.rank_threshold == b.rank_threshold &&
+        a.covariance.has_value() == b.covariance.has_value() &&
+        (!a.covariance || *a.covariance == *b.covariance);
+}
+
+void InvalidateGroup(ModelAnalysisData & data, GroupKey key)
+{
+    auto & groups = data.AtomGroupEntry();
+    for (const auto * atom : groups.GetMembers(key))
+        if (auto * entry = data.FindAtomLocalEntry(*atom)) entry->ClearGroupMemberResult();
+    groups.ClearResult(key);
+}
+
+void InvalidateGroups(ModelAnalysisData & data, const std::set<int> & ids)
+{
+    auto & groups = data.AtomGroupEntry();
+    for (const auto key : groups.CollectGroupKeys())
+        if (std::any_of(groups.GetMembers(key).begin(), groups.GetMembers(key).end(),
+            [&](const auto * atom) { return ids.contains(atom->GetSerialID()); }))
+            InvalidateGroup(data, key);
+}
+
+void InvalidateJointRuns(ModelAnalysisData & data, const std::set<std::string> & runs)
+{
+    if (runs.empty()) return;
+    std::set<int> affected;
+    for (auto & [id, entry] : data.AtomLocalEntries())
+    {
+        auto stage = entry->StageEstimate(FittingStage::Second);
+        if (stage.source.method != EstimateMethod::JointComponents || !runs.contains(stage.source.run_id)) continue;
+        stage.uncertainty = {};
+        entry->SetStageEstimate(FittingStage::Second, std::move(stage));
+        entry->ClearGroupEvidence();
+        entry->ClearGroupMemberResult();
+        entry->ClearPeeling();
+        affected.insert(id);
+    }
+    InvalidateGroups(data, affected);
+    data.joint_result.reset();
+}
+
+void InvalidateStageChange(ModelAnalysisData & data, int id,
+    const LocalStageEstimate & before, LocalStageEstimate & after)
+{
+    if (!SameEndpoint(before, after))
+    {
+        std::set<std::string> runs;
+        for (const auto * stage : {&before, static_cast<const LocalStageEstimate *>(&after)})
+            if (stage->source.method == EstimateMethod::JointComponents) runs.insert(stage->source.run_id);
+        InvalidateJointRuns(data, runs);
+        // An uncertainty copied along with a changed endpoint is no longer evidence for it.
+        if (before.source.method == EstimateMethod::JointComponents &&
+            SameUncertainty(before.uncertainty, after.uncertainty)) after.uncertainty = {};
+        auto & entry = *data.AtomLocalEntries().at(id);
+        entry.ClearGroupEvidence();
+        if (!runs.empty()) entry.ClearPeeling();
+        entry.ClearGroupMemberResult();
+        InvalidateGroups(data, {id});
+    }
+    else if (!SameUncertainty(before.uncertainty, after.uncertainty))
+    {
+        data.AtomLocalEntries().at(id)->ClearGroupEvidence();
+        data.AtomLocalEntries().at(id)->ClearGroupMemberResult();
+        InvalidateGroups(data, {id});
+    }
 }
 
 } // namespace
@@ -41,7 +126,44 @@ void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
 void ModelAnalysisEditor::SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value)
 {
     value.source.atom_id = std::to_string(atom.GetSerialID());
-    EnsureAtomLocalPotential(m_model_object, atom).SetStageEstimate(stage, std::move(value));
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
+    const auto before = entry.StageEstimate(stage);
+    if (stage == FittingStage::Second)
+        InvalidateStageChange(ModelAnalysisData::Of(m_model_object), atom.GetSerialID(), before, value);
+    entry.SetStageEstimate(stage, std::move(value));
+}
+
+void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates)
+{
+    // Validate the complete mapping before touching any published result.
+    for (auto & [id, estimate] : estimates)
+    {
+        const AtomObject * atom = nullptr;
+        try { atom = m_model_object.FindAtomPtr(id); }
+        catch (const std::out_of_range &) { throw std::invalid_argument("Joint contributor does not belong to model."); }
+        if (!atom || atom->GetElement() == Element::HYDROGEN)
+            throw std::invalid_argument("Joint contributor does not belong to model.");
+        if (estimate.point) GaussianModel3D::RequireFinitePositiveWidthModel(*estimate.point);
+        estimate.source.atom_id = std::to_string(id);
+    }
+    auto & data = ModelAnalysisData::Of(m_model_object);
+    std::set<std::string> runs;
+    std::set<int> ids;
+    for (const auto & [id, estimate] : estimates)
+    {
+        auto & entry = EnsureAtomLocalPotential(m_model_object, *m_model_object.FindAtomPtr(id));
+        for (const auto * source : {&entry.StageEstimate(FittingStage::Second).source, &estimate.source})
+            if (source->method == EstimateMethod::JointComponents) runs.insert(source->run_id);
+        ids.insert(id);
+    }
+    InvalidateJointRuns(data, runs);
+    InvalidateGroups(data, ids);
+    for (auto & [id, estimate] : estimates)
+    {
+        auto & entry = *data.AtomLocalEntries().at(id);
+        entry.ClearPeeling(); entry.ClearGroupEvidence(); entry.ClearGroupMemberResult();
+        entry.SetStageEstimate(FittingStage::Second, std::move(estimate));
+    }
 }
 
 void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value)
@@ -64,7 +186,10 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
 
 void ModelAnalysisEditor::SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value)
 {
-    EnsureAtomLocalPotential(m_model_object, atom).SetGroupEvidence(std::move(value));
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
+    entry.ClearGroupMemberResult();
+    InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom.GetSerialID()});
+    entry.SetGroupEvidence(std::move(value));
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupParameterSummary(GroupKey key, GroupParameterSummary value)
@@ -167,8 +292,9 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
     const AtomObject & atom_object,
     LocalPotentialSampleList value)
 {
-    EnsureAtomLocalPotential(m_model_object, atom_object)
-        .SetRawSamplingEntries(std::move(value));
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
+    entry.ClearPeeling();
+    entry.SetRawSamplingEntries(std::move(value));
 }
 
 void ModelAnalysisEditor::SetAtomLocalPeelingSamplingEntries(
@@ -184,8 +310,16 @@ void ModelAnalysisEditor::SetAtomLocalGaussianResult(
     const AtomObject & atom_object,
     LocalGaussianResult result)
 {
-    EnsureAtomLocalPotential(m_model_object, atom_object)
-        .SetGaussianResult(stage, std::move(result));
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
+    const auto before = entry.StageEstimate(stage);
+    LocalPotentialEntry prepared;
+    prepared.SetGaussianResult(stage, result);
+    auto estimate = prepared.StageEstimate(stage);
+    estimate.source.atom_id = std::to_string(atom_object.GetSerialID());
+    if (stage == FittingStage::Second)
+        InvalidateStageChange(ModelAnalysisData::Of(m_model_object), atom_object.GetSerialID(), before, estimate);
+    entry.SetGaussianResult(stage, std::move(result));
+    entry.SetStageEstimate(stage, std::move(estimate));
 }
 
 void ModelAnalysisEditor::SetAtomLocalAlphaR(
@@ -200,6 +334,7 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
     auto & group_entry{ analysis_data.AtomGroupEntry() };
+    for (const auto key : group_entry.CollectGroupKeys()) InvalidateGroup(analysis_data, key);
     group_entry = AtomGroupPotentialEntry{};
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
@@ -221,7 +356,7 @@ void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
     for (const auto group_key : group_entry.CollectGroupKeys())
     {
-        group_entry.SetAlphaG(group_key, alpha_g);
+        SetAtomGroupAlphaG(group_key, alpha_g);
     }
 }
 
@@ -283,7 +418,10 @@ void ModelAnalysisEditor::SetAtomGroupAlphaG(
     GroupKey group_key,
     double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(group_key, alpha_g);
+    auto & data = ModelAnalysisData::Of(m_model_object);
+    if (data.AtomGroupEntry().HasGroup(group_key) && data.AtomGroupEntry().GetAlphaG(group_key) != alpha_g)
+        InvalidateGroup(data, group_key);
+    data.AtomGroupEntry().SetAlphaG(group_key, alpha_g);
 }
 
 } // namespace rhbm_gem

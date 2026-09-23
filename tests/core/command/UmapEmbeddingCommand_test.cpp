@@ -812,17 +812,22 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     }
     auto snapshot=CaptureJointAnalysisResult(FitJointComponents(JointProblem(input),widths));
     snapshot.metadata.map_normalization=rg::JointMapNormalization{false,false,1};
+    std::map<int, LocalPotentialSampleList> original_peeling;
+    for (const auto & atom : model->GetAtomList())
+        original_peeling[atom->GetSerialID()] = rg::AtomLocalPotentialView::For(*atom).GetPeelingSamplingEntries(false);
     rg::data_internal::ApplyJointStageEstimates(*model,snapshot,"saved-joint-umap");
     model->EditAnalysis().SetJointResult(snapshot);
     for(const auto & atom:model->GetAtomList())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
         rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
-        for(const auto & sample:view.GetPeelingSamplingEntries(false)) peeling.samples.push_back({sample.response,{}});
+        for(const auto & sample:original_peeling.at(atom->GetSerialID())) peeling.samples.push_back({sample.response,{}});
         if(atom->GetSerialID()==1) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
         model->EditAnalysis().SetAtomPostFitPeeling(*atom,peeling);
     }
     const auto path=dir.path()/"joint.sqlite";
+    {rg::DataRepository repository(path); repository.SaveModel(*model,"model");}
+    model->EditAnalysis().ClearJointResult();
     {rg::DataRepository repository(path); repository.SaveModel(*model,"model");}
     model.reset();
     const auto request=MakeRequest(path,dir.path()/"output");

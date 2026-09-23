@@ -1,5 +1,6 @@
 #pragma once
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
+#include <map>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -16,6 +17,7 @@ class ModelAnalysisEditor
 public:
     void SetJointResult(JointAnalysisResult result);
     void ClearJointResult();
+    void ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates);
     void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value);

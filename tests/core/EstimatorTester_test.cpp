@@ -515,10 +515,10 @@ TEST(EstimatorTesterTest, GroupFittingUsesSecondLocalInputsWithoutChangingLocalS
                 SamplingPoint{ distance, { distance, 0.0, 0.0 }, i % 3 != 0 }
             });
         }
-        analysis.SetAtomLocalPeelingSamplingEntries(*atom, samples);
         auto raw_samples{ samples };
         for (auto & sample : raw_samples) sample.response += 5.0;
         analysis.SetAtomLocalRawSamplingEntries(*atom, std::move(raw_samples));
+        analysis.SetAtomLocalPeelingSamplingEntries(*atom, samples);
         expected_inputs.emplace_back(rg::GroupGaussianMemberInput{
             samples, results[1].alpha_r, final_model
         });

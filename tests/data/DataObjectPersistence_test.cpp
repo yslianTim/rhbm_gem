@@ -281,9 +281,9 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     group_result.member_results.resize(
         view.GetAtomObjectList(group_key).size());
     group_result.member_results.front() = member_result;
-    editor.ApplyAtomGroupGaussianResult(group_key, group_result);
     editor.SetAtomLocalGaussianResult(
         rg::FittingStage::Second, *atom, local_result);
+    editor.ApplyAtomGroupGaussianResult(group_key, group_result);
 
     rg::LocalGaussianResult first_result{ local_result };
     first_result.alpha_r = 0.1;
@@ -699,7 +699,10 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
     auto * target=f.model->FindAtomPtr(1);
     auto changed=rg::AtomLocalPotentialView::For(*target).GetStageEstimate(rg::FittingStage::Second);
     const auto original=*changed.point; changed.point=original.WithAmplitude(original.GetAmplitude()+1);
+    const auto snapshot = *f.model->GetAnalysisView().GetJointResult();
     f.model->EditAnalysis().SetAtomStageEstimate(rg::FittingStage::Second,*target,changed);
+    EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
+    f.model->EditAnalysis().SetJointResult(snapshot); // An explicitly reattached stale snapshot must still fail validation.
     EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
     const auto preserved=repository.LoadModel("joint");
     EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1)).GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());

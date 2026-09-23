@@ -78,6 +78,13 @@ public:
     }
     const std::optional<GroupParameterEvidence> & GroupEvidence() const { return m_group_evidence; }
     void SetGroupEvidence(GroupParameterEvidence value) { m_group_evidence = std::move(value); }
+    void ClearGroupEvidence() { m_group_evidence.reset(); }
+    void ClearPeeling()
+    {
+        m_post_fit_peeling.reset();
+        m_peeling_sampling_entries.clear();
+        m_neighbor_count_for_peeling = 0;
+    }
     void ClearGroupMemberResult()
     {
         m_group_member_result.reset();

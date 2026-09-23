@@ -1,5 +1,6 @@
 #include "detail/CommandRunner.hpp"
 #include "core/command/detail/LocalFittingFeatures.hpp"
+#include "core/detail/StageSummary.hpp"
 #include <boost/json.hpp>
 #include <map>
 
@@ -355,8 +356,11 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     prepared.exclusions = std::move(exclusions);
     prepared.excluded_rows=excluded_rows;
     const auto & joint=model_object.GetAnalysisView().GetJointResult();
-    prepared.estimator=joint ? "joint-components" : "two-stage";
-    prepared.peeling_mode=joint ? "grid-consistent" : "iterative";
+    std::vector<const AtomObject *> population;
+    for (const auto & row : prepared.feature_rows) population.push_back(model_object.FindAtomPtr(row.serial_id));
+    const auto provenance = CollectStageProvenance(population);
+    prepared.estimator = provenance.estimator;
+    prepared.peeling_mode = provenance.peeling_mode;
     prepared.map_normalization="unavailable";
     if(joint && joint->metadata.map_normalization)
     {
