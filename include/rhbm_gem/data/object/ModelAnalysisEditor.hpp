@@ -16,6 +16,8 @@ class ModelAnalysisEditor
 public:
     void SetJointResult(JointAnalysisResult result);
     void ClearJointResult();
+    void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
+    void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void Clear();
     void ClearTransientFitStates();
     void InitializeFromSelection();

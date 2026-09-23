@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <rhbm_gem/core/PotentialEstimator.hpp>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -14,6 +15,8 @@ namespace core {
 
 struct FitOptions
 {
+    PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
+    SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
     int thread_size{ 1 };
     bool quiet_mode{ false };
     bool exclude_hydrogen{ false };

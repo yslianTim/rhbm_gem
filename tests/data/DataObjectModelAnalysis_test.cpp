@@ -1690,3 +1690,32 @@ TEST(DataObjectModelAnalysisTest, SelectedAtomsAndBondsRemainQueryableForContext
     EXPECT_EQ(bond_map.at(1).size(), 1);
     EXPECT_EQ(bond_map.at(2).size(), 1);
 }
+
+TEST(DataObjectModelAnalysisTest, StageAvailabilitySeparatesSeedsZeroAmplitudeAndMethods)
+{
+    auto model = data_test::MakeModelWithBond();
+    model->SelectAllAtoms();
+    auto editor = model->EditAnalysis();
+    editor.InitializeFromSelection();
+    editor.InitializeLocalFittingSeedModels();
+    const auto & atom = *model->GetSelectedAtoms().front();
+    const auto view = rg::AtomLocalPotentialView::For(atom);
+    EXPECT_FALSE(view.HasFinalModel(rg::FittingStage::First));
+    EXPECT_FALSE(view.HasFinalModel(rg::FittingStage::Second));
+    EXPECT_THROW(view.GetFinalModel(rg::FittingStage::Second), std::runtime_error);
+    rg::LocalStageEstimate estimate;
+    estimate.point = rg::GaussianModel3D{0.0, 0.5, -0.2};
+    estimate.source.method = rg::EstimateMethod::JointComponents;
+    estimate.source.role = rg::FittingRole::Target;
+    estimate.reason.clear();
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, estimate);
+    EXPECT_TRUE(view.HasFinalModel(rg::FittingStage::Second));
+    EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 0.0);
+    EXPECT_EQ(view.GetStageEstimate(rg::FittingStage::Second).source.atom_id, std::to_string(atom.GetSerialID()));
+    EXPECT_FALSE(view.GetStageEstimate(rg::FittingStage::Second).uncertainty.covariance);
+    EXPECT_THROW(view.GetEstimateMDPDE(rg::FittingStage::Second), std::runtime_error);
+    EXPECT_THROW(view.GetEstimateOLS(rg::FittingStage::Second), std::runtime_error);
+    EXPECT_THROW(view.GetAlphaR(rg::FittingStage::Second), std::runtime_error);
+    editor.ClearTransientFitStates();
+    EXPECT_TRUE(view.HasFinalModel(rg::FittingStage::Second));
+}

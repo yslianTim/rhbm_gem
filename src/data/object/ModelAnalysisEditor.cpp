@@ -37,6 +37,17 @@ void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
     ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
 }
 
+void ModelAnalysisEditor::SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value)
+{
+    value.source.atom_id = std::to_string(atom.GetSerialID());
+    EnsureAtomLocalPotential(m_model_object, atom).SetStageEstimate(stage, std::move(value));
+}
+
+void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value)
+{
+    EnsureAtomLocalPotential(m_model_object, atom).SetPostFitPeeling(std::move(value));
+}
+
 void ModelAnalysisEditor::ClearJointResult()
 {
     ModelAnalysisData::Of(m_model_object).joint_result.reset();
@@ -92,6 +103,8 @@ void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
         result.fit_result.reset();
         SetAtomLocalGaussianResult(FittingStage::First, *atom, result);
         SetAtomLocalGaussianResult(FittingStage::Second, *atom, std::move(result));
+        SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
+        SetAtomStageEstimate(FittingStage::Second, *atom, LocalStageEstimate{});
     }
 }
 

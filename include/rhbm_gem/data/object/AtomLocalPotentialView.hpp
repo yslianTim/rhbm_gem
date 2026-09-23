@@ -19,6 +19,11 @@ class AtomLocalPotentialView
 public:
     static AtomLocalPotentialView For(const AtomObject & atom_object);
     bool IsAvailable() const;
+    const LocalStageEstimate & GetStageEstimate(FittingStage stage) const;
+    bool HasFinalModel(FittingStage stage) const;
+    const GaussianModel3D & GetFinalModel(FittingStage stage) const;
+    const std::optional<PostFitPeelingResult> & GetPostFitPeeling() const;
+    bool HasSampleGeometry() const;
     const LocalGaussianResult & GetGaussianResult(FittingStage stage) const;
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
@@ -16,6 +17,9 @@ class LocalPotentialEntry
     LocalPotentialSampleList m_raw_sampling_entries;
     LocalPotentialSampleList m_peeling_sampling_entries;
     std::array<LocalGaussianResult, 2> m_gaussian_results{};
+    std::array<LocalStageEstimate, 2> m_stage_estimates{};
+    std::optional<PostFitPeelingResult> m_post_fit_peeling;
+    bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
     int m_neighbor_count_for_peeling{ 0 };
 
@@ -41,8 +45,31 @@ public:
     }
     void SetGaussianResult(FittingStage stage, LocalGaussianResult value)
     {
+        auto & estimate = m_stage_estimates.at(StageIndex(stage));
+        estimate = LocalStageEstimate{};
+        const auto & model = value.mdpde.GetModel();
+        if (std::isfinite(model.GetAmplitude()) && std::isfinite(model.GetOffset()) &&
+            std::isfinite(model.GetWidth()) && model.GetWidth() > 0)
+        {
+            estimate.point = model;
+            estimate.source.method = stage == FittingStage::First ?
+                EstimateMethod::LocalMDPDE : EstimateMethod::Peeling;
+            estimate.reason.clear();
+        }
         GaussianResult(stage) = std::move(value);
     }
+    const LocalStageEstimate & StageEstimate(FittingStage stage) const
+    {
+        return m_stage_estimates.at(StageIndex(stage));
+    }
+    void SetStageEstimate(FittingStage stage, LocalStageEstimate value)
+    {
+        m_stage_estimates.at(StageIndex(stage)) = std::move(value);
+    }
+    const std::optional<PostFitPeelingResult> & PostFitPeeling() const { return m_post_fit_peeling; }
+    void SetPostFitPeeling(PostFitPeelingResult value) { m_post_fit_peeling = std::move(value); }
+    bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
+    void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }
     void SetGroupMemberResult(GroupGaussianMemberResult value)
     {
         m_group_member_result = std::move(value);

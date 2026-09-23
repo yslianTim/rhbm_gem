@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/core/PotentialEstimator.hpp>
 
 namespace rhbm_gem::core {
 
@@ -26,12 +27,6 @@ enum class PrinterType : int
     GAUS_ESTIMATES = 2,
     ATOM_OUTLIER   = 3,
     JOINT_ESTIMATES = 4
-};
-
-enum class PotentialEstimator : int
-{
-    TWO_STAGE = 0,
-    JOINT_COMPONENTS = 1
 };
 
 enum class PotentialModel : int

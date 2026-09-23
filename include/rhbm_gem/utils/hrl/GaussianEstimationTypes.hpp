@@ -1,6 +1,8 @@
 #pragma once
 
 #include <optional>
+#include <string>
+#include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
@@ -13,6 +15,51 @@ enum class FittingStage
 {
     First,
     Second
+};
+
+enum class EstimateMethod { Unspecified, LocalMDPDE, Peeling, JointComponents };
+enum class FittingRole { NotRecorded, Target, Halo };
+enum class EvidenceStatus { NotRun, Available, Unavailable, Ineligible };
+
+struct EstimateSource
+{
+    EstimateMethod method{ EstimateMethod::Unspecified };
+    std::string atom_id, component_id, run_id;
+    FittingRole role{ FittingRole::NotRecorded };
+};
+
+struct StageUncertainty
+{
+    EvidenceStatus status{ EvidenceStatus::NotRun };
+    std::string method, reason;
+    // Coordinates are (A, C, log B); includes nuisance-parameter coupling.
+    std::optional<Eigen::Matrix3d> covariance;
+    std::optional<double> residual_variance;
+    std::size_t rank{}, degrees_of_freedom{};
+    double rank_threshold{};
+};
+
+struct LocalStageEstimate
+{
+    std::optional<GaussianModel3D> point;
+    EstimateSource source;
+    std::string reason{ "not-fitted" };
+    JointCheckStatus convergence{ JointCheckStatus::NotRun };
+    StageUncertainty uncertainty;
+};
+
+struct PeelingSampleEstimate
+{
+    std::optional<double> response;
+    std::string reason;
+};
+
+struct PostFitPeelingResult
+{
+    EstimateSource source;
+    std::string mode{ "grid-consistent" };
+    // One entry per raw sample, including samples without coverage.
+    std::vector<PeelingSampleEstimate> samples;
 };
 
 struct LocalGaussianResult
