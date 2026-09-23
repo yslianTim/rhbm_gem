@@ -57,20 +57,38 @@ class DomainAtoms
     std::shared_ptr<const DomainAtoms> parent;
     Indices selected;
     std::shared_ptr<const Indices> row_to_local;
+    std::shared_ptr<const std::vector<Indices>> retained;
     std::size_t RootAtom(std::size_t a) const {return parent ? parent->RootAtom(static_cast<std::size_t>(selected.at(a))) : a;}
     Eigen::Index LocalRow(Eigen::Index row) const
-    {return parent ? row_to_local->at(static_cast<std::size_t>(parent->LocalRow(row))) : row;}
+    {
+        if(!parent) return row;
+        const auto previous=parent->LocalRow(row);
+        return previous<0 ? -1 : row_to_local->at(static_cast<std::size_t>(previous));
+    }
 public:
     explicit DomainAtoms(std::shared_ptr<const JointProblemInput> snapshot):input(std::move(snapshot)) {}
     DomainAtoms Select(const Indices & atoms,std::shared_ptr<const Indices> rows) const
-    {DomainAtoms out(input); out.parent=std::make_shared<const DomainAtoms>(*this); out.selected=atoms; out.row_to_local=std::move(rows); return out;}
+    {
+        DomainAtoms out(input); out.parent=std::make_shared<const DomainAtoms>(*this); out.selected=atoms; out.row_to_local=std::move(rows);
+        auto indices=std::make_shared<std::vector<Indices>>(atoms.size()); bool filtered=false;
+        for(std::size_t a=0;a<atoms.size();++a)
+        {
+            const auto & support=input->support.at(out.RootAtom(a));
+            for(std::size_t k=0;k<support.size();++k)
+                if(out.LocalRow(static_cast<Eigen::Index>(support[k].row))>=0) (*indices)[a].push_back(static_cast<Eigen::Index>(k));
+                else filtered=true;
+        }
+        if(filtered) out.retained=std::move(indices);
+        return out;
+    }
     std::size_t size() const {return parent ? selected.size() : input->support.size();}
     struct Rows
     {
         const DomainAtoms * owner; std::span<const JointSupport> entries;
-        std::size_t size() const {return entries.size();} bool empty() const {return entries.empty();}
+        const Indices * retained{};
+        std::size_t size() const {return retained ? retained->size() : entries.size();} bool empty() const {return size()==0;}
         Support operator[](std::size_t i) const
-        {const auto & s=entries[i]; return {owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
+        {const auto & s=entries[retained ? static_cast<std::size_t>(retained->at(i)) : i]; return {owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
         struct Iterator
         {
             const Rows * rows; std::size_t index;
@@ -80,7 +98,7 @@ public:
         };
         Iterator begin() const {return {this,0};} Iterator end() const {return {this,size()};}
     };
-    Rows operator[](std::size_t a) const {return {this,input->support.at(RootAtom(a))};}
+    Rows operator[](std::size_t a) const {return {this,input->support.at(RootAtom(a)),retained ? &retained->at(a) : nullptr};}
     struct Iterator
     {
         const DomainAtoms * owner; std::size_t index;

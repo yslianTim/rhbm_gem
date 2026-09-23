@@ -9,7 +9,7 @@ CompactSvdCapture & CompactSvdCaptureForTesting() {static thread_local CompactSv
 #endif
 namespace {
 template<class Svd>
-CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute,const Vector * rhs,bool guard)
+CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute,const Vector * rhs,bool guard,bool right)
 {
     auto & work=SparseWorkForTesting();
     CompactSvdResult out; Svd svd;
@@ -31,6 +31,11 @@ CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute
         if((out.singular_values.array()-out.threshold).abs().minCoeff()<=margin) return out;
     }
     out.rank=svd.rank();
+    if(right)
+    {
+        out.right_vectors=svd.matrixV().leftCols(out.singular_values.size());
+        if(!out.right_vectors.allFinite()) return out;
+    }
     if(rhs)
     {
         ++work.reference_solves; WorkTimer timer(work.reference_solve_seconds);
@@ -40,11 +45,12 @@ CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute
     out.valid=true; return out;
 }
 template<int Options>
-CompactSvdResult Jacobi(const Matrix & a,double relative,double absolute,const Vector * rhs)
-{return Decompose<Eigen::JacobiSVD<Matrix,Options>>(a,relative,absolute,rhs,false);}
+CompactSvdResult Jacobi(const Matrix & a,double relative,double absolute,const Vector * rhs,bool right)
+{return Decompose<Eigen::JacobiSVD<Matrix,Options>>(a,relative,absolute,rhs,false,right);}
 }
-CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolute,const Vector * rhs)
+CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolute,const Vector * rhs,CompactSvdVectors vectors)
 {
+    const bool right=vectors==CompactSvdVectors::Right;
     auto & work=SparseWorkForTesting();
     ++(rhs ? work.reference_svds : work.free_design_svds);
     if(matrix.rows()==0 || matrix.cols()==0 || !matrix.allFinite() ||
@@ -55,17 +61,19 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
     legacy=CompactSvdModeForTesting()==CompactSvdMode::Legacy;
 #endif
     const auto jacobi=[&]() {
-        if(rhs) return Jacobi<Eigen::ComputeFullU|Eigen::ComputeFullV>(matrix,relative,absolute,rhs);
-        if(legacy) return Jacobi<Eigen::ComputeThinU|Eigen::ComputeThinV>(matrix,relative,absolute,rhs);
-        return Jacobi<0>(matrix,relative,absolute,rhs);
+        if(rhs) return Jacobi<Eigen::ComputeFullU|Eigen::ComputeFullV>(matrix,relative,absolute,rhs,right);
+        if(legacy) return Jacobi<Eigen::ComputeThinU|Eigen::ComputeThinV>(matrix,relative,absolute,rhs,right);
+        if(right) return Jacobi<Eigen::ComputeThinV>(matrix,relative,absolute,rhs,right);
+        return Jacobi<0>(matrix,relative,absolute,rhs,right);
     };
     CompactSvdResult out;
     const bool bdc=automatic && std::min(matrix.rows(),matrix.cols())>=16;
     if(bdc)
     {
         ++work.bdc_svds;
-        if(rhs) out=Decompose<Eigen::BDCSVD<Matrix,Eigen::ComputeThinU|Eigen::ComputeThinV>>(matrix,relative,absolute,rhs,true);
-        else out=Decompose<Eigen::BDCSVD<Matrix>>(matrix,relative,absolute,rhs,true);
+        if(rhs) out=Decompose<Eigen::BDCSVD<Matrix,Eigen::ComputeThinU|Eigen::ComputeThinV>>(matrix,relative,absolute,rhs,true,right);
+        else if(right) out=Decompose<Eigen::BDCSVD<Matrix,Eigen::ComputeThinV>>(matrix,relative,absolute,rhs,true,right);
+        else out=Decompose<Eigen::BDCSVD<Matrix>>(matrix,relative,absolute,rhs,true,right);
         if(!out.valid)
         {
             ++work.jacobi_retries; WorkTimer timer(work.jacobi_retry_seconds);

@@ -41,9 +41,16 @@ def main() -> int:
         run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
             "-m", map_path, "-d", database, "-k", "changed", "--map-normalization", "false", "-v", "0")
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
+        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
+            "-m", map_path, "-d", database, "-k", "example.contributions", "--map-normalization", "false", "-v", "0")
         map_path.unlink()
         model.unlink()
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
+        collision = root / "collision"
+        collision.mkdir()
+        run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "example.contributions",
+            "-o", collision, succeeds=False)
+        assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
             assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
@@ -65,13 +72,13 @@ def main() -> int:
                     assert atom["evidence"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 3
+        assert saved["schema_version"] == 4
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv = (root / "joint_atoms_example.csv").read_text().splitlines()
-        assert csv[0].endswith(",SelectionRole")
-        assert csv[1].endswith(",target") and csv[2].endswith(",halo")
+        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID")
+        assert csv[1].endswith(',target,FullABC,""') and csv[2].endswith(',halo,FullABC,""')
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash
         assert metadata["map_sha256"] == map_hash

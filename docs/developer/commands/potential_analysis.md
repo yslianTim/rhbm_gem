@@ -205,10 +205,11 @@ Invalid input/problem construction and persistence errors fail the command.
 `NotRun` offline evidence never implies passing certification.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
-`joint_atoms_<sanitized-key>.csv`. JSON schema 3 includes metadata, identities,
+`joint_atoms_<sanitized-key>.csv`, plus `joint_atoms_<sanitized-key>.contributions.csv`.
+JSON schema 4 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
 row mappings/mask, initial values, actual states, objectives, cost counters,
 checks, ranks and captured convergence. CSV has one row per fitted contributor (including unavailable targets):
-`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole`.
+`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID`.
 A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
 Available but unconverged states are retained. Missing estimates have empty CSV
 fields and null JSON states. Initialization diagnostics with nonfinite numbers
@@ -221,12 +222,12 @@ contract and enable only available data. Joint values are not written to OLS or
 local MDPDE columns. UMAP excludes rows missing required features and needs at
 least three valid targets.
 
-SQLite v18 is created for new databases. Reading v17 does not modify it; the first
+SQLite v19 is created for new databases. Reading v17/v18 does not modify them; the first
 Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schema 3)
+### Provenance and map units (joint JSON schemas 3 and 4)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.
@@ -253,9 +254,10 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Only production joint JSON schema 3 is accepted. Older joint JSON is rejected
+Production joint JSON schemas 3 and 4 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-The Joint snapshot JSON remains schema 3; SQLite v18 additionally stores neutral
+New Joint result JSON uses schema 4; v3 preserves its full-ABC semantics and saved
+evidence. SQLite v19 additionally stores neutral
 stages, uncertainty, posterior evidence and sample geometry in `model_stage_result`.
 Legacy sample BLOBs have unavailable geometry; old Joint snapshots do not gain
 recomputed uncertainty, peeling or posterior.
@@ -274,8 +276,10 @@ and diagnostics are saved, regardless of role or convergence.
 `initialization.data_scope` is `caller-provided-widths` or
 `contributor-local-sampling-may-read-outside-target-domain`. Each initialization
 atom retains its reason; a failed component retains an unavailable state while
-independent valid components can run. `initialization.valid` still means all
-initial widths are valid. `costs.construction_seconds` records builder time;
+independent valid components can run. `initialization.valid` means all required FullABC
+initial widths are valid. Reduced halos are marked `not-required-observable-contribution`;
+invalid FullABC seeds may use the fixed donor median while retaining the original
+width and failure reason. See the [observable-halo contract](../joint-observable-halo.md). `costs.construction_seconds` records builder time;
 initializer time includes model-copy setup. Neither storage nor export recomputes
 roles, initialization or numerical evidence. Original selection and halo legacy
 analysis are preserved; successful target first-stage data can be updated.

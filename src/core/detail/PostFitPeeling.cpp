@@ -2,9 +2,11 @@
 #include "JointPostprocessing.hpp"
 #include "MapInterpolation.hpp"
 #include "joint_component/Numerics.hpp"
+#include "data/detail/JointStageAdapter.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <unordered_map>
@@ -12,9 +14,12 @@
 namespace rhbm_gem::core::detail {
 std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
     const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
-    std::optional<std::span<const std::size_t>> outputs)
+    std::optional<std::span<const std::size_t>> outputs,const JointAnalysisResult * result)
 {
     const auto & input = problem.Input();
+    if(result && (result->atom_ids!=input.atom_ids || result->row_ids!=input.row_ids))
+        throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
+    const auto estimates=result ? data_internal::BuildJointStageEstimates(*result,{}) : std::map<int,LocalStageEstimate>{};
     const auto requested = JointOutputMask(input, outputs);
     std::unordered_map<std::size_t, std::size_t> rows;
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
@@ -31,7 +36,7 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
     {
         const auto view = AtomLocalPotentialView::For(*model.FindAtomPtr(std::stoi(input.atom_ids[atom])));
-        const auto & point = view.GetStageEstimate(FittingStage::Second).point;
+        const auto & point = result ? estimates.at(std::stoi(input.atom_ids[atom])).point : view.GetStageEstimate(FittingStage::Second).point;
         has_point.push_back(point.has_value());
         for (const auto & support : input.support[atom])
         {
@@ -47,6 +52,13 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
             if (requested[atom]) own[atom].emplace(support.row, value);
         }
     }
+    if(result) for(const auto & component:result->components) if(component.state && component.layout)
+        for(std::size_t k=0;k<component.layout->groups.size();++k)
+        {
+            const auto & group=component.layout->groups[k];
+            prediction.at(group.row)+=component.state->nuisance_amplitudes.at(k);
+            missing.at(group.row)-=group.atoms.size();
+        }
     std::map<int, PostFitPeelingResult> results;
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
     {
@@ -59,6 +71,8 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         for (const auto & raw : view.GetRawSamplingEntries(false))
         {
             PeelingSampleEstimate sample;
+            if(result && result->layout && !std::binary_search(result->layout->full_atoms.begin(),result->layout->full_atoms.end(),atom))
+            {sample.reason="observable-contribution-only"; output.samples.push_back(sample); continue;}
             if (!view.HasSampleGeometry()) { sample.reason = "sample-geometry-unavailable"; output.samples.push_back(sample); continue; }
             const auto stencil = MakeTricubicStencil(geometry, raw.point.position);
             for (const auto & [grid, weight] : TricubicWeights(stencil))

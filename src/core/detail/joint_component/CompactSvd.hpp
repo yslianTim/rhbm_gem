@@ -8,13 +8,17 @@ namespace rhbm_gem::core::joint_component {
 struct CompactSvdResult
 {
     Vector singular_values,solution;
+    Matrix right_vectors;
     Eigen::Index rank{};
     double threshold{};
     bool valid{},used_bdc{},jacobi_retry{};
 };
+enum class CompactSvdVectors {None,Right};
 // Thresholds belong to the original problem, not the compact matrix dimensions.
-// A null RHS requests singular values only; no singular vectors survive the call.
-CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,const Vector * rhs=nullptr);
+// A non-null RHS requests a least-squares solution. Right vectors are retained
+// only when explicitly requested; the default needs singular values alone.
+CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,const Vector * rhs=nullptr,
+    CompactSvdVectors=CompactSvdVectors::None);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 enum class CompactSvdMode {Automatic,Legacy,ValuesOnly};
 CompactSvdMode & CompactSvdModeForTesting();

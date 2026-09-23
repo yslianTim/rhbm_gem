@@ -15,10 +15,12 @@ struct TiledQR
         Eigen::MatrixXd a(prior+rows.rows(),r.cols()),b(prior+rows.rows(),target.cols());
         a.topRows(prior)=r; a.bottomRows(rows.rows())=rows;
         b.topRows(prior)=target; b.bottomRows(rows.rows())=rhs;
-        const Eigen::HouseholderQR<Eigen::MatrixXd> qr(a);
-        const Eigen::MatrixXd transformed=qr.householderQ().adjoint()*b;
+        // The assembled tile is disposable. Factor and transform it in place;
+        // retain the same Householder arithmetic without two full-size copies.
+        const Eigen::HouseholderQR<Eigen::Ref<Eigen::MatrixXd>> qr(a);
+        b.applyOnTheLeft(qr.householderQ().adjoint());
         const auto keep=std::min(a.rows(),a.cols());
-        r=qr.matrixQR().topRows(keep).triangularView<Eigen::Upper>(); target=transformed.topRows(keep);
+        r=qr.matrixQR().topRows(keep).triangularView<Eigen::Upper>(); target=b.topRows(keep);
     }
 };
 }

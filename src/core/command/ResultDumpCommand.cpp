@@ -372,13 +372,16 @@ bool ExecutePreparedRequest(const ResultDumpRequest & request)
 
     if (request.printer_choice==PrinterType::JOINT_ESTIMATES)
     {
-        std::set<std::string> tags;
+        std::set<std::string> filenames;
         for (const auto & model:inputs->model_objects)
         {
             if (!model->GetAnalysisView().GetJointResult())
                 throw std::invalid_argument("No joint result saved for key '"+model->GetKeyTag()+"'.");
-            if (!tags.insert(path_helper::EnsureSanitizedTag(model->GetKeyTag())).second)
-                throw std::invalid_argument("Joint export filenames collide after key sanitization.");
+            const auto tag=path_helper::EnsureSanitizedTag(model->GetKeyTag());
+            for(const auto & filename:{"joint_result_"+tag+".json","joint_atoms_"+tag+".csv",
+                "joint_atoms_"+tag+".contributions.csv"})
+                if (!filenames.insert(filename).second)
+                    throw std::invalid_argument("Joint export filenames collide after key sanitization.");
         }
         for (const auto & model:inputs->model_objects)
         {

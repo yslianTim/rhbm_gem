@@ -11,8 +11,10 @@ struct FittingWorkset
 {
     std::vector<AtomObject *> contributors;
     std::vector<bool> target_mask;
+    std::vector<bool> full_parameter_mask{};
 };
 FittingWorkset MakeJointFittingWorkset(ModelObject &, const JointProblem &);
+void ApplyJointSeedFallback(JointInitialization &);
 enum class FirstStageMode { ExistingSamplesBatch, SampleContributorsIsolated };
 LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
 // Batch mode consumes prepared samples/seeds and returns no Joint diagnostic report.

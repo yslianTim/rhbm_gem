@@ -30,8 +30,33 @@ FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem &
         workset.contributors.push_back(atom);
         const auto & targets = input.selection_domain->target_indices;
         workset.target_mask.push_back(std::binary_search(targets.begin(), targets.end(), i));
+        const auto & full=problem.ParameterLayout().full_atoms;
+        workset.full_parameter_mask.push_back(std::binary_search(full.begin(),full.end(),i));
     }
     return workset;
+}
+
+void ApplyJointSeedFallback(JointInitialization & initialization)
+{
+    std::vector<double> donors;
+    for(const auto & atom:initialization.atoms)
+        if(atom.reason=="valid-width" && atom.original_b && std::isfinite(*atom.original_b) && *atom.original_b>0)
+            donors.push_back(*atom.original_b);
+    std::sort(donors.begin(),donors.end());
+    const double median=donors.empty() ? 0 : donors.size()%2 ? donors[donors.size()/2] :
+        donors[donors.size()/2-1]+(donors[donors.size()/2]-donors[donors.size()/2-1])/2;
+    initialization.valid=true;
+    for(std::size_t i=0;i<initialization.atoms.size();++i)
+    {
+        auto & atom=initialization.atoms[i];
+        if(atom.reason=="not-required-observable-contribution") continue;
+        if(!(std::isfinite(initialization.b[i]) && initialization.b[i]>0) && !donors.empty())
+        {initialization.b[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
+        const bool valid=std::isfinite(initialization.b[i]) && initialization.b[i]>0;
+        if(valid) atom.used_b=initialization.b[i];
+        initialization.valid &= valid;
+    }
+    initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
 }
 
 LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
@@ -69,6 +94,11 @@ JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & wo
         record.mdpde = record.ols;
         record.alpha = std::numeric_limits<double>::quiet_NaN();
         double width = std::numeric_limits<double>::quiet_NaN();
+        if(!workset.full_parameter_mask.empty() && !workset.full_parameter_mask.at(index))
+        {
+            record.reason="not-required-observable-contribution"; record.seed_source="not-required";
+            initialization.b.push_back(width); initialization.atoms.push_back(std::move(record)); continue;
+        }
         try
         {
             LocalGaussianResult seed;
@@ -103,11 +133,11 @@ JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & wo
             record.reason = missing.reason;
         }
         initialization.b.push_back(width);
+        if(std::isfinite(width)) record.original_b=width;
+        record.seed_source=std::isfinite(width) && width>0 ? "fitted" : "unavailable";
         initialization.atoms.push_back(std::move(record));
     }
-    initialization.valid = std::all_of(initialization.b.begin(), initialization.b.end(),
-        [](double b) { return std::isfinite(b) && b > 0; });
-    initialization.reason = initialization.valid ? "valid-widths" : "invalid-widths";
+    ApplyJointSeedFallback(initialization);
     return initialization;
 }
 }

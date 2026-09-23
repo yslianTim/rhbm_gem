@@ -309,8 +309,9 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON uses schema 3 (distinct from fixture and offline report
-schemas). See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schema-3).
+Production outcome JSON uses schema 4 and retains schema 3 reading (distinct
+from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
+describes parameter layouts, nuisance contributions and seed provenance. See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-and-4).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values and `JointSoftwareProvenance`. `CaptureJointAnalysisResult` records the
 current library's version/source/configuration/build identity. The decoder and

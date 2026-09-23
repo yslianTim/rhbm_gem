@@ -36,8 +36,9 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
     std::set<std::size_t> assigned;
     for (const auto & component : result.components)
     {
-        if (component.state && (component.state->ac.size() != 2 * component.atoms.size() ||
-            component.state->b.size() != component.atoms.size()))
+        const auto & full=component.layout ? component.layout->full_atoms : component.atoms;
+        if (component.state && (component.state->ac.size() != 2 * full.size() ||
+            component.state->b.size() != full.size()))
             throw std::invalid_argument("Joint component state/mapping size mismatch.");
         for (std::size_t local = 0; local < component.atoms.size(); ++local)
         {
@@ -46,10 +47,18 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                 throw std::invalid_argument("Invalid or duplicate joint component mapping.");
             auto & estimate = estimates.at(identities[global]);
             estimate.source.component_id = component.id;
+            const auto found=std::find(full.begin(),full.end(),global);
+            if(found==full.end())
+            {
+                estimate.reason="observable-contribution-only";
+                estimate.convergence=JointCheckStatus::Unavailable;
+                continue;
+            }
             estimate.convergence = component.state ? component.runtime_convergence : JointCheckStatus::Unavailable;
             if (!component.state) { estimate.reason = component.stop_reason; continue; }
             const auto & state = *component.state;
-            const double a = state.ac[2 * local], c = state.ac[2 * local + 1], b = state.b[local];
+            const auto index=static_cast<std::size_t>(found-full.begin());
+            const double a = state.ac[2 * index], c = state.ac[2 * index + 1], b = state.b[index];
             if (!std::isfinite(a) || a < 0 || !std::isfinite(c) || !std::isfinite(b) || b <= 0)
                 throw std::invalid_argument("Invalid joint point estimate.");
             estimate.point = GaussianModel3D{a, b, c};

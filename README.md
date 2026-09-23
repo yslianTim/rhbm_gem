@@ -30,7 +30,7 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 
 ## Joint component workflow (opt-in)
 
-The default estimator remains the two-stage workflow. New results use **SQLite v18**. Valid v17 databases are read without modification
+The default estimator remains the two-stage workflow. New results use **SQLite v19**. Valid v17/v18 databases are read without modification
 and upgraded transactionally on their first write; v16 and earlier are rejected.
 
 ```sh
@@ -45,7 +45,10 @@ saved, including incomplete or unconverged outcomes. See the
 for options, C++/Python examples and JSON/CSV output. Joint endpoints populate the
 common Second stage. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
-with zero.
+with zero. Single-voxel halos use a shared observable contribution per row,
+without invented A/B/C estimates. JSON v4 and the companion `.contributions.csv`
+preserve these contributions; JSON v3 remains readable. See the
+[observable-halo contract](docs/developer/joint-observable-halo.md).
 
 ## License, Citation, and Third-Party Notices
 

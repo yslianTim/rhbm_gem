@@ -1,6 +1,7 @@
 #include "Numerics.hpp"
 #include "SparseFactor.hpp"
 #include "TiledDerivative.hpp"
+#include "CompactSvd.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -23,10 +24,9 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
     }
     return {std::move(reduced.r),std::move(reduced.target)};
 }
-Eigen::JacobiSVD<Matrix> Decompose(const Matrix & r,Eigen::Index rows)
+CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors vectors=CompactSvdVectors::None,const Vector * rhs=nullptr)
 {
-    Eigen::JacobiSVD<Matrix> out(r,Eigen::ComputeThinU|Eigen::ComputeThinV);
-    out.setThreshold(eps*static_cast<double>(std::max(rows,r.cols()))); return out;
+    return CompactSvd(r,eps*static_cast<double>(std::max(rows,r.cols())),-1,rhs,vectors);
 }
 }
 double RankPolicy::Relative(Eigen::Index columns) const
@@ -183,7 +183,7 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     {
         out.reason="invalid-primary";
         if(e.x.cols()>0 && e.x.nonZeros()>0 && context->audit.trial_details)
-            out.design=DesignSpectrum(e.x,Vector::Ones(y.size()));
+            out.design=DesignSpectrum(e.x,Vector::Ones(y.size()),&policy.rank);
         return out;
     }
     if(!e.certificate.available || !e.certificate.feasible || !e.certificate.kkt_passed)
@@ -234,19 +234,20 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     out.prediction_difference=(prediction-original_prediction).lpNorm<Eigen::Infinity>();
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
-    if (context->audit.trial_details) out.design=DesignSpectrum(e.x,Vector::Ones(y.size()));
+    if (context->audit.trial_details) out.design=DesignSpectrum(e.x,Vector::Ones(y.size()),&policy.rank);
     out.passed=prediction_ok && gradient_ok && kkt_difference<=1e-13;
     out.reason=out.passed ? "trusted" : "replay-disagreement";
     return out;
 }
 
 namespace {
-Spectrum CompactSpectrum(const Eigen::JacobiSVD<Matrix> & svd,Eigen::Index rows)
+Spectrum CompactSpectrum(const CompactSvdResult & svd,Eigen::Index rows)
 {
-    const auto & v=svd.singularValues(); Spectrum out;
-    out.rank=svd.rank(); out.rows=rows; out.columns=svd.cols(); out.singular_values=v;
+    const auto & v=svd.singular_values; Spectrum out;
+    if(!svd.valid) {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
+    out.rank=svd.rank; out.rows=rows; out.columns=v.size(); out.singular_values=v;
     out.minimum=v(v.size()-1); out.condition=v(0)/v(v.size()-1);
-    out.threshold=eps*static_cast<double>(std::max(rows,svd.cols()))*v(0); return out;
+    out.threshold=svd.threshold; return out;
 }
 template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPolicy & policy,Eigen::Index columns,bool normalize)
 {
@@ -256,7 +257,8 @@ template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPo
     Design x=input; Vector norms(input.cols());
     for(Eigen::Index k=0;k<x.cols();++k) {norms(k)=x.col(k).norm(); if(normalize && norms(k)>0) x.col(k)/=norms(k);}
     const auto reduced=Reduce(x,Matrix(x.rows(),0));
-    const Eigen::JacobiSVD<Matrix> svd(reduced.first,Eigen::ComputeThinV); const auto & values=svd.singularValues();
+    const auto svd=CompactSvd(reduced.first,policy.Relative(columns)); const auto & values=svd.singular_values;
+    if(!svd.valid) {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
     const double threshold=policy.Absolute(columns,values(0));
     out.singular_values=values; out.rank=(values.array()>threshold).count(); out.threshold=threshold;
     out.column_norms=norms; out.minimum=values(values.size()-1); out.condition=values(0)/values(values.size()-1); return out;
@@ -266,7 +268,7 @@ Spectrum ComputeSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index colu
 {return SpectrumRecord(x,p,columns,normalize);}
 Spectrum ComputeSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return SpectrumRecord(x,p,columns,normalize);}
-Spectrum DesignSpectrum(const Sparse & x,const Vector & weights)
+Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy * policy)
 {
     Vector scales(x.cols());
     for(Eigen::Index k=0;k<x.cols();++k)
@@ -276,8 +278,9 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights)
     }
     for(Eigen::Index k=0;k<x.cols();++k) if(scales(k)==0) scales(k)=1;
     const auto reduced=ReferenceQR(x,weights,scales,Vector::Zero(x.rows()));
-    const Eigen::JacobiSVD<Matrix> svd(reduced.first); const auto values=svd.singularValues();
-    const double threshold=eps*static_cast<double>(std::max(x.rows(),x.cols()));
+    const double threshold=eps*static_cast<double>(std::max(policy ? policy->rows : x.rows(),x.cols()));
+    const auto svd=CompactSvd(reduced.first,threshold); const auto & values=svd.singular_values;
+    if(!svd.valid) {Spectrum out; out.available=false; out.reason="spectrum-factorization-failed"; return out;}
     Spectrum out; out.rank=(values.array()>threshold*values(0)).count(); out.minimum=values.tail(1)(0);
     out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=threshold*values(0); return out;
 }
@@ -309,30 +312,35 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
     if(!out.primary.valid || !reference.valid) {out.failure="inner-solve"; return out;}
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
-    out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()));
+    out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()),&policy.rank);
     out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
     const auto prepared=PrepareDerivative(endpoint,scale,context);
     const auto differential=ReduceDerivative(prepared,endpoint.residual);
     if(!differential.valid) {out.failure=differential.reason; return out;}
-    const auto widths=Decompose(differential.projected,context->rank.rows);
+    const auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+    if(!widths.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.widths=CompactSpectrum(widths,context->rank.rows);
     const Vector & norms=differential.projected_norms; out.widths->column_norms=norms;
     Matrix normalized=differential.projected;
     for(Eigen::Index k=0;k<norms.size();++k) if(norms(k)>0) normalized.col(k)/=norms(k);
-    out.normalized_widths=CompactSpectrum(Decompose(normalized,context->rank.rows),context->rank.rows);
-    out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.matrixV().cols()));
+    const auto normalized_svd=Decompose(normalized,context->rank.rows);
+    if(!normalized_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
+    out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
+    out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
     for(Eigen::Index k=0;k<out.weak_directions.cols();++k)
     {
-        Vector direction=widths.matrixV().col(widths.matrixV().cols()-1-k);
+        Vector direction=widths.right_vectors.col(widths.right_vectors.cols()-1-k);
         Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign); if(direction(sign)<0) direction=-direction;
         out.weak_directions.col(k)=direction;
     }
-    const auto correction_svd=Decompose(differential.jacobian,context->rank.rows);
-    const Vector correction=correction_svd.solve(-differential.response); out.correction=correction;
+    const Vector response=-differential.response;
+    const auto correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
+    if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
+    const Vector & correction=correction_svd.solution; out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
     out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;
-    out.identified=widths.rank()==eta.size() && correction_svd.rank()==eta.size();
+    out.identified=widths.rank==eta.size() && correction_svd.rank==eta.size();
     out.failure=!out.inner ? "inner-solve" : !out.identified ? "width-unidentified" :
         !out.gradient || !out.local ? "b-not-stationary" : "none";
     return out;

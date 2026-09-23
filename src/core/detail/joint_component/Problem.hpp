@@ -10,9 +10,15 @@ struct ProblemData
     VectorMap y;
     EvaluationContext context;
     ComponentPartition partition;
+    JointParameterLayout layout;
     explicit ProblemData(std::shared_ptr<const JointProblemInput> snapshot):input(std::move(snapshot)),domain(input),
         y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size())) {}
 };
+JointParameterLayout BuildParameterLayout(const JointProblemInput &);
+JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &);
+std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope);
+Domain ProfileDomain(const Domain &,const JointParameterLayout &);
+EvaluationContext ProfileContext(const EvaluationContext &,const JointParameterLayout &,Eigen::Index);
 }
 namespace rhbm_gem::core {
 struct JointProblemAccess

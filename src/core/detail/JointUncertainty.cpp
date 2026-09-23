@@ -3,6 +3,7 @@
 #include "joint_component/Problem.hpp"
 #include "joint_component/Numerics.hpp"
 #include "joint_component/TiledQR.hpp"
+#include "joint_component/CompactSvd.hpp"
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <Eigen/SVD>
 #include <cmath>
@@ -12,7 +13,7 @@ namespace rhbm_gem::core::detail {
 namespace {
 StageUncertainty ComponentUncertainty(const JointProblemInput & input,
     const JointAnalysisComponent & component, const joint_component::ComponentView & view,
-    const std::vector<bool> & requested, std::map<std::size_t, Eigen::Matrix3d> & blocks)
+    const std::vector<bool> & requested, std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows)
 {
     StageUncertainty out;
     out.method = "iid-ls-linearized";
@@ -43,7 +44,7 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
         for (const auto & support : input.support.at(component.atoms[a]))
         {
             const auto row = view.LocalRow(static_cast<Eigen::Index>(support.row));
-            if (row < 0) throw std::invalid_argument("Joint uncertainty component support mismatch.");
+            if (row < 0) continue; // Analytically profiled nuisance rows carry no remaining information.
             tiles[static_cast<std::size_t>(row / joint_component::derivative_tile_rows)].emplace_back(a, &support);
             const auto v = values(a, support.squared_distance);
             prediction(row) += state.ac[2 * a] * v(0) + state.ac[2 * a + 1] * v(1);
@@ -70,13 +71,14 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
         reduced.Append(tile, Eigen::MatrixXd(count, 0));
     }
     // Full-component right singular vectors retain the coupling to C and neighbors.
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(reduced.r, Eigen::ComputeThinV);
-    if (svd.info() != Eigen::Success || !svd.singularValues().allFinite())
+    const auto svd=joint_component::CompactSvd(reduced.r,
+        std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(original_rows,3*atoms)),
+        -1,nullptr,joint_component::CompactSvdVectors::Right);
+    if (!svd.valid)
     { out.reason = "jacobian-factorization-failed"; return out; }
-    svd.setThreshold(std::numeric_limits<double>::epsilon() * static_cast<double>(std::max(rows, 3 * atoms)));
-    out.rank = static_cast<std::size_t>(svd.rank());
-    out.rank_threshold = svd.threshold() * svd.singularValues()(0);
-    if (svd.rank() != columns) { out.reason = "rank-deficient-jacobian"; return out; }
+    out.rank = static_cast<std::size_t>(svd.rank);
+    out.rank_threshold = svd.threshold;
+    if (svd.rank != columns) { out.reason = "rank-deficient-jacobian"; return out; }
     for (std::size_t row = 0; row < rows; ++row)
         prediction(static_cast<Eigen::Index>(row)) -= input.observations.at(component.rows[row]);
     const double variance = prediction.squaredNorm() / static_cast<double>(out.degrees_of_freedom);
@@ -88,7 +90,7 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
         if (!requested[component.atoms[a]]) continue;
         const auto column = static_cast<Eigen::Index>(3 * a);
         const Eigen::MatrixXd factor = norms.segment<3>(column).cwiseInverse().asDiagonal() *
-            svd.matrixV().middleRows(column, 3) * svd.singularValues().cwiseInverse().asDiagonal();
+            svd.right_vectors.middleRows(column, 3) * svd.singular_values.cwiseInverse().asDiagonal();
         const Eigen::Matrix3d covariance = variance * factor * factor.transpose();
         if (!covariance.allFinite()) { out.reason = "nonfinite-covariance"; blocks.clear(); return out; }
         blocks.emplace(a, covariance);
@@ -111,13 +113,29 @@ std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & pro
         if (std::none_of(component.atoms.begin(), component.atoms.end(), [&](auto a) { return requested.at(a); })) continue;
         std::map<std::size_t, Eigen::Matrix3d> blocks;
         const auto index = partition.mappings->atom_component.at(component.atoms.at(0));
-        const auto status = ComponentUncertainty(problem.Input(), component, partition.components.at(static_cast<std::size_t>(index)), requested, blocks);
-        for (std::size_t a = 0; a < component.atoms.size(); ++a)
+        auto profiled=component;
+        auto view=partition.components.at(static_cast<std::size_t>(index));
+        if(component.layout)
         {
-            if (!requested[component.atoms[a]]) continue;
+            profiled.atoms=component.layout->full_atoms; profiled.rows=component.layout->informative_rows;
+            auto mappings=std::make_shared<joint_component::PartitionMappings>();
+            mappings->row_component.assign(problem.Input().observations.size(),-1);
+            mappings->row_to_local.assign(problem.Input().observations.size(),-1);
+            for(std::size_t r=0;r<profiled.rows.size();++r)
+            {mappings->row_component[profiled.rows[r]]=0; mappings->row_to_local[profiled.rows[r]]=static_cast<Eigen::Index>(r);}
+            view.rows.assign(profiled.rows.begin(),profiled.rows.end()); view.atoms.assign(profiled.atoms.begin(),profiled.atoms.end());
+            view.mappings=std::move(mappings); view.component_index=0;
+            for(const auto & group:component.layout->groups) for(auto atom:group.atoms) if(requested.at(atom))
+            {StageUncertainty missing; missing.status=EvidenceStatus::Unavailable; missing.reason="observable-contribution-only"; output.emplace(std::stoi(result.atom_ids.at(atom)),missing);}
+        }
+        if(profiled.atoms.empty()) continue;
+        const auto status = ComponentUncertainty(problem.Input(), profiled, view, requested, blocks,component.rows.size());
+        for (std::size_t a = 0; a < profiled.atoms.size(); ++a)
+        {
+            if (!requested[profiled.atoms[a]]) continue;
             auto uncertainty = status;
             if (status.status == EvidenceStatus::Available) uncertainty.covariance = blocks.at(a);
-            output.emplace(std::stoi(result.atom_ids.at(component.atoms[a])), std::move(uncertainty));
+            output.emplace(std::stoi(result.atom_ids.at(profiled.atoms[a])), std::move(uncertainty));
         }
     }
     return output;

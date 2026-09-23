@@ -23,6 +23,17 @@ struct JointSelectionDomain
 };
 enum class JointCheckStatus {Passed,Failed,Unavailable,NotRun};
 enum class JointEvidenceScope {ComponentLocal,AssembledGlobal};
+struct JointNuisanceGroup
+{
+    std::size_t row{};
+    std::vector<std::size_t> atoms;
+};
+// All indices refer to the original immutable problem, including component layouts.
+struct JointParameterLayout
+{
+    std::vector<std::size_t> full_atoms,informative_rows;
+    std::vector<JointNuisanceGroup> groups;
+};
 struct JointCheck
 {
     std::string name;
@@ -47,6 +58,9 @@ struct JointInitializationAtom
     std::size_t sample_count{};
     std::optional<int> native_status;
     std::string reason;
+    std::optional<double> original_b,used_b;
+    std::string seed_source{"not-recorded"};
+    std::size_t donor_count{};
 };
 struct JointInitialization
 {
@@ -61,6 +75,7 @@ struct JointState
     std::vector<double> ac,b,log_b,width_gradient;
     // 0.5 * squared residual norm / parent ObservationScale() squared.
     double objective{};
+    std::vector<double> nuisance_amplitudes{};
 };
 struct JointComponentData
 {
@@ -72,6 +87,8 @@ struct JointComponentData
     std::vector<JointCheck> evidence;
     std::vector<JointRankEvidence> ranks;
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
+    // Absent means the historical identity layout (all component atoms are FullABC).
+    std::optional<JointParameterLayout> layout;
 };
 struct JointFitCosts
 {

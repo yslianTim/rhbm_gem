@@ -185,6 +185,7 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/Observation_test.cpp
     core/joint_component/Runtime_test.cpp
     core/joint_component/PartialSelection_test.cpp
+    core/joint_component/ObservableProfile_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES

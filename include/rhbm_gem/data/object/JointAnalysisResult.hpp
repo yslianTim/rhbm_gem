@@ -31,6 +31,8 @@ struct JointAnalysisComponent : JointComponentData
 // from the runtime result once and are never inferred by storage or readers.
 struct JointAnalysisResult
 {
+    std::string parameterization_contract{"full-abc-v1"};
+    std::optional<JointParameterLayout> layout;
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
     std::optional<JointSelectionDomain> selection_domain;

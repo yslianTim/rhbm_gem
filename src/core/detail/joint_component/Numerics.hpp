@@ -88,7 +88,7 @@ struct Spectrum
     Vector singular_values,column_norms;
     double minimum{unavailable},condition{unavailable},threshold{};
 };
-Spectrum DesignSpectrum(const Sparse &,const Vector &);
+Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullptr);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr);

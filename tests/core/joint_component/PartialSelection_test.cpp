@@ -187,7 +187,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
     EXPECT_EQ(rhbm_gem::joint_result_io::Encode(decoded),encoded);
 }
 
-TEST(JointComponentPartialSelectionTest, InitializationExceptionsRemainLocal)
+TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceWithMedianSeed)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(int i=0;i<2;++i)
@@ -217,8 +217,12 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsRemainLocal)
     ASSERT_EQ(fit.initialization.atoms.size(),2);
     EXPECT_TRUE(fit.initialization.atoms[0].reason.starts_with("initialization-exception:"));
     EXPECT_EQ(fit.initialization.atoms[1].reason,"valid-width");
-    ASSERT_EQ(fit.components.size(),2); EXPECT_FALSE(fit.components[0].state); EXPECT_TRUE(fit.components[1].state);
-    EXPECT_FALSE(fit.initialization.valid); EXPECT_FALSE(fit.objective);
+    ASSERT_EQ(fit.components.size(),2); EXPECT_TRUE(fit.components[0].state); EXPECT_TRUE(fit.components[1].state);
+    EXPECT_TRUE(fit.initialization.valid); EXPECT_TRUE(fit.objective);
+    EXPECT_EQ(fit.initialization.atoms[0].seed_source,"median-fallback");
+    EXPECT_EQ(fit.initialization.atoms[0].donor_count,1);
+    EXPECT_FALSE(fit.initialization.atoms[0].original_b);
+    EXPECT_DOUBLE_EQ(fit.initialization.b[0],fit.initialization.b[1]);
     EXPECT_EQ(model.GetSelectedAtomCount(),2);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));

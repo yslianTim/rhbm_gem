@@ -398,6 +398,55 @@ TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverr
     }
 }
 
+TEST(JointComponentNumericsTest, CompactSvdRightVectorsPreserveCovarianceAndBoundaryRetry)
+{
+    namespace n=p::runtime;
+    for(Eigen::Index size:{3,17,32})
+    {
+        Matrix x=Matrix::Zero(size+2,size);
+        for(Eigen::Index k=0;k<size;++k)
+        {x(k,k)=1+.03*static_cast<double>(k); x(size,k)=.02*static_cast<double>(k);}
+        const Eigen::JacobiSVD<Matrix> reference(x,Eigen::ComputeThinV);
+        const auto right=n::CompactSvd(x,1e-12,-1,nullptr,n::CompactSvdVectors::Right);
+        ASSERT_TRUE(right.valid); ASSERT_EQ(right.right_vectors.cols(),size);
+        EXPECT_EQ(right.solution.size(),0);
+        EXPECT_EQ(n::CompactSvd(x,1e-12).right_vectors.size(),0);
+        const Matrix factor=right.right_vectors*right.singular_values.cwiseInverse().asDiagonal();
+        const Matrix expected=reference.matrixV()*reference.singularValues().cwiseInverse().asDiagonal();
+        EXPECT_LT((factor*factor.transpose()-expected*expected.transpose()).norm(),1e-10);
+        x.setZero(); x.topRows(size).setIdentity(); x(size-1,size-1)=1e-9;
+        const auto boundary=n::CompactSvd(x,1e-9,-1,nullptr,n::CompactSvdVectors::Right);
+        EXPECT_TRUE(boundary.valid); EXPECT_EQ(boundary.jacobi_retry,size>=16);
+        EXPECT_TRUE(boundary.right_vectors.allFinite());
+    }
+}
+
+TEST(JointComponentNumericsTest, InPlaceTiledQrMatchesOriginalOrthogonalTransforms)
+{
+    namespace n=p::runtime;
+    for(Eigen::Index responses:{0,2})
+    {
+        n::TiledQR actual(4,responses); Matrix r(0,4),target(0,responses);
+        for(Eigen::Index count:{3,5,3})
+        {
+            Matrix rows(count,4),rhs(count,responses);
+            for(Eigen::Index i=0;i<rows.size();++i) rows.data()[i]=std::sin(static_cast<double>(i+count));
+            for(Eigen::Index i=0;i<rhs.size();++i) rhs.data()[i]=std::cos(static_cast<double>(i+count));
+            // Frozen copying implementation: compare R and transformed RHS,
+            // including an underdetermined first tile and zero RHS columns.
+            Matrix a(r.rows()+count,4),b(target.rows()+count,responses);
+            a.topRows(r.rows())=r; a.bottomRows(count)=rows;
+            b.topRows(target.rows())=target; b.bottomRows(count)=rhs;
+            const Eigen::HouseholderQR<Matrix> qr(a);
+            const Matrix transformed=qr.householderQ().adjoint()*b;
+            const auto keep=std::min(a.rows(),a.cols());
+            r=qr.matrixQR().topRows(keep).triangularView<Eigen::Upper>(); target=transformed.topRows(keep);
+            actual.Append(rows,rhs);
+            EXPECT_EQ((actual.r-r).norm(),0); EXPECT_EQ((actual.target-target).norm(),0);
+        }
+    }
+}
+
 TEST(JointComponentNumericsTest, CompactSvdZeroAndInvalidInputsCannotQualify)
 {
     namespace n=p::runtime;

@@ -54,7 +54,7 @@ int main()
     rhbm_gem::WriteJointAnalysisResult(saved,"consumer-joint.json","consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)),{});
-    if(payload.find("\"schema_version\":3")==std::string::npos ||
+    if(payload.find("\"schema_version\":4")==std::string::npos ||
         payload.find("joint-kernel-map-units-v1")==std::string::npos ||
         payload.find("fixed-selected-voxel-closure-v1")==std::string::npos) return 7;
     rhbm_gem::ModelObject saved_model;

@@ -58,13 +58,12 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
         auto fit = FitJointComponents(problem, initialization.b);
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
-        fit.initialization.atoms = initialization.atoms;
-        fit.initialization.data_scope = initialization.data_scope;
+        fit.initialization = initialization;
         return CaptureJointAnalysisResult(fit);
     }();
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices))
+    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
     for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
     {

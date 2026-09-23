@@ -28,6 +28,7 @@ public:
     explicit JointProblem(JointProblemInput);
     const JointProblemInput & Input() const;
     double ObservationScale() const;
+    const JointParameterLayout & ParameterLayout() const;
 private:
     std::shared_ptr<const joint_component::ProblemData> m_data;
     friend struct JointProblemAccess;
@@ -46,6 +47,7 @@ struct JointComponentResult : JointComponentData
 };
 struct JointFitResult
 {
+    std::optional<JointParameterLayout> layout;
     std::optional<JointProblem> problem;
     JointInitialization initialization;
     JointFitCosts costs;

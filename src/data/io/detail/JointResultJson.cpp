@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <set>
 #include <stdexcept>
 
@@ -69,13 +70,15 @@ std::vector<double> DiagnosticValues(const j::value & v)
 Object State(const JointState & x)
 {
     return {{"ac",j::value_from(x.ac)},{"b",j::value_from(x.b)},{"log_b",j::value_from(x.log_b)},
-        {"width_gradient",j::value_from(x.width_gradient)},{"objective",x.objective}};
+        {"width_gradient",j::value_from(x.width_gradient)},{"objective",x.objective},
+        {"nuisance_amplitudes",j::value_from(x.nuisance_amplitudes)}};
 }
 JointState ReadState(const j::value & v)
 {
     const auto & o=v.as_object();
     return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"b"),Read<std::vector<double>>(o,"log_b"),
-        Read<std::vector<double>>(o,"width_gradient"),Read<double>(o,"objective")};
+        Read<std::vector<double>>(o,"width_gradient"),Read<double>(o,"objective"),
+        o.contains("nuisance_amplitudes") ? Read<std::vector<double>>(o,"nuisance_amplitudes") : std::vector<double>{}};
 }
 j::value OptionalState(const std::optional<JointState> & x) {return x ? j::value(State(*x)) : j::value(nullptr);}
 j::array Checks(const std::vector<JointCheck> & values)
@@ -124,7 +127,8 @@ Object Initialization(const JointInitialization & x)
     j::array atoms;
     for(const auto & a:x.atoms) atoms.emplace_back(Object{{"id",a.id},{"ols",Diagnostics(a.ols)},{"mdpde",Diagnostics(a.mdpde)},
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
-        {"native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason}});
+        { "native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason},
+        {"original_b",Number(a.original_b)},{"used_b",Number(a.used_b)},{"seed_source",a.seed_source},{"donor_count",a.donor_count}});
     return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.b)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
@@ -141,6 +145,11 @@ JointInitialization ReadInitialization(const j::value & v)
         std::copy(ols.begin(),ols.end(),atom.ols.begin()); std::copy(mdpde.begin(),mdpde.end(),atom.mdpde.begin());
         atom.alpha=OptionalNumber(a.at("alpha")).value_or(std::numeric_limits<double>::quiet_NaN());
         atom.sample_count=Read<std::size_t>(a,"sample_count");
+        if(a.contains("seed_source"))
+        {
+            atom.original_b=OptionalNumber(a.at("original_b")); atom.used_b=OptionalNumber(a.at("used_b"));
+            atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
+        }
         if(!a.at("native_status").is_null()) atom.native_status=Read<int>(a,"native_status");
         x.atoms.push_back(std::move(atom));
     }
@@ -223,13 +232,15 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         Require(n.applied ? n.requested && !m.simulation : n.divisor==1,"inconsistent normalization");
     }
 }
-void ValidateState(const JointState & x,std::size_t atoms)
+void ValidateState(const JointState & x,std::size_t atoms,std::size_t groups=0)
 {
     Require(x.ac.size()==2*atoms && x.b.size()==atoms && x.log_b.size()==atoms && x.width_gradient.size()==atoms,"state dimensions");
     for(const auto * values:{&x.ac,&x.b,&x.log_b,&x.width_gradient})
         for(double value:*values) Require(std::isfinite(value),"nonfinite state");
     for(double b:x.b) Require(b>0,"nonpositive width");
     Require(std::isfinite(x.objective),"nonfinite objective");
+    Require(x.nuisance_amplitudes.size()==groups,"nuisance amplitude dimensions");
+    for(double value:x.nuisance_amplitudes) Require(std::isfinite(value),"nonfinite nuisance amplitude");
 }
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
@@ -244,6 +255,44 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
     const auto & o=value.as_object();
     return JointSelectionDomain{Read<std::string>(o,"contract"),Read<std::vector<std::size_t>>(o,"target_indices"),
         Read<double>(o,"observation_radius"),Read<double>(o,"support_radius"),Read<std::string>(o,"contributor_policy")};
+}
+j::value Layout(const std::optional<JointParameterLayout> & layout)
+{
+    if(!layout) return nullptr;
+    j::array groups;
+    for(const auto & group:layout->groups) groups.emplace_back(Object{{"row",group.row},{"atoms",j::value_from(group.atoms)}});
+    return Object{{"full_atoms",j::value_from(layout->full_atoms)},{"informative_rows",j::value_from(layout->informative_rows)},{"groups",std::move(groups)}};
+}
+std::optional<JointParameterLayout> ReadLayout(const Object & object)
+{
+    if(!object.contains("layout") || object.at("layout").is_null()) return std::nullopt;
+    const auto & o=object.at("layout").as_object();
+    JointParameterLayout out{Read<std::vector<std::size_t>>(o,"full_atoms"),Read<std::vector<std::size_t>>(o,"informative_rows"),{}};
+    for(const auto & item:o.at("groups").as_array())
+    {const auto & group=item.as_object(); out.groups.push_back({Read<std::size_t>(group,"row"),Read<std::vector<std::size_t>>(group,"atoms")});}
+    return out;
+}
+void ValidateLayout(const JointParameterLayout & layout,const std::vector<std::size_t> & atoms,
+    const std::vector<std::size_t> & rows,const JointSelectionDomain * selection)
+{
+    std::set<std::size_t> remaining_atoms(atoms.begin(),atoms.end()),remaining_rows(rows.begin(),rows.end());
+    Require(std::is_sorted(layout.full_atoms.begin(),layout.full_atoms.end()),"unsorted full atom layout");
+    Require(std::is_sorted(layout.informative_rows.begin(),layout.informative_rows.end()),"unsorted informative rows");
+    for(auto a:layout.full_atoms) Require(remaining_atoms.erase(a)==1,"full atom mapping");
+    for(auto r:layout.informative_rows) Require(remaining_rows.erase(r)==1,"informative row mapping");
+    std::optional<std::size_t> previous;
+    for(const auto & group:layout.groups)
+    {
+        Require(!previous || *previous<group.row,"unsorted or duplicate nuisance row"); previous=group.row;
+        Require(!group.atoms.empty() && remaining_rows.erase(group.row)==1,"nuisance row mapping");
+        Require(std::is_sorted(group.atoms.begin(),group.atoms.end()),"unsorted nuisance atoms");
+        for(auto a:group.atoms)
+        {
+            Require(remaining_atoms.erase(a)==1,"nuisance atom mapping");
+            Require(selection && !std::binary_search(selection->target_indices.begin(),selection->target_indices.end(),a),"nuisance atom must be a recorded halo");
+        }
+    }
+    Require(remaining_atoms.empty() && remaining_rows.empty(),"incomplete parameter layout");
 }
 void Validate(const JointAnalysisResult & x)
 {
@@ -261,11 +310,21 @@ void Validate(const JointAnalysisResult & x)
     Require(x.available_row_mask.size()==rows,"row mask dimensions");
     Require(std::isfinite(x.observation_scale) && x.observation_scale>=1,"observation scale");
     Require(!x.objective || std::isfinite(*x.objective),"nonfinite objective");
-    if(x.assembled_state) ValidateState(*x.assembled_state,atoms);
+    Require(x.parameterization_contract==(x.layout ? "singleton-halo-profile-v1" : "full-abc-v1"),"parameterization contract");
+    if(x.layout)
+    {
+        std::vector<std::size_t> all_atoms(atoms),all_rows(rows);
+        std::iota(all_atoms.begin(),all_atoms.end(),0); std::iota(all_rows.begin(),all_rows.end(),0);
+        Require(!x.layout->groups.empty(),"empty observable reduction");
+        ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
+    }
+    if(x.assembled_state) ValidateState(*x.assembled_state,x.layout ? x.layout->full_atoms.size() : atoms,x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
         Require(x.initialization.b.size()==atoms,"initial width dimensions");
-        for(double b:x.initialization.b) Require(std::isfinite(b) && b>0,"invalid initial width");
+        for(std::size_t a=0;a<atoms;++a)
+            if(!x.layout || std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),a))
+                Require(std::isfinite(x.initialization.b[a]) && x.initialization.b[a]>0,"invalid initial width");
     }
     Require(x.initialization.atoms.size()<=atoms,"initialization dimensions");
     std::set<std::size_t> used_atoms,used_rows;
@@ -275,7 +334,19 @@ void Validate(const JointAnalysisResult & x)
         Require(components.insert(c.id).second,"duplicate component");
         for(auto a:c.atoms) Require(a<atoms && used_atoms.insert(a).second,"component atom mapping");
         for(auto r:c.rows) Require(r<rows && used_rows.insert(r).second,"component row mapping");
-        if(c.state) ValidateState(*c.state,c.atoms.size());
+        Require(c.layout.has_value()==x.layout.has_value(),"component layout contract");
+        if(c.layout)
+        {
+            ValidateLayout(*c.layout,c.atoms,c.rows,x.selection_domain ? &*x.selection_domain : nullptr);
+            for(auto a:c.layout->full_atoms) Require(std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),a),"component full atom disagreement");
+            for(auto r:c.layout->informative_rows) Require(std::binary_search(x.layout->informative_rows.begin(),x.layout->informative_rows.end(),r),"component informative row disagreement");
+            for(const auto & group:c.layout->groups)
+            {
+                const auto found=std::find_if(x.layout->groups.begin(),x.layout->groups.end(),[&](const auto & g){return g.row==group.row;});
+                Require(found!=x.layout->groups.end() && found->atoms==group.atoms,"component nuisance group disagreement");
+            }
+        }
+        if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
     }
 }
 }
@@ -289,9 +360,9 @@ std::string Encode(const JointAnalysisResult & x)
         {"search_completed",c.search_completed},{"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
-        {"runtime_convergence",StatusText(c.runtime_convergence)}});
-    Object out{{"schema_version",3},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
-        {"support_contract","sphere-fma-v1"},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
+        { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)}});
+    Object out{{"schema_version",4},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+        { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
@@ -305,12 +376,14 @@ JointAnalysisResult Decode(std::string_view text)
 {
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
-    Require(Read<int>(o,"schema_version")==3,"unsupported result schema version (expected 3; regenerate older joint outcomes)");
+    const int version=Read<int>(o,"schema_version");
+    Require(version==3 || version==4,"unsupported result schema version (expected 3 or 4)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
         Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
     JointAnalysisResult x;
+    if(version==4) {x.layout=ReadLayout(o); x.parameterization_contract=Read<std::string>(o,"parameterization_contract");}
     x.metadata=ReadMetadata(o.at("metadata").as_object());
     x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
@@ -322,6 +395,7 @@ JointAnalysisResult Decode(std::string_view text)
     for(const auto & item:o.at("components").as_array())
     {
         const auto & c=item.as_object(); JointAnalysisComponent component;
+        if(version==4) component.layout=ReadLayout(c);
         component.id=Read<std::string>(c,"id"); component.stop_reason=Read<std::string>(c,"stop_reason");
         component.atoms=Read<std::vector<std::size_t>>(c,"atoms"); component.rows=Read<std::vector<std::size_t>>(c,"rows");
         component.search_completed=Read<bool>(c,"search_completed"); component.profile_evaluations=Read<int>(c,"profile_evaluations");

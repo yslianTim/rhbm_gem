@@ -107,15 +107,13 @@ JointCheckStatus JointFitResult::RuntimeConvergence() const
     for(const auto & component:components) status=joint_component::MergeConvergenceStatus(status,component.RuntimeConvergence());
     return status;
 }
-namespace {
-std::vector<JointRankEvidence> Ranks(const n::Assessment & a,JointEvidenceScope scope)
+std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessment & a,JointEvidenceScope scope)
 {
     std::vector<JointRankEvidence> out;
     for(const auto & [name,spectrum]:std::vector<std::pair<std::string,const std::optional<n::Spectrum> *>>{
         {"design",&a.design},{"projected-width",&a.widths},{"normalized-width",&a.normalized_widths},{"jacobian",&a.jacobian}})
         if(*spectrum) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,Values((*spectrum)->singular_values)});
     return out;
-}
 }
 JointProblem::JointProblem(JointProblemInput input)
 {
@@ -130,10 +128,12 @@ JointProblem::JointProblem(JointProblemInput input)
     if(!data->y.allFinite()) throw std::invalid_argument("Nonfinite joint observations.");
     data->partition=n::Partition(data->domain,data->input->atom_ids);
     data->context=n::CreateContext(data->input);
+    data->layout=n::BuildParameterLayout(*data->input);
     m_data=std::move(data);
 }
 const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
+const JointParameterLayout & JointProblem::ParameterLayout() const {return m_data->layout;}
 JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 {
     const auto atoms=EligibleAtoms(model); JointProblemInput input;
@@ -168,6 +168,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
+    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b);
     const auto & data=JointProblemAccess::Get(problem); JointFitResult out; out.problem=problem;
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
@@ -200,7 +201,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         {
             component.state=State(*result.trusted_state,data.context.scale);
             component.evidence=n::AssessmentEvidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
-            component.ranks=Ranks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
+            component.ranks=n::AssessmentRanks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
         }
         else
         {
@@ -226,7 +227,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
-    out.ranks=Ranks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
+    out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     if(assembly.available)
     {
         const auto & state=assembly.raw;
@@ -242,6 +243,8 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
 {
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
     JointAnalysisResult out;
+    out.layout=fit.layout;
+    if(out.layout) out.parameterization_contract="singleton-halo-profile-v1";
     metadata.software=JointSoftwareProvenance{RHBM_GEM_SIMULATION_VERSION,
         RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
         RHBM_GEM_SIMULATION_BUILD_SHA256};
@@ -290,8 +293,7 @@ JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
     const double initialization_seconds=Seconds(initialization_start);
     auto out=FitJointComponents(problem,initialization.b); out.costs.initialization_seconds=initialization_seconds;
     out.costs.construction_seconds=construction_seconds;
-    out.initialization.atoms=std::move(initialization.atoms);
-    out.initialization.data_scope=std::move(initialization.data_scope);
+    out.initialization=std::move(initialization);
     return out;
 }
 }
