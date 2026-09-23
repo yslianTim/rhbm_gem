@@ -1,5 +1,6 @@
 #pragma once
 #include "Numerics.hpp"
+#include <chrono>
 
 namespace rhbm_gem::core::joint_component {
 struct SparseFactorState;
@@ -7,8 +8,18 @@ struct SparseWork
 {
     std::size_t symbolic{},numeric{},symbolic_reuses{},factor_reuses{},reference{},factor_nonzeros{},cancellation_reductions{};
     double matrix_preparation_seconds{},symbolic_seconds{},numeric_seconds{},reference_seconds{},reference_svd_seconds{},derivative_seconds{};
+    std::size_t derivative_preparations{},derivative_compacts{},reference_compacts{},free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
+    double derivative_compact_seconds{},reference_compact_seconds{},free_design_svd_seconds{},reference_solve_seconds{},cancellation_seconds{},jacobi_retry_seconds{};
 };
 SparseWork & SparseWorkForTesting();
+// Inclusive elapsed time, including early returns and exception unwinding.
+struct WorkTimer
+{
+    double & seconds;
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    explicit WorkTimer(double & value):seconds(value) {}
+    ~WorkTimer() {seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+};
 bool SparseBackendEnabled();
 class FreeDesignFactor
 {

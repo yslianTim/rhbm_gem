@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
+#include "core/detail/joint_component/CompactSvd.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <cmath>
@@ -10,6 +11,12 @@ namespace m=second_stage_test::matched;
 namespace p=m::joint_abc;
 using Vector=Eigen::VectorXd;
 using Matrix=Eigen::MatrixXd;
+struct SvdMode
+{
+    p::runtime::CompactSvdMode saved{p::runtime::CompactSvdModeForTesting()};
+    explicit SvdMode(p::runtime::CompactSvdMode mode) {p::runtime::CompactSvdModeForTesting()=mode;}
+    ~SvdMode() {p::runtime::CompactSvdModeForTesting()=saved;}
+};
 struct Sample
 {
     m::unique_grid::Grid grid;
@@ -335,4 +342,129 @@ TEST(JointComponentNumericsTest, SparseCancellationRetainsTiledDerivativePrecisi
     Matrix projected,jacobian; prepared.Rows(0,e.x.rows(),projected,jacobian);
     EXPECT_LT((projected-dense.projected).norm(),1e-12);
     EXPECT_LT((jacobian-dense.jacobian).norm(),1e-12);
+}
+
+TEST(JointComponentNumericsTest, CompactSvdDispatchAndRepeatedSpectrumMatchJacobi)
+{
+    namespace n=p::runtime;
+    for(Eigen::Index size:{15,16,17,32})
+    {
+        Matrix x(size+3,size);
+        for(Eigen::Index i=0;i<x.rows();++i) for(Eigen::Index k=0;k<size;++k)
+            x(i,k)=std::sin(static_cast<double>(i*size+k+1));
+        const Eigen::HouseholderQR<Matrix> qr(x);
+        const Matrix q=qr.householderQ()*Matrix::Identity(x.rows(),size);
+        Vector values=Vector::Ones(size); values.tail(size/2).setConstant(.25);
+        x=q*values.asDiagonal();
+        const Vector rhs=Vector::LinSpaced(x.rows(),-.3,2.);
+        const double relative=std::numeric_limits<double>::epsilon()*1000000;
+        n::CompactSvdResult expected;
+        {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,-1,&rhs);}
+        n::SparseWorkForTesting()={};
+        const auto spectrum=n::CompactSvd(x,relative),solved=n::CompactSvd(x,relative,-1,&rhs);
+        ASSERT_TRUE(expected.valid && spectrum.valid && solved.valid);
+        EXPECT_EQ(spectrum.used_bdc,size>=16); EXPECT_FALSE(spectrum.jacobi_retry);
+        EXPECT_EQ(spectrum.rank,size); EXPECT_EQ(solved.rank,expected.rank);
+        EXPECT_LT((spectrum.singular_values-expected.singular_values).lpNorm<Eigen::Infinity>(),1e-10);
+        EXPECT_LT((solved.solution-expected.solution).norm(),1e-10);
+        EXPECT_NEAR(spectrum.threshold,relative,1e-10*relative);
+        EXPECT_EQ(n::SparseWorkForTesting().bdc_svds,size>=16 ? 2 : 0);
+        EXPECT_EQ(n::SparseWorkForTesting().reference_solves,1);
+        EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,1);
+    }
+}
+
+TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverride)
+{
+    namespace n=p::runtime;
+    constexpr double relative=1e-9;
+    for(double absolute:{-1.,1e-7}) for(double factor:{0.,.5,.999999,1.,1.000001,2.})
+    {
+        const double threshold=absolute<0 ? relative : absolute;
+        Matrix x=Matrix::Identity(16,16); x(15,15)=threshold*factor;
+        const Vector rhs=x*Vector::LinSpaced(16,.5,2.);
+        n::CompactSvdResult expected;
+        {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,absolute,&rhs);}
+        n::SparseWorkForTesting()={};
+        const auto actual=n::CompactSvd(x,relative,absolute,&rhs);
+        ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected.rank);
+        EXPECT_EQ(actual.threshold,expected.threshold);
+        EXPECT_LT((actual.solution-expected.solution).norm(),1e-10);
+        const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
+        EXPECT_EQ(actual.jacobi_retry,near);
+        EXPECT_EQ(n::SparseWorkForTesting().jacobi_retries,near ? 1 : 0);
+        EXPECT_EQ(n::SparseWorkForTesting().reference_solves,1);
+        if(near) EXPECT_GT(n::SparseWorkForTesting().jacobi_retry_seconds,0);
+    }
+}
+
+TEST(JointComponentNumericsTest, CompactSvdZeroAndInvalidInputsCannotQualify)
+{
+    namespace n=p::runtime;
+    Matrix x=Matrix::Zero(16,16); const Vector rhs=Vector::Ones(16);
+    const auto zero=n::CompactSvd(x,1e-12,-1,&rhs);
+    ASSERT_TRUE(zero.valid); EXPECT_EQ(zero.rank,0); EXPECT_TRUE(zero.jacobi_retry);
+    EXPECT_EQ(zero.solution.norm(),0);
+    x(0,0)=std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(n::CompactSvd(x,1e-12).valid);
+    EXPECT_FALSE(n::CompactSvd(Matrix(0,0),1e-12).valid);
+    EXPECT_FALSE(n::CompactSvd(Matrix::Identity(17,17),1e-12,-1,&rhs).valid);
+}
+
+TEST(JointComponentNumericsTest, CompactSvdLargeDerivativeAndReferencePreserveResidualCorrection)
+{
+    namespace n=p::runtime;
+    Sample sample; const p::Domain base(sample.grid,sample.atoms);
+    constexpr Eigen::Index copies=4;
+    std::vector<std::vector<p::Support>> support(static_cast<std::size_t>(2*copies));
+    Vector y(base.rows*copies),eta(2*copies);
+    for(Eigen::Index k=0;k<copies;++k)
+    {
+        y.segment(k*base.rows,base.rows)=sample.y;
+        eta.segment(2*k,2)=Eigen::Vector2d(.55,.51).array().log();
+        for(std::size_t a=0;a<base.atoms.size();++a) for(const auto & s:base.atoms[a])
+            support[static_cast<std::size_t>(2*k)+a].push_back({k*base.rows+s.row,s.square});
+    }
+    const p::Domain domain(y.size(),std::move(support)); const auto context=p::MakeContext(y,eta.size());
+    const auto e=n::EvaluateProfile(domain,y,eta,false,&context);
+    ASSERT_TRUE(e.valid); ASSERT_GT(e.residual.norm(),1e-3);
+    n::TiledDifferential legacy; n::Evaluation reference;
+    {SvdMode mode(n::CompactSvdMode::Legacy);
+        legacy=n::PrepareDerivative(e,context.scale,&context);
+        reference=n::EvaluateProfile(domain,y,eta,true,&context);}
+    n::SparseWorkForTesting()={};
+    const auto actual=n::PrepareDerivative(e,context.scale,&context);
+    const auto fast=n::EvaluateProfile(domain,y,eta,true,&context);
+    ASSERT_TRUE(actual.valid && legacy.valid && reference.valid && fast.valid);
+    EXPECT_GT(n::SparseWorkForTesting().bdc_svds,0);
+    EXPECT_LT((actual.coefficients-legacy.coefficients).norm(),1e-10);
+    EXPECT_LT((actual.correction-legacy.correction).norm(),1e-10);
+    EXPECT_LT((fast.beta-reference.beta).norm(),1e-10);
+    EXPECT_TRUE(n::CheckTrust(domain,y,e,context,fast).passed);
+    const auto dense=p::DenseDifferentiate(p::Evaluation(e),context.scale,&context);
+    Matrix projected,jacobian; actual.Rows(0,y.size(),projected,jacobian);
+    EXPECT_GT((projected-jacobian).norm(),1e-3);
+    EXPECT_LT((jacobian-dense.jacobian).norm()/dense.jacobian.norm(),1e-8);
+    EXPECT_LT((projected-dense.projected).norm()/dense.projected.norm(),1e-8);
+    const auto rejected=n::PrepareDerivative(e,context.scale,&context,100.);
+    EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient-free-design");
+    EXPECT_EQ(n::SparseWorkForTesting().derivative_preparations,2);
+    EXPECT_GT(n::SparseWorkForTesting().derivative_seconds,0);
+}
+
+TEST(JointComponentNumericsTest, CompactSvdReferencePreservesWeightedChangingActiveFace)
+{
+    namespace n=p::runtime;
+    Matrix x=Matrix::Zero(33,16); x.topRows(16).setIdentity(); x.row(16).setConstant(.2);
+    Vector truth=Vector::Ones(16); truth(0)=-.5; truth(3)=-.3;
+    const Vector y=x*truth; Vector weights=Vector::LinSpaced(33,.5,2.); weights(32)=0;
+    const n::Sparse sparse=x.sparseView();
+    const auto oracle=n::SolveLinear(x,y,weights,true);
+    n::SparseWorkForTesting()={};
+    const auto candidate=n::SolveLinear(sparse,y,weights,true,true);
+    ASSERT_TRUE(oracle.valid && candidate.valid);
+    EXPECT_EQ(candidate.beta(0),0); EXPECT_GT(n::SparseWorkForTesting().bdc_svds,0);
+    EXPECT_GT(n::SparseWorkForTesting().reference_svds,1);
+    EXPECT_EQ(candidate.rank,oracle.rank);
+    EXPECT_LT((candidate.beta-oracle.beta).norm(),1e-10);
 }

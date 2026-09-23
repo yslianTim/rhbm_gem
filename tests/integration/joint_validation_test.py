@@ -9,6 +9,36 @@ import joint_validation as v
 from joint_validation_report import parameter_stats, statistical_summary, wilson
 
 class ValidationTest(unittest.TestCase):
+    def test_compact_svd_checks_weak_spectrum_and_threshold_not_only_residual(self):
+        import json
+        from joint_compact_validation import svd_parity
+        row=dict(valid=True,rank=2,threshold=1e-9,singular_values=[1.,2e-9],solution=[1.,2.])
+        self.assertTrue(svd_parity(row,row)['passed'])
+        self.assertFalse(svd_parity(row,{**row,'rank':1})['passed'])
+        self.assertFalse(svd_parity(row,{**row,'threshold':1e-8})['passed'])
+        self.assertFalse(svd_parity(row,{**row,'singular_values':[1.,4e-9]})['passed'])
+        self.assertFalse(svd_parity(row,{**row,'solution':[1.,None]})['passed'])
+        self.assertEqual(len(svd_parity(row,row)['weak_values']),2)
+        json.dumps(svd_parity(row,row),allow_nan=False)
+
+    def test_compact_audit_requires_trust_and_full_derivative(self):
+        from joint_compact_validation import audit_parity
+        row=dict(valid=True,free_rank=2,kkt_passed=True,active_atoms=[],beta=[1.,2.],objective=.1,relative_residual=.1,b_gradient=[0.])
+        spectrum=dict(valid=True,rank=2,threshold=1e-9,singular_values=[1.,.5],solution=[])
+        derivative=dict(valid=True,**{k:[1.,2.] for k in ('coefficients','correction','projected','jacobian','response')})
+        a=dict(primary=row,reference=row,trust=dict(passed=True),initial_b=[.5],
+               derivative_audit=derivative,derivative_reason='full-profile-derivative',svd_records=[spectrum])
+        self.assertTrue(audit_parity(a,a)['passed'])
+        self.assertFalse(audit_parity(a,{**a,'trust':dict(passed=False)})['passed'])
+        self.assertFalse(audit_parity(a,{**a,'derivative_audit':{**derivative,'correction':[]}})['passed'])
+
+    def test_compact_summary_cannot_pass_missing_or_censored_evidence(self):
+        from joint_compact_validation import summary
+        result=summary(dict(fixed={},audits={},baseline_controls={},commands={}))
+        self.assertFalse(result['compact_gate_passed'])
+        self.assertFalse(result['complete_512_passed'])
+        self.assertIsNone(result['commands']['single-512']['candidate']['median_seconds'])
+
     def test_sparse_parity_requires_matching_rank_and_available_coefficients(self):
         from joint_sparse_validation import parity
         row=dict(valid=True,free_rank=2,kkt_passed=True,active_atoms=[],beta=[1.,2.],objective=.1,relative_residual=.1,b_gradient=[0.])

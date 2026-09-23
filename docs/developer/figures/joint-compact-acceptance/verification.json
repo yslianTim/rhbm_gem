@@ -1,0 +1,36 @@
+{
+  "production_source_sha256": "f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755",
+  "backends": [
+    "EIGEN",
+    "SPQR"
+  ],
+  "configuration": "Release, SYSTEM, OpenMP ON, ROOT/UMAP/Python OFF",
+  "ctest": {
+    "tests_per_backend_excluding_resource_runner": 27,
+    "numerical_and_cli_tests_passed": true,
+    "documentation_recheck_passed": true,
+    "note": "Full-suite logs retain the sole failure: the acceptance page link was written before its target. The page now exists; both documentation contract rechecks passed."
+  },
+  "resource_runner_tests": 12,
+  "testing_disabled": {
+    "backend": "SPQR",
+    "build_passed": true,
+    "single_128_runtime_convergence": "passed",
+    "atom_count": 128,
+    "output_sha256": "df2594e6266cc92a1e20790de3cf8942a80a7942a811a3ee748c041e7fedadb5"
+  },
+  "setup_attempt": {
+    "status": "failed-before-timing",
+    "reason": "The existing tests_all target does not build joint_validation. Built the generator explicitly and added runner preflight validation.",
+    "formal_samples": 0
+  },
+  "log_sha256": {
+    "spqr-tests.txt": "9bf2fdc9a17ba544594e920cbd27f994081ab820ab200aa347e90a8057fafd07",
+    "eigen-tests.txt": "e936e27e6c13daf2559f1edc151b2311f8df708791178134f2a6b9de604923c3",
+    "spqr-documentation-recheck.txt": "b3685db0c8bbe64486e42a22bcc58ca9aec763ae6679ecc111f691a3ac6b30a1",
+    "eigen-documentation-recheck.txt": "fd94fc203c0a27419782e181f6d2c17e604c7c824a64863d096b2514765554b4",
+    "runner-tests.txt": "4ea806640c6a0714dfd08353c5ac432fee72124adbfd64d7bd45ec3dd61f0030",
+    "repository-guards.txt": "ef7cea8fe8a267fa9155f8cdc40c55496e0ff1f0d88c781b1b69441a72405721",
+    "testing-disabled-build.txt": "6b82471313c26327fd75f6e80c3b9dadcdd8f3e69abe7188c83c2c4305ff8b64"
+  }
+}

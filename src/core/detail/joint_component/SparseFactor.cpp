@@ -127,7 +127,8 @@ Matrix FreeDesignFactor::Compact() const
 }
 std::pair<Matrix,Vector> SparseReferenceQR(const Sparse & x,const Vector & weights,const Vector & scales,VectorRef y)
 {
-    const auto start=Clock::now(); SparseFactorState state;
+    ++SparseWorkForTesting().reference; WorkTimer timer(SparseWorkForTesting().reference_seconds);
+    SparseFactorState state;
     LongSparse storage=x;
     for(Eigen::Index k=0;k<storage.outerSize();++k) for(LongSparse::InnerIterator e(storage,k);e;++e)
         e.valueRef()=(e.value()*std::sqrt(weights(e.row())))/scales(k);
@@ -145,7 +146,6 @@ std::pair<Matrix,Vector> SparseReferenceQR(const Sparse & x,const Vector & weigh
     if(r) cholmod_l_free_sparse(&r,&state.cc);
     if(permutation) cholmod_l_free(static_cast<std::size_t>(x.cols()),sizeof(int64_t),permutation,&state.cc);
     if(rank<0 || !c) throw std::runtime_error("Independent SPQR reduction failed");
-    ++SparseWorkForTesting().reference; SparseWorkForTesting().reference_seconds+=Seconds(start);
     return {std::move(result),response.Copy().col(0)};
 }
 #else

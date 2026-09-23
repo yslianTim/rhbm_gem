@@ -67,3 +67,6 @@ scripts/user/local/
 
 # Immutable joint runtime regression fixtures
 !tests/fixtures/joint_component/*.tar.gz
+
+# Reproducible compact SVD acceptance evidence
+!docs/developer/figures/joint-compact-acceptance/*.gz

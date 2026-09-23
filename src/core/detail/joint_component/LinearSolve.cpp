@@ -1,6 +1,6 @@
 #include "Numerics.hpp"
 #include "SparseFactor.hpp"
-#include <chrono>
+#include "CompactSvd.hpp"
 #include <Eigen/SparseQR>
 #include <algorithm>
 #include <cmath>
@@ -34,6 +34,7 @@ std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
     const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,VectorRef y)
 {
     if(SparseBackendEnabled()) return SparseReferenceQR(x,weights,scales,y);
+    ++SparseWorkForTesting().reference; WorkTimer timer(SparseWorkForTesting().reference_seconds);
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
     Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
     constexpr Eigen::Index tile=8192;
@@ -295,13 +296,17 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             // Independent orthogonal reduction of the full weighted problem.
             // SVD(R) preserves its singular values and solves against Q^T y,
             // without materializing the tall left singular-vector matrix.
-            const Eigen::HouseholderQR<Eigen::MatrixXd> reduction(a);
-            const Eigen::MatrixXd r{reduction.matrixQR().topRows(a.cols()).triangularView<Eigen::Upper>()};
-            const Eigen::VectorXd transformed{reduction.householderQ().adjoint()*rhs};
-            const auto svd_started=std::chrono::steady_clock::now();
-            Eigen::JacobiSVD<Eigen::MatrixXd> svd(r,Eigen::ComputeFullU|Eigen::ComputeFullV);
-            svd.setThreshold(rank_threshold); out.rank=static_cast<int>(svd.rank()); solution=svd.solve(transformed.head(a.cols()));
-            SparseWorkForTesting().reference_svd_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-svd_started).count();
+            Eigen::MatrixXd r; Eigen::VectorXd transformed;
+            {
+                ++SparseWorkForTesting().reference_compacts;
+                WorkTimer timer(SparseWorkForTesting().reference_compact_seconds);
+                const Eigen::HouseholderQR<Eigen::MatrixXd> reduction(a);
+                r=reduction.matrixQR().topRows(a.cols()).triangularView<Eigen::Upper>();
+                transformed=(reduction.householderQ().adjoint()*rhs).eval().head(a.cols());
+            }
+            const auto svd=CompactSvd(r,rank_threshold,-1,&transformed);
+            if(!svd.valid) {out.reason="nonfinite"; return out;}
+            out.rank=static_cast<int>(svd.rank); solution=svd.solution;
         }
         else if (use_svd)
         {

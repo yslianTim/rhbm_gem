@@ -47,7 +47,9 @@ factor. Evaluating supplied coefficients never replaces those coefficients.
 Projection and residual correction use orthogonal transforms and triangular
 solves, with at most 16 right-hand sides per batch. No dense observation-sized Q,
 pseudo-inverse, normal-equation matrix or full Jacobian is constructed. The
-free-design SVD still checks the compact factor. When projection nearly cancels
+free-design SVD checks the compact factor without computing unused U/V. Compact
+free-design and reference solves use the [internal compact SVD policy](joint-component-compact-svd.md),
+including a counted Jacobi retry near the original rank threshold. When projection nearly cancels
 a raw width column (relative norm at most `64 * epsilon / 1e-10`), derivative
 preparation retains the existing tiled free-design arithmetic to protect the
 normalized-spectrum precision contract. This counted cancellation reduction

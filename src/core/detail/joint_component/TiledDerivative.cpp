@@ -1,7 +1,8 @@
 #include "TiledDerivative.hpp"
 #include "SparseFactor.hpp"
-#include <chrono>
+#include "CompactSvd.hpp"
 #include <cmath>
+#include <optional>
 
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -10,6 +11,8 @@ DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork 
 TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
 {
+    auto & work=SparseWorkForTesting(); ++work.derivative_preparations;
+    WorkTimer preparation_timer(work.derivative_seconds);
     TiledDifferential out;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
@@ -31,18 +34,18 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
     out.free_design.setFromTriplets(entries.begin(),entries.end()); out.raw.setFromTriplets(raw.begin(),raw.end());
     if(SparseBackendEnabled())
     {
-        const auto started=std::chrono::steady_clock::now();
         LinearWorkspace workspace;
         const Sparse design=out.free_design;
         auto factor=e.factor;
         try {
             if(!factor || !factor->Matches(design,free)) factor=workspace.Factor(design,free,0);
             else ++SparseWorkForTesting().factor_reuses;
-            const Matrix compact=factor->Compact();
-            Eigen::JacobiSVD<Matrix> svd(compact,Eigen::ComputeThinU|Eigen::ComputeThinV);
-            svd.setThreshold(std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(context ? context->rank.rows : n,p)));
-            if(absolute>=0 && svd.singularValues()(0)>0) svd.setThreshold(absolute/svd.singularValues()(0));
-            if(svd.rank()!=p) {out.reason="rank-deficient-free-design"; return out;}
+            Matrix compact;
+            {++work.derivative_compacts; WorkTimer timer(work.derivative_compact_seconds); compact=factor->Compact();}
+            const auto svd=CompactSvd(compact,std::numeric_limits<double>::epsilon()*
+                static_cast<double>(std::max(context ? context->rank.rows : n,p)),absolute);
+            if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
+            if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
             out.coefficients.resize(p,m); out.correction.resize(p,m);
             for(Eigen::Index first=0;first<m;first+=16)
             {
@@ -51,7 +54,6 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
                 out.correction.middleCols(first,count)=factor->NormalSolve(t.middleCols(first,count));
             }
         } catch(const std::runtime_error &) {out.reason="sparse-derivative-failed"; return out;}
-        SparseWorkForTesting().derivative_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
         out.valid=out.coefficients.allFinite() && out.correction.allFinite();
         if(!out.valid) {out.reason="nonfinite-derivative"; return out;}
         // Near-complete cancellation amplifies QR ordering roundoff in the
@@ -70,21 +72,26 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
         ++SparseWorkForTesting().cancellation_reductions;
         out.valid=false;
     }
+    std::optional<WorkTimer> cancellation_timer;
+    if(SparseBackendEnabled()) cancellation_timer.emplace(work.cancellation_seconds);
     TiledQR qr(p,m);
-    for(Eigen::Index first=0;first<n;first+=tile)
     {
-        const auto count=std::min(tile,n-first);
+        ++work.derivative_compacts; WorkTimer compact_timer(work.derivative_compact_seconds);
+        for(Eigen::Index first=0;first<n;first+=tile)
+        {
+            const auto count=std::min(tile,n-first);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto & work=DerivativeWorkForTesting();
-        work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
-        work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+qr.r.rows());
+            auto & tiles=DerivativeWorkForTesting();
+            tiles.maximum_generated_rows=std::max(tiles.maximum_generated_rows,count);
+            tiles.maximum_reduction_rows=std::max(tiles.maximum_reduction_rows,count+qr.r.rows());
 #endif
-        qr.Append(Matrix(out.free_design.middleRows(first,count)),Matrix(out.raw.middleRows(first,count)));
+            qr.Append(Matrix(out.free_design.middleRows(first,count)),Matrix(out.raw.middleRows(first,count)));
+        }
     }
-    Eigen::JacobiSVD<Matrix> svd(qr.r,Eigen::ComputeThinU|Eigen::ComputeThinV);
-    svd.setThreshold(std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(context ? context->rank.rows : n,p)));
-    if(absolute>=0 && svd.singularValues()(0)>0) svd.setThreshold(absolute/svd.singularValues()(0));
-    if(svd.rank()!=p) {out.reason="rank-deficient-free-design"; return out;}
+    const auto svd=CompactSvd(qr.r,std::numeric_limits<double>::epsilon()*
+        static_cast<double>(std::max(context ? context->rank.rows : n,p)),absolute);
+    if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
+    if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
     out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target);
     const Matrix adjoint=qr.r.transpose().triangularView<Eigen::Lower>().solve(t);
     out.correction=qr.r.triangularView<Eigen::Upper>().solve(adjoint);

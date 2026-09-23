@@ -1,0 +1,165 @@
+Test project /Users/yslian/Project/em_map_analysis/build/joint-compact-eigen
+      Start  1: joint_component_offline_tests
+ 1/27 Test  #1: joint_component_offline_tests .........   Passed   16.98 sec
+      Start  2: rhbm_tests_joint_component
+ 2/27 Test  #2: rhbm_tests_joint_component ............   Passed    0.75 sec
+      Start  3: rhbm_tests_core_command
+ 3/27 Test  #3: rhbm_tests_core_command ...............   Passed    0.48 sec
+      Start  4: rhbm_tests_core_sampler
+ 4/27 Test  #4: rhbm_tests_core_sampler ...............   Passed    0.01 sec
+      Start  5: rhbm_tests_core_qscore
+ 5/27 Test  #5: rhbm_tests_core_qscore ................   Passed    0.03 sec
+      Start  6: rhbm_tests_core_estimator
+ 6/27 Test  #6: rhbm_tests_core_estimator .............   Passed   19.00 sec
+      Start  7: rhbm_tests_core_contract
+ 7/27 Test  #7: rhbm_tests_core_contract ..............***Failed    0.10 sec
+Running main() from /private/tmp/googletest-20260810-2300-tbptpn/googletest-1.18.0/googletest/src/gtest_main.cc
+[0;33mNote: Google Test filter = *CommandCatalogTest.*:*CommandEnumMappingTest.*:*CommandExecutionContractTest.*:*DocumentationLayoutTest.*
+[m[0;32m[==========] [mRunning 15 tests from 3 test suites.
+[0;32m[----------] [mGlobal test environment set-up.
+[0;32m[----------] [m6 tests from CommandCatalogTest
+[0;32m[ RUN      ] [mCommandCatalogTest.CommandCatalogKeepsExpectedOrder
+[0;32m[       OK ] [mCommandCatalogTest.CommandCatalogKeepsExpectedOrder (0 ms)
+[0;32m[ RUN      ] [mCommandCatalogTest.PainterTypeDoesNotExposeRemovedModelAliases
+[0;32m[       OK ] [mCommandCatalogTest.PainterTypeDoesNotExposeRemovedModelAliases (0 ms)
+[0;32m[ RUN      ] [mCommandCatalogTest.ExperimentalCommandVisibilityFollowsFeatureGuard
+[0;32m[       OK ] [mCommandCatalogTest.ExperimentalCommandVisibilityFollowsFeatureGuard (0 ms)
+[0;32m[ RUN      ] [mCommandCatalogTest.UmapCommandVisibilityFollowsFeatureGuard
+[0;32m[       OK ] [mCommandCatalogTest.UmapCommandVisibilityFollowsFeatureGuard (0 ms)
+[0;32m[ RUN      ] [mCommandCatalogTest.RunCommandCLIReturnsSuccessForHelpRequest
+RHBM-GEM
+
+
+RHBM-GEM [OPTIONS] SUBCOMMAND
+
+
+OPTIONS:
+  -h,     --help              Print this help message and exit
+
+SUBCOMMANDS:
+  potential_analysis          Run potential analysis
+  potential_display           Run potential display
+  result_dump                 Run result dump
+  map_simulation              Run map simulation command
+  rhbm_test                   Run RHBM simulation test
+potential_analysis: The following arguments were not expected: --fit-min 1.0
+Run with --help for more information.
+potential_analysis: The following arguments were not expected: --fit-max 1.0
+Run with --help for more information.
+rhbm_test: The following arguments were not expected: --fit-min 1.0
+Run with --help for more information.
+rhbm_test: The following arguments were not expected: --fit-max 1.0
+Run with --help for more information.
+[0;32m[       OK ] [mCommandCatalogTest.RunCommandCLIReturnsSuccessForHelpRequest (5 ms)
+[0;32m[ RUN      ] [mCommandCatalogTest.RunCommandCLIReturnsFailureForMissingCommandInput
+[Error] [validation] Option -a,--model: model_file_path path is required.
+[0;32m[       OK ] [mCommandCatalogTest.RunCommandCLIReturnsFailureForMissingCommandInput (0 ms)
+[0;32m[----------] [m6 tests from CommandCatalogTest (5 ms total)
+
+[0;32m[----------] [m6 tests from CommandExecutionContractTest
+[0;32m[ RUN      ] [mCommandExecutionContractTest.RunValidatesBeforeExecuteImpl
+[Error] [validation] Option request: prepare failed
+[0;32m[       OK ] [mCommandExecutionContractTest.RunValidatesBeforeExecuteImpl (0 ms)
+[0;32m[ RUN      ] [mCommandExecutionContractTest.RunExecutesValidationAndExecuteOnce
+[0;32m[       OK ] [mCommandExecutionContractTest.RunExecutesValidationAndExecuteOnce (0 ms)
+[0;32m[ RUN      ] [mCommandExecutionContractTest.RepeatedRunRecomputesPrepareIssues
+[Error] [validation] Option request: prepare failed
+[0;32m[       OK ] [mCommandExecutionContractTest.RepeatedRunRecomputesPrepareIssues (0 ms)
+[0;32m[ RUN      ] [mCommandExecutionContractTest.RepeatedRunExecutesEachTime
+[0;32m[       OK ] [mCommandExecutionContractTest.RepeatedRunExecutesEachTime (0 ms)
+[0;32m[ RUN      ] [mCommandExecutionContractTest.PublicRunEntryPointReportsPreparationFailureAndValidationIssues
+[Error] [validation] Option -a,--model: model_file_path path is required.
+[0;32m[       OK ] [mCommandExecutionContractTest.PublicRunEntryPointReportsPreparationFailureAndValidationIssues (0 ms)
+[0;32m[ RUN      ] [mCommandExecutionContractTest.PublicRunEntryPointReportsUnsupportedRequestType
+[0;32m[       OK ] [mCommandExecutionContractTest.PublicRunEntryPointReportsUnsupportedRequestType (0 ms)
+[0;32m[----------] [m6 tests from CommandExecutionContractTest (0 ms total)
+
+[0;32m[----------] [m3 tests from DocumentationLayoutTest
+[0;32m[ RUN      ] [mDocumentationLayoutTest.MarkdownLinksResolveWithinRepository
+/Users/yslian/Project/em_map_analysis/tests/core/contract/DocumentationLayout_test.cpp:100: Failure
+Value of: fs::exists(resolved_target)
+  Actual: false
+Expected: true
+Broken markdown link target: joint-component-compact-svd-acceptance.md from /Users/yslian/Project/em_map_analysis/docs/developer/joint-component-compact-svd.md
+Google Test trace:
+/Users/yslian/Project/em_map_analysis/tests/core/contract/DocumentationLayout_test.cpp:87: /Users/yslian/Project/em_map_analysis/docs/developer/joint-component-compact-svd.md
+
+[0;31m[  FAILED  ] [mDocumentationLayoutTest.MarkdownLinksResolveWithinRepository (82 ms)
+[0;32m[ RUN      ] [mDocumentationLayoutTest.CommandDocumentationIndexExistsForScaffoldOutput
+[0;32m[       OK ] [mDocumentationLayoutTest.CommandDocumentationIndexExistsForScaffoldOutput (0 ms)
+[0;32m[ RUN      ] [mDocumentationLayoutTest.ResourcesTreeKeepsNarrativeDocumentationInDocsDirectory
+[0;32m[       OK ] [mDocumentationLayoutTest.ResourcesTreeKeepsNarrativeDocumentationInDocsDirectory (0 ms)
+[0;32m[----------] [m3 tests from DocumentationLayoutTest (82 ms total)
+
+[0;32m[----------] [mGlobal test environment tear-down
+[0;32m[==========] [m15 tests from 3 test suites ran. (88 ms total)
+[0;32m[  PASSED  ] [m14 tests.
+[0;31m[  FAILED  ] [m1 test, listed below:
+[0;31m[  FAILED  ] [mDocumentationLayoutTest.MarkdownLinksResolveWithinRepository
+
+ 1 FAILED TEST
+
+      Start  8: rhbm_tests_data_runtime
+ 8/27 Test  #8: rhbm_tests_data_runtime ...............   Passed    0.06 sec
+      Start  9: rhbm_tests_data_schema
+ 9/27 Test  #9: rhbm_tests_data_schema ................   Passed    0.39 sec
+      Start 10: rhbm_tests_utils_algorithm
+10/27 Test #10: rhbm_tests_utils_algorithm ............   Passed    0.02 sec
+      Start 11: rhbm_tests_utils_math
+11/27 Test #11: rhbm_tests_utils_math .................   Passed    0.02 sec
+      Start 12: rhbm_tests_utils_domain
+12/27 Test #12: rhbm_tests_utils_domain ...............   Passed    0.07 sec
+      Start 13: rhbm_tests_utils_hrl
+13/27 Test #13: rhbm_tests_utils_hrl ..................   Passed    0.30 sec
+      Start 14: rhbm_tests_integration_command
+14/27 Test #14: rhbm_tests_integration_command ........   Passed    0.35 sec
+      Start 15: joint_component_evidence_test
+15/27 Test #15: joint_component_evidence_test .........   Passed    0.24 sec
+      Start 16: joint_component_runtime_runner_test
+16/27 Test #16: joint_component_runtime_runner_test ...   Passed    0.23 sec
+      Start 17: joint_component_regression
+17/27 Test #17: joint_component_regression ............   Passed    6.59 sec
+      Start 18: joint_component_physical_smoke
+18/27 Test #18: joint_component_physical_smoke ........   Passed    2.91 sec
+      Start 19: joint_component_offline_regression
+19/27 Test #19: joint_component_offline_regression ....   Passed  196.10 sec
+      Start 20: joint_component_two_step_regression
+20/27 Test #20: joint_component_two_step_regression ...   Passed    3.76 sec
+      Start 21: joint_component_extended_regression
+21/27 Test #21: joint_component_extended_regression ...   Passed   90.16 sec
+      Start 22: endpoint_refinement_runner_test
+22/27 Test #22: endpoint_refinement_runner_test .......   Passed    0.11 sec
+      Start 23: second_stage_audit_parser_test
+23/27 Test #23: second_stage_audit_parser_test ........   Passed    0.17 sec
+      Start 24: fold_168_regression_runner_test
+24/27 Test #24: fold_168_regression_runner_test .......   Passed    0.62 sec
+      Start 25: cli_quickstart_smoke_test
+25/27 Test #25: cli_quickstart_smoke_test .............   Passed    1.99 sec
+      Start 26: joint_workflow_cli_smoke_test
+26/27 Test #26: joint_workflow_cli_smoke_test .........   Passed    0.61 sec
+      Start 27: command_scaffold_smoke_test
+27/27 Test #27: command_scaffold_smoke_test ...........   Passed    0.12 sec
+
+96% tests passed, 1 tests failed out of 27
+
+Label Time Summary:
+domain:core           =  37.35 sec*proc (7 tests)
+domain:data           =   0.45 sec*proc (2 tests)
+domain:integration    = 303.95 sec*proc (14 tests)
+domain:utils          =   0.41 sec*proc (4 tests)
+intent:algorithm      = 337.98 sec*proc (17 tests)
+intent:command        =   3.42 sec*proc (4 tests)
+intent:contract       =   0.97 sec*proc (3 tests)
+intent:io             =   0.06 sec*proc (1 test)
+intent:sampling       =   0.01 sec*proc (1 test)
+intent:schema         =   0.39 sec*proc (1 test)
+intent:validation     =   0.55 sec*proc (2 tests)
+joint:extended        =  90.16 sec*proc (1 test)
+joint:offline         = 216.84 sec*proc (3 tests)
+joint:runtime         =  10.73 sec*proc (5 tests)
+
+Total Test time (real) = 342.21 sec
+
+The following tests FAILED:
+	  7 - rhbm_tests_core_contract (Failed)                 domain:core intent:contract
+Errors while running CTest
