@@ -1139,7 +1139,10 @@ void LoadAtomLocalPotentialEntrySubList(
         entry->SetGroupMemberResult(GroupGaussianMemberResult{
             posterior,
             static_cast<bool>(database.GetColumn<int>(7)),
-            database.GetColumn<double>(8)
+            database.GetColumn<double>(8),
+            {},
+            true,
+            std::nullopt
         });
     }
 }

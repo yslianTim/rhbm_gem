@@ -155,7 +155,10 @@ std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
         member_results.emplace_back(GroupGaussianMemberResult{
             gaussian_with_offset,
             static_cast<bool>(result.outlier_flag_array(i)),
-            result.statistical_distance_array(i)
+            result.statistical_distance_array(i),
+            {},
+            true,
+            std::nullopt
         });
     }
     return member_results;
