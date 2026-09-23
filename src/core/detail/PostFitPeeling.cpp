@@ -1,4 +1,5 @@
 #include "PostFitPeeling.hpp"
+#include "JointPostprocessing.hpp"
 #include "MapInterpolation.hpp"
 #include "joint_component/Numerics.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -10,9 +11,11 @@
 
 namespace rhbm_gem::core::detail {
 std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
-    const MapObject & geometry, const ModelObject & model, const JointProblem & problem)
+    const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
+    std::optional<std::span<const std::size_t>> outputs)
 {
     const auto & input = problem.Input();
+    const auto requested = JointOutputMask(input, outputs);
     std::unordered_map<std::size_t, std::size_t> rows;
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
     {
@@ -41,12 +44,13 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
                 prediction[support.row] += value;
             }
             else ++missing[support.row];
-            own[atom].emplace(support.row, value);
+            if (requested[atom]) own[atom].emplace(support.row, value);
         }
     }
     std::map<int, PostFitPeelingResult> results;
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
     {
+        if (!requested[atom]) continue;
         const auto id = std::stoi(input.atom_ids[atom]);
         const auto view = AtomLocalPotentialView::For(*model.FindAtomPtr(id));
         auto & output = results[id];

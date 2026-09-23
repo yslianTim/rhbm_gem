@@ -1,4 +1,6 @@
 #include "JointUncertainty.hpp"
+#include "JointPostprocessing.hpp"
+#include "joint_component/Problem.hpp"
 #include "joint_component/Numerics.hpp"
 #include "joint_component/TiledQR.hpp"
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -9,7 +11,8 @@
 namespace rhbm_gem::core::detail {
 namespace {
 StageUncertainty ComponentUncertainty(const JointProblemInput & input,
-    const JointAnalysisComponent & component, std::vector<Eigen::Matrix3d> & blocks)
+    const JointAnalysisComponent & component, const joint_component::ComponentView & view,
+    const std::vector<bool> & requested, std::map<std::size_t, Eigen::Matrix3d> & blocks)
 {
     StageUncertainty out;
     out.method = "iid-ls-linearized";
@@ -24,9 +27,11 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
         if (!(state.ac.at(2 * a) > 0)) { out.reason = "active-amplitude-boundary"; return out; }
     if (rows <= 3 * atoms) { out.reason = "insufficient-residual-degrees-of-freedom"; return out; }
     out.degrees_of_freedom = rows - 3 * atoms;
-    std::vector<Eigen::Index> local_rows(input.observations.size(), -1);
-    for (std::size_t row = 0; row < rows; ++row)
-        local_rows.at(component.rows[row]) = static_cast<Eigen::Index>(row);
+    if (!std::equal(component.rows.begin(), component.rows.end(), view.rows.begin(), view.rows.end()) ||
+        !std::equal(component.atoms.begin(), component.atoms.end(), view.atoms.begin(), view.atoms.end()))
+        throw std::invalid_argument("Joint uncertainty component mapping mismatch.");
+    using Membership = std::pair<std::size_t, const JointSupport *>;
+    std::vector<std::vector<Membership>> tiles((rows + joint_component::derivative_tile_rows - 1) / joint_component::derivative_tile_rows);
     Eigen::VectorXd prediction = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(rows));
     Eigen::VectorXd norms = Eigen::VectorXd::Zero(columns);
     const auto values = [&](std::size_t a, double squared) {
@@ -37,8 +42,9 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
     for (std::size_t a = 0; a < atoms; ++a)
         for (const auto & support : input.support.at(component.atoms[a]))
         {
-            const auto row = local_rows.at(support.row);
+            const auto row = view.LocalRow(static_cast<Eigen::Index>(support.row));
             if (row < 0) throw std::invalid_argument("Joint uncertainty component support mismatch.");
+            tiles[static_cast<std::size_t>(row / joint_component::derivative_tile_rows)].emplace_back(a, &support);
             const auto v = values(a, support.squared_distance);
             prediction(row) += state.ac[2 * a] * v(0) + state.ac[2 * a + 1] * v(1);
             for (Eigen::Index k = 0; k < 3; ++k)
@@ -54,15 +60,13 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
     {
         const auto count = std::min(joint_component::derivative_tile_rows, prediction.size() - first);
         Eigen::MatrixXd tile = Eigen::MatrixXd::Zero(count, columns);
-        for (std::size_t a = 0; a < atoms; ++a)
-            for (const auto & support : input.support.at(component.atoms[a]))
-            {
-                const auto row = local_rows[support.row];
-                if (row < first || row >= first + count) continue;
-                const auto column = static_cast<Eigen::Index>(3 * a);
-                tile.block<1, 3>(row - first, column) =
-                    (values(a, support.squared_distance).array() / norms.segment<3>(column).array()).matrix().transpose();
-            }
+        for (const auto & [a, support] : tiles[static_cast<std::size_t>(first / joint_component::derivative_tile_rows)])
+        {
+            const auto row = view.LocalRow(static_cast<Eigen::Index>(support->row));
+            const auto column = static_cast<Eigen::Index>(3 * a);
+            tile.block<1, 3>(row - first, column) =
+                (values(a, support->squared_distance).array() / norms.segment<3>(column).array()).matrix().transpose();
+        }
         reduced.Append(tile, Eigen::MatrixXd(count, 0));
     }
     // Full-component right singular vectors retain the coupling to C and neighbors.
@@ -81,29 +85,36 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
     { out.reason = "residual-variance-unavailable"; return out; }
     for (std::size_t a = 0; a < atoms; ++a)
     {
+        if (!requested[component.atoms[a]]) continue;
         const auto column = static_cast<Eigen::Index>(3 * a);
         const Eigen::MatrixXd factor = norms.segment<3>(column).cwiseInverse().asDiagonal() *
             svd.matrixV().middleRows(column, 3) * svd.singularValues().cwiseInverse().asDiagonal();
         const Eigen::Matrix3d covariance = variance * factor * factor.transpose();
         if (!covariance.allFinite()) { out.reason = "nonfinite-covariance"; blocks.clear(); return out; }
-        blocks.push_back(covariance);
+        blocks.emplace(a, covariance);
     }
     out.status = EvidenceStatus::Available;
     return out;
 }
 }
 
-std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & problem, const JointAnalysisResult & result)
+std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & problem, const JointAnalysisResult & result,
+    std::optional<std::span<const std::size_t>> outputs)
 {
     if (result.atom_ids != problem.Input().atom_ids || result.row_ids != problem.Input().row_ids)
         throw std::invalid_argument("Joint uncertainty snapshot identity mismatch.");
+    const auto requested = JointOutputMask(problem.Input(), outputs);
+    const auto & partition = JointProblemAccess::Get(problem).partition;
     std::map<int, StageUncertainty> output;
     for (const auto & component : result.components)
     {
-        std::vector<Eigen::Matrix3d> blocks;
-        const auto status = ComponentUncertainty(problem.Input(), component, blocks);
+        if (std::none_of(component.atoms.begin(), component.atoms.end(), [&](auto a) { return requested.at(a); })) continue;
+        std::map<std::size_t, Eigen::Matrix3d> blocks;
+        const auto index = partition.mappings->atom_component.at(component.atoms.at(0));
+        const auto status = ComponentUncertainty(problem.Input(), component, partition.components.at(static_cast<std::size_t>(index)), requested, blocks);
         for (std::size_t a = 0; a < component.atoms.size(); ++a)
         {
+            if (!requested[component.atoms[a]]) continue;
             auto uncertainty = status;
             if (status.status == EvidenceStatus::Available) uncertainty.covariance = blocks.at(a);
             output.emplace(std::stoi(result.atom_ids.at(component.atoms[a])), std::move(uncertainty));

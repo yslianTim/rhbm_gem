@@ -1,0 +1,1870 @@
+{
+  "baseline_revision": "54a39f0a",
+  "candidate": "S3",
+  "configuration": "Release EIGEN, ROOT/UMAP/Python ON, one fitting thread",
+  "fixture_sha256": "4d86fcf409507942605e260af0d05849fe99435fb42fbc2a3fcff1ed590a1ea3",
+  "before": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "repetitions": 3,
+    "threads": 1,
+    "scope": "Fixture creation excluded from time, included in process peak RSS. Post mode uses a fixed direct-fit endpoint; workflow mode includes First initialization. Output formatting follows RSS capture.",
+    "cases": {
+      "full-workflow": {
+        "runs": [
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.127625,
+              "save_seconds": 0.018955292,
+              "total_seconds": 0.147705708
+            },
+            "process_peak_rss_bytes": 49905664,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          },
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.1235875,
+              "save_seconds": 0.01874625,
+              "total_seconds": 0.14236975
+            },
+            "process_peak_rss_bytes": 52461568,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          },
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.125168834,
+              "save_seconds": 0.018753,
+              "total_seconds": 0.143951542
+            },
+            "process_peak_rss_bytes": 52477952,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.125168834,
+          "save_seconds": 0.018753,
+          "total_seconds": 0.143951542
+        },
+        "median_peak_rss_bytes": 52461568
+      },
+      "full-post": {
+        "runs": [
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008394125,
+              "uncertainty_seconds": 0.004136125,
+              "group_seconds": 4.1208e-05,
+              "save_seconds": 0.018517375,
+              "total_seconds": 0.102381209
+            },
+            "process_peak_rss_bytes": 52314112,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          },
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.00819575,
+              "uncertainty_seconds": 0.004200125,
+              "group_seconds": 5.0708e-05,
+              "save_seconds": 0.01890725,
+              "total_seconds": 0.104477292
+            },
+            "process_peak_rss_bytes": 52527104,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          },
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008369,
+              "uncertainty_seconds": 0.004088709,
+              "group_seconds": 4.05e-05,
+              "save_seconds": 0.018172458,
+              "total_seconds": 0.102592584
+            },
+            "process_peak_rss_bytes": 52396032,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.008369,
+          "uncertainty_seconds": 0.004136125,
+          "group_seconds": 4.1208e-05,
+          "save_seconds": 0.018517375,
+          "total_seconds": 0.102592584
+        },
+        "median_peak_rss_bytes": 52396032
+      },
+      "halo-workflow": {
+        "runs": [
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.161381458,
+              "save_seconds": 0.016384292,
+              "total_seconds": 0.177798166
+            },
+            "process_peak_rss_bytes": 52707328,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          },
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.162468958,
+              "save_seconds": 0.017056208,
+              "total_seconds": 0.179551541
+            },
+            "process_peak_rss_bytes": 51937280,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          },
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.161658291,
+              "save_seconds": 0.0167155,
+              "total_seconds": 0.17840775
+            },
+            "process_peak_rss_bytes": 52641792,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.161658291,
+          "save_seconds": 0.0167155,
+          "total_seconds": 0.17840775
+        },
+        "median_peak_rss_bytes": 52641792
+      },
+      "halo-post": {
+        "runs": [
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008754167,
+              "uncertainty_seconds": 0.004477667,
+              "group_seconds": 6.584e-06,
+              "save_seconds": 0.017061959,
+              "total_seconds": 0.117445
+            },
+            "process_peak_rss_bytes": 52985856,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          },
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008785709,
+              "uncertainty_seconds": 0.004666833,
+              "group_seconds": 1.1e-05,
+              "save_seconds": 0.016572292,
+              "total_seconds": 0.115471916
+            },
+            "process_peak_rss_bytes": 52756480,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          },
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.009067709,
+              "uncertainty_seconds": 0.004562833,
+              "group_seconds": 1.0209e-05,
+              "save_seconds": 0.016405833,
+              "total_seconds": 0.115742709
+            },
+            "process_peak_rss_bytes": 52625408,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 745472,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.008785709,
+          "uncertainty_seconds": 0.004562833,
+          "group_seconds": 1.0209e-05,
+          "save_seconds": 0.016572292,
+          "total_seconds": 0.115742709
+        },
+        "median_peak_rss_bytes": 52756480
+      },
+      "multi-workflow": {
+        "runs": [
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.328576083,
+              "save_seconds": 0.052151958,
+              "total_seconds": 0.380752
+            },
+            "process_peak_rss_bytes": 93683712,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          },
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.325154459,
+              "save_seconds": 0.05138625,
+              "total_seconds": 0.376571459
+            },
+            "process_peak_rss_bytes": 93667328,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          },
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.326684291,
+              "save_seconds": 0.050638458,
+              "total_seconds": 0.37734775
+            },
+            "process_peak_rss_bytes": 91668480,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.326684291,
+          "save_seconds": 0.05138625,
+          "total_seconds": 0.37734775
+        },
+        "median_peak_rss_bytes": 93667328
+      },
+      "multi-post": {
+        "runs": [
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.02244225,
+              "uncertainty_seconds": 0.009640625,
+              "group_seconds": 4.3917e-05,
+              "save_seconds": 0.052999875,
+              "total_seconds": 0.303902541
+            },
+            "process_peak_rss_bytes": 95682560,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          },
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.022206334,
+              "uncertainty_seconds": 0.009702042,
+              "group_seconds": 4.5042e-05,
+              "save_seconds": 0.052099,
+              "total_seconds": 0.302228417
+            },
+            "process_peak_rss_bytes": 95436800,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          },
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.022931875,
+              "uncertainty_seconds": 0.010051875,
+              "group_seconds": 5.825e-05,
+              "save_seconds": 0.050404209,
+              "total_seconds": 0.303692334
+            },
+            "process_peak_rss_bytes": 92028928,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1736704,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.02244225,
+          "uncertainty_seconds": 0.009702042,
+          "group_seconds": 4.5042e-05,
+          "save_seconds": 0.052099,
+          "total_seconds": 0.303692334
+        },
+        "median_peak_rss_bytes": 95436800
+      }
+    }
+  },
+  "after": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "repetitions": 3,
+    "threads": 1,
+    "scope": "Fixture creation excluded from time, included in process peak RSS. Post mode uses a fixed direct-fit endpoint; workflow mode includes First initialization. Output formatting follows RSS capture.",
+    "cases": {
+      "full-workflow": {
+        "runs": [
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.128449958,
+              "save_seconds": 0.014684375,
+              "total_seconds": 0.143172625
+            },
+            "process_peak_rss_bytes": 52674560,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          },
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.128406,
+              "save_seconds": 0.015449083,
+              "total_seconds": 0.143894583
+            },
+            "process_peak_rss_bytes": 51970048,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          },
+          {
+            "case": "full",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.128181917,
+              "save_seconds": 0.015172333,
+              "total_seconds": 0.143387333
+            },
+            "process_peak_rss_bytes": 53837824,
+            "objective": 2.6802367089410818e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000290659317353,
+                  0.10002343495364148,
+                  2.1995444904129684,
+                  0.07995380217742812,
+                  2.40038503188294,
+                  0.06002145927866831
+                ],
+                "b": [
+                  0.5000361020432524,
+                  0.5299510493150457,
+                  0.5600388023672304
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "a3acc9a57da7bdfb44f223527b46c1df22b9f4b1a898d7e38df6cabe53d24a74"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.128406,
+          "save_seconds": 0.015172333,
+          "total_seconds": 0.143387333
+        },
+        "median_peak_rss_bytes": 52674560,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "workflow_seconds": 1.0258623963853493,
+          "save_seconds": 0.8090616434703781,
+          "total_seconds": 0.9960805629994572
+        },
+        "peak_rss_ratio": 1.0040599625234228
+      },
+      "full-post": {
+        "runs": [
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008747791,
+              "uncertainty_seconds": 0.004230042,
+              "group_seconds": 4.3458e-05,
+              "save_seconds": 0.014582708,
+              "total_seconds": 0.100486792
+            },
+            "process_peak_rss_bytes": 51052544,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          },
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008590459,
+              "uncertainty_seconds": 0.004302958,
+              "group_seconds": 4.65e-05,
+              "save_seconds": 0.014868625,
+              "total_seconds": 0.102482042
+            },
+            "process_peak_rss_bytes": 51183616,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          },
+          {
+            "case": "full",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.008261792,
+              "uncertainty_seconds": 0.004311291,
+              "group_seconds": 6.6916e-05,
+              "save_seconds": 0.014177625,
+              "total_seconds": 0.099507834
+            },
+            "process_peak_rss_bytes": 50954240,
+            "objective": 2.6802367089410732e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.00029065931188,
+                  0.10002343495364238,
+                  2.199544490422539,
+                  0.07995380217748844,
+                  2.4003850318711173,
+                  0.06002145927883369
+                ],
+                "b": [
+                  0.5000361020428229,
+                  0.5299510493157211,
+                  0.5600388023662537
+                ]
+              }
+            ],
+            "database_bytes": 774144,
+            "target_diagnostics_sha256": "bffdc7e4f0baf3fcc4b76c2ff8045ee69229cdb5fa2b339f5b5231a7272a1598"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.008590459,
+          "uncertainty_seconds": 0.004302958,
+          "group_seconds": 4.65e-05,
+          "save_seconds": 0.014582708,
+          "total_seconds": 0.100486792
+        },
+        "median_peak_rss_bytes": 51052544,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "peeling_seconds": 1.0264618233958658,
+          "uncertainty_seconds": 1.0403355797999334,
+          "group_seconds": 1.1284216656959813,
+          "save_seconds": 0.7875148610426694,
+          "total_seconds": 0.979474227883762
+        },
+        "peak_rss_ratio": 0.9743589743589743
+      },
+      "halo-workflow": {
+        "runs": [
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.159168125,
+              "save_seconds": 0.011261916,
+              "total_seconds": 0.170466833
+            },
+            "process_peak_rss_bytes": 50544640,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          },
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.158880833,
+              "save_seconds": 0.011704834,
+              "total_seconds": 0.170621042
+            },
+            "process_peak_rss_bytes": 51134464,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          },
+          {
+            "case": "halo",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.1605635,
+              "save_seconds": 0.012519542,
+              "total_seconds": 0.173106334
+            },
+            "process_peak_rss_bytes": 51167232,
+            "objective": 1.1769111797062741e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003063541880572,
+                  0.10001607423873844,
+                  2.199401583921432,
+                  0.07995663813220111,
+                  2.4009176349979766,
+                  0.0600424987392232,
+                  2.5986044236561052,
+                  0.039963452250923216,
+                  2.8003424451561263,
+                  0.020060068359486913
+                ],
+                "b": [
+                  0.5000359017238841,
+                  0.5299406197626673,
+                  0.56007951580843,
+                  0.5898758634130069,
+                  0.6200755977867339
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a6d8d4184c4a59edec205e641aa13fe77d25e62e268eb498312816ee358c422f"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.159168125,
+          "save_seconds": 0.011704834,
+          "total_seconds": 0.170621042
+        },
+        "median_peak_rss_bytes": 51134464,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "workflow_seconds": 0.9845961132918323,
+          "save_seconds": 0.7002383416589393,
+          "total_seconds": 0.9563544296702358
+        },
+        "peak_rss_ratio": 0.9713663243075008
+      },
+      "halo-post": {
+        "runs": [
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.004834833,
+              "uncertainty_seconds": 0.0049275,
+              "group_seconds": 6.625e-06,
+              "save_seconds": 0.014569041,
+              "total_seconds": 0.113077458
+            },
+            "process_peak_rss_bytes": 51314688,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          },
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.004982834,
+              "uncertainty_seconds": 0.004743042,
+              "group_seconds": 5.416e-06,
+              "save_seconds": 0.013435958,
+              "total_seconds": 0.117256959
+            },
+            "process_peak_rss_bytes": 53641216,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          },
+          {
+            "case": "halo",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.005003416,
+              "uncertainty_seconds": 0.0047585,
+              "group_seconds": 9.375e-06,
+              "save_seconds": 0.011875792,
+              "total_seconds": 0.107517666
+            },
+            "process_peak_rss_bytes": 50036736,
+            "objective": 1.1769111797062659e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.000306354213462,
+                  0.10001607423868837,
+                  2.1994015837971173,
+                  0.07995663813214304,
+                  2.40091763534157,
+                  0.06004249873905685,
+                  2.598604422966379,
+                  0.03996345225218292,
+                  2.8003424459363746,
+                  0.020060068358199692
+                ],
+                "b": [
+                  0.5000359017241777,
+                  0.5299406197585845,
+                  0.5600795158205658,
+                  0.5898758633864208,
+                  0.6200755978277839
+                ]
+              }
+            ],
+            "database_bytes": 626688,
+            "target_diagnostics_sha256": "a7378e1a663ce3560c04a0331664e67090cf124f0cdaae83c8ac06397f858c00"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.004982834,
+          "uncertainty_seconds": 0.0047585,
+          "group_seconds": 6.625e-06,
+          "save_seconds": 0.013435958,
+          "total_seconds": 0.113077458
+        },
+        "median_peak_rss_bytes": 51314688,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "peeling_seconds": 0.5671521786118799,
+          "uncertainty_seconds": 1.042882787952134,
+          "group_seconds": 0.648937212263689,
+          "save_seconds": 0.8107483261820393,
+          "total_seconds": 0.9769726229580474
+        },
+        "peak_rss_ratio": 0.9726708074534162
+      },
+      "multi-workflow": {
+        "runs": [
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.322358584,
+              "save_seconds": 0.029475875,
+              "total_seconds": 0.351862084
+            },
+            "process_peak_rss_bytes": 93421568,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          },
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.324219333,
+              "save_seconds": 0.030124667,
+              "total_seconds": 0.354384417
+            },
+            "process_peak_rss_bytes": 91078656,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          },
+          {
+            "case": "multi",
+            "mode": "workflow",
+            "phases": {
+              "workflow_seconds": 0.322485,
+              "save_seconds": 0.065136333,
+              "total_seconds": 0.387676042
+            },
+            "process_peak_rss_bytes": 94830592,
+            "objective": 1.9196408557314314e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074562424,
+                  0.10001672779583058,
+                  2.199391237908329,
+                  0.07995658391491739,
+                  2.4004628874474063,
+                  0.06002898659800098
+                ],
+                "b": [
+                  0.5000398072340813,
+                  0.529940448777246,
+                  0.5600463073623583
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512605072,
+                  0.09997971056276035,
+                  2.2004732971666545,
+                  0.0800506465130749,
+                  2.3996992835389204,
+                  0.059964622050750954
+                ],
+                "b": [
+                  0.4999638990804863,
+                  0.5300504184167565,
+                  0.5599663867823439
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127741298,
+                  0.10000821539001872,
+                  2.2000257333870556,
+                  0.07998107680053496,
+                  2.399907628101798,
+                  0.060014583283421345
+                ],
+                "b": [
+                  0.5000046793722508,
+                  0.5299974321612251,
+                  0.5599950990483802
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "60b6156e257b76b93163da514013690e65559850ada606ea08595f2d8068fc8f"
+          }
+        ],
+        "median_phases": {
+          "workflow_seconds": 0.322485,
+          "save_seconds": 0.030124667,
+          "total_seconds": 0.354384417
+        },
+        "median_peak_rss_bytes": 93421568,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "workflow_seconds": 0.9871457210656022,
+          "save_seconds": 0.586239840424238,
+          "total_seconds": 0.9391454354769573
+        },
+        "peak_rss_ratio": 0.9973762462830156
+      },
+      "multi-post": {
+        "runs": [
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.014785666,
+              "uncertainty_seconds": 0.010066792,
+              "group_seconds": 4.4167e-05,
+              "save_seconds": 0.030833708,
+              "total_seconds": 0.279900125
+            },
+            "process_peak_rss_bytes": 91209728,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          },
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.014742125,
+              "uncertainty_seconds": 0.010252583,
+              "group_seconds": 5.1e-05,
+              "save_seconds": 0.03096325,
+              "total_seconds": 0.278542333
+            },
+            "process_peak_rss_bytes": 93110272,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          },
+          {
+            "case": "multi",
+            "mode": "post",
+            "phases": {
+              "peeling_seconds": 0.014207375,
+              "uncertainty_seconds": 0.009850166,
+              "group_seconds": 6.7125e-05,
+              "save_seconds": 0.029498417,
+              "total_seconds": 0.274783459
+            },
+            "process_peak_rss_bytes": 89849856,
+            "objective": 1.9196408557314234e-08,
+            "endpoints": [
+              {
+                "id": "1",
+                "convergence": 0,
+                "ac": [
+                  2.0003600074536987,
+                  0.10001672779583382,
+                  2.1993912379112754,
+                  0.07995658391490541,
+                  2.400462887441493,
+                  0.060028986598206185
+                ],
+                "b": [
+                  0.5000398072338527,
+                  0.5299404487774028,
+                  0.5600463073618741
+                ]
+              },
+              {
+                "id": "4",
+                "convergence": 0,
+                "ac": [
+                  1.9996981512107443,
+                  0.0999797105631007,
+                  2.2004732972131316,
+                  0.08005064651301036,
+                  2.3996992834552757,
+                  0.05996462205351983
+                ],
+                "b": [
+                  0.4999638990758135,
+                  0.5300504184191291,
+                  0.5599663867756677
+                ]
+              },
+              {
+                "id": "7",
+                "convergence": 0,
+                "ac": [
+                  2.000012127761193,
+                  0.10000821538969101,
+                  2.2000257333732227,
+                  0.07998107680048488,
+                  2.3999076281130884,
+                  0.060014583283248275
+                ],
+                "b": [
+                  0.5000046793741963,
+                  0.5299974321604767,
+                  0.5599950990490664
+                ]
+              }
+            ],
+            "database_bytes": 1507328,
+            "target_diagnostics_sha256": "ef99bafd0605570598d96cf814faadb70ee4cbf043a0a735e619a371b37c1dfc"
+          }
+        ],
+        "median_phases": {
+          "peeling_seconds": 0.014742125,
+          "uncertainty_seconds": 0.010066792,
+          "group_seconds": 5.1e-05,
+          "save_seconds": 0.030833708,
+          "total_seconds": 0.278542333
+        },
+        "median_peak_rss_bytes": 91209728,
+        "target_diagnostics_exact_equal": true,
+        "phase_ratios": {
+          "peeling_seconds": 0.6568915772705499,
+          "uncertainty_seconds": 1.0375951784170796,
+          "group_seconds": 1.132276541894232,
+          "save_seconds": 0.5918291713852474,
+          "total_seconds": 0.9171859208010169
+        },
+        "peak_rss_ratio": 0.9557081545064378
+      }
+    }
+  }
+}

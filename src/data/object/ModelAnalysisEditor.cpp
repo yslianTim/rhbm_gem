@@ -203,6 +203,13 @@ void ModelAnalysisEditor::ApplyAtomGroupParameterSummary(GroupKey key, GroupPara
     groups.SetParameterSummary(key, std::move(value));
 }
 
+void ModelAnalysisEditor::UpdateJointMetadata(JointAnalysisMetadata metadata)
+{
+    auto & result = ModelAnalysisData::Of(m_model_object).joint_result;
+    if (!result) throw std::runtime_error("Joint diagnostic snapshot unavailable.");
+    result->metadata = std::move(metadata);
+}
+
 void ModelAnalysisEditor::ClearJointResult()
 {
     ModelAnalysisData::Of(m_model_object).joint_result.reset();

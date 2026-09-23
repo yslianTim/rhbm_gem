@@ -171,14 +171,13 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
     if (joint)
     {
-        auto fit=*model_object->GetAnalysisView().GetJointResult();
+        const auto & fit=*model_object->GetAnalysisView().GetJointResult();
         metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
         metadata.grid_size=map_object->GetGridSize(); metadata.grid_spacing=map_object->GetGridSpacing();
         metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
         metadata.map_normalization=normalization;
         metadata.software=fit.metadata.software;
-        fit.metadata=std::move(metadata);
-        model_object->EditAnalysis().SetJointResult(fit);
+        model_object->EditAnalysis().UpdateJointMetadata(std::move(metadata));
 
     }
 

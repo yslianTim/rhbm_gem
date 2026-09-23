@@ -1273,12 +1273,8 @@ void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & r
         throw std::invalid_argument("Joint result atom identities do not match the saved model.");
 }
 
-void SaveJointResult(SQLiteWrapper & database, const ModelObject & model, const std::string & key_tag)
+void SaveJointResult(SQLiteWrapper & database, const std::string & json, const std::string & key_tag)
 {
-    const auto & result=ModelAnalysisData::Of(model).joint_result;
-    if (!result) return;
-    ValidateJointAtoms(model,*result);
-    const auto json=joint_result_io::Encode(*result);
     SQLiteStatementBatch batch{database,"INSERT INTO model_joint_result (key_tag,result_json) VALUES (?,?);"};
     batch.Execute([&](SQLiteWrapper & statement)
     {
@@ -1365,11 +1361,12 @@ void Save(
     const std::string & key_tag)
 {
     std::unique_ptr<ModelObject> snapshot_model;
+    std::optional<std::string> joint_json;
     const auto & joint=ModelAnalysisData::Of(input_model).joint_result;
     if(joint)
     {
         ValidateJointAtoms(input_model,*joint);
-        (void)joint_result_io::Encode(*joint);
+        joint_json = joint_result_io::Encode(*joint);
         bool has_neutral=false;
         for(const auto & id:joint->atom_ids) {const auto * e=ModelAnalysisData::Of(input_model).FindAtomLocalEntry(*input_model.FindAtomPtr(std::stoi(id))); if(e && e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) has_neutral=true;}
         if(!has_neutral) {snapshot_model=std::make_unique<ModelObject>(input_model); stage_result_io::MapSnapshot(*snapshot_model);}
@@ -1382,7 +1379,7 @@ void Save(
 
     SaveStructure(database, model_obj, key_tag);
     SaveAnalysis(database, model_obj, key_tag);
-    SaveJointResult(database, model_obj, key_tag);
+    if (joint_json) SaveJointResult(database, *joint_json, key_tag);
     const auto neutral = stage_result_io::Encode(model_obj);
     SQLiteStatementBatch batch{database, "INSERT INTO model_stage_result (key_tag,result_json) VALUES (?,?);"};
     batch.Execute([&](SQLiteWrapper & statement) { statement.Bind<std::string>(1,key_tag); statement.Bind<std::string>(2,neutral); });

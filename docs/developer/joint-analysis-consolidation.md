@@ -54,3 +54,48 @@ Python enabled). Added tests verify getter coherence after replacement, durable
 diagnostics after transient clearing, rejection of independent Joint peeling
 writes, copy consistency, and detached group projections. Existing persistence,
 two-stage and frozen Joint regressions passed without tolerance changes.
+
+## S3 — bounded postprocessing and serialization
+
+Metadata updates modify only the diagnostic metadata. The workflow releases the
+solver result before postprocessing and moves its captured snapshot into analysis
+after the last uncertainty read. Saving encodes the joint document once.
+
+Postprocessing defaults to recorded targets; an explicit output index span can
+request other contributors, and inputs without selection metadata retain all-atom
+behavior. Predictions and full-component covariance factorization retain every
+contributor. Only target own-contribution maps and requested marginal covariance
+blocks are materialized. Uncertainty reuses the immutable problem partition and
+indexes support memberships by tile in the original atom/support order.
+
+The opt-in `joint_postprocessing_benchmark` target and
+`tests/integration/joint_postprocessing_benchmark.py` measure three independent
+serial processes per full/halo/multi-component case, separately for complete
+workflow+save and fixed-endpoint postprocessing+save. Synthetic maps use 0.16 A
+spacing so component Jacobians span multiple 8192-row tiles. Process peak RSS
+includes fixture construction; phase times exclude it. These bounded fixtures do
+not establish a maximum supported problem size or general speedup guarantee.
+
+Measured medians (seconds, MiB; baseline S2 versus S3 on the same host):
+
+| Case | Total before / after | Peak RSS before / after |
+| --- | --- | --- |
+| full-workflow | 0.1440 / 0.1434 | 50.03 / 50.23 |
+| full-post | 0.1026 / 0.1005 | 49.97 / 48.69 |
+| halo-workflow | 0.1784 / 0.1706 | 50.20 / 48.77 |
+| halo-post | 0.1157 / 0.1131 | 50.31 / 48.94 |
+| multi-workflow | 0.3773 / 0.3544 | 89.33 / 89.09 |
+| multi-post | 0.3037 / 0.2785 | 91.02 / 86.98 |
+
+All 18 paired runs retained exactly equal endpoint A/C/B, objective, runtime
+convergence and target peeling/covariance values. Raw runs, phase times and
+diagnostic hashes are recorded in [the measurement report](joint-analysis-consolidation-benchmark.json).
+Saving and halo peeling improved on these fixtures; uncertainty phase time was
+slightly higher despite removal of repeated scans. Full-selection peak RSS was
+essentially unchanged. No broader performance claim is inferred.
+
+S3 validation: `tests_all` built; all 25 default CTests passed. Target-only and
+explicit all-contributor postprocessing agree exactly on targets. Dense covariance
+reference, coverage/negative contribution tests and frozen Joint regression pass.
+CLI/persistence tests now explicitly require absent halo diagnostics. Numerical
+tolerances are unchanged; `git diff --check` passed.

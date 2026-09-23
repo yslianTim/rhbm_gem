@@ -319,8 +319,10 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
         EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
-        ASSERT_TRUE(view.GetPostFitPeeling());
-        EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
+        const bool target = view.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role == rhbm_gem::FittingRole::Target;
+        EXPECT_EQ(view.GetPostFitPeeling().has_value(), target);
+        EXPECT_EQ(view.GetGroupEvidence().has_value(), target);
+        if (target) EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
     const auto direct = core::FitJointComponents(problem, result.initialization.b);
@@ -508,6 +510,8 @@ TEST(JointComponentPartialSelectionTest, FullComponentUncertaintyMatchesDenseRef
         "residual-variance-unavailable");
     auto deficient = input; deficient.support[1] = deficient.support[0];
     auto deficient_snapshot = snapshot;
+    deficient_snapshot.components[0].rows.clear();
+    for (const auto & support : deficient.support[0]) deficient_snapshot.components[0].rows.push_back(support.row);
     deficient_snapshot.components[0].state->b[1] = deficient_snapshot.components[0].state->b[0];
     EXPECT_EQ(core::detail::ComputeJointUncertainty(core::JointProblem(deficient), deficient_snapshot).at(1).reason,
         "rank-deficient-jacobian");
@@ -642,4 +646,37 @@ TEST(JointComponentPartialSelectionTest, SummaryReportsMixedSourcesWithoutSnapsh
     editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(2), local);
     EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
     EXPECT_NE(core::BuildSecondStageSpotSummary(*f.model).find("Estimator: mixed"), std::string::npos);
+}
+
+TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullContributorCoupling)
+{
+    auto f = joint_partial_test::Make("partial");
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    const auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "output-scope");
+    for (const auto & atom : f.model->GetAtomList())
+        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
+            core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
+    const std::vector<std::size_t> all{0, 1};
+    const auto target = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
+    const auto complete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem, all);
+    ASSERT_EQ(target.size(), 1); ASSERT_EQ(complete.size(), 2);
+    EXPECT_EQ(target.at(1).neighbor_count, complete.at(1).neighbor_count);
+    for (std::size_t i=0; i<target.at(1).samples.size(); ++i)
+    {
+        EXPECT_EQ(target.at(1).samples[i].response, complete.at(1).samples[i].response);
+        EXPECT_EQ(target.at(1).samples[i].reason, complete.at(1).samples[i].reason);
+    }
+    const auto target_u = core::detail::ComputeJointUncertainty(problem, snapshot);
+    const auto complete_u = core::detail::ComputeJointUncertainty(problem, snapshot, all);
+    ASSERT_EQ(target_u.size(), 1); ASSERT_EQ(complete_u.size(), 2);
+    EXPECT_EQ(target_u.at(1).status, complete_u.at(1).status);
+    EXPECT_EQ(target_u.at(1).covariance.has_value(), complete_u.at(1).covariance.has_value());
+    if(target_u.at(1).covariance) EXPECT_EQ(*target_u.at(1).covariance, *complete_u.at(1).covariance);
+    f.model->EditAnalysis().SetJointResult(snapshot);
+    auto metadata = snapshot.metadata; metadata.model_path = "metadata-only";
+    f.model->EditAnalysis().UpdateJointMetadata(metadata);
+    EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->objective, snapshot.objective);
+    EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->metadata.model_path, "metadata-only");
+    EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).HasFinalModel(rhbm_gem::FittingStage::Second));
 }

@@ -52,7 +52,12 @@ def main() -> int:
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
             assert len(stages["atoms"]) == 2
             assert all(atom["second"]["source"]["method"] == 3 for atom in stages["atoms"])
-            assert all(atom["peeling"]["mode"] == "grid-consistent" for atom in stages["atoms"])
+            for atom in stages["atoms"]:
+                if atom["second"]["source"]["role"] == 1:  # target
+                    assert atom["peeling"]["mode"] == "grid-consistent"
+                else:
+                    assert atom["peeling"] is None
+                    assert atom["evidence"] is None
             assert connection.execute("SELECT COUNT(*) FROM model_atom_local_potential WHERE key_tag='example' AND amplitude_estimate_mdpde_2nd IS NOT NULL").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 3

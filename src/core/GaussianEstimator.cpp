@@ -550,18 +550,19 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     const auto initialization = detail::RunContributorFirstStage(map, model, workset, options);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
-    auto fit = FitJointComponents(problem, initialization.b);
-    fit.costs.construction_seconds = construction_seconds;
-    fit.costs.initialization_seconds = initialization_seconds;
-    fit.initialization.atoms = initialization.atoms;
-    fit.initialization.data_scope = initialization.data_scope;
-    const auto snapshot = CaptureJointAnalysisResult(fit);
+    auto snapshot = [&] {
+        auto fit = FitJointComponents(problem, initialization.b);
+        fit.costs.construction_seconds = construction_seconds;
+        fit.costs.initialization_seconds = initialization_seconds;
+        fit.initialization.atoms = initialization.atoms;
+        fit.initialization.data_scope = initialization.data_scope;
+        return CaptureJointAnalysisResult(fit);
+    }();
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
-    model.EditAnalysis().SetJointResult(snapshot);
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem))
+    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
-    for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot))
+    for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
     {
         auto & atom = *model.FindAtomPtr(id);
         auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
@@ -569,6 +570,7 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
         model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, stage);
         model.EditAnalysis().SetAtomGroupEvidence(atom, detail::BuildJointParameterEvidence(stage));
     }
+    model.EditAnalysis().SetJointResult(std::move(snapshot));
     RunGroupPotentialFitting(model, options);
 }
 
