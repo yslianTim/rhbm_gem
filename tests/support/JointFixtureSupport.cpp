@@ -3,6 +3,7 @@
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 #include <fstream>
 #include <sstream>
 namespace second_stage_test::matched::joint_abc {
@@ -33,10 +34,15 @@ j::object BackendParity(const Domain & domain,const Vector & y,const j::value & 
     if(state.is_null()) return {{"status","unavailable"},{"reason","missing-trusted-state"}};
     const auto e=runtime::EvaluateState(domain,y,Parse(state.at("eta")),Parse(state.at("beta")),context);
     const auto dense=DenseDifferentiate(e,context.scale,&context);
+    const auto cancellations=runtime::SparseWorkForTesting().cancellation_reductions;
     const auto prepared=runtime::PrepareDerivative(e,context.scale,&context);
     const auto reduced=runtime::ReduceDerivative(prepared,e.residual);
     if(dense.valid!=reduced.valid) return {{"status","failed"},{"reason","derivative-validity"}};
     if(!dense.valid) return {{"status","limited"},{"reason",dense.reason}};
+    runtime::Matrix raw=runtime::Matrix::Zero(e.x.rows(),e.eta.size());
+    for(Eigen::Index k=0;k<e.beta.size();++k) for(runtime::Sparse::InnerIterator v(e.derivative,k);v;++v)
+        raw(v.row(),k/2)+=v.value()*e.beta(k);
+    const double raw_error=(raw-runtime::Matrix(prepared.raw)).norm();
     double projected_error{},jacobian_error{};
     runtime::Matrix projected,jacobian;
     for(Eigen::Index first=0;first<domain.rows;first+=runtime::derivative_tile_rows)
@@ -49,7 +55,7 @@ j::object BackendParity(const Domain & domain,const Vector & y,const j::value & 
     projected_error=std::sqrt(projected_error)/std::max(1e-12,dense.projected.norm());
     jacobian_error=std::sqrt(jacobian_error)/std::max(1e-12,dense.jacobian.norm());
     bool passed=projected_error<=1e-8 && jacobian_error<=1e-8;
-    double spectrum_error{}; bool ranks=true;
+    double spectrum_error{}; bool ranks=true; j::object families;
     for(int family=0;family<3;++family)
     {
         const auto a=runtime::ComputeSpectrum(family==2 ? dense.jacobian : dense.projected,context.rank,e.eta.size(),family==1);
@@ -60,6 +66,9 @@ j::object BackendParity(const Domain & domain,const Vector & y,const j::value & 
         const double error=(a.singular_values-b.singular_values).lpNorm<Eigen::Infinity>();
         spectrum_error=std::max(spectrum_error,a.singular_values(0)>0 ? error/a.singular_values(0) : error);
         ranks &= a.rank==b.rank && a.available==b.available;
+        families[family==0 ? "projected" : family==1 ? "normalized_projected" : "profile_jacobian"]=j::object{
+            {"normalized_difference",a.singular_values(0)>0 ? error/a.singular_values(0) : error},
+            {"reference_rank",a.rank},{"actual_rank",b.rank}};
     }
     passed &= ranks && spectrum_error<=1e-10;
     const auto correction=DenseLocalCorrection(e,dense,context);
@@ -78,6 +87,8 @@ j::object BackendParity(const Domain & domain,const Vector & y,const j::value & 
     const bool gradient_passed=((gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
     passed &= gradient_passed;
     return {{"status",passed ? (correction_available ? "passed" : "limited") : "failed"},
+        {"active_face",j::value_from(e.certificate.active_atoms)},{"raw_assembly_difference",raw_error},{"spectrum_families",families},{"projected_column_norms",j::value_from(std::vector<double>(reduced.projected_norms.data(),reduced.projected_norms.data()+reduced.projected_norms.size()))},
+        {"cancellation_fallback",runtime::SparseWorkForTesting().cancellation_reductions>cancellations},
         {"projected_relative_difference",projected_error},{"jacobian_relative_difference",jacobian_error},
         {"normalized_spectrum_difference",spectrum_error},{"ranks_agree",ranks},{"gradient_passed",gradient_passed},
         {"local_correction_available",correction_available},{"local_correction_scaled_difference",correction_available ? j::value(correction_error) : j::value(nullptr)}};

@@ -206,10 +206,10 @@ Invalid input/problem construction and persistence errors fail the command.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
 `joint_atoms_<sanitized-key>.csv`, plus `joint_atoms_<sanitized-key>.contributions.csv`.
-JSON schema 4 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
+JSON schema 5 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
 row mappings/mask, initial values, actual states, objectives, cost counters,
 checks, ranks and captured convergence. CSV has one row per fitted contributor (including unavailable targets):
-`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID`.
+`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability`.
 A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
 Available but unconverged states are retained. Missing estimates have empty CSV
 fields and null JSON states. Initialization diagnostics with nonfinite numbers
@@ -254,10 +254,11 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 and 4 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3, 4 and 5 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 4; v3 preserves its full-ABC semantics and saved
-evidence. SQLite v19 additionally stores neutral
+New Joint result JSON uses schema 5; v3/v4 preserve their saved semantics and
+evidence without adding target certification. See the [target contract](../joint-target-estimability.md)
+for target convergence, halo representative availability and covariance. SQLite v19 additionally stores neutral
 stages, uncertainty, posterior evidence and sample geometry in `model_stage_result`.
 Legacy sample BLOBs have unavailable geometry; old Joint snapshots do not gain
 recomputed uncertainty, peeling or posterior.

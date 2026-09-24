@@ -628,13 +628,13 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     }
     rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
     std::ifstream csv(dir.path()/"out.csv"); std::string line;
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,FullABC,\"\""));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,FullABC,\"\""));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,FullABC,\"\",not-run,not-run"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,FullABC,\"\",not-run,not-run"));
     auto raw=saved; raw.selection_domain.reset();
     rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv");
     std::ifstream raw_csv(dir.path()/"raw.csv"); std::getline(raw_csv,line); std::getline(raw_csv,line);
-    EXPECT_TRUE(line.ends_with(",not-recorded,FullABC,\"\""));
+    EXPECT_TRUE(line.ends_with(",not-recorded,FullABC,\"\",not-run,not-run"));
 }
 
 #include "support/JointPartialSelection.hpp"

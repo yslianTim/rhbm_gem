@@ -4,6 +4,7 @@
 #include "joint_component/Numerics.hpp"
 #include "joint_component/TiledQR.hpp"
 #include "joint_component/CompactSvd.hpp"
+#include "joint_component/TargetEvidence.hpp"
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <Eigen/SVD>
 #include <cmath>
@@ -11,10 +12,53 @@
 
 namespace rhbm_gem::core::detail {
 namespace {
+StageUncertainty TargetUncertainty(const JointProblemInput & input,const JointAnalysisComponent & component,
+    const joint_component::ComponentView & view,const std::vector<bool> & requested,
+    std::map<std::size_t,Eigen::Matrix3d> & blocks,std::size_t original_rows,double observation_scale)
+{
+    StageUncertainty out; out.method="iid-ls-target-quotient"; out.status=EvidenceStatus::Unavailable;
+    if(!component.state) {out.reason="missing-component-state"; return out;}
+    const auto & state=*component.state;
+    for(std::size_t a=0;a<state.b.size();++a) if(state.ac.at(2*a)==0)
+    {out.reason="active-amplitude-boundary"; return out;}
+    if(component.target_runtime_convergence!=JointCheckStatus::Passed)
+    {out.reason="targets-not-converged"; return out;}
+    joint_component::Vector y(component.rows.size());
+    std::vector<std::vector<joint_component::Support>> support(component.atoms.size());
+    for(std::size_t r=0;r<component.rows.size();++r) y(static_cast<Eigen::Index>(r))=input.observations.at(component.rows[r]);
+    for(std::size_t a=0;a<component.atoms.size();++a) for(const auto & point:input.support.at(component.atoms[a]))
+    {
+        const auto row=view.LocalRow(static_cast<Eigen::Index>(point.row));
+        if(row>=0) support[a].push_back({row,point.squared_distance});
+    }
+    const joint_component::Domain domain(y.size(),std::move(support));
+    auto context=joint_component::CreateContext(y,static_cast<Eigen::Index>(component.atoms.size())); context.rank.rows=static_cast<Eigen::Index>(original_rows);
+    context.scale=observation_scale;
+    const auto geometry=joint_component::BuildTargetGeometry(domain,y,state,context);
+    if(!geometry.valid || geometry.threshold_sensitive) {out.reason=geometry.reason; return out;}
+    const auto & svd=geometry.svd; out.rank=static_cast<std::size_t>(svd.rank); out.rank_threshold=svd.threshold;
+    if(component.rows.size()<=out.rank) {out.reason="insufficient-residual-degrees-of-freedom"; return out;}
+    out.degrees_of_freedom=component.rows.size()-out.rank;
+    const double variance=geometry.endpoint.residual.squaredNorm()/static_cast<double>(out.degrees_of_freedom);
+    if(std::isfinite(variance)) out.residual_variance=variance;
+    if(!(variance>0) || !std::isfinite(variance)) {out.reason="residual-variance-unavailable"; return out;}
+    for(std::size_t a=0;a<component.atoms.size();++a) if(requested[component.atoms[a]])
+    {
+        const auto col=3*static_cast<Eigen::Index>(a);
+        if(svd.right_vectors.block(col,svd.rank,3,svd.right_vectors.cols()-svd.rank).norm()>1e-10) continue;
+        const Eigen::MatrixXd factor=geometry.scales.segment<3>(col).cwiseInverse().asDiagonal()*
+            svd.right_vectors.block(col,0,3,svd.rank)*svd.singular_values.head(svd.rank).cwiseInverse().asDiagonal();
+        const Eigen::Matrix3d covariance=variance*factor*factor.transpose();
+        if(!covariance.allFinite()) {blocks.clear(); out.reason="nonfinite-covariance"; return out;}
+        blocks.emplace(a,covariance);
+    }
+    out.status=EvidenceStatus::Available; return out;
+}
 StageUncertainty ComponentUncertainty(const JointProblemInput & input,
     const JointAnalysisComponent & component, const joint_component::ComponentView & view,
-    const std::vector<bool> & requested, std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows)
+    const std::vector<bool> & requested, std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows,double observation_scale)
 {
+    if(component.target_evidence) return TargetUncertainty(input,component,view,requested,blocks,original_rows,observation_scale);
     StageUncertainty out;
     out.method = "iid-ls-linearized";
     out.status = EvidenceStatus::Unavailable;
@@ -130,12 +174,17 @@ std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & pro
             {StageUncertainty missing; missing.status=EvidenceStatus::Unavailable; missing.reason="observable-contribution-only"; output.emplace(std::stoi(result.atom_ids.at(atom)),missing);}
         }
         if(profiled.atoms.empty()) continue;
-        const auto status = ComponentUncertainty(problem.Input(), profiled, view, requested, blocks,component.rows.size());
+        const auto status = ComponentUncertainty(problem.Input(), profiled, view, requested, blocks,component.rows.size(),result.observation_scale);
         for (std::size_t a = 0; a < profiled.atoms.size(); ++a)
         {
             if (!requested[profiled.atoms[a]]) continue;
             auto uncertainty = status;
-            if (status.status == EvidenceStatus::Available) uncertainty.covariance = blocks.at(a);
+            if (status.status == EvidenceStatus::Available)
+            {
+                const auto found=blocks.find(a);
+                if(found!=blocks.end()) uncertainty.covariance=found->second;
+                else {uncertainty.status=EvidenceStatus::Unavailable; uncertainty.reason="nonunique-parameter-directions";}
+            }
             output.emplace(std::stoi(result.atom_ids.at(profiled.atoms[a])), std::move(uncertainty));
         }
     }

@@ -32,11 +32,20 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
     std::vector<double> prediction(input.row_ids.size());
     std::vector<std::size_t> missing(input.row_ids.size());
     std::vector<std::unordered_map<std::size_t, double>> own(input.atom_ids.size());
+    // Internal representatives reconstruct the observation prediction even when
+    // a nonunique halo has no public atom-wise point estimate.
+    std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
+    if(result) for(const auto & c:result->components) if(c.state)
+    {
+        const auto & full=c.layout ? c.layout->full_atoms : c.atoms;
+        for(std::size_t k=0;k<full.size();++k)
+            represented[full[k]]=GaussianModel3D{c.state->ac[2*k],c.state->b[k],c.state->ac[2*k+1]};
+    }
     std::vector<bool> has_point;
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
     {
         const auto view = AtomLocalPotentialView::For(*model.FindAtomPtr(std::stoi(input.atom_ids[atom])));
-        const auto & point = result ? estimates.at(std::stoi(input.atom_ids[atom])).point : view.GetStageEstimate(FittingStage::Second).point;
+        const auto & point = result ? represented[atom] : view.GetStageEstimate(FittingStage::Second).point;
         has_point.push_back(point.has_value());
         for (const auto & support : input.support[atom])
         {
@@ -73,6 +82,8 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
             PeelingSampleEstimate sample;
             if(result && result->layout && !std::binary_search(result->layout->full_atoms.begin(),result->layout->full_atoms.end(),atom))
             {sample.reason="observable-contribution-only"; output.samples.push_back(sample); continue;}
+            if(result && !estimates.at(id).point)
+            {sample.reason=estimates.at(id).reason; output.samples.push_back(sample); continue;}
             if (!view.HasSampleGeometry()) { sample.reason = "sample-geometry-unavailable"; output.samples.push_back(sample); continue; }
             const auto stencil = MakeTricubicStencil(geometry, raw.point.position);
             for (const auto & [grid, weight] : TricubicWeights(stencil))

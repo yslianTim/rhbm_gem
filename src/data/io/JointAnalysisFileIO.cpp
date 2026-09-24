@@ -44,7 +44,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             if(amplitude) contribution_file << *amplitude;
             contribution_file << ',' << amplitude.has_value() << '\n';
         }
-        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID\n"
+        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
         for(const auto & component:result.components)
@@ -56,20 +56,27 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             const bool full=group_ids[atom].empty();
             if(component && component->layout && full)
                 index=static_cast<std::size_t>(std::find(component->layout->full_atoms.begin(),component->layout->full_atoms.end(),atom)-component->layout->full_atoms.begin());
+            const bool target=result.selection_domain && std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom);
+            JointCheckStatus identified=JointCheckStatus::NotRun;
+            if(component && component->target_evidence)
+                for(const auto & a:component->target_evidence->atoms) if(a.atom==atom) identified=a.status;
+            const bool export_point=full && (target || !component || !component->target_evidence || identified==JointCheckStatus::Passed);
             csv_file << CsvText(result.atom_ids[atom]) << ',' << CsvText(component ? component->id : "") << ',';
-            if(component && component->state && full)
+            if(component && component->state && export_point)
             {
                 const auto & state=*component->state;
                 csv_file << state.ac[2*index] << ',' << state.b[index] << ',' << state.ac[2*index+1];
             }
             else csv_file << ",,";
-            csv_file << ',' << (component && component->state.has_value() && full) << ',' << (component && component->search_completed)
+            csv_file << ',' << (component && component->state.has_value() && export_point) << ',' << (component && component->search_completed)
                 << ',' << CsvText(component ? component->stop_reason : result.initialization.reason)
                 << ',' << joint_result_io::StatusText(component && full ? component->runtime_convergence : JointCheckStatus::Unavailable)
                 << ',' << joint_result_io::StatusText(component ? component->regular_certificate : result.regular_certificate)
                 << ',' << (!result.selection_domain ? "not-recorded" :
                     std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom) ? "target" : "halo") << ',' << (full ? "FullABC" : "ObservableContributionOnly")
-                << ',' << CsvText(group_ids[atom]) << '\n';
+                << ',' << CsvText(group_ids[atom]) << ','
+                << joint_result_io::StatusText(component ? component->target_runtime_convergence : JointCheckStatus::NotRun) << ','
+                << joint_result_io::StatusText(identified) << '\n';
         }
         json_file.close(); csv_file.close(); contribution_file.close();
     }

@@ -26,6 +26,7 @@ struct JointAnalysisMetadata
 struct JointAnalysisComponent : JointComponentData
 {
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
+    JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
 // A saved outcome, not an audit/restart bundle. Convergence values are captured
 // from the runtime result once and are never inferred by storage or readers.
@@ -48,5 +49,7 @@ struct JointAnalysisResult
     double observation_scale{1};
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
+    std::optional<JointTargetEvidence> target_evidence;
+    JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
 }

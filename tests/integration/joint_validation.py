@@ -222,7 +222,7 @@ def resource_run(args, case, model, map_path, repetition, deadline):
         result['export']=export;result['status']=export['status']
         if export['status']=='completed':
             outcome=read(root/'joint_result_validation.json')
-            assert outcome['schema_version'] in (3,4) and outcome['metadata']['map_normalization']['divisor']==1
+            assert outcome['schema_version'] in (3,4,5) and outcome['metadata']['map_normalization']['divisor']==1
             csv=(root/'joint_atoms_validation.csv').read_text().splitlines()
             assert len(csv)==len(outcome['atom_ids'])+1
             result.update(runtime_convergence=outcome['runtime_convergence'], state_available=outcome['assembled_state'] is not None,

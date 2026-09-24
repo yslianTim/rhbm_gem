@@ -54,7 +54,7 @@ int main()
     rhbm_gem::WriteJointAnalysisResult(saved,"consumer-joint.json","consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)),{});
-    if(payload.find("\"schema_version\":4")==std::string::npos ||
+    if(payload.find("\"schema_version\":5")==std::string::npos ||
         payload.find("joint-kernel-map-units-v1")==std::string::npos ||
         payload.find("fixed-selected-voxel-closure-v1")==std::string::npos) return 7;
     rhbm_gem::ModelObject saved_model;
@@ -74,6 +74,8 @@ int main()
         rhbm_gem::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetStageEstimate(rhbm_gem::FittingStage::Second).point.has_value()) return 8;
     const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
     if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
+    if(unobserved.TargetRuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
+        unobserved.components[0].TargetRuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable) return 9;
     if(joint.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
         unobserved.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
         unobserved.components[0].RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable) return 4;

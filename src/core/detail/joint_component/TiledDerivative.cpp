@@ -36,6 +36,35 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
         t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
     }
     out.free_design.setFromTriplets(entries.begin(),entries.end()); out.raw.setFromTriplets(raw.begin(),raw.end());
+    const auto cancelled=[&]() {
+        constexpr double relative_roundoff=64*std::numeric_limits<double>::epsilon()/1e-10;
+        for(Eigen::Index k=0;k<m;++k)
+        {
+            const Vector column=Vector(out.raw.col(k));
+            if(column.norm()>0 && (column-out.free_design*out.coefficients.col(k)).norm()<=relative_roundoff*column.norm()) return true;
+        }
+        return false;
+    };
+    const auto reference_raw=[&]() {
+        ++SparseWorkForTesting().cancellation_reductions;
+        out.reference_order=true;
+        // Match the independent reference's multiply-add accumulation before
+        // normalization amplifies a nearly cancelled projected column.
+        raw.clear();
+        for(Eigen::Index a=0;a<m;++a)
+        {
+            Sparse::InnerIterator ga(e.derivative,2*a),ch(e.derivative,2*a+1);
+            while(ga || ch)
+            {
+                const auto row=!ch || (ga && ga.row()<ch.row()) ? ga.row() : ch.row();
+                double value=0;
+                if(ga && ga.row()==row) {value=std::fma(ga.value(),e.beta(2*a),value); ++ga;}
+                if(ch && ch.row()==row) {value=std::fma(ch.value(),e.beta(2*a+1),value); ++ch;}
+                raw.emplace_back(row,a,value);
+            }
+        }
+        out.raw.setFromTriplets(raw.begin(),raw.end());
+    };
     if(SparseBackendEnabled())
     {
         LinearWorkspace workspace;
@@ -60,48 +89,55 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
         out.valid=out.coefficients.allFinite() && out.correction.allFinite();
         if(!out.valid) {out.reason="nonfinite-derivative"; return out;}
         // Near-complete cancellation amplifies QR ordering roundoff in the
-        // normalized width spectrum. Retain the existing tiled arithmetic in
+        // normalized width spectrum. Use reference-compatible tiled arithmetic in
         // that regime; this changes computation, never acceptance thresholds.
-        bool cancellation=false;
-        constexpr double relative_roundoff=64*std::numeric_limits<double>::epsilon()/1e-10;
-        for(Eigen::Index k=0;k<m;++k)
-        {
-            const Vector raw_column=Vector(out.raw.col(k));
-            const double norm=raw_column.norm();
-            if(norm>0 && (raw_column-out.free_design*out.coefficients.col(k)).norm()<=relative_roundoff*norm)
-            {cancellation=true; break;}
-        }
-        if(!cancellation) {out.reason="full-profile-derivative"; return out;}
-        ++SparseWorkForTesting().cancellation_reductions;
+        if(!cancelled()) {out.reason="full-profile-derivative"; return out;}
+        reference_raw();
         out.valid=false;
     }
     std::optional<WorkTimer> cancellation_timer;
     if(SparseBackendEnabled()) cancellation_timer.emplace(work.cancellation_seconds);
-    TiledQR qr(p,m);
-    {
-        ++work.derivative_compacts; WorkTimer compact_timer(work.derivative_compact_seconds);
-        for(Eigen::Index first=0;first<n;first+=tile)
+    const auto tiled_solve=[&]() {
+        TiledQR qr(p,m);
         {
-            const auto count=std::min(tile,n-first);
+            ++work.derivative_compacts; WorkTimer compact_timer(work.derivative_compact_seconds);
+            for(Eigen::Index first=0;first<n;first+=tile)
+            {
+                const auto count=std::min(tile,n-first);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            auto & tiles=DerivativeWorkForTesting();
-            tiles.maximum_generated_rows=std::max(tiles.maximum_generated_rows,count);
-            tiles.maximum_reduction_rows=std::max(tiles.maximum_reduction_rows,count+qr.r.rows());
+                auto & tiles=DerivativeWorkForTesting();
+                tiles.maximum_generated_rows=std::max(tiles.maximum_generated_rows,count);
+                tiles.maximum_reduction_rows=std::max(tiles.maximum_reduction_rows,count+qr.r.rows());
 #endif
-            qr.Append(Matrix(out.free_design.middleRows(first,count)),Matrix(out.raw.middleRows(first,count)));
+                qr.Append(Matrix(out.free_design.middleRows(first,count)),Matrix(out.raw.middleRows(first,count)),out.reference_order);
+            }
         }
+        const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute});
+        if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}
+        if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return false;}
+        out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target);
+        const Matrix adjoint=qr.r.transpose().triangularView<Eigen::Lower>().solve(t);
+        out.correction=qr.r.triangularView<Eigen::Upper>().solve(adjoint);
+        return true;
+    };
+    if(!tiled_solve()) return out;
+    if(!out.reference_order && cancelled())
+    {
+        reference_raw();
+        if(!tiled_solve()) return out;
     }
-    const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute});
-    if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
-    if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
-    out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target);
-    const Matrix adjoint=qr.r.transpose().triangularView<Eigen::Lower>().solve(t);
-    out.correction=qr.r.triangularView<Eigen::Upper>().solve(adjoint);
     out.valid=out.coefficients.allFinite() && out.correction.allFinite();
     out.reason=out.valid ? "full-profile-derivative" : "nonfinite-derivative"; return out;
 }
 void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
 {
+    if(reference_order)
+    {
+        const Sparse design=free_design.middleRows(first,count);
+        projected=(Matrix(raw.middleRows(first,count))-design*coefficients)/scale;
+        jacobian=projected-design*correction/scale;
+        return;
+    }
     projected=(Matrix(raw.middleRows(first,count))-free_design.middleRows(first,count)*coefficients)/scale;
     jacobian=projected-free_design.middleRows(first,count)*correction/scale;
 }

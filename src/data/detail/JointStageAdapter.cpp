@@ -54,7 +54,19 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                 estimate.convergence=JointCheckStatus::Unavailable;
                 continue;
             }
-            estimate.convergence = component.state ? component.runtime_convergence : JointCheckStatus::Unavailable;
+            if(component.target_evidence)
+            {
+                const auto & atoms=component.target_evidence->atoms;
+                const auto identified=std::find_if(atoms.begin(),atoms.end(),[&](const auto & a){return a.atom==global;});
+                if(estimate.source.role==FittingRole::Halo && (identified==atoms.end() || identified->status!=JointCheckStatus::Passed))
+                {
+                    estimate.reason=identified==atoms.end() ? "missing-identifiability" : identified->reason;
+                    estimate.convergence=JointCheckStatus::Unavailable; continue;
+                }
+            }
+            estimate.convergence = component.state ?
+                (component.target_evidence && estimate.source.role==FittingRole::Target ? component.target_runtime_convergence : component.runtime_convergence) :
+                JointCheckStatus::Unavailable;
             if (!component.state) { estimate.reason = component.stop_reason; continue; }
             const auto & state = *component.state;
             const auto index=static_cast<std::size_t>(found-full.begin());

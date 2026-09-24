@@ -191,7 +191,8 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
         {
             available+=component.state.has_value();
             Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
-                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence)));
+                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence))+
+                ", target_runtime_convergence="+std::string(joint_result_io::StatusText(component.target_runtime_convergence)));
         }
         const auto targets=fit.selection_domain->target_indices.size();
         Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
@@ -199,6 +200,7 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
         Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
             ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
             ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+
+            ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence))+
             ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
         if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
     }

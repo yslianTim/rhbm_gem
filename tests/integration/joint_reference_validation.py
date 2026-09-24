@@ -69,7 +69,7 @@ def endpoint_comparison(a, b):
 def exports(root, expected_widths=None):
     require(all((root/n).is_file() for n in EXPORTS), 'Missing completed-command export: '+str(root))
     outcome = v.read(root/EXPORTS[1])
-    require(outcome['schema_version'] in (3,4) and outcome['assembled_state'] is not None, 'Invalid exported state')
+    require(outcome['schema_version'] in (3,4,5) and outcome['assembled_state'] is not None, 'Invalid exported state')
     with (root/EXPORTS[2]).open() as f:
         require(len(list(csv.reader(f)))==len(outcome['atom_ids'])+1, 'CSV atom count mismatch')
     with sqlite3.connect((root/EXPORTS[0]).resolve().as_uri()+'?mode=ro',uri=True) as db:

@@ -167,7 +167,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
 {return n::FitWithSearchPolicy(problem,initial_b,{});}
-JointFitResult n::FitWithSearchPolicy(const JointProblem & problem,const std::vector<double> & initial_b,const n::SearchPolicy & search_policy)
+JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std::vector<double> & initial_b,const n::SearchPolicy & search_policy)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy);
@@ -260,12 +260,14 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         JointAnalysisComponent saved;
         static_cast<JointComponentData &>(saved)=component;
         saved.runtime_convergence=component.RuntimeConvergence();
+        saved.target_runtime_convergence=component.TargetRuntimeConvergence();
         out.components.push_back(std::move(saved));
     }
     out.assembled_state=fit.assembled_state; out.objective=fit.objective;
     out.available_row_mask=fit.available_row_mask; out.evidence=fit.evidence; out.ranks=fit.ranks;
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
     out.runtime_convergence=fit.RuntimeConvergence(); out.regular_certificate=fit.regular_certificate;
+    out.target_evidence=fit.target_evidence; out.target_runtime_convergence=fit.TargetRuntimeConvergence();
     return out;
 }
 JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)

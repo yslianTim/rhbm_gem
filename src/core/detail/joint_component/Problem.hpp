@@ -17,6 +17,7 @@ struct ProblemData
 JointParameterLayout BuildParameterLayout(const JointProblemInput &);
 JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const SearchPolicy & = {});
 JointFitResult FitWithSearchPolicy(const JointProblem &,const std::vector<double> &,const SearchPolicy &);
+JointFitResult FitWithSearchPolicyImpl(const JointProblem &,const std::vector<double> &,const SearchPolicy &);
 std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope);
 Domain ProfileDomain(const Domain &,const JointParameterLayout &);
 EvaluationContext ProfileContext(const EvaluationContext &,const JointParameterLayout &,Eigen::Index);

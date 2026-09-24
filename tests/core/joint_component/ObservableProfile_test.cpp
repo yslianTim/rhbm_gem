@@ -2,6 +2,7 @@
 #include <boost/json.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/JointUncertainty.hpp"
@@ -261,4 +262,192 @@ TEST(JointObservableProfileTest, PersistenceExportPeelingAndSkippedInitializatio
     EXPECT_EQ(initialization.atoms[1].reason,"not-required-observable-contribution");
     EXPECT_EQ(initialization.atoms[2].reason,"not-required-observable-contribution");
     EXPECT_FALSE(initialization.atoms[1].original_b); EXPECT_FALSE(initialization.atoms[1].used_b);
+}
+
+namespace {
+core::JointProblemInput TwoRowHalo(bool selected=false,bool noise=false)
+{
+    auto input=Input(noise);
+    input.atom_ids.push_back("4"); input.support.push_back({{0,.4},{1,1.2}});
+    if(selected) input.selection_domain->target_indices.push_back(3);
+    for(const auto & p:input.support[3])
+    {
+        const auto basis=n::EvaluateKernel(p.squared_distance,.65,2.5);
+        input.observations[p.row]+=basis.gaussian+.2*basis.charge;
+    }
+    return input;
+}
+}
+TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
+{
+    const core::JointProblem problem(TwoRowHalo());
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width,.65});
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_NE(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed) << rhbm_gem::joint_result_io::Encode(core::CaptureJointAnalysisResult(fit));
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    const auto stages=rhbm_gem::data_internal::BuildJointStageEstimates(saved,"target-test");
+    ASSERT_TRUE(stages.at(1).point); EXPECT_EQ(stages.at(1).convergence,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_FALSE(stages.at(4).point); EXPECT_EQ(stages.at(4).reason,"nonunique-parameter-directions");
+    const auto text=rhbm_gem::joint_result_io::Encode(saved);
+    auto value=boost::json::parse(text);
+    EXPECT_EQ(value.at("schema_version").as_int64(),5);
+    const auto restored=rhbm_gem::joint_result_io::Decode(text);
+    EXPECT_EQ(restored.target_runtime_convergence,saved.target_runtime_convergence);
+    EXPECT_EQ(restored.components[0].target_evidence->atoms.back().status,rhbm_gem::JointCheckStatus::Failed);
+    value.as_object()["schema_version"]=4;
+    const auto old=rhbm_gem::joint_result_io::Decode(boost::json::serialize(value));
+    EXPECT_FALSE(old.target_evidence); EXPECT_FALSE(old.components[0].target_evidence);
+    EXPECT_EQ(old.target_runtime_convergence,rhbm_gem::JointCheckStatus::NotRun);
+}
+TEST(JointObservableProfileTest, TheSameTwoRowGeometryCannotIdentifyASelectedTarget)
+{
+    const auto fit=core::FitJointComponents(core::JointProblem(TwoRowHalo(true)),{.6,missing_width,missing_width,.65});
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Failed);
+}
+TEST(JointObservableProfileTest, EquivalentHaloRepresentativesPreserveTargetCovariance)
+{
+    const core::JointProblem problem(TwoRowHalo(false,true));
+    const auto first=core::FitJointComponents(problem,{.6,missing_width,missing_width,.65});
+    const auto second=core::FitJointComponents(problem,{.6,missing_width,missing_width,.7});
+    ASSERT_EQ(first.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_EQ(second.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto & a=*first.assembled_state; const auto & b=*second.assembled_state;
+    EXPECT_NEAR(a.ac[0],b.ac[0],1e-10); EXPECT_NEAR(a.ac[1],b.ac[1],1e-10); EXPECT_NEAR(a.b[0],b.b[0],1e-10);
+    EXPECT_GT(std::abs(a.b[1]-b.b[1]),1e-3);
+    Eigen::Matrix2d halo_design; Eigen::Vector2d halo_response;
+    for(std::size_t r=0;r<2;++r)
+    {
+        const double square=problem.Input().support[3][r].squared_distance;
+        const auto old=n::EvaluateKernel(square,a.b[1],2.5),changed=n::EvaluateKernel(square,b.b[1],2.5);
+        halo_design.row(static_cast<Eigen::Index>(r)) << changed.gaussian,changed.charge;
+        halo_response(static_cast<Eigen::Index>(r))=a.ac[2]*old.gaussian+a.ac[3]*old.charge;
+    }
+    const Eigen::Vector2d compensated=halo_design.fullPivLu().solve(halo_response);
+    ASSERT_GT(compensated(0),0); ASSERT_GT(b.ac[2],0);
+    EXPECT_NEAR(compensated(0),b.ac[2],1e-10); EXPECT_NEAR(compensated(1),b.ac[3],1e-10);
+    for(std::size_t r=0;r<first.prediction->size();++r) EXPECT_NEAR(first.prediction->at(r),second.prediction->at(r),2e-12+2e-13*std::abs(first.prediction->at(r)));
+    const auto ca=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(first));
+    const auto cb=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(second));
+    ASSERT_TRUE(ca.at(1).covariance) << ca.at(1).reason;
+    ASSERT_TRUE(cb.at(1).covariance) << cb.at(1).reason;
+    EXPECT_EQ(ca.at(1).degrees_of_freedom,18);
+    // Independent augmented Jacobian includes the original singleton row.
+    n::Matrix z=n::Matrix::Zero(24,7);
+    for(std::size_t k=0;k<2;++k) for(const auto & p:problem.Input().support[k==0 ? 0 : 3])
+    {
+        const auto basis=n::EvaluateKernel(p.squared_distance,a.b[k],2.5);
+        z.block<1,3>(static_cast<Eigen::Index>(p.row),3*static_cast<Eigen::Index>(k)) << basis.gaussian,basis.charge,
+            a.ac[2*k]*basis.gaussian_log_width+a.ac[2*k+1]*basis.charge_log_width;
+    }
+    z(23,6)=1;
+    Eigen::JacobiSVD<n::Matrix> oracle(z,Eigen::ComputeThinU|Eigen::ComputeThinV);
+    oracle.setThreshold(std::numeric_limits<double>::epsilon()*24);
+    ASSERT_EQ(oracle.rank(),6);
+    const n::Matrix inverse=oracle.solve(n::Matrix::Identity(24,24));
+    const n::Matrix covariance=*ca.at(1).residual_variance*inverse.topRows(3)*inverse.topRows(3).transpose();
+    EXPECT_LT((covariance-*ca.at(1).covariance).norm()/covariance.norm(),1e-10);
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for(int id=1;id<=4;++id)
+    {auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(id); atom->SetElement(Element::CARBON); atom->SetPosition(0,0,0); atoms.push_back(std::move(atom));}
+    rhbm_gem::ModelObject model(std::move(atoms));
+    auto values=std::make_unique<double[]>(24*4*4);
+    for(std::size_t r=0;r<24;++r) values[r]=problem.Input().observations[r];
+    rhbm_gem::MapObject map({24,4,4},{1,1,1},{0,0,0},std::move(values));
+    const SamplingPointList points{{0,{0,0,0},false},{1,{1,0,0},false}};
+    model.EditAnalysis().SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1),second_stage_test::SampleExperimentPoints(map,points));
+    const auto sa=core::CaptureJointAnalysisResult(first),sb=core::CaptureJointAnalysisResult(second);
+    const auto pa=core::detail::BuildPostFitPeelingSamples(map,model,problem,std::nullopt,&sa);
+    const auto pb=core::detail::BuildPostFitPeelingSamples(map,model,problem,std::nullopt,&sb);
+    for(std::size_t k=0;k<2;++k)
+    {
+        ASSERT_TRUE(pa.at(1).samples[k].response); ASSERT_TRUE(pb.at(1).samples[k].response);
+        EXPECT_NEAR(*pa.at(1).samples[k].response,*pb.at(1).samples[k].response,2e-12);
+    }
+    EXPECT_LT((*ca.at(1).covariance-*cb.at(1).covariance).norm()/ca.at(1).covariance->norm(),1e-10);
+}
+TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
+{
+    auto input=Input(); input.atom_ids.resize(1); input.support.resize(1); input.selection_domain.reset();
+    const auto fit=core::FitJointComponents(core::JointProblem(input),{.6});
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::NotRun);
+    EXPECT_FALSE(fit.target_evidence);
+}
+
+TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
+{
+    auto input=TwoRowHalo();
+    const core::JointProblem problem(input);
+    auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width,.65});
+    ASSERT_TRUE(fit.assembled_state);
+    auto state=*fit.assembled_state; state.ac[2]=0;
+    // The boundary is checked directly, even if this supplied state fails KKT.
+    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,input.observations.size());
+    EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
+    auto saved=core::CaptureJointAnalysisResult(fit);
+    saved.components[0].state->ac[2]=0;
+    const auto uncertainty=core::detail::ComputeJointUncertainty(problem,saved);
+    EXPECT_FALSE(uncertainty.at(1).covariance);
+    EXPECT_EQ(uncertainty.at(1).reason,"active-amplitude-boundary");
+}
+
+TEST(JointObservableProfileTest, TargetEvidenceIsUnavailableAtTheRankThreshold)
+{
+    const core::JointProblem problem(Input());
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width});
+    ASSERT_TRUE(fit.assembled_state);
+    const auto & data=core::JointProblemAccess::Get(problem); const auto & layout=problem.ParameterLayout();
+    auto context=n::ProfileContext(data.context,layout,24);
+    const auto geometry=n::BuildTargetGeometry(n::ProfileDomain(data.domain,layout),data.y.head(23),*fit.assembled_state,context);
+    ASSERT_TRUE(geometry.valid);
+    const auto rows=static_cast<std::size_t>(geometry.svd.singular_values.tail(1)(0)/
+        (std::numeric_limits<double>::epsilon()*geometry.svd.singular_values(0)));
+    const auto evidence=n::AssessTargetState(problem,layout,fit.assembled_state,fit.evidence,rhbm_gem::JointEvidenceScope::AssembledGlobal,rows);
+    EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(evidence.atoms[0].reason,"rank-threshold-sensitive");
+}
+
+TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedState)
+{
+    auto input=TwoRowHalo(false,true);
+    const auto copy=input;
+    for(std::size_t a=0;a<copy.atom_ids.size();++a)
+    {
+        input.atom_ids.push_back(std::to_string(a+5)); input.support.emplace_back();
+        for(const auto & p:copy.support[a]) input.support.back().push_back({p.row+24,p.squared_distance});
+    }
+    input.selection_domain->target_indices.push_back(4);
+    for(std::size_t r=0;r<24;++r)
+    {input.row_ids.push_back(std::to_string(r+24)); input.observations.push_back(copy.observations[r]);}
+    const core::JointProblem problem(input);
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width,.65,.6,missing_width,missing_width,.65});
+    ASSERT_EQ(fit.components.size(),2);
+    ASSERT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed) << rhbm_gem::joint_result_io::Encode(core::CaptureJointAnalysisResult(fit));
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
+    ASSERT_TRUE(covariance.at(1).covariance); ASSERT_TRUE(covariance.at(5).covariance);
+    EXPECT_LT((*covariance.at(1).covariance-*covariance.at(5).covariance).norm()/covariance.at(1).covariance->norm(),1e-10);
+    auto state=*fit.assembled_state; state.ac[0]+=.01;
+    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,input.observations.size());
+    EXPECT_NE(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(evidence.atoms[0].reason,"invalid-saved-state");
+    state=*fit.assembled_state; state.b[0]*=1.01;
+    const auto inconsistent=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,input.observations.size());
+    EXPECT_EQ(inconsistent.atoms[0].reason,"inconsistent-saved-widths");
+    auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
+    json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
+    EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
+}
+
+TEST(JointObservableProfileTest, UnobservedTargetHasNoTargetCertificate)
+{
+    core::JointProblemInput input; input.atom_ids={"1"}; input.support.resize(1);
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+    const auto fit=core::FitJointComponents(core::JointProblem(input),{.6});
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(fit.components.at(0).TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
 }

@@ -294,6 +294,45 @@ void ValidateLayout(const JointParameterLayout & layout,const std::vector<std::s
     }
     Require(remaining_atoms.empty() && remaining_rows.empty(),"incomplete parameter layout");
 }
+j::value Target(const std::optional<JointTargetEvidence> & value)
+{
+    if(!value) return nullptr;
+    const auto & t=*value; j::array atoms;
+    for(const auto & a:t.atoms) atoms.emplace_back(Object{{"atom",a.atom},{"status",StatusText(a.status)},
+        {"null_space_leakage",Number(a.null_space_leakage)},{"reason",a.reason}});
+    return Object{{"contract",t.contract},{"checks",Checks(t.checks)},{"ranks",Ranks(t.ranks)},
+        {"atoms",atoms},{"column_scales",j::value_from(t.column_scales)},{"original_rows",t.original_rows}};
+}
+std::optional<JointTargetEvidence> ReadTarget(const j::value & value)
+{
+    if(value.is_null()) return {};
+    const auto & o=value.as_object(); JointTargetEvidence t;
+    t.contract=Read<std::string>(o,"contract"); t.checks=ReadChecks(o.at("checks")); t.ranks=ReadRanks(o.at("ranks"));
+    t.column_scales=Read<std::vector<double>>(o,"column_scales"); t.original_rows=Read<std::size_t>(o,"original_rows");
+    for(const auto & value:o.at("atoms").as_array())
+    {
+        const auto & a=value.as_object();
+        t.atoms.push_back({Read<std::size_t>(a,"atom"),Status(a.at("status")),OptionalNumber(a.at("null_space_leakage")),Read<std::string>(a,"reason")});
+    }
+    return t;
+}
+void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::vector<std::size_t> & atoms,
+    const std::optional<JointSelectionDomain> & selection,std::size_t full,std::size_t rows)
+{
+    if(!value) return;
+    const auto & t=*value;
+    Require(selection.has_value() && t.contract=="target-estimability-v1","target evidence contract");
+    Require(t.original_rows==rows,"target rank row context");
+    Require(t.column_scales.empty() || t.column_scales.size()==3*full,"target scale dimensions");
+    for(double s:t.column_scales) Require(std::isfinite(s) && s>0,"target column scale");
+    std::set<std::size_t> expected(atoms.begin(),atoms.end()),seen;
+    for(const auto & a:t.atoms)
+    {
+        Require(expected.contains(a.atom) && seen.insert(a.atom).second,"target atom mapping");
+        if(a.null_space_leakage) Require(std::isfinite(*a.null_space_leakage) && *a.null_space_leakage>=0,"target null space leakage");
+    }
+    Require(seen==expected,"incomplete target atom evidence");
+}
 void Validate(const JointAnalysisResult & x)
 {
     ValidateMetadata(x.metadata);
@@ -318,6 +357,8 @@ void Validate(const JointAnalysisResult & x)
         Require(!x.layout->groups.empty(),"empty observable reduction");
         ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
     }
+    std::vector<std::size_t> all(atoms); std::iota(all.begin(),all.end(),0);
+    ValidateTarget(x.target_evidence,all,x.selection_domain,x.layout ? x.layout->full_atoms.size() : atoms,rows);
     if(x.assembled_state) ValidateState(*x.assembled_state,x.layout ? x.layout->full_atoms.size() : atoms,x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
@@ -346,6 +387,7 @@ void Validate(const JointAnalysisResult & x)
                 Require(found!=x.layout->groups.end() && found->atoms==group.atoms,"component nuisance group disagreement");
             }
         }
+        ValidateTarget(c.target_evidence,c.atoms,x.selection_domain,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
         if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
     }
 }
@@ -360,8 +402,9 @@ std::string Encode(const JointAnalysisResult & x)
         {"search_completed",c.search_completed},{"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
-        { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)}});
-    Object out{{"schema_version",4},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+        { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
+        {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
+    Object out{{"schema_version",5},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -369,7 +412,8 @@ std::string Encode(const JointAnalysisResult & x)
         {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},{"objective",Number(x.objective)},
         {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},{"ranks",Ranks(x.ranks)},
         {"search_completed",x.search_completed},{"observation_scale",x.observation_scale},
-        {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)}};
+        {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)},
+        {"target_evidence",Target(x.target_evidence)},{"target_runtime_convergence",StatusText(x.target_runtime_convergence)}};
     return j::serialize(out);
 }
 JointAnalysisResult Decode(std::string_view text)
@@ -377,13 +421,13 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4,"unsupported result schema version (expected 3 or 4)");
+    Require(version==3 || version==4 || version==5,"unsupported result schema version (expected 3, 4 or 5)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
         Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
     JointAnalysisResult x;
-    if(version==4) {x.layout=ReadLayout(o); x.parameterization_contract=Read<std::string>(o,"parameterization_contract");}
+    if(version>=4) {x.layout=ReadLayout(o); x.parameterization_contract=Read<std::string>(o,"parameterization_contract");}
     x.metadata=ReadMetadata(o.at("metadata").as_object());
     x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
@@ -395,7 +439,7 @@ JointAnalysisResult Decode(std::string_view text)
     for(const auto & item:o.at("components").as_array())
     {
         const auto & c=item.as_object(); JointAnalysisComponent component;
-        if(version==4) component.layout=ReadLayout(c);
+        if(version>=4) component.layout=ReadLayout(c);
         component.id=Read<std::string>(c,"id"); component.stop_reason=Read<std::string>(c,"stop_reason");
         component.atoms=Read<std::vector<std::size_t>>(c,"atoms"); component.rows=Read<std::vector<std::size_t>>(c,"rows");
         component.search_completed=Read<bool>(c,"search_completed"); component.profile_evaluations=Read<int>(c,"profile_evaluations");
@@ -404,6 +448,7 @@ JointAnalysisResult Decode(std::string_view text)
         if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));
         component.evidence=ReadChecks(c.at("evidence")); component.ranks=ReadRanks(c.at("ranks"));
         component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
+        if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence")); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}
         x.components.push_back(std::move(component));
     }
     if(!o.at("assembled_state").is_null()) x.assembled_state=ReadState(o.at("assembled_state"));
@@ -411,6 +456,7 @@ JointAnalysisResult Decode(std::string_view text)
     x.evidence=ReadChecks(o.at("evidence")); x.ranks=ReadRanks(o.at("ranks"));
     x.search_completed=Read<bool>(o,"search_completed"); x.observation_scale=Read<double>(o,"observation_scale");
     x.regular_certificate=Status(o.at("regular_certificate")); x.runtime_convergence=Status(o.at("runtime_convergence"));
+    if(version>=5) {x.target_evidence=ReadTarget(o.at("target_evidence")); x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));}
     Validate(x); return x;
 }
 }

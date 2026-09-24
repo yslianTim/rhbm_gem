@@ -50,6 +50,22 @@ struct JointRankEvidence
     double threshold{};
     std::vector<double> singular_values;
 };
+struct JointAtomIdentifiability
+{
+    std::size_t atom{};
+    JointCheckStatus status{JointCheckStatus::Unavailable};
+    std::optional<double> null_space_leakage;
+    std::string reason;
+};
+struct JointTargetEvidence
+{
+    std::string contract{"target-estimability-v1"};
+    std::vector<JointCheck> checks;
+    std::vector<JointRankEvidence> ranks;
+    std::vector<JointAtomIdentifiability> atoms;
+    std::vector<double> column_scales;
+    std::size_t original_rows{};
+};
 struct JointInitializationAtom
 {
     std::string id;
@@ -89,6 +105,7 @@ struct JointComponentData
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     // Absent means the historical identity layout (all component atoms are FullABC).
     std::optional<JointParameterLayout> layout;
+    std::optional<JointTargetEvidence> target_evidence;
 };
 struct JointFitCosts
 {

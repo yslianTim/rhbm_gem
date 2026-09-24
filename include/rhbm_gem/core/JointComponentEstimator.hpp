@@ -44,6 +44,7 @@ using ::rhbm_gem::JointFitCosts;
 struct JointComponentResult : JointComponentData
 {
     JointCheckStatus RuntimeConvergence() const;
+    JointCheckStatus TargetRuntimeConvergence() const;
 };
 struct JointFitResult
 {
@@ -64,6 +65,8 @@ struct JointFitResult
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     // Actual-state numerical evidence only; independent of search termination and offline audits.
     JointCheckStatus RuntimeConvergence() const;
+    JointCheckStatus TargetRuntimeConvergence() const;
+    std::optional<JointTargetEvidence> target_evidence;
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});

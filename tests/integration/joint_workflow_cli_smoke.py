@@ -72,13 +72,14 @@ def main() -> int:
                     assert atom["evidence"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 4
+        assert saved["schema_version"] == 5
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv = (root / "joint_atoms_example.csv").read_text().splitlines()
-        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID")
-        assert csv[1].endswith(',target,FullABC,""') and csv[2].endswith(',halo,FullABC,""')
+        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability")
+        assert ',target,FullABC,"",' in csv[1] and ',halo,FullABC,"",' in csv[2]
+        assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash
         assert metadata["map_sha256"] == map_hash

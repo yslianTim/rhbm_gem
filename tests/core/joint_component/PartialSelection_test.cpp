@@ -477,6 +477,9 @@ TEST(JointComponentPartialSelectionTest, FullComponentUncertaintyMatchesDenseRef
     auto & component = snapshot.components.front();
     ASSERT_TRUE(component.state);
     component.runtime_convergence = core::JointCheckStatus::Passed;
+    // Exercise the legacy full-parameter covariance contract with a synthetic endpoint.
+    component.target_evidence.reset();
+    component.target_runtime_convergence = core::JointCheckStatus::NotRun;
     // A fixed, slightly perturbed endpoint gives a known nonzero residual variance.
     component.state->ac[0] += 0.01;
     const auto & input = problem.Input();

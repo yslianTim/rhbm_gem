@@ -8,7 +8,7 @@ struct TiledDifferential
     Eigen::SparseMatrix<double,Eigen::RowMajor> free_design,raw;
     Matrix coefficients,correction;
     double scale{};
-    bool valid{};
+    bool valid{},reference_order{};
     std::string reason;
     void Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const;
 };
