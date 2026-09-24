@@ -92,6 +92,7 @@ Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & b
 namespace {
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
+    ResourcePhase phase("basis");
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         eta.size()==0 || !eta.allFinite() || !y.allFinite()) {out.reason="invalid-input"; return out;}
@@ -120,6 +121,7 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace)
 {
+    ResourcePhase phase(reference ? "reference" : "ac-profile");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
@@ -303,6 +305,7 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
 Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
     const EvaluationContext & policy,bool supplied)
 {
+    ResourcePhase phase("assessment");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     ++AssessmentWorkForTesting().assessments;
 #endif

@@ -12,6 +12,7 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
     double absolute,Eigen::Index tile)
 {
     auto & work=SparseWorkForTesting(); ++work.derivative_preparations;
+    ResourcePhase phase("derivative-prepare");
     WorkTimer preparation_timer(work.derivative_seconds);
     TiledDifferential out;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
@@ -22,6 +23,9 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
     out.scale=scale; out.free_design.resize(n,p); out.raw.resize(n,m);
     std::vector<Eigen::Triplet<double>> entries,raw;
     Matrix t=Matrix::Zero(p,m);
+    RecordDenseShape("derivative-t",p,m);
+    RecordDenseShape("derivative-coefficients",p,m);
+    RecordDenseShape("derivative-correction",p,m);
     for(Eigen::Index k=0;k<2*m;++k) for(Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
         raw.emplace_back(entry.row(),k/2,entry.value()*e.beta(k));
     for(Eigen::Index col=0;col<p;++col)
@@ -105,6 +109,7 @@ void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & proj
 }
 ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
 {
+    ResourcePhase phase("derivative-reduce");
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();

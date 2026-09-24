@@ -6,6 +6,11 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointFixtureSupport.hpp"
 #include "support/JointRuntimeJson.hpp"
+#ifndef SPARSE_BASELINE_DRIVER
+#include "support/JointOperatorWorkload.hpp"
+#include "core/detail/joint_component/ProfileJacobianOperator.hpp"
+#include "core/detail/JointUncertainty.hpp"
+#endif
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -21,6 +26,7 @@ namespace p=second_stage_test::matched::joint_abc;
 namespace j=boost::json;
 using Clock=std::chrono::steady_clock;
 bool audit{};
+bool operator_audit{};
 std::filesystem::path capture;
 j::array svd_records;
 j::value Read(const char * path,bool precise=false)
@@ -69,6 +75,16 @@ void Capture(const n::Matrix & a,double relative,double absolute,const n::Vector
 void Snapshot(const char * output,j::object & report)
 {
 #ifndef SPARSE_BASELINE_DRIVER
+    const auto & resource=n::ResourceWorkForTesting();
+    if(resource.enabled)
+    {
+        j::array shapes,phases;
+        for(const auto & r:resource.dense_shapes) shapes.push_back(j::object{{"phase",r.phase},{"role",r.role},
+            {"rows",r.rows},{"columns",r.columns},{"observations",r.observations},{"maximum_matrix_bytes",r.maximum_bytes}});
+        for(const auto & r:resource.phases) phases.push_back(j::object{{"phase",r.phase},{"calls",r.calls},{"inclusive_seconds",r.inclusive_seconds}});
+        report["resources"]=j::object{{"dense_shape_probes",shapes},{"phases",phases},
+            {"semantics","phase times overlap; shapes are known matrix probes, not an allocation trace"}};
+    }
     const auto & w=n::SparseWorkForTesting();
     report["work"]=j::object{{"symbolic",w.symbolic},{"numeric",w.numeric},{"symbolic_reuses",w.symbolic_reuses},
         {"factor_reuses",w.factor_reuses},{"cancellation_reductions",w.cancellation_reductions},{"factor_nonzeros_upper_bound",w.factor_nonzeros},
@@ -107,6 +123,40 @@ void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::Ev
     report["derivative_seconds"]=Seconds(started);report["derivative_valid"]=derivative.valid;
     report["derivative_reason"]=derivative.reason;
 #ifndef SPARSE_BASELINE_DRIVER
+    if(operator_audit && primary.valid)
+    {
+        report["stage"]="operator"; Snapshot(output,report);
+        n::OperatorWorkForTesting()={}; const n::ProfileJacobianOperator op(primary,context);
+        j::object result{{"valid",op.Valid()},{"reason",op.Reason()},{"krylov_iterations",nullptr}};
+        if(!op.Valid() && !derivative.valid) result["passed"]=op.Reason()==derivative.reason;
+        if(op.Valid() && derivative.valid)
+        {
+            const n::Vector v=n::Vector::LinSpaced(op.Columns(),-.3,.7);
+            n::Vector w(op.Rows()); for(Eigen::Index r=0;r<w.size();++r) w(r)=std::sin(.17*static_cast<double>(r));
+            const auto actual=op.Apply(v),adjoint=op.ApplyAdjoint(w);
+            n::Vector expected(op.Rows()),expected_adjoint=n::Vector::Zero(op.Columns());
+            n::Matrix projected,jacobian;
+            {n::ResourcePhase phase("operator-oracle");
+            for(Eigen::Index first=0;first<op.Rows();first+=1024)
+            {
+                const auto count=std::min<Eigen::Index>(1024,op.Rows()-first);
+                derivative.Rows(first,count,projected,jacobian);
+                expected.segment(first,count)=jacobian*v;
+                expected_adjoint+=jacobian.transpose()*w.segment(first,count);
+            }}
+            const double apply_error=(actual-expected).norm()/std::max(1e-12,expected.norm());
+            const double adjoint_error=(adjoint-expected_adjoint).norm()/std::max(1e-12,expected_adjoint.norm());
+            const double duality=std::abs(actual.dot(w)-v.dot(adjoint))/std::max({1.,actual.norm()*w.norm(),v.norm()*adjoint.norm()});
+            result["apply_relative_error"]=apply_error; result["adjoint_relative_error"]=adjoint_error;
+            result["duality_scaled_error"]=duality;
+            result["passed"]=apply_error<=1e-8 && adjoint_error<=1e-8 && duality<=1e-12;
+            result["raw_nonzeros"]=op.RawNonZeros(); result["free_columns"]=op.FreeColumns();
+        }
+        const auto & ow=n::OperatorWorkForTesting();
+        result["prepare_seconds"]=ow.preparation_seconds; result["rank_seconds"]=ow.rank_seconds;
+        result["apply_seconds"]=ow.apply_seconds; result["adjoint_seconds"]=ow.adjoint_seconds;
+        result["rank_checks"]=ow.rank_checks; report["operator"]=result;
+    }
     if(audit && derivative.valid)
     {
         report["stage"]="derivative-audit"; Snapshot(output,report);
@@ -148,6 +198,8 @@ int main(int argc,char ** argv)
                 const std::string option=argv[k];
                 if(option=="--svd-mode" && k+1<end) Mode(argv[++k]);
                 else if(option=="--audit") audit=true;
+                else if(option=="--operator") operator_audit=true;
+                else if(option=="--resources") n::ResourceWorkForTesting().enabled=true;
                 else if(option=="--capture" && k+1<end) {audit=true; capture=argv[++k]; std::filesystem::create_directories(capture);}
                 else throw std::invalid_argument("Invalid benchmark option");
             }
@@ -155,6 +207,55 @@ int main(int argc,char ** argv)
         if(audit) n::CompactSvdCaptureForTesting()=Capture;
 #endif
         Eigen::setNbThreads(1); const std::string mode=argc>1 ? argv[1] : "";
+#ifndef SPARSE_BASELINE_DRIVER
+        if(mode=="synthetic" && argc==6)
+        {
+            const std::string topology=argv[2],phase=argv[4]; const int atoms=std::stoi(argv[3]);
+            if(phase!="prepare" && phase!="fixed" && phase!="workflow") throw std::invalid_argument("Invalid synthetic phase");
+            if(atoms>512 && phase!="prepare") throw std::invalid_argument("Large workloads are preparation-only in PR0/PR1");
+            const auto started=Clock::now(); const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+            const double construction_seconds=Seconds(started);
+            const auto & data=c::JointProblemAccess::Get(problem);
+            std::size_t memberships{}; for(const auto & a:problem.Input().support) memberships+=a.size();
+            if(data.partition.components.size()!=1 || data.layout.full_atoms.size()!=static_cast<std::size_t>(atoms) ||
+                memberships!=static_cast<std::size_t>(atoms)*515) throw std::runtime_error("Invalid synthetic support census");
+            if(phase=="fixed") {Run(data.domain,data.y,n::Vector::Constant(atoms,.55),data.context,argv[5]); return 0;}
+            j::object report{{"generator","frozen-lattice-v1"},{"topology",topology},{"atoms",atoms},
+                {"rows",data.y.size()},{"memberships",memberships},{"components",data.partition.components.size()},
+                {"spacing",3.5},{"grid",.5},{"support",2.5},{"truth_a",2.},{"truth_c",.2},{"truth_b",.5},
+                {"initial_b",.55},{"noise","1e-5*sin(.13*z+.17*y+.19*x), integer half-angstrom coordinates"},
+                {"construction_seconds",construction_seconds}};
+            const auto hash_started=Clock::now(); report["input_sha256"]=second_stage_test::OperatorWorkloadHash(problem.Input());
+            report["fingerprint_seconds"]=Seconds(hash_started);
+            if(phase=="prepare")
+            {
+                const auto basis_started=Clock::now(); n::Vector beta(2*atoms);
+                for(int a=0;a<atoms;++a) {beta(2*a)=2; beta(2*a+1)=.2;}
+                const auto state=n::EvaluateState(data.domain,data.y,n::Vector::Constant(atoms,std::log(.55)),beta,data.context);
+                report["basis_seconds"]=Seconds(basis_started); report["raw_state_valid"]=state.valid;
+                report["design_nonzeros"]=state.x.nonZeros(); report["derivative_nonzeros"]=state.derivative.nonZeros();
+                report["residual_norm"]=state.residual.norm();
+                report["not_run"]=j::array{"ac-solve","rank","operator","reference","search","assessment","uncertainty"};
+            }
+            else
+            {
+                const auto fit=c::FitJointComponents(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55));
+                const auto captured=c::CaptureJointAnalysisResult(fit);
+                const auto uncertainty=c::detail::ComputeJointUncertainty(problem,captured);
+                report["state_available"]=fit.assembled_state.has_value(); report["search_completed"]=fit.search_completed;
+                report["uncertainty_outputs"]=uncertainty.size();
+                report["search_seconds"]=fit.costs.search_seconds; report["assessment_seconds"]=fit.costs.assessment_seconds;
+                report["assembly_seconds"]=fit.costs.assembly_seconds;
+            }
+            rusage usage{};getrusage(RUSAGE_SELF,&usage);
+#ifdef __APPLE__
+            report["peak_rss_bytes"]=usage.ru_maxrss;
+#else
+            report["peak_rss_bytes"]=usage.ru_maxrss*1024;
+#endif
+            report["stage"]="complete"; Snapshot(argv[5],report); return 0;
+        }
+#endif
 #ifndef SPARSE_BASELINE_DRIVER
         if(mode=="replay" && argc==5)
         {

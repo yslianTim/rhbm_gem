@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "ResourceWork.hpp"
 #include <algorithm>
 #include <map>
 #include <numeric>
@@ -136,6 +137,7 @@ ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const Ev
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
     const EvaluationContext & context,const std::vector<ComponentResult> & fits,const AssessmentReuse * reuse)
 {
+    ResourcePhase phase("assembly");
     if(fits.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");
     AssemblyResult out; out.available=true; out.row_mask.assign(static_cast<std::size_t>(domain.rows),false);
     out.eta=Vector::Constant(static_cast<Eigen::Index>(domain.atoms.size()),unavailable);

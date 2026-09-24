@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include "ResourceWork.hpp"
 
 namespace rhbm_gem::core::joint_component {
 inline constexpr Eigen::Index derivative_tile_rows=8192;
@@ -13,6 +14,8 @@ struct TiledQR
     {
         const auto prior=r.rows();
         Eigen::MatrixXd a(prior+rows.rows(),r.cols()),b(prior+rows.rows(),target.cols());
+        RecordDenseShape("tiled-qr-design",a.rows(),a.cols());
+        RecordDenseShape("tiled-qr-response",b.rows(),b.cols());
         a.topRows(prior)=r; a.bottomRows(rows.rows())=rows;
         b.topRows(prior)=target; b.bottomRows(rows.rows())=rhs;
         // The assembled tile is disposable. Factor and transform it in place;

@@ -42,6 +42,7 @@ std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
     {
         const Eigen::Index n=std::min(tile,x.rows()-first), prior=r.rows();
         Eigen::MatrixXd a=Eigen::MatrixXd::Zero(prior+n,x.cols());
+        RecordDenseShape("reference-tile",prior+n,x.cols());
         Eigen::VectorXd rhs=Eigen::VectorXd::Zero(prior+n);
         if (prior) {a.topRows(prior)=r; rhs.head(prior)=target;}
         for (Eigen::Index row=first;row<first+n;++row)
@@ -79,6 +80,7 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
         {local_column[static_cast<std::size_t>(k)]=static_cast<int>(columns.size()); columns.push_back(static_cast<int>(k));}
         if (columns.empty()) continue;
         Eigen::MatrixXd local{Eigen::MatrixXd::Zero(count,static_cast<Eigen::Index>(columns.size()))};
+        RecordDenseShape("ac-row-reduction",local.rows(),local.cols());
         for (Eigen::Index row=first;row<first+count;++row)
             for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
                 local(row-first,local_column[static_cast<std::size_t>(e.col())])=e.value();
@@ -187,6 +189,7 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
             {
                 Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
                 qr.setPivotThreshold(absolute); qr.compute(f.reduced);
+                if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
                 if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
                 out.rank+=static_cast<int>(qr.rank()); solution=qr.solve(f.rhs);
             }
@@ -287,6 +290,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                 // largest norm of the weighted, column-normalized design.
                 const auto reduced{ReduceSparseRows(selected,rhs)};
                 qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
+                if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
                 if (qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
                 out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
             }

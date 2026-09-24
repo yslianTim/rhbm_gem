@@ -103,6 +103,7 @@ StageUncertainty ComponentUncertainty(const JointProblemInput & input,
 std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & problem, const JointAnalysisResult & result,
     std::optional<std::span<const std::size_t>> outputs)
 {
+    joint_component::ResourcePhase phase("uncertainty");
     if (result.atom_ids != problem.Input().atom_ids || result.row_ids != problem.Input().row_ids)
         throw std::invalid_argument("Joint uncertainty snapshot identity mismatch.");
     const auto requested = JointOutputMask(problem.Input(), outputs);

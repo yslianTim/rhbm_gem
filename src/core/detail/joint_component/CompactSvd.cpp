@@ -50,6 +50,8 @@ CompactSvdResult Jacobi(const Matrix & a,double relative,double absolute,const V
 }
 CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolute,const Vector * rhs,CompactSvdVectors vectors)
 {
+    RecordDenseShape("svd-input",matrix.rows(),matrix.cols());
+    if(vectors==CompactSvdVectors::Right) RecordDenseShape("svd-right-vectors",matrix.cols(),std::min(matrix.rows(),matrix.cols()));
     const bool right=vectors==CompactSvdVectors::Right;
     auto & work=SparseWorkForTesting();
     ++(rhs ? work.reference_svds : work.free_design_svds);

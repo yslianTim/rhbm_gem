@@ -70,6 +70,7 @@ struct Profile
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context)
 {
+    ResourcePhase phase("search");
     const auto start=std::chrono::steady_clock::now();
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};

@@ -12,6 +12,7 @@
 
 #pragma once
 #include <unsupported/Eigen/NonLinearOptimization>
+#include "ResourceWork.hpp"
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.
 // Trial instrumentation/rejection and compact QR input are added; trust-region
@@ -125,6 +126,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeIni
   wa4.resize(m);
   fvec.resize(m);
   fjac.resize(n, n);
+  RecordDenseShape("lm-fjac",n,n);
   if (!useExternalScaling) diag.resize(n);
   eigen_assert((!useExternalScaling || diag.size() == n) &&
                "When useExternalScaling is set, the caller must provide a valid 'diag'");

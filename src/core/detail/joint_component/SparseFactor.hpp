@@ -1,5 +1,6 @@
 #pragma once
 #include "Numerics.hpp"
+#include "ResourceWork.hpp"
 #include <chrono>
 
 namespace rhbm_gem::core::joint_component {
@@ -33,6 +34,8 @@ public:
     int Rank() const;
     Matrix Compact() const;
     Matrix LeastSquares(const Matrix &) const;
+    Matrix PseudoInverseTranspose(const Matrix &) const;
+    Matrix ProjectComplement(const Matrix &) const;
     Matrix NormalSolve(const Matrix &) const;
 };
 class LinearWorkspace
