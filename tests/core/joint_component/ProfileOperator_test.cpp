@@ -50,6 +50,18 @@ void Parity(const n::Evaluation & e,const n::EvaluationContext & context)
     const auto jv=op.Apply(v); const auto jtw=op.ApplyAdjoint(w);
     EXPECT_NEAR(jv.dot(w),v.dot(jtw),1e-12*std::max({1.,jv.norm()*w.norm(),v.norm()*jtw.norm()}));
     EXPECT_LE((op.Apply(v+2*u)-jv-2*op.Apply(u)).norm(),1e-12*std::max(1.,jv.norm()));
+    const auto q_before=n::SparseWorkForTesting().q_actions;
+    const n::Vector normal=op.ApplyNormal(v);
+    EXPECT_EQ(n::SparseWorkForTesting().q_actions-q_before,2);
+    const auto composed_before=n::SparseWorkForTesting().q_actions;
+    const n::Vector composed=op.ApplyAdjoint(op.Apply(v));
+    EXPECT_EQ(n::SparseWorkForTesting().q_actions-composed_before,6);
+    const n::Vector expected=dense.jacobian.transpose()*dense.jacobian*v;
+    EXPECT_LE((normal-expected).norm(),1e-12+1e-8*expected.norm());
+    EXPECT_LE((normal-composed).norm(),1e-12+1e-8*composed.norm());
+    EXPECT_NEAR(u.dot(normal),v.dot(op.ApplyNormal(u)),1e-12*std::max({1.,u.norm()*normal.norm(),v.norm()*op.ApplyNormal(u).norm()}));
+    EXPECT_NEAR(v.dot(normal),jv.squaredNorm(),1e-12*std::max(1.,jv.squaredNorm()));
+    EXPECT_LE((op.ApplyNormal(v+2*u)-normal-2*op.ApplyNormal(u)).norm(),1e-12*std::max(1.,normal.norm()));
     const auto gradient=op.ApplyAdjoint(e.residual/context.scale);
     for(Eigen::Index k=0;k<gradient.size();++k) EXPECT_NEAR(gradient(k),e.gradient(k),1e-13+2e-9*std::abs(e.gradient(k)));
 }
@@ -75,7 +87,8 @@ TEST(JointProfileOperatorTest, ActiveFaceAndOwnership)
     const n::ProfileJacobianOperator op(e,s.context); ASSERT_TRUE(op.Valid());
     const n::Vector v=n::Vector::Ones(3),before=op.Apply(v);
     n::EvaluateProfile(s.domain,s.y,s.eta.array()+.02,false,&s.context,nullptr,&workspace);
-    e={}; EXPECT_EQ(op.Apply(v),before);
+    const auto normal_before=op.ApplyNormal(v);
+    e={}; EXPECT_EQ(op.Apply(v),before); EXPECT_EQ(op.ApplyNormal(v),normal_before);
     n::Vector beta(6); beta<<0,-.2,2,.3,1,-.1;
     const auto boundary=n::EvaluateState(s.domain,s.y,s.eta,beta,s.context);
     const n::ProfileJacobianOperator changed(boundary,s.context); ASSERT_TRUE(changed.Valid());
@@ -83,7 +96,7 @@ TEST(JointProfileOperatorTest, ActiveFaceAndOwnership)
     const auto dense=p::DenseDifferentiate(boundary,s.context.scale,&s.context);
     EXPECT_LT((changed.Apply(v)-dense.jacobian*v).norm(),1e-10);
     const auto counts=n::SparseWorkForTesting(); const auto ranks=n::OperatorWorkForTesting().rank_checks;
-    op.Apply(v); op.ApplyAdjoint(n::Vector::Ones(op.Rows()));
+    op.Apply(v); op.ApplyAdjoint(n::Vector::Ones(op.Rows())); op.ApplyNormal(v);
     EXPECT_EQ(n::SparseWorkForTesting().numeric,counts.numeric);
     EXPECT_EQ(n::OperatorWorkForTesting().rank_checks,ranks);
     EXPECT_THROW(op.Apply(n::Vector::Zero(2)),std::invalid_argument);
@@ -95,6 +108,7 @@ TEST(JointProfileOperatorTest, CancellationAndRankThreshold)
     const n::ProfileJacobianOperator op(e,s.context); ASSERT_TRUE(op.Valid());
     const auto dense=p::DenseDifferentiate(e,s.context.scale,&s.context);
     EXPECT_LT((op.Apply(n::Vector::Ones(3))-dense.jacobian*n::Vector::Ones(3)).norm(),1e-12);
+    EXPECT_LT((op.ApplyNormal(n::Vector::Ones(3))-dense.jacobian.transpose()*dense.jacobian*n::Vector::Ones(3)).norm(),1e-12);
     EXPECT_FALSE(n::ProfileJacobianOperator(e,s.context,100).Valid());
     e.x.col(1)=e.x.col(0);
     EXPECT_FALSE(n::ProfileJacobianOperator(e,s.context).Valid());
@@ -105,6 +119,11 @@ TEST(JointProfileOperatorTest, FactorAdjointsAndPermutation)
     n::LinearWorkspace workspace; auto factor=workspace.Factor(a.sparseView(),{4,1,3},0);
     const n::Vector v=n::Vector::LinSpaced(3,-.7,.6),w=n::Vector::LinSpaced(9,-.2,.5);
     const n::Matrix inverse=a.completeOrthogonalDecomposition().pseudoInverse();
+    const auto fixed=n::FreeDesignFactor::Fixed(a.sparseView(),{4,1,3});
+    EXPECT_LT((fixed->LeastSquares(w)-inverse*w).norm(),1e-12);
+    EXPECT_LT((fixed->PseudoInverseTranspose(v)-inverse.transpose()*v).norm(),1e-12);
+    EXPECT_LT((fixed->NormalSolve(v)-inverse*inverse.transpose()*v).norm(),1e-12);
+    EXPECT_LT((fixed->Compact().transpose()*fixed->Compact()-a.transpose()*a).norm(),1e-12);
     EXPECT_LT((factor->LeastSquares(w)-inverse*w).norm(),1e-12);
     EXPECT_LT((factor->PseudoInverseTranspose(v)-inverse.transpose()*v).norm(),1e-12);
     EXPECT_LT((factor->ProjectComplement(w)-(w-a*inverse*w)).norm(),1e-12);
@@ -132,12 +151,12 @@ TEST(JointProfileOperatorTest, InstrumentationIsNeutralAndActionsDoNotReduceMatr
     auto & work=n::ResourceWorkForTesting(); work={}; work.enabled=true;
     const n::ProfileJacobianOperator op(e,s.context); ASSERT_TRUE(op.Valid());
     const n::Vector v=n::Vector::Ones(3);
-    EXPECT_EQ(control.Apply(v),op.Apply(v)); op.ApplyAdjoint(e.residual);
+    EXPECT_EQ(control.Apply(v),op.Apply(v)); op.ApplyAdjoint(e.residual); EXPECT_EQ(control.ApplyNormal(v),op.ApplyNormal(v));
     bool compact=false;
     for(const auto & shape:work.dense_shapes)
     {
         if(shape.phase=="operator-rank" && shape.role=="free-design-compact") compact=true;
-        if(shape.phase=="operator-apply" || shape.phase=="operator-adjoint") EXPECT_EQ(shape.columns,1);
+        if(shape.phase=="operator-apply" || shape.phase=="operator-adjoint" || shape.phase=="operator-normal") EXPECT_EQ(shape.columns,1);
         EXPECT_NE(shape.role,"derivative-t"); EXPECT_NE(shape.role,"derivative-coefficients"); EXPECT_NE(shape.role,"derivative-correction");
     }
     EXPECT_TRUE(compact); work={};
@@ -219,4 +238,28 @@ TEST(JointProfileOperatorTest, FrozenWorkloadHasCompleteDeterministicSupport)
         }
         const c::JointProblem problem(a); EXPECT_EQ(c::JointProblemAccess::Get(problem).partition.components.size(),1);
     }
+}
+
+TEST(JointProfileOperatorTest, NormalActionRetainsWeakDirectionsAndRejectsInvalidInputs)
+{
+    n::Evaluation e; e.valid=true; e.eta=n::Vector::Zero(2); e.beta=n::Vector::Ones(4);
+    n::Matrix x=n::Matrix::Zero(9,4); x(0,0)=1; x(1,1)=1; x(2,2)=1; x(0,3)=1; x(3,3)=1e-8;
+    e.x=x.sparseView(); x.row(8)<<.1,.2,.3,.4; e.derivative=x.sparseView();
+    e.residual=n::Vector::Zero(9); e.residual(8)=.1;
+    const auto context=n::CreateContext(e.residual,2);
+    const n::ProfileJacobianOperator op(e,context); ASSERT_TRUE(op.Valid());
+    const auto dense=p::DenseDifferentiate(e,context.scale,&context); ASSERT_TRUE(dense.valid);
+    for(int k=0;k<2;++k)
+    {
+        const n::Vector v=n::Vector::Unit(2,k),expected=dense.jacobian.transpose()*dense.jacobian*v;
+        EXPECT_LE((op.ApplyNormal(v)-expected).norm(),1e-12+1e-8*expected.norm());
+    }
+    EXPECT_THROW(op.ApplyNormal(n::Vector::Zero(3)),std::invalid_argument);
+    EXPECT_THROW(op.ApplyNormal(n::Vector::Constant(2,n::unavailable)),std::invalid_argument);
+    const auto work=n::SparseWorkForTesting(); const auto ranks=n::OperatorWorkForTesting().rank_checks;
+    op.ApplyNormal(n::Vector::Ones(2));
+    EXPECT_EQ(n::SparseWorkForTesting().numeric,work.numeric);
+    EXPECT_EQ(n::SparseWorkForTesting().fixed_factorizations,work.fixed_factorizations);
+    EXPECT_EQ(n::SparseWorkForTesting().compact_extractions,work.compact_extractions);
+    EXPECT_EQ(n::OperatorWorkForTesting().rank_checks,ranks);
 }

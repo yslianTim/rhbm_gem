@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import math
 import statistics
 import subprocess
 import tarfile
@@ -25,7 +26,8 @@ def require_current_build(build):
     sources=[p for folder in ('src','include','cmake') for p in (source/folder).rglob('*') if p.is_file() and p.suffix in ('.cpp','.hpp','.h','.cmake','.txt')]
     sources += [source/'CMakeLists.txt']
     core_time=max(p.stat().st_mtime_ns for p in sources)
-    driver_time=(source/'tests/experiments/joint_sparse_benchmark.cpp').stat().st_mtime_ns
+    driver_sources=[source/'tests/experiments/joint_sparse_benchmark.cpp',source/'tests/support/JointFixedDiagnostic.hpp']
+    driver_time=max(p.stat().st_mtime_ns for p in driver_sources if p.is_file())
     if core_time>min(p.stat().st_mtime_ns for p in libraries) or max(core_time,driver_time)>(build/'bin/joint_sparse_benchmark').stat().st_mtime_ns:
         raise ValueError(f'Sources are newer than measured binaries; rebuild before starting a campaign: {build}')
 
@@ -37,30 +39,67 @@ def frozen_hash():
                          if m.isfile() and Path(m.name).suffix in ('.cpp','.hpp','.h','.cmake','.txt')})
 
 
+def finite(value):
+    return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
+
+
+def valid_state(report):
+    state=report.get('returned_state')
+    if not isinstance(state,dict): return False
+    beta,b,active=(state.get(k) for k in ('beta','b','active_atoms'))
+    if not isinstance(b,list) or not b or not all(finite(x) and x>0 for x in b): return False
+    if not isinstance(beta,list) or len(beta)!=2*len(b) or not all(finite(x) for x in beta): return False
+    if any(x<0 for x in beta[::2]): return False
+    if not isinstance(active,list) or any(type(x) is not int or not 0<=x<len(b) for x in active): return False
+    if len(set(active))!=len(active) or sorted(active)!=[i for i,x in enumerate(beta[::2]) if x==0]: return False
+    scale=report.get('search',{}).get('residual_scale')
+    return finite(state.get('objective')) and state['objective']>=0 and finite(scale) and scale>0
+
+
+def overlap_eligible(report):
+    metadata=report.get('partition')
+    if not isinstance(metadata,dict): return None
+    blocks,memberships=metadata.get('blocks'),metadata.get('atom_memberships')
+    if type(blocks) is not int or not isinstance(memberships,list) or not memberships: return None
+    if any(type(x) is not int or not 1<=x<=blocks for x in memberships): return None
+    return blocks>=2 and max(memberships)>1
+
+
 def scientific_parity(left,right):
     """Trajectories may differ; returned evidence and qualified endpoints may not."""
     a,b=left.get('returned_assessment'),right.get('returned_assessment')
     if (a is None)!=(b is None): return dict(passed=False,reason='state-availability')
     if a is None:
+        if left.get('returned_state') is not None or right.get('returned_state') is not None: return dict(passed=False,reason='uncertified-returned-state')
         a,b=left.get('search',{}).get('initial',{}),right.get('search',{}).get('initial',{})
-        same=a.get('valid') is False and b.get('valid') is False and a.get('reason')==b.get('reason')
+        same=a.get('valid') is False and b.get('valid') is False and isinstance(a.get('reason'),str) and bool(a['reason']) and a.get('reason')==b.get('reason')
         return dict(passed=same,reason='equivalent-explicit-unavailability' if same else 'uncertified-states')
+    if not valid_state(left) or not valid_state(right): return dict(passed=False,reason='invalid-returned-state')
     failures=[]
+    if a.get('runtime_convergence') not in ('passed','failed','unavailable','not-run') or not a.get('runtime_failure'): failures.append('missing-runtime-evidence')
     for key in ('runtime_convergence','runtime_checks','runtime_failure'):
         if a.get(key)!=b.get(key): failures.append(key)
+    if a.get('runtime_convergence')=='passed' and not isinstance(a.get('runtime_checks'),dict): failures.append('runtime_checks/missing')
     for key in ('design_spectrum','width_spectrum','profile_jacobian_spectrum'):
-        if a.get(key,{}).get('rank')!=b.get(key,{}).get('rank'): failures.append(key+'/rank')
+        if (key in a)!=(key in b): failures.append(key+'/availability')
+        if a.get('runtime_convergence')=='passed' and key not in a: failures.append(key+'/missing')
+        for record in (a,b):
+            if key in record and (not isinstance(record[key],dict) or type(record[key].get('rank')) is not int or record[key]['rank']<0): failures.append(key+'/invalid')
+        if isinstance(a.get(key,{}),dict) and isinstance(b.get(key,{}),dict) and a.get(key,{}).get('rank')!=b.get(key,{}).get('rank'): failures.append(key+'/rank')
     sa,sb=left['returned_state'],right['returned_state']
+    if len(sa['b'])!=len(sb['b']): failures.append('state-dimensions')
     if sa.get('active_atoms')!=sb.get('active_atoms'): failures.append('active-face')
     if left.get('search_completed') and not right.get('search_completed'): failures.append('search-incomplete')
+    oa=sa['objective']/left['search']['residual_scale']/left['search']['residual_scale']
+    ob=sb['objective']/right['search']['residual_scale']/right['search']['residual_scale']
+    if not finite(oa) or not finite(ob): return dict(passed=False,reason='invalid-normalized-objective')
     if a.get('runtime_convergence')=='passed':
         for key in ('beta','b'):
             x,y=sa.get(key,[]),sb.get(key,[])
             if len(x)!=len(y) or any(abs(u-w)>1e-10*(1+max(abs(u),abs(w))) for u,w in zip(x,y)): failures.append(key)
-        oa=sa['objective']/left['search']['residual_scale']**2
-        ob=sb['objective']/right['search']['residual_scale']**2
         if abs(oa-ob)>1e-12: failures.append('normalized-objective')
-    return dict(passed=not failures,reason='same-evidence-and-qualified-endpoint',differences=failures)
+    elif ob>oa+1e-12: failures.append('normalized-objective-regression')
+    return dict(passed=not failures,reason='same-evidence-and-qualified-endpoint' if a.get('runtime_convergence')=='passed' else 'unconverged-not-worse',differences=failures)
 
 
 def compare(root):
@@ -85,7 +124,7 @@ def compare(root):
                     if x['process']['status']!='completed' or y['process']['status']!='completed' or x.get('result',{}).get('stage')!='complete' or y.get('result',{}).get('stage')!='complete':
                         checks.append(dict(passed=None,reason='incomplete-measurement'))
                     else: checks.append(scientific_parity(x['result'],y['result']))
-                done=len(checks)==3 and all(c['passed'] is not None for c in checks)
+                done=len(runs)==len(actual)==3 and len(checks)==3 and all(c['passed'] is not None for c in checks)
                 passed=all(c['passed'] for c in checks) if done else None
                 out['comparisons'][f'{backend}/{kind}/{case}']=dict(complete=done,passed=passed,checks=checks)
                 numerical &= passed is True; complete &= done
@@ -96,7 +135,11 @@ def compare(root):
             return statistics.median(r['result']['search_seconds'] for r in runs)
         legacy,new=median('legacy','single-512'),median('schwarz','single-512')
         wins=[]
-        for case in ('heterogeneous-168','chain-128','cube-128','chain-512','cube-512'):
+        for case in sorted(present):
+            rows=candidate['runs'].get(f'{backend}/schwarz/{case}',[])
+            eligible=[overlap_eligible(r.get('result',{})) for r in rows]
+            if len(eligible)!=3 or any(x is None for x in eligible): complete=False; continue
+            if not all(eligible): continue
             a,b=median('schwarz',case),median('diagonal',case)
             if a is not None and b is not None and a<b and out['comparisons'][f'{backend}/schwarz/{case}']['passed'] is True and out['comparisons'][f'{backend}/diagonal/{case}']['passed'] is True: wins.append(case)
         out['performance'][backend]=dict(legacy_512=legacy,schwarz_512=new,

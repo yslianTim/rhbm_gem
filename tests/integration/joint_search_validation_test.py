@@ -10,11 +10,40 @@ from joint_search_validation import scientific_parity
 
 def result():
     return dict(stage='complete',search_completed=True,search=dict(residual_scale=2),
-        returned_assessment=dict(runtime_convergence='passed',runtime_failure='none',runtime_checks=dict(inner=True,local_correction=True),design_spectrum=dict(rank=2)),
+        returned_assessment=dict(runtime_convergence='passed',runtime_failure='none',runtime_checks=dict(inner=True,local_correction=True),design_spectrum=dict(rank=2),width_spectrum=dict(rank=1),profile_jacobian_spectrum=dict(rank=1)),
         returned_state=dict(objective=.04,beta=[2.,.2],b=[.5],active_atoms=[]))
 
 
 class SearchComparison(unittest.TestCase):
+    def test_malformed_states_never_pass(self):
+        for key,value in (('beta',[float('nan'),.2]),('beta',[float('inf'),.2]),
+                          ('beta',[]),('b',[]),('b',[0.]),('objective',float('nan')),
+                          ('active_atoms',[1]),('active_atoms',[0,0])):
+            a=result(); b=copy.deepcopy(a); b['returned_state'][key]=value
+            with self.subTest(key=key,value=value): self.assertFalse(scientific_parity(a,b)['passed'])
+        for key in ('beta','b','objective','active_atoms'):
+            a=result(); del a['returned_state'][key]
+            self.assertFalse(scientific_parity(a,a)['passed'])
+        for scale in (0.,-1.,float('nan'),float('inf')):
+            a=result(); a['search']['residual_scale']=scale
+            self.assertFalse(scientific_parity(a,a)['passed'])
+
+    def test_missing_evidence_is_not_equivalent_success(self):
+        for key in ('runtime_checks','design_spectrum','width_spectrum','profile_jacobian_spectrum'):
+            a=result(); del a['returned_assessment'][key]
+            self.assertFalse(scientific_parity(a,a)['passed'])
+        a=result(); a['returned_assessment']['design_spectrum']={}
+        self.assertFalse(scientific_parity(a,a)['passed'])
+        a=dict(returned_assessment=None,search=dict(initial=dict(valid=False)))
+        self.assertFalse(scientific_parity(a,a)['passed'])
+
+    def test_failed_states_must_not_worsen(self):
+        a=result(); a['returned_assessment']['runtime_convergence']='failed'
+        b=copy.deepcopy(a); b['returned_state']['objective']=1e6
+        self.assertFalse(scientific_parity(a,b)['passed'])
+        b['returned_state']['objective']=.01
+        self.assertTrue(scientific_parity(a,b)['passed'])
+
     def test_stale_binaries_are_rejected_before_a_campaign(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder); source=root/'source'; build=root/'build'

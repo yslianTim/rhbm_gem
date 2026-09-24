@@ -146,6 +146,14 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     Snapshot(output,report);
     auto search=n::SearchProfile(domain,y,b,context);
     report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
+#ifndef PR23_BASELINE_DRIVER
+    if(search_kind=="schwarz")
+    {
+        const auto partition=n::SearchPartition(domain,context);
+        j::array memberships; for(const auto & blocks:partition->atom_blocks) if(!blocks.empty()) memberships.push_back(blocks.size());
+        report["partition"]=j::object{{"blocks",partition->blocks.size()},{"atom_memberships",memberships}};
+    }
+#endif
     report["search_seconds"]=search.seconds; report["search_work"]=SearchWork();
     report["search_global_derivative_preparations"]=n::SparseWorkForTesting().derivative_preparations;
     report["stage"]="assessment"; Snapshot(output,report);
@@ -159,10 +167,16 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 }
 
 #endif
+#if !defined(SPARSE_BASELINE_DRIVER) && !defined(PR23_BASELINE_DRIVER)
+#include "support/JointFixedDiagnostic.hpp"
+#endif
 void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::EvaluationContext & context,const char * output)
 {
 
 #ifndef SPARSE_BASELINE_DRIVER
+#ifndef PR23_BASELINE_DRIVER
+    if(!fixed_mode.empty()) {RunFixed(domain,y,b,context,output); return;}
+#endif
     if(!search_kind.empty()) {RunSearch(domain,y,b,context,output); return;}
 #endif
     j::object report{{"rows",domain.rows},{"atoms",b.size()},{"initial_b",Values(b)},{"stage","primary"}};Snapshot(output,report);
@@ -262,6 +276,10 @@ int main(int argc,char ** argv)
                 else if(option=="--audit") audit=true;
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
+#ifndef PR23_BASELINE_DRIVER
+                else if(option=="--fixed" && k+1<end) fixed_mode=argv[++k];
+                else if(option=="--state" && k+1<end) fixed_state=argv[++k];
+#endif
                 else if(option=="--resources") n::ResourceWorkForTesting().enabled=true;
                 else if(option=="--capture" && k+1<end) {audit=true; capture=argv[++k]; std::filesystem::create_directories(capture);}
                 else throw std::invalid_argument("Invalid benchmark option");

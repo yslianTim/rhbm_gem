@@ -46,7 +46,7 @@ WidthStepResult WidthStepSolver(const ProfileJacobianOperator & op,VectorRef gra
     if(!context.Valid() || context.linearization!=op.Identity() || context.space!=PreconditionerSpace::Width || context.metric.size()!=op.Columns() || !(context.damping>0))
     {WidthStepResult out; out.reason="pcg-stale-or-invalid-context"; return out;}
     const Vector diagonal=context.damping*context.metric.array().square().matrix();
-    const auto action=[&](VectorRef v)->Vector {return op.ApplyAdjoint(op.Apply(v))+(diagonal.array()*v.array()).matrix();};
+    const auto action=[&](VectorRef v)->Vector {return op.ApplyNormal(v)+(diagonal.array()*v.array()).matrix();};
     auto result=SolvePcg(action,inverse,-gradient,context.metric,limit);
     if(result.valid)
     {

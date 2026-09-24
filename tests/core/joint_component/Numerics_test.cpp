@@ -517,3 +517,24 @@ TEST(JointComponentNumericsTest, CompactSvdReferencePreservesWeightedChangingAct
     EXPECT_EQ(candidate.rank,oracle.rank);
     EXPECT_LT((candidate.beta-oracle.beta).norm(),1e-10);
 }
+
+TEST(JointComponentNumericsTest, SharedRankContractPreservesBothBoundaryRules)
+{
+    namespace n=p::runtime;
+    const double relative=n::RankPolicy{1000,0,0}.Relative(4);
+    for(double absolute:{-1.,1e-7}) for(double multiple:{0.,.5,1.,2.})
+    {
+        const double threshold=absolute<0 ? relative : absolute;
+        Matrix x=Matrix::Identity(4,4); x(3,3)=threshold*multiple;
+        const auto old=n::CompactSvd(x,relative,absolute);
+        const auto native=n::EvaluateRank(x,{{1000,8,4},4,absolute});
+        const auto strict=n::EvaluateRank(x,{{1000,8,4},4,absolute,n::RankBoundary::StrictGreater});
+        ASSERT_TRUE(native.valid && strict.valid);
+        EXPECT_EQ(native.rank,old.rank); EXPECT_EQ(native.threshold,old.threshold);
+        EXPECT_EQ(strict.rank,(old.singular_values.array()>old.threshold).count());
+    }
+    const auto global=n::EvaluateRank(Matrix::Identity(2,2),{{1000,4,2},4});
+    ASSERT_TRUE(global.valid); EXPECT_EQ(global.threshold,n::RankPolicy({1000,4,2}).Relative(4));
+    EXPECT_EQ(n::EvaluateRank(Matrix::Zero(4,4),{{1000,8,4},4}).rank,0);
+    EXPECT_FALSE(n::EvaluateRank(Matrix::Constant(4,4,n::unavailable),{{1000,8,4},4}).valid);
+}

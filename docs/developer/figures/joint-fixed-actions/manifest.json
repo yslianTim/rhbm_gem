@@ -1,0 +1,10 @@
+{
+  "archive": "receipts.tar.xz",
+  "sha256": "eb29866fb7b2315919699cef163ed37d91d1837af668ecb7da3550f305f62f41",
+  "bytes": 15987804,
+  "baseline": "ec24f3056427408cb1978cff004ed477908fb0d0",
+  "numerical_runs": 72,
+  "numerical_comparisons": 24,
+  "promotion": false,
+  "timing_note": "Original totals exclude gradient setup; see acceptance report. Raw receipts preserved; final corrected wrappers and functional checks included."
+}

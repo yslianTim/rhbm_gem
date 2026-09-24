@@ -7,6 +7,8 @@ namespace rhbm_gem::core::joint_component {
 struct SparseFactorState;
 struct SparseWork
 {
+    std::size_t q_actions{},triangular_solves{},compact_extractions{},fixed_factorizations{},factor_storage_bytes{};
+    double least_squares_seconds{},q_seconds{},triangular_seconds{},compact_seconds{},fixed_factor_seconds{};
     std::size_t symbolic{},numeric{},symbolic_reuses{},factor_reuses{},reference{},factor_nonzeros{},cancellation_reductions{};
     double matrix_preparation_seconds{},symbolic_seconds{},numeric_seconds{},reference_seconds{},reference_svd_seconds{},derivative_seconds{};
     std::size_t derivative_preparations{},derivative_compacts{},reference_compacts{},free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
@@ -30,6 +32,7 @@ class FreeDesignFactor
     FreeDesignFactor(std::shared_ptr<SparseFactorState>,std::size_t);
     void Check() const;
 public:
+    static std::shared_ptr<FreeDesignFactor> Fixed(const Sparse &,const std::vector<Eigen::Index> &);
     bool Matches(const Sparse &,const std::vector<Eigen::Index> &) const;
     int Rank() const;
     Matrix Compact() const;

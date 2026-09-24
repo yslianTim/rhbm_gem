@@ -13,11 +13,23 @@ struct CompactSvdResult
     double threshold{};
     bool valid{},used_bdc{},jacobi_retry{};
 };
+// Preserve the historical distinction: spectrum counts use strict >, while
+// solve/derivative evidence uses Eigen's native cutoff and zero-value guard.
+enum class RankBoundary {SvdNative,StrictGreater};
+struct RankRequest
+{
+    RankPolicy policy;
+    Eigen::Index columns{}; // Decision dimensions may be larger than a component compact.
+    double absolute{-1};
+    RankBoundary boundary{RankBoundary::SvdNative};
+};
 enum class CompactSvdVectors {None,Right};
 // Thresholds belong to the original problem, not the compact matrix dimensions.
 // A non-null RHS requests a least-squares solution. Right vectors are retained
 // only when explicitly requested; the default needs singular values alone.
 CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,const Vector * rhs=nullptr,
+    CompactSvdVectors=CompactSvdVectors::None);
+CompactSvdResult EvaluateRank(const Matrix &,const RankRequest &,const Vector * rhs=nullptr,
     CompactSvdVectors=CompactSvdVectors::None);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 enum class CompactSvdMode {Automatic,Legacy,ValuesOnly};

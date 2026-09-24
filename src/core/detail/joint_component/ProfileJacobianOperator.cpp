@@ -14,6 +14,7 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     if(!e.valid || !(scale_>0) || !std::isfinite(scale_) || m<=0 || e.beta.size()!=2*m ||
         e.x.cols()!=2*m || e.derivative.rows()!=n || e.derivative.cols()!=2*m || e.residual.size()!=n ||
         !e.beta.allFinite() || !e.residual.allFinite()) return;
+    const auto design_started=std::chrono::steady_clock::now();
     Indices free;
     for(Eigen::Index k=0;k<2*m;++k) if(k%2 || e.beta(k)>0) free.push_back(k);
     const auto p=static_cast<Eigen::Index>(free.size());
@@ -35,13 +36,18 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     }
     if(!contraction_.allFinite()) {reason_="nonfinite-derivative"; return;}
     design.setFromTriplets(entries.begin(),entries.end()); raw_.setFromTriplets(raw.begin(),raw.end());
+    work.design_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-design_started).count();
     try {
         // Dedicated ownership: a trial's mutable workspace cannot expire this factor.
-        LinearWorkspace workspace; factor_=workspace.Factor(design,free,0);
+        {WorkTimer factor_timer(work.factor_seconds);
+        factor_=FreeDesignFactor::Fixed(design,free);}
         {
             ResourcePhase rank_phase("operator-rank");
             ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
-            const auto svd=CompactSvd(factor_->Compact(),context.rank.Relative(p),absolute);
+            Matrix compact;
+            {WorkTimer compact_timer(work.compact_seconds); compact=factor_->Compact();}
+            CompactSvdResult svd;
+            {WorkTimer svd_timer(work.svd_seconds); svd=EvaluateRank(compact,{context.rank,p,absolute});}
             if(!svd.valid) {reason_="nonfinite-derivative"; factor_.reset(); return;}
             if(svd.rank!=p || factor_->Rank()!=p)
             {reason_="rank-deficient-free-design"; factor_.reset(); return;}
@@ -80,4 +86,20 @@ Vector ProfileJacobianOperator::ApplyAdjoint(VectorRef w) const
     if(!out.allFinite()) throw std::runtime_error("Nonfinite profile operator adjoint");
     return out;
 }
+Vector ProfileJacobianOperator::ApplyNormal(VectorRef v) const
+{
+    ResourcePhase phase("operator-normal");
+    Check(v,Columns()); auto & work=OperatorWorkForTesting(); ++work.normals; WorkTimer timer(work.normal_seconds);
+    RecordDenseShape("operator-observation-vector",Rows(),1);
+    RecordDenseShape("operator-free-vector",FreeColumns(),1);
+    Vector t(contraction_.size());
+    for(Eigen::Index k=0;k<t.size();++k) t(k)=contraction_(k)*v(owners_[static_cast<std::size_t>(k)]);
+    Vector out=raw_.transpose()*factor_->ProjectComplement(raw_*v).col(0);
+    const Vector solved=factor_->NormalSolve(t);
+    for(Eigen::Index k=0;k<solved.size();++k) out(owners_[static_cast<std::size_t>(k)])+=contraction_(k)*solved(k);
+    out/=scale_; out/=scale_;
+    if(!out.allFinite()) throw std::runtime_error("Nonfinite profile operator normal action");
+    return out;
+}
+
 }

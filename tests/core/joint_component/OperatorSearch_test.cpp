@@ -83,7 +83,12 @@ TEST(JointOperatorSearchTest, SchwarzSpdAndThreeStepSolversHaveSameGlobalSolutio
             if(kind==1) return x.array()/(norms.array().square()+pc.damping*pc.metric.array().square());
             return x;
         };
+        const auto composed=n::SolvePcg([&](n::VectorRef x)->n::Vector {
+            return op.ApplyAdjoint(op.Apply(x))+(pc.damping*pc.metric.array().square()*x.array()).matrix();
+        },action,-gradient,pc.metric);
+        ASSERT_TRUE(composed.valid)<<composed.reason;
         const auto result=n::WidthStepSolver(op,gradient,pc,action); ASSERT_TRUE(result.valid)<<result.reason;
+        EXPECT_LT((result.step-composed.step).norm(),1e-10*(1+composed.step.norm()));
         EXPECT_LT((result.step-expected).norm(),1e-10*(1+expected.norm()));
         EXPECT_NEAR(result.predicted,-gradient.dot(expected)-.5*(j*expected).squaredNorm(),1e-12);
     }

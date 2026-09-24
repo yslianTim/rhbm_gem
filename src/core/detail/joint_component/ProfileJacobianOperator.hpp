@@ -4,8 +4,8 @@
 namespace rhbm_gem::core::joint_component {
 struct OperatorWork
 {
-    std::size_t preparations{},applications{},adjoints{},rank_checks{};
-    double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{};
+    std::size_t preparations{},applications{},adjoints{},rank_checks{},normals{};
+    double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{},normal_seconds{},design_seconds{},factor_seconds{},compact_seconds{},svd_seconds{};
 };
 OperatorWork & OperatorWorkForTesting();
 // A unique immutable identity; equal dimensions do not imply equal states.
@@ -32,5 +32,6 @@ public:
     const std::shared_ptr<const LinearizationIdentity> & Identity() const {return identity_;}
     Vector Apply(VectorRef) const;
     Vector ApplyAdjoint(VectorRef) const;
+    Vector ApplyNormal(VectorRef) const;
 };
 }

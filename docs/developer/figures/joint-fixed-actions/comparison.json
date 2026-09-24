@@ -1,0 +1,5960 @@
+{
+  "comparisons": {
+    "chain-8/eigen/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "chain-8/eigen/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "chain-8/eigen/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "chain-8/spqr/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "chain-8/spqr/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "chain-8/spqr/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/eigen/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/eigen/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/eigen/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/spqr/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/spqr/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-128/spqr/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/eigen/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/eigen/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/eigen/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/spqr/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/spqr/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "heterogeneous-168/spqr/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/eigen/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/eigen/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/eigen/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/spqr/A-B": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/spqr/B-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    },
+    "single-512/spqr/A-C": {
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        },
+        {
+          "passed": true,
+          "differences": []
+        }
+      ]
+    }
+  },
+  "performance": {
+    "chain-8/eigen/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 4.25e-06,
+        "candidate_median": 3.417e-06,
+        "baseline_range": [
+          3.125e-06,
+          2.7917e-05
+        ],
+        "candidate_range": [
+          2.5e-06,
+          1.2833e-05
+        ],
+        "ratio": 0.804,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.000759583,
+        "candidate_median": 0.000735958,
+        "baseline_range": [
+          0.000692041,
+          0.00108975
+        ],
+        "candidate_range": [
+          0.000722208,
+          0.000936042
+        ],
+        "ratio": 0.9688974081831742,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000236667,
+        "candidate_median": 0.000236709,
+        "baseline_range": [
+          0.000229333,
+          0.000296667
+        ],
+        "candidate_range": [
+          0.000233625,
+          0.00023825
+        ],
+        "ratio": 1.0001774645387824,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.002290416,
+        "candidate_median": 0.002226124,
+        "baseline_range": [
+          0.002120041,
+          0.002823917
+        ],
+        "candidate_range": [
+          0.002106583,
+          0.002363833
+        ],
+        "ratio": 0.9719299900105483,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.002622791,
+        "candidate_median": 0.002052,
+        "baseline_range": [
+          0.002025999,
+          0.002665083
+        ],
+        "candidate_range": [
+          0.002044374,
+          0.002271958
+        ],
+        "ratio": 0.7823726709448064,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.002539957,
+        "candidate_median": 0.002420958,
+        "baseline_range": [
+          0.0024166660000000005,
+          0.0031720410000000004
+        ],
+        "candidate_range": [
+          0.002398583,
+          0.002806666
+        ],
+        "ratio": 0.9531492068566516,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002823917,
+            0.0052380859999999994
+          ],
+          [
+            0.002290416,
+            0.0042679169999999995
+          ],
+          [
+            0.002120041,
+            0.004329123
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002363833,
+            0.00438075
+          ],
+          [
+            0.002226124,
+            0.004219499
+          ],
+          [
+            0.002106583,
+            0.004072373000000001
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002290416,
+          "candidate_median": 0.004219499,
+          "baseline_range": [
+            0.002120041,
+            0.002823917
+          ],
+          "candidate_range": [
+            0.004072373000000001,
+            0.00438075
+          ],
+          "ratio": 1.8422413221004392,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002665083,
+            0.005079251999999999
+          ],
+          [
+            0.002025999,
+            0.0040035
+          ],
+          [
+            0.002622791,
+            0.004831873
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002271958,
+            0.004288875
+          ],
+          [
+            0.002044374,
+            0.004037749
+          ],
+          [
+            0.002052,
+            0.00401779
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002622791,
+          "candidate_median": 0.004037749,
+          "baseline_range": [
+            0.002025999,
+            0.002665083
+          ],
+          "candidate_range": [
+            0.00401779,
+            0.004288875
+          ],
+          "ratio": 1.5394856090325153,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.0031720410000000004,
+            0.00558621
+          ],
+          [
+            0.0024166660000000005,
+            0.004394167000000001
+          ],
+          [
+            0.002539957,
+            0.004749039
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002806666,
+            0.004823583
+          ],
+          [
+            0.002398583,
+            0.0043919580000000005
+          ],
+          [
+            0.002420958,
+            0.004386748
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002539957,
+          "candidate_median": 0.0043919580000000005,
+          "baseline_range": [
+            0.0024166660000000005,
+            0.0031720410000000004
+          ],
+          "candidate_range": [
+            0.004386748,
+            0.004823583
+          ],
+          "ratio": 1.7291465957888266,
+          "observed": false
+        }
+      }
+    },
+    "chain-8/eigen/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 3.417e-06,
+        "candidate_median": 2.708e-06,
+        "baseline_range": [
+          2.5e-06,
+          1.2833e-05
+        ],
+        "candidate_range": [
+          2.625e-06,
+          3.875e-06
+        ],
+        "ratio": 0.7925080479953176,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.000735958,
+        "candidate_median": 0.000741417,
+        "baseline_range": [
+          0.000722208,
+          0.000936042
+        ],
+        "candidate_range": [
+          0.000722958,
+          0.000786208
+        ],
+        "ratio": 1.0074175428489125,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000236709,
+        "candidate_median": 8.1583e-05,
+        "baseline_range": [
+          0.000233625,
+          0.00023825
+        ],
+        "candidate_range": [
+          7.8625e-05,
+          8.5e-05
+        ],
+        "ratio": 0.3446552518070711,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.002226124,
+        "candidate_median": 0.001330584,
+        "baseline_range": [
+          0.002106583,
+          0.002363833
+        ],
+        "candidate_range": [
+          0.00130546,
+          0.001357291
+        ],
+        "ratio": 0.5977133349265361,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.002052,
+        "candidate_median": 0.0013480830000000001,
+        "baseline_range": [
+          0.002044374,
+          0.002271958
+        ],
+        "candidate_range": [
+          0.001299751,
+          0.0017855419999999998
+        ],
+        "ratio": 0.6569605263157895,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.002420958,
+        "candidate_median": 0.001878042,
+        "baseline_range": [
+          0.002398583,
+          0.002806666
+        ],
+        "candidate_range": [
+          0.0018517079999999999,
+          0.0019117920000000003
+        ],
+        "ratio": 0.7757433214454773,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002363833,
+            0.00438075
+          ],
+          [
+            0.002226124,
+            0.004219499
+          ],
+          [
+            0.002106583,
+            0.004072373000000001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.001357291,
+            0.001601083
+          ],
+          [
+            0.001330584,
+            0.0016397100000000002
+          ],
+          [
+            0.00130546,
+            0.0015375430000000002
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002226124,
+          "candidate_median": 0.001601083,
+          "baseline_range": [
+            0.002106583,
+            0.002363833
+          ],
+          "candidate_range": [
+            0.0015375430000000002,
+            0.0016397100000000002
+          ],
+          "ratio": 0.7192245355604631,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002271958,
+            0.004288875
+          ],
+          [
+            0.002044374,
+            0.004037749
+          ],
+          [
+            0.002052,
+            0.00401779
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.0013480830000000001,
+            0.0015918750000000002
+          ],
+          [
+            0.001299751,
+            0.001608877
+          ],
+          [
+            0.0017855419999999998,
+            0.002017625
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002052,
+          "candidate_median": 0.001608877,
+          "baseline_range": [
+            0.002044374,
+            0.002271958
+          ],
+          "candidate_range": [
+            0.0015918750000000002,
+            0.002017625
+          ],
+          "ratio": 0.7840531189083821,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002806666,
+            0.004823583
+          ],
+          [
+            0.002398583,
+            0.0043919580000000005
+          ],
+          [
+            0.002420958,
+            0.004386748
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.0019117920000000003,
+            0.0021555840000000003
+          ],
+          [
+            0.0018517079999999999,
+            0.002160834
+          ],
+          [
+            0.001878042,
+            0.002110125
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002420958,
+          "candidate_median": 0.0021555840000000003,
+          "baseline_range": [
+            0.002398583,
+            0.002806666
+          ],
+          "candidate_range": [
+            0.002110125,
+            0.002160834
+          ],
+          "ratio": 0.8903847154721397,
+          "observed": true
+        }
+      }
+    },
+    "chain-8/eigen/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 4.25e-06,
+        "candidate_median": 2.708e-06,
+        "baseline_range": [
+          3.125e-06,
+          2.7917e-05
+        ],
+        "candidate_range": [
+          2.625e-06,
+          3.875e-06
+        ],
+        "ratio": 0.6371764705882353,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.000759583,
+        "candidate_median": 0.000741417,
+        "baseline_range": [
+          0.000692041,
+          0.00108975
+        ],
+        "candidate_range": [
+          0.000722958,
+          0.000786208
+        ],
+        "ratio": 0.9760842462245732,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000236667,
+        "candidate_median": 8.1583e-05,
+        "baseline_range": [
+          0.000229333,
+          0.000296667
+        ],
+        "candidate_range": [
+          7.8625e-05,
+          8.5e-05
+        ],
+        "ratio": 0.34471641589237195,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.002290416,
+        "candidate_median": 0.001330584,
+        "baseline_range": [
+          0.002120041,
+          0.002823917
+        ],
+        "candidate_range": [
+          0.00130546,
+          0.001357291
+        ],
+        "ratio": 0.5809355156443197,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.002622791,
+        "candidate_median": 0.0013480830000000001,
+        "baseline_range": [
+          0.002025999,
+          0.002665083
+        ],
+        "candidate_range": [
+          0.001299751,
+          0.0017855419999999998
+        ],
+        "ratio": 0.5139879616789901,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.002539957,
+        "candidate_median": 0.001878042,
+        "baseline_range": [
+          0.0024166660000000005,
+          0.0031720410000000004
+        ],
+        "candidate_range": [
+          0.0018517079999999999,
+          0.0019117920000000003
+        ],
+        "ratio": 0.7393991315601013,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002823917,
+            0.0052380859999999994
+          ],
+          [
+            0.002290416,
+            0.0042679169999999995
+          ],
+          [
+            0.002120041,
+            0.004329123
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.001357291,
+            0.001601083
+          ],
+          [
+            0.001330584,
+            0.0016397100000000002
+          ],
+          [
+            0.00130546,
+            0.0015375430000000002
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002290416,
+          "candidate_median": 0.001601083,
+          "baseline_range": [
+            0.002120041,
+            0.002823917
+          ],
+          "candidate_range": [
+            0.0015375430000000002,
+            0.0016397100000000002
+          ],
+          "ratio": 0.699035895662622,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.002665083,
+            0.005079251999999999
+          ],
+          [
+            0.002025999,
+            0.0040035
+          ],
+          [
+            0.002622791,
+            0.004831873
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.0013480830000000001,
+            0.0015918750000000002
+          ],
+          [
+            0.001299751,
+            0.001608877
+          ],
+          [
+            0.0017855419999999998,
+            0.002017625
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002622791,
+          "candidate_median": 0.001608877,
+          "baseline_range": [
+            0.002025999,
+            0.002665083
+          ],
+          "candidate_range": [
+            0.0015918750000000002,
+            0.002017625
+          ],
+          "ratio": 0.6134217328029569,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.0031720410000000004,
+            0.00558621
+          ],
+          [
+            0.0024166660000000005,
+            0.004394167000000001
+          ],
+          [
+            0.002539957,
+            0.004749039
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.0019117920000000003,
+            0.0021555840000000003
+          ],
+          [
+            0.0018517079999999999,
+            0.002160834
+          ],
+          [
+            0.001878042,
+            0.002110125
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.002539957,
+          "candidate_median": 0.0021555840000000003,
+          "baseline_range": [
+            0.0024166660000000005,
+            0.0031720410000000004
+          ],
+          "candidate_range": [
+            0.002110125,
+            0.002160834
+          ],
+          "ratio": 0.8486694853495553,
+          "observed": true
+        }
+      }
+    },
+    "chain-8/spqr/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.000395584,
+        "candidate_median": 1.042e-06,
+        "baseline_range": [
+          0.000346458,
+          0.000416291
+        ],
+        "candidate_range": [
+          1e-06,
+          2.167e-06
+        ],
+        "ratio": 0.0026340802459149004,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.001335583,
+        "candidate_median": 0.001172625,
+        "baseline_range": [
+          0.001157833,
+          0.003138125
+        ],
+        "candidate_range": [
+          0.001043042,
+          0.001515959
+        ],
+        "ratio": 0.8779873658170253,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000653375,
+        "candidate_median": 0.000748584,
+        "baseline_range": [
+          0.000644541,
+          0.000708917
+        ],
+        "candidate_range": [
+          0.000735667,
+          0.000952459
+        ],
+        "ratio": 1.1457187679357184,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.004883373999999999,
+        "candidate_median": 0.005285833,
+        "baseline_range": [
+          0.004755083,
+          0.0071556250000000005
+        ],
+        "candidate_range": [
+          0.005225126,
+          0.006398585
+        ],
+        "ratio": 1.0824141259711013,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.004912958,
+        "candidate_median": 0.005492876000000001,
+        "baseline_range": [
+          0.004773332,
+          0.007141625
+        ],
+        "candidate_range": [
+          0.005063959000000001,
+          0.006264667
+        ],
+        "ratio": 1.1180384607399454,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.004921249,
+        "candidate_median": 0.005532291,
+        "baseline_range": [
+          0.004760166,
+          0.007139582
+        ],
+        "candidate_range": [
+          0.005029333,
+          0.006105167999999999
+        ],
+        "ratio": 1.1241640079581423,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.0071556250000000005,
+            0.01318146
+          ],
+          [
+            0.004755083,
+            0.010179416
+          ],
+          [
+            0.004883373999999999,
+            0.010269371999999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.006398585,
+            0.013505708000000002
+          ],
+          [
+            0.005285833,
+            0.011669375000000001
+          ],
+          [
+            0.005225126,
+            0.011230503
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004883373999999999,
+          "candidate_median": 0.011669375000000001,
+          "baseline_range": [
+            0.004755083,
+            0.0071556250000000005
+          ],
+          "candidate_range": [
+            0.011230503,
+            0.013505708000000002
+          ],
+          "ratio": 2.3896132059514597,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.007141625,
+            0.01316746
+          ],
+          [
+            0.004773332,
+            0.010197665
+          ],
+          [
+            0.004912958,
+            0.010298956000000001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.006264667,
+            0.013371790000000001
+          ],
+          [
+            0.005492876000000001,
+            0.011876418000000001
+          ],
+          [
+            0.005063959000000001,
+            0.011069336
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004912958,
+          "candidate_median": 0.011876418000000001,
+          "baseline_range": [
+            0.004773332,
+            0.007141625
+          ],
+          "candidate_range": [
+            0.011069336,
+            0.013371790000000001
+          ],
+          "ratio": 2.4173660755903064,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.007139582,
+            0.013165417
+          ],
+          [
+            0.004760166,
+            0.010184499
+          ],
+          [
+            0.004921249,
+            0.010307247
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.006105167999999999,
+            0.013212291000000001
+          ],
+          [
+            0.005532291,
+            0.011915833
+          ],
+          [
+            0.005029333,
+            0.01103471
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004921249,
+          "candidate_median": 0.011915833,
+          "baseline_range": [
+            0.004760166,
+            0.007139582
+          ],
+          "candidate_range": [
+            0.01103471,
+            0.013212291000000001
+          ],
+          "ratio": 2.421302600213889,
+          "observed": false
+        }
+      }
+    },
+    "chain-8/spqr/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 1.042e-06,
+        "candidate_median": 1.042e-06,
+        "baseline_range": [
+          1e-06,
+          2.167e-06
+        ],
+        "candidate_range": [
+          1.042e-06,
+          1.084e-06
+        ],
+        "ratio": 1.0,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.001172625,
+        "candidate_median": 0.000968583,
+        "baseline_range": [
+          0.001043042,
+          0.001515959
+        ],
+        "candidate_range": [
+          0.000905875,
+          0.001016875
+        ],
+        "ratio": 0.8259955228653661,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000748584,
+        "candidate_median": 0.000242167,
+        "baseline_range": [
+          0.000735667,
+          0.000952459
+        ],
+        "candidate_range": [
+          0.000240125,
+          0.0002445
+        ],
+        "ratio": 0.3235001015250126,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.005285833,
+        "candidate_median": 0.002596958,
+        "baseline_range": [
+          0.005225126,
+          0.006398585
+        ],
+        "candidate_range": [
+          0.002580791,
+          0.002659167
+        ],
+        "ratio": 0.49130534392592423,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.005492876000000001,
+        "candidate_median": 0.002631334,
+        "baseline_range": [
+          0.005063959000000001,
+          0.006264667
+        ],
+        "candidate_range": [
+          0.002611873,
+          0.002809042
+        ],
+        "ratio": 0.479044857375262,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.005532291,
+        "candidate_median": 0.002995418,
+        "baseline_range": [
+          0.005029333,
+          0.006105167999999999
+        ],
+        "candidate_range": [
+          0.002974459,
+          0.0030120010000000003
+        ],
+        "ratio": 0.541442595843205,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.006398585,
+            0.013505708000000002
+          ],
+          [
+            0.005285833,
+            0.011669375000000001
+          ],
+          [
+            0.005225126,
+            0.011230503
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002659167,
+            0.0033477100000000003
+          ],
+          [
+            0.002580791,
+            0.0032930829999999996
+          ],
+          [
+            0.002596958,
+            0.003310375
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.005285833,
+          "candidate_median": 0.003310375,
+          "baseline_range": [
+            0.005225126,
+            0.006398585
+          ],
+          "candidate_range": [
+            0.0032930829999999996,
+            0.0033477100000000003
+          ],
+          "ratio": 0.6262730964069428,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.006264667,
+            0.013371790000000001
+          ],
+          [
+            0.005492876000000001,
+            0.011876418000000001
+          ],
+          [
+            0.005063959000000001,
+            0.011069336
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002631334,
+            0.0033198769999999997
+          ],
+          [
+            0.002611873,
+            0.0033241649999999996
+          ],
+          [
+            0.002809042,
+            0.003522459
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.005492876000000001,
+          "candidate_median": 0.0033241649999999996,
+          "baseline_range": [
+            0.005063959000000001,
+            0.006264667
+          ],
+          "candidate_range": [
+            0.0033198769999999997,
+            0.003522459
+          ],
+          "ratio": 0.6051775062826831,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.006105167999999999,
+            0.013212291000000001
+          ],
+          [
+            0.005532291,
+            0.011915833
+          ],
+          [
+            0.005029333,
+            0.01103471
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002974459,
+            0.0036630020000000003
+          ],
+          [
+            0.002995418,
+            0.0037077100000000003
+          ],
+          [
+            0.0030120010000000003,
+            0.0037254180000000003
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.005532291,
+          "candidate_median": 0.0037077100000000003,
+          "baseline_range": [
+            0.005029333,
+            0.006105167999999999
+          ],
+          "candidate_range": [
+            0.0036630020000000003,
+            0.0037254180000000003
+          ],
+          "ratio": 0.6701943191346948,
+          "observed": true
+        }
+      }
+    },
+    "chain-8/spqr/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.000395584,
+        "candidate_median": 1.042e-06,
+        "baseline_range": [
+          0.000346458,
+          0.000416291
+        ],
+        "candidate_range": [
+          1.042e-06,
+          1.084e-06
+        ],
+        "ratio": 0.0026340802459149004,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.001335583,
+        "candidate_median": 0.000968583,
+        "baseline_range": [
+          0.001157833,
+          0.003138125
+        ],
+        "candidate_range": [
+          0.000905875,
+          0.001016875
+        ],
+        "ratio": 0.7252136332972192,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.000653375,
+        "candidate_median": 0.000242167,
+        "baseline_range": [
+          0.000644541,
+          0.000708917
+        ],
+        "candidate_range": [
+          0.000240125,
+          0.0002445
+        ],
+        "ratio": 0.3706401377463172,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.004883373999999999,
+        "candidate_median": 0.002596958,
+        "baseline_range": [
+          0.004755083,
+          0.0071556250000000005
+        ],
+        "candidate_range": [
+          0.002580791,
+          0.002659167
+        ],
+        "ratio": 0.5317958444305106,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.004912958,
+        "candidate_median": 0.002631334,
+        "baseline_range": [
+          0.004773332,
+          0.007141625
+        ],
+        "candidate_range": [
+          0.002611873,
+          0.002809042
+        ],
+        "ratio": 0.5355905749652246,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.004921249,
+        "candidate_median": 0.002995418,
+        "baseline_range": [
+          0.004760166,
+          0.007139582
+        ],
+        "candidate_range": [
+          0.002974459,
+          0.0030120010000000003
+        ],
+        "ratio": 0.6086702786223579,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.0071556250000000005,
+            0.01318146
+          ],
+          [
+            0.004755083,
+            0.010179416
+          ],
+          [
+            0.004883373999999999,
+            0.010269371999999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002659167,
+            0.0033477100000000003
+          ],
+          [
+            0.002580791,
+            0.0032930829999999996
+          ],
+          [
+            0.002596958,
+            0.003310375
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004883373999999999,
+          "candidate_median": 0.003310375,
+          "baseline_range": [
+            0.004755083,
+            0.0071556250000000005
+          ],
+          "candidate_range": [
+            0.0032930829999999996,
+            0.0033477100000000003
+          ],
+          "ratio": 0.6778868462665363,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.007141625,
+            0.01316746
+          ],
+          [
+            0.004773332,
+            0.010197665
+          ],
+          [
+            0.004912958,
+            0.010298956000000001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002631334,
+            0.0033198769999999997
+          ],
+          [
+            0.002611873,
+            0.0033241649999999996
+          ],
+          [
+            0.002809042,
+            0.003522459
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004912958,
+          "candidate_median": 0.0033241649999999996,
+          "baseline_range": [
+            0.004773332,
+            0.007141625
+          ],
+          "candidate_range": [
+            0.0033198769999999997,
+            0.003522459
+          ],
+          "ratio": 0.6766117275987296,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.007139582,
+            0.013165417
+          ],
+          [
+            0.004760166,
+            0.010184499
+          ],
+          [
+            0.004921249,
+            0.010307247
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.002974459,
+            0.0036630020000000003
+          ],
+          [
+            0.002995418,
+            0.0037077100000000003
+          ],
+          [
+            0.0030120010000000003,
+            0.0037254180000000003
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.004921249,
+          "candidate_median": 0.0037077100000000003,
+          "baseline_range": [
+            0.004760166,
+            0.007139582
+          ],
+          "candidate_range": [
+            0.0036630020000000003,
+            0.0037254180000000003
+          ],
+          "ratio": 0.753408331909237,
+          "observed": true
+        }
+      }
+    },
+    "single-128/eigen/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 9.8458e-05,
+        "candidate_median": 0.000127083,
+        "baseline_range": [
+          9.8125e-05,
+          0.000103458
+        ],
+        "candidate_range": [
+          0.000120709,
+          0.000131875
+        ],
+        "ratio": 1.290733104470942,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.690764417,
+        "candidate_median": 0.7168535,
+        "baseline_range": [
+          0.686689208,
+          0.695909333
+        ],
+        "candidate_range": [
+          0.696517375,
+          0.730195208
+        ],
+        "ratio": 1.0377684234421125,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.050796292,
+        "candidate_median": 0.052476792,
+        "baseline_range": [
+          0.050694541,
+          0.059487792
+        ],
+        "candidate_range": [
+          0.050972292,
+          0.053722875
+        ],
+        "ratio": 1.0330831234689335,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 1.0720450830000001,
+        "candidate_median": 1.108195708,
+        "baseline_range": [
+          1.066546333,
+          1.112233042
+        ],
+        "candidate_range": [
+          1.080793958,
+          1.118418249
+        ],
+        "ratio": 1.0337211798022863,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 1.0753155,
+        "candidate_median": 1.109293208,
+        "baseline_range": [
+          1.070366375,
+          1.089563249
+        ],
+        "candidate_range": [
+          1.0808874990000001,
+          1.1191553330000001
+        ],
+        "ratio": 1.0315978966173183,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.996967417,
+        "candidate_median": 1.0134316239999999,
+        "baseline_range": [
+          0.9902787910000002,
+          1.001732292
+        ],
+        "candidate_range": [
+          0.98521375,
+          1.0247666240000002
+        ],
+        "ratio": 1.0165142879488906,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.112233042,
+            1.706370044
+          ],
+          [
+            1.066546333,
+            1.634675123
+          ],
+          [
+            1.0720450830000001,
+            1.6329284570000002
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.080793958,
+            1.6406604150000001
+          ],
+          [
+            1.118418249,
+            1.688443042
+          ],
+          [
+            1.108195708,
+            1.680967376
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.0720450830000001,
+          "candidate_median": 1.680967376,
+          "baseline_range": [
+            1.066546333,
+            1.112233042
+          ],
+          "candidate_range": [
+            1.6406604150000001,
+            1.688443042
+          ],
+          "ratio": 1.5680006397641393,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.089563249,
+            1.683700251
+          ],
+          [
+            1.0753155,
+            1.6434442900000001
+          ],
+          [
+            1.070366375,
+            1.6312497490000002
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.0808874990000001,
+            1.6407539560000002
+          ],
+          [
+            1.1191553330000001,
+            1.6891801260000001
+          ],
+          [
+            1.109293208,
+            1.6820648759999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.0753155,
+          "candidate_median": 1.6820648759999999,
+          "baseline_range": [
+            1.070366375,
+            1.089563249
+          ],
+          "candidate_range": [
+            1.6407539560000002,
+            1.6891801260000001
+          ],
+          "ratio": 1.56425242266107,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.001732292,
+            1.595869294
+          ],
+          [
+            0.996967417,
+            1.565096207
+          ],
+          [
+            0.9902787910000002,
+            1.551162165
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.98521375,
+            1.5450802070000003
+          ],
+          [
+            1.0247666240000002,
+            1.5947914170000002
+          ],
+          [
+            1.0134316239999999,
+            1.5862032919999998
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.996967417,
+          "candidate_median": 1.5862032919999998,
+          "baseline_range": [
+            0.9902787910000002,
+            1.001732292
+          ],
+          "candidate_range": [
+            1.5450802070000003,
+            1.5947914170000002
+          ],
+          "ratio": 1.5910282171237695,
+          "observed": false
+        }
+      }
+    },
+    "single-128/eigen/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.000127083,
+        "candidate_median": 0.00010575,
+        "baseline_range": [
+          0.000120709,
+          0.000131875
+        ],
+        "candidate_range": [
+          6.3333e-05,
+          0.000126708
+        ],
+        "ratio": 0.8321333301857841,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.7168535,
+        "candidate_median": 0.6872055,
+        "baseline_range": [
+          0.696517375,
+          0.730195208
+        ],
+        "candidate_range": [
+          0.684519875,
+          0.692426083
+        ],
+        "ratio": 0.9586414797444666,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.052476792,
+        "candidate_median": 0.016777208,
+        "baseline_range": [
+          0.050972292,
+          0.053722875
+        ],
+        "candidate_range": [
+          0.016709917,
+          0.016849959
+        ],
+        "ratio": 0.31970719551606736,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 1.108195708,
+        "candidate_median": 0.833758459,
+        "baseline_range": [
+          1.080793958,
+          1.118418249
+        ],
+        "candidate_range": [
+          0.829573249,
+          0.8384337909999999
+        ],
+        "ratio": 0.7523566938413012,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 1.109293208,
+        "candidate_median": 0.832552041,
+        "baseline_range": [
+          1.0808874990000001,
+          1.1191553330000001
+        ],
+        "candidate_range": [
+          0.827525083,
+          0.8381145409999999
+        ],
+        "ratio": 0.7505247800994379,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 1.0134316239999999,
+        "candidate_median": 0.810260626,
+        "baseline_range": [
+          0.98521375,
+          1.0247666240000002
+        ],
+        "candidate_range": [
+          0.808361042,
+          0.814873415
+        ],
+        "ratio": 0.7995217504678935,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.080793958,
+            1.6406604150000001
+          ],
+          [
+            1.118418249,
+            1.688443042
+          ],
+          [
+            1.108195708,
+            1.680967376
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.833758459,
+            0.884217001
+          ],
+          [
+            0.8384337909999999,
+            0.888993332
+          ],
+          [
+            0.829573249,
+            0.8799172909999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.108195708,
+          "candidate_median": 0.884217001,
+          "baseline_range": [
+            1.080793958,
+            1.118418249
+          ],
+          "candidate_range": [
+            0.8799172909999999,
+            0.888993332
+          ],
+          "ratio": 0.7978888517767116,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.0808874990000001,
+            1.6407539560000002
+          ],
+          [
+            1.1191553330000001,
+            1.6891801260000001
+          ],
+          [
+            1.109293208,
+            1.6820648759999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.832552041,
+            0.883010583
+          ],
+          [
+            0.8381145409999999,
+            0.888674082
+          ],
+          [
+            0.827525083,
+            0.877869125
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.109293208,
+          "candidate_median": 0.883010583,
+          "baseline_range": [
+            1.0808874990000001,
+            1.1191553330000001
+          ],
+          "candidate_range": [
+            0.877869125,
+            0.888674082
+          ],
+          "ratio": 0.7960118899420865,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.98521375,
+            1.5450802070000003
+          ],
+          [
+            1.0247666240000002,
+            1.5947914170000002
+          ],
+          [
+            1.0134316239999999,
+            1.5862032919999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.810260626,
+            0.860719168
+          ],
+          [
+            0.814873415,
+            0.865432956
+          ],
+          [
+            0.808361042,
+            0.858705084
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.0134316239999999,
+          "candidate_median": 0.860719168,
+          "baseline_range": [
+            0.98521375,
+            1.0247666240000002
+          ],
+          "candidate_range": [
+            0.858705084,
+            0.865432956
+          ],
+          "ratio": 0.849311534805628,
+          "observed": true
+        }
+      }
+    },
+    "single-128/eigen/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 9.8458e-05,
+        "candidate_median": 0.00010575,
+        "baseline_range": [
+          9.8125e-05,
+          0.000103458
+        ],
+        "candidate_range": [
+          6.3333e-05,
+          0.000126708
+        ],
+        "ratio": 1.0740620366044404,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.690764417,
+        "candidate_median": 0.6872055,
+        "baseline_range": [
+          0.686689208,
+          0.695909333
+        ],
+        "candidate_range": [
+          0.684519875,
+          0.692426083
+        ],
+        "ratio": 0.994847857080629,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.050796292,
+        "candidate_median": 0.016777208,
+        "baseline_range": [
+          0.050694541,
+          0.059487792
+        ],
+        "candidate_range": [
+          0.016709917,
+          0.016849959
+        ],
+        "ratio": 0.33028410813923187,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 1.0720450830000001,
+        "candidate_median": 0.833758459,
+        "baseline_range": [
+          1.066546333,
+          1.112233042
+        ],
+        "candidate_range": [
+          0.829573249,
+          0.8384337909999999
+        ],
+        "ratio": 0.7777270491897773,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 1.0753155,
+        "candidate_median": 0.832552041,
+        "baseline_range": [
+          1.070366375,
+          1.089563249
+        ],
+        "candidate_range": [
+          0.827525083,
+          0.8381145409999999
+        ],
+        "ratio": 0.7742397845097555,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.996967417,
+        "candidate_median": 0.810260626,
+        "baseline_range": [
+          0.9902787910000002,
+          1.001732292
+        ],
+        "candidate_range": [
+          0.808361042,
+          0.814873415
+        ],
+        "ratio": 0.8127252828765216,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.112233042,
+            1.706370044
+          ],
+          [
+            1.066546333,
+            1.634675123
+          ],
+          [
+            1.0720450830000001,
+            1.6329284570000002
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.833758459,
+            0.884217001
+          ],
+          [
+            0.8384337909999999,
+            0.888993332
+          ],
+          [
+            0.829573249,
+            0.8799172909999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.0720450830000001,
+          "candidate_median": 0.884217001,
+          "baseline_range": [
+            1.066546333,
+            1.112233042
+          ],
+          "candidate_range": [
+            0.8799172909999999,
+            0.888993332
+          ],
+          "ratio": 0.8247946052097138,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.089563249,
+            1.683700251
+          ],
+          [
+            1.0753155,
+            1.6434442900000001
+          ],
+          [
+            1.070366375,
+            1.6312497490000002
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.832552041,
+            0.883010583
+          ],
+          [
+            0.8381145409999999,
+            0.888674082
+          ],
+          [
+            0.827525083,
+            0.877869125
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.0753155,
+          "candidate_median": 0.883010583,
+          "baseline_range": [
+            1.070366375,
+            1.089563249
+          ],
+          "candidate_range": [
+            0.877869125,
+            0.888674082
+          ],
+          "ratio": 0.8211641913466327,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.001732292,
+            1.595869294
+          ],
+          [
+            0.996967417,
+            1.565096207
+          ],
+          [
+            0.9902787910000002,
+            1.551162165
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.810260626,
+            0.860719168
+          ],
+          [
+            0.814873415,
+            0.865432956
+          ],
+          [
+            0.808361042,
+            0.858705084
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.996967417,
+          "candidate_median": 0.860719168,
+          "baseline_range": [
+            0.9902787910000002,
+            1.001732292
+          ],
+          "candidate_range": [
+            0.858705084,
+            0.865432956
+          ],
+          "ratio": 0.8633373100497226,
+          "observed": true
+        }
+      }
+    },
+    "single-128/spqr/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.157742083,
+        "candidate_median": 1.5792e-05,
+        "baseline_range": [
+          0.149677959,
+          0.256997875
+        ],
+        "candidate_range": [
+          1.4792e-05,
+          1.9834e-05
+        ],
+        "ratio": 0.00010011278981272232,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.194199042,
+        "candidate_median": 0.042630625,
+        "baseline_range": [
+          0.185234792,
+          0.29268425
+        ],
+        "candidate_range": [
+          0.042522333,
+          0.047883958
+        ],
+        "ratio": 0.21952026416278614,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.035836958,
+        "candidate_median": 0.042707333,
+        "baseline_range": [
+          0.035381833,
+          0.036403083
+        ],
+        "candidate_range": [
+          0.041503292,
+          0.043906375
+        ],
+        "ratio": 1.1917120030109698,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.46300075,
+        "candidate_median": 0.37112799900000004,
+        "baseline_range": [
+          0.443456875,
+          0.554077959
+        ],
+        "candidate_range": [
+          0.366320833,
+          0.375516709
+        ],
+        "ratio": 0.8015710536106043,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.45946870900000003,
+        "candidate_median": 0.36808141699999997,
+        "baseline_range": [
+          0.445265501,
+          0.554685501
+        ],
+        "candidate_range": [
+          0.36020537399999997,
+          0.37208862400000003
+        ],
+        "ratio": 0.8011022509043155,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.40545549999999997,
+        "candidate_median": 0.293047499,
+        "baseline_range": [
+          0.386635332,
+          0.49909312599999994
+        ],
+        "candidate_range": [
+          0.28629104099999997,
+          0.296196166
+        ],
+        "ratio": 0.7227611883424938,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.443456875,
+            0.8221784179999999
+          ],
+          [
+            0.46300075,
+            0.85349779
+          ],
+          [
+            0.554077959,
+            0.9380652079999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.366320833,
+            0.839618668
+          ],
+          [
+            0.37112799900000004,
+            0.842526165
+          ],
+          [
+            0.375516709,
+            0.8468384170000001
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.46300075,
+          "candidate_median": 0.842526165,
+          "baseline_range": [
+            0.443456875,
+            0.554077959
+          ],
+          "candidate_range": [
+            0.839618668,
+            0.8468384170000001
+          ],
+          "ratio": 1.8197079918337065,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.445265501,
+            0.8239870439999999
+          ],
+          [
+            0.45946870900000003,
+            0.8499657490000001
+          ],
+          [
+            0.554685501,
+            0.9386727499999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.36808141699999997,
+            0.8413792519999999
+          ],
+          [
+            0.37208862400000003,
+            0.84348679
+          ],
+          [
+            0.36020537399999997,
+            0.831527082
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.45946870900000003,
+          "candidate_median": 0.8413792519999999,
+          "baseline_range": [
+            0.445265501,
+            0.554685501
+          ],
+          "candidate_range": [
+            0.831527082,
+            0.84348679
+          ],
+          "ratio": 1.8312003309892422,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.386635332,
+            0.7653568749999999
+          ],
+          [
+            0.40545549999999997,
+            0.79595254
+          ],
+          [
+            0.49909312599999994,
+            0.8830803749999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.293047499,
+            0.7663453339999999
+          ],
+          [
+            0.296196166,
+            0.7675943319999999
+          ],
+          [
+            0.28629104099999997,
+            0.757612749
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.40545549999999997,
+          "candidate_median": 0.7663453339999999,
+          "baseline_range": [
+            0.386635332,
+            0.49909312599999994
+          ],
+          "candidate_range": [
+            0.757612749,
+            0.7675943319999999
+          ],
+          "ratio": 1.8900849390376995,
+          "observed": false
+        }
+      }
+    },
+    "single-128/spqr/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 1.5792e-05,
+        "candidate_median": 1.5042e-05,
+        "baseline_range": [
+          1.4792e-05,
+          1.9834e-05
+        ],
+        "candidate_range": [
+          1.1084e-05,
+          1.6084e-05
+        ],
+        "ratio": 0.9525075987841944,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.042630625,
+        "candidate_median": 0.0474675,
+        "baseline_range": [
+          0.042522333,
+          0.047883958
+        ],
+        "candidate_range": [
+          0.04614775,
+          0.048501667
+        ],
+        "ratio": 1.1134601005732383,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.042707333,
+        "candidate_median": 0.014502959,
+        "baseline_range": [
+          0.041503292,
+          0.043906375
+        ],
+        "candidate_range": [
+          0.014362667,
+          0.015710417
+        ],
+        "ratio": 0.33958943303717887,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.37112799900000004,
+        "candidate_median": 0.171443374,
+        "baseline_range": [
+          0.366320833,
+          0.375516709
+        ],
+        "candidate_range": [
+          0.17042300100000002,
+          0.173753626
+        ],
+        "ratio": 0.46195214174611493,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.36808141699999997,
+        "candidate_median": 0.17050479200000002,
+        "baseline_range": [
+          0.36020537399999997,
+          0.37208862400000003
+        ],
+        "candidate_range": [
+          0.169982625,
+          0.173607874
+        ],
+        "ratio": 0.4632257542086131,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.293047499,
+        "candidate_median": 0.156728583,
+        "baseline_range": [
+          0.28629104099999997,
+          0.296196166
+        ],
+        "candidate_range": [
+          0.152969043,
+          0.285488917
+        ],
+        "ratio": 0.5348231380060336,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.366320833,
+            0.839618668
+          ],
+          [
+            0.37112799900000004,
+            0.842526165
+          ],
+          [
+            0.375516709,
+            0.8468384170000001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.171443374,
+            0.21454916500000001
+          ],
+          [
+            0.173753626,
+            0.219639001
+          ],
+          [
+            0.17042300100000002,
+            0.21393766800000003
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.37112799900000004,
+          "candidate_median": 0.21454916500000001,
+          "baseline_range": [
+            0.366320833,
+            0.375516709
+          ],
+          "candidate_range": [
+            0.21393766800000003,
+            0.219639001
+          ],
+          "ratio": 0.5781001853217762,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.36808141699999997,
+            0.8413792519999999
+          ],
+          [
+            0.37208862400000003,
+            0.84348679
+          ],
+          [
+            0.36020537399999997,
+            0.831527082
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.169982625,
+            0.213088416
+          ],
+          [
+            0.173607874,
+            0.219493249
+          ],
+          [
+            0.17050479200000002,
+            0.21401945900000002
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.36808141699999997,
+          "candidate_median": 0.21401945900000002,
+          "baseline_range": [
+            0.36020537399999997,
+            0.37208862400000003
+          ],
+          "candidate_range": [
+            0.213088416,
+            0.219493249
+          ],
+          "ratio": 0.5814459766655377,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.293047499,
+            0.7663453339999999
+          ],
+          [
+            0.296196166,
+            0.7675943319999999
+          ],
+          [
+            0.28629104099999997,
+            0.757612749
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.156728583,
+            0.199834374
+          ],
+          [
+            0.285488917,
+            0.331374292
+          ],
+          [
+            0.152969043,
+            0.19648371
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.293047499,
+          "candidate_median": 0.199834374,
+          "baseline_range": [
+            0.28629104099999997,
+            0.296196166
+          ],
+          "candidate_range": [
+            0.19648371,
+            0.331374292
+          ],
+          "ratio": 0.681918032680429,
+          "observed": false
+        }
+      }
+    },
+    "single-128/spqr/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.157742083,
+        "candidate_median": 1.5042e-05,
+        "baseline_range": [
+          0.149677959,
+          0.256997875
+        ],
+        "candidate_range": [
+          1.1084e-05,
+          1.6084e-05
+        ],
+        "ratio": 9.53581930321029e-05,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.194199042,
+        "candidate_median": 0.0474675,
+        "baseline_range": [
+          0.185234792,
+          0.29268425
+        ],
+        "candidate_range": [
+          0.04614775,
+          0.048501667
+        ],
+        "ratio": 0.24442705541255969,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.035836958,
+        "candidate_median": 0.014502959,
+        "baseline_range": [
+          0.035381833,
+          0.036403083
+        ],
+        "candidate_range": [
+          0.014362667,
+          0.015710417
+        ],
+        "ratio": 0.40469280344609604,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 0.46300075,
+        "candidate_median": 0.171443374,
+        "baseline_range": [
+          0.443456875,
+          0.554077959
+        ],
+        "candidate_range": [
+          0.17042300100000002,
+          0.173753626
+        ],
+        "ratio": 0.37028746497710857,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 0.45946870900000003,
+        "candidate_median": 0.17050479200000002,
+        "baseline_range": [
+          0.445265501,
+          0.554685501
+        ],
+        "candidate_range": [
+          0.169982625,
+          0.173607874
+        ],
+        "ratio": 0.3710911943733692,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 0.40545549999999997,
+        "candidate_median": 0.156728583,
+        "baseline_range": [
+          0.386635332,
+          0.49909312599999994
+        ],
+        "candidate_range": [
+          0.152969043,
+          0.285488917
+        ],
+        "ratio": 0.38654940677830246,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.443456875,
+            0.8221784179999999
+          ],
+          [
+            0.46300075,
+            0.85349779
+          ],
+          [
+            0.554077959,
+            0.9380652079999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.171443374,
+            0.21454916500000001
+          ],
+          [
+            0.173753626,
+            0.219639001
+          ],
+          [
+            0.17042300100000002,
+            0.21393766800000003
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.46300075,
+          "candidate_median": 0.21454916500000001,
+          "baseline_range": [
+            0.443456875,
+            0.554077959
+          ],
+          "candidate_range": [
+            0.21393766800000003,
+            0.219639001
+          ],
+          "ratio": 0.4633883746408618,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.445265501,
+            0.8239870439999999
+          ],
+          [
+            0.45946870900000003,
+            0.8499657490000001
+          ],
+          [
+            0.554685501,
+            0.9386727499999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.169982625,
+            0.213088416
+          ],
+          [
+            0.173607874,
+            0.219493249
+          ],
+          [
+            0.17050479200000002,
+            0.21401945900000002
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.45946870900000003,
+          "candidate_median": 0.21401945900000002,
+          "baseline_range": [
+            0.445265501,
+            0.554685501
+          ],
+          "candidate_range": [
+            0.213088416,
+            0.219493249
+          ],
+          "ratio": 0.46579768068602034,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            0.386635332,
+            0.7653568749999999
+          ],
+          [
+            0.40545549999999997,
+            0.79595254
+          ],
+          [
+            0.49909312599999994,
+            0.8830803749999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.156728583,
+            0.199834374
+          ],
+          [
+            0.285488917,
+            0.331374292
+          ],
+          [
+            0.152969043,
+            0.19648371
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 0.40545549999999997,
+          "candidate_median": 0.199834374,
+          "baseline_range": [
+            0.386635332,
+            0.49909312599999994
+          ],
+          "candidate_range": [
+            0.19648371,
+            0.331374292
+          ],
+          "ratio": 0.4928638876522825,
+          "observed": true
+        }
+      }
+    },
+    "heterogeneous-168/eigen/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 9.2583e-05,
+        "candidate_median": 7.1875e-05,
+        "baseline_range": [
+          7.9292e-05,
+          0.000104583
+        ],
+        "candidate_range": [
+          5.4958e-05,
+          9.8542e-05
+        ],
+        "ratio": 0.7763304278323234,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 2.767920458,
+        "candidate_median": 2.6607745,
+        "baseline_range": [
+          2.714332792,
+          2.922853583
+        ],
+        "candidate_range": [
+          2.63027825,
+          2.721412041
+        ],
+        "ratio": 0.9612900877659543,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.193833917,
+        "candidate_median": 0.191983958,
+        "baseline_range": [
+          0.190835958,
+          0.195050375
+        ],
+        "candidate_range": [
+          0.191703375,
+          0.1934805
+        ],
+        "ratio": 0.9904559582314999,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 8.160256833,
+        "candidate_median": 8.102593040999999,
+        "baseline_range": [
+          8.109688668,
+          8.206639625000001
+        ],
+        "candidate_range": [
+          8.098580417,
+          8.144107667
+        ],
+        "ratio": 0.9929335812364619,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 6.382685457999999,
+        "candidate_median": 6.312988248,
+        "baseline_range": [
+          6.326120792999999,
+          6.763566916
+        ],
+        "candidate_range": [
+          6.19695,
+          6.357301583
+        ],
+        "ratio": 0.9890802687272265,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 4.574787499999999,
+        "candidate_median": 4.364336375,
+        "baseline_range": [
+          4.440811459,
+          4.712465334000001
+        ],
+        "candidate_range": [
+          4.362991499,
+          4.475547791
+        ],
+        "ratio": 0.9539976173756706,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            8.160256833,
+            13.551921538999999
+          ],
+          [
+            8.109688668,
+            13.531510204
+          ],
+          [
+            8.206639625000001,
+            13.861246208
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            8.098580417,
+            13.568636707000001
+          ],
+          [
+            8.102593040999999,
+            13.590591826999997
+          ],
+          [
+            8.144107667,
+            13.607274626999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 8.160256833,
+          "candidate_median": 13.590591826999997,
+          "baseline_range": [
+            8.109688668,
+            8.206639625000001
+          ],
+          "candidate_range": [
+            13.568636707000001,
+            13.607274626999999
+          ],
+          "ratio": 1.6654612845075873,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            6.382685457999999,
+            11.774350163999998
+          ],
+          [
+            6.326120792999999,
+            11.747942329
+          ],
+          [
+            6.763566916,
+            12.418173498999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            6.19695,
+            11.66700629
+          ],
+          [
+            6.312988248,
+            11.800987033999998
+          ],
+          [
+            6.357301583,
+            11.820468543
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 6.382685457999999,
+          "candidate_median": 11.800987033999998,
+          "baseline_range": [
+            6.326120792999999,
+            6.763566916
+          ],
+          "candidate_range": [
+            11.66700629,
+            11.820468543
+          ],
+          "ratio": 1.8489062498307434,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.574787499999999,
+            9.966452206
+          ],
+          [
+            4.440811459,
+            9.862632995
+          ],
+          [
+            4.712465334000001,
+            10.367071917
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            4.364336375,
+            9.834392665
+          ],
+          [
+            4.362991499,
+            9.850990284999998
+          ],
+          [
+            4.475547791,
+            9.938714751
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.574787499999999,
+          "candidate_median": 9.850990284999998,
+          "baseline_range": [
+            4.440811459,
+            4.712465334000001
+          ],
+          "candidate_range": [
+            9.834392665,
+            9.938714751
+          ],
+          "ratio": 2.1533219379042197,
+          "observed": false
+        }
+      }
+    },
+    "heterogeneous-168/eigen/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 7.1875e-05,
+        "candidate_median": 6.3e-05,
+        "baseline_range": [
+          5.4958e-05,
+          9.8542e-05
+        ],
+        "candidate_range": [
+          5.3209e-05,
+          0.000363916
+        ],
+        "ratio": 0.8765217391304349,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 2.6607745,
+        "candidate_median": 2.663208916,
+        "baseline_range": [
+          2.63027825,
+          2.721412041
+        ],
+        "candidate_range": [
+          2.608526833,
+          2.826785667
+        ],
+        "ratio": 1.0009149275896922,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.191983958,
+        "candidate_median": 0.06437675,
+        "baseline_range": [
+          0.191703375,
+          0.1934805
+        ],
+        "candidate_range": [
+          0.063549291,
+          0.0672515
+        ],
+        "ratio": 0.3353235899011937,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 8.102593040999999,
+        "candidate_median": 4.538890749,
+        "baseline_range": [
+          8.098580417,
+          8.144107667
+        ],
+        "candidate_range": [
+          4.433704,
+          4.696675749
+        ],
+        "ratio": 0.560177553782193,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 6.312988248,
+        "candidate_median": 3.932900041,
+        "baseline_range": [
+          6.19695,
+          6.357301583
+        ],
+        "candidate_range": [
+          3.877345333,
+          4.078063166
+        ],
+        "ratio": 0.6229854842904184,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 4.364336375,
+        "candidate_median": 3.3659962909999996,
+        "baseline_range": [
+          4.362991499,
+          4.475547791
+        ],
+        "candidate_range": [
+          3.29865125,
+          3.516914917
+        ],
+        "ratio": 0.7712504265897698,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            8.098580417,
+            13.568636707000001
+          ],
+          [
+            8.102593040999999,
+            13.590591826999997
+          ],
+          [
+            8.144107667,
+            13.607274626999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            4.433704,
+            4.62287175
+          ],
+          [
+            4.538890749,
+            4.731547998
+          ],
+          [
+            4.696675749,
+            4.892306874
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 8.102593040999999,
+          "candidate_median": 4.731547998,
+          "baseline_range": [
+            8.098580417,
+            8.144107667
+          ],
+          "candidate_range": [
+            4.62287175,
+            4.892306874
+          ],
+          "ratio": 0.5839547875671226,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            6.19695,
+            11.66700629
+          ],
+          [
+            6.312988248,
+            11.800987033999998
+          ],
+          [
+            6.357301583,
+            11.820468543
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            3.877345333,
+            4.066513083
+          ],
+          [
+            3.932900041,
+            4.12555729
+          ],
+          [
+            4.078063166,
+            4.273694291
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 6.312988248,
+          "candidate_median": 4.12555729,
+          "baseline_range": [
+            6.19695,
+            6.357301583
+          ],
+          "candidate_range": [
+            4.066513083,
+            4.273694291
+          ],
+          "ratio": 0.6535030841071193,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.364336375,
+            9.834392665
+          ],
+          [
+            4.362991499,
+            9.850990284999998
+          ],
+          [
+            4.475547791,
+            9.938714751
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            3.29865125,
+            3.487819
+          ],
+          [
+            3.3659962909999996,
+            3.5586535399999994
+          ],
+          [
+            3.516914917,
+            3.7125460419999996
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.364336375,
+          "candidate_median": 3.5586535399999994,
+          "baseline_range": [
+            4.362991499,
+            4.475547791
+          ],
+          "candidate_range": [
+            3.487819,
+            3.7125460419999996
+          ],
+          "ratio": 0.8153939646780777,
+          "observed": true
+        }
+      }
+    },
+    "heterogeneous-168/eigen/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 9.2583e-05,
+        "candidate_median": 6.3e-05,
+        "baseline_range": [
+          7.9292e-05,
+          0.000104583
+        ],
+        "candidate_range": [
+          5.3209e-05,
+          0.000363916
+        ],
+        "ratio": 0.6804704967434626,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 2.767920458,
+        "candidate_median": 2.663208916,
+        "baseline_range": [
+          2.714332792,
+          2.922853583
+        ],
+        "candidate_range": [
+          2.608526833,
+          2.826785667
+        ],
+        "ratio": 0.962169598588949,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.193833917,
+        "candidate_median": 0.06437675,
+        "baseline_range": [
+          0.190835958,
+          0.195050375
+        ],
+        "candidate_range": [
+          0.063549291,
+          0.0672515
+        ],
+        "ratio": 0.3321232475532133,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 8.160256833,
+        "candidate_median": 4.538890749,
+        "baseline_range": [
+          8.109688668,
+          8.206639625000001
+        ],
+        "candidate_range": [
+          4.433704,
+          4.696675749
+        ],
+        "ratio": 0.5562191046052337,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 6.382685457999999,
+        "candidate_median": 3.932900041,
+        "baseline_range": [
+          6.326120792999999,
+          6.763566916
+        ],
+        "candidate_range": [
+          3.877345333,
+          4.078063166
+        ],
+        "ratio": 0.6161826502151284,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 4.574787499999999,
+        "candidate_median": 3.3659962909999996,
+        "baseline_range": [
+          4.440811459,
+          4.712465334000001
+        ],
+        "candidate_range": [
+          3.29865125,
+          3.516914917
+        ],
+        "ratio": 0.73577106936661,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            8.160256833,
+            13.551921538999999
+          ],
+          [
+            8.109688668,
+            13.531510204
+          ],
+          [
+            8.206639625000001,
+            13.861246208
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            4.433704,
+            4.62287175
+          ],
+          [
+            4.538890749,
+            4.731547998
+          ],
+          [
+            4.696675749,
+            4.892306874
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 8.160256833,
+          "candidate_median": 4.731547998,
+          "baseline_range": [
+            8.109688668,
+            8.206639625000001
+          ],
+          "candidate_range": [
+            4.62287175,
+            4.892306874
+          ],
+          "ratio": 0.5798283184992004,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            6.382685457999999,
+            11.774350163999998
+          ],
+          [
+            6.326120792999999,
+            11.747942329
+          ],
+          [
+            6.763566916,
+            12.418173498999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            3.877345333,
+            4.066513083
+          ],
+          [
+            3.932900041,
+            4.12555729
+          ],
+          [
+            4.078063166,
+            4.273694291
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 6.382685457999999,
+          "candidate_median": 4.12555729,
+          "baseline_range": [
+            6.326120792999999,
+            6.763566916
+          ],
+          "candidate_range": [
+            4.066513083,
+            4.273694291
+          ],
+          "ratio": 0.6463670060427409,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.574787499999999,
+            9.966452206
+          ],
+          [
+            4.440811459,
+            9.862632995
+          ],
+          [
+            4.712465334000001,
+            10.367071917
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            3.29865125,
+            3.487819
+          ],
+          [
+            3.3659962909999996,
+            3.5586535399999994
+          ],
+          [
+            3.516914917,
+            3.7125460419999996
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.574787499999999,
+          "candidate_median": 3.5586535399999994,
+          "baseline_range": [
+            4.440811459,
+            4.712465334000001
+          ],
+          "candidate_range": [
+            3.487819,
+            3.7125460419999996
+          ],
+          "ratio": 0.7778838995253878,
+          "observed": true
+        }
+      }
+    },
+    "heterogeneous-168/spqr/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.7535175,
+        "candidate_median": 2.6917e-05,
+        "baseline_range": [
+          0.727228167,
+          0.765479333
+        ],
+        "candidate_range": [
+          2.2209e-05,
+          2.8583e-05
+        ],
+        "ratio": 3.5721798100243194e-05,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.891325708,
+        "candidate_median": 0.172139416,
+        "baseline_range": [
+          0.870136375,
+          0.91289375
+        ],
+        "candidate_range": [
+          0.17041275,
+          0.190484084
+        ],
+        "ratio": 0.1931273993950593,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.138469792,
+        "candidate_median": 0.164956542,
+        "baseline_range": [
+          0.138076667,
+          0.142827375
+        ],
+        "candidate_range": [
+          0.164371292,
+          0.174634583
+        ],
+        "ratio": 1.1912817923493377,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 4.882403126000001,
+        "candidate_median": 4.996247292,
+        "baseline_range": [
+          4.835424332,
+          5.130854917000001
+        ],
+        "candidate_range": [
+          4.986486499,
+          5.040438916
+        ],
+        "ratio": 1.0233172401094353,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 3.4705422489999997,
+        "candidate_median": 3.4501775830000003,
+        "baseline_range": [
+          3.458024541,
+          3.717490333
+        ],
+        "candidate_range": [
+          3.3686525420000004,
+          3.640555583
+        ],
+        "ratio": 0.9941321371304823,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 2.137714667,
+        "candidate_median": 1.701332668,
+        "baseline_range": [
+          2.1202095410000004,
+          2.2692363330000003
+        ],
+        "candidate_range": [
+          1.648956042,
+          1.7173002069999999
+        ],
+        "ratio": 0.7958651798874522,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.835424332,
+            8.882567833
+          ],
+          [
+            5.130854917000001,
+            9.277643754
+          ],
+          [
+            4.882403126000001,
+            9.022308874
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            4.996247292,
+            9.877028747
+          ],
+          [
+            5.040438916,
+            10.075785166
+          ],
+          [
+            4.986486499,
+            9.841612079
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.882403126000001,
+          "candidate_median": 9.877028747,
+          "baseline_range": [
+            4.835424332,
+            5.130854917000001
+          ],
+          "candidate_range": [
+            9.841612079,
+            10.075785166
+          ],
+          "ratio": 2.022985094041577,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            3.717490333,
+            7.764633834000001
+          ],
+          [
+            3.4705422489999997,
+            7.617331085999998
+          ],
+          [
+            3.458024541,
+            7.597930288999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            3.4501775830000003,
+            8.330959038
+          ],
+          [
+            3.640555583,
+            8.675901832999998
+          ],
+          [
+            3.3686525420000004,
+            8.223778122
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 3.4705422489999997,
+          "candidate_median": 8.330959038,
+          "baseline_range": [
+            3.458024541,
+            3.717490333
+          ],
+          "candidate_range": [
+            8.223778122,
+            8.675901832999998
+          ],
+          "ratio": 2.4004776315287555,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            2.2692363330000003,
+            6.316379834000001
+          ],
+          [
+            2.1202095410000004,
+            6.2669983779999985
+          ],
+          [
+            2.137714667,
+            6.2776204149999995
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.701332668,
+            6.582114123
+          ],
+          [
+            1.648956042,
+            6.684302291999998
+          ],
+          [
+            1.7173002069999999,
+            6.572425787
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 2.137714667,
+          "candidate_median": 6.582114123,
+          "baseline_range": [
+            2.1202095410000004,
+            2.2692363330000003
+          ],
+          "candidate_range": [
+            6.572425787,
+            6.684302291999998
+          ],
+          "ratio": 3.079042411322895,
+          "observed": false
+        }
+      }
+    },
+    "heterogeneous-168/spqr/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 2.6917e-05,
+        "candidate_median": 3.1833e-05,
+        "baseline_range": [
+          2.2209e-05,
+          2.8583e-05
+        ],
+        "candidate_range": [
+          2.2042e-05,
+          4.7625e-05
+        ],
+        "ratio": 1.1826355091577814,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.172139416,
+        "candidate_median": 0.1760795,
+        "baseline_range": [
+          0.17041275,
+          0.190484084
+        ],
+        "candidate_range": [
+          0.175500084,
+          0.1808515
+        ],
+        "ratio": 1.0228889123220914,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.164956542,
+        "candidate_median": 0.056836583,
+        "baseline_range": [
+          0.164371292,
+          0.174634583
+        ],
+        "candidate_range": [
+          0.055551667,
+          0.057807417
+        ],
+        "ratio": 0.3445548888870379,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 4.996247292,
+        "candidate_median": 1.771740667,
+        "baseline_range": [
+          4.986486499,
+          5.040438916
+        ],
+        "candidate_range": [
+          1.754027207,
+          1.817562542
+        ],
+        "ratio": 0.3546142861737277,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 3.4501775830000003,
+        "candidate_median": 1.353913583,
+        "baseline_range": [
+          3.3686525420000004,
+          3.640555583
+        ],
+        "candidate_range": [
+          1.344658833,
+          1.4274476249999999
+        ],
+        "ratio": 0.39241852062082677,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 1.701332668,
+        "candidate_median": 0.803757791,
+        "baseline_range": [
+          1.648956042,
+          1.7173002069999999
+        ],
+        "candidate_range": [
+          0.78883375,
+          0.908603625
+        ],
+        "ratio": 0.47242835344180906,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.996247292,
+            9.877028747
+          ],
+          [
+            5.040438916,
+            10.075785166
+          ],
+          [
+            4.986486499,
+            9.841612079
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.771740667,
+            1.935812958
+          ],
+          [
+            1.817562542,
+            1.9820440419999998
+          ],
+          [
+            1.754027207,
+            1.916934831
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.996247292,
+          "candidate_median": 1.935812958,
+          "baseline_range": [
+            4.986486499,
+            5.040438916
+          ],
+          "candidate_range": [
+            1.916934831,
+            1.9820440419999998
+          ],
+          "ratio": 0.38745339148837316,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            3.4501775830000003,
+            8.330959038
+          ],
+          [
+            3.640555583,
+            8.675901832999998
+          ],
+          [
+            3.3686525420000004,
+            8.223778122
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.344658833,
+            1.508731124
+          ],
+          [
+            1.4274476249999999,
+            1.5919291249999998
+          ],
+          [
+            1.353913583,
+            1.516821207
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 3.4501775830000003,
+          "candidate_median": 1.516821207,
+          "baseline_range": [
+            3.3686525420000004,
+            3.640555583
+          ],
+          "candidate_range": [
+            1.508731124,
+            1.5919291249999998
+          ],
+          "ratio": 0.43963569135507885,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            1.701332668,
+            6.582114123
+          ],
+          [
+            1.648956042,
+            6.684302291999998
+          ],
+          [
+            1.7173002069999999,
+            6.572425787
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.908603625,
+            1.0726759160000001
+          ],
+          [
+            0.78883375,
+            0.95331525
+          ],
+          [
+            0.803757791,
+            0.966665415
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 1.701332668,
+          "candidate_median": 0.966665415,
+          "baseline_range": [
+            1.648956042,
+            1.7173002069999999
+          ],
+          "candidate_range": [
+            0.95331525,
+            1.0726759160000001
+          ],
+          "ratio": 0.5681813046806199,
+          "observed": true
+        }
+      }
+    },
+    "heterogeneous-168/spqr/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.7535175,
+        "candidate_median": 3.1833e-05,
+        "baseline_range": [
+          0.727228167,
+          0.765479333
+        ],
+        "candidate_range": [
+          2.2042e-05,
+          4.7625e-05
+        ],
+        "ratio": 4.224586688431258e-05,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 0.891325708,
+        "candidate_median": 0.1760795,
+        "baseline_range": [
+          0.870136375,
+          0.91289375
+        ],
+        "candidate_range": [
+          0.175500084,
+          0.1808515
+        ],
+        "ratio": 0.19754787550680633,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.138469792,
+        "candidate_median": 0.056836583,
+        "baseline_range": [
+          0.138076667,
+          0.142827375
+        ],
+        "candidate_range": [
+          0.055551667,
+          0.057807417
+        ],
+        "ratio": 0.41046196559607745,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 4.882403126000001,
+        "candidate_median": 1.771740667,
+        "baseline_range": [
+          4.835424332,
+          5.130854917000001
+        ],
+        "candidate_range": [
+          1.754027207,
+          1.817562542
+        ],
+        "ratio": 0.36288291263067646,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 3.4705422489999997,
+        "candidate_median": 1.353913583,
+        "baseline_range": [
+          3.458024541,
+          3.717490333
+        ],
+        "candidate_range": [
+          1.344658833,
+          1.4274476249999999
+        ],
+        "ratio": 0.3901158625543648,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 2.137714667,
+        "candidate_median": 0.803757791,
+        "baseline_range": [
+          2.1202095410000004,
+          2.2692363330000003
+        ],
+        "candidate_range": [
+          0.78883375,
+          0.908603625
+        ],
+        "ratio": 0.3759892764958982,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            4.835424332,
+            8.882567833
+          ],
+          [
+            5.130854917000001,
+            9.277643754
+          ],
+          [
+            4.882403126000001,
+            9.022308874
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.771740667,
+            1.935812958
+          ],
+          [
+            1.817562542,
+            1.9820440419999998
+          ],
+          [
+            1.754027207,
+            1.916934831
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 4.882403126000001,
+          "candidate_median": 1.935812958,
+          "baseline_range": [
+            4.835424332,
+            5.130854917000001
+          ],
+          "candidate_range": [
+            1.916934831,
+            1.9820440419999998
+          ],
+          "ratio": 0.39648773524892256,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            3.717490333,
+            7.764633834000001
+          ],
+          [
+            3.4705422489999997,
+            7.617331085999998
+          ],
+          [
+            3.458024541,
+            7.597930288999999
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            1.344658833,
+            1.508731124
+          ],
+          [
+            1.4274476249999999,
+            1.5919291249999998
+          ],
+          [
+            1.353913583,
+            1.516821207
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 3.4705422489999997,
+          "candidate_median": 1.516821207,
+          "baseline_range": [
+            3.458024541,
+            3.717490333
+          ],
+          "candidate_range": [
+            1.508731124,
+            1.5919291249999998
+          ],
+          "ratio": 0.43705596940566166,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            2.2692363330000003,
+            6.316379834000001
+          ],
+          [
+            2.1202095410000004,
+            6.2669983779999985
+          ],
+          [
+            2.137714667,
+            6.2776204149999995
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            0.908603625,
+            1.0726759160000001
+          ],
+          [
+            0.78883375,
+            0.95331525
+          ],
+          [
+            0.803757791,
+            0.966665415
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 2.137714667,
+          "candidate_median": 0.966665415,
+          "baseline_range": [
+            2.1202095410000004,
+            2.2692363330000003
+          ],
+          "candidate_range": [
+            0.95331525,
+            1.0726759160000001
+          ],
+          "ratio": 0.4521957162583289,
+          "observed": true
+        }
+      }
+    },
+    "single-512/eigen/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.007230125,
+        "candidate_median": 0.003129875,
+        "baseline_range": [
+          0.003320708,
+          0.01306725
+        ],
+        "candidate_range": [
+          0.002990208,
+          0.003471958
+        ],
+        "ratio": 0.4328936221711243,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 40.286813125,
+        "candidate_median": 39.33421975,
+        "baseline_range": [
+          38.96713125,
+          40.52206975
+        ],
+        "candidate_range": [
+          39.096876291,
+          40.640767875
+        ],
+        "ratio": 0.976354710112107,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.763016125,
+        "candidate_median": 0.73977725,
+        "baseline_range": [
+          0.741213708,
+          0.775147666
+        ],
+        "candidate_range": [
+          0.735247625,
+          0.753965541
+        ],
+        "ratio": 0.9695434025067294,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 46.18166375,
+        "candidate_median": 44.886733458,
+        "baseline_range": [
+          44.522513583999995,
+          46.333630583
+        ],
+        "candidate_range": [
+          44.810336500000005,
+          46.239579457000005
+        ],
+        "ratio": 0.971960077077128,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 46.960843084000004,
+        "candidate_median": 45.693808751000006,
+        "baseline_range": [
+          45.288438918,
+          47.014478791
+        ],
+        "candidate_range": [
+          45.381369082,
+          47.046144791
+        ],
+        "ratio": 0.9730193444199112,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 45.332005290999994,
+        "candidate_median": 44.636146583000006,
+        "baseline_range": [
+          43.93841675,
+          45.45595346
+        ],
+        "candidate_range": [
+          44.214568041,
+          45.607141750000004
+        ],
+        "ratio": 0.9846497258717531,
+        "observed": false,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            46.18166375,
+            55.233957043
+          ],
+          [
+            46.333630583,
+            55.69919433300001
+          ],
+          [
+            44.522513583999995,
+            53.446618666999996
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            44.886733458,
+            53.969631414000006
+          ],
+          [
+            44.810336500000005,
+            53.844330123000006
+          ],
+          [
+            46.239579457000005,
+            55.501137832000005
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 46.18166375,
+          "candidate_median": 53.969631414000006,
+          "baseline_range": [
+            44.522513583999995,
+            46.333630583
+          ],
+          "candidate_range": [
+            53.844330123000006,
+            55.501137832000005
+          ],
+          "ratio": 1.168637659010282,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            46.960843084000004,
+            56.013136377
+          ],
+          [
+            47.014478791,
+            56.38004254100001
+          ],
+          [
+            45.288438918,
+            54.212544001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            45.693808751000006,
+            54.776706707
+          ],
+          [
+            45.381369082,
+            54.415362705
+          ],
+          [
+            47.046144791,
+            56.307703166
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 46.960843084000004,
+          "candidate_median": 54.776706707,
+          "baseline_range": [
+            45.288438918,
+            47.014478791
+          ],
+          "candidate_range": [
+            54.415362705,
+            56.307703166
+          ],
+          "ratio": 1.1664336308660297,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            45.45595346,
+            54.508246753
+          ],
+          [
+            45.332005290999994,
+            54.697569040999994
+          ],
+          [
+            43.93841675,
+            52.862521833
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            44.636146583000006,
+            53.71904453900001
+          ],
+          [
+            44.214568041,
+            53.248561664
+          ],
+          [
+            45.607141750000004,
+            54.868700125000004
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 45.332005290999994,
+          "candidate_median": 53.71904453900001,
+          "baseline_range": [
+            43.93841675,
+            45.45595346
+          ],
+          "candidate_range": [
+            53.248561664,
+            54.868700125000004
+          ],
+          "ratio": 1.1850136386899508,
+          "observed": false
+        }
+      }
+    },
+    "single-512/eigen/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.003129875,
+        "candidate_median": 0.004025208,
+        "baseline_range": [
+          0.002990208,
+          0.003471958
+        ],
+        "candidate_range": [
+          0.002663958,
+          0.004184958
+        ],
+        "ratio": 1.2860603059227604,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 39.33421975,
+        "candidate_median": 39.826018375,
+        "baseline_range": [
+          39.096876291,
+          40.640767875
+        ],
+        "candidate_range": [
+          39.057684042,
+          40.224414
+        ],
+        "ratio": 1.012503073103414,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.73977725,
+        "candidate_median": 0.248891958,
+        "baseline_range": [
+          0.735247625,
+          0.753965541
+        ],
+        "candidate_range": [
+          0.242602917,
+          0.248953583
+        ],
+        "ratio": 0.3364417572992411,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 44.886733458,
+        "candidate_median": 41.88896058299999,
+        "baseline_range": [
+          44.810336500000005,
+          46.239579457000005
+        ],
+        "candidate_range": [
+          41.131305333,
+          42.386542417
+        ],
+        "ratio": 0.9332147241722325,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 45.693808751000006,
+        "candidate_median": 42.22002383299999,
+        "baseline_range": [
+          45.381369082,
+          47.046144791
+        ],
+        "candidate_range": [
+          41.430242793,
+          42.622125833
+        ],
+        "ratio": 0.9239769016207476,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 44.636146583000006,
+        "candidate_median": 41.76006816699999,
+        "baseline_range": [
+          44.214568041,
+          45.607141750000004
+        ],
+        "candidate_range": [
+          40.988948125,
+          42.174737583
+        ],
+        "ratio": 0.9355661580093613,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            44.886733458,
+            53.969631414000006
+          ],
+          [
+            44.810336500000005,
+            53.844330123000006
+          ],
+          [
+            46.239579457000005,
+            55.501137832000005
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            41.131305333,
+            41.865504501000004
+          ],
+          [
+            42.386542417,
+            43.140064583000004
+          ],
+          [
+            41.88896058299999,
+            42.61689754099999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 44.886733458,
+          "candidate_median": 42.61689754099999,
+          "baseline_range": [
+            44.810336500000005,
+            46.239579457000005
+          ],
+          "candidate_range": [
+            41.865504501000004,
+            43.140064583000004
+          ],
+          "ratio": 0.9494319202549264,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            45.693808751000006,
+            54.776706707
+          ],
+          [
+            45.381369082,
+            54.415362705
+          ],
+          [
+            47.046144791,
+            56.307703166
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            41.430242793,
+            42.164441960999994
+          ],
+          [
+            42.622125833,
+            43.375647999
+          ],
+          [
+            42.22002383299999,
+            42.94796079099999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 45.693808751000006,
+          "candidate_median": 42.94796079099999,
+          "baseline_range": [
+            45.381369082,
+            47.046144791
+          ],
+          "candidate_range": [
+            42.164441960999994,
+            43.375647999
+          ],
+          "ratio": 0.9399076584978283,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            44.636146583000006,
+            53.71904453900001
+          ],
+          [
+            44.214568041,
+            53.248561664
+          ],
+          [
+            45.607141750000004,
+            54.868700125000004
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            40.988948125,
+            41.723147293
+          ],
+          [
+            42.174737583,
+            42.928259749000006
+          ],
+          [
+            41.76006816699999,
+            42.488005124999994
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 44.636146583000006,
+          "candidate_median": 42.488005124999994,
+          "baseline_range": [
+            44.214568041,
+            45.607141750000004
+          ],
+          "candidate_range": [
+            41.723147293,
+            42.928259749000006
+          ],
+          "ratio": 0.951874397266673,
+          "observed": true
+        }
+      }
+    },
+    "single-512/eigen/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.007230125,
+        "candidate_median": 0.004025208,
+        "baseline_range": [
+          0.003320708,
+          0.01306725
+        ],
+        "candidate_range": [
+          0.002663958,
+          0.004184958
+        ],
+        "ratio": 0.556727304161408,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 40.286813125,
+        "candidate_median": 39.826018375,
+        "baseline_range": [
+          38.96713125,
+          40.52206975
+        ],
+        "candidate_range": [
+          39.057684042,
+          40.224414
+        ],
+        "ratio": 0.988562144427501,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 0.763016125,
+        "candidate_median": 0.248891958,
+        "baseline_range": [
+          0.741213708,
+          0.775147666
+        ],
+        "candidate_range": [
+          0.242602917,
+          0.248953583
+        ],
+        "ratio": 0.32619488611724945,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 46.18166375,
+        "candidate_median": 41.88896058299999,
+        "baseline_range": [
+          44.522513583999995,
+          46.333630583
+        ],
+        "candidate_range": [
+          41.131305333,
+          42.386542417
+        ],
+        "ratio": 0.9070474552359538,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 46.960843084000004,
+        "candidate_median": 42.22002383299999,
+        "baseline_range": [
+          45.288438918,
+          47.014478791
+        ],
+        "candidate_range": [
+          41.430242793,
+          42.622125833
+        ],
+        "ratio": 0.8990473990741608,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 45.332005290999994,
+        "candidate_median": 41.76006816699999,
+        "baseline_range": [
+          43.93841675,
+          45.45595346
+        ],
+        "candidate_range": [
+          40.988948125,
+          42.174737583
+        ],
+        "ratio": 0.9212049610188068,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            46.18166375,
+            55.233957043
+          ],
+          [
+            46.333630583,
+            55.69919433300001
+          ],
+          [
+            44.522513583999995,
+            53.446618666999996
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            41.131305333,
+            41.865504501000004
+          ],
+          [
+            42.386542417,
+            43.140064583000004
+          ],
+          [
+            41.88896058299999,
+            42.61689754099999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 46.18166375,
+          "candidate_median": 42.61689754099999,
+          "baseline_range": [
+            44.522513583999995,
+            46.333630583
+          ],
+          "candidate_range": [
+            41.865504501000004,
+            43.140064583000004
+          ],
+          "ratio": 0.9228099223904638,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            46.960843084000004,
+            56.013136377
+          ],
+          [
+            47.014478791,
+            56.38004254100001
+          ],
+          [
+            45.288438918,
+            54.212544001
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            41.430242793,
+            42.164441960999994
+          ],
+          [
+            42.622125833,
+            43.375647999
+          ],
+          [
+            42.22002383299999,
+            42.94796079099999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 46.960843084000004,
+          "candidate_median": 42.94796079099999,
+          "baseline_range": [
+            45.288438918,
+            47.014478791
+          ],
+          "candidate_range": [
+            42.164441960999994,
+            43.375647999
+          ],
+          "ratio": 0.9145483336868108,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            45.45595346,
+            54.508246753
+          ],
+          [
+            45.332005290999994,
+            54.697569040999994
+          ],
+          [
+            43.93841675,
+            52.862521833
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            40.988948125,
+            41.723147293
+          ],
+          [
+            42.174737583,
+            42.928259749000006
+          ],
+          [
+            41.76006816699999,
+            42.488005124999994
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 45.332005290999994,
+          "candidate_median": 42.488005124999994,
+          "baseline_range": [
+            43.93841675,
+            45.45595346
+          ],
+          "candidate_range": [
+            41.723147293,
+            42.928259749000006
+          ],
+          "ratio": 0.9372628643329697,
+          "observed": true
+        }
+      }
+    },
+    "single-512/spqr/A-B": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 17.313357459,
+        "candidate_median": 0.001027125,
+        "baseline_range": [
+          16.203829666,
+          18.334089958
+        ],
+        "candidate_range": [
+          0.000487417,
+          0.002425667
+        ],
+        "ratio": 5.9325581559345086e-05,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 18.840745417,
+        "candidate_median": 1.779321875,
+        "baseline_range": [
+          17.815526375,
+          19.870823167
+        ],
+        "candidate_range": [
+          1.77190525,
+          1.987325417
+        ],
+        "ratio": 0.09444009966795253,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 1.111298083,
+        "candidate_median": 1.371989834,
+        "baseline_range": [
+          1.084324083,
+          1.25951975
+        ],
+        "candidate_range": [
+          1.30611625,
+          1.394977916
+        ],
+        "ratio": 1.23458310149897,
+        "observed": false
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 27.261521709,
+        "candidate_median": 12.232983333,
+        "baseline_range": [
+          26.543620292,
+          28.273947458000002
+        ],
+        "candidate_range": [
+          11.901469168,
+          12.328568666999999
+        ],
+        "ratio": 0.44872709101053065,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 28.082442459,
+        "candidate_median": 13.729109709,
+        "baseline_range": [
+          27.14113775,
+          29.189775584000003
+        ],
+        "candidate_range": [
+          13.344846126,
+          13.771688791
+        ],
+        "ratio": 0.48888588409089845,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 26.031728584,
+        "candidate_median": 10.592194083999999,
+        "baseline_range": [
+          25.119563792,
+          27.512981583000002
+        ],
+        "candidate_range": [
+          10.501879375000001,
+          10.99096671
+        ],
+        "ratio": 0.4068955332651374,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            28.273947458000002,
+            41.87814845700001
+          ],
+          [
+            27.261521709,
+            40.507535375
+          ],
+          [
+            26.543620292,
+            40.046375042
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            12.328568666999999,
+            28.957909330999996
+          ],
+          [
+            11.901469168,
+            28.476578754000002
+          ],
+          [
+            12.232983333,
+            28.858599000999998
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 27.261521709,
+          "candidate_median": 28.858599000999998,
+          "baseline_range": [
+            26.543620292,
+            28.273947458000002
+          ],
+          "candidate_range": [
+            28.476578754000002,
+            28.957909330999996
+          ],
+          "ratio": 1.0585835709777252,
+          "observed": false
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            29.189775584000003,
+            42.793976583
+          ],
+          [
+            28.082442459,
+            41.328456125
+          ],
+          [
+            27.14113775,
+            40.6438925
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            13.729109709,
+            30.358450372999997
+          ],
+          [
+            13.344846126,
+            29.919955712
+          ],
+          [
+            13.771688791,
+            30.397304458999997
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 28.082442459,
+          "candidate_median": 30.358450372999997,
+          "baseline_range": [
+            27.14113775,
+            29.189775584000003
+          ],
+          "candidate_range": [
+            29.919955712,
+            30.397304458999997
+          ],
+          "ratio": 1.0810473632171753,
+          "observed": false
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            27.512981583000002,
+            41.117182582000005
+          ],
+          [
+            26.031728584,
+            39.27774225
+          ],
+          [
+            25.119563792,
+            38.622318542
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            10.99096671,
+            27.620307374
+          ],
+          [
+            10.592194083999999,
+            27.16730367
+          ],
+          [
+            10.501879375000001,
+            27.127495043
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 26.031728584,
+          "candidate_median": 27.16730367,
+          "baseline_range": [
+            25.119563792,
+            27.512981583000002
+          ],
+          "candidate_range": [
+            27.127495043,
+            27.620307374
+          ],
+          "ratio": 1.0436227307124724,
+          "observed": false
+        }
+      }
+    },
+    "single-512/spqr/B-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 0.001027125,
+        "candidate_median": 0.000560333,
+        "baseline_range": [
+          0.000487417,
+          0.002425667
+        ],
+        "candidate_range": [
+          0.000474041,
+          0.000627584
+        ],
+        "ratio": 0.5455353535353535,
+        "observed": false
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 1.779321875,
+        "candidate_median": 1.720831042,
+        "baseline_range": [
+          1.77190525,
+          1.987325417
+        ],
+        "candidate_range": [
+          1.711987084,
+          1.944768125
+        ],
+        "ratio": 0.9671274580379112,
+        "observed": false
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 1.371989834,
+        "candidate_median": 0.451699625,
+        "baseline_range": [
+          1.30611625,
+          1.394977916
+        ],
+        "candidate_range": [
+          0.443832333,
+          0.45812775
+        ],
+        "ratio": 0.3292295713905413,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 12.232983333,
+        "candidate_median": 5.780539666,
+        "baseline_range": [
+          11.901469168,
+          12.328568666999999
+        ],
+        "candidate_range": [
+          5.717512999,
+          6.937821833999999
+        ],
+        "ratio": 0.4725371978891096,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 13.729109709,
+        "candidate_median": 6.65299275,
+        "baseline_range": [
+          13.344846126,
+          13.771688791
+        ],
+        "candidate_range": [
+          6.022774874,
+          7.067088792
+        ],
+        "ratio": 0.48459025319308857,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 10.592194083999999,
+        "candidate_median": 5.336853374,
+        "baseline_range": [
+          10.501879375000001,
+          10.99096671
+        ],
+        "candidate_range": [
+          5.126203459,
+          5.480304
+        ],
+        "ratio": 0.5038477705069212,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            12.328568666999999,
+            28.957909330999996
+          ],
+          [
+            11.901469168,
+            28.476578754000002
+          ],
+          [
+            12.232983333,
+            28.858599000999998
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            5.717512999,
+            7.071947665
+          ],
+          [
+            5.780539666,
+            7.210498416
+          ],
+          [
+            6.937821833999999,
+            8.368731666999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 12.232983333,
+          "candidate_median": 7.210498416,
+          "baseline_range": [
+            11.901469168,
+            12.328568666999999
+          ],
+          "candidate_range": [
+            7.071947665,
+            8.368731666999999
+          ],
+          "ratio": 0.5894309032980353,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            13.729109709,
+            30.358450372999997
+          ],
+          [
+            13.344846126,
+            29.919955712
+          ],
+          [
+            13.771688791,
+            30.397304458999997
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            6.022774874,
+            7.377209539999999
+          ],
+          [
+            6.65299275,
+            8.0829515
+          ],
+          [
+            7.067088792,
+            8.497998625
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 13.729109709,
+          "candidate_median": 8.0829515,
+          "baseline_range": [
+            13.344846126,
+            13.771688791
+          ],
+          "candidate_range": [
+            7.377209539999999,
+            8.497998625
+          ],
+          "ratio": 0.5887454956166088,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            10.99096671,
+            27.620307374
+          ],
+          [
+            10.592194083999999,
+            27.16730367
+          ],
+          [
+            10.501879375000001,
+            27.127495043
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            5.336853374,
+            6.69128804
+          ],
+          [
+            5.480304,
+            6.91026275
+          ],
+          [
+            5.126203459,
+            6.557113292
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 10.592194083999999,
+          "candidate_median": 6.69128804,
+          "baseline_range": [
+            10.501879375000001,
+            10.99096671
+          ],
+          "candidate_range": [
+            6.557113292,
+            6.91026275
+          ],
+          "ratio": 0.6317187909261879,
+          "observed": true
+        }
+      }
+    },
+    "single-512/spqr/A-C": {
+      "compact": {
+        "complete": true,
+        "baseline_median": 17.313357459,
+        "candidate_median": 0.000560333,
+        "baseline_range": [
+          16.203829666,
+          18.334089958
+        ],
+        "candidate_range": [
+          0.000474041,
+          0.000627584
+        ],
+        "ratio": 3.236420210966777e-05,
+        "observed": true
+      },
+      "preparation": {
+        "complete": true,
+        "baseline_median": 18.840745417,
+        "candidate_median": 1.720831042,
+        "baseline_range": [
+          17.815526375,
+          19.870823167
+        ],
+        "candidate_range": [
+          1.711987084,
+          1.944768125
+        ],
+        "ratio": 0.09133561352871392,
+        "observed": true
+      },
+      "normal": {
+        "complete": true,
+        "baseline_median": 1.111298083,
+        "candidate_median": 0.451699625,
+        "baseline_range": [
+          1.084324083,
+          1.25951975
+        ],
+        "candidate_range": [
+          0.443832333,
+          0.45812775
+        ],
+        "ratio": 0.40646126535251115,
+        "observed": true
+      },
+      "identity-total": {
+        "complete": true,
+        "baseline_median": 27.261521709,
+        "candidate_median": 5.780539666,
+        "baseline_range": [
+          26.543620292,
+          28.273947458000002
+        ],
+        "candidate_range": [
+          5.717512999,
+          6.937821833999999
+        ],
+        "ratio": 0.2120402422030476,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "diagonal-total": {
+        "complete": true,
+        "baseline_median": 28.082442459,
+        "candidate_median": 6.65299275,
+        "baseline_range": [
+          27.14113775,
+          29.189775584000003
+        ],
+        "candidate_range": [
+          6.022774874,
+          7.067088792
+        ],
+        "ratio": 0.23690933435413544,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "schwarz-total": {
+        "complete": true,
+        "baseline_median": 26.031728584,
+        "candidate_median": 5.336853374,
+        "baseline_range": [
+          25.119563792,
+          27.512981583000002
+        ],
+        "candidate_range": [
+          5.126203459,
+          5.480304
+        ],
+        "ratio": 0.20501340726486428,
+        "observed": true,
+        "scope": "recorded subtotal; old receipts exclude gradient setup"
+      },
+      "identity-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            28.273947458000002,
+            41.87814845700001
+          ],
+          [
+            27.261521709,
+            40.507535375
+          ],
+          [
+            26.543620292,
+            40.046375042
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            5.717512999,
+            7.071947665
+          ],
+          [
+            5.780539666,
+            7.210498416
+          ],
+          [
+            6.937821833999999,
+            8.368731666999999
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 27.261521709,
+          "candidate_median": 7.210498416,
+          "baseline_range": [
+            26.543620292,
+            28.273947458000002
+          ],
+          "candidate_range": [
+            7.071947665,
+            8.368731666999999
+          ],
+          "ratio": 0.26449361458863674,
+          "observed": true
+        }
+      },
+      "diagonal-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            29.189775584000003,
+            42.793976583
+          ],
+          [
+            28.082442459,
+            41.328456125
+          ],
+          [
+            27.14113775,
+            40.6438925
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            6.022774874,
+            7.377209539999999
+          ],
+          [
+            6.65299275,
+            8.0829515
+          ],
+          [
+            7.067088792,
+            8.497998625
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 28.082442459,
+          "candidate_median": 8.0829515,
+          "baseline_range": [
+            27.14113775,
+            29.189775584000003
+          ],
+          "candidate_range": [
+            7.377209539999999,
+            8.497998625
+          ],
+          "ratio": 0.28782936212905996,
+          "observed": true
+        }
+      },
+      "schwarz-gradient-inclusive-bounds": {
+        "baseline_bounds": [
+          [
+            27.512981583000002,
+            41.117182582000005
+          ],
+          [
+            26.031728584,
+            39.27774225
+          ],
+          [
+            25.119563792,
+            38.622318542
+          ]
+        ],
+        "candidate_bounds": [
+          [
+            5.336853374,
+            6.69128804
+          ],
+          [
+            5.480304,
+            6.91026275
+          ],
+          [
+            5.126203459,
+            6.557113292
+          ]
+        ],
+        "conservative_improvement": {
+          "complete": true,
+          "baseline_median": 26.031728584,
+          "candidate_median": 6.69128804,
+          "baseline_range": [
+            25.119563792,
+            27.512981583000002
+          ],
+          "candidate_range": [
+            6.557113292,
+            6.91026275
+          ],
+          "ratio": 0.2570435543075191,
+          "observed": true
+        }
+      }
+    }
+  },
+  "promote": false,
+  "comparator_sha256": "208c77ae52f2ffb01d3f8b9bd222d0ca6603fcebadced2aa5f7d04b4ef84eaa5"
+}

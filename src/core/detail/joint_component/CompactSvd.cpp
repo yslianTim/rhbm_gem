@@ -89,4 +89,13 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
 #endif
     return out;
 }
+CompactSvdResult EvaluateRank(const Matrix & compact,const RankRequest & request,const Vector * rhs,CompactSvdVectors vectors)
+{
+    if(request.policy.rows<0 || request.columns<=0 || !std::isfinite(request.absolute)) return {};
+    auto out=CompactSvd(compact,request.policy.Relative(request.columns),request.absolute,rhs,vectors);
+    if(out.valid && request.boundary==RankBoundary::StrictGreater)
+        out.rank=(out.singular_values.array()>out.threshold).count();
+    return out;
+}
+
 }

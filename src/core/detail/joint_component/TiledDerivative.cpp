@@ -46,8 +46,7 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
             else ++SparseWorkForTesting().factor_reuses;
             Matrix compact;
             {++work.derivative_compacts; WorkTimer timer(work.derivative_compact_seconds); compact=factor->Compact();}
-            const auto svd=CompactSvd(compact,std::numeric_limits<double>::epsilon()*
-                static_cast<double>(std::max(context ? context->rank.rows : n,p)),absolute);
+            const auto svd=EvaluateRank(compact,{{context ? context->rank.rows : n,2*m,m},p,absolute});
             if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
             if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
             out.coefficients.resize(p,m); out.correction.resize(p,m);
@@ -92,8 +91,7 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
             qr.Append(Matrix(out.free_design.middleRows(first,count)),Matrix(out.raw.middleRows(first,count)));
         }
     }
-    const auto svd=CompactSvd(qr.r,std::numeric_limits<double>::epsilon()*
-        static_cast<double>(std::max(context ? context->rank.rows : n,p)),absolute);
+    const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute});
     if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
     if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
     out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target);

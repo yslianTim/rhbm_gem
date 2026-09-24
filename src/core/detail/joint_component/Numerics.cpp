@@ -9,7 +9,6 @@
 
 namespace rhbm_gem::core::joint_component {
 namespace {
-constexpr double eps=std::numeric_limits<double>::epsilon();
 double Difference(const Vector & a,const Vector & b) {return ((a-b).array().abs()/(1+a.array().abs().max(b.array().abs()))).maxCoeff();}
 // Full-column TSQR from original rows. RHS columns undergo the same orthogonal
 // transformations. Only the small R and transformed RHS survive each tile.
@@ -26,7 +25,7 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
 }
 CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors vectors=CompactSvdVectors::None,const Vector * rhs=nullptr)
 {
-    return CompactSvd(r,eps*static_cast<double>(std::max(rows,r.cols())),-1,rhs,vectors);
+    return EvaluateRank(r,{{rows,0,0},r.cols()},rhs,vectors);
 }
 }
 double RankPolicy::Relative(Eigen::Index columns) const
@@ -259,10 +258,10 @@ template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPo
     Design x=input; Vector norms(input.cols());
     for(Eigen::Index k=0;k<x.cols();++k) {norms(k)=x.col(k).norm(); if(normalize && norms(k)>0) x.col(k)/=norms(k);}
     const auto reduced=Reduce(x,Matrix(x.rows(),0));
-    const auto svd=CompactSvd(reduced.first,policy.Relative(columns)); const auto & values=svd.singular_values;
+    const auto svd=EvaluateRank(reduced.first,{policy,columns,-1,RankBoundary::StrictGreater}); const auto & values=svd.singular_values;
     if(!svd.valid) {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    const double threshold=policy.Absolute(columns,values(0));
-    out.singular_values=values; out.rank=(values.array()>threshold).count(); out.threshold=threshold;
+    const double threshold=svd.threshold;
+    out.singular_values=values; out.rank=svd.rank; out.threshold=threshold;
     out.column_norms=norms; out.minimum=values(values.size()-1); out.condition=values(0)/values(values.size()-1); return out;
 }
 }
@@ -280,11 +279,10 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy
     }
     for(Eigen::Index k=0;k<x.cols();++k) if(scales(k)==0) scales(k)=1;
     const auto reduced=ReferenceQR(x,weights,scales,Vector::Zero(x.rows()));
-    const double threshold=eps*static_cast<double>(std::max(policy ? policy->rows : x.rows(),x.cols()));
-    const auto svd=CompactSvd(reduced.first,threshold); const auto & values=svd.singular_values;
+    const auto svd=EvaluateRank(reduced.first,{{policy ? policy->rows : x.rows(),x.cols(),0},x.cols(),-1,RankBoundary::StrictGreater}); const auto & values=svd.singular_values;
     if(!svd.valid) {Spectrum out; out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    Spectrum out; out.rank=(values.array()>threshold*values(0)).count(); out.minimum=values.tail(1)(0);
-    out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=threshold*values(0); return out;
+    Spectrum out; out.rank=svd.rank; out.minimum=values.tail(1)(0);
+    out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=svd.threshold; return out;
 }
 Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
 {
