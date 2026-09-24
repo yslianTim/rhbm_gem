@@ -122,6 +122,9 @@ j::object SearchWork()
         {"partition_seconds",w.partition_seconds},{"metric_seconds",w.metric_seconds},{"local_seconds",w.local_seconds},
         {"factor_seconds",w.factor_seconds},{"inverse_seconds",w.inverse_seconds},{"pcg_seconds",w.pcg_seconds},
         {"maximum_lambda",w.maximum_lambda},{"maximum_tau",w.maximum_tau},{"last_relative_residual",w.last_relative_residual},
+        {"operator_normal_seconds",op.normal_seconds},{"operator_normals",op.normals},
+        {"operator_design_seconds",op.design_seconds},{"operator_fixed_factor_seconds",op.factor_seconds},
+        {"operator_compact_seconds",op.compact_seconds},{"operator_svd_seconds",op.svd_seconds},
         {"operator_prepare_seconds",op.preparation_seconds},{"operator_rank_seconds",op.rank_seconds},
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
         {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
@@ -169,6 +172,9 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #endif
 #if !defined(SPARSE_BASELINE_DRIVER) && !defined(PR23_BASELINE_DRIVER)
 #include "support/JointFixedDiagnostic.hpp"
+#ifndef PR4_BASELINE_DRIVER
+#include "support/JointRankDiagnostic.hpp"
+#endif
 #endif
 void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::EvaluationContext & context,const char * output)
 {
@@ -278,6 +284,7 @@ int main(int argc,char ** argv)
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
 #ifndef PR23_BASELINE_DRIVER
                 else if(option=="--fixed" && k+1<end) fixed_mode=argv[++k];
+                else if(option=="--fixed-preconditioner" && k+1<end) fixed_preconditioner=argv[++k];
                 else if(option=="--state" && k+1<end) fixed_state=argv[++k];
 #endif
                 else if(option=="--resources") n::ResourceWorkForTesting().enabled=true;
@@ -292,8 +299,8 @@ int main(int argc,char ** argv)
         if(mode=="synthetic" && argc==6)
         {
             const std::string topology=argv[2],phase=argv[4]; const int atoms=std::stoi(argv[3]);
-            if(phase!="prepare" && phase!="fixed" && phase!="workflow" && phase!="local") throw std::invalid_argument("Invalid synthetic phase");
-            if(atoms>512 && phase!="prepare" && phase!="local") throw std::invalid_argument("Large workloads are preparation/local-only");
+            if(phase!="prepare" && phase!="fixed" && phase!="workflow" && phase!="local" && phase!="rank" && phase!="rank-oracle") throw std::invalid_argument("Invalid synthetic phase");
+            if(atoms>512 && phase!="prepare" && phase!="local" && phase!="rank") throw std::invalid_argument("Large workloads are preparation/local-only");
             const auto started=Clock::now(); const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
             const double construction_seconds=Seconds(started);
             const auto & data=c::JointProblemAccess::Get(problem);
@@ -308,7 +315,7 @@ int main(int argc,char ** argv)
                 {"construction_seconds",construction_seconds}};
             const auto hash_started=Clock::now(); report["input_sha256"]=second_stage_test::OperatorWorkloadHash(problem.Input());
             report["fingerprint_seconds"]=Seconds(hash_started);
-            if(phase=="prepare" || phase=="local")
+            if(phase=="prepare" || phase=="local" || phase=="rank" || phase=="rank-oracle")
             {
                 const auto basis_started=Clock::now(); n::Vector beta(2*atoms);
                 for(int a=0;a<atoms;++a) {beta(2*a)=2; beta(2*a+1)=.2;}
@@ -318,6 +325,9 @@ int main(int argc,char ** argv)
                 report["residual_norm"]=state.residual.norm();
                 report["not_run"]=j::array{"ac-solve","rank","operator","reference","search","assessment","uncertainty"};
 #ifndef PR23_BASELINE_DRIVER
+#ifndef PR4_BASELINE_DRIVER
+                if(phase=="rank" || phase=="rank-oracle") RunRank(state,data.context,phase=="rank-oracle",report,argv[5]);
+#endif
                 if(phase=="local")
                 {
                     report["stage"]="local"; Snapshot(argv[5],report);

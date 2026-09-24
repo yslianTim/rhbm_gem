@@ -2,9 +2,19 @@
 #include "Numerics.hpp"
 #include "ResourceWork.hpp"
 #include <chrono>
+#include <span>
+#include <cstdint>
 
 namespace rhbm_gem::core::joint_component {
 struct SparseFactorState;
+// Read-only exported SPQR storage. The owning immutable factor must outlive this view.
+struct RankFactorView
+{
+    const Sparse * design{};
+    Eigen::Index rows{},columns{},reflectors{};
+    std::span<const int64_t> r_outer,r_inner,h_outer,h_inner,permutation,row_permutation;
+    std::span<const double> r_values,h_values,tau;
+};
 struct SparseWork
 {
     std::size_t q_actions{},triangular_solves{},compact_extractions{},fixed_factorizations{},factor_storage_bytes{};
@@ -35,6 +45,7 @@ public:
     static std::shared_ptr<FreeDesignFactor> Fixed(const Sparse &,const std::vector<Eigen::Index> &);
     bool Matches(const Sparse &,const std::vector<Eigen::Index> &) const;
     int Rank() const;
+    std::optional<RankFactorView> RankView() const;
     Matrix Compact() const;
     Matrix LeastSquares(const Matrix &) const;
     Matrix PseudoInverseTranspose(const Matrix &) const;

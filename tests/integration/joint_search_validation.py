@@ -26,7 +26,7 @@ def require_current_build(build):
     sources=[p for folder in ('src','include','cmake') for p in (source/folder).rglob('*') if p.is_file() and p.suffix in ('.cpp','.hpp','.h','.cmake','.txt')]
     sources += [source/'CMakeLists.txt']
     core_time=max(p.stat().st_mtime_ns for p in sources)
-    driver_sources=[source/'tests/experiments/joint_sparse_benchmark.cpp',source/'tests/support/JointFixedDiagnostic.hpp']
+    driver_sources=[source/'tests/experiments/joint_sparse_benchmark.cpp',*list((source/'tests/support').glob('Joint*.hpp')),*list((source/'tests/support').glob('Joint*.cpp'))]
     driver_time=max(p.stat().st_mtime_ns for p in driver_sources if p.is_file())
     if core_time>min(p.stat().st_mtime_ns for p in libraries) or max(core_time,driver_time)>(build/'bin/joint_sparse_benchmark').stat().st_mtime_ns:
         raise ValueError(f'Sources are newer than measured binaries; rebuild before starting a campaign: {build}')

@@ -1,5 +1,6 @@
 #pragma once
 #include "SparseFactor.hpp"
+#include "FreeDesignRank.hpp"
 
 namespace rhbm_gem::core::joint_component {
 struct OperatorWork
@@ -19,10 +20,12 @@ class ProfileJacobianOperator
     std::shared_ptr<const LinearizationIdentity> identity_;
     double scale_{};
     bool valid_{};
+    FreeDesignRankResult rank_evidence_;
     std::string reason_;
     void Check(VectorRef,Eigen::Index) const;
 public:
-    ProfileJacobianOperator(const Evaluation &,const EvaluationContext &,double absolute=-1);
+    ProfileJacobianOperator(const Evaluation &,const EvaluationContext &,double absolute=-1,FreeDesignRankBackend=FreeDesignRankBackend::Dense);
+    const FreeDesignRankResult & RankEvidence() const {return rank_evidence_;}
     bool Valid() const {return valid_;}
     const std::string & Reason() const {return reason_;}
     Eigen::Index Rows() const {return raw_.rows();}

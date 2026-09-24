@@ -4,7 +4,7 @@
 
 namespace rhbm_gem::core::joint_component {
 OperatorWork & OperatorWorkForTesting() {static thread_local OperatorWork work; return work;}
-ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const EvaluationContext & context,double absolute)
+ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const EvaluationContext & context,double absolute,FreeDesignRankBackend backend)
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
 {
     ResourcePhase phase("operator-prepare");
@@ -44,13 +44,25 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
         {
             ResourcePhase rank_phase("operator-rank");
             ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
-            Matrix compact;
-            {WorkTimer compact_timer(work.compact_seconds); compact=factor_->Compact();}
-            CompactSvdResult svd;
-            {WorkTimer svd_timer(work.svd_seconds); svd=EvaluateRank(compact,{context.rank,p,absolute});}
-            if(!svd.valid) {reason_="nonfinite-derivative"; factor_.reset(); return;}
-            if(svd.rank!=p || factor_->Rank()!=p)
-            {reason_="rank-deficient-free-design"; factor_.reset(); return;}
+            if(backend==FreeDesignRankBackend::SpqrBounds)
+            {
+                rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute});
+                if(rank_evidence_.status!=FreeDesignRankStatus::FullRank)
+                {
+                    reason_=rank_evidence_.status==FreeDesignRankStatus::Deficient ? "rank-deficient-free-design" : rank_evidence_.reason;
+                    factor_.reset(); return;
+                }
+            }
+            else
+            {
+                Matrix compact;
+                {WorkTimer compact_timer(work.compact_seconds); compact=factor_->Compact();}
+                CompactSvdResult svd;
+                {WorkTimer svd_timer(work.svd_seconds); svd=EvaluateRank(compact,{context.rank,p,absolute});}
+                if(!svd.valid) {reason_="nonfinite-derivative"; factor_.reset(); return;}
+                if(svd.rank!=p || factor_->Rank()!=p)
+                {reason_="rank-deficient-free-design"; factor_.reset(); return;}
+            }
         }
         valid_=true; reason_="full-profile-operator";
     } catch(const std::runtime_error &) {factor_.reset(); reason_="operator-factorization-failed";}

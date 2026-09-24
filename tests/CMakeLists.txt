@@ -179,6 +179,7 @@ set(UTILS_HRL_TEST_SOURCES
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES
+    core/joint_component/FreeDesignRank_test.cpp
     core/joint_component/ProfileOperator_test.cpp
     core/joint_component/OperatorSearch_test.cpp
     core/joint_component/Numerics_test.cpp
@@ -370,6 +371,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
+    add_test(NAME joint_bounded_validation_runner_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_bounded_validation_test.py")
+    set_tests_properties(joint_bounded_validation_runner_test PROPERTIES ENVIRONMENT
+        "JOINT_BOUNDED_TEST_EXECUTABLE=$<TARGET_FILE:joint_sparse_benchmark>;JOINT_BOUNDED_TEST_BACKEND=${RHBM_GEM_JOINT_SPARSE_BACKEND}")
     add_test(NAME joint_fixed_validation_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_validation_test.py")
     add_test(NAME joint_search_validation_runner_test
@@ -382,7 +387,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test joint_component_runtime_runner_test joint_component_regression joint_component_physical_smoke joint_operator_validation_runner_test joint_search_validation_runner_test joint_fixed_validation_runner_test
+    set_tests_properties(joint_component_evidence_test joint_component_runtime_runner_test joint_component_regression joint_component_physical_smoke joint_operator_validation_runner_test joint_search_validation_runner_test joint_fixed_validation_runner_test joint_bounded_validation_runner_test
         PROPERTIES LABELS "domain:integration;intent:algorithm;joint:runtime")
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
         add_test(NAME joint_validation_runner_test

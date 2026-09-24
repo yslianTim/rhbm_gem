@@ -199,6 +199,22 @@ bool FreeDesignFactor::Matches(const Sparse & a,const std::vector<Eigen::Index> 
         std::equal(a.valuePtr(),a.valuePtr()+a.nonZeros(),state_->design.valuePtr());
 }
 int FreeDesignFactor::Rank() const {Check(); return state_->fixed_rank>=0 ? state_->fixed_rank : static_cast<int>(state_->qr->rank);}
+std::optional<RankFactorView> FreeDesignFactor::RankView() const
+{
+    Check(); const auto & s=*state_;
+    if(s.fixed_rank<0) return std::nullopt;
+    const auto n=s.design.rows(),p=s.design.cols();
+    const auto * hp=static_cast<const int64_t *>(s.h->p);
+    return RankFactorView{&s.design,n,p,static_cast<Eigen::Index>(s.h->ncol),
+        {s.r.outerIndexPtr(),static_cast<std::size_t>(p+1)},
+        {s.r.innerIndexPtr(),static_cast<std::size_t>(s.r.nonZeros())},
+        {hp,s.h->ncol+1},{static_cast<const int64_t *>(s.h->i),static_cast<std::size_t>(hp[s.h->ncol])},
+        {s.permutation,s.permutation ? static_cast<std::size_t>(p) : 0},
+        {s.hpinv,s.hpinv ? static_cast<std::size_t>(n) : 0},
+        {s.r.valuePtr(),static_cast<std::size_t>(s.r.nonZeros())},
+        {static_cast<const double *>(s.h->x),static_cast<std::size_t>(hp[s.h->ncol])},
+        {static_cast<const double *>(s.tau->x),s.h->ncol}};
+}
 Matrix FreeDesignFactor::LeastSquares(const Matrix & rhs) const
 {
     Check(); auto b=View(rhs); auto & s=*state_;
@@ -332,6 +348,7 @@ bool FreeDesignFactor::Matches(const Sparse & a,const std::vector<Eigen::Index> 
         a.rows()==state_->design.rows() && a.cols()==state_->design.cols() && (a-state_->design).norm()==0;
 }
 int FreeDesignFactor::Rank() const {Check(); return static_cast<int>(state_->qr.rank());}
+std::optional<RankFactorView> FreeDesignFactor::RankView() const {Check(); return std::nullopt;}
 Matrix FreeDesignFactor::Compact() const
 {
     Check(); auto & work=SparseWorkForTesting(); ++work.compact_extractions; WorkTimer timer(work.compact_seconds);

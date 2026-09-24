@@ -1,6 +1,6 @@
 // Included by the offline benchmark inside its existing anonymous namespace.
 // This bounded path never calls reference, assessment, or derivative reduction.
-std::string fixed_mode;
+std::string fixed_mode,fixed_preconditioner;
 std::filesystem::path fixed_state;
 n::Vector FixedVector(const j::value & value)
 {
@@ -31,6 +31,7 @@ j::object FixedWork()
 void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::EvaluationContext & context,const char * output)
 {
     if(fixed_mode!="freeze" && fixed_mode!="composed" && fixed_mode!="normal") throw std::invalid_argument("Invalid fixed diagnostic mode");
+    if(!fixed_preconditioner.empty() && fixed_preconditioner!="identity" && fixed_preconditioner!="diagonal" && fixed_preconditioner!="schwarz") throw std::invalid_argument("Invalid fixed preconditioner");
     if(b.size()>512) throw std::invalid_argument("Fixed diagnostics are bounded to 512 atoms");
     if(fixed_mode=="freeze")
     {
@@ -59,6 +60,7 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
     Snapshot(output,report);
     n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
     svd_records.clear(); n::CompactSvdCaptureForTesting()=Capture;
+    {
     const n::ProfileJacobianOperator op(e,context);
     n::CompactSvdCaptureForTesting()={};
     report["rank"]=svd_records; report["valid"]=op.Valid(); report["reason"]=op.Reason();
@@ -77,27 +79,43 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
     const auto normal_start=Clock::now(); const n::Vector nv=normal(v);
     report["normal_action_seconds"]=Seconds(normal_start); report["normal_q_actions"]=n::SparseWorkForTesting().q_actions-q_before;
     report["normal"]=Values(nv);
-    const auto metric_start=Clock::now();
-    const auto norms=n::WidthNorms(n::RawWidthDerivative(e),context.scale); const auto metric=n::WidthMetric(norms);
-    const double metric_seconds=Seconds(metric_start);
-    const auto gradient_start=Clock::now();
-    const n::Vector gradient=op.ApplyAdjoint(e.residual/context.scale);
-    const double gradient_seconds=Seconds(gradient_start);
     report["total_includes_gradient"]=true;
-    report["operator_gradient"]=Values(gradient);
-    const auto partition_start=Clock::now(); const auto partition=n::SearchPartition(domain,context);
-    const double partition_seconds=Seconds(partition_start);
-    j::array memberships; for(const auto & blocks:partition->atom_blocks) if(!blocks.empty()) memberships.push_back(blocks.size());
-    report["partition"]=j::object{{"blocks",partition->blocks.size()},{"atom_memberships",memberships}};
+    report["timing_scope"]="independent preparation through prediction; audit actions and serialization excluded";
+    report["operator_gradient"]=Values(op.ApplyAdjoint(e.residual/context.scale));
+    } // Release the audit factor before independent timed steps.
     j::array steps;
     for(const auto * kind:{"identity","diagonal","schwarz"})
     {
+        if(!fixed_preconditioner.empty() && fixed_preconditioner!=kind) continue;
         report["stage"]=kind; Snapshot(output,report);
-        const n::PreconditionerContext pc{op.Identity(),n::PreconditionerSpace::Width,metric,1e-3};
-        const auto build_start=Clock::now();
+        const auto wall_start=Clock::now();
+        const auto preparation_start=Clock::now();
+        const n::ProfileJacobianOperator step_op(e,context);
+        const double preparation_seconds=Seconds(preparation_start);
+        if(!step_op.Valid())
+        {
+            steps.push_back(j::object{{"kind",kind},{"valid",false},{"reason",step_op.Reason()},
+                {"fixed_step_wall_seconds",Seconds(wall_start)}});
+            report["steps"]=steps; continue;
+        }
+        const auto gradient_start=Clock::now();
+        const n::Vector gradient=step_op.ApplyAdjoint(e.residual/context.scale);
+        const double gradient_seconds=Seconds(gradient_start);
+        const auto metric_start=Clock::now();
+        const auto norms=n::WidthNorms(n::RawWidthDerivative(e),context.scale); const auto metric=n::WidthMetric(norms);
+        const double metric_seconds=Seconds(metric_start);
+        const n::PreconditionerContext pc{step_op.Identity(),n::PreconditionerSpace::Width,metric,1e-3};
+        double partition_seconds{};
         std::unique_ptr<n::SchwarzModel> model; std::unique_ptr<n::SchwarzPreconditioner> inverse;
-        if(std::string(kind)=="schwarz") {model=std::make_unique<n::SchwarzModel>(*partition,e,context.scale,pc); inverse=std::make_unique<n::SchwarzPreconditioner>(*model,pc);}
-        const double build_seconds=Seconds(build_start);
+        const auto build_start=Clock::now();
+        if(std::string(kind)=="schwarz")
+        {
+            const auto partition_start=Clock::now(); const auto partition=n::SearchPartition(domain,context);
+            partition_seconds=Seconds(partition_start);
+            model=std::make_unique<n::SchwarzModel>(*partition,e,context.scale,pc);
+            inverse=std::make_unique<n::SchwarzPreconditioner>(*model,pc);
+        }
+        const double build_seconds=Seconds(build_start)-partition_seconds;
         const n::Vector diagonal=norms.array().square()+pc.damping*metric.array().square();
         double inverse_seconds{}; std::size_t inverse_actions{};
         const auto precondition=[&](n::VectorRef r)->n::Vector {
@@ -106,16 +124,25 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
             if(std::string(kind)=="diagonal") return r.array()/diagonal.array();
             return r;
         };
-        const auto action=[&](n::VectorRef x)->n::Vector {return normal(x)+(pc.damping*metric.array().square()*x.array()).matrix();};
+        const auto action=[&](n::VectorRef x)->n::Vector {
+            n::Vector result;
+#ifndef PR4_BASELINE_DRIVER
+            if(fixed_mode=="normal") result=step_op.ApplyNormal(x);
+            else
+#endif
+                result=step_op.ApplyAdjoint(step_op.Apply(x));
+            return result+(pc.damping*metric.array().square()*x.array()).matrix();
+        };
         const auto solve_start=Clock::now(); auto step=n::SolvePcg(action,precondition,-gradient,metric);
-        if(step.valid) step.predicted=-gradient.dot(step.step)-.5*op.Apply(step.step).squaredNorm();
-        const double solve_seconds=Seconds(solve_start);
+        if(step.valid) step.predicted=-gradient.dot(step.step)-.5*step_op.Apply(step.step).squaredNorm();
+        const double solve_seconds=Seconds(solve_start),wall_seconds=Seconds(wall_start);
         steps.push_back(j::object{{"kind",kind},{"valid",step.valid},{"reason",step.reason},{"step",Values(step.step)},
             {"iterations",step.iterations},{"true_residual",std::isfinite(step.relative_residual) ? j::value(step.relative_residual) : j::value(nullptr)},
             {"predicted",std::isfinite(step.predicted) ? j::value(step.predicted) : j::value(nullptr)},
-            {"gradient_seconds",gradient_seconds},{"metric_seconds",metric_seconds},{"partition_seconds",inverse ? partition_seconds : 0.},
+            {"preparation_seconds",preparation_seconds},{"gradient_seconds",gradient_seconds},{"metric_seconds",metric_seconds},{"partition_seconds",partition_seconds},
             {"build_seconds",build_seconds},{"inverse_seconds",inverse_seconds},{"inverse_actions",inverse_actions},{"solve_seconds",solve_seconds},
-            {"total_seconds",n::OperatorWorkForTesting().preparation_seconds+gradient_seconds+metric_seconds+(inverse ? partition_seconds : 0.)+build_seconds+solve_seconds}});
+            {"fixed_step_wall_seconds",wall_seconds},
+            {"total_seconds",preparation_seconds+gradient_seconds+metric_seconds+partition_seconds+build_seconds+solve_seconds}});
         report["steps"]=steps;
     }
     report["factor_work"]=FixedWork(); report["search_work"]=SearchWork(); report["stage"]="complete"; Snapshot(output,report);

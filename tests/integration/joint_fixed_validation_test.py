@@ -55,4 +55,30 @@ class FixedComparison(unittest.TestCase):
         self.assertIsNone(overlap_eligible(dict(partition=dict(blocks=2,atom_memberships=[3]))))
 
 
+
+class FixedCli(unittest.TestCase):
+    def test_compare_exit_codes_and_receipt_immutability(self):
+        import json
+        import subprocess
+        import sys
+        import tempfile
+        from pathlib import Path
+        from joint_fixed_validation import CASES,MODES
+        for expected,missing,bad in ((0,False,False),(3,True,False),(1,False,True),(1,True,True)):
+            with self.subTest(expected=expected,missing=missing,bad=bad),tempfile.TemporaryDirectory() as folder:
+                root=Path(folder); report=dict(states={c:dict(sha256='state') for c in CASES},runs={})
+                for c in CASES:
+                    for b in ('eigen','spqr'):
+                        for mode in MODES:
+                            value=result()
+                            if mode=='C': value.update(mode='normal',normal_q_actions=2)
+                            if bad and mode=='B': value['state_control']['objective']=10
+                            report['runs'][f'{c}/{b}/{mode}']=[dict(process=dict(status='completed'),state_sha256='state',result=dict(value,stage='complete')) for _ in range(3)]
+                if missing: report['runs'].pop(f'{CASES[-1]}/spqr/C')
+                receipt=root/'campaign.json'; receipt.write_text(json.dumps(report)); original=receipt.read_bytes()
+                process=subprocess.run([sys.executable,str(Path(__file__).with_name('joint_fixed_validation.py')),'--compare','--work-dir',folder],capture_output=True,text=True)
+                self.assertEqual(process.returncode,expected,process.stderr)
+                self.assertEqual(receipt.read_bytes(),original)
+                self.assertEqual(json.loads((root/'comparison.json').read_text())['exit_code'],expected)
+
 if __name__=='__main__': unittest.main()

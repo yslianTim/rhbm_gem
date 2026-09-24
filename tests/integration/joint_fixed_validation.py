@@ -21,7 +21,7 @@ def vector_close(a,b,relative=1e-8,absolute=1e-12):
     return math.hypot(*(x-y for x,y in zip(a,b)))<=absolute+relative*math.hypot(*a)
 
 
-def parity(a,b):
+def parity(a,b,kinds=('identity','diagonal','schwarz')):
     failures=[]
     for key in ('valid','reason'):
         if key not in a or a.get(key)!=b.get(key): failures.append(key)
@@ -50,8 +50,8 @@ def parity(a,b):
         if result.get('normal_q_actions')!=(2 if result.get('mode')=='normal' else 6): failures.append('normal-q-actions')
         if any(result.get('work',{}).get(k)!=0 for k in ('reference_solves','derivative_preparations')): failures.append('forbidden-work')
     aa,bb=a.get('steps',[]),b.get('steps',[])
-    if len(aa)!=3 or len(bb)!=3: failures.append('steps/missing')
-    for index,kind in enumerate(('identity','diagonal','schwarz')):
+    if len(aa)!=len(kinds) or len(bb)!=len(kinds): failures.append('steps/missing')
+    for index,kind in enumerate(kinds):
         if len(aa)<=index or len(bb)<=index: continue
         x,y=aa[index],bb[index]
         if x.get('kind')!=kind or y.get('kind')!=kind or x.get('valid') is not True or y.get('valid') is not True: failures.append(kind+'/unavailable'); continue
@@ -84,6 +84,13 @@ def total_bounds(result,index):
     return total,total+adjoint
 
 
+def aggregate_status(comparisons):
+    failed=any(c.get('passed') is False for row in comparisons.values() for c in row.get('checks',[]))
+    incomplete=not comparisons or any(not row.get('complete') for row in comparisons.values())
+    return dict(status='failed' if failed else 'incomplete' if incomplete else 'passed',
+                numerical_failed=failed,incomplete=incomplete,exit_code=1 if failed else 3 if incomplete else 0)
+
+
 def compare(root):
     report=v.read(root/'campaign.json'); out=dict(comparisons={},performance={},promote=False)
     for case in CASES:
@@ -94,6 +101,8 @@ def compare(root):
                 for a,b in zip(x,y):
                     if any(r['process']['status']!='completed' or r.get('result',{}).get('stage')!='complete' for r in (a,b)):
                         checks.append(dict(passed=None,reason='incomplete-measurement'))
+                    elif not report.get('states',{}).get(case,{}).get('sha256'):
+                        checks.append(dict(passed=None,reason='missing-state-fingerprint'))
                     elif a.get('state_sha256')!=report.get('states',{}).get(case,{}).get('sha256') or a.get('state_sha256')!=b.get('state_sha256'):
                         checks.append(dict(passed=False,reason='state-fingerprint'))
                     else: checks.append(parity(a['result'],b['result']))
@@ -115,6 +124,7 @@ def compare(root):
                     out['performance'][key][kind+'-gradient-inclusive-bounds']=dict(
                         baseline_bounds=baseline_bounds,candidate_bounds=candidate_bounds,
                         conservative_improvement=improvement([t[0] for t in baseline_bounds],[t[1] for t in candidate_bounds],passed))
+    out.update(aggregate_status(out['comparisons']))
     out['comparator_sha256']=v.sha(Path(__file__))
     v.write(root/'comparison.json',out); return out
 
@@ -125,7 +135,7 @@ def main():
     for name in ('baseline-eigen','baseline-spqr','eigen','spqr'): p.add_argument('--'+name,type=Path)
     p.add_argument('--compare',action='store_true')
     args=p.parse_args(); root=args.work_dir.resolve()
-    if args.compare: compare(root); return
+    if args.compare: return compare(root)['exit_code']
     builds={key:getattr(args,key.replace('-','_')) for key in ('baseline-eigen','baseline-spqr','eigen','spqr')}
     if args.input_dir is None or any(x is None for x in builds.values()): p.error('All four builds and input-dir are required')
     if (root/'campaign.json').exists(): raise SystemExit('Refusing to replace or resume a prior campaign')
@@ -194,7 +204,12 @@ def main():
                     row['state_sha256']=v.sha(state); runs.append(row)
                     if row['process']['status']!='completed': stopped.add(key)
                     save()
-    report['finished']=True; save(); compare(root)
+    report['finished']=True; save(); return compare(root)['exit_code']
 
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    try: raise SystemExit(main())
+    except (OSError,ValueError,KeyError,TypeError,IndexError) as error:
+        import sys
+        print(f'Invalid validation input: {error}',file=sys.stderr)
+        raise SystemExit(2)

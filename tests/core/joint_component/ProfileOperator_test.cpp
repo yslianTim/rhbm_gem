@@ -263,3 +263,25 @@ TEST(JointProfileOperatorTest, NormalActionRetainsWeakDirectionsAndRejectsInvali
     EXPECT_EQ(n::SparseWorkForTesting().compact_extractions,work.compact_extractions);
     EXPECT_EQ(n::OperatorWorkForTesting().rank_checks,ranks);
 }
+
+TEST(JointProfileOperatorTest,ExplicitRankPrototypePreservesActionsAndActiveFace)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR prototype";
+    Sample s; const auto initial=n::EvaluateProfile(s.domain,s.y,s.eta,false,&s.context); ASSERT_TRUE(initial.valid);
+    for(bool active:{false,true})
+    {
+        auto beta=initial.beta; if(active) beta(0)=0;
+        const auto e=n::EvaluateState(s.domain,s.y,s.eta,beta,s.context); ASSERT_TRUE(e.valid);
+        const n::ProfileJacobianOperator oracle(e,s.context); ASSERT_TRUE(oracle.Valid());
+        n::SparseWorkForTesting()={};
+        const n::ProfileJacobianOperator prototype(e,s.context,-1,n::FreeDesignRankBackend::SpqrBounds);
+        ASSERT_TRUE(prototype.Valid())<<prototype.Reason();
+        EXPECT_EQ(n::SparseWorkForTesting().compact_extractions,0);
+        EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,0);
+        const n::Vector v=n::Vector::LinSpaced(3,-.2,.7),w=n::Vector::LinSpaced(60,-.4,.6);
+        EXPECT_LE((prototype.Apply(v)-oracle.Apply(v)).norm(),1e-12);
+        EXPECT_LE((prototype.ApplyAdjoint(w)-oracle.ApplyAdjoint(w)).norm(),1e-12);
+        EXPECT_LE((prototype.ApplyNormal(v)-oracle.ApplyNormal(v)).norm(),1e-12);
+        EXPECT_EQ(prototype.FreeColumns(),active ? 5 : oracle.FreeColumns());
+    }
+}
