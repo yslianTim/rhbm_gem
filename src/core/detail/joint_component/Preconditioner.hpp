@@ -1,5 +1,6 @@
 #pragma once
 #include "ProfileJacobianOperator.hpp"
+#include <algorithm>
 #include <cmath>
 #include <set>
 
@@ -23,9 +24,10 @@ struct PreconditionerPartition
     {
         if(!problem) throw std::invalid_argument("Missing preconditioner snapshot");
         atom_blocks.resize(problem->atom_ids.size());
-        const std::set<std::size_t> full(layout.full_atoms.begin(),layout.full_atoms.end());
-        const std::set<std::size_t> rows(layout.informative_rows.begin(),layout.informative_rows.end());
-        std::set<std::size_t> cores; std::set<std::string> names;
+        std::vector<bool> full(problem->atom_ids.size()),cores(full.size()),rows(problem->observations.size());
+        for(auto a:layout.full_atoms) full.at(a)=true;
+        for(auto r:layout.informative_rows) rows.at(r)=true;
+        std::set<std::string> names;
         for(std::size_t k=0;k<blocks.size();++k)
         {
             const auto & block=blocks[k]; std::set<Eigen::Index> members;
@@ -33,15 +35,18 @@ struct PreconditionerPartition
                 throw std::invalid_argument("Invalid preconditioner block identity");
             for(const auto * atoms:{&block.core_atoms,&block.overlap_atoms}) for(auto a:*atoms)
             {
-                if(a<0 || static_cast<std::size_t>(a)>=atom_blocks.size() || !full.contains(static_cast<std::size_t>(a)) || !members.insert(a).second)
+                if(a<0 || static_cast<std::size_t>(a)>=atom_blocks.size() || !full[static_cast<std::size_t>(a)] || !members.insert(a).second)
                     throw std::invalid_argument("Invalid preconditioner atom mapping");
                 atom_blocks[static_cast<std::size_t>(a)].push_back(k);
-                if(atoms==&block.core_atoms && !cores.insert(static_cast<std::size_t>(a)).second)
-                    throw std::invalid_argument("Overlapping preconditioner cores");
+                if(atoms==&block.core_atoms)
+                {
+                    if(cores[static_cast<std::size_t>(a)]) throw std::invalid_argument("Overlapping preconditioner cores");
+                    cores[static_cast<std::size_t>(a)]=true;
+                }
             }
             std::set<Eigen::Index> unique_rows;
             for(auto r:block.informative_rows)
-                if(r<0 || static_cast<std::size_t>(r)>=problem->observations.size() || !rows.contains(static_cast<std::size_t>(r)) || !unique_rows.insert(r).second)
+                if(r<0 || static_cast<std::size_t>(r)>=problem->observations.size() || !rows[static_cast<std::size_t>(r)] || !unique_rows.insert(r).second)
                     throw std::invalid_argument("Invalid preconditioner row mapping");
         }
         if(cores!=full) throw std::invalid_argument("Uncovered preconditioner core atom");
@@ -52,6 +57,11 @@ struct BlockCoordinates
     Indices global; // local -> solver coordinate; never parent atom indices.
     Vector weights;
     Eigen::Index dimension{};
+    Eigen::Index LocalIndex(Eigen::Index coordinate) const
+    {
+        const auto found=std::find(global.begin(),global.end(),coordinate);
+        return found==global.end() ? -1 : static_cast<Eigen::Index>(found-global.begin());
+    }
     Vector Restrict(VectorRef v) const
     {
         if(v.size()!=dimension) throw std::invalid_argument("Invalid global RHS size");

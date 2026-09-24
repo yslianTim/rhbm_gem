@@ -10,6 +10,9 @@
 #include "support/JointOperatorWorkload.hpp"
 #include "core/detail/joint_component/ProfileJacobianOperator.hpp"
 #include "core/detail/JointUncertainty.hpp"
+#ifndef PR23_BASELINE_DRIVER
+#include "core/detail/joint_component/OperatorSearch.hpp"
+#endif
 #endif
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -27,6 +30,7 @@ namespace j=boost::json;
 using Clock=std::chrono::steady_clock;
 bool audit{};
 bool operator_audit{};
+std::string search_kind;
 std::filesystem::path capture;
 j::array svd_records;
 j::value Read(const char * path,bool precise=false)
@@ -101,8 +105,66 @@ void Snapshot(const char * output,j::object & report)
 #endif
     Write(output,report);
 }
+
+#ifndef SPARSE_BASELINE_DRIVER
+j::object SearchWork()
+{
+    j::object out;
+#ifndef PR23_BASELINE_DRIVER
+    const auto & w=n::SearchWorkForTesting(); const auto & op=n::OperatorWorkForTesting();
+    j::array regularizations;
+    for(const auto & r:w.regularizations) regularizations.push_back(j::object{{"local_build",r.local_build},{"factor_build",r.factor_build},
+        {"block",r.block},{"lambda",r.lambda},{"damping",r.damping},{"tau",r.tau},{"attempt",r.attempt}});
+    out={{"linearizations",w.linearizations},{"pcg_solves",w.pcg_solves},{"pcg_iterations",w.pcg_iterations},
+        {"damping_trials",w.damping_trials},{"local_builds",w.local_builds},{"factor_builds",w.factor_builds},
+        {"inverse_actions",w.inverse_actions},{"topology_bytes",w.topology_bytes},{"storage_bytes",w.storage_bytes},
+        {"scratch_bytes_bound",w.scratch_bytes},{"maximum_block_atoms",w.maximum_block_atoms},
+        {"partition_seconds",w.partition_seconds},{"metric_seconds",w.metric_seconds},{"local_seconds",w.local_seconds},
+        {"factor_seconds",w.factor_seconds},{"inverse_seconds",w.inverse_seconds},{"pcg_seconds",w.pcg_seconds},
+        {"maximum_lambda",w.maximum_lambda},{"maximum_tau",w.maximum_tau},{"last_relative_residual",w.last_relative_residual},
+        {"operator_prepare_seconds",op.preparation_seconds},{"operator_rank_seconds",op.rank_seconds},
+        {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
+        {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
+#endif
+    return out;
+}
+void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::EvaluationContext context,const char * output)
+{
+#ifndef PR23_BASELINE_DRIVER
+    if(search_kind!="legacy")
+    {
+        context.search.method=n::SearchMethod::OperatorPcg;
+        if(search_kind=="identity") context.search.preconditioner=n::PreconditionerKind::Identity;
+        else if(search_kind=="diagonal") context.search.preconditioner=n::PreconditionerKind::Diagonal;
+        else if(search_kind=="schwarz") context.search.preconditioner=n::PreconditionerKind::Schwarz;
+        else throw std::invalid_argument("Invalid search kind");
+    }
+#else
+    if(search_kind!="legacy") throw std::invalid_argument("Baseline supports only legacy search");
+#endif
+    j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows}};
+    Snapshot(output,report);
+    auto search=n::SearchProfile(domain,y,b,context);
+    report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
+    report["search_seconds"]=search.seconds; report["search_work"]=SearchWork();
+    report["search_global_derivative_preparations"]=n::SparseWorkForTesting().derivative_preparations;
+    report["stage"]="assessment"; Snapshot(output,report);
+    const auto fit=n::AssessComponentSearch(domain,y,context,std::move(search));
+    report["search_completed"]=fit.search_success;
+    report["assessment_seconds"]=fit.assessment_seconds;
+    report["assessment"]=second_stage_test::matched::runtime_json::Assessment(fit.assessment);
+    report["returned_state"]=fit.trusted_state ? j::value(second_stage_test::matched::runtime_json::Endpoint(*fit.trusted_state)) : j::value(nullptr);
+    report["returned_assessment"]=fit.trusted_assessment ? j::value(second_stage_test::matched::runtime_json::Assessment(*fit.trusted_assessment)) : j::value(nullptr);
+    report["stage"]="complete"; Snapshot(output,report);
+}
+
+#endif
 void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::EvaluationContext & context,const char * output)
 {
+
+#ifndef SPARSE_BASELINE_DRIVER
+    if(!search_kind.empty()) {RunSearch(domain,y,b,context,output); return;}
+#endif
     j::object report{{"rows",domain.rows},{"atoms",b.size()},{"initial_b",Values(b)},{"stage","primary"}};Snapshot(output,report);
 #ifndef SPARSE_BASELINE_DRIVER
     n::SparseWorkForTesting()={}; n::LinearWorkspace workspace;
@@ -199,6 +261,7 @@ int main(int argc,char ** argv)
                 if(option=="--svd-mode" && k+1<end) Mode(argv[++k]);
                 else if(option=="--audit") audit=true;
                 else if(option=="--operator") operator_audit=true;
+                else if(option=="--search" && k+1<end) search_kind=argv[++k];
                 else if(option=="--resources") n::ResourceWorkForTesting().enabled=true;
                 else if(option=="--capture" && k+1<end) {audit=true; capture=argv[++k]; std::filesystem::create_directories(capture);}
                 else throw std::invalid_argument("Invalid benchmark option");
@@ -211,8 +274,8 @@ int main(int argc,char ** argv)
         if(mode=="synthetic" && argc==6)
         {
             const std::string topology=argv[2],phase=argv[4]; const int atoms=std::stoi(argv[3]);
-            if(phase!="prepare" && phase!="fixed" && phase!="workflow") throw std::invalid_argument("Invalid synthetic phase");
-            if(atoms>512 && phase!="prepare") throw std::invalid_argument("Large workloads are preparation-only in PR0/PR1");
+            if(phase!="prepare" && phase!="fixed" && phase!="workflow" && phase!="local") throw std::invalid_argument("Invalid synthetic phase");
+            if(atoms>512 && phase!="prepare" && phase!="local") throw std::invalid_argument("Large workloads are preparation/local-only");
             const auto started=Clock::now(); const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
             const double construction_seconds=Seconds(started);
             const auto & data=c::JointProblemAccess::Get(problem);
@@ -227,7 +290,7 @@ int main(int argc,char ** argv)
                 {"construction_seconds",construction_seconds}};
             const auto hash_started=Clock::now(); report["input_sha256"]=second_stage_test::OperatorWorkloadHash(problem.Input());
             report["fingerprint_seconds"]=Seconds(hash_started);
-            if(phase=="prepare")
+            if(phase=="prepare" || phase=="local")
             {
                 const auto basis_started=Clock::now(); n::Vector beta(2*atoms);
                 for(int a=0;a<atoms;++a) {beta(2*a)=2; beta(2*a+1)=.2;}
@@ -236,10 +299,51 @@ int main(int argc,char ** argv)
                 report["design_nonzeros"]=state.x.nonZeros(); report["derivative_nonzeros"]=state.derivative.nonZeros();
                 report["residual_norm"]=state.residual.norm();
                 report["not_run"]=j::array{"ac-solve","rank","operator","reference","search","assessment","uncertainty"};
+#ifndef PR23_BASELINE_DRIVER
+                if(phase=="local")
+                {
+                    report["stage"]="local"; Snapshot(argv[5],report);
+                    try {
+                        const auto partition=n::BuildPreconditionerPartition(data.input,data.layout);
+                        {
+                            const auto free=n::FreeColumnMapping(*partition,state.beta);
+                            report["free_coordinates"]=free.dimension;
+                            report["free_mapping_blocks"]=free.blocks.size();
+                            for(const auto & block:free.blocks) for(std::size_t j=0;j<block.global.size();++j)
+                                if(block.LocalIndex(block.global[j])!=static_cast<Eigen::Index>(j)) throw std::runtime_error("preconditioner-mapping-failed");
+                        }
+                        const auto metric=n::WidthMetric(n::WidthNorms(n::RawWidthDerivative(state),data.context.scale));
+                        const n::PreconditionerContext pc{std::make_shared<const n::LinearizationIdentity>(),n::PreconditionerSpace::Width,metric,1e-3};
+                        const n::SchwarzModel model(*partition,state,data.context.scale,pc); const n::SchwarzPreconditioner inverse(model,pc);
+                        const n::Vector u=n::Vector::LinSpaced(atoms,-.5,.7),v=n::Vector::LinSpaced(atoms,.1,1.);
+                        const auto a=inverse.ApplyInverse(u,pc),b=inverse.ApplyInverse(v,pc);
+                        const double error=std::abs(u.dot(b)-v.dot(a))/std::max({1.,u.norm()*b.norm(),v.norm()*a.norm()});
+                        report["local_available"]=true; report["local_passed"]=error<=1e-12 && u.dot(a)>0 && v.dot(b)>0;
+                        report["symmetry_error"]=error; report["blocks"]=partition->blocks.size();
+                    } catch(const std::runtime_error & e) {report["local_available"]=false; report["local_reason"]=e.what();}
+                    report["search_work"]=SearchWork();
+                }
+#else
+                if(phase=="local") throw std::invalid_argument("No local baseline implementation");
+#endif
+
             }
             else
             {
+#ifndef PR23_BASELINE_DRIVER
+                n::SearchPolicy policy;
+                if(!search_kind.empty() && search_kind!="legacy")
+                {
+                    policy.method=n::SearchMethod::OperatorPcg;
+                    if(search_kind=="identity") policy.preconditioner=n::PreconditionerKind::Identity;
+                    else if(search_kind=="diagonal") policy.preconditioner=n::PreconditionerKind::Diagonal;
+                    else if(search_kind=="schwarz") policy.preconditioner=n::PreconditionerKind::Schwarz;
+                    else throw std::invalid_argument("Invalid search kind");
+                }
+                const auto fit=n::FitWithSearchPolicy(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),policy);
+#else
                 const auto fit=c::FitJointComponents(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55));
+#endif
                 const auto captured=c::CaptureJointAnalysisResult(fit);
                 const auto uncertainty=c::detail::ComputeJointUncertainty(problem,captured);
                 report["state_available"]=fit.assembled_state.has_value(); report["search_completed"]=fit.search_completed;

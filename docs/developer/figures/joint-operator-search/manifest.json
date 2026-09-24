@@ -1,0 +1,13 @@
+{
+  "archive": "receipts.tar.gz",
+  "sha256": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f",
+  "bytes": 13985678,
+  "campaign_files": 189,
+  "logs": 9,
+  "status": "closed-at-user-request",
+  "production_default": "LegacyCompact",
+  "eigen_single512_ratio": 1.8302910029977166,
+  "spqr_single512_ratio": 1.6064723595280024,
+  "required_max_ratio": 1.1,
+  "promotion_passed": false
+}

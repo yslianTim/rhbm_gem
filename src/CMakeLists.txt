@@ -28,6 +28,8 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/CompactSvd.cpp
     core/detail/joint_component/SparseFactor.cpp
     core/detail/joint_component/ProfileJacobianOperator.cpp
+    core/detail/joint_component/OperatorSearch.cpp
+    core/detail/joint_component/Schwarz.cpp
     core/detail/joint_component/Search.cpp
     core/detail/joint_component/Components.cpp
     core/detail/joint_component/ObservableProfile.cpp

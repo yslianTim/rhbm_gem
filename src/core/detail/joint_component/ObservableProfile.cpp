@@ -73,7 +73,7 @@ EvaluationContext ProfileContext(const EvaluationContext & parent,const JointPar
     context.rank={original_rows,2*atoms,atoms}; context.linear.rank_relative=context.rank.Relative(2*atoms);
     return context;
 }
-JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b)
+JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b,const SearchPolicy & search_policy)
 {
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input;
     JointFitResult out; out.problem=problem; out.layout=data.layout; out.observation_scale=data.context.scale;
@@ -101,7 +101,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         else if(valid && !layout.informative_rows.empty())
         {
             const auto domain=ProfileDomain(data.domain,layout);
-            auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(view.rows.size())); context.independent_search=true;
+            auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(view.rows.size())); context.independent_search=true; context.search=search_policy;
             const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
             const Vector start=SelectValues(widths,IndicesOf(layout.full_atoms));
             const auto result=AssessComponentSearch(domain,y,context,SearchProfile(domain,y,start,context));

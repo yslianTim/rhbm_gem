@@ -89,6 +89,8 @@ public:
         std::size_t size() const {return retained ? retained->size() : entries.size();} bool empty() const {return size()==0;}
         Support operator[](std::size_t i) const
         {const auto & s=entries[retained ? static_cast<std::size_t>(retained->at(i)) : i]; return {owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
+        Eigen::Index ParentRow(std::size_t i) const
+        {return static_cast<Eigen::Index>(entries[retained ? static_cast<std::size_t>(retained->at(i)) : i].row);}
         struct Iterator
         {
             const Rows * rows; std::size_t index;
@@ -107,6 +109,8 @@ public:
         bool operator!=(const Iterator & other) const {return index!=other.index;}
     };
     Iterator begin() const {return {this,0};} Iterator end() const {return {this,size()};}
+    std::shared_ptr<const JointProblemInput> Snapshot() const {return input;}
+    std::size_t ParentAtom(std::size_t a) const {return RootAtom(a);}
     const JointProblemInput * Storage() const {return input.get();}
 };
 struct Domain

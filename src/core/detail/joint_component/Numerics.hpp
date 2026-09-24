@@ -32,6 +32,14 @@ struct LinearPolicy
     int active_set_iteration_factor{20};
     double release_factor{128}, release_response_norm{-1};
 };
+enum class SearchMethod {LegacyCompact,OperatorPcg};
+enum class PreconditionerKind {Identity,Diagonal,Schwarz};
+struct SearchPolicy
+{
+    SearchMethod method{SearchMethod::LegacyCompact};
+    PreconditionerKind preconditioner{PreconditionerKind::Schwarz};
+    int pcg_iterations{-1},damping_trials{20};
+};
 struct EvaluationContext
 {
     std::string snapshot_hash;
@@ -42,6 +50,7 @@ struct EvaluationContext
     LinearPolicy linear;
     AuditPlan audit;
     bool independent_search{};
+    SearchPolicy search;
     int profile_budget{200},update_budget{100};
 };
 EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",const AuditPlan & = {});

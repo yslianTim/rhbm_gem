@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "OperatorSearch.hpp"
 #include "SparseFactor.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
@@ -70,6 +71,7 @@ struct Profile
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context)
 {
+    if(context.search.method==SearchMethod::OperatorPcg) return SearchOperatorProfile(domain,y,initial_b,context);
     ResourcePhase phase("search");
     const auto start=std::chrono::steady_clock::now();
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {}};

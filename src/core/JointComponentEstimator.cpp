@@ -166,9 +166,11 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
+{return n::FitWithSearchPolicy(problem,initial_b,{});}
+JointFitResult n::FitWithSearchPolicy(const JointProblem & problem,const std::vector<double> & initial_b,const n::SearchPolicy & search_policy)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b);
+    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy);
     const auto & data=JointProblemAccess::Get(problem); JointFitResult out; out.problem=problem;
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
@@ -179,6 +181,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
         return out;
     }
+    auto search_context=data.context; search_context.search=search_policy;
     const n::Vector b=Eigen::Map<const n::Vector>(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
     std::vector<n::ComponentResult> results;
     for(const auto & view:data.partition.components)
@@ -188,7 +191,7 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
         const bool valid=std::all_of(view.atoms.begin(),view.atoms.end(),[&](auto a) {
             return std::isfinite(initial_b[static_cast<std::size_t>(a)]) && initial_b[static_cast<std::size_t>(a)]>0;
         });
-        if(valid) result=n::SolveComponent(view,data.y,b,data.context);
+        if(valid) result=n::SolveComponent(view,data.y,b,search_context);
         else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}
 
         JointComponentResult component; component.id=view.id; component.stop_reason=result.search.stop_reason;
