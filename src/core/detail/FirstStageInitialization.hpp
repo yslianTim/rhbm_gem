@@ -6,7 +6,10 @@
 #include <string_view>
 #endif
 
+namespace rhbm_gem { class ModelAnalysisEditor; }
+
 namespace rhbm_gem::core::detail {
+void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
 struct FittingWorkset
 {
     std::vector<AtomObject *> contributors;

@@ -325,6 +325,25 @@ void RunLocalAlphaTraining(
     RunLocalAlphaTraining(model_object, options, stage, model_object.GetSelectedAtoms());
 }
 
+void detail::TrainLocalAlphaForAtom(
+    ModelAnalysisEditor & analysis,
+    const FitOptions & options,
+    FittingStage stage,
+    AtomObject & atom)
+{
+    const auto local_view{ AtomLocalPotentialView::For(atom) };
+    auto alpha_r{ MakeTrainingOptions(options).alpha_min };
+    if (local_view.HasEnoughSamplingEntriesInRange(
+            stage,
+            0.0,
+            detail::kSignalDistanceMax,
+            kMinimumAlphaRTrainingSampleCount))
+    {
+        alpha_r = TrainAlphaR(local_view.GetSamplingEntries(stage), options);
+    }
+    analysis.SetAtomLocalAlphaR(stage, atom, alpha_r);
+}
+
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
@@ -332,7 +351,6 @@ void RunLocalAlphaTraining(
     const std::vector<AtomObject *> & atom_list)
 {
     auto analysis{ model_object.EditAnalysis() };
-    const auto alpha_min{ MakeTrainingOptions(options).alpha_min };
 
     size_t count{ 0 };
     if (!options.quiet_mode)
@@ -343,19 +361,7 @@ void RunLocalAlphaTraining(
     }
     for (auto * atom : atom_list)
     {
-        const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        auto alpha_r{ alpha_min };
-        if (local_view.HasEnoughSamplingEntriesInRange(
-                stage,
-                0.0,
-                detail::kSignalDistanceMax,
-                kMinimumAlphaRTrainingSampleCount))
-        {
-            alpha_r = TrainAlphaR(
-                local_view.GetSamplingEntries(stage),
-                options);
-        }
-        analysis.SetAtomLocalAlphaR(stage, *atom, alpha_r);
+        detail::TrainLocalAlphaForAtom(analysis, options, stage, *atom);
         count++;
         if (!options.quiet_mode)
         {

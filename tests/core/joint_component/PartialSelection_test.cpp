@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <algorithm>
 #include "support/JointPartialSelection.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -18,12 +19,19 @@
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <set>
 
 namespace {
 namespace core=rhbm_gem::core;
 namespace n=core::joint_component;
 namespace sim=core::simulation;
+void ResetProgressPercentForTest()
+{
+    testing::internal::CaptureStdout();
+    Logger::ProgressPercent(0, 1);
+    testing::internal::GetCapturedStdout();
+}
 // Exhaust the whole map/catalogue independently of the builder's bounding boxes.
 void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject & model)
 {
@@ -213,21 +221,110 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceW
     // Outside both target supports, but inside the first atom's cubic sampling stencil.
     values[4+13*(3+7*3)]=std::numeric_limits<double>::quiet_NaN();
     rhbm_gem::MapObject map(dims,spacing,origin,std::move(values));
-    const auto fit=core::EstimateJointComponents(map,model);
-    ASSERT_EQ(fit.initialization.atoms.size(),2);
-    EXPECT_TRUE(fit.initialization.atoms[0].reason.starts_with("initialization-exception:"));
-    EXPECT_EQ(fit.initialization.atoms[1].reason,"valid-width");
+    const auto problem = core::BuildJointProblem(map, model);
+    const auto workset = core::detail::MakeJointFittingWorkset(model, problem);
+    core::FitOptions options; options.thread_size = 1;
+    ResetProgressPercentForTest();
+    testing::internal::CaptureStdout();
+    const auto initialization = core::detail::RunFirstStage(model, workset, options,
+        core::detail::FirstStageMode::SampleContributorsIsolated, &map);
+    const auto progress = testing::internal::GetCapturedStdout();
+    EXPECT_NE(progress.find("50%"), std::string::npos);
+    EXPECT_NE(progress.find("100%"), std::string::npos);
+    EXPECT_EQ(progress.find("Run local alpha training for 1 atoms."), std::string::npos);
+    EXPECT_EQ(std::count(progress.begin(), progress.end(), '\r'), 2);
+    const auto fit = core::FitJointComponents(problem, initialization.b);
+    ASSERT_EQ(initialization.atoms.size(),2);
+    EXPECT_TRUE(initialization.atoms[0].reason.starts_with("initialization-exception:"));
+    EXPECT_EQ(initialization.atoms[1].reason,"valid-width");
     ASSERT_EQ(fit.components.size(),2); EXPECT_TRUE(fit.components[0].state); EXPECT_TRUE(fit.components[1].state);
-    EXPECT_TRUE(fit.initialization.valid); EXPECT_TRUE(fit.objective);
-    EXPECT_EQ(fit.initialization.atoms[0].seed_source,"median-fallback");
-    EXPECT_EQ(fit.initialization.atoms[0].donor_count,1);
-    EXPECT_FALSE(fit.initialization.atoms[0].original_b);
-    EXPECT_DOUBLE_EQ(fit.initialization.b[0],fit.initialization.b[1]);
+    EXPECT_TRUE(initialization.valid); EXPECT_TRUE(fit.objective);
+    EXPECT_EQ(initialization.atoms[0].seed_source,"median-fallback");
+    EXPECT_EQ(initialization.atoms[0].donor_count,1);
+    EXPECT_FALSE(initialization.atoms[0].original_b);
+    EXPECT_DOUBLE_EQ(initialization.b[0],initialization.b[1]);
     EXPECT_EQ(model.GetSelectedAtomCount(),2);
-    const auto saved=core::CaptureJointAnalysisResult(fit);
+    auto saved=core::CaptureJointAnalysisResult(fit);
+    saved.initialization = initialization;
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(decoded.initialization.atoms[0].reason,fit.initialization.atoms[0].reason);
+    EXPECT_EQ(decoded.initialization.atoms[0].reason,initialization.atoms[0].reason);
     EXPECT_EQ(decoded.available_row_mask,fit.available_row_mask);
+}
+
+TEST(JointComponentPartialSelectionTest, LocalAlphaSingleAtomAndBatchPreserveNumericalResults)
+{
+    auto f = joint_partial_test::Make("all");
+    const auto contributors = f.model->GetSelectedAtoms();
+    ASSERT_EQ(contributors.size(), 2);
+    core::FitOptions options; options.thread_size = 1;
+    std::vector<double> expected_alpha;
+    {
+        auto editor = f.model->EditAnalysis();
+        for (auto * atom : contributors)
+        {
+            editor.SetAtomLocalRawSamplingEntries(*atom,
+                core::SampleAtomMapValues(*f.map, *atom, options.sampling_method));
+            const auto entries = rhbm_gem::AtomLocalPotentialView::For(*atom)
+                .GetSamplingEntries(rhbm_gem::FittingStage::First);
+            ASSERT_GE(entries.size(), 10);
+            expected_alpha.push_back(core::TrainAlphaR(entries, options));
+        }
+        core::detail::TrainLocalAlphaForAtom(editor, options,
+            rhbm_gem::FittingStage::First, *contributors.front());
+    }
+    EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*contributors.front())
+        .GetAlphaR(rhbm_gem::FittingStage::First), expected_alpha.front());
+
+    ResetProgressPercentForTest();
+    testing::internal::CaptureStdout();
+    core::RunLocalAlphaTraining(*f.model, options, rhbm_gem::FittingStage::First, contributors);
+    const auto progress = testing::internal::GetCapturedStdout();
+    EXPECT_NE(progress.find("Run local alpha training for 2 atoms."), std::string::npos);
+    EXPECT_NE(progress.find("50%"), std::string::npos);
+    EXPECT_NE(progress.find("100%"), std::string::npos);
+    EXPECT_EQ(std::count(progress.begin(), progress.end(), '\r'), 2);
+    for (std::size_t i = 0; i < contributors.size(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*contributors[i])
+            .GetAlphaR(rhbm_gem::FittingStage::First), expected_alpha[i]);
+    }
+}
+
+TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributorsOnce)
+{
+    auto f = joint_partial_test::Make("partial");
+    const core::detail::FittingWorkset workset{
+        {f.model->FindAtomPtr(1), f.model->FindAtomPtr(2)}, {true, false}, {false, true}};
+    core::FitOptions options; options.thread_size = 1;
+    std::map<std::pair<int, std::string>, int> calls;
+    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
+        ++calls[{id, std::string(phase)}];
+    };
+    ResetProgressPercentForTest();
+    testing::internal::CaptureStdout();
+    const auto initialization = core::detail::RunFirstStage(*f.model, workset, options,
+        core::detail::FirstStageMode::SampleContributorsIsolated, f.map.get());
+    const auto progress = testing::internal::GetCapturedStdout();
+    core::detail::FirstStageObserverForTesting() = {};
+
+    ASSERT_EQ(initialization.atoms.size(), 2);
+    EXPECT_EQ(initialization.atoms[0].reason, "not-required-observable-contribution");
+    EXPECT_EQ(initialization.atoms[0].seed_source, "not-required");
+    EXPECT_FALSE(initialization.atoms[0].original_b);
+    EXPECT_EQ((calls[{1, "raw"}]), 0);
+    EXPECT_EQ((calls[{1, "first"}]), 0);
+    EXPECT_EQ((calls[{2, "raw"}]), 1);
+    EXPECT_EQ((calls[{2, "first"}]), 1);
+    EXPECT_NE(progress.find("50%"), std::string::npos);
+    EXPECT_NE(progress.find("100%"), std::string::npos);
+    EXPECT_EQ(progress.find("Run local alpha training for 1 atoms."), std::string::npos);
+    EXPECT_EQ(std::count(progress.begin(), progress.end(), '\r'), 2);
+
+    options.quiet_mode = true;
+    testing::internal::CaptureStdout();
+    core::detail::RunFirstStage(*f.model, workset, options,
+        core::detail::FirstStageMode::SampleContributorsIsolated, f.map.get());
+    EXPECT_TRUE(testing::internal::GetCapturedStdout().empty());
 }
 
 TEST(JointComponentPartialSelectionTest, ZeroSignalRankDeficiencyAndInsufficientRows)
