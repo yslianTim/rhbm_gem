@@ -1,5 +1,8 @@
 # Fixed-state factor / normal-action acceptance
 
+Status: Historical. Current fixed-action measurement instructions live in
+[`joint-fixed-actions.md`](joint-fixed-actions.md).
+
 Production still defaults to `SearchMethod::LegacyCompact`. Implementation and
 bounded numerical validation are complete. These measurements establish observed
 fixed-state/fixed-step improvements, not full-search promotion or scalability.
@@ -113,8 +116,9 @@ justify a larger automatic operator cutoff or 2k/5k/10k workflow claims.
 See the [implementation/reproduction guide](joint-fixed-actions.md),
 [compact summary](figures/joint-fixed-actions/summary.json), and
 [full comparison decisions](figures/joint-fixed-actions/comparison.json).
-The [archive manifest](figures/joint-fixed-actions/manifest.json) identifies the
-[raw receipts and logs](figures/joint-fixed-actions/receipts.tar.xz).
-The archive contains campaign receipts, frozen states, per-process output,
-resource records, measured wrappers/source patch and regression logs. Original
-PR0-PR3 receipts, cancellation records and failed promotion gates are unchanged.
+The experiment metadata is in
+[`figures/joint-fixed-actions/manifest.json`](figures/joint-fixed-actions/manifest.json).
+The raw receipt archive was removed from the current worktree; its provenance is
+recorded under `joint-fixed-actions-receipts` in the artifact manifest and it is
+retrievable from Git history. Original PR0-PR3 receipts, cancellation records
+and failed promotion gates are unchanged.

@@ -6,6 +6,12 @@ Start here if you are changing the codebase, validating build configurations, or
 
 For current Joint measurements, start with the [unified Joint benchmark guide](joint-benchmark.md). It replaces the seven retired campaign runners and the historical postprocessing wrapper; older acceptance documents retain their campaign results and provenance.
 
+### Generated Evidence
+
+- Keep deterministic regression inputs in `tests/fixtures/` with a permanent test owner.
+- Write generated benchmark and research outputs under `build/` or an explicit work directory; `docs/developer/figures/` is for curated, compact evidence and manifests.
+- Large retired campaign evidence is indexed in the [artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json) and retrieved from Git history by its recorded commit and former path.
+
 1. Read [`docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md) for CMake parameters, dependency selection, coverage, and feature-mode validation commands.
 2. Read [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md) for repository-wide engineering rules, test/label expectations, command-registry sync requirements, and quality-check alignment (`lint_repo`, formatter/tidy checks).
 3. Read [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md), [`docs/developer/architecture/object-architecture.md`](/docs/developer/architecture/object-architecture.md), and [`docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md) when you need architecture context for commands, object internals, typed dispatch, data I/O, or persistence.

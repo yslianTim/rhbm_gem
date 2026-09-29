@@ -1,10 +1,8 @@
 # Complete-command resource envelope
 
-This is a historical Stage C report. Its dedicated orchestration and stack
-sampler have been retired. Current complete-command measurements use the unified
-[Joint benchmark command profile](joint-benchmark.md), which records execution
-and resource outcomes separately from numerical status and covers analysis,
-save/reload, and JSON/CSV export.
+Status: Historical. Its dedicated orchestration and stack sampler have been
+retired. Current complete-command measurements use the unified
+[Joint benchmark command profile](joint-benchmark.md).
 
 ## Measured environment and inputs
 

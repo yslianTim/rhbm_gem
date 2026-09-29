@@ -1,5 +1,8 @@
 # Joint sparse backend acceptance
 
+Status: Historical. Current benchmark instructions live in
+[`joint-benchmark.md`](joint-benchmark.md).
+
 Baseline: `ceb6155992b9c891ab3fa878e875c6b10aa0590f`.
 Candidate production source fingerprint: `9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0`.
 

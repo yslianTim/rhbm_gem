@@ -1,5 +1,8 @@
 # Joint compact SVD acceptance
 
+Status: Historical. Current measurement instructions live in
+[`joint-benchmark.md`](joint-benchmark.md).
+
 The historical compact campaign has been verified and passes its numerical and
 performance gates. Its baseline is `ce58c89747d4091f91967e7f4bd9c7890d51c203`,
 production fingerprint

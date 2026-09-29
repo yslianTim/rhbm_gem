@@ -115,13 +115,13 @@
     "full command model/map/manifest used by Joint validation Stage C"
   ],
   "not_verified": [
-    "Historical figure files and archives not named in checked_archives or fixture_inventory; no full-directory hash sweep was performed.",
+    "Retained historical figure files not listed in the checked baseline or fixture inventory have not had a full-directory hash sweep.",
     "External inputs listed above; they were not present in the configured run and were not hashed."
   ],
   "notes": [
-    "Seven checked archives are present and match their recorded SHA-256 values. Three sparse/operator archive paths previously recorded as checked are absent at the PR 4 starting checkout; their expected byte counts and SHA-256 values remain in the source verification manifests, but those hashes could not be rechecked here.",
-    "No missing artifact was recreated. The two older report references do not specify a containing directory; neither name exists in the current figures tree or the checked historical tree. The search-records-a archive is retrievable from its recorded historical Git commit; its size and hash match the retired-artifact inventory, but it is not present at this HEAD.",
-    "This manifest intentionally records only the requested high-value archives and documented missing files, not every file under docs/developer/figures."
+    "At the PR 4 inventory checkout, seven checked archives were present and matched their recorded SHA-256 values; PR 6 records their verified removal from the current tree. Three sparse/operator archive paths previously recorded as present were absent at the PR 4 starting checkout; their expected sizes and SHA-256 values remain in the source verification manifests.",
+    "No missing artifact was recreated. The two older report references do not specify a containing directory; neither name exists in the PR 1–4 checked trees. The search-records-a archive is retrievable from its recorded historical Git commit; its size and hash match the retired-artifact inventory, but it was absent at the PR 4 inventory checkout.",
+    "This manifest records requested high-value archives and documented missing files from the PR 1–4 inventory, plus the PR 6 removal update; it is not a full inventory of every file under docs/developer/figures."
   ],
   "retirement_update": {
     "based_on_start_commit": "e5a9e7922f063743df71b6e2561ee3c43c781ff5",
@@ -183,6 +183,197 @@
         "docs/developer/figures/joint-validation/resources.json": "historical Stage C benchmark evidence",
         "docs/developer/figures/joint-validation/campaign.json": "shared historical provenance"
       }
+    },
+    "pr6_update": {
+      "based_on_start_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+      "active_dependency_scan": {
+        "roots": [
+          "src/",
+          "include/",
+          "tests/",
+          "resources/",
+          "cmake/",
+          "CMakeLists.txt",
+          "docs/developer/"
+        ],
+        "result": "No active readers of the seven removed archive paths; old direct links and retired-runner instructions were removed from current documentation.",
+        "stage_b_raw_results_retained": "docs/developer/figures/joint-validation/noise-runs.json"
+      },
+      "artifacts": [
+        {
+          "id": "joint-reference-historical-inputs",
+          "path": "docs/developer/figures/joint-reference-acceptance/historical-inputs.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Historical compact campaign immutable inputs.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 10493974,
+          "sha256": "33dbafe83bc6727138f56edb7dba7590737a370cb56c80215861b62b07436689",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-reference-historical-audits",
+          "path": "docs/developer/figures/joint-reference-acceptance/historical-audits.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Historical compact campaign matrices and numerical audits.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 98380219,
+          "sha256": "172b309da56c6d88664253e6f3d2a11bc9d3490bbf691b6ef0900c2086fb778f",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-reference-historical-results",
+          "path": "docs/developer/figures/joint-reference-acceptance/historical-results.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "DUPLICATE_HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Historical compact campaign command results, exports and resource stops.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 12281158,
+          "sha256": "398118a2eeca2fc0001daf04371b999a10896a13182bdd5667267265e499bd16",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-reference-incremental-inputs",
+          "path": "docs/developer/figures/joint-reference-acceptance/incremental-inputs.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Incremental endpoint-reference experiment inputs.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 10493883,
+          "sha256": "e19d80da2d82055b4fad8dcf4080cb75c3d4936ec6bf26d30bed8975598e4cff",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-reference-incremental-audits",
+          "path": "docs/developer/figures/joint-reference-acceptance/incremental-audits.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Incremental fixed-state numerical audits.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 89237357,
+          "sha256": "dceb54598c51f8f4ce0f79f77e74159789f3d2076b8c4918c6ff23c2e2f40081",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-reference-incremental-results",
+          "path": "docs/developer/figures/joint-reference-acceptance/incremental-results.tar.gz",
+          "status": "removed_from_worktree",
+          "classification": "DUPLICATE_HISTORICAL_EVIDENCE",
+          "campaign": "joint-reference-acceptance",
+          "purpose": "Incremental command outputs, initialization and receipts.",
+          "source_commit": "adf16940493bf46de4a467ade719d15ad7cb9b75",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 15930939,
+          "sha256": "7cdff3ce4537b37b58d24641dfa2341854c2bc4fc1a40efb14a8bde7ab54d471",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained summary and verification records; Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_reference_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        },
+        {
+          "id": "joint-fixed-actions-receipts",
+          "path": "docs/developer/figures/joint-fixed-actions/receipts.tar.xz",
+          "status": "removed_from_worktree",
+          "classification": "OBSOLETE_RAW_LOG",
+          "campaign": "joint-fixed-actions",
+          "purpose": "Per-process receipts, frozen states, resource records and regression logs from the retired fixed-actions campaign.",
+          "source_commit": "5f61bb6e01ffadba277aa1b9a98c42409c2da8ad",
+          "last_present_commit": "a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71",
+          "size_bytes": 15987804,
+          "sha256": "eb29866fb7b2315919699cef163ed37d91d1837af668ecb7da3550f305f62f41",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Retained campaign summary/comparison and Git history.",
+          "notes": "Size is the tracked compressed file size. Removed from the current tree only; Git history was not rewritten.",
+          "source_tool": "tests/integration/joint_fixed_validation.py",
+          "source_commit_role": "Commit that added this archive with its historical campaign source and evidence."
+        }
+      ],
+      "size_accounting_before_pr6": {
+        "tracked_files": 679,
+        "current_tracked_bytes": 277957447,
+        "figure_files": 115,
+        "figure_tracked_bytes": 258695460,
+        "removed_archive_files": 7,
+        "removed_compressed_bytes": 252805334,
+        "git_history_rewritten": false
+      },
+      "ownership": {
+        "permanent_fixtures_and_reference_inputs": "retained; fixture hashes and sizes remain listed under fixture_inventory",
+        "stage_b_research_output": "retained as historical scientific outcomes",
+        "joint_reference_acceptance_summary_and_verification": "retained",
+        "joint_fixed_actions_summary_and_comparison": "retained",
+        "small_historical_logs_and_decision_records": "retained where they record distinct conclusions or provenance"
+      },
+      "missing_artifacts": "Existing missing_current_tree and retirement_update.missing_archives records are retained unchanged; no missing file was reconstructed.",
+      "large_figure_ownership_threshold_bytes": 5242880,
+      "size_accounting_after_pr6": {
+        "tracked_files": 673,
+        "current_tracked_bytes": 25171196,
+        "figure_files": 108,
+        "figure_tracked_bytes": 5898770,
+        "fixture_inventory_files": 20,
+        "fixture_inventory_bytes": 14181744,
+        "current_tree_byte_reduction": 252786251,
+        "git_history_rewritten": false,
+        "current_tree_byte_reduction_mib": 241.076,
+        "removed_compressed_bytes": 252805334,
+        "removed_compressed_mib": 241.094
+      },
+      "entry_count": 7,
+      "status_values": [
+        "removed_from_worktree"
+      ],
+      "current_status_supersedes": [
+        "checked_archives",
+        "retirement_update.archives"
+      ],
+      "historical_snapshot_note": "The listed checked_archives and earlier retirement_update.archives remain as PR 1–4 snapshots; PR 6 entries are the current worktree status."
     }
   },
   "fixture_inventory": {

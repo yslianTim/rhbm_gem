@@ -61,26 +61,9 @@ allocator overhead and factorization scratch; unavailable values are null.
 Process-tree RSS and OS peaks remain separate measurements. Dense probes are
 known allocations, not an allocator trace. A p-by-p compact still exists.
 
-## Reproduction
+## Current measurement
 
-Configure both EIGEN and SPQR Release builds with BUILD_TESTING=ON,
-RHBM_GEM_DEP_PROVIDER=SYSTEM, RHBM_GEM_ENABLE_UMAP=OFF,
-RHBM_GEM_ROOT_MODE=OFF and RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON.
-Build `rhbm_tests`, `joint_sparse_benchmark`, `joint_component_runtime`,
-and `rhbm_gem_cli` for candidate regression and measurement. The archived
-campaign's `joint_validation` helper is retired.
-
-Export pristine `ec24f3056427408cb1978cff004ed477908fb0d0` to a separate source
-tree and apply `figures/joint-fixed-actions/baseline-instrumentation.patch`.
-This patch only adds counters/timers; it retains the original numerical actions.
-Copy the current benchmark driver and `tests/support/JointFixedDiagnostic.hpp`
-into that tree and add `PR4_BASELINE_DRIVER` to the benchmark target definitions.
-Build `joint_sparse_benchmark` for both backends. The archived paired campaign's
-`joint_validation` helper is retired; current measurements use the unified
-benchmark entry point below.
-The runner verifies the frozen instrumented source hash and identical wrappers.
-
-Current fixed-action timing is available through the unified profile:
+Use the unified benchmark profile for fixed-action timing:
 
 ```sh
 python3 tests/integration/joint_benchmark.py \
@@ -89,40 +72,7 @@ python3 tests/integration/joint_benchmark.py \
   --output build/fixed-normal-schwarz.json
 ```
 
-The historical runner's EIGEN/SPQR A/B/C paired campaign and receipt comparison
-remain documented below as archived evidence; they require the retired source
-from Git history.
-
-### Historical A/B/C campaign protocol
-
-The dedicated benchmark modes are `--fixed freeze|composed|normal` and
-`--state FILE`, with the existing initial/fixture/synthetic-fixed input forms.
-Freeze uses the baseline Eigen profile and replay. Every subsequent process
-reconstructs that exact beta/eta and context with `EvaluateState`, avoiding
-backend-dependent re-profiling. No reference solve, derivative reduction,
-assessment, search, or uncertainty runs in the measured diagnostic path.
-
-A uses baseline factors and composed J'/J; B uses new factors and composed
-J'/J; C uses new factors and ApplyNormal. Each run measures actions and one
-fixed-damping solve (mu=1e-3) for identity, diagonal and Schwarz. Per-step totals
-include operator preparation, separately timed gradient setup, metric and applicable partition/model/factor
-construction, plus solve/prediction. Input/basis setup and audit output are
-separate. A fixed step is not a trust-region acceptance or convergence claim.
-
-The single campaign has a 1,800-second deadline including state preparation,
-300 seconds per process, 4 GiB sampled process-tree RSS and one numerical thread.
-Sampling can overshoot. Runs are serial, ordered chain-8, single-128,
-heterogeneous-168, then optional single-512. Three independent processes are
-required per backend/mode; A/B/C order rotates each repetition. A resource stop
-ends that group's remaining repetitions. There is no restart or budget increase.
-
-Comparisons check same-state residual/objective/gradient, rank/spectrum,
-J/J'/normal actions, all three steps and true residuals. Missing/invalid results
-never qualify. Only three completed numerical matches, a lower median and
-three faster paired times establish an observed phase improvement. A faster
-phase with a slower total is not an overall speedup. This diagnostic never
-promotes the production search backend or claims large-component scalability.
-
-The archived campaign predates the gradient-timer correction. Its total_seconds
-fields are explicitly treated as subtotals by postprocessing; see the acceptance
-report for the retained limitation and conservative tracked-phase bounds.
+The [historical acceptance report](joint-fixed-actions-validation.md) retains
+the measured conclusions and limitations. Its raw receipt archive is indexed by
+the artifact manifest and retrievable from Git history; no current benchmark
+command reads it.

@@ -1,87 +1,23 @@
 # Endpoint-reference incremental acceptance
 
-> Historical acceptance record. `joint_reference_validation.py` was retired;
-> its campaign can be reproduced only from the recorded historical source.
-> Current search measurements use [`joint-benchmark.md`](joint-benchmark.md),
-> while independent certification remains in the offline reference tests.
+Status: Historical. `joint_reference_validation.py` was retired. Current search
+measurements are documented in [`joint-benchmark.md`](joint-benchmark.md), while
+independent certification remains in the offline reference tests.
 
 This experiment compares `e32919f3` (compact SVD with reference checks during
 search) against `c9e0f8c9` (search replay with endpoint reference certification).
 It does not change production algorithms, rank policies or convergence gates.
 
-## Reproduction
+## Historical provenance
 
-Use a separate SPQR Release build of `e32919f3`, and SPQR/EIGEN Release builds
-of `c9e0f8c9`. Match SYSTEM dependencies, OpenMP ON, ROOT/UMAP/Python OFF,
-and enable joint extended/offline tests. Build `tests_all`, `rhbm_gem_cli` and
-`joint_sparse_benchmark` for candidates; the baseline needs the latter two.
-Complete regression tests and a testing-disabled build before measurement.
-
-The runner reuses the original immutable compact campaign. It verifies its
-source fingerprints against Git archives, its harness against `e32919f3`, input
-hashes, raw fixed samples, audits, matrix replay and completed SQLite/JSON/CSV
-exports. Historical executable hashes describe the binaries used then; current
-build files are not substituted for them. The retained historical source is
-`f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755`;
-the new candidate is
-`62d178d17643a4a8195aceac17a5e4ced5af59cfb79a7e288f87bdd5d82c2de1`.
-
-Current search measurements use the solve profile, for example:
-
-```sh
-python3 tests/integration/joint_benchmark.py \
-  --profile solve --case baseline:first-stage-double \
-  --build-dir build/joint-reference-spqr --output build/reference-solve.json
-```
-
-The original campaign command is preserved as historical documentation only:
-
-```sh
-python3 tests/integration/joint_reference_validation.py \
-  --prior-work-dir build/joint-compact-measurements-final \
-  --baseline-spqr build/joint-reference-baseline-spqr \
-  --spqr build/joint-compact-spqr --eigen build/joint-compact-eigen \
-  --work-dir build/joint-reference-measurements
-```
-
-A fresh output directory is required. All workers are single-threaded and no
-build or other benchmark may overlap measurement. Initialization is checked
-against frozen widths before command timing. Each completed 128/512 case has
-three fresh processes per version, alternating baseline and candidate. Each
-analysis-to-export pipeline shares 600 seconds and a sampled 4 GiB process-tree
-limit. A resource stop ends repetitions for that version/case. The entire new
-experiment, including initialization checks and audits, is bounded to 80 minutes.
-The monitor is sampled, not an OS hard memory limit; OS peak RSS is retained too.
-
-After command timing, both backends audit all three compact modes on 128,
-heterogeneous 168 and 512. Full spectra and derivative arrays are compared
-against latest legacy mode and the corresponding historical audit. No new
-fixed-state performance sample is inferred from these audit runs.
-
-The report retains each command's phase costs, search counts, termination,
-initialization, parameter/rank/active-face/evidence differences, exports and
-fingerprints. Search-reference time is nested inside search time and is not
-added to the phase totals. An active A is strictly positive, matching the
-canonical free face. Exported `JointState.objective` is already normalized:
-comparisons use its value directly, without another division by observation
-scale. Historical 128 exports are rechecked with this corrected comparison.
-
-Only complete three-sample groups produce medians and speedup ratios. Latest
-128 requires coefficient/width agreement at 1e-10 and normalized objective
-agreement at 1e-12. Latest 512 requires runtime convergence, persistence/export,
-and resource compliance; trajectory differences are reported separately.
-Candidate search-reference counts and time must be zero. Existing compact
-30%/10% thresholds remain unchanged; no new 30% endpoint-speedup gate is imposed.
-Missing evidence, source mismatches, failed checks and incomplete samples never
-produce a passing latest gate. Preserve a failed attempt before repairing or
-repeating only the affected case.
-
-The receipt contains a hash manifest of the historical and new evidence.
-Reaggregation works after relocation and needs neither the original binaries
-nor Git:
-
-Historical report-only reaggregation also requires the retired runner from Git
-history; current benchmark JSON is reported directly by `joint_benchmark.py`.
+The original campaign compared `e32919f3` with `c9e0f8c9`; its retained source
+and harness fingerprints are recorded in the historical report and evidence
+manifest. The former archives were removed from the current worktree in PR 6.
+Their IDs, hashes, compressed sizes, source commits and former paths are in the
+artifact manifest. Retrieve an exact archive with `git show <commit>:<path>`
+using its `last_present_commit` and `path` fields. Historical report
+reaggregation requires the retired runner from Git history; current measurements
+use the unified benchmark profile documented in `joint-benchmark.md`.
 
 ## Results
 
@@ -128,9 +64,9 @@ convergence and zero search-reference time. Runtime controls cover replay-only
 search, endpoint rejection, saved-coefficient fallback, exhausted fallback and
 preservation of existing stop reasons; frozen failure expectations were unchanged.
 
-The [evidence index](figures/joint-reference-acceptance/README.md) links the full
-historical and incremental records, exports, source proofs, test logs and six
-archives. The [machine-readable summary](figures/joint-reference-acceptance/summary.json)
+The [evidence index](figures/joint-reference-acceptance/README.md) identifies
+the retained historical records and manifest provenance. The
+[machine-readable summary](figures/joint-reference-acceptance/summary.json)
 retains every numerical comparison. See the
 [compact acceptance record](joint-component-compact-svd-acceptance.md) for the
 separate original compact thresholds and historical command results.

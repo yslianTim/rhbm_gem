@@ -20,69 +20,24 @@ Stage C resource completion does not replace persistence or numerical tests.
 
 ## Stage A: offline numerical diagnosis
 
-The diagnostic replays the existing weak-halo fixture from its production start
-and two fixed alternative starts. It retains the returned state, target/halo
-parameter roles, rank and weak-direction evidence, independent precision
-comparisons, local correction scans and restart outcome. An unavailable returned
-state stays unavailable; collection completeness is reported separately.
-
-```sh
-cmake -S . -B build/offline -DBUILD_TESTING=ON \
-  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
-cmake --build build/offline --target joint_offline_diagnostic
-python3 tests/integration/joint_offline_diagnostic.py \
-  --work-dir build/joint-diagnostic/run-01 \
-  --executable build/offline/bin/joint_offline_diagnostic \
-  --output build/joint-diagnostic/report/weak-halo.json
-```
-
-The small offline CTest smoke runs these three deterministic starts. The
-historical Stage A report remains in
-[`figures/joint-validation/weak-halo.json`](figures/joint-validation/weak-halo.json)
-and [`weak-snapshot.json`](figures/joint-validation/weak-snapshot.json).
+The offline diagnostic keeps the actual returned state, target/halo roles,
+rank and weak directions, precision comparison, and restart outcome. An
+unavailable state remains unavailable; it is not converted to a generic
+numerical failure. The [weak-halo diagnostic guide](joint-weak-halo-attribution.md)
+is the current entry point and explains how to run and interpret the report.
 
 ## Stage B: statistical research
 
-The fixed design has two geometries, 20 PCG64 seeds per noisy condition, paired
-initialization modes where specified, and the existing IID/correlated noise and
-position-mismatch definitions. The smoke uses the noiseless control and first
-seeded IID case and is marked `scope: smoke`; only a full run covers all 326
-generated inputs and 450 fitted outcomes.
-
-```sh
-cmake -S . -B build/research -DBUILD_TESTING=ON \
-  -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
-cmake --build build/research --target joint_statistical_experiment
-python3 tests/integration/joint_statistical_experiment.py \
-  --smoke --work-dir build/joint-statistical/smoke \
-  --executable build/research/bin/joint_statistical_experiment
-python3 tests/integration/joint_statistical_experiment.py \
-  --work-dir build/joint-statistical/full \
-  --executable build/research/bin/joint_statistical_experiment
-```
-
-Every condition remains in the receipt, including not-run and process failures.
-Summary rows name attempted, completed, qualified, failed and unavailable counts;
-error statistics retain their denominators and separate all-available from
-converged-only estimates. The research smoke is a tool check, not a statistical
-result.
+The statistical design, seeds, input definitions, metrics, failure denominator,
+smoke and full-run commands belong to the [Stage B research guide](joint-noise-mismatch-validation.md).
+Every condition remains in the receipt, including not-run and process failures;
+the smoke is a tool check, not a statistical result.
 
 ## Stage C: complete-command benchmark
 
-Use the unified command profile described in the [Joint benchmark guide](joint-benchmark.md):
-
-```sh
-python3 tests/integration/joint_benchmark.py \
-  --profile command --case sample --build-dir build/debug \
-  --model input.cif --map input.map --output build/joint-command.json
-```
-
-The profile records command completion, database persistence/reload, JSON/CSV
-export, process error, timeout, RSS limit and not-run outcomes. Numerical
-convergence and available values are reported independently. The built-in
-`joint_benchmark_smoke` uses generated local data and checks this path without
-running the historical resource campaign. Timeout and RSS limits can be supplied
-to the benchmark command; old Stage C thresholds remain historical evidence.
+The [Joint benchmark guide](joint-benchmark.md) is the sole current entry point
+for the command profile and its options. It keeps process/resource outcomes
+separate from numerical qualification and scientific interpretation.
 
 ## Permanent correctness and evidence
 

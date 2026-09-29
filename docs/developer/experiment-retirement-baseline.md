@@ -264,7 +264,7 @@ Permanent numerical protection includes sparse solve/dense-reference parity; com
 
 Current measurements use [`joint-benchmark.md`](joint-benchmark.md), with explicit `prepare`, `fixed`, `solve`, `rank`, `workflow`, `postprocess`, and `command` profiles. The C++ drivers remain separate: `joint_sparse_benchmark`, `joint_postprocessing_benchmark`, and `joint_component_benchmark`. The first two serve the unified profiles; no benchmark algorithm was moved into Python. `BUILD_TESTING=ON` without benchmark/research options no longer registers or depends on the retired campaign entries.
 
-Historical source remains retrievable from Git history. The seven validation source files were last changed at `7f84f931215f7b5a52948f7ecdbfc15fad79d7c5`; the postprocessing wrapper was last changed at `47514581f13e6544d2800cac59ff445948d9043c`. Historical timing gates and source pins remain evidence only. Seven hash-checked archives remain present and are marked historical evidence with no active-tool dependency. Three additional archive paths previously recorded as present are now marked missing because they are absent from this checkout; two older references whose paths were never located also remain recorded as missing. No archive was deleted or recreated.
+Historical source remains retrievable from Git history. The seven validation source files were last changed at `7f84f931215f7b5a52948f7ecdbfc15fad79d7c5`; the postprocessing wrapper was last changed at `47514581f13e6544d2800cac59ff445948d9043c`. Historical timing gates and source pins remain evidence only. At PR 4 completion, seven hash-checked archives were present and had no active-tool dependency. Three additional archive paths previously recorded as present were absent from that checkout; two older references whose paths were never located also remained recorded as missing. PR 6 records the later removal of the seven present archives below; no archive was recreated.
 
 PR 4 changes no production source, estimator default, numerical tolerance, rank threshold, convergence policy, oracle, or Stage A/B/C methodology. Build and smoke outcomes for this checkout are reported with the PR 4 change review; the PR 1–3 test records above are unchanged snapshots.
 
@@ -384,5 +384,139 @@ reported as not run or unavailable when their backend or inputs are absent.
 
 The archived Stage A JSON carries a different source fingerprint from the PR 5
 starting checkout, so it was retained as historical evidence but not used as
-the before-run for the equivalence check above. Historical artifacts remain
-physically present.
+the before-run for the equivalence check above. Historical artifacts remained
+physically present at the PR 5 starting checkout.
+
+## PR 6 historical artifact and documentation update
+
+PR 6 began on `develop` at `a8cd8d1465705b1d7d5aa28d68b47018ff0c0f71`
+(`2026-09-29T22:53:05+08:00`) after `git pull --ff-only`; the starting worktree
+was clean and `origin/develop` matched. PR 1–5 sections above remain historical
+snapshots. This section records the current ownership and worktree state.
+
+### Active dependency scan and artifact decisions
+
+The source scan covered `src/`, `include/`, `tests/`, `resources/`, `cmake/`,
+`CMakeLists.txt`, and developer Markdown. It checked the candidate filename,
+relative path and distinctive stem. No production, permanent test, current
+benchmark/research tool, or current documentation command reads the seven files.
+The direct archive links and retired-runner reproduction instructions have been
+removed from current documentation. The exact pre-removal hashes and compressed
+file sizes were rechecked against the starting worktree before removal.
+
+| Artifact | Classification | Active callers | Decision | Reason |
+|---|---|---:|---|---|
+| `joint-reference-acceptance/historical-inputs.tar.gz` | HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Retired campaign input bundle; provenance and retained summary/verification are in the manifest/Git history. |
+| `joint-reference-acceptance/historical-audits.tar.gz` | HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Retired audit matrices; exact compressed hash and source commit are recorded. |
+| `joint-reference-acceptance/historical-results.tar.gz` | DUPLICATE_HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Summary, verification, and compact decisions remain; raw campaign outputs are in Git history. |
+| `joint-reference-acceptance/incremental-inputs.tar.gz` | HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Retired experiment input bundle; not used by current tests or benchmark. |
+| `joint-reference-acceptance/incremental-audits.tar.gz` | HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Retired fixed-state audits; compact conclusions and provenance remain. |
+| `joint-reference-acceptance/incremental-results.tar.gz` | DUPLICATE_HISTORICAL_EVIDENCE | 0 | REMOVE_FROM_WORKTREE | Historical command results are summarized and retrievable from Git history. |
+| `joint-fixed-actions/receipts.tar.xz` | OBSOLETE_RAW_LOG | 0 | REMOVE_FROM_WORKTREE | Raw per-process receipts/logs; summary, comparison, and experiment metadata remain. |
+
+### Retained artifact decisions
+
+| Artifact group | Classification | Active owner/caller | Decision | Reason |
+|---|---|---|---|---|
+| `tests/fixtures/joint_component/` | ACTIVE_FIXTURE / ACTIVE_REFERENCE | Joint permanent C++ and Python tests | KEEP_ACTIVE | Deterministic regression and oracle inputs; hashes/sizes remain in the fixture inventory. |
+| `tests/fixtures/mdpde/` | ACTIVE_FIXTURE / ACTIVE_REFERENCE | MDPDE and production-fitting permanent tests | KEEP_ACTIVE | Includes captured offset-IRLS and shape maximum-iteration cases used by permanent protection. |
+| `tests/benchmarks/fold_168_simulation_baseline.json` | ACTIVE_BENCHMARK_INPUT | Optional Fold-168 regression | KEEP_ACTIVE | A compact reference baseline, not an output archive. |
+| `figures/joint-validation/noise-runs.json` and summaries | ACTIVE_RESEARCH_OUTPUT | `joint_statistical_experiment.py` produces the current result schema; no runtime reader | KEEP_HISTORICAL | Preserves the full fixed-seed Stage B outcomes and denominator alongside the current research method. |
+| `figures/joint-validation/weak-halo.json`, `weak-snapshot.json` | HISTORICAL_EVIDENCE | Offline diagnostic owner; no historical-result reader | KEEP_HISTORICAL | Records the weak-halo conclusion and original input; its old source fingerprint differs from current code. |
+| `figures/joint-validation/resources.json`, preflight and diagnostic records | HISTORICAL_EVIDENCE | Joint benchmark owns current resource measurement; no historical-result reader | KEEP_HISTORICAL | Retains historical timeout/resource outcomes and their limitations. |
+| `figures/joint-reference-acceptance/summary.json`, `verification.json`, `testing-disabled-result.json` | HISTORICAL_EVIDENCE | No active reader | KEEP_HISTORICAL | Compact acceptance summary plus the distinct testing-disabled full-command outcome. |
+| `figures/joint-fixed-actions/summary.json`, `comparison.json`, instrumentation patch | HISTORICAL_EVIDENCE | Permanent operator tests and unified benchmark own current behavior | KEEP_HISTORICAL | Preserves the decision record, detailed comparisons and measurement-only patch. |
+| `figures/joint-sparse-acceptance/late-profile/stack-*.txt` | HISTORICAL_EVIDENCE | No active reader | KEEP_HISTORICAL | Small timeout stack samples have distinct diagnosis value and remain hash-linked by their receipt. |
+
+The 10.3 MB `heterogeneous-168.tar.gz` Joint fixture remains active in
+`tests/fixtures/`; the 5 MiB figure threshold does not apply to fixture inputs.
+No permanent fixture, benchmark input, Stage B output, or independent oracle
+was removed.
+
+The machine-readable [artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json)
+is the sole source for each removed path, status, compressed bytes, SHA-256,
+source commit, last-present commit, purpose, and replacement. `removed_from_worktree`
+means the current branch no longer tracks that file; Git history is unchanged.
+The earlier missing paths (`scientific-records.tar.gz`,
+`frozen-diagnostics/frozen-endpoint-records.tar.gz`, sparse measurements and
+exports, and operator receipts) remain recorded as missing; none was recreated.
+
+### Retained evidence and ownership
+
+- Joint component and MDPDE fixtures, the independent numerical references, and
+  the fixed-seed Stage B research outcomes remain in the tree. The Stage B tool
+  can still run from its fixed-seed design without the removed archives.
+- Compact Joint reference summaries, verification records, fixed-action
+  summary/comparison, and small decision evidence remain historical evidence.
+- The remaining `docs/developer/figures/` tree contains curated results,
+  diagnostics, baseline records, and manifests; generated full benchmark and
+  research outputs belong under `build/` or an explicit work directory.
+
+### Current and historical documentation
+
+| Document | PR 6 role | Status |
+|---|---|---|
+| `joint-benchmark.md` | Sole current Joint benchmark instructions, including command profile | Current |
+| `joint-noise-mismatch-validation.md` | Stage B research design, metrics, denominator, smoke and full run | Current research |
+| `joint-fixed-actions.md` | Current fixed-action benchmark entry point and numerical contract | Current |
+| `joint-component-reference-acceptance.md` | Retained acceptance conclusions and Git-history retrieval | Historical |
+| `joint-fixed-actions-validation.md` | Retained campaign results and limitations | Historical |
+| `figures/joint-reference-acceptance/README.md` | Small evidence index and removed-archive provenance | Historical |
+
+Developer guidance now assigns permanent inputs to `tests/fixtures/`, generated
+outputs to build/work directories, and `figures/` to curated compact evidence.
+The old archive checksums were removed from campaign-local metadata; the central
+artifact manifest owns current path/status/hash/provenance records.
+
+### Guards added or retained
+
+| Guard | Owner | Coverage |
+|---|---|---|
+| Current Markdown local-link validation | `DocumentationLayoutTest.MarkdownLinksResolveWithinRepository` | Current links must resolve; historical removed files are no longer linked. |
+| Manifest and fixture validation | `historical_artifact_manifest_test` | Unique artifact IDs/paths, allowed statuses, removed-file absence, missing-file records, source/hash metadata, and fixture sizes/hashes. |
+| Active dependency and large artifact ownership | `historical_artifact_manifest_test` | Removed archive names/paths/stems cannot appear in current code or developer commands; figure files at least 5 MiB must be listed in the manifest. |
+
+The 5 MiB ownership threshold is above all retained figure files and below each
+of the seven removed archives; it makes future large files require an owner
+without banning large active fixtures elsewhere in the repository.
+
+### PR 6 behavior boundary
+
+No production source, estimator behavior, numerical tolerance, rank or
+convergence threshold, permanent regression fixture, or independent oracle was
+changed or removed. Stage B noise generation, seeds, mismatch definition and
+metrics are unchanged. Joint benchmark and Stage B research inputs remain
+available without historical archives. Git history was not rewritten; the
+external archive service remains unused.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Production-only Release configure/build (`BUILD_TESTING=OFF`) | Passed from a fresh build directory. |
+| Default Release CTest | 25/26 passed. The sole failure is the PR 5 baseline issue `JointComponentPartialSelectionTest.StageAdapterUsesIdentityAndClearsMissingStates`; the other core, integration, documentation-link and manifest checks passed. |
+| Artifact manifest/ownership test | Passed: seven unique removed entries, retained fixture hashes/sizes, no active references, and no unowned figure at or above 5 MiB. |
+| Offline diagnostic smoke | Passed with a fresh work directory: 3/3 starts completed; weak-halo rank/precision/restart output was produced. |
+| Unified Joint benchmark smoke | Passed for all seven profiles, including command persistence/export. Timeout and RSS classifications remain covered by the benchmark contract test. |
+| Stage B statistical smoke | Passed. Seed `20260921` input hash `508655679930ee0d406fde4ea1ecb68b2eaff5d2133bc7071ef176638d79857a`; observation hash `c5147ebda1fe72d1012b49d91838743ce4e8ca00abf4b3f8d3dcfa233fba02e1`; 3/3 summarized attempts completed and qualified. |
+| Optional backend/external cases | Four SPQR-specific tests were skipped in this EIGEN build. Fold/6Z6U external inputs were unavailable and not run. |
+
+The full tracked-byte accounting is stored under `pr6_update.size_accounting_*`
+in the artifact manifest. It distinguishes current-tree removal from Git
+history size; the seven removed archives total 252,805,334 compressed bytes.
+
+### Current-tree size
+
+| Measure | Before PR 6 | After PR 6 |
+|---|---:|---:|
+| Tracked files | 679 | 673 |
+| Current tracked tree bytes | 277,957,447 | 25,171,196 |
+| Tracked `figures/` files | 115 | 108 |
+| Tracked `figures/` bytes | 258,695,460 | 5,898,770 |
+
+The seven removed compressed files account for 252,805,334 bytes (241.094 MiB).
+The current tracked tree is smaller by 252,786,251 bytes (241.076 MiB), after
+including PR 6's manifest, guard, and documentation additions. The recorded
+active fixture/reference inventory remains 20 files totaling 14,181,744 bytes.
+These are current tracked-tree figures; Git history and clone history size are
+unchanged.
