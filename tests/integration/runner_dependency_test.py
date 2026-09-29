@@ -7,16 +7,13 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 INTEGRATION = ROOT / 'tests/integration'
 RUNNERS = {
-    'endpoint_refinement',
-    'failed_only_refinement',
     'fold_168_regression',
     'joint_component_audit',
     'joint_component_runtime',
     'joint_benchmark',
+    'joint_offline_diagnostic',
     'joint_partial_selection',
-    'joint_validation',
-    'joint_validation_profile',
-    'joint_validation_report',
+    'joint_statistical_experiment',
     'mdpde_experiment',
     'simulation_contract',
 }

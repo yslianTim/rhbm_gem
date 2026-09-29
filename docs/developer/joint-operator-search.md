@@ -105,8 +105,8 @@ legacy production default.
 Build EIGEN and SPQR Release variants with BUILD_TESTING=ON,
 RHBM_GEM_DEP_PROVIDER=SYSTEM, RHBM_GEM_ENABLE_UMAP=OFF,
 RHBM_GEM_ROOT_MODE=OFF and RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON.
-Targets: rhbm_tests, joint_sparse_benchmark, joint_component_runtime,
-joint_validation and rhbm_gem_cli.
+Current targets: rhbm_tests, joint_sparse_benchmark, joint_component_runtime,
+and rhbm_gem_cli. The archived campaign's `joint_validation` helper is retired.
 
 The baseline is a git archive of
 `c6c869cd4f4939104dfde96984ae17f736a8ce4a`. Its production sources must remain

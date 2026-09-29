@@ -193,11 +193,11 @@ complete-process measurements with `tests/integration/joint_partial_selection.py
 independent processes per case). These measurements include builder and initializer
 costs and do not establish a maximum supported problem size.
 
-The optional `joint_validation` target is created by the offline-audit,
-benchmark, or research-tools option. It and
-`tests/integration/joint_validation.py` run the bounded weak-halo, paired
-noise/mismatch and complete-command resource experiments. The runner enforces
-per-process-group RSS/time limits and stage budgets, saves failures separately
-from runtime convergence, and never promotes offline results into production
-outcomes. See the [capability assessment](../docs/developer/joint-capabilities-limitations.md)
-for commands, external input hashes and the actual measured envelope.
+Joint experiment responsibilities are split by build category. The offline
+`joint_offline_diagnostic` covers weak-halo and identifiability diagnosis; the
+research `joint_statistical_experiment` retains the fixed noise/mismatch design
+and has a deterministic smoke; the benchmark command profile covers the
+complete CLI/save/reload/export path under resource measurement. The statistical
+and command smokes are opt-in and are not full campaigns. See the
+[capability guide](../docs/developer/joint-capabilities-limitations.md) for
+current commands and the historical evidence mapping.

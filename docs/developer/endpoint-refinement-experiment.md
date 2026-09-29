@@ -1,5 +1,9 @@
 # Endpoint refinement：分支、完整 operator 與 recovery 實驗
 
+狀態：**歷史實驗報告**。本文件保留當時的方法與結果；其中的 campaign
+入口已退役，不再是目前操作流程。現行 production contract 與 permanent test
+owners 見 [failed-only refinement](failed-only-refinement.md)。
+
 基準為 `0785a395`；本輪所有數值政策均限於 `BUILD_TESTING`。
 Production 預設、公開 C++／CLI 介面、MDPDE 方程、weight floor、covariance 公式、offset IRLS、
 外層接受政策與 `1e-4` 收斂門檻均不變。Observation matching 不在本輪範圍。
@@ -145,42 +149,15 @@ Fresh-residual 的對應軌跡為 `211.329177 → 172.422367 → 164.433674 → 
 及 [341 例逐分支核對表](figures/endpoint-refinement/branches.csv)。
 它們保存結果與完整本機產物雜湊，不取代原始 DB、snapshot、逐 solve 證據與 provenance。
 
-## 重跑方式與產物
+## 歷史產物與目前 owner
 
-建立 Debug／SYSTEM／OpenMP 測試版，關閉 Python bindings 與 UMAP，啟用 second-stage audit。
-建置 `rhbm_gem_cli`、`rhbm_tests`、`mdpde_experiment`。另建 audit OFF 的 testing 版，
-以及 `BUILD_TESTING=OFF` 的 production 隔離檢查版。
+版本化結果仍保留在 [endpoint refinement results](figures/endpoint-refinement/results.json)
+與 [branch comparisons](figures/endpoint-refinement/branches.csv)。Active tools
+不載入這些 historical reports，也不再重跑 fold-wide endpoint/failed-only
+campaign。永久數值性質由 `MDPDEExperiment_test.cpp` 和
+`ProductionFitting_test.cpp` 保護；其 fixtures、independent equation reference、
+`EndpointRefinementExperiment.*`、`SolverFailureCapture.*` 與
+`ForwardModelExperiment.*` 仍由測試或 MDPDE research tool 使用而保留。
 
-先用 [既有 capture runner](../../tests/integration/mdpde_experiment.py) 重建原始基準。
-以下 `CAPTURES` 指向該 run 的 `solver-failures`，`MODEL`／`MAP` 指向前述固定輸入；
-每次使用全新 output 目錄，不覆寫歷史資料。
-
-```sh
-python3 tests/integration/endpoint_refinement.py calibrate \
-  --executable build/endpoint-refinement/on/bin/mdpde_experiment \
-  --captures "$CAPTURES" --output build/endpoint-refinement/stage-a
-
-python3 tests/integration/endpoint_refinement.py run --mode compare \
-  --stage-a build/endpoint-refinement/stage-a/stage-a.json \
-  --reference build/endpoint-refinement/baseline-run \
-  --executable build/endpoint-refinement/on/bin/RHBM-GEM \
-  --model "$MODEL" --map "$MAP" --output build/endpoint-refinement/compare
-
-# 對 failed-only 與 fresh-residual 各自執行；v4 保存完整 recovery audit。
-python3 tests/integration/endpoint_refinement.py run --mode failed-only \
-  --stage-a build/endpoint-refinement/stage-a/stage-a.json \
-  --stage-b build/endpoint-refinement/compare/stage-b.json \
-  --reference build/endpoint-refinement/compare --verbosity 4 \
-  --executable build/endpoint-refinement/on/bin/RHBM-GEM \
-  --model "$MODEL" --map "$MAP" --output build/endpoint-refinement/failed-only-audit
-```
-
-使用 v3／j4 重跑驗證平行路徑；audit OFF／j1 檢查隔離性。
-Debug logging 會依既有行為停用部分外層平行工作，因此 v4 的 j4 本身不算完整平行驗證。
-Runner 要求 A 通過才可 compare，指定政策通過 B 才可 closed loop。
-科學門檻未通過會保存結果並停止升階；缺案例、重播不符、資料或程式執行中改變則回傳失敗。
-
-完整本機產物保存在 `build/endpoint-refinement/`，不納入版本控制：
-獨立基準來源／建置、各 run 的 DB／log／score／certificate、source／binary／input hashes、
-A 的逐例 root／reference／branch 結果、凍結政策、B 的 before／after snapshots 與逐 atom 比較、
-C 的逐 solve JSONL（拒絕時附精確 dataset）及 audit 軌跡。應另行備份此目錄。
+歷史 runner source 可從 Git history 取得。本文件中的 exact campaign work
+counts、比較與 recovery 軌跡屬歷史結果，不是新的 production acceptance gate。

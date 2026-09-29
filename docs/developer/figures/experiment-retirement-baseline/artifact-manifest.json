@@ -152,7 +152,38 @@
       {"runner": "joint_postprocessing_benchmark.py", "profiles": ["workflow", "postprocess"], "evidence": ["docs/developer/joint-analysis-consolidation.md"]}
     ],
     "preexisting_unlocated_references": ["scientific-records.tar.gz", "frozen-diagnostics/frozen-endpoint-records.tar.gz"],
-    "newly_verified_missing_archives": 3
+    "newly_verified_missing_archives": 3,
+    "pr5_update": {
+      "based_on_start_commit": "465168565d5bf3c046c12e471e22cd3098c59bad",
+      "active_campaign_sources_removed": [
+        "tests/integration/endpoint_refinement.py",
+        "tests/integration/endpoint_refinement_test.py",
+        "tests/integration/failed_only_refinement.py",
+        "tests/integration/joint_validation.py",
+        "tests/integration/joint_validation_test.py",
+        "tests/integration/joint_validation_profile.py",
+        "tests/integration/joint_validation_report.py",
+        "tests/integration/joint_validation_support.py",
+        "tests/experiments/joint_validation.cpp"
+      ],
+      "active_owners": {
+        "endpoint_refinement": "permanent MDPDEExperiment_test and ProductionFitting_test; shared refinement test support retained",
+        "failed_only_refinement": "permanent production policy tests; production implementation unchanged",
+        "stage_a": "offline joint_offline_diagnostic entry",
+        "stage_b": "research joint_statistical_experiment entry with existing noise/mismatch matrix",
+        "stage_c": "Joint benchmark command profile"
+      },
+      "historical_artifacts_physically_removed": false,
+      "historical_artifacts_active_dependencies": false,
+      "artifact_groups": {
+        "docs/developer/figures/endpoint-refinement/": "historical refinement campaign evidence",
+        "docs/developer/figures/failed-only-refinement/": "historical failed-only campaign evidence",
+        "docs/developer/figures/joint-validation/weak-halo.json": "historical Stage A evidence",
+        "docs/developer/figures/joint-validation/noise-runs.json": "historical Stage B research results",
+        "docs/developer/figures/joint-validation/resources.json": "historical Stage C benchmark evidence",
+        "docs/developer/figures/joint-validation/campaign.json": "shared historical provenance"
+      }
+    }
   },
   "fixture_inventory": {
     "files": [

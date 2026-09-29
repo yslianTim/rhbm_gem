@@ -72,7 +72,9 @@ Python bindings OFF, and the joint extended/offline options ON. Run the joint
 core, runtime, extended, offline and CLI tests for both backends, the resource
 runner tests, repository guards and a testing-disabled build before timing.
 Build `tests_all` and `rhbm_gem_cli` in both candidate directories, and explicitly
-build `joint_validation` in the SPQR candidate directory for input generation.
+The archived campaign also used the retired `joint_validation` executable for
+input generation. Current fixed-state measurements use the unified benchmark
+profiles shown below and do not need that historical generator.
 
 Current fixed-state measurements use the unified profile in each backend build:
 

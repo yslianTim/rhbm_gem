@@ -80,7 +80,9 @@ Build pristine `15e71e3fc230205e6efd7f60c8a915eb1989733b` and the candidate
 separately for EIGEN and SPQR, Release, `BUILD_TESTING=ON`,
 `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON`. Build `rhbm_tests` (candidate),
 `rhbm_gem_cli`, `joint_component_runtime`, `joint_sparse_benchmark`, and
-`joint_validation`. Runtime ROOT/UMAP are unnecessary; use identical settings.
+The historical campaign also built `joint_validation`; that helper is retired.
+Runtime ROOT/UMAP are unnecessary; use identical settings for the current
+unified benchmark profiles below.
 
 Current measurement entry points:
 

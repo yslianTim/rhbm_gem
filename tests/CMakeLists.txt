@@ -330,7 +330,7 @@ if(RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
     endif()
 endif()
 
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS OR RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
+if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
         support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp
         support/JointLocalEvidence.cpp support/JointDerivativeAudit.cpp)
@@ -340,23 +340,20 @@ endif()
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_executable(joint_component_audit experiments/joint_component_audit.cpp)
     target_link_libraries(joint_component_audit PRIVATE joint_offline_support rhbm_gem)
+    add_executable(joint_offline_diagnostic experiments/joint_offline_diagnostic.cpp)
+    target_link_libraries(joint_offline_diagnostic PRIVATE joint_offline_support rhbm_gem)
     add_executable(joint_offline_tests core/joint_component/Precision_test.cpp
         core/joint_component/OfflineComponents_test.cpp)
     target_link_libraries(joint_offline_tests PRIVATE joint_offline_support rhbm_gem ${GTEST_MAIN_TARGET})
     add_test(NAME joint_component_offline_tests COMMAND joint_offline_tests)
     set_tests_properties(joint_component_offline_tests PROPERTIES LABELS "offline;domain:core;intent:algorithm;joint:offline")
-    add_dependencies(tests_all joint_component_audit joint_offline_tests)
+    add_dependencies(tests_all joint_component_audit joint_offline_diagnostic joint_offline_tests)
 endif()
 
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS OR RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    add_executable(joint_validation experiments/joint_validation.cpp)
-    target_link_libraries(joint_validation PRIVATE joint_offline_support rhbm_gem)
-    if(RHBM_GEM_BUILD_BENCHMARKS)
-        add_dependencies(benchmarks_all joint_validation)
-    endif()
-    if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-        add_dependencies(research_tools_all joint_validation)
-    endif()
+if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
+    add_executable(joint_statistical_experiment experiments/joint_statistical_experiment.cpp)
+    target_link_libraries(joint_statistical_experiment PRIVATE joint_test_support rhbm_gem)
+    add_dependencies(research_tools_all joint_statistical_experiment)
 endif()
 
 add_rhbm_gtest_group(rhbm_tests_joint_component
@@ -470,20 +467,25 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             LABELS "benchmark;domain:integration;intent:benchmark;joint:benchmark")
     endif()
 
-    if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS OR RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
-        add_test(NAME joint_validation_runner_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_validation_test.py")
-        set(joint_validation_labels "domain:integration;intent:algorithm;joint:validation")
-        if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-            list(APPEND joint_validation_labels "offline")
-        endif()
-        if(RHBM_GEM_BUILD_BENCHMARKS)
-            list(APPEND joint_validation_labels "benchmark")
-        endif()
-        if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-            list(APPEND joint_validation_labels "research")
-        endif()
-        set_tests_properties(joint_validation_runner_test PROPERTIES LABELS "${joint_validation_labels}")
+    if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
+        add_test(NAME joint_offline_diagnostic_smoke
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_offline_diagnostic.py"
+                --work-dir "${PROJECT_BINARY_DIR}/joint-offline-diagnostic"
+                --executable $<TARGET_FILE:joint_offline_diagnostic>
+                --output "${PROJECT_BINARY_DIR}/joint-offline-diagnostic/weak-halo.json")
+        set_tests_properties(joint_offline_diagnostic_smoke
+            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline")
+    endif()
+
+    if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
+        add_test(NAME joint_statistical_experiment_contract_test
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_statistical_experiment_test.py")
+        add_test(NAME joint_statistical_experiment_smoke
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_statistical_experiment.py"
+                --smoke --work-dir "${PROJECT_BINARY_DIR}/joint-statistical-smoke"
+                --executable $<TARGET_FILE:joint_statistical_experiment>)
+        set_tests_properties(joint_statistical_experiment_contract_test joint_statistical_experiment_smoke
+            PROPERTIES LABELS "research;domain:integration;intent:algorithm;joint:research")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
@@ -503,10 +505,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         set_tests_properties(joint_component_extended_regression
             PROPERTIES LABELS "extended;domain:integration;intent:algorithm;joint:extended")
     endif()
-    add_test(NAME endpoint_refinement_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/endpoint_refinement_test.py")
-    set_tests_properties(endpoint_refinement_runner_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(
         NAME second_stage_audit_parser_test
         COMMAND "${Python_EXECUTABLE}"
@@ -655,7 +653,7 @@ foreach(_optional_target IN ITEMS
     joint_sparse_benchmark
     joint_postprocessing_benchmark
     joint_component_benchmark
-    joint_validation)
+    joint_statistical_experiment)
     if(_optional_target IN_LIST _tests_all_dependencies)
         message(FATAL_ERROR "Optional target ${_optional_target} must not be a tests_all dependency")
     endif()
@@ -701,10 +699,18 @@ elseif(TARGET joint_component_audit OR TARGET joint_offline_tests)
     message(FATAL_ERROR "Offline audit targets exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
 endif()
 
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS OR RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    if(NOT TARGET joint_validation OR NOT TARGET joint_offline_support)
-        message(FATAL_ERROR "The selected optional category did not create joint_validation support")
+if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
+    if(NOT TARGET joint_offline_diagnostic OR NOT TARGET joint_offline_support)
+        message(FATAL_ERROR "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS did not create its diagnostic support")
     endif()
-elseif(TARGET joint_validation OR TARGET joint_offline_support)
-    message(FATAL_ERROR "joint_validation exists in the default test configuration")
+elseif(TARGET joint_offline_diagnostic OR TARGET joint_offline_support)
+    message(FATAL_ERROR "Offline diagnostic targets exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
+endif()
+
+if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
+    if(NOT TARGET joint_statistical_experiment)
+        message(FATAL_ERROR "RHBM_GEM_BUILD_RESEARCH_TOOLS did not create joint_statistical_experiment")
+    endif()
+elseif(TARGET joint_statistical_experiment)
+    message(FATAL_ERROR "joint_statistical_experiment exists while RHBM_GEM_BUILD_RESEARCH_TOOLS=OFF")
 endif()

@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 
 namespace {
 second_stage_test::ShapeFixture Fixture(double alpha = 0.1)
@@ -207,6 +208,39 @@ TEST(EndpointRefinementTest, InvalidEndpointsAreNeverPromoted)
     EXPECT_EQ(insufficient.refinement->candidate_equation_evaluations,1);
 }
 
+TEST(EndpointRefinementTest, FailedOnlyDoesNotPromoteAnIneligibleRankDeficientEndpoint)
+{
+    auto f{Fixture()};
+    f.dataset.X.col(1) = f.dataset.X.col(0);
+    auto endpoint{f.expected};
+    endpoint.status = rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+    const auto result{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(
+        f.dataset, f.alpha, f.options, endpoint)};
+    ASSERT_TRUE(result.refinement);
+    EXPECT_FALSE(result.refinement->accepted);
+    EXPECT_EQ(result.refinement->reason,"rank-deficient");
+    EXPECT_EQ(result.refinement->reference_updates,0);
+    EXPECT_EQ(result.status,endpoint.status);
+    EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+    EXPECT_TRUE((result.beta_mdpde.array() == endpoint.beta_mdpde.array()).all());
+    EXPECT_DOUBLE_EQ(result.sigma_square,endpoint.sigma_square);
+}
+
+TEST(EndpointRefinementTest, NegativeAndNonfiniteVarianceAreNeverPromoted)
+{
+    for (const double variance : {-1.0, std::numeric_limits<double>::quiet_NaN(),
+                                  std::numeric_limits<double>::infinity()})
+    {
+        auto f{Fixture()};
+        f.expected.sigma_square = variance;
+        const auto result{second_stage_test::RefineMDPDEEndpoint(f,128)};
+        EXPECT_FALSE(result.accepted);
+        EXPECT_EQ(result.result.Qualification(),rhbm_gem::RHBMSolveQualification::Unqualified);
+        if (std::isnan(variance)) EXPECT_TRUE(std::isnan(result.result.sigma_square));
+        else EXPECT_DOUBLE_EQ(result.result.sigma_square,variance);
+    }
+}
+
 TEST(EndpointRefinementTest, ExactFitAndNearZeroNoiseRemainDistinct)
 {
     auto f{Fixture()}; Eigen::Vector2d beta; beta << 1.0,4.0; f.dataset.y=f.dataset.X*beta;
@@ -247,9 +281,11 @@ TEST(EndpointRefinementTest, FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshR
     ASSERT_GT(fresh.scaled.lpNorm<Eigen::Infinity>(),1e-8);
     const auto result{rhbm_gem::mdpde_detail::ApplyFailedOnlyRefinement(f.dataset,f.alpha,f.options,f.expected)};
     EXPECT_FALSE(result.refinement);
+    EXPECT_EQ(result.status,f.expected.status);
     EXPECT_EQ(result.Qualification(),rhbm_gem::RHBMSolveQualification::NativeSuccess);
     EXPECT_TRUE((result.beta_mdpde.array() == f.expected.beta_mdpde.array()).all());
     EXPECT_DOUBLE_EQ(result.sigma_square,f.expected.sigma_square);
+    EXPECT_EQ(result.diagnostics.iterations,f.expected.diagnostics.iterations);
     EXPECT_TRUE((result.data_weight.diagonal().array() == f.expected.data_weight.diagonal().array()).all());
     EXPECT_TRUE((result.data_covariance.diagonal().array() == f.expected.data_covariance.diagonal().array()).all());
 }

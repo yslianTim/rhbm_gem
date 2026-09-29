@@ -67,14 +67,17 @@ Configure both EIGEN and SPQR Release builds with BUILD_TESTING=ON,
 RHBM_GEM_DEP_PROVIDER=SYSTEM, RHBM_GEM_ENABLE_UMAP=OFF,
 RHBM_GEM_ROOT_MODE=OFF and RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON.
 Build `rhbm_tests`, `joint_sparse_benchmark`, `joint_component_runtime`,
-`joint_validation` and `rhbm_gem_cli` for candidate regression and measurement.
+and `rhbm_gem_cli` for candidate regression and measurement. The archived
+campaign's `joint_validation` helper is retired.
 
 Export pristine `ec24f3056427408cb1978cff004ed477908fb0d0` to a separate source
 tree and apply `figures/joint-fixed-actions/baseline-instrumentation.patch`.
 This patch only adds counters/timers; it retains the original numerical actions.
 Copy the current benchmark driver and `tests/support/JointFixedDiagnostic.hpp`
 into that tree and add `PR4_BASELINE_DRIVER` to the benchmark target definitions.
-Build `joint_sparse_benchmark` for both backends and `joint_validation` for Eigen.
+Build `joint_sparse_benchmark` for both backends. The archived paired campaign's
+`joint_validation` helper is retired; current measurements use the unified
+benchmark entry point below.
 The runner verifies the frozen instrumented source hash and identical wrappers.
 
 Current fixed-action timing is available through the unified profile:

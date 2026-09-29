@@ -146,11 +146,15 @@ cmake -S . -B build-research \\
 cmake --build build-research --target research_tools_all
 ```
 
-`joint_sparse_benchmark` is shared by benchmark and research campaigns, so
-either option creates it. The combined Stage A/B/C `joint_validation` executable
-is available with an offline, benchmark, or research option; its campaign is
-still run manually. The small `joint_sparse_benchmark_smoke` CTest is registered
-only when that executable exists. It does not run a timing campaign.
+`joint_sparse_benchmark` is shared by benchmark and research builds. Stage A's
+`joint_offline_diagnostic` is created only by
+`RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`; Stage B's
+`joint_statistical_experiment` is created only by
+`RHBM_GEM_BUILD_RESEARCH_TOOLS`. Stage C complete-command measurements use
+`tests/integration/joint_benchmark.py --profile command` with
+`RHBM_GEM_BUILD_BENCHMARKS`. No per-stage CMake switches are needed. The command
+profile smoke runs only in benchmark builds; it checks save/reload and export
+without running a resource campaign.
 
 CTest labels include `core`, `offline`, `extended`, `external`, `benchmark`, and
 `research`. The default configuration registers only core tests. Turning a

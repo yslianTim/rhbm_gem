@@ -1,5 +1,11 @@
 # Complete-command resource envelope
 
+This is a historical Stage C report. Its dedicated orchestration and stack
+sampler have been retired. Current complete-command measurements use the unified
+[Joint benchmark command profile](joint-benchmark.md), which records execution
+and resource outcomes separately from numerical status and covers analysis,
+save/reload, and JSON/CSV export.
+
 ## Measured environment and inputs
 
 The measured host is an Apple M1 iMac, 8 cores, 16 GiB RAM, macOS 26.6.2 arm64.

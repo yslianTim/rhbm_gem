@@ -73,9 +73,20 @@ relabeling this endpoint as converged.
 
 ## Reproduction and boundaries
 
-Build the opt-in offline `joint_validation` executable and run stage A of
-`tests/integration/joint_validation.py` as described in the
-[delivery guide](joint-capabilities-limitations.md). Each available state uses
+Build and run the opt-in offline diagnostic:
+
+```sh
+cmake -S . -B build/offline -DBUILD_TESTING=ON \
+  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
+cmake --build build/offline --target joint_offline_diagnostic
+python3 tests/integration/joint_offline_diagnostic.py \
+  --work-dir build/joint-diagnostic/run-01 \
+  --executable build/offline/bin/joint_offline_diagnostic \
+  --output build/joint-diagnostic/report/weak-halo.json
+```
+
+The output is a numerical/identifiability diagnosis, not a production acceptance
+gate. Each available state uses
 both signs of log-width steps `1e-6` through `1e-1`, along the correction and weakest
 width direction. Every point reprofiles all A/C; steps `±1e-3` and `±1e-1` also
 have independent 50/100-digit reprofiled controls. High precision promotes the

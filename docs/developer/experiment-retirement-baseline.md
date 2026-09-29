@@ -143,14 +143,18 @@ The reference → compact → sparse and bounded → fixed → search → operat
 | Target-only summary | `PartialSelection_test.cpp` | No | `PartialSelection_test.cpp` | Yes |
 | Peeling coverage | `PartialSelection_test.cpp` | No | `PartialSelection_test.cpp` | Yes |
 | Covariance availability | `ObservableProfile_test.cpp`, `PartialSelection_test.cpp` | Yes | Permanent uncertainty tests | Yes |
-| Native-success unchanged | `ProductionFitting_test.cpp`, `MDPDEExperiment_test.cpp` | Yes | Those permanent tests | Yes |
-| Failed-only refinement policy | `MDPDEExperiment_test.cpp` (`PoliciesDoNotConfuseNativeSuccessWithFreshQualification`, `FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshResidual`, `ProductionRefinesCapturedFailuresWithoutRewritingNativeStatus`) | Yes | Those permanent policy tests | Yes |
+| Native-success unchanged | `ProductionFitting_test.cpp`, `MDPDEExperiment_test.cpp` (`FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshResidual`) | Yes | Those permanent tests | Yes |
+| Failed-only refinement policy | `MDPDEExperiment_test.cpp` (`PoliciesDoNotConfuseNativeSuccessWithFreshQualification`, `FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshResidual`, `ProductionRefinesCapturedFailuresWithoutRewritingNativeStatus`, `FailedOnlyDoesNotPromoteAnIneligibleRankDeficientEndpoint`) | Yes | Those permanent policy tests | Yes |
 | Wrong-root rejection | `MDPDEExperiment_test.cpp` (`KnownOtherRootFailsBranchComparison`) | No | Same permanent branch test | Yes |
 | Fresh-weight behavior | `MDPDEExperiment_test.cpp` (`AcceptedResultHasFreshWeightsAndExistingCovarianceFormula`) | Yes | Same permanent fresh-weight test | Yes |
-| Covariance consistency after refinement | `ProductionFitting_test.cpp`, refinement campaign | Yes | Permanent production-fitting test | Yes |
-| Budget exhaustion | `ProductionFitting_test.cpp` recovery exhaustion tests | Yes | Permanent recovery test | Yes |
-| Invalid variance | `MDPDEExperiment_test.cpp` (`InvalidEndpointsAreNeverPromoted`) | Yes | Same permanent endpoint test | Yes |
-| Rank-deficient refinement | `MDPDEExperiment_test.cpp` (`InvalidEndpointsAreNeverPromoted`) | Yes | Same permanent endpoint test | Yes |
+| Covariance consistency after refinement | `MDPDEExperiment_test.cpp` (`AcceptedResultHasFreshWeightsAndExistingCovarianceFormula`), `ProductionFitting_test.cpp` | Yes | Same permanent tests | Yes |
+| Budget exhaustion | `MDPDEExperiment_test.cpp` (`BudgetRejectionPreservesNativeHistoryButIsUnqualified`), `ProductionFitting_test.cpp` recovery exhaustion tests | Yes | Same permanent tests | Yes |
+| Invalid variance/state | `MDPDEExperiment_test.cpp` (`InvalidEndpointsAreNeverPromoted`, `NegativeAndNonfiniteVarianceAreNeverPromoted`) | Yes | Same permanent endpoint tests | Yes |
+| Rank-deficient refinement | `MDPDEExperiment_test.cpp` (`InvalidEndpointsAreNeverPromoted`, `FailedOnlyDoesNotPromoteAnIneligibleRankDeficientEndpoint`) | Yes | Same permanent endpoint tests | Yes |
+| Weak-halo diagnosis and returned-state identity | Offline `joint_offline_diagnostic_smoke`; historical `weak-halo.json` equivalence | No | Offline diagnostic, separate from numerical pass/fail | Yes |
+| Stage B RNG stream and generated input | `joint_statistical_experiment_contract_test` fixed-seed hashes | No | Same research contract test | Yes |
+| Stage B attempted/completed/qualified/failed/unavailable denominators | `joint_statistical_experiment_contract_test` | No | Same research contract test | Yes |
+| Stage C command save/reload/export and resource status | `joint_benchmark_smoke`, `joint_benchmark_contract_test` | Yes | Unified command profile and workflow correctness tests | Yes |
 | Audit ON/OFF numerical neutrality | `NumericalAuditNeutrality_test.cpp`; manual two-build runner | Partial | Permanent full-workflow paired test | Partial; migrate first |
 | EIGEN backend | Joint C++ tests and runtime CTest (this snapshot) | Yes | Backend-specific permanent CTest | Yes |
 | SPQR backend | Backend-conditional C++ tests and archived SPQR CTest receipts | Yes historically | Run SPQR permanent CTest in an SPQR build | Not run in this baseline |
@@ -263,3 +267,122 @@ Current measurements use [`joint-benchmark.md`](joint-benchmark.md), with explic
 Historical source remains retrievable from Git history. The seven validation source files were last changed at `7f84f931215f7b5a52948f7ecdbfc15fad79d7c5`; the postprocessing wrapper was last changed at `47514581f13e6544d2800cac59ff445948d9043c`. Historical timing gates and source pins remain evidence only. Seven hash-checked archives remain present and are marked historical evidence with no active-tool dependency. Three additional archive paths previously recorded as present are now marked missing because they are absent from this checkout; two older references whose paths were never located also remain recorded as missing. No archive was deleted or recreated.
 
 PR 4 changes no production source, estimator default, numerical tolerance, rank threshold, convergence policy, oracle, or Stage A/B/C methodology. Build and smoke outcomes for this checkout are reported with the PR 4 change review; the PR 1–3 test records above are unchanged snapshots.
+
+## PR 5 refinement and Joint responsibility update
+
+PR 5 began on `develop` at `465168565d5bf3c046c12e471e22cd3098c59bad`
+(`2026-09-29T21:47:43+08:00`) after `git pull --ff-only`; the worktree was
+clean and `origin/develop` matched. PR 1–4 records above remain historical
+snapshots. The current owners below supersede their endpoint/failed-only and
+Stage A/B/C rows.
+
+### Current owner mapping
+
+| Retired historical entry | Permanent/current owner | Result and retained evidence |
+|---|---|---|
+| `endpoint_refinement.py`, `endpoint_refinement_test.py` | `MDPDEExperiment_test.cpp`, `ProductionFitting_test.cpp`; shared refinement test support | Campaign/report orchestration retired; fixtures and `figures/endpoint-refinement/*` retained |
+| `failed_only_refinement.py` | `MDPDEExperiment_test.cpp`, `ProductionFitting_test.cpp` | Full fold comparison retired; production failed-only policy remains unchanged; `figures/failed-only-refinement/*` retained |
+| Stage A weak-halo campaign | `joint_offline_diagnostic.py` and `joint_offline_diagnostic` | Numerical/identifiability diagnosis retained as OFFLINE; old `weak-halo.json` and `weak-snapshot.json` retained |
+| Stage B noise/mismatch campaign | `joint_statistical_experiment.py` and `joint_statistical_experiment` | KEEP as RESEARCH with the same noise, seeds, case order, mismatch, roles and metrics; historical outputs retained |
+| Stage C command/resource campaign | `joint_benchmark.py --profile command` | Old watchdog/profile orchestration retired; CLI smoke and unified benchmark own command/save/reload/export and resource status; old results retained |
+
+The corresponding protection matrix rows now name permanent refinement tests,
+Stage B deterministic RNG/denominator contracts, the offline diagnostic smoke,
+and the unified command benchmark. Exact historical call totals and work-count
+fingerprints remain campaign evidence, not correctness assertions.
+
+### Joint validation function inventory
+
+This classifies the top-level functions as they existed before the PR 5 split.
+The mixed modules are removed after their active responsibilities moved to the
+single-purpose owners above.
+
+| Source function | Responsibility | Current owner / disposition |
+|---|---|---|
+| `joint_validation.py:run_a` | Stage A process loop and receipts | `joint_offline_diagnostic.py`; shared budget ledger and watchdog retired |
+| `clean_map`, `noise_field`, `conditions`, `metrics`, `run_b` | Stage B scientific inputs, per-fit metrics and execution | `joint_statistical_experiment.py`; methods and iteration order preserved |
+| `run_c` | Stage C generated cases, census, process runs and repetitions | Retired; command profile in `joint_benchmark.py` owns current complete-command measurement |
+| `main` | Stage dispatch, shared campaign budget/provenance ledger | Removed with mixed runner |
+| `joint_validation_report.py:wilson`, `parameter_stats`, `statistical_summary` | Stage B reporting | `joint_statistical_experiment.py`, with explicit denominator fields |
+| `compact_a` | Stage A diagnostic compaction and state checks | `joint_offline_diagnostic.py`; retained-state and snapshot checks remain |
+| report `main` | Merged A/B/C reports and artifact manifest | Removed; Stage A and B write their own output; Stage C uses benchmark schema |
+| `joint_validation_profile.py:main` | Stage C stack sampler and campaign accounting | Retired; no current owner |
+| `joint_validation_support.py:resource_run` | Stage C analysis/export watchdog and resource report | Retired; shared process support and command benchmark remain |
+| C++ `Weak` | Stage A numerical diagnosis | `joint_offline_diagnostic.cpp` |
+| C++ `TwoAtoms`, `Statistical` | Stage B deterministic generated-input check and numerical fits | `joint_statistical_experiment.cpp` |
+| C++ `Inspect`, `Generate` | Stage C historical resource case preparation | Retired with Stage C campaign matrix |
+| C++ `Read`, `Write`, `Outcome`, `Census` | Small serialization/census helpers | Kept only in the owner that needs them; no all-stage dispatcher |
+
+The new integration architecture guard checks that Stage A, Stage B and the
+benchmark runner do not import or launch one another. `experiment_process.py`
+remains shared process infrastructure; the retired Stage C profile/watchdog
+framework is not duplicated.
+
+### Permanent refinement properties
+
+| Property | Permanent owner | Covered after PR 5 |
+|---|---|---:|
+| Native success leaves parameters, status, covariance and iterations unchanged | `FailedOnlyLeavesNativeSuccessUntouchedDespiteFreshResidual`; production test | Yes |
+| Native failure enters failed-only policy; rank-ineligible endpoint is rejected before root continuation | `ProductionRefinesCapturedFailuresWithoutRewritingNativeStatus`; `FailedOnlyDoesNotPromoteAnIneligibleRankDeficientEndpoint` | Yes |
+| Wrong mathematical root fails branch comparison | `KnownOtherRootFailsBranchComparison` | Yes |
+| Refined state uses fresh weights | `AcceptedResultHasFreshWeightsAndExistingCovarianceFormula` | Yes |
+| Covariance follows the existing formula and rejected candidates preserve it | `AcceptedResultHasFreshWeightsAndExistingCovarianceFormula`; `ProductionFitting_test` | Yes |
+| Budget exhaustion stays unqualified and preserves the native endpoint | `BudgetRejectionPreservesNativeHistoryButIsUnqualified`; `ProductionFitting_test` | Yes |
+| Invalid/negative/NaN/Inf variance cannot be promoted | `InvalidEndpointsAreNeverPromoted`; `NegativeAndNonfiniteVarianceAreNeverPromoted` | Yes |
+| Rank deficiency and invalid denominator stay explicit | `InvalidEndpointsAreNeverPromoted`; `FailedOnlyDoesNotPromoteAnIneligibleRankDeficientEndpoint` | Yes |
+
+The rank-ineligible property reflects the current API exactly: native `SUCCESS`
+returns before the failed-only entry point; other native statuses enter it, and
+the refinement routine rejects unsuitable data before attempting root/reference
+continuation. No new status allowlist or production policy change was introduced.
+
+### Historical artifact ownership
+
+| Artifact group | Current meaning | Active input? |
+|---|---|---:|
+| `figures/endpoint-refinement/results.json`, `branches.csv` | Endpoint campaign historical evidence | No |
+| `figures/failed-only-refinement/results.json` | Failed-only fold comparison historical evidence | No |
+| `figures/joint-validation/weak-snapshot.json`, `weak-halo.json` | Stage A diagnosis evidence | No |
+| `figures/joint-validation/noise-runs.json`, `noise-summary.json`, `noise-table.md` | Stage B research results | No; full-run output is newly generated |
+| `figures/joint-validation/resources.json`, `resource-preflight.json`, `diagnostic-profiles.json`, persistence records and logs | Stage C historical benchmark evidence | No |
+| `figures/joint-validation/campaign.json`, `manifest.json`, `source-index.json`, build metadata | Shared historical provenance | No |
+
+No historical figure, archive, result, fixture or source history was physically
+removed. The machine-readable [artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json)
+records the PR 5 owner mapping and no active dependency.
+
+### Files removed and build categories
+
+Removed active campaign files are `endpoint_refinement.py`,
+`endpoint_refinement_test.py`, `failed_only_refinement.py`,
+`joint_validation.py`, `joint_validation_test.py`,
+`joint_validation_profile.py`, `joint_validation_report.py`,
+`joint_validation_support.py`, and the multiplexed C++
+`tests/experiments/joint_validation.cpp`. Their owners are listed above. No
+fixture, independent MDPDE reference, production source or historical report was
+removed.
+
+| Responsibility | Build category | Registered smoke/check |
+|---|---|---|
+| Permanent MDPDE/refinement correctness | CORE | `rhbm_tests_utils_hrl`, `rhbm_tests_core_contract` |
+| Stage A numerical diagnosis | OFFLINE | `joint_offline_diagnostic_smoke`, plus offline numerical tests |
+| Stage B research experiment | RESEARCH | `joint_statistical_experiment_contract_test`, `joint_statistical_experiment_smoke` |
+| Stage C complete command measurement | BENCHMARK | `joint_benchmark_smoke` and `joint_benchmark_contract_test` |
+
+No per-stage CMake option was added. SPQR and external Fold/6Z6U cases are
+reported as not run or unavailable when their backend or inputs are absent.
+
+### PR 5 equivalence and verification record
+
+| Check | Before / after result |
+|---|---|
+| Stage A weak-halo start 0 | Rebuilt the pre-PR5 `joint_validation.cpp` runner from the starting revision and ran the same fixture/start as the new offline diagnostic. Start B and returned state match; design/projected-width/normalized-width/Jacobian ranks are `4/2/2/2`; target runtime convergence is `passed`, full runtime convergence is `failed`; the weak direction is the halo-width direction (up to eigenvector sign). Independent 50/100-digit values agree in both runs; derivative and correction audits both remain `failed`. Numerical diagnosis fields match; elapsed-time/RSS and expected source/build fingerprints differ. |
+| Stage B fixed-seed case | Historical and smoke records for iid seed `20260921` match exactly: input SHA-256 `508655679930ee0d406fde4ea1ecb68b2eaff5d2133bc7071ef176638d79857a`, observation SHA-256 `c5147ebda1fe72d1012b49d91838743ce4e8ca00abf4b3f8d3dcfa233fba02e1`, completed/qualified status, parameters, errors, prediction RMSE `0.0003535161322428431`, and residual RMSE `0.0031937884385234948`. |
+| Stage C command smoke | Existing PR 4 `command` profile is the unchanged owner. Its small command smoke completed analysis and reload/export, wrote SQLite and JSON/CSV exports, and passed the separate process-status contract (`completed`, `process_error`, `timeout`, `rss_limit`, `not_run`). Timeout/RSS-limit classifications are contract-tested, not induced in this smoke. |
+| Core and full CTest | Full run: 32 tests, 31 passed after rerunning the two process-inspection smokes with permission; one existing failure remains in `JointComponentPartialSelectionTest.StageAdapterUsesIdentityAndClearsMissingStates` (summary-column formatting assertions). The MDPDE/refinement group passed again after adding explicit native-success status and iteration-preservation assertions. |
+| Optional environment | Debug build uses `EIGEN`; SPQR was not run. External Fold and 6Z6U inputs were unavailable in this checkout. |
+
+The archived Stage A JSON carries a different source fingerprint from the PR 5
+starting checkout, so it was retained as historical evidence but not used as
+the before-run for the equivalence check above. Historical artifacts remain
+physically present.

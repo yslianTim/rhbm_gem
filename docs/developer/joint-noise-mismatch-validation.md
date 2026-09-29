@@ -1,4 +1,9 @@
-# Noise and position-mismatch validation
+# Joint noise and position-mismatch research experiment
+
+The current entry point is `tests/integration/joint_statistical_experiment.py`.
+This is a research tool: its smoke run checks the fixed-seed input and output
+contract; only the full run evaluates the complete statistical matrix. Neither
+run is a production acceptance gate.
 
 Status: **complete with applicability limitations**. The 326 generated inputs
 produced 450 fitted outcomes: all retained a state, 65 passed current runtime
@@ -82,7 +87,42 @@ Missing quantities stay null; they are never zero-filled. All-available paramete
 statistics are conditional on state availability, and converged-only statistics
 are additionally selected by the runtime checks.
 
+Each summary group reports attempted, process-completed, qualified, failed, and
+unavailable cases, along with process status counts. Scientific error summaries
+remain conditional on state availability and identify the converged subset.
+Process completion does not imply numerical qualification.
+
 Residual correlation is a descriptive nearest-neighbor statistic over the fixed
 domain. It is not an independently calibrated hypothesis test. This pilot tests
 one noise correlation length and one type of model mismatch, not a general
 cryo-EM noise distribution or real-data scientific validity.
+
+## Running the research tool
+
+Build the opt-in research target:
+
+```sh
+cmake -S . -B build/research -DBUILD_TESTING=ON \
+  -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
+cmake --build build/research --target joint_statistical_experiment
+```
+
+Run the deterministic one-geometry smoke or the full fixed matrix in fresh
+directories. The smoke covers the noiseless control and the first seeded IID
+case; its output is marked `scope: smoke` and must not be pooled with the 326-case
+research result.
+
+```sh
+python3 tests/integration/joint_statistical_experiment.py \
+  --smoke --work-dir build/joint-statistical/smoke \
+  --executable build/research/bin/joint_statistical_experiment
+python3 tests/integration/joint_statistical_experiment.py \
+  --work-dir build/joint-statistical/full \
+  --executable build/research/bin/joint_statistical_experiment
+```
+
+The full run writes every attempted case to `receipt.json`, including cases that
+did not run or whose process did not complete. Compact per-fit records,
+denominator-aware summaries and a table are written below `report/`. The 20 seeds,
+PCG64 stream, draw order, conditions, geometry, metrics and qualification rules
+are fixed by the experiment.
