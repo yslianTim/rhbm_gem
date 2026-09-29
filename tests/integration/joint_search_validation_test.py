@@ -5,13 +5,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 import joint_search_validation as runner
-from joint_search_validation import scientific_parity
-
-
-def result():
-    return dict(stage='complete',search_completed=True,search=dict(residual_scale=2),
-        returned_assessment=dict(runtime_convergence='passed',runtime_failure='none',runtime_checks=dict(inner=True,local_correction=True),design_spectrum=dict(rank=2),width_spectrum=dict(rank=1),profile_jacobian_spectrum=dict(rank=1)),
-        returned_state=dict(objective=.04,beta=[2.,.2],b=[.5],active_atoms=[]))
+from joint_validation_checks import scientific_parity
+from joint_validation_test_data import search_result
 
 
 class SearchComparison(unittest.TestCase):
@@ -19,26 +14,26 @@ class SearchComparison(unittest.TestCase):
         for key,value in (('beta',[float('nan'),.2]),('beta',[float('inf'),.2]),
                           ('beta',[]),('b',[]),('b',[0.]),('objective',float('nan')),
                           ('active_atoms',[1]),('active_atoms',[0,0])):
-            a=result(); b=copy.deepcopy(a); b['returned_state'][key]=value
+            a=search_result(); b=copy.deepcopy(a); b['returned_state'][key]=value
             with self.subTest(key=key,value=value): self.assertFalse(scientific_parity(a,b)['passed'])
         for key in ('beta','b','objective','active_atoms'):
-            a=result(); del a['returned_state'][key]
+            a=search_result(); del a['returned_state'][key]
             self.assertFalse(scientific_parity(a,a)['passed'])
         for scale in (0.,-1.,float('nan'),float('inf')):
-            a=result(); a['search']['residual_scale']=scale
+            a=search_result(); a['search']['residual_scale']=scale
             self.assertFalse(scientific_parity(a,a)['passed'])
 
     def test_missing_evidence_is_not_equivalent_success(self):
         for key in ('runtime_checks','design_spectrum','width_spectrum','profile_jacobian_spectrum'):
-            a=result(); del a['returned_assessment'][key]
+            a=search_result(); del a['returned_assessment'][key]
             self.assertFalse(scientific_parity(a,a)['passed'])
-        a=result(); a['returned_assessment']['design_spectrum']={}
+        a=search_result(); a['returned_assessment']['design_spectrum']={}
         self.assertFalse(scientific_parity(a,a)['passed'])
         a=dict(returned_assessment=None,search=dict(initial=dict(valid=False)))
         self.assertFalse(scientific_parity(a,a)['passed'])
 
     def test_failed_states_must_not_worsen(self):
-        a=result(); a['returned_assessment']['runtime_convergence']='failed'
+        a=search_result(); a['returned_assessment']['runtime_convergence']='failed'
         b=copy.deepcopy(a); b['returned_state']['objective']=1e6
         self.assertFalse(scientific_parity(a,b)['passed'])
         b['returned_state']['objective']=.01
@@ -63,18 +58,18 @@ class SearchComparison(unittest.TestCase):
             runner.require_current_build(build)
 
     def test_trajectory_does_not_replace_endpoint_check(self):
-        a=result(); b=copy.deepcopy(a); b['search']['accepted_updates']=99
+        a=search_result(); b=copy.deepcopy(a); b['search']['accepted_updates']=99
         self.assertTrue(scientific_parity(a,b)['passed'])
         b['returned_state']['b'][0]+=.001
         self.assertFalse(scientific_parity(a,b)['passed'])
 
     def test_evidence_and_availability(self):
-        a=result(); b=copy.deepcopy(a); b['returned_assessment']['runtime_checks']['local_correction']=False
+        a=search_result(); b=copy.deepcopy(a); b['returned_assessment']['runtime_checks']['local_correction']=False
         self.assertFalse(scientific_parity(a,b)['passed'])
         b['returned_assessment']=None; self.assertFalse(scientific_parity(a,b)['passed'])
 
     def test_normalized_objective_and_search_failure(self):
-        a=result(); b=copy.deepcopy(a); b['returned_state']['objective']+=1e-8
+        a=search_result(); b=copy.deepcopy(a); b['returned_state']['objective']+=1e-8
         self.assertFalse(scientific_parity(a,b)['passed'])
         b=copy.deepcopy(a); b['search_completed']=False
         self.assertFalse(scientific_parity(a,b)['passed'])

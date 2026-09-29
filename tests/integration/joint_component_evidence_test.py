@@ -4,8 +4,9 @@ import tempfile
 import unittest
 
 from joint_runtime_support import write
-from fold_168_regression import sha256_file
+from experiment_io import sha256_file
 import joint_offline_support as cert
+import joint_numerical_reference as reference
 import simulation_contract as contract
 import numpy as np
 
@@ -93,7 +94,7 @@ class JointEvidenceTest(unittest.TestCase):
     def test_snapshot_replay_keeps_zero_negative_observations(self):
         table = np.array([(0,0,0.), (1,0,1.), (2,0,6.25)], dtype=[('row',int), ('atom',int), ('square',float)])
         y = np.array([0., -1., 2.])
-        result = cert.snapshot_replay(table, 1, y, {'b': [.5], 'beta': [0., -.2]})
+        result = reference.snapshot_replay(table, 1, y, {'b': [.5], 'beta': [0., -.2]})
         np.testing.assert_array_equal(result['residual'], result['prediction']-y)
         self.assertEqual(len(result['residual']), 3)
 

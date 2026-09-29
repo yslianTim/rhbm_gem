@@ -9,10 +9,9 @@ import tempfile
 from joint_runtime_support import read, write, require, scientific, differences, unpack
 
 import joint_fixture_records as records
-from joint_offline_support import replay_passed
+from joint_fixture_records import CATALOG
+from joint_numerical_reference import replay_passed
 import numpy as np
-
-CATALOG = Path(__file__).resolve().parents[1]/'fixtures/joint_component/catalog.json'
 
 
 def execute(executable, *args):

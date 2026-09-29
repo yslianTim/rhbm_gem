@@ -4,6 +4,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import numpy as np
 import joint_validation as v
 from joint_validation_report import parameter_stats, statistical_summary, wilson
@@ -72,7 +73,7 @@ class ValidationTest(unittest.TestCase):
 
     def test_compact_svd_checks_weak_spectrum_and_threshold_not_only_residual(self):
         import json
-        from joint_compact_validation import svd_parity
+        from joint_validation_checks import svd_parity
         row=dict(valid=True,rank=2,threshold=1e-9,singular_values=[1.,2e-9],solution=[1.,2.])
         self.assertTrue(svd_parity(row,row)['passed'])
         self.assertFalse(svd_parity(row,{**row,'rank':1})['passed'])
@@ -83,7 +84,7 @@ class ValidationTest(unittest.TestCase):
         json.dumps(svd_parity(row,row),allow_nan=False)
 
     def test_compact_audit_requires_trust_and_full_derivative(self):
-        from joint_compact_validation import audit_parity
+        from joint_validation_checks import audit_parity
         row=dict(valid=True,free_rank=2,kkt_passed=True,active_atoms=[],beta=[1.,2.],objective=.1,relative_residual=.1,b_gradient=[0.])
         spectrum=dict(valid=True,rank=2,threshold=1e-9,singular_values=[1.,.5],solution=[])
         derivative=dict(valid=True,**{k:[1.,2.] for k in ('coefficients','correction','projected','jacobian','response')})
@@ -162,9 +163,11 @@ class ValidationTest(unittest.TestCase):
     def test_timeout_and_memory_are_process_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
             command=[sys.executable,'-c','import time; time.sleep(10)']
-            timeout=v.monitored(command,Path(tmp)/'timeout',time.monotonic()+5,seconds=.2)
+            with patch('experiment_process.process_tree_rss',return_value=0):
+                timeout=v.monitored(command,Path(tmp)/'timeout',time.monotonic()+5,seconds=.2)
             self.assertEqual(timeout['status'],'time-limit')
-            memory=v.monitored(command,Path(tmp)/'memory',time.monotonic()+5,rss_limit=1)
+            with patch('experiment_process.process_tree_rss',return_value=2):
+                memory=v.monitored(command,Path(tmp)/'memory',time.monotonic()+5,rss_limit=1)
             self.assertEqual(memory['status'],'rss-limit')
             self.assertGreater(memory['sampled_tree_peak_rss_bytes'],1)
 

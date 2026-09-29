@@ -15,11 +15,16 @@ import tarfile
 import time
 from types import SimpleNamespace
 
-import joint_compact_validation as compact
-import joint_validation as v
+import joint_validation_support as v
+from joint_compact_support import summarize_compact_receipt
+from joint_validation_checks import audit_parity, scaled
 
 BASELINE = 'f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755'
 CANDIDATE = '62d178d17643a4a8195aceac17a5e4ced5af59cfb79a7e288f87bdd5d82c2de1'
+COMPACT_BASELINE_SOURCE = '9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0'
+COMPACT_CASES = ('single-128', 'heterogeneous-168', 'single-512')
+COMPACT_MODES = ('legacy', 'values', 'auto')
+COMPACT_PERFORMANCE_RATIO_LIMITS = {'single-128': 1.1, 'heterogeneous-168': 1.1, 'single-512': .7}
 EXPORTS = ('result.sqlite', 'joint_result_validation.json', 'joint_atoms_validation.csv')
 
 
@@ -54,7 +59,7 @@ def endpoint_comparison(a, b):
     x,y = a.get('assembled_state'),b.get('assembled_state')
     if not x or not y:
         return dict(passed=False, reason='missing-state')
-    errors = {k:compact.scaled(x[k],y[k]) for k in ('ac','b')}
+    errors = {k:scaled(x[k],y[k]) for k in ('ac','b')}
     # JointState.objective is already divided by observation_scale squared.
     objective = abs(x['objective']-y['objective'])
     ranks = lambda r: [[(e['name'],e['scope'],e['rank']) for e in c['ranks']] for c in r['components']]
@@ -83,7 +88,7 @@ def historical(root):
     r = v.read(root/'receipt.json')
     require(r['finished'], 'Historical campaign did not finish')
     for name,b in r['builds'].items():
-        expected = compact.BASELINE_SOURCE if name.startswith('baseline_') else BASELINE
+        expected = COMPACT_BASELINE_SOURCE if name.startswith('baseline_') else BASELINE
         require(f'SOURCE_SHA256 "{expected}"' in b['source_fingerprint'], 'Historical source mismatch')
     for case,files in r['inputs'].items():
         for name,digest in files.items():
@@ -101,7 +106,9 @@ def historical(root):
     for key,modes in r['replay'].items():
         for mode,run in modes.items():
             require(v.read(root/'replay'/key/mode/'state.json')==run['result'], 'Historical replay mismatch')
-    out = compact.summary(r,root)  # Also verifies captured matrices and audit hashes.
+    out = summarize_compact_receipt(r, root, cases=COMPACT_CASES, modes=COMPACT_MODES,
+        backends=('eigen', 'spqr'), command_cases=('single-128', 'single-512'),
+        performance_ratio_limits=COMPACT_PERFORMANCE_RATIO_LIMITS)  # Also verifies captured matrices and audit hashes.
     endpoints={}
     for case,roles in r['commands'].items():
         endpoints[case]={}
@@ -112,7 +119,7 @@ def historical(root):
                 require(v.read(path/'receipt.json')==run, 'Historical command receipt mismatch')
                 if run['status']=='completed':
                     state=exports(path,v.read(root/'inputs'/case/'widths.json')['b'])
-                    expected=compact.BASELINE_SOURCE if role=='baseline' else BASELINE
+                    expected=COMPACT_BASELINE_SOURCE if role=='baseline' else BASELINE
                     require(state['metadata']['software']['source_sha256']==expected, 'Historical export source mismatch')
                     states.append(state)
     comparisons=[endpoint_comparison(a,b) for a,b in itertools.product(
@@ -164,18 +171,18 @@ def summarize(r, root):
         out['commands'][case]=row
         if case=='single-128':numerical &= a['passed'] and b['passed'] and len(comparisons)==9 and all(x['passed'] for x in comparisons)
     for backend in ('spqr','eigen'):
-        for case in compact.CASES:
+        for case in COMPACT_CASES:
             modes=r['audits'].get(backend,{}).get(case,{})
             checks={}
-            for mode in compact.MODES:
+            for mode in COMPACT_MODES:
                 entry=modes.get(mode,{})
                 if entry.get('process',{}).get('status')!='completed':
                     checks[mode]=dict(passed=False,reason='incomplete-audit');numerical=False;continue
                 current=v.read(root/entry['output'])
                 previous=v.read(root/'historical/audits'/backend/case/mode/'state.json')
-                historic=compact.audit_parity(previous,current)
+                historic=audit_parity(previous,current)
                 legacy=modes.get('legacy',{})
-                local=compact.audit_parity(v.read(root/legacy['output']),current) if legacy.get('process',{}).get('status')=='completed' else dict(passed=False)
+                local=audit_parity(v.read(root/legacy['output']),current) if legacy.get('process',{}).get('status')=='completed' else dict(passed=False)
                 checks[mode]=dict(historical=historic,latest_legacy=local,passed=historic['passed'] and local['passed'])
                 numerical &= checks[mode]['passed']
             out['audits'][backend+'/'+case]=checks
@@ -198,7 +205,7 @@ def main():
     require(not root.exists(), 'Use a fresh work directory')
     old=args.prior_work_dir.resolve();history=historical(old)
     proofs={ref:source_proof(ref) for ref in ('ce58c897','e32919f3','c9e0f8c9')}
-    for ref,expected in zip(proofs,(compact.BASELINE_SOURCE,BASELINE,CANDIDATE)):
+    for ref,expected in zip(proofs,(COMPACT_BASELINE_SOURCE,BASELINE,CANDIDATE)):
         require(proofs[ref]['production_source_sha256']==expected, 'Commit source proof mismatch')
     prior=v.read(old/'receipt.json')
     for name,digest in prior['sources'].items():
@@ -244,10 +251,10 @@ def main():
                 groups[role].append(row);save();print('command',case,role,repetition,row['status'],flush=True)
     for backend in ('spqr','eigen'):
         cases=r['audits'][backend]={}
-        for case in compact.CASES:
+        for case in COMPACT_CASES:
             modes=cases[case]={};inputs=root/'inputs'/case
             command=[builds[backend]/'bin/joint_sparse_benchmark',*(['fixture',inputs,'first-stage-float32'] if case=='heterogeneous-168' else ['initial',inputs/'input.cif',inputs/'input.map',inputs/'widths.json'])]
-            for mode in compact.MODES:
+            for mode in COMPACT_MODES:
                 directory=root/'audits'/backend/case/mode;output=directory/'state.json'
                 p=v.monitored([*command,output,'--svd-mode',mode,'--audit'],directory,deadline)
                 modes[mode]=dict(process=p,output=str(output.relative_to(root)));save()

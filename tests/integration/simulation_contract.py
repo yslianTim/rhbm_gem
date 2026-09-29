@@ -2,7 +2,7 @@
 from pathlib import Path
 import math
 import re
-import fold_168_regression as fold
+import fold_168_support as fold
 
 ROOT = Path(__file__).resolve().parents[2]
 SUPPORT = {"version": "sphere-fma-v1", "comparison": "squared_distance<=cutoff*cutoff",

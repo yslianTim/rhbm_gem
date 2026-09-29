@@ -1,23 +1,14 @@
 import copy
 import unittest
-from joint_fixed_validation import parity, improvement, vector_close, total_bounds
-from joint_search_validation import overlap_eligible
-
-
-def result():
-    return dict(valid=True,reason='full-profile-operator',mode='composed',normal_q_actions=6,
-        state_control=dict(eta=[.2],beta=[1.,.1],free_columns=[0,1],scale=2.,rank_rows=10,
-                           residual=[.1,.2],gradient=[.03],objective=.025),
-        rank=[dict(valid=True,rank=2,rows=2,columns=2,relative_threshold=1e-12,absolute_override=-1,
-                   threshold=1e-12,singular_values=[1.,.5])],
-        apply=[.1,.2],adjoint=[.3],normal=[.4],operator_gradient=[.03],
-        work=dict(reference_solves=0,derivative_preparations=0),
-        steps=[dict(kind=k,valid=True,step=[.2],predicted=.001,true_residual=1e-11) for k in ('identity','diagonal','schwarz')])
+from joint_fixed_validation import improvement, total_bounds
+from joint_validation_checks import fixed_action_parity as parity, vector_close
+from joint_validation_checks import overlap_eligible
+from joint_validation_test_data import fixed_result as fixed_result
 
 
 class FixedComparison(unittest.TestCase):
     def test_same_state_and_step_controls(self):
-        a=result(); b=copy.deepcopy(a); b.update(mode='normal',normal_q_actions=2)
+        a=fixed_result(); b=copy.deepcopy(a); b.update(mode='normal',normal_q_actions=2)
         self.assertTrue(parity(a,b)['passed'])
         for section,key,value in [('state_control','beta',[2.,.1]),('state_control','objective',.1),
                                   ('state_control','residual',[float('nan'),.2]),('work','reference_solves',1)]:
@@ -26,7 +17,7 @@ class FixedComparison(unittest.TestCase):
         b['steps'][0]['step']=[.3]; self.assertFalse(parity(a,b)['passed'])
 
     def test_missing_nonfinite_and_unavailable_evidence(self):
-        a=result()
+        a=fixed_result()
         for key in ('rank','apply','adjoint','normal','operator_gradient','steps','state_control'):
             b=copy.deepcopy(a); del b[key]
             self.assertFalse(parity(a,b)['passed'],key)
@@ -55,7 +46,6 @@ class FixedComparison(unittest.TestCase):
         self.assertIsNone(overlap_eligible(dict(partition=dict(blocks=2,atom_memberships=[3]))))
 
 
-
 class FixedCli(unittest.TestCase):
     def test_compare_exit_codes_and_receipt_immutability(self):
         import json
@@ -70,7 +60,7 @@ class FixedCli(unittest.TestCase):
                 for c in CASES:
                     for b in ('eigen','spqr'):
                         for mode in MODES:
-                            value=result()
+                            value=fixed_result()
                             if mode=='C': value.update(mode='normal',normal_q_actions=2)
                             if bad and mode=='B': value['state_control']['objective']=10
                             report['runs'][f'{c}/{b}/{mode}']=[dict(process=dict(status='completed'),state_sha256='state',result=dict(value,stage='complete')) for _ in range(3)]

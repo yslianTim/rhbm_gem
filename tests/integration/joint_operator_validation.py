@@ -5,48 +5,20 @@ Use compare after both stages. Large cases never enter a numerical solve.
 """
 from __future__ import annotations
 import argparse
-import hashlib
-import io
 import platform
 import statistics
-import subprocess
-import tarfile
 import time
 from pathlib import Path
 
-import joint_validation as v
+import joint_validation_support as v
+from experiment_provenance import build_fingerprint as fingerprint, git_source_hash
 from joint_runtime_support import unpack, differences, scientific
-from joint_sparse_validation import parity
+from joint_validation_checks import sparse_parity as parity
 
 BASELINE = '15e71e3fc230205e6efd7f60c8a915eb1989733b'
 
-
-def source_hash(root):
-    files = sorted(p for folder in ('src', 'include', 'cmake') for p in (root/folder).rglob('*')
-                   if p.is_file() and p.suffix in ('.cpp', '.hpp', '.h', '.cmake', '.txt'))
-    files += [root/'CMakeLists.txt']
-    return v.digest({str(p.relative_to(root)): v.sha(p) for p in files})
-
-
 def baseline_source_hash():
-    data=subprocess.check_output(['git','archive',BASELINE,'src','include','cmake','CMakeLists.txt'],cwd=v.ROOT)
-    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-        return v.digest({m.name:hashlib.sha256(archive.extractfile(m).read()).hexdigest()
-                         for m in archive if m.isfile() and Path(m.name).suffix in ('.cpp','.hpp','.h','.cmake','.txt')})
-
-
-def fingerprint(root):
-    cache = (root/'CMakeCache.txt').read_text()
-    source = Path(next(line.split('=', 1)[1] for line in cache.splitlines()
-                       if line.startswith('CMAKE_HOME_DIRECTORY:')))
-    binaries = [root/'bin/joint_sparse_benchmark', root/'bin/joint_component_runtime',
-                root/'bin/joint_validation', root/'bin/RHBM-GEM', *sorted((root/'src').glob('librhbm_gem.*'))]
-    return dict(source_root=str(source), source_sha256=source_hash(source), cache=cache,
-                binaries={str(p.relative_to(root)): v.sha(p) for p in binaries if p.is_file()},
-                configuration=(root/'generated/Release/SimulationConfiguration-CXX.txt').read_text(),
-                linked_libraries=subprocess.check_output(
-                    ['otool', '-L', str(root/'src/librhbm_gem.dylib')] if platform.system() == 'Darwin'
-                    else ['ldd', str(root/'src/librhbm_gem.so')], text=True))
+    return git_source_hash(BASELINE, v.ROOT)
 
 
 def compare(root):

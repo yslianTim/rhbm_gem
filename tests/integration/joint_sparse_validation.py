@@ -9,8 +9,9 @@ import statistics
 import subprocess
 import time
 from types import SimpleNamespace
-import joint_validation as v
+import joint_validation_support as v
 from joint_runtime_support import unpack
+from joint_validation_checks import sparse_parity as parity
 
 
 def profile(args):
@@ -61,24 +62,6 @@ def profile(args):
             v.write(root/'receipt.json',record)
 
 
-def parity(a, b):
-    checks = {}
-    for role in ('primary', 'reference'):
-        if role not in a or role not in b:
-            checks[role] = dict(available=False)
-            continue
-        x, y = a[role], b[role]
-        same = all(x.get(k) == y.get(k) for k in ('valid', 'reason', 'feasible', 'free_rank', 'kkt_passed', 'active_atoms'))
-        available = x['valid'] and y['valid'] and len(x['beta']) == len(y['beta']) and all(i is not None for i in x['beta']+y['beta'])
-        error = max((abs(i-j)/(1+max(abs(i),abs(j))) for i,j in zip(x['beta'],y['beta'])), default=0.) if available else None
-        objective = abs(x['objective']-y['objective']) if available else None
-        normalized = .5*abs(x['relative_residual']**2-y['relative_residual']**2) if available else None
-        gradient = available and len(x['b_gradient'])==len(y['b_gradient']) and all(
-            i is not None and z is not None and abs(i-z)<=1e-13+2e-9*abs(i) for i,z in zip(x['b_gradient'],y['b_gradient']))
-        checks[role] = dict(available=available, same_status_rank_face=same, coefficient_error=error,
-                            objective_difference=objective, normalized_objective_difference=normalized, gradient_passed=gradient,
-                            passed=same and available and error<=1e-10 and normalized<=1e-12 and gradient)
-    return checks
 
 
 def main():

@@ -1,169 +1,29 @@
 """Bounded three-way compact SVD acceptance; report-only rechecks saved evidence."""
 from __future__ import annotations
 import argparse
-import itertools
 import os
 from pathlib import Path
 import platform
-import statistics
 import subprocess
 import time
 from types import SimpleNamespace
 
-import numpy as np
-import joint_validation as v
+import joint_validation_support as v
 from joint_runtime_support import unpack
-from joint_sparse_validation import parity
+from joint_compact_support import summarize_compact_receipt
 
 MODES = ('legacy', 'values', 'auto')
 CASES = ('single-128', 'heterogeneous-168', 'single-512')
 BASELINE_SOURCE = '9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0'
 
 
-def scaled(a, b):
-    x, y = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
-    if x.shape != y.shape or not np.isfinite(x).all() or not np.isfinite(y).all():
-        return None
-    return float(np.max(np.abs(x-y)/(1+np.maximum(np.abs(x), np.abs(y))), initial=0))
 
-
-def svd_parity(a, b):
-    x, y = np.asarray(a['singular_values'], dtype=float), np.asarray(b['singular_values'], dtype=float)
-    same = bool(a['valid'] == b['valid'] and a['rank'] == b['rank'] and x.shape == y.shape
-                and np.isfinite(x).all() and np.isfinite(y).all())
-    maximum = float(x[0]) if x.size else 0.
-    error = float(np.max(np.abs(x-y), initial=0)/max(maximum, np.finfo(float).tiny)) if same else None
-    solution = scaled(a['solution'], b['solution'])
-    threshold = abs(a['threshold']-b['threshold']) <= 1e-10*max(abs(a['threshold']), np.finfo(float).tiny)
-    # Retain the actual weak-end values; a global norm alone does not verify rank.
-    near = [dict(index=k, baseline=float(s), candidate=float(y[k]), threshold=a['threshold'])
-            for k,s in enumerate(x) if same and (s <= 2*a['threshold'] or k >= len(x)-3)]
-    return dict(same_rank_status=same, spectrum_error=error, solution_error=solution,
-                threshold_agrees=threshold, weak_values=near,
-                passed=same and a['valid'] and error <= 1e-10 and threshold and solution is not None and solution <= 1e-10)
-
-
-def audit_parity(a, b):
-    endpoints = parity(a, b)
-    checks = [svd_parity(x, y) for x,y in zip(a.get('svd_records', []), b.get('svd_records', []))]
-    same_calls = (len(a.get('svd_records', [])) == len(b.get('svd_records', [])) > 0
-                  and all(all(x.get(k)==y.get(k) for k in ('role','rows','columns','relative_threshold','absolute_override'))
-                          for x,y in zip(a.get('svd_records', []), b.get('svd_records', []))))
-    left, right = a.get('derivative_audit', {}), b.get('derivative_audit', {})
-    arrays = {k: scaled(left.get(k, []), right.get(k, []))
-              for k in ('coefficients', 'correction', 'projected', 'jacobian', 'response')}
-    passed = (all(c['passed'] for c in endpoints.values()) and a['trust']['passed'] and b['trust']['passed']
-              and a['initial_b'] == b['initial_b'] and same_calls and all(c['passed'] for c in checks)
-              and left.get('valid') is True and right.get('valid') is True
-              and a['derivative_reason'] == b['derivative_reason']
-              and all(k in left and k in right and len(left[k]) > 0 for k in arrays)
-              and all(e is not None and e <= 1e-10 for e in arrays.values()))
-    return dict(endpoints=endpoints, spectra=checks, derivative_errors=arrays, passed=passed)
 
 
 def summary(r, root=Path('.')):
-    out = dict(fixed={}, audits={}, replay={}, commands={}, baseline_controls={})
-    numerical = bool(r.get('matrix_files'))
-    for path,digest in r.get('matrix_files', {}).items():
-        if v.sha(root/path) != digest:
-            raise RuntimeError('Captured matrix hash mismatch')
-    for backend in ('eigen', 'spqr'):
-        out['fixed'][backend] = {}
-        for case in CASES:
-            group = r['fixed'].get(backend, {}).get(case, {})
-            records = out['fixed'][backend][case] = {}
-            for mode in MODES:
-                runs = group.get(mode, [])
-                complete = len(runs) == 3 and all(x['process']['status'] == 'completed' for x in runs)
-                numerical &= complete
-                if not complete:
-                    records[mode] = dict(complete=False)
-                    continue
-                states = [x['result'] for x in runs]
-                records[mode] = dict(complete=True, reference_seconds=statistics.median(s['reference_seconds'] for s in states),
-                    derivative_seconds=statistics.median(s['derivative_seconds'] for s in states),
-                    combined_seconds=statistics.median(s['reference_seconds']+s['derivative_seconds'] for s in states),
-                    reference_svd_seconds=statistics.median(s['work']['reference_svd_seconds'] for s in states),
-                    free_design_svd_seconds=statistics.median(s['work']['free_design_svd_seconds'] for s in states),
-                    peak_rss_bytes=max(max(x['process'].get('os_process_peak_rss_bytes') or 0,
-                                          x['process'].get('sampled_tree_peak_rss_bytes', 0)) for x in runs))
-            pairs = []
-            for mode in ('values', 'auto'):
-                for a,b in itertools.product(group.get('legacy', []), group.get(mode, [])):
-                    if 'result' not in a or 'result' not in b:
-                        numerical = False
-                        continue
-                    check = parity(a['result'], b['result'])
-                    passed = (all(x.get('passed', False) for x in check.values()) and
-                              a['result']['initial_b'] == b['result']['initial_b'] and
-                              a['result']['trust']['passed'] and b['result']['trust']['passed'] and
-                              a['result']['derivative_valid'] and b['result']['derivative_valid'])
-                    pairs.append(dict(mode=mode, passed=passed, checks=check)); numerical &= passed
-            records['comparisons'] = pairs
-            audits = r['audits'].get(backend, {}).get(case, {})
-            checks = {}
-            for mode in ('values', 'auto'):
-                a,b = audits.get('legacy', {}), audits.get(mode, {})
-                if a.get('process', {}).get('status') == b.get('process', {}).get('status') == 'completed':
-                    if any(v.sha(root/row['output']) != row['output_sha256'] for row in (a,b)):
-                        raise RuntimeError('Audit output hash mismatch')
-                    checks[mode] = audit_parity(v.read(root/a['output']), v.read(root/b['output']))
-                else:
-                    checks[mode] = dict(passed=False, unavailable=True)
-                numerical &= checks[mode]['passed']
-            out['audits'][backend+'/'+case] = checks
-            control = r['baseline_controls'].get(backend, {}).get(case, {})
-            if control.get('process', {}).get('status') == 'completed' and group.get('legacy'):
-                check = parity(control['result'], group['legacy'][0]['result'])
-                passed = all(x['passed'] for x in check.values())
-                out['baseline_controls'][backend+'/'+case] = dict(passed=passed, checks=check)
-                numerical &= passed
-            else:
-                numerical = False
-    for name, modes in r.get('replay', {}).items():
-        checks = {}
-        for mode in ('values', 'auto'):
-            a,b = modes.get('legacy', {}), modes.get(mode, {})
-            checks[mode] = svd_parity(a['result'], b['result']) if 'result' in a and 'result' in b else dict(passed=False)
-            numerical &= checks[mode]['passed']
-        out['replay'][name] = checks
-    numerical &= all(any(k.startswith(case+'/'+role+'-') for k in r.get('replay', {}))
-                     for case in CASES for role in ('reference','free-design'))
-    performance = True
-    for case in CASES:
-        group = out['fixed']['spqr'][case]; a,b = group['legacy'],group['auto']
-        if not a['complete'] or not b['complete']:
-            performance = False
-            continue
-        keys = ('reference_svd_seconds', 'free_design_svd_seconds', 'combined_seconds') if case == 'single-512' else ('combined_seconds',)
-        ratios = {k: b[k]/a[k] for k in keys}
-        limit = .7 if case == 'single-512' else 1.1
-        group['performance_gate'] = dict(ratios=ratios, maximum_ratio=limit, passed=all(x <= limit for x in ratios.values()))
-        performance &= group['performance_gate']['passed']
-    for case in ('single-128','single-512'):
-        groups = r.get('commands', {}).get(case, {})
-        out['commands'][case] = {}
-        for role in ('baseline','candidate'):
-            runs = groups.get(role, [])
-            complete = len(runs) == 3 and all(x['status'] == 'completed' for x in runs)
-            out['commands'][case][role] = dict(complete=complete,
-                converged=complete and all(x.get('runtime_convergence') == 'passed' for x in runs),
-                median_seconds=statistics.median(x['total_command_seconds'] for x in runs) if complete else None,
-                peak_rss_bytes=max((max(x.get('os_process_peak_rss_bytes') or 0, x.get('sampled_tree_peak_rss_bytes',0)) for x in runs), default=0))
-    numerical &= out['commands']['single-128']['baseline']['converged'] and out['commands']['single-128']['candidate']['converged']
-    command_pairs=[]
-    for a,b in itertools.product(r.get('command_endpoints', {}).get('baseline', []), r.get('command_endpoints', {}).get('candidate', [])):
-        x,y=a['assembled_state'],b['assembled_state']
-        errors={k:scaled(x[k],y[k]) for k in ('ac','b')}
-        objective=abs(x['objective']/a['observation_scale']**2-y['objective']/b['observation_scale']**2)
-        passed=a['atom_ids']==b['atom_ids'] and all(e is not None and e<=1e-10 for e in errors.values()) and objective<=1e-12
-        command_pairs.append(dict(errors=errors,normalized_objective_difference=objective,passed=passed)); numerical &= passed
-    numerical &= len(command_pairs)==9
-    out['commands']['single-128']['endpoint_comparisons']=command_pairs
-    out.update(numerical_passed=bool(numerical),performance_passed=bool(performance),
-               compact_gate_passed=bool(numerical and performance),
-               complete_512_passed=out['commands']['single-512']['candidate']['converged'])
-    return out
+    return summarize_compact_receipt(r, root, cases=CASES, modes=MODES, backends=('eigen', 'spqr'),
+        command_cases=('single-128', 'single-512'),
+        performance_ratio_limits={'single-128': 1.1, 'heterogeneous-168': 1.1, 'single-512': .7})
 
 
 def main():

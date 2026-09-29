@@ -3,6 +3,8 @@ from pathlib import Path
 from joint_runtime_support import read, require, sha
 import numpy as np
 
+CATALOG = Path(__file__).resolve().parents[2] / "tests/fixtures/joint_component/catalog.json"
+
 
 def digest(path):
     return sha(Path(path).read_bytes())

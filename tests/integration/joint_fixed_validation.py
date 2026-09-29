@@ -1,64 +1,17 @@
 """One 30-minute fixed-state/fixed-step campaign; never resumes or promotes search."""
 from __future__ import annotations
 import argparse
-import math
 import statistics
 import time
 from pathlib import Path
-import joint_validation as v
-from joint_operator_validation import fingerprint
-from joint_search_validation import finite, require_current_build
+import joint_validation_support as v
+from experiment_provenance import build_fingerprint as fingerprint, require_current_build
 from joint_runtime_support import unpack
+from joint_validation_checks import finite, fixed_action_parity as parity
 
 BASELINE='ec24f3056427408cb1978cff004ed477908fb0d0'
 MODES=('A','B','C')
 CASES=('chain-8','single-128','heterogeneous-168','single-512')
-
-
-def vector_close(a,b,relative=1e-8,absolute=1e-12):
-    if not isinstance(a,list) or not isinstance(b,list) or not a or len(a)!=len(b): return False
-    if not all(finite(x) for x in a+b): return False
-    return math.hypot(*(x-y for x,y in zip(a,b)))<=absolute+relative*math.hypot(*a)
-
-
-def parity(a,b,kinds=('identity','diagonal','schwarz')):
-    failures=[]
-    for key in ('valid','reason'):
-        if key not in a or a.get(key)!=b.get(key): failures.append(key)
-    sa,sb=a.get('state_control',{}),b.get('state_control',{})
-    for key in ('eta','beta','free_columns','scale','rank_rows'):
-        if key not in sa or sa.get(key)!=sb.get(key): failures.append('state/'+key)
-    for key in ('residual','gradient'):
-        if not vector_close(sa.get(key),sb.get(key),relative=0,absolute=1e-12): failures.append('state/'+key)
-    oa,ob=sa.get('objective'),sb.get('objective')
-    if not finite(oa) or not finite(ob) or abs(oa-ob)>1e-12: failures.append('state/objective')
-    ra,rb=a.get('rank',[]),b.get('rank',[])
-    if len(ra)!=1 or len(rb)!=1: failures.append('rank/missing')
-    else:
-        for key in ('valid','rank','rows','columns','relative_threshold','absolute_override'):
-            if key not in ra[0] or ra[0].get(key)!=rb[0].get(key): failures.append('rank/'+key)
-        x,y=ra[0].get('singular_values'),rb[0].get('singular_values')
-        if not isinstance(x,list) or not isinstance(y,list) or not x or len(x)!=len(y) or not all(finite(z) for z in x+y) or max(abs(u-w) for u,w in zip(x,y))>1e-10*max(x): failures.append('rank/spectrum')
-        x,y=ra[0].get('threshold'),rb[0].get('threshold')
-        if not finite(x) or not finite(y) or abs(x-y)>1e-10*max(abs(x),abs(y)): failures.append('rank/threshold')
-    if a.get('valid') is not True or b.get('valid') is not True: failures.append('unavailable-operator')
-    for key in ('apply','adjoint','normal'):
-        if not vector_close(a.get(key),b.get(key)): failures.append(key)
-    x,y=a.get('operator_gradient',[]),b.get('operator_gradient',[])
-    if not x or len(x)!=len(y) or not all(finite(z) for z in x+y) or any(abs(u-w)>1e-13+2e-9*abs(u) for u,w in zip(x,y)): failures.append('operator-gradient')
-    for result in (a,b):
-        if result.get('normal_q_actions')!=(2 if result.get('mode')=='normal' else 6): failures.append('normal-q-actions')
-        if any(result.get('work',{}).get(k)!=0 for k in ('reference_solves','derivative_preparations')): failures.append('forbidden-work')
-    aa,bb=a.get('steps',[]),b.get('steps',[])
-    if len(aa)!=len(kinds) or len(bb)!=len(kinds): failures.append('steps/missing')
-    for index,kind in enumerate(kinds):
-        if len(aa)<=index or len(bb)<=index: continue
-        x,y=aa[index],bb[index]
-        if x.get('kind')!=kind or y.get('kind')!=kind or x.get('valid') is not True or y.get('valid') is not True: failures.append(kind+'/unavailable'); continue
-        if not vector_close(x.get('step'),y.get('step'),1e-10,1e-10): failures.append(kind+'/step')
-        if not finite(x.get('predicted')) or not finite(y.get('predicted')) or abs(x['predicted']-y['predicted'])>1e-12: failures.append(kind+'/predicted')
-        if any(not finite(r.get('true_residual')) or r['true_residual']>1e-10 for r in (x,y)): failures.append(kind+'/true-residual')
-    return dict(passed=not failures,differences=failures)
 
 
 def improvement(a,b,qualified):

@@ -11,8 +11,8 @@ import subprocess
 import time
 from types import SimpleNamespace
 
-import mdpde_experiment as experiment
-import fold_168_regression as fold
+from experiment_io import sha256_file
+import mdpde_experiment_support as experiment
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICIES = ("failed-only", "fresh-residual")
@@ -45,7 +45,7 @@ def choose_budget(maximum):
 def refine_run(args, directory, budget):
     fresh(directory)
     before = experiment.provenance(args.executable.resolve(), args.source.resolve())
-    hashes = {str(p.resolve()): fold.sha256_file(p) for p in sorted(args.captures.glob("*.txt"))}
+    hashes = {str(p.resolve()): sha256_file(p) for p in sorted(args.captures.glob("*.txt"))}
     command = [str(args.executable.resolve()), "refine", str(args.captures.resolve()), str(directory.resolve()), str(budget)]
     start = time.perf_counter()
     with (directory/"run.log").open("w") as log:
@@ -55,7 +55,7 @@ def refine_run(args, directory, budget):
     experiment.write(directory/"input-hashes.json", hashes)
     require(code == 0 and before == experiment.provenance(args.executable.resolve(),args.source.resolve()),
             "Refinement failed or source/executable changed.")
-    require(all(fold.sha256_file(Path(p)) == h for p,h in hashes.items()), "Capture inputs changed.")
+    require(all(sha256_file(Path(p)) == h for p,h in hashes.items()), "Capture inputs changed.")
     index = read(directory/"index.json")
     require(index["shape_count"] == 337 and index["independent_count"] == 4 and len(index["files"]) == 341,
             "Stage A requires all 337 captures and four independent fixtures.")
@@ -80,7 +80,7 @@ def calibrate(args):
               "captures":337,"independent_fixtures":4,"profile_work":work,"profile_failures":failures,
               "frozen_accepted":sum(r["accepted"] for r in frozen),
               "reference_updates":distribution([r["reference_updates"] for r in results]),
-              "profile_provenance_sha256":fold.sha256_file(args.output/"profile/provenance.json")}
+              "profile_provenance_sha256":sha256_file(args.output/"profile/provenance.json")}
     experiment.write(args.output/"stage-a.json",report)
     print(json.dumps(report))
     require(passed,"Stage A did not pass; operator and closed-loop experiments are not authorized by this gate.")
@@ -111,7 +111,7 @@ def compare_report(directory, budget):
     for phase in ("final", "recovery-current"):
         path = directory/"endpoint"/phase
         data = read(path/"comparison.json")
-        before, after = fold.sha256_file(path/"input-before.json"), fold.sha256_file(path/"input-after.json")
+        before, after = sha256_file(path/"input-before.json"), sha256_file(path/"input-after.json")
         require(data["input_unchanged"] and before == after,"Operator comparison changed its input.")
         variants = {v["policy"]:v for v in data["variants"]}
         require(set(variants) == {"legacy",*POLICIES},"Missing operator policies.")
@@ -152,8 +152,8 @@ def run(args):
             if v is None: os.environ.pop(k,None)
             else: os.environ[k]=v
     experiment.write(args.output/"policy.json",{"mode":args.mode,"budget":budget,"environment":variables,
-        "stage_a_sha256":fold.sha256_file(args.stage_a) if args.stage_a else None,
-        "stage_b_sha256":fold.sha256_file(args.stage_b) if args.stage_b else None})
+        "stage_a_sha256":sha256_file(args.stage_a) if args.stage_a else None,
+        "stage_b_sha256":sha256_file(args.stage_b) if args.stage_b else None})
     session = read(args.output/"endpoint/session.json")
     require(session["complete"],"Endpoint session did not complete.")
     records = [json.loads(line) for line in (args.output/"endpoint/solves.jsonl").read_text().splitlines()]

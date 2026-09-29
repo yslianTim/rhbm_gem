@@ -5,7 +5,7 @@ import collections
 import math
 from pathlib import Path
 import numpy as np
-from joint_validation import read, write, sha, digest
+from experiment_io import read, write, sha, digest
 
 
 def wilson(failures, total):

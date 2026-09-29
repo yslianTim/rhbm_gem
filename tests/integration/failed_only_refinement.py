@@ -10,8 +10,8 @@ import subprocess
 import time
 from types import SimpleNamespace
 
-import fold_168_regression as fold
-import mdpde_experiment as experiment
+import fold_168_support as fold
+import mdpde_experiment_support as experiment
 
 
 def validate_solves(records, enabled):

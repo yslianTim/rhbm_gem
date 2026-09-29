@@ -1,103 +1,33 @@
 """Bounded offline validation. Production algorithms and convergence policies are unchanged."""
 from __future__ import annotations
 import argparse
-import collections
 import hashlib
 import json
 import math
 import os
 import platform
-import re
-import signal
-import subprocess
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
+from experiment_io import ROOT, digest, read, sha, write
+from experiment_process import monitored, process_tree_rss
+from joint_validation_support import resource_run
 
-ROOT = Path(__file__).resolve().parents[2]
 SEEDS = list(range(20260921, 20260941))
-ENV = dict(os.environ, **{k: '1' for k in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')})
 LIMITS = dict(process_seconds=600, rss_bytes=4*1024**3, sample_seconds=.1, stage_seconds={'a':1200,'b':1200,'c':4800}, total_seconds=7200)
 
 
-def read(path):
-    return json.loads(Path(path).read_text())
 
 
-def write(path, data):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix+'.tmp')
-    temporary.write_text(json.dumps(data, indent=2, allow_nan=False)+'\n')
-    temporary.replace(path)
 
 
-def sha(path):
-    with Path(path).open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def digest(data):
-    return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(',',':'), allow_nan=False).encode()).hexdigest()
 
 
-def process_tree_rss(pid):
-    result = subprocess.run(['ps','-axo','pid=,ppid=,rss='], capture_output=True, text=True, check=True)
-    rows = [tuple(map(int, line.split())) for line in result.stdout.splitlines()]
-    descendants = {pid}
-    while True:
-        found = {p for p, parent, _ in rows if parent in descendants}
-        if found <= descendants:
-            break
-        descendants |= found
-    return sum(rss*1024 for p, _, rss in rows if p in descendants)
 
 
-def monitored(command, directory, deadline, *, rss_limit=LIMITS['rss_bytes'], seconds=600):
-    directory = Path(directory); directory.mkdir(parents=True, exist_ok=True)
-    start = time.monotonic()
-    available = deadline-start
-    if available <= 0:
-        return dict(status='not-run-budget', command=list(map(str,command)), wall_seconds=0)
-    expires = min(deadline, start+seconds)
-    peak = 0; samples = 0; gap = 0.; last = start; next_update = start+30
-    record = dict(command=list(map(str,command)), status='running', sample_interval_seconds=.1)
-    # The parent owns the entire process group, including time and all CLI children.
-    timed = ['/usr/bin/time', '-l' if sys.platform=='darwin' else '-v', *map(str,command)]
-    with (directory/'stdout.txt').open('w') as stdout, (directory/'stderr.txt').open('w') as stderr:
-        process = subprocess.Popen(timed, stdout=stdout, stderr=stderr, env=ENV, start_new_session=True)
-        try:
-            while process.poll() is None:
-                now = time.monotonic(); gap=max(gap,now-last); last=now
-                peak=max(peak,process_tree_rss(process.pid)); samples+=1
-                reason = 'rss-limit' if peak > rss_limit else ('time-limit' if now >= expires else None)
-                if reason:
-                    record['status']=reason
-                    os.killpg(process.pid, signal.SIGTERM)
-                    try: process.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(process.pid, signal.SIGKILL); process.wait()
-                    break
-                if now >= next_update:
-                    print(f"running {directory.name}: {now-start:.0f}s, sampled peak {peak/1024**2:.0f} MiB",flush=True)
-                    next_update=now+30
-                time.sleep(max(0,min(.1-(time.monotonic()-now),expires-time.monotonic())))
-        except BaseException:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGKILL); process.wait()
-            raise
-    if record['status']=='running': record['status']='completed' if process.returncode==0 else 'process-failure'
-    text=(directory/'stderr.txt').read_text()
-    match = re.search(r'(\d+)\s+maximum resident set size',text) if sys.platform=='darwin' else re.search(r'Maximum resident set size \(kbytes\): (\d+)',text)
-    record.update(wall_seconds=time.monotonic()-start, exit_code=process.returncode,
-                  sampled_tree_peak_rss_bytes=peak, samples=samples, maximum_sampling_gap_seconds=gap,
-                  os_process_peak_rss_bytes=int(match[1])*(1 if sys.platform=='darwin' else 1024) if match else None)
-    if record['status']=='completed' and (record['os_process_peak_rss_bytes'] or 0)>rss_limit:
-        record['status']='rss-limit-observed-after-exit'
-    write(directory/'process.json',record)
-    return record
 
 
 def run_a(args, deadline):
@@ -210,40 +140,6 @@ def run_b(args, deadline):
     write(root/'receipt.json',dict(seeds=SEEDS,rng='numpy.PCG64',numpy_version=np.__version__,records=records))
 
 
-def resource_run(args, case, model, map_path, repetition, deadline):
-    root=args.work_dir/args.stage_dir/case/f'run-{repetition}';root.mkdir(parents=True,exist_ok=True)
-    database=root/'result.sqlite';started=time.monotonic(); pipeline_deadline=min(deadline,started+600)
-    analysis=monitored([args.cli,'potential_analysis','--estimator','joint-components','-a',model,'-m',map_path,
-        '-d',database,'-k','validation','--exclude-hydrogen','true','--asymmetry','false','--only-backbone','false',
-        '--map-normalization','false','-j','1','-v','0'],root/'analysis',pipeline_deadline)
-    result=dict(repetition=repetition,analysis=analysis,status=analysis['status'])
-    if analysis['status']=='completed':
-        export=monitored([args.cli,'result_dump','--printer','joint','-d',database,'-k','validation','-o',root,'-v','0'],root/'export',pipeline_deadline)
-        result['export']=export;result['status']=export['status']
-        if export['status']=='completed':
-            outcome=read(root/'joint_result_validation.json')
-            assert outcome['schema_version'] in (3,4,5) and outcome['metadata']['map_normalization']['divisor']==1
-            csv=(root/'joint_atoms_validation.csv').read_text().splitlines()
-            assert len(csv)==len(outcome['atom_ids'])+1
-            result.update(runtime_convergence=outcome['runtime_convergence'], state_available=outcome['assembled_state'] is not None,
-                          initialization_valid=outcome['initialization']['valid'],
-                          invalid_initialization_reasons=dict(collections.Counter(a['reason'] for a in outcome['initialization']['atoms'] if a['reason']!='valid-width')),
-                          stop_reasons=dict(collections.Counter(c['stop_reason'] for c in outcome['components'])),
-                          costs=outcome['costs'],software=outcome['metadata']['software'],
-                          component_statuses=dict(collections.Counter(c['runtime_convergence'] for c in outcome['components'])),
-                          failure_reasons=dict(collections.Counter(e['name']+':'+e['status'] for c in outcome['components'] for e in c['evidence'] if e['status'] in ('failed','unavailable'))),
-                          input_hashes={k:outcome['metadata'][k] for k in ('model_sha256','map_sha256')},
-                          output_bytes=sum(p.stat().st_size for p in root.iterdir() if p.is_file()))
-    # External measurement ends when export exits, before parsing its results.
-    result['total_command_seconds']=analysis['wall_seconds']+result.get('export',{}).get('wall_seconds',0)
-    if 'costs' in result:
-        estimator=sum(result['costs'][key] for key in ('construction_seconds','initialization_seconds','search_seconds','assessment_seconds','assembly_seconds'))
-        result['outside_estimator_seconds']=result['total_command_seconds']-estimator
-    stages=[analysis]+([result['export']] if 'export' in result else [])
-    result['sampled_tree_peak_rss_bytes']=max(s.get('sampled_tree_peak_rss_bytes',0) for s in stages)
-    result['os_process_peak_rss_bytes']=max((s['os_process_peak_rss_bytes'] for s in stages if s.get('os_process_peak_rss_bytes') is not None),default=None)
-    write(root/'receipt.json',result)
-    return result
 
 
 def run_c(args, deadline):

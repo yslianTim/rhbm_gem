@@ -7,8 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import joint_bounded_validation as runner
-from joint_fixed_validation_test import result as fixed_result
-from joint_search_validation_test import result as search_result
+from joint_validation_test_data import fixed_result, search_result
 
 
 def row(value): return dict(process=dict(status='completed'),result=value)

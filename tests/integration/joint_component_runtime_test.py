@@ -5,7 +5,7 @@ from pathlib import Path
 from joint_runtime_support import differences, scientific, unpack, read
 from joint_component_runtime import CATALOG, compare, runtime_expected, backend_differences
 import joint_fixture_records as records
-import joint_offline_support as runner
+import joint_numerical_reference as reference
 import numpy as np
 
 
@@ -120,8 +120,8 @@ class JointRuntimeSupportTest(unittest.TestCase):
         data = {"ids": ["a"], "table": np.array([(0, 0, 0.), (1, 0, 1.)],
                 dtype=[("row", int), ("atom", int), ("square", float)])}
         y = np.array([1., .5]); endpoint = {"beta": [1., -.2], "b": [.5]}
-        local = runner.replay(data, y, endpoint, np.linalg.norm(y))
-        parent = runner.replay(data, y, endpoint, 100.)
+        local = reference.replay(data, y, endpoint, np.linalg.norm(y))
+        parent = reference.replay(data, y, endpoint, 100.)
         np.testing.assert_array_equal(local["prediction"], parent["prediction"])
         self.assertAlmostEqual(parent["projected_kkt"], local["projected_kkt"]*np.linalg.norm(y)/100.)
         np.testing.assert_allclose(parent["b_gradient"], local["b_gradient"]*(np.linalg.norm(y)/100.)**2)

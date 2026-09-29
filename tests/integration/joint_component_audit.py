@@ -4,9 +4,10 @@ import argparse
 from pathlib import Path
 import subprocess
 from joint_runtime_support import read, write, require, unpack, differences
-from joint_component_runtime import CATALOG
+from joint_fixture_records import CATALOG
 import joint_fixture_records as records
-from joint_offline_support import certificate, validate_audit, replay_passed
+from joint_offline_support import certificate, validate_audit
+from joint_numerical_reference import replay_passed
 import numpy as np
 
 

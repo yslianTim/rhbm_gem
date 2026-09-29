@@ -5,11 +5,10 @@ import statistics
 import sys
 import time
 from pathlib import Path
-import joint_validation as v
-from joint_operator_validation import fingerprint
-from joint_search_validation import finite, require_current_build, scientific_parity
-from joint_fixed_validation import parity as fixed_parity
+import joint_validation_support as v
+from experiment_provenance import build_fingerprint as fingerprint, require_current_build
 from joint_runtime_support import unpack
+from joint_validation_checks import finite, scientific_parity, fixed_action_parity as fixed_parity
 
 BACKENDS=('eigen','spqr')
 STAGE_SECONDS={'fixed':300,'search':2700,'rank':600}

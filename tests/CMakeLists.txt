@@ -367,6 +367,12 @@ if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
 endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
+    add_test(NAME experiment_support_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/experiment_support_test.py")
+    add_test(NAME historical_runner_dependency_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
+    set_tests_properties(experiment_support_test historical_runner_dependency_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_component_runtime_runner_test

@@ -5,7 +5,8 @@ from pathlib import Path
 import signal
 import subprocess
 import time
-from joint_validation import ENV, LIMITS, process_tree_rss, read, sha, write
+from experiment_io import read, sha, write
+from experiment_process import ENV, RSS_LIMIT_BYTES, process_tree_rss
 
 
 def main():
@@ -47,8 +48,8 @@ def main():
             times=[5,15,25]
             while process.poll() is None:
                 now=time.monotonic();elapsed=now-start;peak=max(peak,process_tree_rss(process.pid))
-                if peak>LIMITS['rss_bytes'] or elapsed>=32:
-                    record['status']='rss-limit' if peak>LIMITS['rss_bytes'] else 'intentional-diagnostic-stop'
+                if peak>RSS_LIMIT_BYTES or elapsed>=32:
+                    record['status']='rss-limit' if peak>RSS_LIMIT_BYTES else 'intentional-diagnostic-stop'
                     break
                 if times and elapsed>=times[0]:
                     second=times.pop(0)
