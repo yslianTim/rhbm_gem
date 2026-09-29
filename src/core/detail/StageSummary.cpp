@@ -45,6 +45,13 @@ StageProvenance CollectStageProvenance(const std::vector<const AtomObject *> & a
 
 std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
 {
+    constexpr int kSpotColumnWidth = 4;
+    constexpr int kValidColumnWidth = 5;
+    constexpr int kNotConvergedColumnWidth = 13;
+    constexpr int kUnavailableColumnWidth = 11;
+    constexpr int kMeanColumnWidth = 8;
+    constexpr int kStandardDeviationColumnWidth = 6;
+    constexpr int kParameterColumnWidth = kMeanColumnWidth + 3 + kStandardDeviationColumnWidth;
     std::map<Spot, GaussianModelParameterSamples> spots;
     std::vector<const AtomObject *> population;
     for (const auto * atom : model_object.GetSelectedAtoms())
@@ -69,16 +76,31 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     summary << "Second-stage estimate summary by Spot:\nEstimator: "
         << CollectStageProvenance(population).estimator
         << "\nPopulation: selected targets; s.d.: between-atom dispersion"
-        << "\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C charge coefficient mean / s.d. |";
+        << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
+        << " | " << std::setw(kValidColumnWidth) << "valid"
+        << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
+        << " | " << std::setw(kUnavailableColumnWidth) << "unavailable"
+        << " | " << std::setw(kParameterColumnWidth) << "A mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << "B mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << "C mean / s.d."
+        << " |";
     for (const auto & [spot, samples] : spots)
     {
-        summary << "\n| " << ChemicalDataHelper::GetLabel(spot) << " | " << samples.amplitude_list.size()
-            << " | " << samples.not_converged << " | " << samples.unavailable;
+        summary << "\n| " << std::left << std::setw(kSpotColumnWidth) << ChemicalDataHelper::GetLabel(spot)
+            << " | " << std::right << std::setw(kValidColumnWidth) << samples.amplitude_list.size()
+            << " | " << std::setw(kNotConvergedColumnWidth) << samples.not_converged
+            << " | " << std::setw(kUnavailableColumnWidth) << samples.unavailable;
         for (const auto * values : {&samples.amplitude_list, &samples.width_list, &samples.offset_list})
         {
-            if (values->empty()) { summary << " | unavailable"; continue; }
+            if (values->empty())
+            {
+                summary << " | " << std::left << std::setw(kParameterColumnWidth) << "unavailable";
+                continue;
+            }
             const auto mean = array_helper::ComputeMean(values->data(), values->size());
-            summary << " | " << std::fixed << std::setprecision(2) << mean << " / "
+            summary << " | " << std::right << std::fixed << std::setprecision(2)
+                << std::setw(kMeanColumnWidth) << mean << " / "
+                << std::setw(kStandardDeviationColumnWidth)
                 << array_helper::ComputeStandardDeviation(values->data(), values->size(), mean);
         }
         summary << " |";

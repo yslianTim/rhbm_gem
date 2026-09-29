@@ -361,8 +361,36 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
-    EXPECT_NE(summary.find("| CA | 1 |"), std::string::npos);
-    EXPECT_EQ(summary.find("| CB |"), std::string::npos);
+    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d.    | B mean / s.d.    | C mean / s.d.    |"), std::string::npos);
+    EXPECT_NE(summary.find("\n| CA   |"), std::string::npos);
+    EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
+    const auto expectSummaryRowWidths = [](const std::string & output, bool unavailable) {
+        const auto row_start = output.find("\n| CA   |");
+        ASSERT_NE(row_start, std::string::npos);
+        const auto row_end = output.find('\n', row_start + 1);
+        const auto row = output.substr(row_start + 1, row_end - row_start - 1);
+        std::array<std::size_t, 8> pipe_positions{};
+        std::size_t pipe_count = 0;
+        for (auto position = row.find('|'); position != std::string::npos; position = row.find('|', position + 1))
+        {
+            ASSERT_LT(pipe_count, pipe_positions.size());
+            pipe_positions[pipe_count++] = position;
+        }
+        ASSERT_EQ(pipe_count, pipe_positions.size());
+        EXPECT_EQ(pipe_positions[1] - pipe_positions[0], 7);
+        EXPECT_EQ(pipe_positions[2] - pipe_positions[1], 8);
+        EXPECT_EQ(pipe_positions[3] - pipe_positions[2], 16);
+        EXPECT_EQ(pipe_positions[4] - pipe_positions[3], 14);
+        for (std::size_t column = 4; column < 7; ++column)
+        {
+            EXPECT_EQ(pipe_positions[column + 1] - pipe_positions[column], 20);
+            if (unavailable)
+                EXPECT_EQ(row.substr(pipe_positions[column] + 2, 11), "unavailable");
+            else
+                EXPECT_EQ(row[pipe_positions[column] + 11], '/');
+        }
+    };
+    expectSummaryRowWidths(summary, false);
     f.model->EditAnalysis().SetJointResult(result);
     f.model->EditAnalysis().ClearJointResult();
     EXPECT_TRUE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
@@ -371,7 +399,8 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_FALSE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
     EXPECT_EQ(target.GetStageEstimate(rhbm_gem::FittingStage::Second).reason, "invalid-initial-widths");
     summary = core::BuildSecondStageSpotSummary(*f.model);
-    EXPECT_NE(summary.find("| CA | 0 | 0 | 1"), std::string::npos);
+    EXPECT_NE(summary.find("\n| CA   |     0 |             0 |           1 |"), std::string::npos);
+    expectSummaryRowWidths(summary, true);
 }
 
 TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetainsMissingCoverage)
