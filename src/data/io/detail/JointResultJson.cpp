@@ -309,9 +309,9 @@ std::optional<JointTargetEvidence> ReadTarget(const j::value & value)
     const auto & o=value.as_object(); JointTargetEvidence t;
     t.contract=Read<std::string>(o,"contract"); t.checks=ReadChecks(o.at("checks")); t.ranks=ReadRanks(o.at("ranks"));
     t.column_scales=Read<std::vector<double>>(o,"column_scales"); t.original_rows=Read<std::size_t>(o,"original_rows");
-    for(const auto & value:o.at("atoms").as_array())
+    for(const auto & value_tmp:o.at("atoms").as_array())
     {
-        const auto & a=value.as_object();
+        const auto & a=value_tmp.as_object();
         t.atoms.push_back({Read<std::size_t>(a,"atom"),Status(a.at("status")),OptionalNumber(a.at("null_space_leakage")),Read<std::string>(a,"reason")});
     }
     return t;
