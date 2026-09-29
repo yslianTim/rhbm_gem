@@ -30,6 +30,10 @@ option(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS
     "Enable frozen 168-atom and additional joint component regressions" OFF)
 option(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS
     "Build independent joint component derivative and certification tools" OFF)
+option(RHBM_GEM_BUILD_BENCHMARKS
+    "Build optional benchmark and resource measurement tools" OFF)
+option(RHBM_GEM_BUILD_RESEARCH_TOOLS
+    "Build optional research and historical validation tools" OFF)
 foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     if(DEFINED ${retired_option})
         message(FATAL_ERROR "${retired_option} is retired. Remove both old options from your command and cache (cmake -U RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE -U RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT), then use RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT.")
@@ -84,6 +88,10 @@ endif()
 
 if((RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS OR RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS) AND NOT BUILD_TESTING)
     message(FATAL_ERROR "Joint component test options require BUILD_TESTING=ON")
+endif()
+
+if((RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS) AND NOT BUILD_TESTING)
+    message(FATAL_ERROR "Benchmark and research tool builds require BUILD_TESTING=ON")
 endif()
 
 function(rhbm_gem_apply_observation_definitions target)

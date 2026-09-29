@@ -40,6 +40,35 @@ The matrix distinguishes numerical/scientific correctness, workflow and persiste
 | JH-06 | Fixed-action campaign: `joint_fixed_validation.py` | Measure frozen-state normal/composed actions and work | Normal-action parity and no unexpected factor/reference work | Fixed-state hashes, historical A/B/C timing and RSS | Frozen states generated from named campaign inputs | Paired action comparison; permanent `ProfileOperator_test` checks algebraic parity | `joint_fixed_validation_runner_test`; `ProfileOperator_test.cpp` | Shared fixed-action parity is in neutral support; fixed campaign retains A/B/C policy and exact artifacts | `ProfileOperator_test.cpp`, `Numerics_test.cpp`, consolidated fixed-work benchmark | MIGRATION_REQUIRED | Preserve action/work invariants in permanent tests; keep factor-reuse checks permanent and historical exact counts non-contractual | Fixed-actions receipt archive and JSON manifest present | Hard-pins baseline commit `ec24f30…`; no other runner imports this runner |
 | JH-07 | Bounded search/rank campaign: `joint_bounded_validation.py` | Compare bounded rank prototype, dense rank oracle, and search behavior | Rank interval/status, threshold, inputs and fixed-step parity | Bounded runtime, watchdog, source/input/state hashes and resource ceilings | Synthetic topologies and named cases; dense oracle is run only on bounded sizes | Dense rank-oracle action for eligible sizes; no dense oracle for largest cases | `joint_bounded_validation_runner_test`; `FreeDesignRank_test.cpp`, `Search_test.cpp` | Rank comparison uses neutral primitives; bounded oracle and large-case policies remain campaign-specific | `FreeDesignRank_test.cpp`, `Search_test.cpp`, independent dense reference tests | MIGRATION_REQUIRED | Preserve rank-oracle status and eligibility semantics in permanent tests before retiring | Bounded/search/fixed artifacts and receipts present where manifested | Records `base_commit=5f61bb6e`; no other runner imports operator, search, or fixed runners |
 
+### PR 3 build-policy update
+
+This table records the build and CTest owner after PR 3. “Default” means
+`BUILD_TESTING=ON` with the new benchmark and research options OFF. The earlier
+target inventory remains a historical snapshot; optionalizing a tool does not
+change its retirement status.
+
+| ID / entry point | Previous default status | New category and build owner | Default built / registered? | Enable with |
+|---|---|---|---|---|
+| S2-01 Fold-168 | Runner contract test registered; full external regression gated | CORE runner contract; EXTERNAL full regression | Contract test yes; campaign no | `RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON` plus the existing model/map paths |
+| S2-02 MDPDE / forward experiment | `mdpde_experiment` was created in every testing build | RESEARCH executable; permanent MDPDE C++ tests remain CORE | Executable no; C++ tests yes | `RHBM_GEM_BUILD_RESEARCH_TOOLS=ON` |
+| S2-03 Endpoint refinement | Permanent C++ tests and runner contract registered; helper sources were compiled into `rhbm_gem` in testing builds | CORE policy tests and runner contract; test helpers now live in non-installed `rhbm_gem_test` | Yes | `BUILD_TESTING=ON` |
+| S2-04 Failed-only refinement | Manual Python campaign; permanent C++ policy tests | CORE policy owners; RESEARCH/HISTORICAL manual runner | C++ tests yes; campaign is not registered | Run the retained Python runner with its existing inputs |
+| S2-05 Second-stage audit parser | Parser CTest registered by default | CORE parser contract | Yes | `BUILD_TESTING=ON` |
+| S2-06 Audit neutrality | C++ probes and helpers were compiled into `rhbm_gem` in testing builds; paired Python campaign was manual | CORE C++ probe tests in `rhbm_gem_test`; paired campaign remains manual | C++ tests yes; campaign no | `BUILD_TESTING=ON` |
+| JC-01 Joint runtime | Runtime executable and regressions were in the default build | CORE runtime executable and regressions | Yes | `BUILD_TESTING=ON` |
+| JC-02 Joint offline audit | Existing offline option | OFFLINE audit executable, support, and CTests | No | `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON` |
+| JC-03 Joint workflow CLI | CLI smoke registered by default | CORE CLI workflow contract | Yes | `BUILD_TESTING=ON` |
+| JC-04 Partial-selection measurement | Measurement executable was a `tests_all` dependency | BENCHMARK measurement; permanent selection tests remain CORE | Executable no; tests yes | `RHBM_GEM_BUILD_BENCHMARKS=ON` |
+| JC-05 Postprocessing benchmark | Benchmark executable was a `tests_all` dependency | BENCHMARK executable | No | `RHBM_GEM_BUILD_BENCHMARKS=ON` |
+| JC-06 Public API benchmark | Executable was created in every testing build | BENCHMARK executable | No | `RHBM_GEM_BUILD_BENCHMARKS=ON` |
+| JC-07 Sparse validation driver | Benchmark driver was a `tests_all` dependency; validation-runner CTests were default | BENCHMARK + RESEARCH + HISTORICAL driver; runner CTests are category-gated | No | `RHBM_GEM_BUILD_BENCHMARKS=ON` or `RHBM_GEM_BUILD_RESEARCH_TOOLS=ON` |
+| Stage A/B/C `joint_validation` | Available through the offline-audit option | Shared OFFLINE + BENCHMARK + RESEARCH campaign executable; remains a manual campaign | No | Offline audits, benchmarks, or research tools |
+
+No row's KEEP / MIGRATION_REQUIRED / READY_FOR_RETIREMENT value changes because
+of build optionality. The permanent protection matrix below retains its owners;
+the independent offline oracle stays behind its existing option. No runner,
+benchmark source, fixture, artifact, or numerical behavior was removed.
+
 ### Current candidate summary
 
 - `READY_FOR_RETIREMENT`: endpoint refinement (`S2-03`), failed-only full-capture orchestration (`S2-04`), partial-selection measurement (`JC-04`), and postprocessing timing harness (`JC-05`). Their remaining use is historical campaign replay or bounded timing; permanent correctness/workflow owners and retained evidence are listed in the rows. Keep their fixtures and permanent tests.

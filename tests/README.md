@@ -184,6 +184,8 @@ consumer execution. A source copy without Git metadata must also build/install
 and run the consumer. Keep the frozen fixture packages and current parity
 thresholds unchanged; no historical matrix replay is required.
 
+Configure with `RHBM_GEM_BUILD_BENCHMARKS=ON` before building
+`joint_partial_selection`; it is an optional measurement executable.
 Partial-selection structural tests use an exhaustive full-grid/catalogue reference,
 plus matched, omitted-halo, bridge and failure-isolation controls. Reproduce small
 complete-process measurements with `tests/integration/joint_partial_selection.py
@@ -191,8 +193,9 @@ complete-process measurements with `tests/integration/joint_partial_selection.py
 independent processes per case). These measurements include builder and initializer
 costs and do not establish a maximum supported problem size.
 
-The opt-in `joint_validation` target (requires `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`)
-and `tests/integration/joint_validation.py` run the bounded weak-halo, paired
+The optional `joint_validation` target is created by the offline-audit,
+benchmark, or research-tools option. It and
+`tests/integration/joint_validation.py` run the bounded weak-halo, paired
 noise/mismatch and complete-command resource experiments. The runner enforces
 per-process-group RSS/time limits and stage budgets, saves failures separately
 from runtime convergence, and never promotes offline results into production

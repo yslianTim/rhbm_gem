@@ -102,6 +102,61 @@ Supported labels:
 - domain: `core`, `data`, `utils`, `integration`
 - intent: `contract`, `command`, `validation`, `io`, `schema`, `migration`, `algorithm`, `bindings`
 
+## Correctness, Offline, Benchmark, and Research Builds
+
+`BUILD_TESTING=ON` creates the permanent correctness tests by default. The
+installable `rhbm_gem` target stays free of test-support sources; `rhbm_gem_test`
+is a non-installed instrumented copy used by tests that need internal probes.
+The `tests_all` target builds core test dependencies and any correctness option
+explicitly enabled, but never depends on benchmark or research targets.
+
+| Configuration | Production | Core tests | Offline | Extended | External | Benchmarks | Research |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No | No | No |
+| Default testing | Yes | Yes | No | No | No | No | No |
+| Offline audits | Yes | Yes | Yes | No | No | No | No |
+| Extended regressions | Yes | Yes | No | Yes | No | No | No |
+| Fold-168 external regression | Yes | Yes | No | No | Yes | No | No |
+| Benchmark tools | Yes | Yes | No | No | No | Yes | No |
+| Research tools | Yes | Yes | No | No | No | No | Yes |
+
+The corresponding options are `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`,
+`RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS`,
+`RHBM_GEM_ENABLE_FOLD_168_REGRESSION`,
+`RHBM_GEM_BUILD_BENCHMARKS`, and
+`RHBM_GEM_BUILD_RESEARCH_TOOLS`. Benchmark and research options require
+`BUILD_TESTING=ON`, because their sources and test-only support remain under
+`tests/`.
+
+Build benchmark tools explicitly:
+
+```bash
+cmake -S . -B build-bench \\
+  -DBUILD_TESTING=ON \\
+  -DRHBM_GEM_BUILD_BENCHMARKS=ON
+cmake --build build-bench --target benchmarks_all
+```
+
+Build research tools explicitly:
+
+```bash
+cmake -S . -B build-research \\
+  -DBUILD_TESTING=ON \\
+  -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
+cmake --build build-research --target research_tools_all
+```
+
+`joint_sparse_benchmark` is shared by benchmark and research campaigns, so
+either option creates it. The combined Stage A/B/C `joint_validation` executable
+is available with an offline, benchmark, or research option; its campaign is
+still run manually. The small `joint_sparse_benchmark_smoke` CTest is registered
+only when that executable exists. It does not run a timing campaign.
+
+CTest labels include `core`, `offline`, `extended`, `external`, `benchmark`, and
+`research`. The default configuration registers only core tests. Turning a
+category on adds its focused test entries; it does not run a full benchmark,
+research sweep, or external-data campaign as part of the default build.
+
 ## Repository Lint Checks
 
 Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/install consumer smoke) are executed through `lint_repo`:
@@ -221,6 +276,10 @@ Beginner / common:
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
 | `RHBM_GEM_ENABLE_FOLD_168_REGRESSION` | `OFF` | Enable the opt-in external-data 168-atom simulation regression. |
+| `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
+| `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
+| `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Create optional benchmark and resource-measurement targets. Requires `BUILD_TESTING=ON`. |
+| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional research and historical validation targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` | `OFF` | Passive second-stage decision records in non-quiet Debug runs; independent of testing. |
 | `RHBM_GEM_FOLD_168_MODEL` | empty | Path to the hash-verified fold-168 CIF input. |
 | `RHBM_GEM_FOLD_168_MAP` | empty | Path to the hash-verified fold-168 map input. |
