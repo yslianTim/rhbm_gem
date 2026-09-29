@@ -1,4 +1,4 @@
-"""Prevent historical runner-to-runner dependencies from returning."""
+"""Prevent active experiment runners from depending on one another."""
 import ast
 from pathlib import Path
 import unittest
@@ -10,17 +10,10 @@ RUNNERS = {
     'endpoint_refinement',
     'failed_only_refinement',
     'fold_168_regression',
-    'joint_bounded_validation',
-    'joint_compact_validation',
     'joint_component_audit',
     'joint_component_runtime',
-    'joint_fixed_validation',
-    'joint_operator_validation',
+    'joint_benchmark',
     'joint_partial_selection',
-    'joint_postprocessing_benchmark',
-    'joint_reference_validation',
-    'joint_search_validation',
-    'joint_sparse_validation',
     'joint_validation',
     'joint_validation_profile',
     'joint_validation_report',

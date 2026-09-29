@@ -1,5 +1,9 @@
 # Joint compact SVD
 
+> Current measurements use [`joint-benchmark.md`](joint-benchmark.md). The
+> source-pinned campaign protocol later in this document is historical; its
+> runner was retired and remains available through Git history.
+
 Derivative preparation checks the column-normalized free design with a
 singular-values-only decomposition. Projection coefficients and the full
 nonzero-residual correction still use the existing QR and triangular solves.
@@ -70,6 +74,20 @@ runner tests, repository guards and a testing-disabled build before timing.
 Build `tests_all` and `rhbm_gem_cli` in both candidate directories, and explicitly
 build `joint_validation` in the SPQR candidate directory for input generation.
 
+Current fixed-state measurements use the unified profile in each backend build:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case baseline:first-stage-double \
+  --build-dir build/joint-compact-eigen --output build/compact-eigen.json
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case baseline:first-stage-double \
+  --build-dir build/joint-compact-spqr --output build/compact-spqr.json
+```
+
+The historical campaign used this retired invocation; it is retained here to
+identify the old workflow, not as a current command:
+
 ```sh
 python3 tests/integration/joint_compact_validation.py \
   --baseline-spqr build/joint-sparse-spqr \
@@ -77,6 +95,8 @@ python3 tests/integration/joint_compact_validation.py \
   --spqr build/joint-compact-spqr --eigen build/joint-compact-eigen \
   --work-dir build/joint-compact-measurements
 ```
+
+### Historical campaign protocol
 
 The runner generates shared 128/512 inputs and serialized production widths,
 and unpacks the frozen heterogeneous-168 fixture. It compares three fresh

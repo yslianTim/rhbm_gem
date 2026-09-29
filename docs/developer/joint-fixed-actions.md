@@ -1,5 +1,9 @@
 # Fixed-state factor and normal actions
 
+> Current fixed-state measurements use [`joint-benchmark.md`](joint-benchmark.md).
+> The source-pinned A/B/C campaign protocol later in this document is historical;
+> the numerical action and factor-reuse contracts remain in permanent C++ tests.
+
 This increment keeps `SearchMethod::LegacyCompact` as the production default.
 It changes the internal operator path, not the model, active-set A/C solver,
 independent reference, trust-region policy, or uncertainty calculation.
@@ -73,11 +77,20 @@ into that tree and add `PR4_BASELINE_DRIVER` to the benchmark target definitions
 Build `joint_sparse_benchmark` for both backends and `joint_validation` for Eigen.
 The runner verifies the frozen instrumented source hash and identical wrappers.
 
-Run `tests/integration/joint_fixed_validation.py` with `--work-dir`,
-`--input-dir`, `--baseline-eigen`, `--baseline-spqr`, `--eigen`, and `--spqr`.
-Input files may reuse frozen PR0/PR1 inputs; their hashes are saved. A new
-campaign directory is mandatory. `--compare --work-dir ...` only regenerates
-comparison output, never executions. The original PR0-PR3 receipts are untouched.
+Current fixed-action timing is available through the unified profile:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case chain-8 --fixed-action normal \
+  --preconditioner schwarz --build-dir build/joint-eigen \
+  --output build/fixed-normal-schwarz.json
+```
+
+The historical runner's EIGEN/SPQR A/B/C paired campaign and receipt comparison
+remain documented below as archived evidence; they require the retired source
+from Git history.
+
+### Historical A/B/C campaign protocol
 
 The dedicated benchmark modes are `--fixed freeze|composed|normal` and
 `--state FILE`, with the existing initial/fixture/synthetic-fixed input forms.

@@ -242,6 +242,10 @@ foreach(_property IN ITEMS
     endif()
 endforeach()
 target_link_libraries(rhbm_gem_test PUBLIC rhbm_gem_dependencies PRIVATE CompilerFlags)
+if(RHBM_GEM_ENABLE_UMAP)
+    target_link_libraries(rhbm_gem_test PRIVATE "$<BUILD_INTERFACE:libscran::umappp>")
+    target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_ENABLE_UMAP)
+endif()
 if(RHBM_GEM_JOINT_SPARSE_BACKEND STREQUAL "SPQR")
     find_package(SPQR 4 CONFIG REQUIRED)
     target_link_libraries(rhbm_gem_test PRIVATE SuiteSparse::SPQR SuiteSparse::CHOLMOD)
@@ -438,9 +442,11 @@ endif()
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME experiment_support_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/experiment_support_test.py")
-    add_test(NAME historical_runner_dependency_test
+    add_test(NAME experiment_runner_dependency_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
-    set_tests_properties(experiment_support_test historical_runner_dependency_test
+    add_test(NAME joint_benchmark_contract_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
+    set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
@@ -457,38 +463,11 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:runtime")
 
     if(RHBM_GEM_BUILD_BENCHMARKS)
-        add_test(NAME joint_bounded_validation_runner_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_bounded_validation_test.py")
-        add_test(NAME joint_fixed_validation_runner_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_validation_test.py")
-        add_test(NAME joint_search_validation_runner_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_search_validation_test.py")
-        set_tests_properties(joint_bounded_validation_runner_test joint_fixed_validation_runner_test
-            joint_search_validation_runner_test
-            PROPERTIES LABELS "benchmark;historical;domain:integration;intent:algorithm")
-    endif()
-
-    if(TARGET joint_sparse_benchmark)
-        add_test(NAME joint_sparse_benchmark_smoke
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_bounded_validation_test.py"
-                DiagnosticDriver.test_real_fixed_timer_and_rank_modes)
-        set(joint_sparse_smoke_labels "domain:integration;intent:algorithm")
-        if(RHBM_GEM_BUILD_BENCHMARKS)
-            list(APPEND joint_sparse_smoke_labels "benchmark")
-        endif()
-        if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-            list(APPEND joint_sparse_smoke_labels "research")
-        endif()
-        set_tests_properties(joint_sparse_benchmark_smoke PROPERTIES
-            LABELS "${joint_sparse_smoke_labels}"
-            ENVIRONMENT "JOINT_BOUNDED_TEST_EXECUTABLE=$<TARGET_FILE:joint_sparse_benchmark>;JOINT_BOUNDED_TEST_BACKEND=${RHBM_GEM_JOINT_SPARSE_BACKEND}")
-    endif()
-
-    if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-        add_test(NAME joint_operator_validation_runner_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_operator_validation_test.py")
-        set_tests_properties(joint_operator_validation_runner_test PROPERTIES
-            LABELS "research;historical;domain:integration;intent:algorithm")
+        add_test(NAME joint_benchmark_smoke
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py"
+                --smoke "${PROJECT_BINARY_DIR}")
+        set_tests_properties(joint_benchmark_smoke PROPERTIES
+            LABELS "benchmark;domain:integration;intent:benchmark;joint:benchmark")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS OR RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)

@@ -50,27 +50,6 @@
       "sha256": "eb29866fb7b2315919699cef163ed37d91d1837af668ecb7da3550f305f62f41",
       "manifest": "docs/developer/figures/joint-fixed-actions/manifest.json",
       "manifest_hash_matches": true
-    },
-    {
-      "path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz",
-      "bytes": 561917,
-      "sha256": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4",
-      "manifest": "docs/developer/figures/joint-sparse-acceptance/verification.json",
-      "manifest_hash_matches": true
-    },
-    {
-      "path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz",
-      "bytes": 1506981,
-      "sha256": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626",
-      "manifest": "docs/developer/figures/joint-sparse-acceptance/verification.json",
-      "manifest_hash_matches": true
-    },
-    {
-      "path": "docs/developer/figures/joint-operator-search/receipts.tar.gz",
-      "bytes": 13985678,
-      "sha256": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f",
-      "manifest": "docs/developer/figures/joint-operator-search/manifest.json",
-      "manifest_hash_matches": true
     }
   ],
   "missing_current_tree": [
@@ -88,6 +67,36 @@
       "directory_specified": false,
       "bytes": null,
       "sha256": null,
+      "status": "missing"
+    },
+    {
+      "reported_reference": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz",
+      "documented_by": "docs/developer/figures/joint-sparse-acceptance/verification.json",
+      "directory_specified": true,
+      "bytes": null,
+      "sha256": null,
+      "previously_recorded_bytes": 561917,
+      "previously_recorded_sha256": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4",
+      "status": "missing"
+    },
+    {
+      "reported_reference": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz",
+      "documented_by": "docs/developer/figures/joint-sparse-acceptance/verification.json",
+      "directory_specified": true,
+      "bytes": null,
+      "sha256": null,
+      "previously_recorded_bytes": 1506981,
+      "previously_recorded_sha256": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626",
+      "status": "missing"
+    },
+    {
+      "reported_reference": "docs/developer/figures/joint-operator-search/receipts.tar.gz",
+      "documented_by": "docs/developer/figures/joint-operator-search/manifest.json",
+      "directory_specified": true,
+      "bytes": null,
+      "sha256": null,
+      "previously_recorded_bytes": 13985678,
+      "previously_recorded_sha256": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f",
       "status": "missing"
     }
   ],
@@ -110,10 +119,41 @@
     "External inputs listed above; they were not present in the configured run and were not hashed."
   ],
   "notes": [
-    "The three sparse/operator archive paths described as missing in older text are present at this HEAD and match their recorded SHA-256 values.",
+    "Seven checked archives are present and match their recorded SHA-256 values. Three sparse/operator archive paths previously recorded as checked are absent at the PR 4 starting checkout; their expected byte counts and SHA-256 values remain in the source verification manifests, but those hashes could not be rechecked here.",
     "No missing artifact was recreated. The two older report references do not specify a containing directory; neither name exists in the current figures tree or the checked historical tree. The search-records-a archive is retrievable from its recorded historical Git commit; its size and hash match the retired-artifact inventory, but it is not present at this HEAD.",
     "This manifest intentionally records only the requested high-value archives and documented missing files, not every file under docs/developer/figures."
   ],
+  "retirement_update": {
+    "based_on_start_commit": "e5a9e7922f063743df71b6e2561ee3c43c781ff5",
+    "active_tool_dependencies_removed": true,
+    "historical_evidence_retained": true,
+    "archives": [
+      {"path": "docs/developer/figures/joint-reference-acceptance/historical-inputs.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-reference-acceptance/historical-audits.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-reference-acceptance/historical-results.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-inputs.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-audits.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-results.tar.gz", "active_dependency": false, "historical_evidence": true},
+      {"path": "docs/developer/figures/joint-fixed-actions/receipts.tar.xz", "active_dependency": false, "historical_evidence": true}
+    ],
+    "missing_archives": [
+      {"path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4"},
+      {"path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626"},
+      {"path": "docs/developer/figures/joint-operator-search/receipts.tar.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f"}
+    ],
+    "retired_campaigns": [
+      {"runner": "joint_sparse_validation.py", "profiles": ["fixed", "solve", "rank"], "evidence": ["docs/developer/figures/joint-sparse-acceptance/numerical-comparison.json", "docs/developer/figures/joint-sparse-acceptance/verification.json"]},
+      {"runner": "joint_compact_validation.py", "profiles": ["fixed", "rank"], "evidence": ["docs/developer/figures/joint-compact-acceptance/", "docs/developer/figures/joint-reference-acceptance/"]},
+      {"runner": "joint_reference_validation.py", "profiles": ["solve", "workflow", "command"], "evidence": ["docs/developer/figures/joint-reference-acceptance/"]},
+      {"runner": "joint_operator_validation.py", "profiles": ["prepare", "fixed"], "evidence": ["docs/developer/figures/joint-operator-search/manifest.json"]},
+      {"runner": "joint_search_validation.py", "profiles": ["solve"], "evidence": ["docs/developer/figures/joint-operator-search/manifest.json"]},
+      {"runner": "joint_fixed_validation.py", "profiles": ["fixed"], "evidence": ["docs/developer/figures/joint-fixed-actions/"]},
+      {"runner": "joint_bounded_validation.py", "profiles": ["rank", "solve"], "evidence": ["docs/developer/joint-bounded-search-rank-validation.md"]},
+      {"runner": "joint_postprocessing_benchmark.py", "profiles": ["workflow", "postprocess"], "evidence": ["docs/developer/joint-analysis-consolidation.md"]}
+    ],
+    "preexisting_unlocated_references": ["scientific-records.tar.gz", "frozen-diagnostics/frozen-endpoint-records.tar.gz"],
+    "newly_verified_missing_archives": 3
+  },
   "fixture_inventory": {
     "files": [
       {

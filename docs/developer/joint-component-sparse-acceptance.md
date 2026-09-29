@@ -109,10 +109,10 @@ are retained in every state record. The complete commands run the production
 initializer directly. The original measurement receipt also retains its raw
 objective comparison; the final audit separately checks normalized objectives.
 
-- [All measurement samples and configuration fingerprints](figures/joint-sparse-acceptance/measurements.json.gz)
+- Historical `measurements.json.gz` archive is absent from this checkout; its previously recorded hash remains in [verification.json](figures/joint-sparse-acceptance/verification.json).
 - [All cross-sample numerical comparisons](figures/joint-sparse-acceptance/numerical-comparison.json)
 - [Build, test and installation receipt](figures/joint-sparse-acceptance/verification.json)
-- [Complete-command JSON/CSV exports and process logs](figures/joint-sparse-acceptance/command-exports.tar.gz)
+- Historical `command-exports.tar.gz` archive is absent from this checkout; its previously recorded hash remains in [verification.json](figures/joint-sparse-acceptance/verification.json).
 - [Eigen CTests](figures/joint-sparse-acceptance/eigen-tests.txt) and [SPQR CTests](figures/joint-sparse-acceptance/spqr-final-tests.txt)
 - [Benchmark source used for timing](figures/joint-sparse-acceptance/benchmark-source.cpp.txt) and [measurement runner source](figures/joint-sparse-acceptance/runner-source.py.txt)
 

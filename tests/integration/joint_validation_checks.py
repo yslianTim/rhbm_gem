@@ -162,13 +162,3 @@ def fixed_action_parity(a,b,kinds=('identity','diagonal','schwarz')):
         if not finite(x.get('predicted')) or not finite(y.get('predicted')) or abs(x['predicted']-y['predicted'])>1e-12: failures.append(kind+'/predicted')
         if any(not finite(r.get('true_residual')) or r['true_residual']>1e-10 for r in (x,y)): failures.append(kind+'/true-residual')
     return dict(passed=not failures,differences=failures)
-
-
-
-def overlap_eligible(report):
-    metadata=report.get('partition')
-    if not isinstance(metadata,dict): return None
-    blocks,memberships=metadata.get('blocks'),metadata.get('atom_memberships')
-    if type(blocks) is not int or not isinstance(memberships,list) or not memberships: return None
-    if any(type(x) is not int or not 1<=x<=blocks for x in memberships): return None
-    return blocks>=2 and max(memberships)>1

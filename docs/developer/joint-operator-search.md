@@ -1,5 +1,10 @@
 # Operator Guarded LM and overlapping Schwarz (PR2 / PR3)
 
+> Current solve measurements use [`joint-benchmark.md`](joint-benchmark.md).
+> The source-pinned promotion protocol later in this document is historical;
+> its runner is available only through Git history. Permanent search contracts
+> remain in `Search_test.cpp` and `OperatorSearch_test.cpp`.
+
 Production still defaults to `SearchMethod::LegacyCompact`. Operator search is
 available through the internal `EvaluationContext::search` and
 `FitWithSearchPolicy`; no installed API or serialized schema was extended.
@@ -112,14 +117,19 @@ measurement wrapper against pristine numerical code. Baseline mode only accepts
 legacy search; its production source hash is verified against git archive.
 Driver, generator and runner hashes are separately retained.
 
-Use `tests/integration/joint_search_validation.py` with a shared `--work-dir`
-and `--input-dir`. Run stages baseline (pristine --eigen/--spqr build directories),
-eigen and spqr (candidate build directories), large-local (candidate), then
-compare. The first four invocations are the four campaigns; each receipt refuses
-replacement. Baseline generates missing single-128/512 inputs with the unchanged
-existing generator and initializer; fixtures are unpacked with catalogue hashes.
-Optional --model/--map select the 6Z6U control. Reusing prior frozen inputs is
-permitted, but baseline/candidate input fingerprints must match exactly.
+Current bounded solve measurements use an explicit preconditioner profile:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile solve --case chain-8 --preconditioner schwarz \
+  --build-dir build/joint-eigen --output build/search-schwarz.json
+```
+
+The retired runner's baseline/eigen/spqr/large-local campaign schedule and
+promotion comparisons are historical. Reproduce them from the pinned source
+commit and archived inputs; current benchmark output does not apply those gates.
+
+### Historical resource-campaign semantics
 
 All measurements use one numerical thread, a 600-second pipeline limit, 4 GiB
 sampled process-tree RSS, and an 80-minute campaign deadline. Sampling may

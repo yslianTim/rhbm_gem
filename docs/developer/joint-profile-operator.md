@@ -1,5 +1,10 @@
 # Fixed-state profile operator and PR0 resource campaign
 
+> Current measurements use [`joint-benchmark.md`](joint-benchmark.md). The
+> source-pinned campaign protocol later in this document is historical;
+> permanent Jv, Jᵀw, adjoint, normal-action, and dense-parity checks remain in
+> `ProfileOperator_test.cpp`.
+
 This increment adds an internal operator and PR3 contracts. Production search
 still uses `PrepareDerivative` / `ReduceDerivative` and the existing Guarded LM.
 Public results, active-set decisions, reference independence, endpoint checks,
@@ -77,14 +82,22 @@ separately for EIGEN and SPQR, Release, `BUILD_TESTING=ON`,
 `rhbm_gem_cli`, `joint_component_runtime`, `joint_sparse_benchmark`, and
 `joint_validation`. Runtime ROOT/UMAP are unnecessary; use identical settings.
 
-Run `tests/integration/joint_operator_validation.py` with `--stage baseline`,
-then `candidate`, then `large`, finally `compare`. Each invocation takes
-`--work-dir` and (except compare) `--eigen` / `--spqr` build directories.
-It refuses to overwrite the stage receipt. Optional `--model` and `--map`
-select the real-data control. Receipts contain source/binary/input fingerprints,
-configuration and linked libraries, single-worker environment, commands,
-process-tree samples, OS peak RSS and numerical statuses. Run campaigns without
-concurrent builds or unrelated numerical jobs when comparing elapsed times.
+Current measurement entry points:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile prepare --case chain-8 --build-dir build/joint-eigen \
+  --output build/operator-prepare.json
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case chain-8 --build-dir build/joint-eigen \
+  --output build/operator-fixed.json
+```
+
+The old `joint_operator_validation.py` baseline/candidate/large comparison
+workflow is historical and requires its source from Git history. Historical
+receipts contain the source and input fingerprints used for those measurements.
+
+### Historical resource-campaign semantics
 
 Each campaign is capped at 4800 seconds; each subprocess at 600 seconds and
 4 GiB sampled tree RSS. These are watchdog limits, not hard OS allocation limits;

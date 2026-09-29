@@ -1,5 +1,9 @@
 # Endpoint-reference acceptance evidence
 
+> Historical artifact bundle. Its campaign runner was retired; current solve
+> measurements use [`../../joint-benchmark.md`](../../joint-benchmark.md), and
+> reference certification remains owned by the permanent offline tests.
+
 [Acceptance report](../../joint-component-reference-acceptance.md) ·
 [Summary](summary.json) · [Verification](verification.json) ·
 [Archive hashes and contents](archives.json) · [Campaign log](campaign.txt)
@@ -23,7 +27,16 @@ fresh directory. This retains complete data without relying on ignored local
 build directories. Historical binaries are represented by their recorded hashes
 and source/configuration proofs; current binaries are not substitutes for them.
 
-Run from the repository root with Python and NumPy available:
+Current search measurements use the unified solve profile, for example:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile solve --case baseline:first-stage-double \
+  --build-dir build/joint-reference-spqr --output build/reference-solve.json
+```
+
+Historical archive reaggregation requires the retired source from Git history
+(last changed at `7f84f931215f7b5a52948f7ecdbfc15fad79d7c5`) plus Python and NumPy:
 
 ```sh
 python3 - <<'PY'

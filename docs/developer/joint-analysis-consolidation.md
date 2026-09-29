@@ -1,5 +1,9 @@
 # Joint analysis consolidation acceptance
 
+> Historical postprocessing measurements. Current workflow and postprocessing
+> runs use [`joint-benchmark.md`](joint-benchmark.md); the Python campaign
+> wrapper named below has been retired.
+
 Baseline: `c5619e0c` on `develop`. Changes are committed in S1–S5 order,
 with each stage validated before the next one begins.
 
@@ -68,13 +72,14 @@ contributor. Only target own-contribution maps and requested marginal covariance
 blocks are materialized. Uncertainty reuses the immutable problem partition and
 indexes support memberships by tile in the original atom/support order.
 
-The opt-in `joint_postprocessing_benchmark` target and
-`tests/integration/joint_postprocessing_benchmark.py` measure three independent
-serial processes per full/halo/multi-component case, separately for complete
-workflow+save and fixed-endpoint postprocessing+save. Synthetic maps use 0.16 A
-spacing so component Jacobians span multiple 8192-row tiles. Process peak RSS
-includes fixture construction; phase times exclude it. These bounded fixtures do
-not establish a maximum supported problem size or general speedup guarantee.
+The opt-in `joint_postprocessing_benchmark` target historically measured three
+independent serial processes per full/halo/multi-component case, separately for
+complete workflow+save and fixed-endpoint postprocessing+save. Current runs use
+`joint_benchmark.py --profile workflow|postprocess` with those same case names.
+Synthetic maps use 0.16 A spacing so component Jacobians span multiple 8192-row
+tiles. Process peak RSS includes fixture construction; named phase times exclude
+it. These bounded fixtures do not establish a maximum supported problem size or
+general speedup guarantee.
 
 Measured medians (seconds, MiB; baseline S2 versus S3 on the same host):
 

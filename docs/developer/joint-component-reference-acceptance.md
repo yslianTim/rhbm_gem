@@ -1,5 +1,10 @@
 # Endpoint-reference incremental acceptance
 
+> Historical acceptance record. `joint_reference_validation.py` was retired;
+> its campaign can be reproduced only from the recorded historical source.
+> Current search measurements use [`joint-benchmark.md`](joint-benchmark.md),
+> while independent certification remains in the offline reference tests.
+
 This experiment compares `e32919f3` (compact SVD with reference checks during
 search) against `c9e0f8c9` (search replay with endpoint reference certification).
 It does not change production algorithms, rank policies or convergence gates.
@@ -20,6 +25,16 @@ build files are not substituted for them. The retained historical source is
 `f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755`;
 the new candidate is
 `62d178d17643a4a8195aceac17a5e4ced5af59cfb79a7e288f87bdd5d82c2de1`.
+
+Current search measurements use the solve profile, for example:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile solve --case baseline:first-stage-double \
+  --build-dir build/joint-reference-spqr --output build/reference-solve.json
+```
+
+The original campaign command is preserved as historical documentation only:
 
 ```sh
 python3 tests/integration/joint_reference_validation.py \
@@ -65,10 +80,8 @@ The receipt contains a hash manifest of the historical and new evidence.
 Reaggregation works after relocation and needs neither the original binaries
 nor Git:
 
-```sh
-python3 tests/integration/joint_reference_validation.py \
-  --work-dir /path/to/extracted/evidence --report-only
-```
+Historical report-only reaggregation also requires the retired runner from Git
+history; current benchmark JSON is reported directly by `joint_benchmark.py`.
 
 ## Results
 

@@ -124,5 +124,68 @@ class ValidationPrimitiveTest(unittest.TestCase):
         self.assertFalse(checks.vector_close([1.0], [1.0, 2.0]))
 
 
+class JointComparisonTest(unittest.TestCase):
+    @staticmethod
+    def endpoint():
+        return dict(valid=True, reason='qualified-inner', feasible=True, free_rank=2,
+                    kkt_passed=True, active_atoms=[], beta=[2., .2], objective=.1,
+                    relative_residual=.2, b_gradient=[1e-13])
+
+    @staticmethod
+    def fixed_action():
+        return dict(valid=True, reason='full-profile-operator', mode='normal', normal_q_actions=2,
+                    state_control=dict(eta=[.2], beta=[1., .1], free_columns=[0, 1], scale=2.,
+                                       rank_rows=10, residual=[.1, .2], gradient=[.03], objective=.025),
+                    rank=[dict(valid=True, rank=2, rows=2, columns=2, relative_threshold=1e-12,
+                               absolute_override=-1, threshold=1e-12, singular_values=[1., .5])],
+                    apply=[.1, .2], adjoint=[.3], normal=[.4], operator_gradient=[.03],
+                    work=dict(reference_solves=0, derivative_preparations=0),
+                    steps=[dict(kind='schwarz', valid=True, step=[.2], predicted=.001,
+                                true_residual=1e-11)])
+
+    @staticmethod
+    def search_result():
+        return dict(stage='complete', search_completed=True, search=dict(residual_scale=2),
+                    returned_assessment=dict(runtime_convergence='passed', runtime_failure='none',
+                        runtime_checks=dict(inner=True), design_spectrum=dict(rank=2),
+                        width_spectrum=dict(rank=1), profile_jacobian_spectrum=dict(rank=1)),
+                    returned_state=dict(objective=.04, beta=[2., .2], b=[.5], active_atoms=[]))
+
+    def test_sparse_and_compact_parity_keep_rank_spectrum_and_unavailability(self):
+        endpoint = self.endpoint()
+        row = dict(primary=endpoint, reference=endpoint)
+        self.assertTrue(all(check['passed'] for check in checks.sparse_parity(row, row).values()))
+        changed = dict(primary={**endpoint, 'free_rank': 1}, reference=endpoint)
+        self.assertFalse(checks.sparse_parity(row, changed)['primary']['passed'])
+        spectrum = dict(valid=True, rank=2, threshold=1e-9,
+                        singular_values=[1., 2e-9], solution=[1., 2.])
+        self.assertTrue(checks.svd_parity(spectrum, spectrum)['passed'])
+        self.assertFalse(checks.svd_parity(spectrum, {**spectrum, 'rank': 1})['passed'])
+        self.assertFalse(checks.svd_parity(spectrum, {**spectrum, 'threshold': 1e-8})['passed'])
+
+    def test_audit_comparison_requires_trust_and_complete_derivative(self):
+        endpoint = self.endpoint()
+        spectrum = dict(valid=True, rank=2, threshold=1e-9, singular_values=[1., .5], solution=[])
+        derivative = dict(valid=True, **{name: [1., 2.] for name in
+                           ('coefficients', 'correction', 'projected', 'jacobian', 'response')})
+        report = dict(primary=endpoint, reference=endpoint, trust=dict(passed=True), initial_b=[.5],
+                      derivative_audit=derivative, derivative_reason='full-profile-derivative',
+                      svd_records=[spectrum])
+        self.assertTrue(checks.audit_parity(report, report)['passed'])
+        self.assertFalse(checks.audit_parity(report, {**report, 'trust': dict(passed=False)})['passed'])
+        broken = {**report, 'derivative_audit': {**derivative, 'correction': []}}
+        self.assertFalse(checks.audit_parity(report, broken)['passed'])
+
+    def test_search_and_fixed_action_comparison_reject_changed_state_or_extra_work(self):
+        search = self.search_result()
+        self.assertTrue(checks.scientific_parity(search, search)['passed'])
+        changed = {**search, 'returned_state': {**search['returned_state'], 'beta': [2., .21]}}
+        self.assertFalse(checks.scientific_parity(search, changed)['passed'])
+        fixed = self.fixed_action()
+        self.assertTrue(checks.fixed_action_parity(fixed, fixed, ('schwarz',))['passed'])
+        changed_fixed = {**fixed, 'work': {'reference_solves': 1, 'derivative_preparations': 0}}
+        self.assertFalse(checks.fixed_action_parity(fixed, changed_fixed, ('schwarz',))['passed'])
+
+
 if __name__ == '__main__':
     unittest.main()

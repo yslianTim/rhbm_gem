@@ -108,11 +108,10 @@ those sizes or global search capability is claimed.
 | 2k / 5k / 10k | Large-local campaign not run at user request; global search remains outside this batch's scope. |
 | 6Z6U | Not run in this batch; earlier resource termination is not a numerical pass. |
 
-The [audit archive](figures/joint-operator-search/receipts.tar.gz) preserves raw
-campaign receipts, process logs, frozen source patches, environment fingerprints,
-test logs and a separate cancellation receipt. Original partial campaign files
-are preserved without marking them complete. The adjacent
-[archive manifest](figures/joint-operator-search/manifest.json) records its SHA-256.
+The historical `receipts.tar.gz` archive is absent from this checkout. Its
+previously recorded size and hash remain in the adjacent
+[archive manifest](figures/joint-operator-search/manifest.json); the raw archive
+contents are not available here.
 
 The inherited `factor_nonzeros_upper_bound` probe describes R fill, not complete
 Q/Householder storage. Exact global factor bytes are unavailable from that

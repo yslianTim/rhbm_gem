@@ -1,5 +1,9 @@
 # Joint sparse factorization backends
 
+> Current benchmark entry point: [`joint-benchmark.md`](joint-benchmark.md).
+> `joint_sparse_validation.py` was retired; the source-pinned campaign protocol
+> in this document is historical and can be reproduced from Git history.
+
 `RHBM_GEM_JOINT_SPARSE_BACKEND` selects the linear algebra implementation at
 configure time. `EIGEN` is the default and needs no SuiteSparse installation.
 `SPQR` requires an installed SPQR 4.x CMake package, CHOLMOD and their transitive
@@ -88,11 +92,19 @@ the library's reported upper bound on `nnz(R)`, not a measured byte allocation.
 Phase wall times include their nested counters and must not be added to them.
 
 ```sh
-python3 tests/integration/joint_sparse_validation.py \
-  --baseline build/joint-sparse-baseline \
-  --candidate build/joint-sparse-spqr \
-  --work-dir build/joint-sparse-measurements
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case chain-8 --build-dir build/joint-sparse-eigen \
+  --output build/joint-sparse-eigen-fixed.json
+python3 tests/integration/joint_benchmark.py \
+  --profile fixed --case chain-8 --build-dir build/joint-sparse-spqr \
+  --output build/joint-sparse-spqr-fixed.json
 ```
+
+These commands measure the same fixed-state profile in separate EIGEN and SPQR
+builds. Historical paired acceptance gates and campaign comparisons remain in
+the linked acceptance evidence; they are not part of the current benchmark.
+
+### Historical campaign protocol
 
 The baseline driver is compiled from the same benchmark source with
 `SPARSE_BASELINE_DRIVER` against the frozen baseline library/test support. That
