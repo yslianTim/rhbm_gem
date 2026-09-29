@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "source_commit": "875f7aeaa3177ba0bde8227ddec27372a497639c",
+  "checked_archives": [
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/historical-inputs.tar.gz",
+      "bytes": 10493974,
+      "sha256": "33dbafe83bc6727138f56edb7dba7590737a370cb56c80215861b62b07436689",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/historical-audits.tar.gz",
+      "bytes": 98380219,
+      "sha256": "172b309da56c6d88664253e6f3d2a11bc9d3490bbf691b6ef0900c2086fb778f",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/historical-results.tar.gz",
+      "bytes": 12281158,
+      "sha256": "398118a2eeca2fc0001daf04371b999a10896a13182bdd5667267265e499bd16",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/incremental-inputs.tar.gz",
+      "bytes": 10493883,
+      "sha256": "e19d80da2d82055b4fad8dcf4080cb75c3d4936ec6bf26d30bed8975598e4cff",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/incremental-audits.tar.gz",
+      "bytes": 89237357,
+      "sha256": "dceb54598c51f8f4ce0f79f77e74159789f3d2076b8c4918c6ff23c2e2f40081",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-reference-acceptance/incremental-results.tar.gz",
+      "bytes": 15930939,
+      "sha256": "7cdff3ce4537b37b58d24641dfa2341854c2bc4fc1a40efb14a8bde7ab54d471",
+      "manifest": "docs/developer/figures/joint-reference-acceptance/archives.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-fixed-actions/receipts.tar.xz",
+      "bytes": 15987804,
+      "sha256": "eb29866fb7b2315919699cef163ed37d91d1837af668ecb7da3550f305f62f41",
+      "manifest": "docs/developer/figures/joint-fixed-actions/manifest.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz",
+      "bytes": 561917,
+      "sha256": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4",
+      "manifest": "docs/developer/figures/joint-sparse-acceptance/verification.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz",
+      "bytes": 1506981,
+      "sha256": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626",
+      "manifest": "docs/developer/figures/joint-sparse-acceptance/verification.json",
+      "manifest_hash_matches": true
+    },
+    {
+      "path": "docs/developer/figures/joint-operator-search/receipts.tar.gz",
+      "bytes": 13985678,
+      "sha256": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f",
+      "manifest": "docs/developer/figures/joint-operator-search/manifest.json",
+      "manifest_hash_matches": true
+    }
+  ],
+  "missing_current_tree": [
+    {
+      "reported_reference": "scientific-records.tar.gz",
+      "documented_by": "docs/developer/joint-component-evidence.md",
+      "directory_specified": false,
+      "bytes": null,
+      "sha256": null,
+      "status": "missing"
+    },
+    {
+      "reported_reference": "frozen-diagnostics/frozen-endpoint-records.tar.gz",
+      "documented_by": "docs/developer/joint-component-evidence.md",
+      "directory_specified": false,
+      "bytes": null,
+      "sha256": null,
+      "status": "missing"
+    }
+  ],
+  "historical_only_archives": [
+    {
+      "path": "docs/developer/figures/joint-abc-components/search-records-a.tar.gz",
+      "bytes": 75047955,
+      "sha256": "08fc5798f9cd5683653621beb88bf20ff44d8d1d6a9e763057d86d993b310cd1",
+      "source_commit": "ba2449faf1e1b163f1b4209c3ef386ff6516de43",
+      "status": "absent from current tree; present in historical Git tree; hash matches retired-artifact inventory"
+    }
+  ],
+  "external_inputs": [
+    "fold-168 CIF, map, and simulation sidecar manifest",
+    "large historical solver captures supplied to endpoint and failed-only refinement runs",
+    "full command model/map/manifest used by Joint validation Stage C"
+  ],
+  "not_verified": [
+    "Historical figure files and archives not named in checked_archives or fixture_inventory; no full-directory hash sweep was performed.",
+    "External inputs listed above; they were not present in the configured run and were not hashed."
+  ],
+  "notes": [
+    "The three sparse/operator archive paths described as missing in older text are present at this HEAD and match their recorded SHA-256 values.",
+    "No missing artifact was recreated. The two older report references do not specify a containing directory; neither name exists in the current figures tree or the checked historical tree. The search-records-a archive is retrievable from its recorded historical Git commit; its size and hash match the retired-artifact inventory, but it is not present at this HEAD.",
+    "This manifest intentionally records only the requested high-value archives and documented missing files, not every file under docs/developer/figures."
+  ],
+  "fixture_inventory": {
+    "files": [
+      {
+        "path": "tests/fixtures/joint_component/README.md",
+        "bytes": 4430,
+        "sha256": "fd224c1173fc4027fe08d0cfddbbf193116442ed469484847b2145caf9fc9b0b"
+      },
+      {
+        "path": "tests/fixtures/joint_component/active-a.tar.gz",
+        "bytes": 428984,
+        "sha256": "75315b5e0c386f3d40ce99bb6f9305682368251c159a8ddfaf10e61db8228c65"
+      },
+      {
+        "path": "tests/fixtures/joint_component/baseline.tar.gz",
+        "bytes": 429549,
+        "sha256": "936a86ba9fc76b42756881bc45f35be6660302e5851166ba5455ff4091f15c01"
+      },
+      {
+        "path": "tests/fixtures/joint_component/catalog.json",
+        "bytes": 14341,
+        "sha256": "eb8a08c3f6f7583f01b9c7a9a757865e130ef3a72e9bb33d2fd4dec1954ee39a"
+      },
+      {
+        "path": "tests/fixtures/joint_component/duplicate.tar.gz",
+        "bytes": 418147,
+        "sha256": "366843b0506bc567ed4d768912fd336f00f52fee3f39e6d6ed2fa1aa7bdd13ce"
+      },
+      {
+        "path": "tests/fixtures/joint_component/heterogeneous-168.tar.gz",
+        "bytes": 10317750,
+        "sha256": "4c17ae3bc5f076f0444d3bfaef0bf7c1af244089016c804d49354b135731bfd2"
+      },
+      {
+        "path": "tests/fixtures/joint_component/near-0.02.tar.gz",
+        "bytes": 435341,
+        "sha256": "7705ce83f0d95a30b37b0ba8cb42c7b7ecea58095d9ac850851a53aed10d329b"
+      },
+      {
+        "path": "tests/fixtures/joint_component/near-0.10.tar.gz",
+        "bytes": 431796,
+        "sha256": "1d782360f194fccfeef801cc75594aed2c9b6a8fb064ff6030534efd5ba8a2af"
+      },
+      {
+        "path": "tests/fixtures/joint_component/simulation-contract.json",
+        "bytes": 3469,
+        "sha256": "6b594a409bc18d4b0778a7fcec298f28c9c04ab785873497fa42981c987c69b2"
+      },
+      {
+        "path": "tests/fixtures/joint_component/weak-1e-2.tar.gz",
+        "bytes": 429291,
+        "sha256": "910badcf108802a21d35fa55485d35f8cd83544ddff3812f9deb3808133cb5d0"
+      },
+      {
+        "path": "tests/fixtures/joint_component/weak-1e-4.tar.gz",
+        "bytes": 429726,
+        "sha256": "e4ca6d43baad004991c4a977c175e0d4fccc46d6827d0cdaa0f447ee8638e1e5"
+      },
+      {
+        "path": "tests/fixtures/joint_component/zero-signal.tar.gz",
+        "bytes": 424057,
+        "sha256": "8b14359b78106f27073a81cc23fee1909a41209b6c8261f2a5086cd1f7453e0b"
+      },
+      {
+        "path": "tests/fixtures/mdpde/README.md",
+        "bytes": 1016,
+        "sha256": "f4d9c3ab9b260839b4eb3960fe1135b19814fb7df8ad06e7ffb5615a49690319"
+      },
+      {
+        "path": "tests/fixtures/mdpde/index.json",
+        "bytes": 7164,
+        "sha256": "eec425790f15a529b9d46af53120f1e447fde3749cedd39ff1b29a40410b6b14"
+      },
+      {
+        "path": "tests/fixtures/mdpde/offset-irls-maximum-iterations.txt",
+        "bytes": 387170,
+        "sha256": "e462dfe470eb632b30b43751dc9b4f22df5fe92373b094026bb4850419ef8570"
+      },
+      {
+        "path": "tests/fixtures/mdpde/shape-maximum-iterations-final-32-33-99.txt",
+        "bytes": 4557,
+        "sha256": "6b7c8fe50b6732af22830f3b08799050967af347e41fe99355130a55b791eb25"
+      },
+      {
+        "path": "tests/fixtures/mdpde/shape-maximum-iterations-recovery-current-32-32-99.txt",
+        "bytes": 4565,
+        "sha256": "d5e5fe8cfbcce4367dd0cb11d1f2950d3fc7f8c68fc76d0591ad680b7db5646f"
+      },
+      {
+        "path": "tests/fixtures/mdpde/shape-maximum-iterations.txt",
+        "bytes": 4565,
+        "sha256": "60a3f6ec486b5f0ce16caaf817e90076d69643b900db0e7c4c9ff9dacd8d4e45"
+      },
+      {
+        "path": "tests/benchmarks/fold_168_simulation_baseline.json",
+        "bytes": 3374,
+        "sha256": "a8a36b18ae82adf35004b46b567958beb13a865e731d022d4701cc06e1e50175"
+      },
+      {
+        "path": "tests/support/JointPartialSelection.hpp",
+        "bytes": 2452,
+        "sha256": "cee697acc892c57d0073b23b4eb006b6695c967d2129e04bea1f62eba675b657"
+      }
+    ],
+    "count": 20,
+    "scope": [
+      "tests/fixtures/joint_component/",
+      "tests/fixtures/mdpde/",
+      "tests/benchmarks/fold_168_simulation_baseline.json",
+      "tests/support/JointPartialSelection.hpp"
+    ]
+  }
+}
