@@ -49,8 +49,8 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     constexpr int kValidColumnWidth = 5;
     constexpr int kNotConvergedColumnWidth = 13;
     constexpr int kUnavailableColumnWidth = 11;
-    constexpr int kMeanColumnWidth = 8;
-    constexpr int kStandardDeviationColumnWidth = 6;
+    constexpr int kMeanColumnWidth = 6;
+    constexpr int kStandardDeviationColumnWidth = 4;
     constexpr int kParameterColumnWidth = kMeanColumnWidth + 3 + kStandardDeviationColumnWidth;
     std::map<Spot, GaussianModelParameterSamples> spots;
     std::vector<const AtomObject *> population;
