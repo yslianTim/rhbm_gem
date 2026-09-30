@@ -1,7 +1,7 @@
 # Fixed-state factor and normal actions
 
 > Current fixed-state measurements use [`joint-benchmark.md`](joint-benchmark.md).
-> Historical acceptance results and provenance are indexed in
+> Historical results and provenance are indexed in
 > [joint-component-evidence.md](joint-component-evidence.md).
 
 `SearchMethod::LegacyCompact` remains the production default. Fixed-action

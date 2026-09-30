@@ -81,7 +81,7 @@ Low residual or a one-sided match does not establish regular parameter recovery.
 
 This section records the historical accounting contract. The 216 search
 outcomes and their timing/RSS interpretation describe the frozen experiment;
-they are not current production acceptance criteria. The [Joint evidence
+they are not current production validation criteria. The [Joint evidence
 guide](joint-component-evidence.md) summarizes the retained research results
 and provenance.
 

@@ -71,5 +71,5 @@ Permanent tests cover Joint-to-stage mapping, target and halo roles, unavailable
 states, target-only summaries and group inference, peeling coverage, and
 invalidation after endpoint or sample changes. The current test lane is
 documented in [tests/README.md](../../tests/README.md). Historical integration
-acceptance results and their boundaries are indexed in the
+results and their boundaries are indexed in the
 [canonical evidence document](joint-component-evidence.md).

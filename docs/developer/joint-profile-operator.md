@@ -128,6 +128,6 @@ Use the unified benchmark profiles for current measurements:
       --output build/operator-fixed.json
 
 These controls establish the operator and partition contracts. They do not
-establish 10,000-atom search, full-workflow scalability, or complete 6Z6U
-acceptance; those historical boundaries are summarized in the
+establish 10,000-atom search, full-workflow scalability, or a complete 6Z6U
+numerical outcome; those historical boundaries are summarized in the
 [evidence index](joint-component-evidence.md).

@@ -154,7 +154,7 @@ tests; solver failure replay remains in `SolverFailureCapture`.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.
 
-## Joint v1 acceptance
+## Joint validation workflow
 
 The production outcome codec accepts joint JSON schema 3 inside SQLite v17.
 Metadata tests cover actual normalization divisors, input/build fingerprints,
@@ -163,7 +163,7 @@ checks export after deleting their temporary model/map inputs. The installed
 consumer smoke target now executes the linked program and checks its exit status,
 including capture/export with unknown in-memory input provenance.
 
-Release acceptance runs all default CTests with Python bindings, then the existing
+Release validation runs all default CTests with Python bindings, then the existing
 `joint:extended|joint:offline` lane, plus a testing-disabled installation and
 consumer execution. A source copy without Git metadata must also build/install
 and run the consumer. Keep the frozen fixture packages and current parity
