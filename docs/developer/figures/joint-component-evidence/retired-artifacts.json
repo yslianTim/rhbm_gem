@@ -3991,6 +3991,78 @@
         "bytes": 7206,
         "sha256": "7004fab705bf5efd4362460a578e880d63b9dda1a048becc04d0d34e63e63f54",
         "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/numerical-comparison.json",
+        "bytes": 21163,
+        "sha256": "b1361c76d9192aa0dd6e6920b53b500eea0a250d18f9e9158ff1eb037082bc2d",
+        "status": "intentionally-retired",
+        "category": "sparse-acceptance-receipt",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/verification.json",
+        "bytes": 22646,
+        "sha256": "a76f080723c5cdbde09bcd4c44e2207f6d2c5a7fc62b3b9b83a1aa1092191713",
+        "status": "intentionally-retired",
+        "category": "sparse-acceptance-receipt",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/receipt.json",
+        "bytes": 2652,
+        "sha256": "08212e5d066eccd260a098438e3a581e00d5d37552349bd9d354e3f26a404b77",
+        "status": "intentionally-retired",
+        "category": "sparse-acceptance-receipt",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-operator-search/manifest.json",
+        "bytes": 404,
+        "sha256": "77dec19aca88ca1b83c129762455d94795fe14a6b3bbf85b5a5dab1733fbf832",
+        "status": "intentionally-retired",
+        "category": "operator-search-manifest",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-profile-operator/acceptance.md",
+        "bytes": 4366,
+        "sha256": "37dea11b5cfe08b3bfd92f4ff630c8dd3f7af54a3c5c6a5d2e32d4551cf6ffd6",
+        "status": "intentionally-retired",
+        "category": "profile-operator-acceptance",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/joint-component-partial-selection-acceptance.json",
+        "bytes": 120075,
+        "sha256": "7b217699aa251d3927493ac25eecb43c8b382980b20cc3041563bc7be28aafdd",
+        "status": "intentionally-retired",
+        "category": "partial-selection-acceptance",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/resources.json",
+        "bytes": 63292,
+        "sha256": "7c33f2c020c30e62dd0d1671e3d9be493e5ce81ded6bc1a8cabed2d98ceab96c",
+        "status": "intentionally-retired",
+        "category": "historical-resource-envelope",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/resource-preflight.json",
+        "bytes": 21216,
+        "sha256": "8e6278d78517c041a6413959bade235ef9f517e9b06140dc44bae4d6bc5ff1bb",
+        "status": "intentionally-retired",
+        "category": "historical-resource-envelope",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/diagnostic-profiles.json",
+        "bytes": 37936,
+        "sha256": "5f7ee7a8174d60cb2e096d47f3c64d9f1b500b7e37e524c0d785bf028ebd61de",
+        "status": "intentionally-retired",
+        "category": "historical-resource-envelope",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
       }
     ]
   }
