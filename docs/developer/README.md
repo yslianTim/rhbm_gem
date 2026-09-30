@@ -38,16 +38,13 @@ with project internals.
   and measurement semantics.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current research boundaries.
-- [Historical evidence](joint-component-evidence.md) summarizes retained
-  comparisons, counterexamples, fixture ownership, and artifact retrieval.
+- [Canonical historical evidence](joint-component-evidence.md) indexes
+  retired experiments, counterexamples, unproven boundaries, and artifact
+  retrieval.
 - [Certification contract](joint_abc_certification_contract.md),
-  [component contract](joint_abc_components_contract.md), and
-  [compact-SVD acceptance](joint-component-compact-svd-acceptance.md) retain
-  independent mathematical and numerical contracts.
-- [Endpoint-reference acceptance](joint-component-reference-acceptance.md)
-  preserves its distinct historical comparison results and provenance.
-- [Joint v1 acceptance](joint-component-v1-acceptance.md) records the
-  integration and metadata contract.
+  [component contract](joint_abc_components_contract.md), and the
+  [compact-SVD implementation contract](joint-component-compact-svd.md) own
+  the maintained mathematical and numerical rules.
 
 ## Testing and release
 
