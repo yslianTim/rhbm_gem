@@ -1,10 +1,24 @@
 # Joint observable-halo parameterization
 
-This work starts from `d634fa0d`. It addresses the structural obstruction in the
-[6Z6U initial-rank diagnosis](joint-initial-rank-diagnostic.md), without changing
-the observation domain, support geometry, contributor closure or component IDs.
+This parameterization preserves the observation domain, support geometry,
+contributor closure, and component identities.
 
-## Work packages 1–2: layout and profiled solve
+## Structural motivation
+
+The historical full-ABC 6Z6U formulation had 4,334 free A/C columns. Twenty
+singleton halo atoms each touched one selected voxel, so each atom's A and C
+columns were proportional. The resulting structural rank bound was 4,314;
+EIGEN, SPQR, multiple legal width starts, and an independent QR/SVD control
+reproduced it. This was a support/parameterization obstruction, not an
+initialization failure. The full evidence and scope are in the
+[canonical historical index](joint-component-evidence.md#41-historical-full-abc-6z6u-obstruction).
+
+Singleton-halo profiling removes that diagnosed A/C obstruction while retaining
+the same observations. It does not establish target-width identifiability or a
+complete 6Z6U solve, and it is not evidence that the full target estimation is
+converged.
+
+## Current parameterization contract
 
 `JointProblem::ParameterLayout()` is fixed before initialization. Only a recorded
 halo with exactly one original support row becomes contribution-only. Selected
@@ -38,7 +52,7 @@ arithmetic mean for even counts), when donors exist. Original reason and width
 are preserved alongside used width, source and donor count; fallback does not
 turn the original first-stage fit into a success or create new donors.
 
-## Work package 3: result consumers
+## Result-consumer semantics
 
 * Second-stage points exist only for FullABC. Reduced halos report
   `observable-contribution-only` with no point or covariance.
@@ -48,10 +62,11 @@ turn the original first-stage fit into a success or create new donors.
 * Uncertainty uses the FullABC Jacobian on informative rows. At an interior,
   full-rank endpoint its residual degrees of freedom are N-q-3p. Existing
   boundary, rank, variance and availability checks remain in force.
-* New JSON is v4, with `singleton-halo-profile-v1` or `full-abc-v1` as its
-  parameterization contract. JSON v3 is read using its original full-ABC
-  semantics; it does not acquire inferred reduction or stronger evidence.
-  SQLite remains schema v19 and stores the JSON payload.
+* New Joint JSON is schema 5, with `singleton-halo-profile-v1` or
+  `full-abc-v1` as its parameterization contract. Schemas 3 and 4 retain their
+  original saved semantics; they do not acquire inferred reduction, target
+  evidence, or stronger qualification. SQLite schema v19 stores the Joint JSON
+  payload.
 * Atom CSV retains all contributors. Reduced A/B/C cells are empty with a group
   ID. The sibling `.contributions.csv` has exactly one row per nuisance group;
   unreduced results produce a header-only companion.
@@ -59,19 +74,21 @@ turn the original first-stage fit into a success or create new donors.
 `JointObservableProfileTest` covers grouping, selection guards, nonzero-residual
 finite differences, explicit nuisance least squares, full reconstruction,
 unobserved targets, seed provenance, partial component failure, augmented
-Jacobian covariance, v3/v4 decoding, SQLite, CSV, peeling and initialization skip.
+Jacobian covariance, v3/v4/v5 decoding, SQLite, CSV, peeling and initialization
+skip.
 Existing frozen, partial-selection and CLI regressions remain enabled.
+Target selector, target convergence, and target covariance semantics are owned
+by the [target-estimability guide](joint-target-estimability.md).
 
-## Numerical operations and experiment conclusions
+## Numerical boundaries
 
 Endpoint assessment and uncertainty request only the compact SVD outputs they
-need. Tiled QR uses its temporary matrices in place. Rank policies, Jacobi
-failure/rank-boundary retry, independent reference and cancellation behavior are
-preserved. Operator LM, normal equations, spectrum truncation and relaxed solver
-budgets are outside this change.
+need. Tiled QR reuses temporary matrices in place. Rank policies, Jacobi retry,
+independent reference, and cancellation behavior remain unchanged. Operator LM,
+normal equations, spectrum truncation, and relaxed solver budgets are outside
+this contract.
 
-The [experiment conclusions](joint-observable-acceptance.md) retain the completed
-measurements and remaining 6Z6U limitations as text. Experiment-only runners,
-diagnostic command extensions, extra timing fields, raw evidence and temporary
-builds have been removed. Production functionality and permanent small regression
-tests remain.
+The [canonical evidence index](joint-component-evidence.md) records the
+historical campaign measurements, incomplete 6Z6U run, and artifacts that are
+absent. Permanent small regression coverage is in
+`ObservableProfile_test.cpp`.

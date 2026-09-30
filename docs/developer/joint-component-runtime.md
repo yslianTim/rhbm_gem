@@ -31,7 +31,7 @@ trust additionally requires reference gradient agreement. Public search referenc
 counts and times remain present and are zero; endpoint work is assessment cost.
 
 Endpoint evaluations and reference solves are passed into assessment and trust
-replay instead of being repeated. A component returns both its historical search
+replay instead of being repeated. A component returns both its original search
 endpoint diagnostics and the assessment of its actual trusted state; the public
 API consumes the latter. Assembly uses its raw evaluation for the returned state
 and retains an independently reprofiled consistency control.
@@ -64,22 +64,28 @@ actual coefficients and widths. Assessment reuse does not change search decision
 and timing are separate from search work. Orthogonal backend row reduction can
 change the search trajectory within the numerical parity contract below.
 
+### Selection-domain contract
+
 The Map/Model builder uses selected non-hydrogen atoms as targets S. Their
-2.5 Angstrom spheres fix the unique observation rows V. It intersects every
-non-hydrogen atom's support with V, retaining targets (even without observations)
-and every intersecting unselected halo contributor. Contributors follow model
-order. Halo never adds rows or recursively adds its neighbors. Atom centers
-outside the map are eligible if their support intersects V. Empty non-hydrogen
-selection is rejected. The existing `sphere-fma-v1` arithmetic and negative/zero
-observations are retained. Structural partition runs after closure; a shared
-halo has one parameter vector and can connect separate target regions.
+2.5 Angstrom spheres fix the unique observation rows V. Selected targets remain
+in the target mapping even if clipping leaves one with no observed support; no
+rows are invented for it. The builder intersects every eligible non-hydrogen
+atom's support with V, retaining every intersecting unselected atom as a halo
+contributor. Contributors follow model order. Halo never adds rows or
+recursively adds its neighbors. Atom centers outside the map are eligible if
+their support intersects V. Empty non-hydrogen selection is rejected. The
+existing `sphere-fma-v1` arithmetic and negative/zero observations are retained.
+Structural partition runs after closure; a shared or bridge halo has one
+parameter vector and can connect separate target regions.
 
 `JointProblemInput.selection_domain` is optional for hand-built frozen inputs
 (null means selection not recorded). The Map/Model builder always records
 `fixed-selected-voxel-closure-v1`, ordered unique `target_indices`, both radii
 (2.5 Angstrom), and `all-non-hydrogen` contributor eligibility. Halo indices are
 the complement within the problem's atom identities. This establishes completeness
-only for the supplied catalogue and truncated support model.
+only for the supplied catalogue and truncated support model. The saved outcome
+retains this domain and atom ordering; stage and CSV metadata report target,
+halo, or not-recorded roles. No role is inferred when selection was not recorded.
 
 `EstimateJointComponents` uses a full model copy and sequential per-atom
 Fibonacci sampling, alpha training and first-stage MDPDE for all contributors.
@@ -137,11 +143,9 @@ checks combine in this order: any `Failed`, any missing/`Unavailable`, any
 Search completion is independent: a budget/untrusted-trial stop can leave a
 trusted endpoint whose runtime checks pass; its stop reason is still reported.
 
-For the frozen representative cases, baseline and near-0.02 pass runtime
-convergence. Weak-1e-4 also passes runtime convergence while its offline derivative
-evidence remains resolution-unverified. Active-a fails local correction,
-zero-signal fails width identification, and duplicate has no usable state. None
-of these runtime results claims an offline regular certificate.
+Historical fixture outcomes and their remaining limitations are summarized in
+the [canonical evidence index](joint-component-evidence.md). Runtime convergence
+does not imply an offline regular certificate.
 
 ## Immutable storage and component views
 
@@ -158,44 +162,27 @@ The Map builder collects and sorts relevant voxel indices instead of allocating
 an index array for the entire map. Voxel ordering and support arithmetic remain
 unchanged. `joint_component_benchmark DATASET CASE` measures the public API in a
 fresh process and reports construction, search, assessment, assembly, total time
-and process peak RSS. It uses only the installed public API and can also be built
-against the baseline library.
+and process peak RSS. The current profiles and measurement semantics are listed
+in the [benchmark guide](joint-benchmark.md).
 
-## Tiled numerical backend
+## Internal numerical backends
 
-The default EIGEN backend uses 8192-row tiles. The optional
-[SPQR backend](joint-component-sparse-backend.md) replaces free-design
-factorization while retaining tiled Jacobian reduction. The first derivative pass reduces
-the normalized free design and raw width derivative. The second generates the
-projected derivative and full residual-corrected Jacobian by tile, retaining only
-compact QR factors, transformed residuals and column norms. LM pivots the compact
-Jacobian factor and retains the original full residual norm for its objective,
-actual reduction and stopping calculations. Rank thresholds still use the
-original context rows/columns, not the reduced factor dimensions.
+The tiled derivative and profile-operator architecture is owned by the
+[profile-operator guide](joint-profile-operator.md); sparse factorization and its
+rank certificates are owned by the
+[sparse-backend guide](joint-component-sparse-backend.md). Both preserve the
+original parent rank context and the full residual norm. They do not cut
+component edges or use a dense runtime fallback.
 
-Derivative/LM dense workspace is O(tile * atoms + atoms²), in addition to sparse
-designs, sparse factorization storage and O(rows) residual vectors. This is not a
-bound on all sparse fill-in or on the parent-global assembled assessment as the
-number of atoms grows. No component edges are cut and no dense runtime fallback
-is used. Dense derivatives exist only in test support as a parity reference.
-
-The fixture runner defaults to backend numerical comparison: trusted-state
-availability, runtime checks and limitations remain fixed; converged identifiable
-A/C/B endpoints use scaled 1e-10 and normalized objectives use 1e-12. For a failed
-convergence check, objective may not worsen by more than 1e-12 and same-state
-parity is checked at both historical and actual endpoints. Changed active faces
-are reported explicitly; a free-face rank is compared across endpoints only
-when their active faces match. Dense/tiled ranks at each identical state must
-always match. Search counts, native stop codes and trial sequences are recorded
-but are not required to be identical. Guarded acceptance and budgets remain
-mandatory. `--strict-history` retains the older exact-trajectory comparison for
-baseline/ownership-only validation.
-
-Each same-state comparison checks projected/full derivatives at relative 1e-8,
-spectra at 1e-10 relative to their largest singular value, local correction at
-scaled 1e-10 and gradient at 1e-13 + 2e-9 * abs(reference). Rank/availability must
-agree. Unavailable corrections and missing trusted states remain explicit
-limitations. No fixture packages or numerical tolerances are regenerated.
+Backend parity remains a current numerical contract: trusted-state availability
+and required runtime checks must agree; converged identifiable A/C/B endpoints
+use scaled 1e-10 and normalized objectives use 1e-12. Same-state projected/full
+derivatives use relative 1e-8, spectra use 1e-10 relative to their largest
+singular value, local corrections use scaled 1e-10, and gradients use
+1e-13 + 2e-9 * abs(reference). A nonconverged comparison may not worsen objective
+by more than 1e-12. Changed active faces are reported explicitly; rank is compared
+across endpoints only when their active faces match. Missing states and
+unavailable corrections remain explicit.
 
 ## Routine regression
 
@@ -205,31 +192,23 @@ cmake --build build --target tests_all -j
 ctest --test-dir build -L joint:runtime --output-on-failure
 ```
 
-The ordinary executable tests numerical, support, partition, same-state,
-actual-state assembly, local-context and failure-isolation contracts. Eight
-frozen representative cases run through the public API and numerical core;
-physical double/float32 and CIF/MRC tests exercise fresh initialization. The
-[fixture catalog](../../tests/fixtures/joint_component/README.md) is self-contained
-and uses independent pre-extraction records plus scalar reference controls.
-The Python runner sets numerical thread limits before importing NumPy.
+The runtime test lane protects the estimator behavior and public API. The
+integration regression runner and its fixture catalog are documented in
+[tests/README.md](../../tests/README.md). Offline certification runs are a
+separate lane and do not change the runtime result.
 
 Runtime search/assembly reports use schema version 2: `runtime_convergence`,
 `runtime_checks` and `runtime_failure` replace the mixed `joint_qualified` and
-`qualification_*` fields. `search_endpoint_eta` preserves the identity needed
-for historical endpoint comparisons. Runtime directional audit evaluations are
-zero. Immutable fixture packages/hashes remain unchanged: the ordinary runner
-compares search/state and non-derivative assertions; the optional two-step runner
-checks the original derivative/qualification conclusions separately. Missing
-evidence must never be interpreted as passing. Legacy `joint_qualified` is
-produced only by offline assessment and retains its derivative-dependent meaning.
+`qualification_*` fields. Search-endpoint identity is retained in diagnostics.
+Missing evidence never means passing. Legacy `joint_qualified` is produced only
+by offline assessment and retains its derivative-dependent meaning.
 
-`joint_component_runtime` provides `run MODEL MAP OUTPUT`, `physical OUTPUT`,
-`physical-inputs OUTPUT`, and `fixture DATASET CASE OUTPUT_JSON`. The Python
-runner exposes `run`, `physical`, `summarize`, `compare`, `regression` and
-`physical-smoke`. Fresh-input commands use one first-stage start, not the old
-four-start/audit matrix. Numerical equality is checked against a monolithic
-solve of the actual loaded problem; MRC header geometry is never replaced by
-generation coordinates.
+`joint_component_runtime` provides commands for public API runs, physical-input
+smokes, and fixture cases. The Python runner exposes run, summary, comparison,
+regression and physical-smoke operations. Current entry points are maintained in
+`tests/integration/joint_component_runtime.py`; historical campaign procedures
+and measured outcomes are indexed in the
+[canonical evidence document](joint-component-evidence.md).
 
 ## Extended and offline checks
 
@@ -243,31 +222,20 @@ cmake --build build --target tests_all -j
 ctest --test-dir build -L 'joint:extended|joint:offline' --output-on-failure
 ```
 
-Extended tests add heterogeneous-168/first-stage-float32 and the remaining
-catalog datasets. For initialization changes, select additional frozen starts:
-
-```sh
-python3 tests/integration/joint_component_runtime.py regression \
-  --executable build/bin/joint_component_runtime --work-dir build/joint-starts \
-  --dataset baseline --all-starts
-```
+Extended and offline lanes are opt-in and stay separate from the default
+runtime regression.
 
 Offline two-step, local-audit preparation and precision code are linked only into
 `joint_component_audit` and `joint_offline_tests`, never the library or ordinary
-test executable. Tests
-cover baseline, near-0.02/narrower, weak-1e-4 and active-a; qualification failures
-must match their historical scopes. Kernel/Jacobian changes require derivative
+test executable. Kernel or Jacobian changes require the applicable derivative
 audits; constraint changes also require boundary controls. Backend changes
-require rank/precision controls and the extended lane.
+require rank and precision controls. Recorded campaign results and their limits
+belong in the [canonical evidence index](joint-component-evidence.md).
 
 ```sh
 python3 tests/integration/joint_component_audit.py \
   --executable build/bin/joint_component_audit --work-dir build/joint-audits
 build/bin/joint_component_audit local-bundle INPUT_JSON OUTPUT_DIRECTORY
-
-# The eight default historical two-step/qualification controls, without precision scans:
-python3 tests/integration/joint_component_audit.py --two-step-only \
-  --executable build/bin/joint_component_audit --work-dir build/joint-two-step
 ```
 
 A standalone bundle carries immutable parent observations/context, component
@@ -277,12 +245,10 @@ invalid widths are rejected. Parent normalization, actual-state preservation,
 local weak-direction evidence and independently reprofiled consistency remain
 required; a local certificate cannot promote a missing or failed component.
 
-## Retired workflows
-
-The [evidence index](joint-component-evidence.md) records the retired research
-workflows, limitations and retrieval commits. No ordinary regression requires
-the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. The first-stage MDPDE research runner and separate Fold-168 external campaign are retired; the production second-stage fitter remains supported. Formal workflow adoption and result persistence use the opt-in command described below. See [tiled backend acceptance](joint-component-tiled-backend.md) for
-validation and measured costs.
+Historical research results and retrieval provenance are indexed in the
+[canonical evidence document](joint-component-evidence.md). Current backend
+behavior and benchmark commands are documented by the profile-operator,
+sparse-backend, and benchmark guides.
 
 ## Saved production outcomes
 
@@ -307,9 +273,10 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON uses schema 4 and retains schema 3 reading (distinct
-from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
-describes parameter layouts, nuisance contributions and seed provenance. See the [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-and-4).
+Production outcome JSON writes schema 5 and retains schema 3 and 4 reading
+(distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
+describes parameter layouts, nuisance contributions and seed provenance. See the
+[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values and `JointSoftwareProvenance`. `CaptureJointAnalysisResult` records the
 current library's version/source/configuration/build identity. The decoder and
@@ -328,15 +295,11 @@ scale. These are kernel coefficient units, not an assertion of physical map
 calibration; C is not a constant background offset. The objective's parent
 observation scale is separate. Unknown normalization cannot support conversion.
 
-The v1 freeze is an acceptance baseline for fixed-position, all-non-hydrogen,
-structural-support, equal-weight Guarded joint LS. It does not change the default
-two-stage estimator, certify every endpoint, or establish real-data applicability.
+The command's default estimator remains two-stage. Joint LS is opt-in and its
+runtime checks do not establish an offline regular certificate.
 
-## Partial-selection acceptance
-
-See [partial-selection acceptance](joint-component-partial-selection-acceptance.md)
-for the structural/identifiable controls, weak-halo limitations and complete-process
-resource measurements. The original v1 freeze remains a historical baseline.
-Partial selection does not change kernel, numerical thresholds, budgets or the
-all-component convergence requirements. Weak or rank-deficient halo atoms are
-not removed or frozen to make target estimates pass.
+Permanent [partial-selection tests](../../tests/core/joint_component/PartialSelection_test.cpp)
+protect the fixed observation domain, nonrecursive halo closure, bridge
+parameterization, unavailable target states, and unchanged numerical policy.
+These are current contracts; historical controls and measured limitations belong
+in the [canonical evidence index](joint-component-evidence.md).

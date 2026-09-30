@@ -27,7 +27,7 @@ Any later deletion is a separate PR-H3 decision.
 | Statistical research protocol | [Noise/mismatch experiment](joint-noise-mismatch-validation.md) |
 | Current benchmark commands | [Benchmark guide](joint-benchmark.md) |
 | Workflow integration | [Stage integration](joint-stage-integration.md) |
-| Data and persistence | [Data I/O architecture](architecture/dataobject-io-architecture.md) and [Joint JSON/CSV contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-and-4) |
+| Data and persistence | [Data I/O architecture](architecture/dataobject-io-architecture.md) and [Joint JSON/CSV contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5) |
 | Certification mathematics | [Certification contract](joint_abc_certification_contract.md) |
 | Component mathematics | [Component contract](joint_abc_components_contract.md) |
 
@@ -54,6 +54,13 @@ historical comparison evidence, not a new runtime measurement. Its 22 default
 and 3 extended/offline test counts came from the recorded macOS/compiler
 configuration and do not establish cross-platform behavior.
 
+The v1 freeze accepted fixed-position, all-non-hydrogen, structural 2.5 Angstrom
+support, equal-weight Guarded joint LS as an opt-in estimator; it did not change
+the default two-stage estimator or package version. Historical baseline,
+near-0.02, weak-1e-4, active-a, zero-signal, and duplicate controls retained
+their distinct convergence, derivative-resolution, width-identification, and
+state-availability outcomes.
+
 ## 3. Backend and numerical evolution
 
 | Milestone | Historical evidence | Retained limitation | Current owner |
@@ -65,7 +72,7 @@ configuration and do not establish cross-platform behavior.
 | Endpoint reference | The 43.81-minute historical campaign completed all 18 fixed-state audits and all 128/512 analysis-export comparisons. Single-128 changed from 5.229 s to 4.912 s; single-512 from 307.805 s to 300.564 s, with peak RSS from 2.500 GiB to 1.872 GiB for single-512. Search reference evaluations changed from six to zero. | These are incremental historical results on the recorded host; search and endpoint assessment remained the dominant costs. | [Compact SVD](joint-component-compact-svd.md); [endpoint-reference report](joint-component-reference-acceptance.md); [archive inventory](figures/joint-reference-acceptance/archives.json). |
 | Profile operator | All 18 fixed-state audits and 20 preparation-only workloads completed. On 6Z6U, baseline and candidate reached the sampled RSS watchdog on both backends and had no numerical verdict. The 10,000-atom runs stopped after input/layout/basis preparation; they did not solve, rank, search, assess, or estimate uncertainty. | Operator construction and action parity do not prove full search or full-workflow scaling. | [Profile operator](joint-profile-operator.md); [acceptance record](figures/joint-profile-operator/acceptance.md). |
 | Operator LM and Schwarz search | The baseline campaign ended at its 80-minute deadline with 41 completed numerical runs, one deadline termination, and 16 entries not run. Single-512 Schwarz medians were 419.562 s vs legacy 229.232 s (Eigen) and 350.104 s vs 217.933 s (SPQR), exceeding the 1.10 performance ratio on both backends. | Required comparisons remained incomplete; 6Z6U and large-local campaign cases were not run. Production remains LegacyCompact; no promotion was made. | [Operator search](joint-operator-search.md); [validation report](joint-operator-search-validation.md); [manifest](figures/joint-operator-search/manifest.json). |
-| Bounded SPQR rank prototype | Small controls established both full-rank and deficient decisions against the dense oracle. The representative chain-128 and cube-128 SPQR prototypes exhausted 100 million charged work units and returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient. No 128-atom definitive rank result, 512/2,000-atom rank result, or scaling guarantee was established. The campaign was not repeated after its final deadline-guard correction. | [Sparse backend](joint-component-sparse-backend.md); [bounded-rank report](joint-bounded-search-rank.md); [validation](joint-bounded-search-rank-validation.md). |
+| Bounded SPQR rank prototype | Small controls established both full-rank and deficient decisions against the dense oracle. The representative chain-128 and cube-128 SPQR prototypes exhausted 100 million charged work units and returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient. No 128-atom definitive rank result, 512/2,000-atom rank result, or scaling guarantee was established. A separate single-512 Schwarz attempt exceeded the sampled 4 GiB RSS threshold on both backends and had no endpoint. The pre-existing SPQR active-a/first-stage-double spectrum discrepancy was 1.2990450737934428e-9 against the unchanged 1e-10 tolerance and reproduced on its pristine baseline. The rank campaign was not repeated after its final deadline-guard correction. | [Sparse backend](joint-component-sparse-backend.md); [bounded-rank report](joint-bounded-search-rank.md); [validation](joint-bounded-search-rank-validation.md). |
 
 The sparse and compact-SVD acceptance reports preserve exact completed-case
 tables, fingerprints, and retained test logs. Their fixed-state evidence must not
@@ -75,8 +82,10 @@ be confused with the full-command resource envelope in §6.
 
 ### 4.1 Historical full-ABC 6Z6U obstruction
 
-At historical base 5f06b027, the selected domain had 2,192 contributors and
-262,801 rows. Its largest component had 2,167 atoms and 4,334 free A/C columns.
+At historical base 5f06b027, the selected domain had 2,192 contributors,
+262,801 rows, and two components. Its largest component had 2,167 atoms,
+262,282 rows, and 4,334 free A/C columns. Historical per-atom B0 mapping was
+unavailable, so its starts were not a bitwise reproduction of the earlier fit.
 Twenty singleton halo atoms each contributed to exactly one selected voxel, so
 their A and C columns were proportional:
 
@@ -85,16 +94,27 @@ their A and C columns were proportional:
 Each pair supplies one independent null direction
     (delta A_i, delta C_i) = (h_i, -g_i),
 giving the structural bound rank <= 4334 - 20 = 4314 for this fixed support and
-any legal positive B. EIGEN, SPQR, four legal B starts, and an independent
-no-tolerance QR/SVD reduction all reproduced rank 4314 before outer search.
-Changing initialization or accelerating factorization could not remove this
-full-ABC structural obstruction.
+any legal positive B. Both EIGEN and SPQR rejected the first all-free A/C face
+before outer search. Four SPQR starts (production B0, 0.9 B0, 1.1 B0, and
+per-atom simulation truth) and an independent no-tolerance QR/SVD reduction all
+reproduced rank 4314; weak-direction actions were checked against the original
+sparse matrix. Nonnegative A does not restore uniqueness because a change in A
+can be offset by signed C. Changing initialization or accelerating
+factorization could not remove this full-ABC structural obstruction. The
+measured weak subspace was concentrated in these halo A/C coordinates.
 
 This was a historical full-ABC parameterization result. It does not establish
 failure of the later observable-halo or target-estimability formulation. The
 diagnostic's optional Jacobi cross-check timed out and its conservative
 rank-boundary diagnostic remained unconfirmed; those numerical limits do not
 invalidate the separate structural argument.
+
+Two remedies were considered at the time: represent each one-row halo by its
+single observable contribution while leaving its individual A/C/B unidentified,
+or expand the observation domain and recompute contributor closure. Observable
+profiling became the maintained parameterization. Domain expansion changes the
+statistical problem and can create further halos, so it has no guaranteed
+full-rank outcome.
 
 ### 4.2 Observable-halo result
 
@@ -188,11 +208,18 @@ included halo contributions, and retained stencil coverage failures. Missing
 evidence did not produce fabricated uncertainty or a substitute group posterior.
 
 The S1-S5 consolidation paired pre/post numerical results without relaxing frozen
-tolerances. The final persistence milestone used SQLite v19 and neutral analysis
-document v2, moved v17/v18 adapters to load/migration, rejected conflicting
+tolerances. Its postprocessing comparison retained exact endpoint A/C/B,
+objective, convergence, target peeling, and covariance in all 18 paired runs;
+the bounded fixtures did not establish a general speedup or size limit. The
+final persistence milestone used SQLite v19 and neutral analysis document v2,
+moved v17/v18 adapters to load/migration, rejected conflicting
 duplicate representations, and rolled back schema and records on failed
 migration or writes. The SQL migration fixture was generated by the v18
-implementation at df138da5. These are historical acceptance facts; current
+implementation at df138da5. The retained paired postprocessing measurements are
+in [joint-analysis-consolidation-benchmark.json](joint-analysis-consolidation-benchmark.json).
+The earlier v1 result format was schema 2; the
+current writer is schema 5 and retains older v3/v4 reads without inferring
+target evidence. These are historical acceptance facts; current
 workflow and persistence semantics are owned by the [stage integration](joint-stage-integration.md)
 and [data I/O architecture](architecture/dataobject-io-architecture.md).
 
@@ -229,7 +256,12 @@ runtime checks, and 385 failed. Recovery reruns were not pooled as more
 replicates. The matrix is deliberately unbalanced and tests one noise-correlation
 length and one position-mismatch type; it is not a population success-rate,
 coverage, or real cryo-EM validity study. Process completion and numerical
-qualification are reported separately.
+qualification are reported separately. A serialization-recovery comparison
+found identical input hashes and numerical statuses, with at most a one-ULP
+parameter representation difference caused by the historical experiment
+wrapper's default JSON parsing; the production decoder was already precise.
+The comparison record is
+[serialization-recovery.json](figures/joint-validation/serialization-recovery.json).
 
 ## 8. Explicitly unproven boundaries
 

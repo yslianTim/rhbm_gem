@@ -1,14 +1,12 @@
 # Fixed-state factor and normal actions
 
 > Current fixed-state measurements use [`joint-benchmark.md`](joint-benchmark.md).
-> The source-pinned A/B/C campaign protocol later in this document is historical;
-> the numerical action and factor-reuse contracts remain in permanent C++ tests.
+> Historical acceptance results and provenance are indexed in
+> [joint-component-evidence.md](joint-component-evidence.md).
 
-This increment keeps `SearchMethod::LegacyCompact` as the production default.
-It changes the internal operator path, not the model, active-set A/C solver,
-independent reference, trust-region policy, or uncertainty calculation.
-
-See the [bounded acceptance report](joint-fixed-actions-validation.md) for measured results.
+`SearchMethod::LegacyCompact` remains the production default. Fixed-action
+optimization affects the internal operator path, not the model, active-set A/C
+solver, independent reference, trust-region policy, or uncertainty calculation.
 
 ## Rank contract
 
@@ -72,6 +70,5 @@ python3 tests/integration/joint_benchmark.py \
   --output build/fixed-normal-schwarz.json
 ```
 
-The [historical acceptance report](joint-fixed-actions-validation.md) retains
-the measured conclusions and limitations. Current benchmark commands do not
-consume the raw receipt archive.
+Historical measured results and their limits are summarized in the
+[canonical evidence index](joint-component-evidence.md).

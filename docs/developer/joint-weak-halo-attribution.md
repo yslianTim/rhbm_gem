@@ -13,11 +13,11 @@ target and one halo. Its canonical JSON SHA-256 is
 Truth is target (A, B, C) = (2, 0.5, 0.2), halo = (2.3, 0.3, 0.15).
 All three starts used exactly this input. Formal public outcomes are retained
 separately from the offline assessments and restarts in the
-[diagnostic records](figures/joint-validation/weak-halo.json).
-These final records use the corrected precise JSON wrapper; the original attempt
-and its one-ULP representation issue remain indexed in the
-[recovery comparison](figures/joint-validation/serialization-recovery.json).
-Internal coefficients, input snapshots and runtime statuses were unchanged.
+[diagnostic records](figures/joint-validation/weak-halo.json). A historical
+serialization comparison found up to a one-ULP representation difference from
+the experiment wrapper; input snapshots and numerical statuses were unchanged.
+The original and recovered receipts are summarized in the
+[canonical evidence index](joint-component-evidence.md).
 
 | Initial B, target / halo (Å) | Formal stop | State | Local correction infinity norm |
 | --- | --- | --- | --- |

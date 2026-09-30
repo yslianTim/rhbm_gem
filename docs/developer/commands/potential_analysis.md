@@ -175,7 +175,7 @@ rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
-request.database_path = "joint.sqlite"; // new v18 database
+request.database_path = "joint.sqlite"; // new v19 database
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```
@@ -227,7 +227,7 @@ Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schemas 3 and 4)
+### Provenance and map units (joint JSON schemas 3, 4 and 5)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.

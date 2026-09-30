@@ -1,119 +1,75 @@
-# Joint second-stage integration acceptance
+# Joint stage integration
 
-Baseline: `adf16940493bf46de4a467ade719d15ad7cb9b75`.
-Each numbered stage is validated and committed before the next stage starts.
+This guide owns the current integration between Joint Component fitting and
+estimator-neutral stage results. Numerical fitting rules are owned by the
+[runtime guide](joint-component-runtime.md); SQLite and neutral-document
+semantics are owned by the
+[data I/O architecture](architecture/dataobject-io-architecture.md).
 
-## 1. Estimator-neutral stage contracts
+## Stage estimates and provenance
 
-The new stage view distinguishes an absent estimate from a zero amplitude, keeps
-method provenance separate from fitting stage, and does not expose Joint values
-as OLS/MDPDE diagnostics. Initialization seeds are not published as final points.
-Existing method-specific computation is unchanged.
+A local stage record separates its optional point, source, convergence, reason,
+and uncertainty. Its source identifies estimator method, atom, component, run,
+and target role. An unavailable estimate is not encoded as a zero point, and
+Joint points are not stored in OLS or local MDPDE diagnostics.
 
-Baseline: all eight related CTest groups passed (core estimator, sampler,
-commands, joint component, data runtime, data schema, HRL and command integration).
+The Joint adapter maps returned component states through contributor identities.
+It preserves an available point even when runtime convergence fails, with the
+failure status alongside it. A missing component state yields an unavailable
+estimate with its stop reason. For recorded selection domains, target and halo
+roles come from the saved domain; inputs without selection metadata retain
+not-recorded. Observable-contribution-only halos do not receive a point.
 
-After the change: the same eight groups, core contracts and the frozen
-`joint_component_regression` passed (10/10). `tests_all` built successfully;
-`git diff --check` passed. The availability test exercises seed/unavailable,
-real zero amplitude, method-specific rejection and transient-state clearing.
+Joint points occupy the neutral Second-stage estimate. The stage summary,
+group fitting, displays, and feature/export consumers include only Joint target
+points. Available unconverged target points remain visible and are marked
+unconverged. Charge C is descriptive; group inference uses the eligible target
+parameter evidence and covariance, and does not infer charge uncertainty.
 
-## 2. Shared sampling and First initialization
+## Workflow ownership
 
-The map-aware fitting workflow prepares one immutable Joint problem, initializes
-contributors using explicit identities, and calls `FitJointComponents` directly.
-The standalone wrapper delegates to the same First implementation on its private
-copy and preserves its historical writeback contract. Two-stage keeps its existing
-sampling and numerical path. The model-only workflow rejects Joint requests.
+The map-aware Joint workflow builds one immutable problem and initializes all
+eligible contributors using their model identities. First-stage initialization
+supplies widths; only those widths seed Joint fitting. Initialization sampling
+may read outside the target observation rows, while the Joint objective remains
+on the saved fixed domain. The second-stage refinement option is for the
+two-stage estimator; the model-only workflow does not accept Joint requests.
 
-Validation: seven focused CTest groups passed, including frozen Joint regression,
-command/CLI smoke, sampler and estimator regression. A final targeted rerun after
-adding First target/halo provenance passed both Joint and CLI smoke. The new
-instrumented test verifies one raw sampling and one formal First per contributor,
-unchanged selections, and exact equality with a direct fit of the same problem/B0.
+After fitting, the workflow publishes the Joint stage estimates, builds
+target-only post-fit peeling from the fixed observation rows, computes eligible
+target uncertainty and group evidence, stores the Joint diagnostic snapshot,
+then runs group fitting. These steps consume the returned Joint state; no
+separate local fit substitutes for a missing component.
 
-## 3. Joint endpoints and Second summary
+## Post-fit peeling
 
-A data-only adapter maps component-local A/C/B through contributor identities to
-neutral Second estimates. It retains target/halo roles, component convergence and
-one source ID per workflow; missing states replace any previous point with an
-explicit unavailable reason. Summary reads the common point interface before
-group fitting, excludes halo and labels C and between-atom dispersion correctly.
+Peeling subtracts the fitted model on the Joint observation rows, including
+contributions from halo atoms. It preserves each raw sample and stores an
+optional peeled response with a reason when coverage or a contributor state is
+missing. Ratios require complete paired coverage in their interval and retain
+signed values without clamping. Peeling does not extend the observation domain.
 
-Validation: all six related tests/groups passed (Joint, estimator, commands,
-command integration, frozen regression and CLI smoke). The new adapter test
-permutes identities/mappings and verifies target-only summary and stale-state
-removal. No solver settings or numeric algorithms changed.
+Replacing a Joint endpoint invalidates derived peeling, parameter evidence,
+posterior results, and the saved Joint snapshot for the affected run. A
+second-stage endpoint change clears its uncertainty and group evidence; group
+summaries affected by the changed endpoint are invalidated. Replacing raw
+samples clears peeling while preserving point estimates. The editor enforces
+these source and invalidation relationships.
 
-## 4. Grid-consistent post-fit peeling
+## Persistence boundary
 
-Sampling and model subtraction now share the original nested tricubic arithmetic
-and clamped stencil. The pure conversion subtracts fitted neighbors on the fixed
-Joint rows, including halo, and preserves each raw sample. Per-sample responses
-are optional, with explicit outside-domain or missing-contributor reasons.
-Ratios require complete paired coverage in their interval and never clamp signed
-results. Neighbor counts include contributors affecting interpolation nodes.
+The in-memory model owns the neutral stage record and the Joint result snapshot.
+Storage validates and round-trips these values but does not recompute numerical
+evidence. Current database versions, migration, transaction, and JSON payload
+contracts are defined in the
+[data I/O architecture](architecture/dataobject-io-architecture.md) and the
+[potential-analysis command guide](commands/potential_analysis.md).
 
-Validation: sampler, estimator, data runtime, commands, command integration,
-frozen Joint regression and CLI smoke passed. The final Joint group rerun also
-passed after correcting a new fixture to use binary-exact spacing: tiny nonzero
-weights at decimal-grid nodes correctly retain conservative coverage rejection.
-Tests cover signed C, zero A, negative responses, zero denominator, distant halo,
-clamping, partial coverage, missing state, and unchanged raw/Second parameters.
-The existing independent observation-stencil oracle passes after extraction.
+## Permanent coverage
 
-## Stage 5 — parameter evidence and group inference
-
-- Full-component raw `(A,C,log B)` Jacobian is column-scaled, reduced by tiled QR, and factored by SVD. Marginal blocks retain charge and neighbor coupling; residual variance uses `RSS/(N-3m)` and original dimensions set the rank threshold.
-- Uncertainty requires runtime convergence, interior positive amplitudes, full rank and positive finite residual variance/degrees of freedom. Zero amplitude, missing state, nonconvergence, rank and variance failures retain Second points and explicit reasons.
-- Group inference consumes only eligible parameter evidence and its covariance. Information-form WEB shares the original sample-domain core; no local MDPDE runs in this route. The correlation approximation is `block-diagonal-by-atom`. Posterior and unchanged Second are distinct; C remains descriptive with no inferred C uncertainty.
-- Alpha training uses eligible members. Descriptive statistics retain all target points. Single-member and singular group covariance yield no substitute posterior. Results are written by atom identity, including exclusions in the middle of a group.
-- Validation: seven affected CTest groups passed (Joint, estimator, data runtime, HRL, core commands, command integration and frozen Joint regression). Final Joint group passed after adding degeneracy tests. Added dense full-component covariance reference (including nuisance C), zero variance/rank/df/boundary/convergence gates, sample-vs-information WEB equivalence, and posterior independence from raw samples with sensitivity to changed evidence. Empty samples are sufficient for the new group route. `git diff --check` passed.
-
-## Stage 6 — persistence and downstream analysis
-
-- SQLite v18 stores neutral stage/source/role, uncertainty, evidence, posterior,
-  paired peeling coverage and actual sample geometry separately from legacy
-  method columns. Joint Second never occupies MDPDE/OLS columns. Snapshot and
-  common Second identities/values are checked within the save transaction.
-- v17 reads do not mutate the database. First write upgrades and saves in one
-  transaction; failed validation rolls back schema and records. Legacy Joint
-  snapshots expose recorded Second points without inventing peeling, uncertainty
-  or posterior. Legacy samples explicitly lack geometry.
-- Display, painters, Gaussian/position/outlier exports and feature construction
-  consume common results and respect fitted target/halo roles. Curves identify
-  Joint, charge coefficient and available uncertainty correctly. Dataset-specific
-  Demo figures are explicitly skipped when their required named inputs are absent.
-- UMAP retains its three features and standardization. Missing required features
-  exclude rows with reasons; fewer than three valid rows fail. Ancillary missing
-  fields remain empty, and a metadata JSON records estimator, features, peeling
-  mode, normalization and exclusions.
-- New tests cover precise round-trip of points/covariance/sample coordinates and
-  unavailable states, snapshot/Second mismatch rollback, byte-identical v17 reads,
-  successful and failed migration, legacy snapshot adaptation, and persisted group
-  posterior identity. Command tests delete original map/model files before display
-  and export, exercise all painter choices and missing components, and verify Joint
-  UMAP target/coverage exclusions with six valid embedded rows.
-
-Final acceptance (2026-09-23):
-
-| Configuration/check | Result |
-| --- | --- |
-| EIGEN, ROOT/UMAP disabled, complete general CTest suite | 23/23 passed |
-| ROOT and UMAP enabled, complete general CTest suite | 23/23 passed |
-| SPQR: Joint component, frozen regression, estimator and HRL groups | 4/4 passed |
-| Frozen Joint regression | Passed in both general suites and SPQR |
-| `lint_repo` | Passed |
-| Installed consumer smoke (`lint_install_smoke`) | Passed with ROOT/UMAP build |
-| `git diff --check` | Passed |
-
-The general suite excludes separately labelled offline/extended research runs;
-those are not claimed as final acceptance evidence. Solver objective, support,
-search budget and convergence thresholds were not changed.
-
-Unavailable data remain intentional and inspectable: fixed-domain stencil gaps
-or missing contributor states block individual peeling samples; old sample blobs
-lack geometry; nonconvergence, boundary amplitudes, rank/df/variance failures block
-uncertainty; insufficient eligible members or singular group covariance block
-posterior. Historical unrecorded derivatives stay NotRun. No replacement local
-fit, fabricated zero, inferred charge error bar or substitute posterior is used.
+Permanent tests cover Joint-to-stage mapping, target and halo roles, unavailable
+states, target-only summaries and group inference, peeling coverage, and
+invalidation after endpoint or sample changes. The current test lane is
+documented in [tests/README.md](../../tests/README.md). Historical integration
+acceptance results and their boundaries are indexed in the
+[canonical evidence document](joint-component-evidence.md).

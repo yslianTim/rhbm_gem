@@ -1,6 +1,7 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v17 boundary.
+This document describes the current typed file I/O and Model-only SQLite v19
+boundary.
 
 ## 1. Public Surface
 
@@ -73,27 +74,31 @@ There is no intermediate persistence forwarding class. `ModelObjectStorage` rema
 
 Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
 
-## 6. SQLite v17 Lifecycle
+## 6. SQLite schema lifecycle
 
-The accepted states are intentionally strict:
+The accepted database states are intentionally strict:
 
-1. An empty database with `PRAGMA user_version = 0` is initialized as v17.
-2. A database with `PRAGMA user_version = 17` is accepted only after structural validation.
-3. Every other version or pre-existing unexpected structure is rejected.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v19.
+2. Versions 17, 18, and 19 are accepted only after structural validation.
+3. Other versions or unexpected structures are rejected without migration.
 
-There are no migrations and no overwrite-on-open fallback. In particular, v16 and earlier versions are rejected without changing their versions, tables, or rows.
+Opening a v17 or v18 database is read-only. Its legacy analysis tables are
+adapted while loading. The first `SaveModel` migrates every stored model to the
+canonical analysis representation and writes the requested model in the same
+transaction. A failed conversion or save rolls back the schema and rows.
+Conflicting legacy and neutral stage values are rejected. Versions 16 and
+earlier are rejected without changing their versions, tables, or rows.
 
-Validation checks:
+Schema validation checks the expected table set and ordered columns, primary
+keys, selected-flag constraints, and direct cascading `key_tag` foreign keys
+from child tables to `model_object(key_tag)`.
 
-- the exact eleven-table set;
-- exact ordered column sets;
-- every primary-key shape;
-- `NOT NULL is_selected` on atom and bond rows;
-- direct `key_tag` foreign keys from every child table to `model_object(key_tag)` with `ON DELETE CASCADE`.
+## 7. Current table topology
 
-## 7. v17 Table Topology
-
-`model_object` is the direct root. There is no `object_catalog`, `map_list`, or legacy bond-analysis table.
+`model_object` is the direct root. Current v19 also has one canonical neutral
+analysis document per model and a separate Joint result payload. The three
+method-specific analysis tables remain only in accepted legacy v17/v18
+databases; they are dropped during first-write migration.
 
 ```mermaid
 flowchart TD
@@ -104,13 +109,16 @@ flowchart TD
     M --> CB[model_component_bond]
     M --> A[model_atom]
     M --> B[model_bond]
-    M --> AL[model_atom_local_potential]
-    M --> AP[model_atom_posterior]
-    M --> AG[model_atom_group_potential]
     M --> J[model_joint_result]
+    M --> S[model_stage_result]
+    subgraph legacy [v17/v18 only]
+        AL[model_atom_local_potential]
+        AP[model_atom_posterior]
+        AG[model_atom_group_potential]
+    end
 ```
 
-The eleven tables are:
+Current v19 contains these nine tables:
 
 - `model_object`;
 - `model_chain_map`;
@@ -119,58 +127,51 @@ The eleven tables are:
 - `model_component_bond`;
 - `model_atom`;
 - `model_bond`;
-- `model_atom_local_potential`;
-- `model_atom_posterior`;
-- `model_atom_group_potential`;
-- `model_joint_result`.
+- `model_joint_result`;
+- `model_stage_result`.
 
-## 8. Stored and Derived Values
+## 8. Canonical analysis data
 
-The root stores model metadata but not `atom_size`; row counts are derived from child tables.
+The root stores model metadata but not `atom_size`; row counts are derived from
+child tables. Atom and bond selection is restored from their structure rows.
+Analysis values do not imply selection.
 
-`model_atom` and `model_bond` store `is_selected` directly. Structure loading restores both selections before analysis hydration. Analysis rows never imply selection.
+`model_stage_result(key_tag, result_json)` owns the canonical neutral analysis
+document (format version 2). It stores per-atom First/Second stage estimates,
+method and run provenance, availability reasons, uncertainty, raw samples and
+geometry, paired peeling, group membership, group evidence and posterior
+summaries. The encoder keeps Joint points separate from native OLS/MDPDE
+diagnostics. Group membership is restored by its saved atom identities; legacy
+group tables are adapted using the restored selection.
 
-Atom-local raw and peeling samples are stored as BLOBs. Each sample is exactly three float64 values:
+`model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
+and its JSON schema-5 metadata, parameter layout, evidence and states. It is
+distinct from the neutral stage view used by downstream analysis. Legacy v17/v18
+analysis rows are read only for adaptation or migration; they are not canonical
+in v19.
 
-1. distance;
-2. response;
-3. selection flag encoded as `0.0` or `1.0`.
-
-Each value is an IEEE-754 64-bit `double`, so one sample occupies `3 * sizeof(double)` bytes. Loading rejects any BLOB whose byte length is not an exact multiple of that size. Sample count is derived from the validated BLOB byte length, so there are no raw or peeling sampling-size columns and no legacy float32 or two-value decoder.
-
-SQLite scalar fields are bound and read as `double` directly. Runtime values are not narrowed before persistence.
-
-Atom-group membership is derived from restored selection and atom classification. The group table stores no `member_size` column.
-
-Local Gaussian data retains fixed two-stage wide rows for OLS, MDPDE, and alpha-r. Group Gaussian data stores one result per group: mean, MDPDE, prior, prior uncertainty, and alpha-g. Group columns have no stage suffixes.
-
-In memory, group membership and statistics use a single group map. Each atom stores an optional `GroupGaussianMemberResult` independently of its two local results. Read the posterior, outlier flag, and statistical distance through `AtomLocalPotentialView::GetGroupMemberResult()`; an available local entry with no group fit returns `std::nullopt`. Group-result and membership APIs take the group key without a fitting stage. Local alpha-r access still selects a stage. The group workflow always uses the final (`Second`) local inputs.
-
-Copying or updating a local fitting stage leaves the independent group member result intact. Workflow seed initialization clears selected atoms' group member results; clearing all analysis removes them as well. The posterior table continues to store one row per atom.
-
-## 9. Save and Load Flow
+## 9. Save and load flow
 
 ### Save
 
-1. Lock the repository.
-2. Begin a transaction.
-3. Delete existing child rows for the key.
-4. Upsert the `model_object` root row.
-5. Save chain, component, atom, bond, and selection rows.
-6. Save atom-local, posterior, and atom-group analysis rows.
-7. Commit.
+1. Lock the repository and begin a transaction.
+2. If the database is v17/v18, load and convert every model to neutral
+   document version 2, create `model_stage_result`, drop the three legacy
+   analysis tables, and set schema version 19.
+3. Replace the requested model's child rows and root row.
+4. Write its structure, optional Joint result, and canonical stage document.
+5. Commit the migration and requested model save together.
 
 ### Load
 
-1. Lock the repository and begin a transaction.
-2. Read components, atoms, bonds, chain metadata, and persisted selection values.
-3. Assemble `ModelObjectParts` into a valid model.
-4. Restore atom and bond selection from their rows.
-5. Load root metadata and atom-local analysis.
-6. Load atom-group results and rebuild group membership from selected atoms.
-7. Return the model and commit the read transaction.
+1. Lock the repository and begin a read transaction.
+2. Read and assemble model structure, metadata, and saved atom/bond selection.
+3. Adapt legacy v17/v18 analysis or decode the canonical v19 stage document.
+4. Decode the optional Joint snapshot and rebuild group membership.
+5. Return the model and commit the read transaction.
 
-A missing `key_tag` raises an error; it does not produce an empty model.
+A missing `key_tag` or conflicting legacy/canonical representation raises an
+error; it does not produce an empty model.
 
 ## 10. Key Files
 
@@ -187,15 +188,15 @@ A missing `key_tag` raises an error; it does not produce an empty model.
 ## Joint result payload
 
 `model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
-same direct cascading model-root foreign key as other child tables. Its JSON
-schema 1 codec is shared by SQLite and the public joint file exporter. Finite
-doubles use precise parsing for round-trip preservation. Nonfinite initialization
-diagnostics alone use null; decoded unavailable diagnostics remain NaN in memory.
-The captured runtime-convergence status is read as stored, alongside original
-scoped evidence. Missing fields, invalid enum/schema values and inconsistent
-state/mapping dimensions are rejected, without numerical reassessment.
+same direct cascading model-root foreign key as other child tables. Its schema-5
+JSON codec is shared by SQLite and the public Joint file exporter; readers accept
+schemas 3, 4, and 5. Finite doubles use precise parsing for round-trip
+preservation. Nonfinite initialization diagnostics use null. Captured convergence
+and scoped evidence are read as stored; decoding does not reassess numerically.
+Missing fields, invalid enums or schema values, and inconsistent state/mapping
+dimensions are rejected.
 
-Save/load uses the model transaction. Saving over a key replaces its joint
-payload too; a model without a joint outcome removes that key's previous payload.
-Stored atom identities must match the model's non-hydrogen atoms. No observations,
-structural support or prediction vectors are stored by this result codec.
+Joint result save/load shares the model transaction. Saving over a key replaces
+its Joint payload; saving a model without a Joint outcome removes that key's
+previous payload. Stored atom identities must match the model's non-hydrogen
+atoms. Observations, support memberships, and prediction vectors are not stored.
