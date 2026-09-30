@@ -46,10 +46,6 @@ fold-wide acceptance campaign.
 
 The historical endpoint and failed-only campaign runners have been retired.
 Their exact work totals and fold-wide outputs are not permanent correctness
-contracts. The checked-in results under
-[`figures/endpoint-refinement/`](figures/endpoint-refinement/) and
-[`figures/failed-only-refinement/`](figures/failed-only-refinement/) remain
-historical evidence and are not read by active tests. The former runner source
-is available in Git history. The separate
-[endpoint refinement experiment report](endpoint-refinement-experiment.md) is
-retained as historical methodology and results.
+contracts. The current refinement policy is owned by this document,
+`production-fitting.md`, and the permanent C++ tests above. Historical artifact
+provenance remains recorded in the retirement manifest and Git history.

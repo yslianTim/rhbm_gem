@@ -45,6 +45,15 @@ thresholds and historical scope definitions. Current public objectives are
 normalized by the parent observation scale squared; archived experiment
 objectives remain raw half-RSS.
 
+Current regression ownership remains in the [Joint runtime tests](../../tests/core/joint_component/Runtime_test.cpp),
+[numerical tests](../../tests/core/joint_component/Numerics_test.cpp),
+[strict-support search tests](../../tests/core/joint_component/Search_test.cpp),
+and [partial-selection tests](../../tests/core/joint_component/PartialSelection_test.cpp).
+The immutable [fixture catalog](../../tests/fixtures/joint_component/catalog.json)
+and [fixture guide](../../tests/fixtures/joint_component/README.md) retain the
+input and expected-state provenance; the [runtime guide](joint-component-runtime.md)
+documents the maintained validation commands.
+
 ## Transition acceptance
 
 The [acceptance receipt](figures/joint-component-evidence/transition-acceptance.json)

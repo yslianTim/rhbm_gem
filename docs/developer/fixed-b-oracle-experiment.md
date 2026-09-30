@@ -1,5 +1,0 @@
-# 固定 B 的 oracle／quantization 控制實驗
-
-This historical workflow is retired. See the [evidence index](joint-component-evidence.md)
-for its conclusion, limitations, source hashes and full-history retrieval.
-Use the [runtime guide](joint-component-runtime.md) for maintained tests.

@@ -117,11 +117,8 @@ and [Readability refactor verification (2026-09-06)](https://github.com/yslianTi
 artifact directory, so raw-evidence availability is not established by this
 inventory. Their old test results are historical records, not current validation.
 
-### Earlier convergence provenance
+### Historical convergence provenance
 
-These three existing historical records remain in place and are not production
-specifications:
-
-1. [Convergence safeguard audit](audit-history/second-stage-convergence/convergence-safeguard-audit.md)
-2. [Stationarity and active-coordinate population audit](audit-history/second-stage-convergence/stationarity-active-coordinate-audit.md)
-3. [Counterfactual convergence continuation audit](audit-history/second-stage-convergence/counterfactual-convergence-continuation-audit.md)
+The retired convergence audit records remain retrievable from Git history. The
+[artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json)
+records their former paths, source commits, sizes, and SHA-256 hashes.
