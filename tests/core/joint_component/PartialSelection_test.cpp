@@ -458,7 +458,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
-    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d.    | B mean / s.d.    | C mean / s.d.    |"), std::string::npos);
+    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C mean / s.d. |"), std::string::npos);
     EXPECT_NE(summary.find("\n| CA   |"), std::string::npos);
     EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
     const auto expectSummaryRowWidths = [](const std::string & output, bool unavailable) {
@@ -480,11 +480,11 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
         EXPECT_EQ(pipe_positions[4] - pipe_positions[3], 14);
         for (std::size_t column = 4; column < 7; ++column)
         {
-            EXPECT_EQ(pipe_positions[column + 1] - pipe_positions[column], 20);
+            EXPECT_EQ(pipe_positions[column + 1] - pipe_positions[column], 16);
             if (unavailable)
                 EXPECT_EQ(row.substr(pipe_positions[column] + 2, 11), "unavailable");
             else
-                EXPECT_EQ(row[pipe_positions[column] + 11], '/');
+                EXPECT_EQ(row[pipe_positions[column] + 9], '/');
         }
     };
     expectSummaryRowWidths(summary, false);
