@@ -8,8 +8,10 @@ belong in the two formal contracts. Historical benchmark results are not current
 performance measurements, and historical success does not establish
 cross-platform behavior or real-data generalization.
 
-No historical Markdown report or evidence artifact is deleted by PR-H1 or PR-H2.
-Any later deletion is a separate PR-H3 decision.
+Historical entries are not uniformly reproducible. Entries whose
+experiment-specific artifacts have been retired are conclusion-only historical
+records. They are not promised as reproducible experiments from the current
+checkout.
 
 ## 1. Scope and ownership
 
@@ -34,8 +36,8 @@ Any later deletion is a separate PR-H3 decision.
 ## 2. Algorithm-formation evidence
 
 These findings describe the historical experiments that shaped the current
-contracts. The four retired experiment pages are short retrieval pointers; this
-section is the summary of their scientific conclusions.
+contracts. This section is the canonical summary of their scientific
+conclusions.
 
 | Historical question | Evidence and limitation | Contract retained today | Provenance |
 | --- | --- | --- | --- |
@@ -44,7 +46,7 @@ section is the summary of their scientific conclusions.
 | Does matched joint A/C solve qualify from full design rank? | All 16 joint runs exhausted 2,000 evaluations without qualification despite design rank 336; frozen-neighbor controls qualified 1,335/1,344 blocks. Rank and lower C error do not establish stationarity. | Search completion, a usable state, and numerical qualification are distinct. | [Runtime contract](joint-component-runtime.md); [retired path and hash inventory](figures/joint-component-evidence/retired-artifacts.json). |
 | What did Experiments A/B/C establish about composite MDPDE? | A: baseline-best28 at alpha 0 had A/C RMSE **0.011471954 / 0.00063732864**; alpha 0.1 qualified at **0.0091138914 / 0.00049314988**, while alpha 0.5 and 1 exhausted their budgets. B: alpha 0 qualified at **0.0091707311 / 0.00032313699**; positive-alpha runs exhausted 100 evaluations. C: two starts both exhausted 100 evaluations; one endpoint had A/C RMSE **0.017916446 / 0.00011271024** and effective sample fraction **0.8983%**. The C comparison had no independent repeat or common-alpha control, so it neither isolates the cause nor disproves heterogeneous MDPDE. | These runs are not prerequisites for current joint LS and do not justify changing its objective. | [Retired path and hash inventory](figures/joint-component-evidence/retired-artifacts.json). |
 | Does fixed-B variable projection support the joint profile? | The historical profile work retained independent double/float32 recovery and full profile-Jacobian checks at nonzero residual. It is finite-fixture evidence, not a general convergence result. | Keep the constrained linear subproblem, full nonzero-residual correction, and independent reference checks in the current numerical contract. | [Certification contract](joint_abc_certification_contract.md); [retired path and hash inventory](figures/joint-component-evidence/retired-artifacts.json). |
-| Did the coverage set make weak and degenerate cases successful? | Nine immutable datasets remain in the fixture catalog. Weak, active-face, zero-signal, and duplicate cases retain their original resolution, correction, width-identification, and state-availability limitations. | Keep these cases as distinct regression outcomes; do not turn unavailable or failed evidence into passes. | [Fixture catalog](../../tests/fixtures/joint_component/catalog.json); [fixture guide](../../tests/fixtures/joint_component/README.md); [v1 receipt](joint-component-v1-acceptance.json). |
+| Did the coverage set make weak and degenerate cases successful? | Nine immutable datasets remain in the fixture catalog. Weak, active-face, zero-signal, and duplicate cases retain their original resolution, correction, width-identification, and state-availability limitations. | Keep these cases as distinct regression outcomes; do not turn unavailable or failed evidence into passes. | [Fixture catalog](../../tests/fixtures/joint_component/catalog.json); [fixture guide](../../tests/fixtures/joint_component/README.md); [v1 freeze receipt](joint-component-v1-acceptance.json). |
 | Did guarded certification qualify all cases? | The frozen baseline recorded 128 paired branches, 64 required global regular pairs, and 192 component-local scopes (128 regular); 96 regular globally restricted scopes use a separate certification scope. These counts apply only to the recorded fixtures and policy. | Keep global, restricted, and local certification scopes separate; local certification cannot replace global qualification. | [Transition receipt](figures/joint-component-evidence/transition-acceptance.json); [certification contract](joint_abc_certification_contract.md); [component contract](joint_abc_components_contract.md). |
 | Did exact component decomposition preserve parent evidence? | Transition receipts compare 1,248 migrated search/state/context records, 2,096 global/restricted audit records, and 3,712 baseline records including separate local scopes. Four representative local certificates were rerun; the migrated offline driver did not rerun the full audit matrix. | Preserve structural partition, shared parent scale/rank context, same-state assembly, and failure isolation. | [Transition receipt](figures/joint-component-evidence/transition-acceptance.json); [global pairs](figures/joint-component-evidence/global-pairs.csv); [scope matrices](figures/joint-component-evidence/global-and-restricted-scopes.csv) and [local scopes](figures/joint-component-evidence/local-scopes.csv). |
 
@@ -66,32 +68,16 @@ state-availability outcomes.
 | Milestone | Historical evidence | Retained limitation | Current owner |
 | --- | --- | --- | --- |
 | Tiled derivative and assessment | For heterogeneous-168 / first-stage-float32 on the recorded macOS arm64 host, peak RSS changed from **1,252.14 MiB to 359.14 MiB (71.3% lower)**; total time changed from 28.7429 s to 27.6702 s (3.7% lower), with assessment slightly slower. Fixed-state parity passed at the same states. | This establishes a storage reduction for that host and case, not general scalability or a universal speedup; sparse factor storage and compact quadratic factors remain. | [Profile operator](joint-profile-operator.md); [measurement JSON](joint-component-tiled-backend.json). |
-| Sparse EIGEN/SPQR backend | On completed fixed states, backend comparisons retained status, rank, active face, coefficients and existing Guarded checks. The single-128 complete command measured 19.20 s versus 11.78 s (1.63x); all six runs converged. Exact case-level comparisons and verification hashes remain in the [numerical comparison](figures/joint-sparse-acceptance/numerical-comparison.json) and [verification receipt](figures/joint-sparse-acceptance/verification.json). | Both 6Z6U attempts stopped during reference at 600 s after primary rank 4314/4334; neither had an accepted state. Both single-512 complete-command attempts stopped at 600 s without persisted output. The two large raw archives are absent from the versioned tree; their hashes and known absence remain recorded in §9. | [Sparse backend](joint-component-sparse-backend.md). |
-| Compact SVD | The historical compact campaign passed its recorded numerical and fixed-state performance gates. For SPQR fixed states, the auto/legacy median ratios were 0.268861 for Single-128 reference plus derivative (maximum 1.10), 0.730425 for Heterogeneous-168 (maximum 1.10), 0.009068 for Single-512 reference SVD, 0.005008 for Single-512 free-design SVD, and 0.184551 for Single-512 reference plus derivative (the latter three maximum 0.70). Three samples per backend passed the numerical audits. The Single-512 candidate completed three full commands (median 289.238 s); the ce58c897 command baseline stopped at 600 s, so no completed-command speedup is established. Baseline `ce58c89747d4091f91967e7f4bd9c7890d51c203` had production fingerprint `9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0`; candidate `e32919f3` had fingerprint `f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755`. | The acceptance is tied to its source, backend, host, and cases. It is not a current performance guarantee. | [Compact SVD](joint-component-compact-svd.md); [verification receipt](figures/joint-compact-acceptance/verification.json). |
+| Sparse EIGEN/SPQR backend | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. Completed fixed-state EIGEN/SPQR comparisons agreed within recorded tolerances. Historical 6Z6U primary rank was 4314/4334 and yielded no accepted state. A historical single-512 complete-command run timed out. `measurements.json.gz` and `command-exports.tar.gz` were already absent. A historical active-a SPQR spectrum discrepancy existed; SPQR was not promoted to the production default. | These fixed-state comparisons do not establish a completed large workflow or a production promotion. | [Sparse backend](joint-component-sparse-backend.md). |
+| Compact SVD | The historical compact campaign passed its recorded numerical and fixed-state performance gates. For SPQR fixed states, the auto/legacy median ratios were 0.268861 for Single-128 reference plus derivative (maximum 1.10), 0.730425 for Heterogeneous-168 (maximum 1.10), 0.009068 for Single-512 reference SVD, 0.005008 for Single-512 free-design SVD, and 0.184551 for Single-512 reference plus derivative (the latter three maximum 0.70). Three samples per backend passed the numerical audits. The Single-512 candidate completed three full commands (median 289.238 s); the ce58c897 command baseline stopped at 600 s, so no completed-command speedup is established. Baseline `ce58c89747d4091f91967e7f4bd9c7890d51c203` had production fingerprint `9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0`; candidate `e32919f3` had fingerprint `f1ac45c36945e8e89e588af5c305158a7723b268a21c5c7ab0b22a3ae676a755`. | These results are tied to their source, backend, host, and cases; they are not current performance guarantees. | [Compact SVD](joint-component-compact-svd.md); [verification receipt](figures/joint-compact-acceptance/verification.json). |
 | Fixed factors and normal actions | The recorded campaign completed **72/72 processes** and **24/24** three-repetition A/B, B/C, and A/C comparisons. Normal actions used two Q/Q′ calls versus six for the composed control. | These fixed-state/fixed-step results do not promote a different full-search default or establish large-workflow scalability. Some original step subtotals omitted gradient setup; corrected bounds are not exact end-to-end step times. | [Fixed actions](joint-fixed-actions.md); [summary](figures/joint-fixed-actions/summary.json) and [comparison decisions](figures/joint-fixed-actions/comparison.json). |
 | Endpoint reference | The 43.81-minute historical campaign completed all 18 fixed-state audits and all 128/512 analysis-export comparisons. Single-128 changed from 5.229 s to 4.912 s; single-512 from 307.805 s to 300.564 s, with peak RSS from 2.500 GiB to 1.872 GiB for single-512. Search reference evaluations changed from six to zero. Detailed comparisons and archive provenance remain in the [summary](figures/joint-reference-acceptance/summary.json) and [archive inventory](figures/joint-reference-acceptance/archives.json). | These are incremental historical results on the recorded host; search and endpoint assessment remained the dominant costs. | [Compact SVD](joint-component-compact-svd.md). |
-| Profile operator | All 18 fixed-state audits and 20 preparation-only workloads completed. On 6Z6U, baseline and candidate reached the sampled RSS watchdog on both backends and had no numerical verdict. The 10,000-atom runs stopped after input/layout/basis preparation; they did not solve, rank, search, assess, or estimate uncertainty. | Operator construction and action parity do not prove full search or full-workflow scaling. | [Profile operator](joint-profile-operator.md); the remaining unique historical measurements are preserved in the [acceptance record](figures/joint-profile-operator/acceptance.md). |
-| Operator LM and Schwarz search | The baseline campaign ended at its 80-minute deadline with 41 completed numerical runs, one deadline termination, and 16 entries not run. Single-512 Schwarz medians were 419.562 s vs legacy 229.232 s (Eigen) and 350.104 s vs 217.933 s (SPQR), exceeding the 1.10 performance ratio on both backends. The required full historical promotion campaign was incomplete and production did not switch. | Required comparisons remained incomplete; 6Z6U and large-local campaign cases were not run. Production remains LegacyCompact; no promotion was made. | [Operator search](joint-operator-search.md); [campaign manifest](figures/joint-operator-search/manifest.json). |
-| Bounded SPQR rank prototype | Small controls established both full-rank and deficient decisions against the dense oracle. Both representative SPQR prototypes exhausted 100 million charged work units and returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient. No 128-atom definitive rank result, 512/2,000-atom rank result, or scaling guarantee was established. A separate single-512 Schwarz attempt exceeded the sampled 4 GiB RSS threshold on both backends and had no endpoint. The pre-existing SPQR active-a/first-stage-double spectrum discrepancy was 1.2990450737934428e-9 against the unchanged 1e-10 tolerance and reproduced on its pristine baseline. The rank campaign was not repeated after its final deadline-guard correction. | [Sparse backend](joint-component-sparse-backend.md). |
+| Profile operator | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. All 18 fixed-state audits passed, establishing operator/action parity on finite recorded controls. The 10,000-atom workload was preparation-only and does not prove solve, search, or full-workflow scalability. Historical 6Z6U runs hit the sampled RSS watchdog and established no numerical verdict. | Fixed-state and preparation-only results do not establish full-workflow scalability or a 6Z6U numerical outcome. | [Profile operator](joint-profile-operator.md). |
+| Operator LM and Schwarz search | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. The full promotion campaign was incomplete and required comparisons were not all run. The historical Single-512 performance gate did not support promotion; the production default remained LegacyCompact. No 6Z6U promotion conclusion was established. | The campaign does not support changing the production default. | [Operator search](joint-operator-search.md). |
+| Bounded SPQR rank prototype | Small controls established full-rank and deficient decisions against the dense oracle. Two representative SPQR prototypes returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient; no definitive 128-atom or 512/2,000-atom rank result or scaling guarantee was established. A separate Single-512 Schwarz attempt exceeded the sampled RSS threshold on both backends and had no endpoint. | [Sparse backend](joint-component-sparse-backend.md). |
 
-The bounded-rank prototype's retained measurements were chain-128 (58,300 rows,
-256 free columns; Unavailable after 99,995,408 charged units, 0.161702 s, and
-64,143,360 sampled process-tree bytes) and cube-128 (47,792 rows, 256 free
-columns; Unavailable after 99,987,038 units, 0.121975 s, and 133,464,064 bytes).
-The dense oracle reported rank 256 for both controls. The final per-column
-deadline guard correction passed its regression but the campaign was not rerun.
-In a separate 600 s Single-512 sparse diagnostic, selected samples at 120 and
-540 s were in `SearchProfile → PrepareDerivative → JacobiSVD`; the 300 s sample
-was in `Profile::Trial → CheckTrust → SolveLinear → JacobiSVD` during reference
-work. The sample hashes and these selected frames remain in the compact
-[diagnostic receipt](figures/joint-sparse-acceptance/late-profile/receipt.json);
-they identify observed call paths, not whole-run time percentages.
-
-Exact sparse fixed-state comparisons and verification hashes remain in the
-machine-readable comparison and verification receipts. The compact-SVD fixed-
-state gates and source fingerprints are summarized above and indexed in the
-retired-artifact inventory. These fixed-state results must not be confused with
-the full-command resource envelope in §6.
+These fixed-state results must not be confused with the full-command resource
+envelope in §6.
 
 ## 4. Structural and identifiability boundaries
 
@@ -147,7 +133,7 @@ the 3,600 s / 8 GiB gate; no endpoint, convergence, uncertainty, peeling,
 database save, or export was completed. A later optimized attempt was stopped
 by the user at 180 s / 3,198 MiB and is incomplete evidence. The 600 s reviewed
 baseline also stopped, at 600.03 s / 3.70 GiB. Single-128 and single-512 completed
-historical comparisons, but do not turn the 6Z6U result into an acceptance.
+historical comparisons, but do not establish a 6Z6U numerical verdict.
 
 The completed Single-128 and Single-512 analysis-export comparisons each had
 three runs per version. Reviewed stage-3 versus optimized medians were 4.68 s
@@ -193,25 +179,14 @@ and its [input snapshot](figures/joint-validation/weak-snapshot.json) and
 
 ### Partial selection and halo closure
 
-Selected non-hydrogen atoms fixed the historical observation rows. Every
-eligible contributor intersecting those rows was included once; halo did not
-expand rows or recursively add its neighbors. A bridge halo had one parameter
-vector. The exhaustive small-domain oracle covered outside-map halos, unobserved
-selected targets, hydrogen exclusion, exact cutoff, clipping, anisotropic
-spacing, and nonrecursive closure.
-
-The matched/omitted-halo synthetic control used the same observation rows.
-Complete closure gave normalized objective 8.139650468e-32 and target A/B/C
-errors below 3e-15. Omitting the halo gave objective 0.07347280397 and target
-errors delta-A=1.909360106, delta-B=0.1355602156 Angstrom,
-delta-C=0.1243884602. This demonstrates parameter compensation in that
-synthetic control; it is not a real-data accuracy claim. A separate weak
-partial-selection case retained available states but failed local correction in
-all three runs. Small synthetic success does not establish large-scale resource
-bounds.
-
-The full validation lanes and resource-run details remain in the
-[partial-selection receipt](joint-component-partial-selection-acceptance.json).
+The experiment-specific receipts have been retired from the current tree. The
+summary below is the canonical historical record. Selected atoms defined the
+historical observation rows, and halo contributor closure was required for
+correctness. In the matched synthetic control, omitting the halo caused strong
+target compensation; complete closure produced near-zero objective and target
+errors. A weak partial-selection state could remain available while local
+correction failed. These small synthetic cases do not establish large-scale
+scalability.
 The current closure rules are owned by the [runtime guide](joint-component-runtime.md).
 
 ### Stage and persistence evolution
@@ -234,35 +209,28 @@ implementation at df138da5. The retained paired postprocessing measurements are
 in [joint-analysis-consolidation-benchmark.json](joint-analysis-consolidation-benchmark.json).
 The earlier v1 result format was schema 2; the
 current writer is schema 5 and retains older v3/v4 reads without inferring
-target evidence. These are historical acceptance facts; current
+target evidence. These are historical workflow results; current
 workflow and persistence semantics are owned by the [stage integration](joint-stage-integration.md)
 and [data I/O architecture](architecture/dataobject-io-architecture.md).
 
 ## 6. Historical resource envelope
 
-The full-command resource study used an Apple M1 iMac (8 cores, 16 GiB,
-macOS 26.6.2 arm64), Release builds, one numerical worker, and a nominal 100 ms
-sampled 4 GiB process-tree watchdog. Input hashes, sampled-memory gaps and
-per-case phase records are retained in [resources.json](figures/joint-validation/resources.json)
-and the [preflight receipt](figures/joint-validation/resource-preflight.json);
-selected stack hashes and attribution are in
-[diagnostic-profiles.json](figures/joint-validation/diagnostic-profiles.json).
-The analysis/export pair shared a 600 s deadline.
+The experiment-specific receipts have been retired from the current tree. The
+summary below is the canonical historical record. The campaign ran on an Apple
+M1 iMac (8 cores, 16 GiB, macOS 26.6.2 arm64). A nominal 100 ms sampled 4 GiB
+process-tree RSS watchdog was used, with a 600 s analysis/export deadline.
 
 | Historical workload | Result | Interpretation |
 | --- | --- | --- |
-| Connected 128 | 3/3 completed in 17.693-19.740 s; all passed, maximum sampled RSS 368 MiB. | Demonstrates only this historical case/host. |
-| Connected 512 | 0/1 completed; 600.030 s time limit, 759 MiB sampled RSS; no exported result. | Numerical outcome unknown. |
-| Connected 2,167 | Not run after the 512 stop. | No connected-2,167 result. |
-| Multi-component, total 2,167 | 0/1 completed; 600.032 s time limit, 1,570 MiB sampled RSS; no exported result. | Does not establish many-small-component scalability. |
-| 6Z6U, 2,192 contributors | 0/1 completed; 600.037 s time limit, 1,956 MiB sampled RSS; no exported result. | Does not establish 6Z6U convergence or failure. |
+| Connected 128 | Completed. | Historical-host evidence only. |
+| Connected 512 | 600 s timeout. | Numerical outcome unknown. |
+| Connected 2,167 | Not run / unavailable. | No scalability conclusion. |
+| Multi-component, total 2,167 | 600 s timeout. | No many-small-component scalability proof. |
+| 6Z6U | 600 s timeout. | No convergence or failure verdict. |
 
-The 37,406-atom catalogue control completed only with two contributors and 681
-rows; it is not evidence for running the full catalogue domain. A process
-timeout/resource stop is not a numerical failure. Process completion is not
-convergence or scientific qualification. Sampled RSS is not a hard OS limit;
-the capped cases lack final OS peak readings. No capped case was retried with
-more time, split into artificial components, or run with relaxed checks.
+Timeout is not a numerical failure; a missing result is not failed convergence;
+completion is not scientific qualification. Sampled RSS was a watchdog
+observation, not a hard OS limit.
 
 ## 7. Statistical evidence
 
@@ -274,18 +242,17 @@ replicates. The matrix is deliberately unbalanced and tests one noise-correlatio
 length and one position-mismatch type; it is not a population success-rate,
 coverage, or real cryo-EM validity study. Process completion and numerical
 qualification are reported separately. A serialization-recovery comparison
-found identical input hashes and numerical statuses, with at most a one-ULP
+found identical input snapshots and numerical statuses, with at most a one-ULP
 parameter representation difference caused by the historical experiment
 wrapper's default JSON parsing; the production decoder was already precise.
-The comparison record is
-[serialization-recovery.json](figures/joint-validation/serialization-recovery.json).
+This conclusion is retained without the experiment-specific recovery record.
 
 ## 8. Explicitly unproven boundaries
 
 - Full 6Z6U end-to-end convergence has not been demonstrated.
 - Large connected-component scalability has not been established.
 - Observable-halo profiling removes the diagnosed full-ABC structural
-  obstruction, but does not establish complete 6Z6U acceptance.
+  obstruction, but does not establish complete 6Z6U qualification.
 - A complete large 6Z6U target-estimability solve has not been established.
 - Numerical full rank does not guarantee practical parameter sensitivity or
   recovery for a weak halo.
@@ -304,30 +271,47 @@ The comparison record is
 
 ## 9. Historical retrieval
 
-The canonical index and adjacent inventories identify the surviving evidence:
+### Current-tree retained historical evidence
+
+- The transition receipt, scope matrices, compact-SVD verification, and
+  fixed-action comparisons remain in their linked locations above.
+- The endpoint-reference package retains its README, archive inventory,
+  summary, and verification files.
+- Frozen fixtures remain catalogued in `tests/fixtures/joint_component/`.
+- Current weak-halo and noise/mismatch results remain under
+  `figures/joint-validation/` and are described by their active research guides.
+
+### Conclusion-only retired campaigns
+
+The experiment-specific current-tree artifacts were intentionally removed for:
+
+- Sparse backend campaign (H06).
+- Operator/Schwarz promotion campaign (H07).
+- Profile-operator audit campaign (H08).
+- Partial-selection campaign (H09).
+- Historical resource envelope (H12).
+
+The summaries in §§3, 5, and 6 are the canonical historical records for these
+campaigns; they are not promised as reproducible experiments from the current
+checkout.
+
+### Historical source references
+
+The canonical index and adjacent inventories identify historical source points:
 
 - The final historical runtime baseline was
   ba2449faf1e1b163f1b4209c3ef386ff6516de43; the pre-extraction component
   reference was 6f30510c06def630226a3dab25e9bcc579d72687.
-- The accepted v1 implementation baseline was
+- The v1 implementation baseline was
   7c0b7a4543fdc43390ca59b3aa3b5d9267fbaac7; its report records runtime source
   fingerprint e601fd9b727d59ec9668e08a1a3949ddef2365eca859c688ae4737767435c450.
 - The 6Z6U initial-rank investigation starts at 5f06b027; observable-halo
   profiling starts at d634fa0d.
-- Sparse-backend acceptance records baseline
-  ceb6155992b9c891ab3fa878e875c6b10aa0590f and candidate production
-  fingerprint 9718531067e72cd3ecf180d12ae8033b8e39360b7fe1d49d24ae847de4240fa0.
-- Compact-SVD acceptance records baseline ce58c89747d4091f91967e7f4bd9c7890d51c203
+- Compact-SVD historical results use baseline ce58c89747d4091f91967e7f4bd9c7890d51c203
   and candidate e32919f3; endpoint-reference comparison is e32919f3 against
   c9e0f8c9.
-- Operator search uses pristine baseline
-  c6c869cd4f4939104dfde96984ae17f736a8ce4a; bounded rank work starts at
-  5f61bb6e.
 - Analysis consolidation starts at c5619e0c; its migration fixture was
   generated by v18 at df138da5.
-- Partial selection was tested from base
-  bb72080c4878ee2333ad3e084f5e7a9d687abf33, with production source SHA-256
-  e346827a2d7ffe05f4d83bcf06c8b92f416d85825f9d4cf3d8f22a20dee73e34.
 
 For a historical source file or artifact, retrieve the recorded commit/path in
 an isolated checkout, for example:
@@ -335,24 +319,18 @@ an isolated checkout, for example:
     git show ba2449faf1e1b163f1b4209c3ef386ff6516de43:docs/developer/figures/joint-abc-components/search-records-a.tar.gz > /tmp/search-records-a.tar.gz
 
 The [retired-artifact inventory](figures/joint-component-evidence/retired-artifacts.json)
-records former paths, byte sizes, source commits, and SHA-256 values for the
-retired Joint tree and PR-H3 documents. The [endpoint-reference archive inventory](figures/joint-reference-acceptance/archives.json)
-records its former paths, retrieval commits, sizes, and hashes. The tiled,
-transition, fixed-action, operator, sparse, compact, resource, and statistical
-receipts remain under figures/; verify retrieved bytes against their
-inventories before use.
+records former paths, byte sizes, last-present commits, and SHA-256 values for
+historical files removed from the current tree. The [endpoint-reference archive
+inventory](figures/joint-reference-acceptance/archives.json) records former
+paths, retrieval commits, sizes, and hashes for that retained evidence package.
 
 Known unavailable material is explicitly **absent**:
 
 - The older certification report's scientific-records.tar.gz and
   frozen-diagnostics/frozen-endpoint-records.tar.gz are absent from the final
   baseline tree and are not promised recoverable artifacts.
-- Sparse acceptance's `measurements.json.gz` and `command-exports.tar.gz` are
-  absent from the versioned tree; their former paths, recorded SHA-256 values,
-  and unknown last-present commit are explicit in
-  [sparse verification metadata](figures/joint-sparse-acceptance/verification.json).
-- Operator-search receipts.tar.gz is absent; its recorded hash remains in
-  [the operator manifest](figures/joint-operator-search/manifest.json).
+- The sparse-backend campaign's `measurements.json.gz` and `command-exports.tar.gz` were
+  already absent before its remaining receipts were retired.
 - Initial-rank experiment-specific tools, tests, captures, builds, and data
   bundles were removed; the structural finding is preserved in §4.1.
 - Observable-halo experiment runners, diagnostic extensions, raw measurements,
