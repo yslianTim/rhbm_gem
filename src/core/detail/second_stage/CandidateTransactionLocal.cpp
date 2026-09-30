@@ -1,5 +1,4 @@
 #include "core/detail/second_stage/ComponentAssembly.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
@@ -329,7 +328,6 @@ static ClusterCandidateResult SelectClusterCandidate(
         previous_objective_entry.has_value() ? &*previous_objective_entry : nullptr
     };
     const auto trust_region_radius{ inputs.trust_region_state.GetRadius(key) };
-    auto & performance_counters{ inputs.performance_counters };
     ClusterCandidateResult result;
     result.polish_provenance.reserve(key.size());
     for (const auto atom_index : key)
@@ -343,10 +341,8 @@ static ClusterCandidateResult SelectClusterCandidate(
     std::optional<double> first_objective_evaluated_factor;
     bool is_polish_eligible{ false };
 
-    LocalSearchObservation observation(inputs, key);
     for (;;)
     {
-        observation.BeginSearch(trust_region_radius);
         result.evidence = CandidateDecisionEvidence{};
         result.polish_progress = PolishProgress{};
         is_polish_eligible =
@@ -373,7 +369,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.accepted_patch = FitStatePatch::FromState(previous_state, key);
             result.evidence.previous_objective = previous_objective_entry;
             result.evidence.candidate_objective = previous_objective_entry;
-            observation.Nonmaterial();
             result.evidence.accepted_factor = 0.0;
             if (is_polish_eligible) result.polish_progress.skipped_count = 1;
             break;
@@ -384,7 +379,6 @@ static ClusterCandidateResult SelectClusterCandidate(
         for (double factor{ 1.0 };
             factor >= std::numeric_limits<double>::epsilon(); factor *= 0.5)
         {
-            observation.Generated();
             auto proposal_result{
                 BuildAtomProposal(
                     previous_state,
@@ -395,7 +389,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (!proposal_result.has_value())
             {
                 result.evidence.invalid_trial_count++;
-                observation.InvalidCandidate();
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::InvalidModel;
                 continue;
@@ -427,7 +420,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             }
             if (!IsTrustRegionStepWithinRadius(proposal.step_norm, trust_region_radius))
             {
-                observation.TrustSkipped();
                 result.evidence.pre_objective_failure_reason =
                     PreObjectiveFailureReason::NoCandidateWithinTrustRegion;
                 continue;
@@ -437,7 +429,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             if (guard_failure)
             {
                 result.evidence.guard_rejected_trial_count++;
-                observation.GuardRejected();
                 last_guard_failure = guard_failure;
                 continue;
             }
@@ -454,11 +445,10 @@ static ClusterCandidateResult SelectClusterCandidate(
             };
             const auto evaluation{ EvaluateLocalCandidate(candidate_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::PreviousNonRegression, key, objective_sample_ref_list, previous_objective,
-                    objective_domain, trial_evidence, performance_counters,
+                    objective_domain, trial_evidence,
                     inputs.member_best ? &inputs.member_best->at(key) : nullptr}) };
             trial_evidence = evaluation.evidence;
             const auto committed{ evaluation.accepted };
-            observation.Trial(trial_evidence, committed);
             if (committed)
             {
                 result.evidence = std::move(trial_evidence);
@@ -584,10 +574,9 @@ static ClusterCandidateResult SelectClusterCandidate(
             const auto evaluation{ EvaluateLocalCandidate(polished_overlay,
                 LocalCandidateReference{LocalObjectivePolicy::StrictReferenceImprovement, key, objective_sample_ref_list,
                     result.evidence.candidate_objective ? &*result.evidence.candidate_objective : nullptr,
-                    objective_domain, polish_evidence, performance_counters}) };
+                    objective_domain, polish_evidence}) };
             polish_evidence = evaluation.evidence;
             const auto polish_committed{ evaluation.accepted };
-            observation.Trial(polish_evidence, polish_committed, true);
             if (!polish_committed)
             {
                 result.polish_progress.rejected_count = 1;
@@ -747,7 +736,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
         }
     }
     inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
-    inputs.performance_counters.RecordFullStateMaterialization();
 
     ReconcileSelectedBoundaries(inputs);
     for (const auto & key : locally_polished_key_list)

@@ -1,10 +1,13 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SecondStageNumericalProbe.hpp"
 #include "support/EndpointRefinementTestSupport.hpp"
 #include <sstream>
 #include <iomanip>
+#endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/SolverFailureCapture.hpp"
+#include "support/SecondStageWorkCapture.hpp"
 #else
-#define RHBM_TEST_WORK(kind) ((void)0)
+#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
 #endif
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "utils/hrl/MDPDEEndpointRefinement.hpp"
@@ -135,7 +138,7 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     const GaussianModel3D & offset_model,
     bool enable_failed_only_refinement) const
 {
-    RHBM_TEST_WORK(Solver);
+    RHBM_TEST_COUNT_WORK(Solver);
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     auto dataset{ BuildDataset(sample_response_list, offset_model) };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION

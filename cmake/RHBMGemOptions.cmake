@@ -34,11 +34,9 @@ option(RHBM_GEM_BUILD_RESEARCH_TOOLS
     "Build optional research and historical validation tools" OFF)
 foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     if(DEFINED ${retired_option})
-        message(FATAL_ERROR "${retired_option} is retired. Remove both old options from your command and cache (cmake -U RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE -U RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT), then use RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT.")
+        message(FATAL_ERROR "${retired_option} is retired. Remove this option from your command and cache.")
     endif()
 endforeach()
-option(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT
-    "Record existing second-stage decision evidence without additional solving" OFF)
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")
@@ -81,12 +79,6 @@ endif()
 if((RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS) AND NOT BUILD_TESTING)
     message(FATAL_ERROR "Benchmark and research tool builds require BUILD_TESTING=ON")
 endif()
-
-function(rhbm_gem_apply_observation_definitions target)
-    if(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT)
-        target_compile_definitions(${target} PRIVATE RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT)
-    endif()
-endfunction()
 
 add_library(CompilerFlags INTERFACE)
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")

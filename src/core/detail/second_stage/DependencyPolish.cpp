@@ -1,6 +1,5 @@
 #include "core/detail/second_stage/ComponentAssembly.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
@@ -26,12 +25,10 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const SuspiciousBlockActivity & block_activity,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
-    PerformanceCounters & performance_counters,
-    SecondStageObservationSession * observation)
+    PerformanceCounters & performance_counters)
 {
     FinalDependencyPolishResult result{ .state = base_state };
-    FinalDependencyPolishDiagnostic unobserved;
-    auto & report{ observation ? observation->final_polish : unobserved };
+    auto & report{ result.diagnostic };
     report = FinalDependencyPolishDiagnostic{};
     if (!options.enable_second_stage_dependency_polish) return result;
 
@@ -44,7 +41,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     };
     report.component_count = component_list.size();
     const auto base_baseline{ BuildResidualBaseline(context, base_state) };
-    performance_counters.RecordGaussianCacheMisses();
     const auto base_objective{
         EvaluateAuditObjective(objective_domain, base_baseline)
     };
@@ -153,7 +149,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                             BoundaryJointCorrectionStatus::CandidateReady ||
                         !correction_result.patch.has_value())
                     {
-                        if (observation) observation->ObserveFinalPolishCorrectionFailure(component.atom_index_list, round + 1);
                         break;
                     }
 
@@ -163,11 +158,9 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         base_state,
                         *correction_result.patch
                     };
-                    JointCandidateObservation trial(observation, component.atom_index_list);
-                    trial.BeginFinalPolish(correction_result.damping, round + 1);
                     const auto evaluation{ EvaluateFinalPolishCandidate(candidate_overlay,
                         FinalPolishCandidateReference{component, partition, objective_domain,
-                            endpoint_state_view, *base_objective, endpoint_objective, performance_counters}, &trial) };
+                            endpoint_state_view, *base_objective, endpoint_objective}) };
 
                     report.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
                     if (!evaluation.objective) break;
@@ -192,7 +185,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         }
         catch (const std::exception &)
         {
-            if (observation) observation->ObserveFinalPolishComponentFailure(component.atom_index_list);
         }
     }
 
@@ -205,7 +197,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     auto assembled_state{ AssembleComponentState(base_state, selected_patches) };
     const auto evaluate_global_audit = [&](const FitState & state)
     {
-        performance_counters.RecordFullStateMaterialization();
         const auto snapshot{ BuildSecondStageModelSnapshot(context, state) };
         return EvaluateAuditObjective(objective_domain, context, snapshot);
     };

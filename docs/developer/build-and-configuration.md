@@ -281,7 +281,6 @@ Beginner / common:
 | `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
 | `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Create optional benchmark and resource-measurement targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional research and historical validation targets. Requires `BUILD_TESTING=ON`. |
-| `RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` | `OFF` | Passive second-stage decision records in non-quiet Debug runs; independent of testing. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 
@@ -388,13 +387,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GE
 
 # Enable project-wide experimental features
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON
-
-# Enable passive second-stage decision recording
-cmake -S . -B build-audit \
-  -DBUILD_TESTING=ON \
-  -DBUILD_PYTHON_BINDINGS=OFF \
-  -DRHBM_GEM_ENABLE_SECOND_STAGE_AUDIT=ON
-cmake --build build-audit --target tests_all -j
 
 # Install Python module into <prefix>/<CMAKE_INSTALL_LIBDIR>/pythonX.Y/site-packages (default layout)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON

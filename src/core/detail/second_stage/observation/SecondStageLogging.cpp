@@ -1,7 +1,6 @@
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 
 #include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
@@ -134,6 +133,11 @@ void AppendAuditSummary(
 
 
 } // namespace
+
+bool IsDebugLogLevelEnabled()
+{
+    return Logger::GetLogLevel() >= LogLevel::Debug;
+}
 
 void FinishProgressLine(bool quiet_mode)
 {
@@ -496,7 +500,6 @@ void LogSecondStageSummary(
 
 void LogSecondStagePerformance(
     const PerformanceCounters & counters,
-    std::size_t symbolic_analysis_count,
     double total_milliseconds)
 {
     std::ostringstream message_info;
@@ -513,7 +516,6 @@ void LogSecondStagePerformance(
         << counters.m_topology_rebuild_milliseconds << "/"
         << total_milliseconds << "\n";
 
-    (void)symbolic_analysis_count;
     Logger::Log(LogLevel::Info, message_info.str());
 }
 
@@ -583,230 +585,70 @@ void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
 }
 
 namespace {
-constexpr std::array<std::string_view, static_cast<std::size_t>(AuditStage::Count)> kAuditStages{
-    "proposal", "local-search", "local-polish", "boundary-endpoint", "boundary-correction", "boundary-backtracking",
-    "rescue-endpoint", "rescue-correction", "rescue-backtracking", "selection-ordinary", "selection-rescue",
-    "commit", "quarantine", "partition", "final-polish", "final-certification" };
-constexpr std::array<std::string_view, static_cast<std::size_t>(AuditCategory::Count)> kAuditCategories{
-    "none", "rejected", "unavailable", "invalid", "guard", "trust", "solver", "exhausted", "shrink",
-    "enter", "retry", "release", "salvage", "rescue", "partition" };
 void JsonNumber(std::ostream & out, double value)
 {
     if (std::isfinite(value)) out << std::setprecision(17) << value;
     else out << "null";
 }
-void JsonOptional(std::ostream & out, const std::optional<double> & value)
-{
-    if (value) JsonNumber(out,*value); else out << "null";
-}
-void JsonObjective(std::ostream & out, const std::optional<ObjectiveBreakdown> & value)
-{
-    if (!value) { out << "{\"value\":null,\"reason\":\"unavailable\"}"; return; }
-    const bool finite = std::isfinite(value->GetTotalObjective());
-    out << "{\"value\":{" << "\"fit\":"; JsonNumber(out,value->fit_range_residual_objective);
-    out << ",\"tail\":"; JsonNumber(out,value->tail_validation_loss);
-    out << ",\"offset\":"; JsonNumber(out,value->offset_plausibility_penalty);
-    out << ",\"total\":"; JsonNumber(out,value->GetTotalObjective());
-    out << "},\"reason\":" << (finite ? "null" : "\"nonfinite\"") << "}";
-}
 template<class T> void JsonArray(std::ostream & out, const T & values)
 {
-    out << '['; bool first=true;
-    for (const auto value : values) { if (!first) out << ','; first=false; JsonNumber(out,static_cast<double>(value)); }
+    out << '[';
+    bool first = true;
+    for (const auto value : values)
+    {
+        if (!first) out << ',';
+        first = false;
+        JsonNumber(out, static_cast<double>(value));
+    }
     out << ']';
 }
-void JsonCertificate(std::ostream & out, const std::optional<ConvergenceAssessment> & assessment, std::string_view reference, bool outer = true)
+void JsonCertificate(
+    std::ostream & out,
+    const std::optional<ConvergenceAssessment> & assessment,
+    std::string_view reference,
+    bool outer = true)
 {
-    out << "{\"reference\":\"" << reference << "\",\"status\":\"" << (assessment ? "evaluated" : "not_evaluated") << '"';
+    out << "{\"reference\":\"" << reference << "\",\"status\":\""
+        << (assessment ? "evaluated" : "not_evaluated") << '\"';
     if (assessment)
     {
-        const auto & c=assessment->certificate;
-        if (outer) { out << ",\"accepted_active_p99\":"; JsonArray(out,c.accepted_active_p99); }
-        out << ",\"operator_nominal_p99\":"; JsonArray(out,c.operator_nominal_p99);
-        if (outer) { out << ",\"accepted_population\":"; JsonArray(out,assessment->diagnostics.accepted_active_movement.population_size_list); }
-        out << ",\"operator_population\":"; JsonArray(out,assessment->diagnostics.operator_nominal_residual.population_size_list);
-        out << ",\"complete\":" << c.operator_complete << ",\"qualified\":" << c.solver_qualified;
-        const auto nonfinite=[](const auto & values) {
-            return std::ranges::any_of(values,[](double value) { return !std::isfinite(value); });
+        const auto & certificate{ assessment->certificate };
+        if (outer)
+        {
+            out << ",\"accepted_active_p99\":";
+            JsonArray(out, certificate.accepted_active_p99);
+        }
+        out << ",\"operator_nominal_p99\":";
+        JsonArray(out, certificate.operator_nominal_p99);
+        if (outer)
+        {
+            out << ",\"accepted_population\":";
+            JsonArray(out, assessment->diagnostics.accepted_active_movement.population_size_list);
+        }
+        out << ",\"operator_population\":";
+        JsonArray(out, assessment->diagnostics.operator_nominal_residual.population_size_list);
+        out << ",\"complete\":" << certificate.operator_complete
+            << ",\"qualified\":" << certificate.solver_qualified;
+        const auto nonfinite = [](const auto & values)
+        {
+            return std::ranges::any_of(values, [](double value) { return !std::isfinite(value); });
         };
-        out << ",\"residual_reason\":" << (nonfinite(c.operator_nominal_p99) || (outer && nonfinite(c.accepted_active_p99)) ?
-            "\"nonfinite-residual\"" : (c.operator_complete ? "null" : "\"operator-unavailable\""));
-        if (outer) out << ",\"blockers\":{\"domain\":" << c.objective_domain_changed << ",\"quarantine\":" << c.quarantine_transition
-            << ",\"suspicious\":" << c.suspicious_block_fallback << ",\"rejected\":" << c.rejected_cluster << '}';
+        out << ",\"residual_reason\":"
+            << (nonfinite(certificate.operator_nominal_p99) ||
+                (outer && nonfinite(certificate.accepted_active_p99)) ?
+                    "\"nonfinite-residual\"" :
+                    (certificate.operator_complete ? "null" : "\"operator-unavailable\""));
+        if (outer)
+        {
+            out << ",\"blockers\":{\"domain\":" << certificate.objective_domain_changed
+                << ",\"quarantine\":" << certificate.quarantine_transition
+                << ",\"suspicious\":" << certificate.suspicious_block_fallback
+                << ",\"rejected\":" << certificate.rejected_cluster << '}';
+        }
     }
     out << '}';
 }
-void JsonNominalSolves(std::ostream & out, const NominalSolveDiagnostics & diagnostics)
-{
-    out << "{\"shapes\":[";
-    for (std::size_t i = 0; i < diagnostics.shapes.size(); ++i)
-    {
-        if (i) out << ',';
-        const auto & solve{ diagnostics.shapes[i] };
-        out << "{\"atom_index\":" << i << ",\"status\":";
-        const auto effective_status{solve.EffectiveStatus()};
-        if (effective_status) out << '"' << LocalRefitStatusText(*effective_status) << '"'; else out << "null";
-        out << ",\"native_status\":";
-        if (solve.status) out << '"' << LocalRefitStatusText(*solve.status) << '"'; else out << "null";
-        const auto qualification{solve.Qualification()};
-        out << ",\"qualification\":\"" << (qualification == RHBMSolveQualification::NativeSuccess ? "native-success" :
-            qualification == RHBMSolveQualification::RefinedSuccess ? "refined-success" : "unqualified") << '"';
-        if (solve.refinement)
-        {
-            const auto & r{*solve.refinement};
-            out << ",\"refinement\":{\"accepted\":" << r.accepted << ",\"reason\":\"" << r.reason
-                << "\",\"candidate_equation_evaluations\":" << r.candidate_equation_evaluations
-                << ",\"reference_updates\":" << r.reference_updates << ",\"reference_stop\":\"" << r.reference_stop
-                << "\",\"original_residual\":";
-            JsonOptional(out,r.original_residual);
-            out << ",\"candidate_residual\":"; JsonOptional(out,r.candidate_residual);
-            out << ",\"reference_residual\":"; JsonOptional(out,r.reference_residual);
-            out << ",\"relative_coordinate_difference\":";
-            if (r.relative_coordinate_difference) JsonArray(out,*r.relative_coordinate_difference); else out << "null";
-            out << ",\"weight_max_difference\":"; JsonOptional(out,r.weight_max_difference);
-            out << ",\"floor_masks_equal\":";
-            if (r.floor_masks_equal) out << *r.floor_masks_equal; else out << "null";
-            out << '}';
-        }
-        out << ",\"iterations\":" << solve.diagnostics.iterations << ",\"squared_beta_change\":";
-        JsonOptional(out, solve.diagnostics.squared_beta_change);
-        out << ",\"relative_variance_change\":"; JsonOptional(out, solve.diagnostics.relative_variance_change);
-        out << ",\"variance\":"; JsonOptional(out, solve.variance); out << '}';
-    }
-    out << "],\"offsets\":[";
-    bool first{ true };
-    for (const auto & [key, entry] : diagnostics.offsets)
-    {
-        if (!first) out << ','; first = false;
-        out << "{\"key\":"; JsonArray(out, key);
-        out << ",\"status\":\"" << JointOffsetSolveStatusText(entry.first) << "\",\"iterations\":" << entry.second.iterations;
-        out << ",\"normalized_change\":"; JsonOptional(out, entry.second.normalized_change);
-        out << ",\"robust_scale\":"; JsonOptional(out, entry.second.robust_scale); out << '}';
-    }
-    out << "]}";
-}
-void JsonRecovery(std::ostream & out, const RecoveryDiagnostics & diagnostic)
-{
-    out << "{\"attempted\":" << diagnostic.attempted << ",\"accepted\":" << diagnostic.accepted
-        << ",\"reason\":\"" << diagnostic.reason << "\",\"operator_evaluations\":" << diagnostic.operator_evaluations;
-    out << ",\"current_residual\":"; JsonOptional(out, diagnostic.current_residual);
-    out << ",\"best_objective\":"; JsonOptional(out, diagnostic.best_objective);
-    out << ",\"trials\":[";
-    bool first{ true };
-    for (const auto & trial : diagnostic.trials)
-    {
-        if (!first) out << ','; first = false;
-        out << "{\"factor\":" << trial.factor << ",\"reason\":\"" << trial.reason << "\",\"residual\":";
-        JsonOptional(out, trial.residual); out << ",\"objective\":"; JsonOptional(out, trial.objective); out << '}';
-    }
-    out << "]}";
-}
-void JsonBatch(std::ostream & out, const AuditBatch & batch)
-{
-    out << "\"stages\":{";
-    for (std::size_t i=0;i<batch.stages.size();++i)
-    {
-        if (i) out << ','; const auto & count=batch.stages[i];
-        out << '"' << kAuditStages[i] << "\":{\"total\":" << count.total << ",\"accepted\":" << count.accepted
-            << ",\"rejected\":" << count.rejected << ",\"skipped\":" << count.skipped << '}';
-    }
-    out << "},\"anomalies\":{\"total\":" << batch.abnormal_count << ",\"shown\":" << batch.detail_count
-        << ",\"omitted\":" << batch.abnormal_count-batch.detail_count << ",\"categories\":{";
-    for (std::size_t i=1;i<batch.categories.size();++i)
-    {
-        std::size_t shown=0;
-        for (std::size_t j=0;j<batch.detail_count;++j)
-            if (static_cast<std::size_t>(batch.details[j].category)==i) ++shown;
-        if (i!=1) out << ',';
-        out << '"' << kAuditCategories[i] << "\":{\"total\":" << batch.categories[i]
-            << ",\"shown\":" << shown << ",\"omitted\":" << batch.categories[i]-shown << '}';
-    }
-    out << "},\"details\":[";
-    for (std::size_t i=0;i<batch.detail_count;++i)
-    {
-        const auto & e=batch.details[i]; if (i) out << ',';
-        out << "{\"stage\":\"" << kAuditStages[static_cast<std::size_t>(e.stage)] << "\",\"first_atom\":" << e.first_atom
-            << ",\"atom_count\":" << e.atom_count << ",\"trial\":" << e.trial << ",\"category\":\"" << kAuditCategories[static_cast<std::size_t>(e.category)]
-            << "\",\"outcome\":\"" << e.outcome << "\",\"reason\":\"" << e.reason << "\",\"scope\":\"" << e.scope
-            << "\",\"reference\":\"" << e.reference << "\",\"previous_checked\":" << e.previous_checked << ",\"best_checked\":" << e.best_checked
-            << ",\"previous\":"; JsonObjective(out,e.previous); out << ",\"candidate\":"; JsonObjective(out,e.candidate);
-        out << ",\"best\":"; JsonObjective(out,e.best); out << ",\"factor\":"; JsonOptional(out,e.factor);
-        out << ",\"radius\":"; JsonOptional(out,e.radius); out << '}';
-    }
-    out << "]}";
-}
-}
-void LogDecisionAuditStart(SecondStageObservationSession & session, const FitOptions & options) noexcept
-{
-    if (!session.Enabled()) return;
-    try
-    {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"start\",\"version\":\"" << RHBM_GEM_AUDIT_VERSION
-            << "\",\"settings\":{\"threads\":" << options.thread_size << ",\"exclude_hydrogen\":" << options.exclude_hydrogen
-            << ",\"boundary_halo_depth\":" << options.second_stage_boundary_halo_depth << ",\"final_polish\":" << options.enable_second_stage_dependency_polish
-            << ",\"final_polish_rounds\":" << options.second_stage_dependency_polish_max_iterations
-            << ",\"failed_only_refinement\":" << options.enable_second_stage_failed_only_refinement << "}}";
-        session.Write(out.str());
-    }
-    catch (...) { session.Disable(); }
-}
-void LogDecisionAuditIteration(SecondStageObservationSession & session, const IterationResult & result) noexcept
-{
-    const auto * data=session.Audit(); if (!data) return;
-    try
-    {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"iteration\",\"attempt\":" << result.attempt_number
-            << ",\"accepted_iterations\":" << result.accepted_iteration_count << ",\"accepted_clusters\":" << result.accepted_key_list.size()
-            << ",\"rejected_clusters\":" << result.rejected_key_list.size() << ",\"objective_revision\":" << data->objective_revision
-            << ",\"recovery_revision\":" << data->recovery_revision << ",\"background_revision\":" << data->background_revision
-            << ",\"partition_revision\":" << data->partition_revision << ",\"objective_domain_changed\":" << result.objective_domain_changed
-            << ",\"quarantine\":{\"entered\":" << data->entered << ",\"retried\":" << data->retried << ",\"released\":" << data->released
-            << ",\"failed_retry\":" << data->failed_retry << "},\"score\":{\"scope\":\"global\",\"reference\":\"iteration_previous\",\"source\":\"" << data->score_source << "\",\"previous\":";
-        JsonObjective(out,data->previous); out << ",\"candidate\":"; JsonObjective(out,data->candidate); out << ",\"best\":"; JsonObjective(out,data->best);
-        out << "},\"selection_audit\":{";
-        for (std::size_t i=0;i<2;++i)
-        {
-            if (i) out << ','; const auto & audit=data->selection[i];
-            out << '"' << (i ? "after_rescue" : "ordinary") << "\":{\"executed\":" << audit.executed << ",\"result\":\"" << audit.result
-                << "\",\"reason\":\"" << audit.reason << "\",\"evaluations\":" << audit.evaluations << ",\"removed_clusters\":" << audit.removed_clusters
-                << ",\"previous\":"; JsonObjective(out,audit.previous); out << ",\"candidate\":"; JsonObjective(out,audit.candidate);
-            out << ",\"best\":"; JsonObjective(out,audit.best); out << '}';
-        }
-        out << "},\"convergence\":"; JsonCertificate(out,data->convergence,data->convergence_reference);
-        out << ",\"nominal_solves\":"; JsonNominalSolves(out, data->nominal);
-        out << ",\"recovery\":"; JsonRecovery(out, data->recovery);
-        out << ",\"stop_reason\":\"" << SecondStageStopReasonText(result.stop_reason) << "\","; JsonBatch(out,data->batch); out << '}';
-        session.Write(out.str());
-    }
-    catch (...) { session.Disable(); }
-}
-void LogDecisionAuditTerminal(SecondStageObservationSession & session, std::string_view reason,
-    std::string_view source, const BestAuditState & best, const PerformanceCounters * counters) noexcept
-{
-    const auto * data=session.Audit(); if (!data) return;
-    try
-    {
-        std::ostringstream out; out.imbue(std::locale::classic()); out << std::boolalpha << "Second-stage audit: schema=2, payload={\"kind\":\"terminal\",\"stop_reason\":\"" << reason
-            << "\",\"final_state_source\":\"" << source << "\",\"best_iteration\":";
-        if (best) out << best->source_iteration; else out << "null";
-        out << ",\"attempt\":" << data->attempt << ",\"objective_revision\":" << data->objective_revision
-            << ",\"background_revision\":" << data->background_revision << ",\"partition_revision\":" << data->partition_revision
-            << ",\"objective\":"; JsonObjective(out,data->final_objective);
-        out << ",\"objective_scope\":\"global_frozen_domain\",\"objective_reference\":\"final_state_last_background\",\"final_polish\":{\"attempted\":" << data->polish_attempted
-            << ",\"objective_accepted\":" << data->polish_accepted << ",\"operator_certified\":";
-        if (data->polish_certificate) out << (data->polish_status == FinalPolishResidualSafetyStatus::AbsolutePassed); else out << "null";
-        out << ",\"status\":\"" << GetFinalPolishResidualSafetyStatusText(data->polish_status) << "\",\"applied\":" << data->polish_applied << ",\"certificate\":";
-        JsonCertificate(out,data->polish_certificate,"final_polish_candidate",false);
-        out << "},\"final_certificate\":"; JsonCertificate(out, data->final_certificate, "persisted_state", false);
-        out << ",\"final_nominal_solves\":"; JsonNominalSolves(out, data->final_nominal);
-        out << ",\"recovery\":"; JsonRecovery(out, data->recovery);
-        out << ",\"work_counters\":";
-        if (counters) JsonArray(out,counters->AuditCounts()); else out << "null";
-        out << ",\"elapsed_ms\":"; JsonNumber(out,session.ElapsedMilliseconds()); out << ','; JsonBatch(out,data->batch); out << '}';
-        session.Write(out.str());
-    }
-    catch (...) { session.Disable(); }
-}
+} // namespace
 
 void LogFinalStateCertificate(bool quiet, const std::optional<ConvergenceAssessment> & assessment, bool polish_applied,
     std::size_t attempts, std::size_t recovery_operators, std::size_t certificate_operators)

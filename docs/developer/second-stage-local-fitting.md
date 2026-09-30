@@ -49,8 +49,8 @@ write. These settings intentionally have no command-line flags.
 ## Implementation responsibilities and state ownership
 
 Shared fitting support lives in `src/core/detail/gaussian_fit/`; second-stage
-implementation lives in `src/core/detail/second_stage/`, with observation and
-logging under its `observation/` subdirectory. All retain the existing
+implementation lives in `src/core/detail/second_stage/`, with runtime logging
+and timing under its `observation/` subdirectory. All retain the existing
 `rhbm_gem::core::detail` namespace.
 
 The internal implementation follows the iteration sequence rather than exposing
@@ -67,15 +67,15 @@ all second-stage services through candidate selection:
 | `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and complete global candidate acceptance with original gate ordering; no history inputs or results |
 | `CandidateTransaction` | Per-key provisional selection, final classification, staged quarantine, and consuming publication of validated results |
-| `CandidateTransactionBoundary.cpp` | Shared normal/cooperative component evaluation and application, complete-selection audit/salvage |
+| `CandidateTransactionBoundary.cpp` | Shared normal/cooperative component evaluation and application, complete-selection validation/salvage |
 | `DependencyPolish` | Final uncut-component candidate generation and salvage policy; validation delegates to `CandidateEvaluation` |
 | `ComponentAssembly` | Ordered patch application and excluded-component trial assembly |
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
-| `observation/SecondStageObservation` / `observation/SecondStageDiagnostics` | Passive session, bounded worker buffers, actual gate and lifecycle evidence, scalar progress diagnostics |
-| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and read-only performance formatting |
-| `observation/PerformanceCounters` | Atomic counts, phase timings, and current/retired solver workspace totals; publishes once at scope exit |
+| `SecondStageDiagnostics` | Scalar iteration and final-polish diagnostics used by production progress and summaries |
+| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and performance formatting |
+| `observation/PerformanceCounters` | Phase timings for normal runtime summaries |
 
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
 operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.
@@ -84,8 +84,7 @@ state/residual representation and seed selection, graph construction and topolog
 drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
 convergence types and the outer attempt result have their own headers. Operator
 evidence summarization serves production convergence and final certification.
-Observation copies the resulting certificate without replaying the operator. Seed diagnostic records belong to
-`observation/SecondStageDiagnostics.hpp`.
+Seed summaries and scalar iteration diagnostics feed normal runtime logging.
 `CandidateEvidence.hpp` supplies diagnostics and candidate evaluation without
 including the complete selection. `CandidateState.hpp` owns selection data.
 `CandidateTransaction.hpp`
@@ -95,45 +94,27 @@ the transaction implementation is distributed across
 `CandidateTransactionBoundary.cpp`. The public Gaussian estimator workflow uses
 internal fitting-range constants; `FitOptions` does not expose radial bounds.
 
-`CandidateSelectionInputs` contains read-only algorithm inputs. The private
+`CandidateSelectionInputs` contains read-only algorithm inputs and runtime
+workspace/timing resources. The private
 `CandidateTransactionBuilder` owns working activity, state and provenance;
 boundary operations are its private methods. Evaluators return numerical decisions
-without accepting or returning per-cluster history. Observation receives actual
-decisions without a decision return value.
-Solver workspaces, counters and observers remain mutable working resources.
-The observation pointer in `CandidateSelectionInputs` is non-owning.
+without accepting or returning per-cluster history. Solver workspaces and timing
+counters remain mutable working resources.
 Boundary candidate and correction references borrow only the per-key samples,
 objective domain, previous member objectives, optional best objective, component,
-reference objectives, and performance counters. Correction also borrows its
-endpoint and strict-improvement reference. Context comes from the candidate
-overlay; evaluators do not include the transaction header or receive solver,
-proposal, provenance, or observation-session state. An unavailable precomputed
+reference objectives and, for correction, its endpoint and strict-improvement
+reference. Context comes from the candidate overlay; evaluators do not include
+the transaction header or receive solver, proposal, or provenance state. An unavailable precomputed
 correction objective is reused as unavailable evidence, never recomputed.
-
-`BoundaryObservationScope` and `JointCandidateObservation` record actual endpoint,
-correction, backtracking and rescue outcomes. Each event records the gate at its
-original decision point; a later rejected correction cannot change an earlier
-endpoint record. Workers keep at most five abnormal details and merge in fixed
-stage/key/trial order. Counters retain all outcomes. Quiet mode and missing
-sessions do not affect numerical decisions.
-
-`RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` applies the same private definition to the
-library and tests through one helper. ON does not require testing. Extra payloads
-exist only in enabled, non-quiet Debug sessions. Allocation, collection and writer
-failures disable extra recording for that session without entering numerical
-fallback branches. Debug's existing solver scheduling condition is independent
-of this option. See the [audit contract](second-stage-audit.md).
 
 `Finish` stages next-iteration quarantine without publishing it. Consuming `Commit`
 publishes quarantine, applies trust updates and copies keys, then publishes the
 accepted model/provenance (or restores the previous state when all candidates are
-rejected), and finally records the committed outcome. It returns `CandidateCommitResult`;
+rejected). It returns `CandidateCommitResult`;
 the runner moves the returned keys and trust updates into `IterationResult`.
 Transaction code does not depend on the outer result or entry header.
-`RunSecondStageIterations` owns a non-copyable `SecondStageObservationSession`;
 `SecondStageContext` contains only atom sampling/design data and the immutable
-frozen background. The session owns a bounded audit payload and scalar
-iteration/final-polish progress summaries. It owns no models or replay snapshots.
+frozen background.
 
 `CandidateDecisionEvidence` contains objective references, factors, failure
 classification, and the invalid/guard/objective-rejection counts used by search
@@ -143,19 +124,17 @@ then rejected evidence in rejection-event order; objective exhaustion still
 does not constitute quarantine failure evidence. Accepted shrink compares the
 accepted factor with the first objective-evaluated factor directly.
 
-Candidate references may point to production-owned member-best patches, while
-results contain no observer history tokens. `CandidateSelection` retains keys, state/provenance, decision evidence,
+Candidate references may point to production-owned member-best patches.
+`CandidateSelection` retains keys, state/provenance, decision evidence,
 and lightweight boundary decisions. `IterationResult` retains accepted/rejected
 keys, radius updates, progress state and stop information; audit-patience reset
-uses rejected keys directly. Bounded output-only event records live in observation sidecars.
-Optional boundary observation scopes keep endpoint/correction/backtracking
-record associations independently of numerical candidate results.
+uses rejected keys directly.
 
 Quarantine is staged on a copy and changes only next-iteration activity,
-without modifying the audited state or requiring fallback re-audit. The builder then freezes a read-only `CandidateTransaction`.
+without modifying the selected state or requiring a second evaluation. The builder then freezes a read-only `CandidateTransaction`.
 Its consuming commit publishes validated state, provenance, quarantine
 and radius updates, including the required rejection updates on all-rejected
-attempts. Only after production publication does it record the commit outcome. Convergence uses the committed candidate and the retained previous
+attempts. Convergence uses the committed candidate and the retained previous
 state. The unrestricted operator evidence remains separate from these
 production restrictions.
 
@@ -163,8 +142,7 @@ Rejection rolls back affected models and provenance without discarding
 rejection-driven radius shrink, fixed activity, failure evidence, or quarantine
 transitions. An all-rejected attempt restores the previous model and still
 publishes those lifecycle updates. Suspicious-failure evidence is sampled before
-quarantine publication. Observer publication follows production commit and does
-not supply a decision or undo production publication.
+quarantine publication.
 
 `SecondStageContext::atom_list` is accessed directly. Model snapshots capture
 both the selected Gaussian models and the immutable background in effect when
@@ -175,23 +153,21 @@ snapshots, while accepted and best-audit states retain complete local results.
 Patch/view and residual-overlay representations continue to avoid full-state
 materialization during candidate evaluation.
 
-The session's `IterationDiagnostics::proposal_maximum_transformed_change` field measures the constrained
+`IterationDiagnostics::proposal_maximum_transformed_change` measures the constrained
 proposal's maximum movement. It is distinct from the nominal operator residual
 in `ConvergenceCertificate`. Maximum/population measurements reside in
-`ConvergenceDiagnostics`; the existing progress label and audit schemas are
-unchanged.
+`ConvergenceDiagnostics`; the existing progress label is unchanged.
 
 ### Candidate acceptance references
 
-`EvaluateCandidate` uses `(candidate, reference)`, with a separate optional
-observation scope for boundary and final-polish records. Typed local and boundary
+`EvaluateCandidate` uses `(candidate, reference)`. Typed local and boundary
 policies share numerical primitives while retaining their own acceptance rules.
 Proposal construction, factor retry, correction generation, and salvage remain
 orchestration responsibilities; failures retain their short-circuit order.
 
 | Phase | Evaluation order and reference |
 | --- | --- |
-| Local search | Construction/validity and the nonmaterial shortcut precede trust, guard, and the previous-objective gate. Passive observation follows the production decision. |
+| Local search | Construction/validity and the nonmaterial shortcut precede trust, guard, and the previous-objective gate. |
 | Local polish | Existing solver feasibility/trust checks, then strict objective improvement against the accepted local endpoint. |
 | Ordinary boundary | Member previous gates in existing key order, followed by the combined objective. |
 | Boundary correction | Suspicious-polish guard, raw objective evidence, member/combined acceptance, then strict improvement against the original correction reference. The raw evidence is reused, including when unavailable. |
@@ -204,8 +180,8 @@ orchestration responsibilities; failures retain their short-circuit order.
 These call conditions were checked against `develop` commit `7500a45eb2fc20ff9d04768789883ef4b1d2eb65`
 on 2026-09-14: [boundary reconciliation and audit/salvage](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/CandidateTransactionBoundary.cpp#L664)
 and [runner publication and post-commit scoring](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/IterationProcess.cpp#L599).
-This is production objective acceptance, separate from optional decision-recording
-observation. Making these calls unconditional would change the algorithm.
+These are production objective acceptance decisions. Making these calls
+unconditional would change the algorithm.
 
 `ReconcileSelectedBoundaries()` builds the ordinary boundary component list
 from the currently selected keys before reconciliation. Each component has at
@@ -268,9 +244,8 @@ With no accepted components, final polish reuses the base objective.
 Ordinary/cooperative sweep ordering and polished-state recertification are
 unchanged.
 
-`FinalDependencyPolishResult` contains only state, objective and acceptance.
-Component/trial details and timing live in the session's final-polish sidecar.
-Acceptance compares the last successfully improved numerical objective with
+`FinalDependencyPolishResult` contains state, objective, acceptance, and scalar
+production diagnostics. Acceptance compares the last successfully improved numerical objective with
 the base objective; no successful update remains unavailable evidence. Neither
 component acceptance nor final recertification reads the diagnostic copy.
 
@@ -626,10 +601,8 @@ normalization coefficient, so the local candidate-minus-previous difference
 matches the corresponding full-global difference when only that cluster
 changes.
 
-Candidate scoring uses only production objective references. Extra observation
-copies existing evidence; it performs no historical re-evaluation or snapshot
-retention. The production global `best_audit_state` remains part of acceptance,
-patience and final-state selection. See the [audit contract](second-stage-audit.md).
+Candidate scoring uses production objective references. The production global
+`best_audit_state` remains part of acceptance, patience and final-state selection.
 
 At each background refresh, re-evaluate both the previous selected state and
 the retained global best under the new cache before comparing or choosing
@@ -639,7 +612,7 @@ robust scales. Refresh itself is not an improvement: audit patience uses the
 candidate's strict improvement over the recomputed historical best, alongside
 the existing domain/quarantine/radius reset conditions.
 
-All second-stage audit tolerances use:
+All second-stage objective comparisons use:
 
 ```text
 tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
@@ -1022,10 +995,10 @@ blocks from converging or being written.
 ## Final state application and final group fitting
 
 After the stopping policy selects the final validated state and any certified
-final polish, the stage captures its selected MDPDE models together with the
+final polish, the stage gathers its selected MDPDE models together with the
 last validated immutable background. This is the actual best-audit or latest
 validated state chosen for application, not an operator endpoint. Each selected
-atom keeps its own final offset. Final polish, certificate, audit, and peeling
+atom keeps its own final offset. Final polish, certificate, objective evaluation, and peeling
 share this exact background; persistence neither averages selected offsets nor
 recalculates a background median. OLS/MDPDE uncertainty and polish provenance
 follow the existing application policy.
@@ -1127,17 +1100,12 @@ values in `dMax A/F`.
 
 Objective-domain startup reports weights and scalar sample/cluster counts.
 Warnings report cumulative quarantine entries, releases, failed retries and
-unresolved targets. Progress, necessary warnings, final summary and basic timings
-remain available without extra audit payloads.
+unresolved targets. Progress, warnings, the final summary and basic timings use
+normal runtime logging.
 
-Enabled, non-quiet Debug sessions emit `Second-stage audit: schema=2, payload={...}`.
-There is one start record, one summary per attempt, and one terminal record.
-Only actual production evidence is recorded; no solver/operator replay, historical
-model scoring, complete snapshots, atom dump, or alternate coupling threshold scan
-remains. Each attempt and finalization retain at most five abnormal details at
-collection time, with complete category totals and omission counts.
-See [Second-stage audit](second-stage-audit.md) for fields, references, failure
-isolation, parser usage and verification tiers.
+Non-quiet runs also emit a final-state certificate record with the persisted-state
+assessment, last frozen-background reference, attempt count, and recovery and
+certification operator counts. This record does not recompute the objective.
 
 The one-time atom-cutoff text remains `Local-fitting atom cutoff: atoms=N,
 limit=100, clusters=C, max-atoms=M, cutoff-edges=E.` and counts selected atoms only.
@@ -1153,7 +1121,7 @@ Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<ini
 `yes` when at least one atom's most recent transformed-parameter update in that
 state came from an accepted polish, `no` when none did, and `unavailable` when
 the stage exits before a valid state can be formed. `best_iteration` describes
-the audit result and `final_state_source` identifies the state actually
+the selected best iteration and `final_state_source` identifies the state actually
 written.
 
 `quiet_mode` suppresses the second-stage informational logging.

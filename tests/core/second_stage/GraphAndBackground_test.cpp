@@ -1,4 +1,4 @@
-#include "support/SecondStageNumericalProbe.hpp"
+#include "support/SecondStageBackgroundCapture.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -1147,9 +1147,9 @@ TEST(
             options.thread_size = 1;
             options.quiet_mode = false;
             logged->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
-            second_stage_test::BeginNumericalCapture();
+            second_stage_test::BeginBackgroundCapture();
             detail::RunSecondStageIterations(*logged, options);
-            const auto captured{ second_stage_test::EndNumericalCapture() };
+            const auto captured{ second_stage_test::EndBackgroundCapture() };
             const auto output{ testing::internal::GetCapturedStdout() };
             auto alternate_logged{ BuildUnselectedContributorDefenseModel(
                 scaled_seeds, scaled_truth, true, shared_cluster, shared_contributor) };
@@ -1166,7 +1166,7 @@ TEST(
             const auto relabeled_output{ testing::internal::GetCapturedStdout() };
             Logger::SetLogLevel(previous_level);
             options.quiet_mode = true;
-            const auto audit_records = [](const std::string & log)
+            const auto stable_runtime_records = [](const std::string & log)
             {
                 std::vector<std::string> records;
                 std::istringstream lines{ log };
@@ -1190,8 +1190,8 @@ TEST(
                 }
                 return records;
             };
-            EXPECT_EQ(audit_records(output), audit_records(alternate_output));
-            EXPECT_EQ(audit_records(output), audit_records(relabeled_output));
+            EXPECT_EQ(stable_runtime_records(output), stable_runtime_records(alternate_output));
+            EXPECT_EQ(stable_runtime_records(output), stable_runtime_records(relabeled_output));
 
             EXPECT_NE(output.find(shared_cluster ?
                 "initial components/max atoms/ratio = 1/2/1.00" :
@@ -1202,14 +1202,14 @@ TEST(
             }
             std::array<std::optional<rg::GaussianModel3D>, 2> first_background;
             std::array<std::optional<rg::GaussianModel3D>, 2> last_background;
-            ASSERT_GT(captured.backgrounds.size(), 1U);
+            ASSERT_GT(captured.size(), 1U);
             for (std::size_t target = 0; target < 2; target++)
             {
-                const auto & first{ captured.backgrounds.front().at(target) };
-                const auto & last{ captured.backgrounds.back().at(target) };
+                const auto & first{ captured.front().at(target) };
+                const auto & last{ captured.back().at(target) };
                 first_background.at(target) = rg::GaussianModel3D{first[0], first[1], first[2]};
                 last_background.at(target) = rg::GaussianModel3D{last[0], last[1], last[2]};
-                for (const auto & background : captured.backgrounds)
+                for (const auto & background : captured)
                     EXPECT_EQ(background.at(0), background.at(1));
                 const auto expected_initial{
                     *detail::BuildGaussianParameterMedian({ scaled_seeds[0], scaled_seeds[1] }) };

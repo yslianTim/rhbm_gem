@@ -12,6 +12,8 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
+class PerformanceCounters;
+
 class TrustRegionStateSet
 {
     std::map<ClusterKey, unsigned int> m_shrink_level_by_key{};
@@ -76,12 +78,10 @@ private:
 
 };
 
-class SecondStageObservationSession;
-
 struct CandidateSelectionInputs
 {
     // Algorithm inputs stay unchanged; updated activity is returned in CandidateSelection.
-    // Solver workspaces, counters and observation state may mutate.
+    // Solver workspaces and counters may mutate.
     const SecondStageContext & context;
     const FitOptions & options;
     const ResidualBaseline & residual_baseline;
@@ -99,11 +99,9 @@ struct CandidateSelectionInputs
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
     BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
     PerformanceCounters & performance_counters;
-    SecondStageObservationSession * observation{ nullptr };
     const MemberBestState * member_best{ nullptr };
 };
 
-class BoundaryObservationScope;
 enum class BoundaryAcceptancePolicy;
 
 struct CandidateCommitResult
@@ -136,7 +134,7 @@ public:
     CandidateTransaction(CandidateTransaction &&) = default;
     CandidateCommitResult Commit(FitState & previous_state,
         FitState & accepted_state, PolishProvenance &,
-        QuarantineState &, TrustRegionStateSet &, SecondStageObservationSession * = nullptr) &&;
+        QuarantineState &, TrustRegionStateSet &) &&;
 };
 
 class CandidateTransactionBuilder
@@ -175,14 +173,14 @@ class CandidateTransactionBuilder
         const ObjectiveBreakdown & improvement_reference_objective,
         const FitStatePatch & endpoint_patch,
         BoundaryComponentDecision & decision,
-        BoundaryObservationScope & observation, BoundaryAcceptancePolicy policy);
+        BoundaryAcceptancePolicy policy);
     std::optional<ComponentCandidate> TryBacktrackBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
         const ObjectiveBreakdown * previous_audit_objective,
         const FitStatePatch & endpoint_patch,
         BoundaryComponentDecision & decision,
-        BoundaryObservationScope & observation, BoundaryAcceptancePolicy policy);
+        BoundaryAcceptancePolicy policy);
     bool ReconcileBoundaryComponent(
         const CandidateSelectionInputs & inputs,
         const BoundaryReconciliationComponent & component,
@@ -193,7 +191,7 @@ class CandidateTransactionBuilder
         const ObjectiveBreakdown & previous_audit_objective);
     void AuditAndSalvageFinalSelection(
         const CandidateSelectionInputs & inputs,
-        const ObjectiveBreakdown & previous_audit_objective, bool rescue_audit = false);
+        const ObjectiveBreakdown & previous_audit_objective);
 public:
     CandidateTransactionBuilder() = default;
     explicit CandidateTransactionBuilder(CandidateSelection initial);

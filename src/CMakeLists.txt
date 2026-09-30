@@ -1,6 +1,5 @@
 add_library(rhbm_gem)
 target_compile_features(rhbm_gem PUBLIC cxx_std_20)
-target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_AUDIT_VERSION="${PROJECT_VERSION}")
 
 set(RHBM_GEM_COMMAND_SOURCES
     core/command/detail/LocalFittingFeatures.cpp
@@ -46,7 +45,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/detail/second_stage/SecondStageState.cpp
-    core/detail/second_stage/observation/SecondStageObservation.cpp
     core/detail/second_stage/CouplingGraph.cpp
     core/detail/second_stage/JointFitting.cpp
     core/detail/second_stage/CandidateEvaluation.cpp
@@ -203,8 +201,6 @@ rhbm_gem_apply_library_install_rpath(rhbm_gem)
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     target_compile_definitions(rhbm_gem PUBLIC RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
 endif()
-rhbm_gem_apply_observation_definitions(rhbm_gem)
-
 install(
     TARGETS rhbm_gem rhbm_gem_dependencies
     EXPORT RHBM_GEMTargets

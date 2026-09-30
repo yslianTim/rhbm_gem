@@ -1,11 +1,10 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SecondStageNumericalProbe.hpp"
+#include "support/SecondStageWorkCapture.hpp"
 #else
-#define RHBM_TEST_WORK(kind) ((void)0)
+#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
 #endif
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 
 #include <algorithm>
@@ -152,7 +151,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
-    RHBM_TEST_WORK(Objective);
+    RHBM_TEST_COUNT_WORK(Objective);
     const auto residual_contribution{
         EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
     };
@@ -173,7 +172,7 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     const State & state,
     const Evaluator & evaluator)
 {
-    RHBM_TEST_WORK(Objective);
+    RHBM_TEST_COUNT_WORK(Objective);
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
@@ -512,17 +511,12 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
-    const ObjectiveBreakdown & baseline,
-    PerformanceCounters & performance_counters)
+    const ObjectiveBreakdown & baseline)
 {
-    RHBM_TEST_WORK(Objective);
+    RHBM_TEST_COUNT_WORK(Objective);
     const auto & changed_key{
         candidate_overlay.GetState().GetOverrideAtomIndexList()
     };
-    const auto unique_sample_count{ domain.unique_sample_count };
-    performance_counters.RecordObjectiveSampleEvaluation(
-        CountObjectiveSamples(affected_sample_ref_list, domain),
-        unique_sample_count);
     const auto candidate_changed{
         EvaluateObjectiveContribution(
             candidate_overlay,

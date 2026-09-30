@@ -11,7 +11,7 @@ This project uses a two-axis test organization model:
 | --- | --- | --- |
 | `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
-| `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and observation |
+| `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and performance logging |
 | `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
@@ -68,9 +68,6 @@ Run by intent:
 ctest --test-dir build -L intent:migration --output-on-failure
 ```
 
-`RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT=ON` enables passive decision records. It also
-works without tests; see the [audit guide](../docs/developer/second-stage-audit.md).
-
 Run repository guards and install consumer smoke (lint lane):
 
 ```bash
@@ -108,7 +105,7 @@ Keep second-stage defense tests in the following behavior-based files under
 | `CandidateAcceptance_test.cpp` | Objectives and best references, trust radii, backtracking, transaction publication, boundary acceptance, and serial/parallel selection |
 | `Recovery_test.cpp` | Suspicious guards, failure masks, quarantine, fallback, ridge guards, and healthy remote clusters |
 | `ConvergenceAndFinalization_test.cpp` | Active-coordinate certificates, final dependency polish, persistence, and whole-run intensity scaling |
-| `Observation_test.cpp` | Bounded passive recording, actual gate references, failure isolation and basic logging |
+| `PerformanceLogging_test.cpp` | Normal performance summary output and quiet-mode behavior |
 
 Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
 All second-stage files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
@@ -117,11 +114,10 @@ this shared suite filter: each would repeat the entire suite. Research-only
 assertions have been removed. Mixed cases that also verify production
 acceptance or rollback remain with the production behavior they exercise.
 
-Boundary reference tests cover ordinary/rescue gates, unavailable evidence and
-single correction-delta evaluation. Observation tests exercise suspicious
-correction early exits, strict rejection, stage identity after
-later trials, and quiet/missing-session neutrality. Keep these cases in the
-existing acceptance and observation files.
+Boundary reference tests cover ordinary/rescue gates, unavailable evidence,
+suspicious-correction early exits, strict rejection, and single correction-delta
+evaluation. Runtime log checks and debug-level scheduling behavior remain with
+the production fitting tests.
 
 Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
 namespace for fixture builders and assertions shared across these files. Keep
@@ -130,15 +126,9 @@ private to the support implementation. Build fresh model/solver state per case;
 do not share mutable fixtures. Use `detail` for `rhbm_gem::core::detail` throughout
 these tests. `EstimatorTester_test.cpp` retains its workflow tests and fixtures.
 
-Compile the support implementation directly into `rhbm_tests`, outside the
-suite-discovery source lists. One helper keeps the library and private-header
-tests consistent for `RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT`. No retired collector is
-compiled in either configuration. `Observation_test.cpp` covers five-detail bounds,
-deterministic worker merging, gate references and failure isolation.
-`NumericalAuditNeutrality_test.cpp` emits small comparison records with actual
-work counts independent of the observer. `second_stage_audit_test.py` covers the
-single schema and output/documentation contracts. Text/parser changes do not
-require external numerical datasets; see the audit guide's verification tiers.
+Compile test support directly into `rhbm_tests`, outside the suite-discovery source
+lists. Work-count and frozen-background capture helpers serve permanent numerical
+tests; solver failure replay remains in `SolverFailureCapture`.
 
 ### General placement
 

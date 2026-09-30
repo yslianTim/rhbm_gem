@@ -1,5 +1,4 @@
 #include "core/detail/second_stage/ComponentAssembly.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 
@@ -90,9 +89,8 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     const ObjectiveBreakdown & improvement_reference_objective,
     const FitStatePatch & endpoint_patch,
     BoundaryComponentDecision & decision,
-    BoundaryObservationScope & observations, BoundaryAcceptancePolicy policy)
+    BoundaryAcceptancePolicy policy)
 {
-    auto & observation{ observations.Trials() };
     auto & selection{ m_selection };
     if (component.halo_atom_index_list.empty()) return std::nullopt;
 
@@ -158,8 +156,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     if (correction_result.status != BoundaryJointCorrectionStatus::CandidateReady ||
         !correction_result.patch.has_value())
     {
-        observations.BeginTrial(BoundaryObservationStage::Correction, correction_result.damping);
-        observation.RejectCorrectionUnavailable();
         record_performance();
         return std::nullopt;
     }
@@ -178,7 +174,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         inputs.previous_state,
         corrected_component_patch
     };
-    observation.BeginBoundary(policy, BoundaryObservationStage::Correction, correction_result.damping);
     const auto correction_accepted{ EvaluateBoundaryCorrection(corrected_overlay,
         BoundaryCandidateReference{
             .policy = policy,
@@ -186,9 +181,8 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             .domain = inputs.objective_domain,
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
-            .counters = inputs.performance_counters,
             .component = component, .member_best = inputs.member_best}, endpoint_state_view, previous_audit_objective,
-        improvement_reference_objective, &observation) };
+        improvement_reference_objective) };
     if (!correction_accepted)
     {
         record_performance();
@@ -221,9 +215,8 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
     const ObjectiveBreakdown * previous_audit_objective,
     const FitStatePatch & endpoint_patch,
     BoundaryComponentDecision & decision,
-    BoundaryObservationScope & observations, BoundaryAcceptancePolicy policy)
+    BoundaryAcceptancePolicy policy)
 {
-    auto & observation{ observations.Trials() };
     auto & selection{ m_selection };
     BacktrackingWorkspace backtracking_workspace{
         inputs.previous_state,
@@ -242,7 +235,6 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
             inputs.previous_state,
             backtracking_workspace.GetCandidatePatch()
         };
-        observations.BeginTrial(BoundaryObservationStage::Backtracking, step.factor, step.trial_number);
         accepted_evaluation = EvaluateBoundaryCandidate(candidate_overlay,
             BoundaryCandidateReference{
                 .policy = policy,
@@ -250,8 +242,7 @@ CandidateTransactionBuilder::TryBacktrackBoundaryComponent(
                 .domain = inputs.objective_domain,
                 .previous_objective_by_key = inputs.previous_objective_by_key,
                 .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
-                .counters = inputs.performance_counters,
-                .component = component, .member_best = inputs.member_best}, previous_audit_objective, &observation);
+                .component = component, .member_best = inputs.member_best}, previous_audit_objective);
         if (accepted_evaluation.has_value())
         {
             break;
@@ -339,9 +330,6 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     }
 
     BoundaryComponentDecision decision;
-    BoundaryObservationScope observations(inputs, component, policy);
-    auto & observation{ observations.Trials() };
-
     auto endpoint_patch{ BuildSelectionPatch(selection, component.key_list) };
     for (const auto & key : cooperative_key_list)
     {
@@ -351,7 +339,6 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     const CandidateEvaluationOverlay endpoint_overlay{
         inputs.context, inputs.residual_baseline, inputs.previous_state, endpoint_patch
     };
-    observations.BeginTrial(BoundaryObservationStage::Endpoint, 1.0);
     const auto endpoint_evaluation{ EvaluateBoundaryCandidate(endpoint_overlay,
         BoundaryCandidateReference{
             .policy = policy,
@@ -359,15 +346,14 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
             .domain = inputs.objective_domain,
             .previous_objective_by_key = inputs.previous_objective_by_key,
             .best_audit = inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr,
-            .counters = inputs.performance_counters,
-            .component = component, .member_best = inputs.member_best}, previous_audit_objective, &observation) };
+            .component = component, .member_best = inputs.member_best}, previous_audit_objective) };
 
     std::optional<ComponentCandidate> accepted;
     if (previous_audit_objective != nullptr)
     {
         accepted = TryBoundaryJointCorrection(inputs, component, *previous_audit_objective,
             endpoint_evaluation ? *endpoint_evaluation : *previous_audit_objective,
-            endpoint_patch, decision, observations, policy);
+            endpoint_patch, decision, policy);
     }
     if (!accepted && endpoint_evaluation)
     {
@@ -377,7 +363,7 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     }
     if (!accepted)
         accepted = TryBacktrackBoundaryComponent(inputs, component, previous_audit_objective,
-            endpoint_patch, decision, observations, policy);
+            endpoint_patch, decision, policy);
     if (accepted)
     {
         ApplyComponentCandidate(inputs, component, endpoint_patch, std::move(*accepted),
@@ -385,7 +371,6 @@ bool CandidateTransactionBuilder::ReconcileBoundaryComponent(
     }
     else if (!cooperative)
         RejectSelectionKeys(inputs, component.key_list, decision.exhausted);
-    observations.Finish(decision);
     return accepted.has_value();
 }
 
@@ -433,7 +418,7 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     const CandidateSelectionInputs & inputs,
     const ObjectiveBreakdown & previous_audit_objective,
     const CandidateSelection & selection,
-    const std::vector<ClusterKey> & selected_key_list, bool rescue_audit)
+    const std::vector<ClusterKey> & selected_key_list)
 {
     if (selected_key_list.empty()) return std::nullopt;
     const auto candidate_patch{
@@ -453,7 +438,7 @@ static std::optional<ObjectiveBreakdown> EvaluateFinalSelectionAudit(
     };
     return EvaluateGlobalCandidate(candidate_overlay,
         GlobalCandidateReference{affected_sample_ref_list, inputs.objective_domain,
-            best_audit_objective, &previous_audit_objective, inputs.performance_counters}, inputs.observation, rescue_audit);
+            best_audit_objective, &previous_audit_objective});
 }
 
 static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCandidates(
@@ -504,8 +489,7 @@ static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCan
                 candidate_overlay,
                 component.affected_sample_ref_list,
                 inputs.objective_domain,
-                previous_audit_objective,
-                inputs.performance_counters)
+                previous_audit_objective)
         };
         if (candidate_audit_objective.has_value() &&
             IsBetterAuditObjective(
@@ -537,14 +521,13 @@ static std::vector<std::pair<double, std::vector<ClusterKey>>> BuildRejectionCan
 
 void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
     const CandidateSelectionInputs & inputs,
-    const ObjectiveBreakdown & previous_audit_objective, bool rescue_audit)
+    const ObjectiveBreakdown & previous_audit_objective)
 {
     auto & selection{ m_selection };
-    const auto initial_count{ SelectedKeys().size() };
     const auto evaluate = [&]
     {
         return EvaluateFinalSelectionAudit(
-            inputs, previous_audit_objective, selection, SelectedKeys(), rescue_audit);
+            inputs, previous_audit_objective, selection, SelectedKeys());
     };
     selection.final_audit_objective = evaluate();
     if (!selection.final_audit_objective.has_value() && !SelectedKeys().empty())
@@ -560,12 +543,8 @@ void CandidateTransactionBuilder::AuditAndSalvageFinalSelection(
     }
     if (selection.final_audit_objective.has_value() || SelectedKeys().empty())
     {
-        const auto remaining{ SelectedKeys().size() };
-        if (inputs.observation) inputs.observation->ObserveSelectionAudit(rescue_audit, true,
-            remaining ? "passed" : "empty_after_salvage", remaining ? "" : "no-selection-remains", initial_count - remaining);
         return;
     }
-    if (inputs.observation) inputs.observation->ObserveSelectionAudit(rescue_audit, true, "rejected", "salvage-failed", initial_count);
 
     const auto remaining_key_list{ SelectedKeys() };
     RejectSelectionKeys(
@@ -586,8 +565,6 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     const auto previous_audit_objective{
         EvaluateAuditObjective(inputs.objective_domain, inputs.residual_baseline)
     };
-    if (inputs.observation) inputs.observation->ObserveScoreReferences(previous_audit_objective,
-        inputs.best_audit_state ? &inputs.best_audit_state->objective : nullptr);
     if (!boundary_component_list.empty())
     {
         const auto boundary_reconciliation_start{ std::chrono::steady_clock::now() };
@@ -601,7 +578,6 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
         }
         if (!previous_audit_objective.has_value())
         {
-            if (inputs.observation) inputs.observation->ObserveSelectionAudit(false, false, "unavailable", "previous-objective-unavailable");
             const auto remaining_key_list{ SelectedKeys() };
             RejectSelectionKeys(
                 inputs,
@@ -622,10 +598,8 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     {
         AuditAndSalvageFinalSelection(
             inputs,
-            *previous_audit_objective, true);
+            *previous_audit_objective);
     }
-    if (!previous_audit_objective)
-        if (inputs.observation) inputs.observation->ObserveSelectionAudit(true, false, "unavailable", "previous-objective-unavailable");
     MaterializeSelection();
 }
 } // namespace rhbm_gem::core::detail

@@ -106,8 +106,7 @@ set(CORE_ESTIMATOR_TEST_SOURCES
     core/second_stage/Recovery_test.cpp
     core/second_stage/ProductionFitting_test.cpp
     core/second_stage/ConvergenceAndFinalization_test.cpp
-    core/second_stage/Observation_test.cpp
-    core/second_stage/NumericalAuditNeutrality_test.cpp
+    core/second_stage/PerformanceLogging_test.cpp
     core/EstimatorTester_test.cpp
     core/TestDataFactory_test.cpp
 )
@@ -224,7 +223,8 @@ endforeach()
 
 add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
-    support/SecondStageNumericalProbe.cpp
+    support/SecondStageWorkCapture.cpp
+    support/SecondStageBackgroundCapture.cpp
     support/SolverFailureCapture.cpp
     support/MDPDETestSupport.cpp
     support/EndpointRefinementTestSupport.cpp
@@ -252,7 +252,6 @@ if(RHBM_GEM_JOINT_SPARSE_BACKEND STREQUAL "SPQR")
 endif()
 target_include_directories(rhbm_gem_test PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(rhbm_gem_test PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-rhbm_gem_apply_observation_definitions(rhbm_gem_test)
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
 target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
@@ -272,8 +271,6 @@ target_include_directories(rhbm_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/src/data"
     "${PROJECT_SOURCE_DIR}/tests"
 )
-rhbm_gem_apply_observation_definitions(rhbm_tests)
-
 add_dependencies(tests_all rhbm_tests)
 
 # Test-only helpers contain no historical runner or multiprecision orchestration.
@@ -503,16 +500,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         set_tests_properties(joint_component_extended_regression
             PROPERTIES LABELS "extended;domain:integration;intent:algorithm;joint:extended")
     endif()
-    add_test(
-        NAME second_stage_audit_parser_test
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/second_stage_audit_test.py"
-    )
-    set_tests_properties(
-        second_stage_audit_parser_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm"
-    )
-
 endif()
 
 if(UNIX)

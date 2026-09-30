@@ -1,7 +1,8 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SecondStageNumericalProbe.hpp"
+#include "support/SolverFailureCapture.hpp"
+#include "support/SecondStageWorkCapture.hpp"
 #else
-#define RHBM_TEST_WORK(kind) ((void)0)
+#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
 #endif
 #include "core/detail/second_stage/JointFitting.hpp"
 
@@ -476,7 +477,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<double> & ridge_multiplier_list,
     algorithm::WeightedRidgeSolver & reusable_solver)
 {
-    RHBM_TEST_WORK(Solver);
+    RHBM_TEST_COUNT_WORK(Solver);
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
@@ -870,7 +871,7 @@ std::optional<FitStateProposal> BuildJointPolishProposal(
     algorithm::WeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
 {
-    RHBM_TEST_WORK(Solver);
+    RHBM_TEST_COUNT_WORK(Solver);
     std::vector<GaussianModel3D> outer_previous_model_list;
     std::vector<GaussianModel3D> base_model_list;
     outer_previous_model_list.reserve(key.size());
@@ -991,7 +992,7 @@ BoundaryJointCorrectionResult BuildBoundaryJointCorrection(
     algorithm::WeightedRidgeSolver & reusable_solver,
     JointCorrectionTrustReference trust_reference)
 {
-    RHBM_TEST_WORK(Solver);
+    RHBM_TEST_COUNT_WORK(Solver);
     BoundaryJointCorrectionResult result;
     if ((shape_active_atom_index_list.empty() && offset_active_atom_index_list.empty()) ||
         sample_ref_list.empty() ||

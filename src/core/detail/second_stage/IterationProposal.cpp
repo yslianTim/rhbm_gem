@@ -1,11 +1,12 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SecondStageNumericalProbe.hpp"
+#include "support/SolverFailureCapture.hpp"
+#include "support/SecondStageWorkCapture.hpp"
 #else
-#define RHBM_TEST_WORK(kind) ((void)0)
+#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
 #endif
 #include "core/detail/second_stage/IterationProposal.hpp"
 
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
+#include "core/detail/second_stage/observation/SecondStageLogging.hpp"
 
 #include <exception>
 #include <limits>
@@ -184,11 +185,13 @@ IterationProposalResult BuildIterationProposal(
     const SuspiciousBlockActivity & quarantine_activity,
     ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
-    RHBM_TEST_WORK(Operator);
+    RHBM_TEST_COUNT_WORK(Operator);
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(context, previous_state)
     };
+#ifdef USE_OPENMP
     const auto is_debug_logging_enabled{ IsDebugLogLevelEnabled() };
+#endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const auto capture_context{ second_stage_test::CaptureOperatorContext(context, previous_state, cluster_key_list) };
 #endif

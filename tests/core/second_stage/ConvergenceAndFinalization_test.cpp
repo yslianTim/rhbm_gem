@@ -1,4 +1,4 @@
-#include "support/SecondStageNumericalProbe.hpp"
+#include "support/SecondStageWorkCapture.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -26,7 +26,6 @@
 #include "core/detail/second_stage/SecondStageState.hpp"
 #include "core/detail/second_stage/SuspiciousUpdate.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"
-#include "core/detail/second_stage/observation/SecondStageObservation.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -190,21 +189,14 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             base_snapshot,
             detail::BuildGraphClusterKeyList(partition))
     };
-    detail::ClusterSolverWorkspaceMap solver_workspace_by_key;
     detail::BoundaryJointCorrectionWorkspaceMap correction_workspace_by_key;
-    detail::PerformanceCounters performance_counters{
-        true,
-        fixture.context,
-        solver_workspace_by_key,
-        correction_workspace_by_key
-    };
+    detail::PerformanceCounters performance_counters{ true };
     auto options{ MakeSecondStageOptions() };
     const detail::SuspiciousBlockActivity all_active{
         std::vector<char>(fixture.context.atom_list.size(), 0),
         std::vector<char>(fixture.context.atom_list.size(), 0),
         std::vector<char>(fixture.context.atom_list.size(), 0)
     };
-    detail::SecondStageObservationSession observation;
     const auto polish_result{
         detail::RunFinalDependencyPolish(
             fixture.context,
@@ -215,21 +207,21 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             all_active,
             fixture.state,
             correction_workspace_by_key,
-            performance_counters, &observation)
+            performance_counters)
     };
     ASSERT_TRUE(polish_result.accepted);
     ASSERT_TRUE(polish_result.objective.has_value());
-    ASSERT_TRUE(observation.final_polish.objective_before.has_value());
-    ASSERT_TRUE(observation.final_polish.objective_after.has_value());
+    ASSERT_TRUE(polish_result.diagnostic.objective_before.has_value());
+    ASSERT_TRUE(polish_result.diagnostic.objective_after.has_value());
     EXPECT_LT(
-        *observation.final_polish.objective_after,
-        *observation.final_polish.objective_before);
-    ASSERT_EQ(observation.final_polish.component_count, 1U);
-    EXPECT_GE(observation.final_polish.round_count, 1U);
+        *polish_result.diagnostic.objective_after,
+        *polish_result.diagnostic.objective_before);
+    ASSERT_EQ(polish_result.diagnostic.component_count, 1U);
+    EXPECT_GE(polish_result.diagnostic.round_count, 1U);
     EXPECT_LE(
-        observation.final_polish.round_count,
+        polish_result.diagnostic.round_count,
         options.second_stage_dependency_polish_max_iterations);
-    EXPECT_EQ(observation.final_polish.parameter_count, 6U);
+    EXPECT_EQ(polish_result.diagnostic.parameter_count, 6U);
     EXPECT_NE(
         polish_result.state.at(0).mdpde.GetModel().GetOffset(),
         polish_result.state.at(1).mdpde.GetModel().GetOffset());
@@ -258,24 +250,22 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishReusesBaseObjectiveWi
         if (!objective_available) domain.cluster_by_key.begin()->second.scale.reset();
         const auto base_objective{ detail::EvaluateAuditObjective(domain, baseline) };
         ASSERT_EQ(base_objective.has_value(), objective_available);
-        detail::ClusterSolverWorkspaceMap solvers;
         detail::BoundaryJointCorrectionWorkspaceMap corrections;
-        detail::PerformanceCounters counters{ true, fixture.context, solvers, corrections };
-        detail::SecondStageObservationSession observation;
+        detail::PerformanceCounters counters{ true };
         const detail::SuspiciousBlockActivity fixed{ { 1, 1 }, { 1, 1 }, { 0, 0 } };
 
-        second_stage_test::BeginNumericalCapture();
+        second_stage_test::BeginWorkCapture();
         const auto result{ detail::RunFinalDependencyPolish(fixture.context, MakeSecondStageOptions(),
-            topology, partition, domain, fixed, fixture.state, corrections, counters, &observation) };
-        const auto capture{ second_stage_test::EndNumericalCapture() };
+            topology, partition, domain, fixed, fixture.state, corrections, counters) };
+        const auto work{ second_stage_test::EndWorkCapture() };
 
         // Only the base baseline and its objective are evaluated. Assembly with
         // no accepted patches must not trigger a second global audit or solve.
-        EXPECT_EQ(capture.work, (std::array<std::size_t, 4>{ 0, 0, 1, 2 }));
+        EXPECT_EQ(work, (std::array<std::size_t, 4>{ 0, 0, 1, 2 }));
         EXPECT_FALSE(result.accepted);
-        EXPECT_EQ(observation.final_polish.component_count, 1U);
-        EXPECT_EQ(observation.final_polish.attempted_component_count, 0U);
-        EXPECT_EQ(observation.final_polish.accepted_component_count, 0U);
+        EXPECT_EQ(result.diagnostic.component_count, 1U);
+        EXPECT_EQ(result.diagnostic.attempted_component_count, 0U);
+        EXPECT_EQ(result.diagnostic.accepted_component_count, 0U);
         ASSERT_EQ(result.objective.has_value(), objective_available);
         if (base_objective)
         {
@@ -833,18 +823,14 @@ TEST(EstimatorSecondStageDefenseTest, SameChemicalKeyAtomsKeepIndependentOffsets
     auto original{ BuildIndependentOffsetDefenseModel() };
     auto relabeled{ BuildIndependentOffsetDefenseModel(1.0, true) };
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*original) };
-    const auto run_logged = [](rg::ModelObject & model)
+    const auto run = [](rg::ModelObject & model)
     {
         auto options{ MakeSecondStageOptions() };
         model.EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
-        second_stage_test::BeginNumericalCapture();
         detail::RunSecondStageIterations(model, options);
-        const auto capture{ second_stage_test::EndNumericalCapture() };
-        EXPECT_FALSE(capture.commits.empty());
-        return capture.commits;
     };
-    const auto original_trace{ run_logged(*original) };
-    EXPECT_EQ(original_trace, run_logged(*relabeled));
+    run(*original);
+    run(*relabeled);
     const auto & atoms{ original->GetSelectedAtoms() };
     const auto & changed{ relabeled->GetSelectedAtoms() };
     ASSERT_EQ(atoms.size(), 2U);

@@ -4,7 +4,6 @@
 #include "support/MDPDETestSupport.hpp"
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <cstdlib>
 #include <cmath>
@@ -171,11 +170,9 @@ TEST(ProductionFittingTest, MemberBestRejectsPreviousOnlyProgressAndReevaluatesD
     const auto & samples{ domain.cluster_by_key.at({0}).sample_ref_list };
     const auto score{ d::EvaluateObjectiveContribution(baseline, {0}, samples, domain) };
     ASSERT_TRUE(score);
-    d::ClusterSolverWorkspaceMap solvers; d::BoundaryJointCorrectionWorkspaceMap corrections;
-    d::PerformanceCounters counters(true, fixture.context, solvers, corrections);
     const d::ClusterKey key{0};
     d::LocalCandidateReference reference{d::LocalObjectivePolicy::PreviousNonRegression, key, samples,
-        &*score, domain, {}, counters};
+        &*score, domain, {}};
     const d::CandidateEvaluationOverlay overlay{fixture.context, baseline, previous, patch};
     EXPECT_TRUE(d::EvaluateLocalCandidate(overlay, reference).accepted);
     reference.member_best = &history.at(key);

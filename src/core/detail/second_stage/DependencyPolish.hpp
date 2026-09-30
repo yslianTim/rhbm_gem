@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
+#include "core/detail/second_stage/SecondStageDiagnostics.hpp"
 #include "core/detail/second_stage/SuspiciousUpdate.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 
@@ -10,12 +11,13 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
-class SecondStageObservationSession;
+class PerformanceCounters;
 
 struct FinalDependencyPolishResult
 {
     FitState state{};
     std::optional<ObjectiveBreakdown> objective{};
+    FinalDependencyPolishDiagnostic diagnostic{};
     bool accepted{ false };
 };
 
@@ -28,7 +30,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const SuspiciousBlockActivity & block_activity,
     const FitState & base_state,
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
-    PerformanceCounters & performance_counters,
-    SecondStageObservationSession * observation = nullptr);
+    PerformanceCounters & performance_counters);
 
 } // namespace rhbm_gem::core::detail

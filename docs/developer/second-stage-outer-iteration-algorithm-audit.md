@@ -3,16 +3,14 @@
 ## Status and authority
 
 The historical numerical-policy inventory below was checked against source **C**:
-`c174458294c1a328058f96bf37a2a21ae16c06a4`. The current passive-observation retirement is documented in the
-[audit guide](second-stage-audit.md); historical experiments below are not new
-validation. Research collectors and alternate threshold scans are retired.
+`c174458294c1a328058f96bf37a2a21ae16c06a4`. The passive second-stage observation
+guide and subsystem were retired by PR-C; historical experiments below are not
+new validation. Research collectors and alternate threshold scans are retired.
 Production numerical decisions below remain as stated; the Fold-168 external
 regression gate was retired by PR-B.
 
 - [Second-stage local fitting](second-stage-local-fitting.md) specifies current
   execution, ownership, acceptance, recovery, and persistence contracts.
-- [Second-stage decision audit](second-stage-audit.md) explains optional
-  observations, schemas, and diagnostic interpretation.
 - The Fold-168 external regression campaign was retired by PR-B. Its fixed
   investigation record remains available at the [historical Git revision](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/fold-168-iteration-regression.md).
 - This page owns current decisions, evidence limits, and historical references.

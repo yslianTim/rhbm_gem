@@ -6,8 +6,6 @@
 
 namespace rhbm_gem::core::detail {
 
-class PerformanceCounters;
-
 inline constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
 inline constexpr double kFitRangeWeight{ 1.0 };
 inline constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
@@ -178,8 +176,7 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const CandidateEvaluationOverlay & candidate_overlay,
     const std::vector<SampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
-    const ObjectiveBreakdown & baseline,
-    PerformanceCounters & performance_counters);
+    const ObjectiveBreakdown & baseline);
 
 void UpdateMemberBestState(const SecondStageContext &, const ObjectiveDomain &,
     const FitState &, const std::vector<ClusterKey> &, MemberBestState &);

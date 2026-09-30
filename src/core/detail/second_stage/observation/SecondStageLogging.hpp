@@ -9,17 +9,15 @@
 #include <string_view>
 #include <vector>
 
-namespace rhbm_gem::core { struct FitOptions; }
 namespace rhbm_gem::core::detail {
-class SecondStageObservationSession;
-
 class PerformanceCounters;
 struct IterationDiagnostics;
 struct FinalDependencyPolishDiagnostic;
 struct SuspiciousGaussianAssessment;
 struct SuspiciousBlockActivity;
 
-void LogSecondStagePerformance(const PerformanceCounters &, std::size_t, double);
+void LogSecondStagePerformance(const PerformanceCounters &, double);
+bool IsDebugLogLevelEnabled();
 
 struct IterationResult;
 struct FixedPointOperatorEvidence;
@@ -99,10 +97,5 @@ void LogSecondStageSummary(
     const PolishProvenance & latest_polish_provenance,
     SecondStageStopReason stop_reason,
     bool final_uses_best_audit);
-
-void LogDecisionAuditStart(SecondStageObservationSession &, const FitOptions &) noexcept;
-void LogDecisionAuditIteration(SecondStageObservationSession &, const IterationResult &) noexcept;
-void LogDecisionAuditTerminal(SecondStageObservationSession &, std::string_view reason, std::string_view source,
-    const BestAuditState &, const PerformanceCounters * = nullptr) noexcept;
 
 } // namespace rhbm_gem::core::detail
