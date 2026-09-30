@@ -24,8 +24,6 @@ option(RHBM_GEM_ENABLE_UMAP
     "Enable the umap_embedding command through umappp" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
-option(RHBM_GEM_ENABLE_FOLD_168_REGRESSION
-    "Enable the external 168-atom simulation regression benchmark" OFF)
 option(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS
     "Enable frozen 168-atom and additional joint component regressions" OFF)
 option(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS
@@ -41,11 +39,6 @@ foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GE
 endforeach()
 option(RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT
     "Record existing second-stage decision evidence without additional solving" OFF)
-
-set(RHBM_GEM_FOLD_168_MODEL "" CACHE FILEPATH
-    "Path to the fixed fold-168 regression CIF model")
-set(RHBM_GEM_FOLD_168_MAP "" CACHE FILEPATH
-    "Path to the fixed fold-168 regression map")
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")
@@ -79,11 +72,6 @@ rhbm_gem_normalize_cache_enum(
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
-endif()
-
-if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION AND NOT BUILD_TESTING)
-    message(FATAL_ERROR
-        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION requires BUILD_TESTING=ON")
 endif()
 
 if((RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS OR RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS) AND NOT BUILD_TESTING)

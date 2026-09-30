@@ -121,37 +121,158 @@
   "notes": [
     "At the PR 4 inventory checkout, seven checked archives were present and matched their recorded SHA-256 values; PR 6 records their verified removal from the current tree. Three sparse/operator archive paths previously recorded as present were absent at the PR 4 starting checkout; their expected sizes and SHA-256 values remain in the source verification manifests.",
     "No missing artifact was recreated. The two older report references do not specify a containing directory; neither name exists in the PR 1–4 checked trees. The search-records-a archive is retrievable from its recorded historical Git commit; its size and hash match the retired-artifact inventory, but it was absent at the PR 4 inventory checkout.",
-    "This manifest records requested high-value archives and documented missing files from the PR 1–4 inventory, plus the PR 6 removal update; it is not a full inventory of every file under docs/developer/figures."
+    "This manifest records requested high-value archives and documented missing files from the PR 1–4 inventory, plus the PR 6 removal update; it is not a full inventory of every file under docs/developer/figures.",
+    "PR-B removes the Fold-168 external benchmark input and the MDPDE forward-research outputs from the active tree. Their exact provenance is recorded in retirement_update.pr_b_update; captured MDPDE fixtures remain active."
   ],
   "retirement_update": {
     "based_on_start_commit": "e5a9e7922f063743df71b6e2561ee3c43c781ff5",
     "active_tool_dependencies_removed": true,
     "historical_evidence_retained": true,
     "archives": [
-      {"path": "docs/developer/figures/joint-reference-acceptance/historical-inputs.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-reference-acceptance/historical-audits.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-reference-acceptance/historical-results.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-inputs.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-audits.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-reference-acceptance/incremental-results.tar.gz", "active_dependency": false, "historical_evidence": true},
-      {"path": "docs/developer/figures/joint-fixed-actions/receipts.tar.xz", "active_dependency": false, "historical_evidence": true}
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/historical-inputs.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/historical-audits.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/historical-results.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/incremental-inputs.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/incremental-audits.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-reference-acceptance/incremental-results.tar.gz",
+        "active_dependency": false,
+        "historical_evidence": true
+      },
+      {
+        "path": "docs/developer/figures/joint-fixed-actions/receipts.tar.xz",
+        "active_dependency": false,
+        "historical_evidence": true
+      }
     ],
     "missing_archives": [
-      {"path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4"},
-      {"path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626"},
-      {"path": "docs/developer/figures/joint-operator-search/receipts.tar.gz", "active_dependency": false, "archive_present": false, "expected_sha256_recorded": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f"}
+      {
+        "path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz",
+        "active_dependency": false,
+        "archive_present": false,
+        "expected_sha256_recorded": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4"
+      },
+      {
+        "path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz",
+        "active_dependency": false,
+        "archive_present": false,
+        "expected_sha256_recorded": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626"
+      },
+      {
+        "path": "docs/developer/figures/joint-operator-search/receipts.tar.gz",
+        "active_dependency": false,
+        "archive_present": false,
+        "expected_sha256_recorded": "091987f1212107968cd0c88942ee1aa44d8f397164a1a031d15f7f9a81fdfb1f"
+      }
     ],
     "retired_campaigns": [
-      {"runner": "joint_sparse_validation.py", "profiles": ["fixed", "solve", "rank"], "evidence": ["docs/developer/figures/joint-sparse-acceptance/numerical-comparison.json", "docs/developer/figures/joint-sparse-acceptance/verification.json"]},
-      {"runner": "joint_compact_validation.py", "profiles": ["fixed", "rank"], "evidence": ["docs/developer/figures/joint-compact-acceptance/", "docs/developer/figures/joint-reference-acceptance/"]},
-      {"runner": "joint_reference_validation.py", "profiles": ["solve", "workflow", "command"], "evidence": ["docs/developer/figures/joint-reference-acceptance/"]},
-      {"runner": "joint_operator_validation.py", "profiles": ["prepare", "fixed"], "evidence": ["docs/developer/figures/joint-operator-search/manifest.json"]},
-      {"runner": "joint_search_validation.py", "profiles": ["solve"], "evidence": ["docs/developer/figures/joint-operator-search/manifest.json"]},
-      {"runner": "joint_fixed_validation.py", "profiles": ["fixed"], "evidence": ["docs/developer/figures/joint-fixed-actions/"]},
-      {"runner": "joint_bounded_validation.py", "profiles": ["rank", "solve"], "evidence": ["docs/developer/joint-bounded-search-rank-validation.md"]},
-      {"runner": "joint_postprocessing_benchmark.py", "profiles": ["workflow", "postprocess"], "evidence": ["docs/developer/joint-analysis-consolidation.md"]}
+      {
+        "runner": "joint_sparse_validation.py",
+        "profiles": [
+          "fixed",
+          "solve",
+          "rank"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-sparse-acceptance/numerical-comparison.json",
+          "docs/developer/figures/joint-sparse-acceptance/verification.json"
+        ]
+      },
+      {
+        "runner": "joint_compact_validation.py",
+        "profiles": [
+          "fixed",
+          "rank"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-compact-acceptance/",
+          "docs/developer/figures/joint-reference-acceptance/"
+        ]
+      },
+      {
+        "runner": "joint_reference_validation.py",
+        "profiles": [
+          "solve",
+          "workflow",
+          "command"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-reference-acceptance/"
+        ]
+      },
+      {
+        "runner": "joint_operator_validation.py",
+        "profiles": [
+          "prepare",
+          "fixed"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-operator-search/manifest.json"
+        ]
+      },
+      {
+        "runner": "joint_search_validation.py",
+        "profiles": [
+          "solve"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-operator-search/manifest.json"
+        ]
+      },
+      {
+        "runner": "joint_fixed_validation.py",
+        "profiles": [
+          "fixed"
+        ],
+        "evidence": [
+          "docs/developer/figures/joint-fixed-actions/"
+        ]
+      },
+      {
+        "runner": "joint_bounded_validation.py",
+        "profiles": [
+          "rank",
+          "solve"
+        ],
+        "evidence": [
+          "docs/developer/joint-bounded-search-rank-validation.md"
+        ]
+      },
+      {
+        "runner": "joint_postprocessing_benchmark.py",
+        "profiles": [
+          "workflow",
+          "postprocess"
+        ],
+        "evidence": [
+          "docs/developer/joint-analysis-consolidation.md"
+        ]
+      }
     ],
-    "preexisting_unlocated_references": ["scientific-records.tar.gz", "frozen-diagnostics/frozen-endpoint-records.tar.gz"],
+    "preexisting_unlocated_references": [
+      "scientific-records.tar.gz",
+      "frozen-diagnostics/frozen-endpoint-records.tar.gz"
+    ],
     "newly_verified_missing_archives": 3,
     "pr5_update": {
       "based_on_start_commit": "465168565d5bf3c046c12e471e22cd3098c59bad",
@@ -388,11 +509,11 @@
           "docs/",
           "README files"
         ],
-      "result": "No production, active test, runner, CMake, script, or current Markdown local-link readers remain. Former paths are retained only in the retirement manifests and Git history."
-    },
-    "historical_evidence_retained": true,
-    "historical_snapshot_note": "Earlier PR5/PR6 status fields remain historical snapshots; this PR-A inventory records the current worktree removals.",
-    "artifacts": [
+        "result": "No production, active test, runner, CMake, script, or current Markdown local-link readers remain. Former paths are retained only in the retirement manifests and Git history."
+      },
+      "historical_evidence_retained": true,
+      "historical_snapshot_note": "Earlier PR5/PR6 status fields remain historical snapshots; this PR-A inventory records the current worktree removals.",
+      "artifacts": [
         {
           "id": "pr-a-joint-precursor-comparisons-observation-matched-prediction-experiment-md",
           "path": "docs/developer/observation-matched-prediction-experiment.md",
@@ -401,7 +522,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 313,
           "sha256": "afaffacd99055d0acf9691ebfa05eba031fe8364d0989be4d9889ce0edac6ac9",
@@ -419,7 +540,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 286,
           "sha256": "154a9c4c85086f69f578d0c6270ddddbd0b031989ff64ef41c4872678cfcdfd4",
@@ -437,7 +558,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 308,
           "sha256": "c75093bc5c880cab640df007d0c6c25e076d7cdff3cee82782bec70c6bbce583",
@@ -455,7 +576,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 280,
           "sha256": "d51b883a19ddfefb4c7cb5652f2e87dd2a08b2979c9d850ca7f20b397df35cd0",
@@ -473,7 +594,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 286,
           "sha256": "5295033df0e42669aa0f78f3810d4bf9b002658a097ad56d7313f21f18ecfc33",
@@ -491,7 +612,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 292,
           "sha256": "9b23f45aafa4220c87c17d053062e098c7038d182def02d3972df3a909c0ba97",
@@ -509,7 +630,7 @@
           "campaign": "joint-precursor-comparisons",
           "purpose": "Historical Joint precursor redirect stub.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 291,
           "sha256": "f892162bac9545db7de878ca8530887123db2abdbcd24518155acd1bc9ef4442",
@@ -527,7 +648,7 @@
           "campaign": "endpoint-refinement",
           "purpose": "Retired endpoint-refinement campaign report or output.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 10754,
           "sha256": "4bcde942a8f5b94a0fec75ec9512aeb87c31bd8e1faee16f2be024858372cb36",
@@ -545,7 +666,7 @@
           "campaign": "endpoint-refinement",
           "purpose": "Retired endpoint-refinement campaign report or output.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 48654,
           "sha256": "6f223b35924fbc9c92ca2007aea145fde1954c60ec77a8076204b437c74841d1",
@@ -563,7 +684,7 @@
           "campaign": "endpoint-refinement",
           "purpose": "Retired endpoint-refinement campaign report or output.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 38595,
           "sha256": "10cf164a06214c1997225b384699faf165094701dc118da98538d0b26cdee093",
@@ -581,7 +702,7 @@
           "campaign": "failed-only-refinement",
           "purpose": "Retired failed-only full-run campaign output.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 11488,
           "sha256": "e5ab3559225b791550d36ad10f89d5a046398c15c0ed6f5c3d47adbe72e9c8c2",
@@ -599,7 +720,7 @@
           "campaign": "second-stage-convergence",
           "purpose": "Historical second-stage convergence audit record.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 12448,
           "sha256": "90fce65ecd2f07f531adecdfcdebae9fcef5c6bf131ccabab45d82d77c9a2fc7",
@@ -617,7 +738,7 @@
           "campaign": "second-stage-convergence",
           "purpose": "Historical second-stage convergence audit record.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 9573,
           "sha256": "027f6d9c2531b9c1ebccd0d01ba2863f722abb969271839b5803f0eb3d799fd4",
@@ -635,7 +756,7 @@
           "campaign": "second-stage-convergence",
           "purpose": "Historical second-stage convergence audit record.",
           "source_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
-        "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
+          "source_commit_role": "Exact tracked bytes captured from this revision; Git history is unchanged.",
           "last_present_commit": "109648b3abd130b6517ef461e8b8854a01df0f30",
           "size_bytes": 13320,
           "sha256": "848812a8740269fe64df026492c1558d71ab00603a6c25e77451478606fb2216",
@@ -655,6 +776,164 @@
         "bytes_removed_from_worktree": 146888,
         "git_history_rewritten": false
       }
+    },
+    "pr_b_update": {
+      "based_on_start_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+      "active_dependency_scan": {
+        "roots": [
+          "src/",
+          "include/",
+          "tests/",
+          "resources/",
+          "cmake/",
+          "CMakeLists.txt",
+          "README.md",
+          "docs/"
+        ],
+        "result": "Fold-168 and MDPDE forward-research entry points and their experiment-only support have no active callers. Joint runtime, offline, benchmark, and statistical targets remain registered."
+      },
+      "retired_infrastructure": [
+        "Fold-168 external regression runner, scoring helper, CTest gate, CMake options, and frozen benchmark input.",
+        "MDPDE solve/forward research runner, experiment-only report support, forward-model wrapper, and research figures."
+      ],
+      "permanent_owners_retained": [
+        "Production MDPDE solver and failed-only endpoint refinement.",
+        "MDPDERegression_test.cpp and its independent numerical references.",
+        "EndpointRefinementTestSupport.cpp and permanent production fitting tests.",
+        "tests/fixtures/mdpde/ and SolverFailureCapture replay coverage.",
+        "Joint runtime, offline, benchmark, and statistical infrastructure."
+      ],
+      "production_numerics_changed": false,
+      "joint_component_numerics_changed": false,
+      "historical_evidence_retained": true,
+      "artifacts": [
+        {
+          "id": "pr-b-fold-168-simulation-baseline",
+          "path": "tests/benchmarks/fold_168_simulation_baseline.json",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_BENCHMARK_INPUT",
+          "campaign": "fold-168",
+          "purpose": "Frozen 168-atom simulation input formerly required by the opt-in external regression.",
+          "source_commit": "d69f809b6dcf74aca100a980fa81b91165f7b3bb",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 3374,
+          "sha256": "a8a36b18ae82adf35004b46b567958beb13a865e731d022d4701cc06e1e50175",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "The external Fold-168 regression is retired. Production MDPDE and second-stage correctness remain covered by permanent tests.",
+          "notes": "Exact tracked input bytes at its last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/fold_168_regression.py",
+          "source_commit_role": "Commit that added the Fold-168 benchmark input."
+        },
+        {
+          "id": "pr-b-mdpde-forward-discrepancy-pdf",
+          "path": "docs/developer/figures/mdpde-experiment/forward-discrepancy.pdf",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_RESEARCH_OUTPUT",
+          "campaign": "mdpde-forward-model",
+          "purpose": "Tracked output from the retired MDPDE forward-model and solver-comparison campaign.",
+          "source_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 22503,
+          "sha256": "e1ffbd6371088b0ad07fafb58d8004db32ff8f64c8b8cf9264b10c6a516c319c",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Permanent MDPDE numerical tests and captured fixtures remain active correctness owners; the research campaign has no active replacement.",
+          "notes": "Exact tracked output bytes at the last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/mdpde_experiment.py",
+          "source_commit_role": "Commit that introduced the MDPDE forward-model campaign and its tracked output."
+        },
+        {
+          "id": "pr-b-mdpde-forward-discrepancy-png",
+          "path": "docs/developer/figures/mdpde-experiment/forward-discrepancy.png",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_RESEARCH_OUTPUT",
+          "campaign": "mdpde-forward-model",
+          "purpose": "Tracked output from the retired MDPDE forward-model and solver-comparison campaign.",
+          "source_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 148666,
+          "sha256": "4234ae8a57af7b4adb917f0f47c5f2937777bcad312d5545975049f086da5085",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Permanent MDPDE numerical tests and captured fixtures remain active correctness owners; the research campaign has no active replacement.",
+          "notes": "Exact tracked output bytes at the last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/mdpde_experiment.py",
+          "source_commit_role": "Commit that introduced the MDPDE forward-model campaign and its tracked output."
+        },
+        {
+          "id": "pr-b-mdpde-results-json",
+          "path": "docs/developer/figures/mdpde-experiment/results.json",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_RESEARCH_OUTPUT",
+          "campaign": "mdpde-forward-model",
+          "purpose": "Tracked output from the retired MDPDE forward-model and solver-comparison campaign.",
+          "source_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 540352,
+          "sha256": "df2e52442b505f1ecb5ab0f5449a9e1ea46bfb37079de101b6a900093652370a",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Permanent MDPDE numerical tests and captured fixtures remain active correctness owners; the research campaign has no active replacement.",
+          "notes": "Exact tracked output bytes at the last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/mdpde_experiment.py",
+          "source_commit_role": "Commit that introduced the MDPDE forward-model campaign and its tracked output."
+        },
+        {
+          "id": "pr-b-mdpde-solver-residuals-pdf",
+          "path": "docs/developer/figures/mdpde-experiment/solver-residuals.pdf",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_RESEARCH_OUTPUT",
+          "campaign": "mdpde-forward-model",
+          "purpose": "Tracked output from the retired MDPDE forward-model and solver-comparison campaign.",
+          "source_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 22626,
+          "sha256": "87710cb6053c4a412bf9bbb6f27260800b32f574cf6c180c46468323a8e7142f",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Permanent MDPDE numerical tests and captured fixtures remain active correctness owners; the research campaign has no active replacement.",
+          "notes": "Exact tracked output bytes at the last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/mdpde_experiment.py",
+          "source_commit_role": "Commit that introduced the MDPDE forward-model campaign and its tracked output."
+        },
+        {
+          "id": "pr-b-mdpde-solver-residuals-png",
+          "path": "docs/developer/figures/mdpde-experiment/solver-residuals.png",
+          "status": "removed_from_worktree",
+          "classification": "ACTIVE_RESEARCH_OUTPUT",
+          "campaign": "mdpde-forward-model",
+          "purpose": "Tracked output from the retired MDPDE forward-model and solver-comparison campaign.",
+          "source_commit": "0785a395c7bfcc5d6e0730a210cb5e8d18153993",
+          "last_present_commit": "b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e",
+          "size_bytes": 243149,
+          "sha256": "c3349490907d83fb3d4e18de9b552fec804c173b027edb2bd309372f264a244f",
+          "active_dependency": false,
+          "active_callers": [],
+          "historical_evidence": true,
+          "replacement": "Permanent MDPDE numerical tests and captured fixtures remain active correctness owners; the research campaign has no active replacement.",
+          "notes": "Exact tracked output bytes at the last-present revision; removed from the current worktree only, with Git history unchanged.",
+          "source_tool": "tests/integration/mdpde_experiment.py",
+          "source_commit_role": "Commit that introduced the MDPDE forward-model campaign and its tracked output."
+        }
+      ],
+      "entry_count": 6,
+      "status_values": [
+        "removed_from_worktree"
+      ],
+      "size_accounting": {
+        "tracked_evidence_files_removed": 6,
+        "tracked_evidence_bytes_removed": 980670,
+        "retained_active_fixture_files": 19,
+        "retained_active_fixture_bytes": 14178282,
+        "git_history_rewritten": false
+      },
+      "historical_snapshot_note": "The preceding retirement inventory is retained as a historical PR 1–6 snapshot. This PR-B block records the current Fold-168 and MDPDE research retirement; the original captured MDPDE fixture files remain in fixture_inventory."
     }
   },
   "fixture_inventory": {
@@ -721,8 +1000,8 @@
       },
       {
         "path": "tests/fixtures/mdpde/README.md",
-        "bytes": 1016,
-        "sha256": "f4d9c3ab9b260839b4eb3960fe1135b19814fb7df8ad06e7ffb5615a49690319"
+        "bytes": 928,
+        "sha256": "670d825198e667dffc6d69f51cca5b753c297e9008d7eac2d30de2cfee08816f"
       },
       {
         "path": "tests/fixtures/mdpde/index.json",
@@ -750,21 +1029,15 @@
         "sha256": "60a3f6ec486b5f0ce16caaf817e90076d69643b900db0e7c4c9ff9dacd8d4e45"
       },
       {
-        "path": "tests/benchmarks/fold_168_simulation_baseline.json",
-        "bytes": 3374,
-        "sha256": "a8a36b18ae82adf35004b46b567958beb13a865e731d022d4701cc06e1e50175"
-      },
-      {
         "path": "tests/support/JointPartialSelection.hpp",
         "bytes": 2452,
         "sha256": "cee697acc892c57d0073b23b4eb006b6695c967d2129e04bea1f62eba675b657"
       }
     ],
-    "count": 20,
+    "count": 19,
     "scope": [
       "tests/fixtures/joint_component/",
       "tests/fixtures/mdpde/",
-      "tests/benchmarks/fold_168_simulation_baseline.json",
       "tests/support/JointPartialSelection.hpp"
     ]
   }

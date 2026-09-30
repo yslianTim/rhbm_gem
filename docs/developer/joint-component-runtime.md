@@ -281,9 +281,7 @@ required; a local certificate cannot promote a missing or failed component.
 
 The [evidence index](joint-component-evidence.md) records the retired research
 workflows, limitations and retrieval commits. No ordinary regression requires
-the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. First-stage `mdpde_experiment solve`, `forward`
-and `refine`, production second-stage and the separate fold-168 regression
-remain supported. Formal workflow adoption and result persistence use the opt-in command described below. See [tiled backend acceptance](joint-component-tiled-backend.md) for
+the historical 72/216/128-case chains or 5,008-report replay. Guarded is the only retained search branch. The first-stage MDPDE research runner and separate Fold-168 external campaign are retired; the production second-stage fitter remains supported. Formal workflow adoption and result persistence use the opt-in command described below. See [tiled backend acceptance](joint-component-tiled-backend.md) for
 validation and measured costs.
 
 ## Saved production outcomes

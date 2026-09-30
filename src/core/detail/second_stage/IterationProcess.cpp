@@ -1,6 +1,6 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SecondStageNumericalProbe.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #else
 #define RHBM_TEST_TERMINAL(value) ((void)0)
 #endif
@@ -935,7 +935,7 @@ static const FitState & FinalizeSecondStageState(
 void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::ScopedSecondStageEndpointExperiment endpoint_experiment;
+    second_stage_test::ScopedSecondStageEndpointTest endpoint_test;
 #endif
     if (options.enable_second_stage_dependency_polish &&
         options.second_stage_dependency_polish_max_iterations == 0)

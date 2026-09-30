@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/SecondStageTestSupport.hpp"
 #include "support/SecondStageNumericalProbe.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>

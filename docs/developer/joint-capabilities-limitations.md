@@ -44,7 +44,7 @@ separate from numerical qualification and scientific interpretation.
 Joint numerical correctness and persistence belong to C++ unit tests, offline
 reference checks and the CLI workflow smoke. The benchmark measures those paths
 without replacing their assertions. Refinement correctness has permanent owners
-in `MDPDEExperiment_test.cpp` and `ProductionFitting_test.cpp`; its campaign
+in `MDPDERegression_test.cpp` and `ProductionFitting_test.cpp`; its campaign
 receipts do not own the production policy.
 
 The historical weak-halo diagnosis, noise/mismatch results, resource campaign,

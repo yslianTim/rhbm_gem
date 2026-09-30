@@ -33,16 +33,16 @@ explicitly unqualified.
 
 ## Permanent owners
 
-`MDPDEExperiment_test.cpp` and `ProductionFitting_test.cpp` cover native-success
+`MDPDERegression_test.cpp` and `ProductionFitting_test.cpp` cover native-success
 bypass and unchanged values, failed-only invocation, ineligible rank-deficient
 endpoints, wrong-root branch rejection, fresh weights, covariance, budget
 exhaustion, invalid variance/state, rank deficiency and preserved native status.
 Captured shape fixtures remain checked in because permanent tests use them.
-`EndpointRefinementExperiment.*`, `SolverFailureCapture.*`, and
-`ForwardModelExperiment.*` also remain because permanent tests and the optional
-MDPDE research tool depend on them. `mdpde_experiment` remains an opt-in solver
-comparison and failure-capture diagnostic; it does not rerun the retired
-fold-wide acceptance campaign.
+`MDPDETestSupport.*`, `EndpointRefinementTestSupport.*`, and
+`SolverFailureCapture.*` remain for numerical references, endpoint policy
+probes, and captured failure replay. The MDPDE forward-comparison campaign and
+the Fold-168 external regression have been retired; permanent tests do not need
+external model, map, or manifest inputs.
 
 The historical endpoint and failed-only campaign runners have been retired.
 Their exact work totals and fold-wide outputs are not permanent correctness

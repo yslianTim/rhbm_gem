@@ -1,9 +1,8 @@
 #include <gtest/gtest.h>
-#include "support/MDPDEExperiment.hpp"
-#include "support/ForwardModelExperiment.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/MDPDETestSupport.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -24,7 +23,7 @@ second_stage_test::ShapeFixture Fixture(double alpha = 0.1)
 }
 }
 
-TEST(MDPDEExperimentTest, AlphaZeroMatchesClosedFormVarianceAndNormalEquations)
+TEST(MDPDENumericsTest, AlphaZeroMatchesClosedFormVarianceAndNormalEquations)
 {
     const auto f{Fixture(0.0)};
     const auto beta{second_stage_test::MDPDETestBeta(f.dataset, Eigen::VectorXd::Ones(40), "svd")};
@@ -32,25 +31,43 @@ TEST(MDPDEExperimentTest, AlphaZeroMatchesClosedFormVarianceAndNormalEquations)
     const auto e{second_stage_test::EvaluateMDPDEEquations(f.dataset,0.0,beta,v,1e-8)};
     ASSERT_TRUE(e.valid); EXPECT_LT(e.scaled.lpNorm<Eigen::Infinity>(),1e-10);
     EXPECT_DOUBLE_EQ(e.denominator,40.0);
+    const auto production{rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.0,f.dataset,f.options)};
+    EXPECT_EQ(production.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    EXPECT_TRUE(production.beta_mdpde.isApprox(beta,1e-12));
+    EXPECT_NEAR(production.sigma_square,v,1e-12);
 }
 
-TEST(MDPDEExperimentTest, RootAndFixedPointAgreeOnFiniteVarianceFixture)
+TEST(MDPDENumericsTest, ProductionFixedPointMatchesIndependentQRReference)
 {
-    const auto f{Fixture()}; const auto result{second_stage_test::CompareMDPDE(f)};
-    ASSERT_TRUE(result.at("exact_replay").as_bool());
-    double reference_v{};
-    for (const auto & value : result.at("methods").as_array())
+    const auto f{Fixture()};
+    const auto production{rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options)};
+    Eigen::VectorXd beta{f.expected.beta_ols};
+    double variance{(f.dataset.y-f.dataset.X*beta).squaredNorm()/(f.dataset.y.size()-1)};
+    bool converged{};
+    for (int i=0;i<f.options.max_iterations;++i)
     {
-        const auto & m{value.as_object()};
-        if (m.at("method") == "production") continue;
-        ASSERT_TRUE(m.at("reference_pass").as_bool()) << m.at("method");
-        const double v{m.at("variance").as_double()};
-        if (reference_v == 0.0) reference_v = v;
-        EXPECT_NEAR(v,reference_v,1e-11);
+        const auto equations{second_stage_test::EvaluateMDPDEEquations(
+            f.dataset,f.alpha,beta,variance,f.options.data_weight_min)};
+        ASSERT_TRUE(equations.valid) << equations.reason;
+        const auto previous_beta{beta}; const double previous_variance{variance};
+        beta=second_stage_test::MDPDETestBeta(f.dataset,equations.weights,"qr");
+        variance=second_stage_test::MDPDETestVariance(f.dataset,f.alpha,equations.weights,beta);
+        const double beta_change{(beta-previous_beta).squaredNorm()};
+        const double variance_change{std::abs(variance-previous_variance)/
+            std::max({std::abs(variance),std::abs(previous_variance),f.options.data_weight_min})};
+        if(beta_change<f.options.tolerance && variance_change<f.options.tolerance)
+        {converged=true;break;}
     }
+    ASSERT_TRUE(converged);
+    ASSERT_EQ(production.status,rhbm_gem::RHBMEstimationStatus::SUCCESS);
+    EXPECT_LT((production.beta_mdpde-beta).norm(),1e-8);
+    EXPECT_NEAR(production.sigma_square,variance,1e-11);
+    const auto fresh{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,
+        production.beta_mdpde,production.sigma_square,f.options.data_weight_min)};
+    ASSERT_TRUE(fresh.valid);
 }
 
-TEST(MDPDEExperimentTest, FreshRobustEquationsMatchIndependentScalarCalculation)
+TEST(MDPDENumericsTest, FreshRobustEquationsMatchIndependentScalarCalculation)
 {
     const auto f{Fixture()}; Eigen::Vector2d beta; beta << 1.19,3.95;
     constexpr double v{0.0001}, floor{0.01}, alpha{0.5};
@@ -71,7 +88,7 @@ TEST(MDPDEExperimentTest, FreshRobustEquationsMatchIndependentScalarCalculation)
     EXPECT_TRUE(e.raw.isApprox(expected,1e-12)); EXPECT_NEAR(e.denominator,denominator,1e-12);
 }
 
-TEST(MDPDEExperimentTest, BoundaryRankFloorAndDenominatorAreExplicit)
+TEST(MDPDENumericsTest, BoundaryRankFloorAndDenominatorAreExplicit)
 {
     auto f{Fixture()};
     const auto beta{f.expected.beta_ols};
@@ -81,57 +98,6 @@ TEST(MDPDEExperimentTest, BoundaryRankFloorAndDenominatorAreExplicit)
     f = Fixture(); f.dataset.y.array() += 100.0;
     const auto e{second_stage_test::EvaluateMDPDEEquations(f.dataset,.1,beta,1e-6,1e-8)};
     EXPECT_EQ(e.floor_count,40); EXPECT_EQ(e.reason,"invalid-denominator");
-}
-
-TEST(MDPDEExperimentTest, ExactFitIsNotReportedAsPositiveVarianceReference)
-{
-    auto f{Fixture()}; Eigen::Vector2d beta; beta << 1.0,4.0;
-    f.dataset.y = f.dataset.X*beta;
-    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
-    const auto result{second_stage_test::CompareMDPDE(f)};
-    EXPECT_EQ(result.at("classification"),"roundoff-exact-fit-boundary");
-    EXPECT_EQ(result.at("methods").as_array().size(),1u);
-}
-
-TEST(MDPDEExperimentTest, NearZeroFiniteNoiseRemainsAnEquationTest)
-{
-    auto f{Fixture()}; Eigen::Vector2d beta; beta << 1.0,4.0;
-    for (int i=0;i<40;++i) f.dataset.y(i)=f.dataset.X.row(i).dot(beta)+1e-7*std::sin(3.0*i);
-    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
-    const auto result{second_stage_test::CompareMDPDE(f,false)};
-    EXPECT_FALSE(result.contains("classification"));
-    EXPECT_EQ(result.at("methods").as_array().size(),8u);
-    for (const auto & method : result.at("methods").as_array())
-        if (method.at("method").as_string().starts_with("root-"))
-            EXPECT_LE(method.at("equation_evaluations").as_int64() +
-                method.at("verification_equation_evaluations").as_int64(),2000);
-}
-
-TEST(MDPDEExperimentTest, InvalidShapeStartingPointIsRecordedWithoutRootIterations)
-{
-    auto f{Fixture()};
-    f.dataset.y = -f.dataset.y;
-    f.expected = rhbm_gem::rhbm_helper::EstimateBetaMDPDE(f.alpha,f.dataset,f.options);
-    const auto result{second_stage_test::CompareMDPDE(f,false)};
-    for (const auto & method : result.at("methods").as_array())
-    {
-        if (!method.at("method").as_string().starts_with("root-")) continue;
-        EXPECT_EQ(method.at("stop"),"invalid-start");
-        EXPECT_EQ(method.at("iterations"),0);
-        EXPECT_EQ(method.at("equation_evaluations"),0);
-        EXPECT_FALSE(method.at("equation_pass").as_bool());
-    }
-}
-
-TEST(MDPDEExperimentTest, SamplingWrapperUsesGridNodesAndExistingBoundaryClamping)
-{
-    rhbm_gem::MapObject map({4,4,4},{0.1,0.1,0.1},{-0.1,-0.1,-0.1});
-    auto values{std::make_unique<double[]>(64)};
-    for (std::size_t i=0;i<64;++i) values[i]=static_cast<double>(i);
-    map.SetMapValueArray(std::move(values));
-    const auto samples{second_stage_test::SampleExperimentPoints(map,{{0.0,{-0.1,-0.1,-0.1},true},{0.0,{0.0,0.0,0.0},true}})};
-    EXPECT_DOUBLE_EQ(samples[0].response,map.GetMapValue(0,0,0));
-    EXPECT_DOUBLE_EQ(samples[1].response,map.GetMapValue(1,1,1));
 }
 
 TEST(EndpointRefinementTest, AcceptedResultHasFreshWeightsAndExistingCovarianceFormula)
@@ -183,9 +149,9 @@ TEST(EndpointRefinementTest, KnownOtherRootFailsBranchComparison)
     ASSERT_TRUE(e.valid); EXPECT_LT(e.scaled.lpNorm<Eigen::Infinity>(),1e-8);
     const auto reference{second_stage_test::EvaluateMDPDEEquations(f.dataset,f.alpha,refined.result.beta_mdpde,
         refined.result.sigma_square,f.options.data_weight_min)};
-    const auto branch{second_stage_test::CompareMDPDEBranches(other,other_v,e,refined.result.beta_mdpde,
+    const auto branch{rhbm_gem::mdpde_detail::CompareMDPDEBranches(other,other_v,e,refined.result.beta_mdpde,
         refined.result.sigma_square,reference,f.options.data_weight_min)};
-    EXPECT_FALSE(branch.at("pass").as_bool()); EXPECT_FALSE(branch.at("floor_masks_equal").as_bool());
+    EXPECT_FALSE(branch.pass); ASSERT_TRUE(branch.floor_masks_equal); EXPECT_FALSE(*branch.floor_masks_equal);
 }
 
 TEST(EndpointRefinementTest, InvalidEndpointsAreNeverPromoted)

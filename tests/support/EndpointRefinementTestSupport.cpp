@@ -1,12 +1,14 @@
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include "support/SolverFailureCapture.hpp"
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <atomic>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 
@@ -14,6 +16,7 @@ namespace second_stage_test {
 namespace {
 namespace j = boost::json;
 namespace d = rhbm_gem::core::detail;
+namespace md = rhbm_gem::mdpde_detail;
 using rhbm_gem::RHBMEstimationStatus;
 struct Run
 {
@@ -123,6 +126,48 @@ j::object Operator(const d::FixedPointOperatorEvidence & evidence, const d::FitS
         {"nominal_max",Vector(assessment.diagnostics.operator_nominal_residual.maximum_list)},
         {"recovery_residual_mean_square",mean ? Number(*mean) : j::value(nullptr)}};
 }
+
+j::object RootJSON(const md::MDPDERootResult & root, const std::vector<md::RootEvaluation> & evaluations,
+    const std::string & label)
+{
+    auto out{EquationJSON(root.equations)};
+    out["beta"] = Vector(root.beta); out["variance"] = Number(root.variance);
+    out["amplitude"] = Number(std::exp(root.beta(0)) * std::pow(2.0 * std::acos(-1.0) / root.beta(1), 1.5));
+    out["width"] = Number(1.0 / std::sqrt(root.beta(1)));
+    out["method"] = "root-" + label; out["native_status"] = root.native_status;
+    out["stop"] = root.stop; out["linear_solves"] = 0;
+    out["equation_evaluations"] = root.equation_evaluations;
+    out["jacobian_evaluations"] = root.jacobian_evaluations; out["iterations"] = root.iterations;
+    out["initial_u"] = Vector(root.initial_u); out["u"] = Vector(root.u);
+    j::array trace;
+    for (const auto & evaluation : evaluations)
+    {
+        j::object row{{"evaluation",trace.size()+1},{"u",Vector(evaluation.u)},
+            {"residual_inf",Number(evaluation.residual_inf.value_or(std::numeric_limits<double>::quiet_NaN()))}};
+        if (!evaluation.reason.empty()) row["reason"] = evaluation.reason;
+        else { row["denominator"] = Number(evaluation.denominator); row["floor_count"] = evaluation.floor_count; }
+        trace.push_back(std::move(row));
+    }
+    out["trace"] = std::move(trace);
+    if (root.jacobian_condition) out["jacobian_condition"] = Number(*root.jacobian_condition);
+    if (root.estimated_remaining_u_error) out["estimated_remaining_u_error"] = Number(*root.estimated_remaining_u_error);
+    out["verification_equation_evaluations"] = root.verification_equation_evaluations;
+    return out;
+}
+
+j::object BranchJSON(const md::MDPDEBranchComparison & branch)
+{
+    j::object out{{"pass",branch.pass},{"coordinate_tolerance",1e-6},{"weight_tolerance",1e-6}};
+    if (branch.relative_coordinate_difference)
+    {
+        j::array change;
+        for (double value : *branch.relative_coordinate_difference) change.push_back(Number(value));
+        out["relative_coordinate_difference"] = std::move(change);
+    }
+    if (branch.weight_max_difference) out["weight_max_difference"] = Number(*branch.weight_max_difference);
+    if (branch.floor_masks_equal) out["floor_masks_equal"] = *branch.floor_masks_equal;
+    return out;
+}
 } // namespace
 
 const char * EndpointPolicyName(EndpointPolicy policy)
@@ -141,12 +186,43 @@ bool ShouldRefineEndpoint(EndpointPolicy policy, RHBMEstimationStatus status, bo
         (status != RHBMEstimationStatus::SUCCESS || (policy == EndpointPolicy::FreshResidual && !fresh_pass));
 }
 
-struct ScopedSecondStageEndpointExperiment::Impl
+EndpointRefinementResult RefineMDPDEEndpoint(const ShapeFixture & fixture, int equation_budget,
+    const MDPDEEquationEvidence * initial)
+{
+    md::EndpointRefinementEvidence evidence;
+    std::vector<md::RootEvaluation> trace;
+    auto result{md::RefineMDPDEEndpoint(fixture.dataset,fixture.alpha,fixture.options,
+        fixture.expected,equation_budget,initial,&evidence,&trace)};
+    const auto & refinement{*result.refinement};
+    j::object out{{"schema_version",1},{"accepted",refinement.accepted},{"reason",refinement.reason},
+        {"original_status",static_cast<int>(fixture.expected.status)},
+        {"original_iterations",fixture.expected.diagnostics.iterations},
+        {"original_squared_beta_change",Number(fixture.expected.diagnostics.squared_beta_change.value_or(NAN))},
+        {"original_relative_variance_change",Number(fixture.expected.diagnostics.relative_variance_change.value_or(NAN))},
+        {"equation_budget",equation_budget},{"candidate_equation_evaluations",refinement.candidate_equation_evaluations},
+        {"candidate_linear_solves",evidence.candidate_linear_solves},{"reference_updates",refinement.reference_updates},
+        {"reference_equation_evaluations",refinement.reference_updates},
+        {"original_equations",EquationJSON(evidence.original)}};
+    if (evidence.root) out["root"] = RootJSON(*evidence.root,trace,"endpoint");
+    if (evidence.reference)
+    {
+        auto reference{EquationJSON(*evidence.reference)};
+        reference["beta"] = Vector(evidence.reference_beta);
+        reference["variance"] = Number(evidence.reference_variance);
+        reference["stop"] = evidence.reference_stop;
+        out["reference"] = std::move(reference);
+    }
+    if (evidence.branch) out["branch"] = BranchJSON(*evidence.branch);
+    const bool accepted{refinement.accepted};
+    return {std::move(result),accepted,std::move(out)};
+}
+
+struct ScopedSecondStageEndpointTest::Impl
 {
     Run run;
     std::unique_ptr<Activate> activation;
 };
-ScopedSecondStageEndpointExperiment::ScopedSecondStageEndpointExperiment()
+ScopedSecondStageEndpointTest::ScopedSecondStageEndpointTest()
 {
     const char * directory{std::getenv("RHBM_TEST_ENDPOINT_DIR")};
     if (!directory || !*directory) return;
@@ -164,7 +240,7 @@ ScopedSecondStageEndpointExperiment::ScopedSecondStageEndpointExperiment()
     run.ledger.open(run.directory/"solves.jsonl"); run.ledger.exceptions(std::ios::failbit | std::ios::badbit);
     impl->activation = std::make_unique<Activate>(&run);
 }
-ScopedSecondStageEndpointExperiment::~ScopedSecondStageEndpointExperiment()
+ScopedSecondStageEndpointTest::~ScopedSecondStageEndpointTest()
 {
     if (!impl) return;
     impl->activation.reset();
@@ -179,10 +255,10 @@ ScopedSecondStageEndpointExperiment::~ScopedSecondStageEndpointExperiment()
 }
 bool IsEndpointOperatorProbe() noexcept
 { const auto * run{active.load()}; return run && run->probe; }
-bool IsEndpointExperimentActive() noexcept
+bool IsEndpointTestActive() noexcept
 { return active.load() != nullptr; }
 
-rhbm_gem::RHBMBetaEstimateResult ApplyEndpointExperiment(const ShapeFixture & f)
+rhbm_gem::RHBMBetaEstimateResult ApplyEndpointTestPolicy(const ShapeFixture & f)
 {
     auto * run{active.load()};
     if (!run || (run->policy == EndpointPolicy::Legacy && !run->probe)) return f.expected;

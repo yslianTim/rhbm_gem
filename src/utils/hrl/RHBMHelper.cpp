@@ -2,7 +2,7 @@
 #include "utils/hrl/MDPDEEndpointRefinement.hpp"
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/MDPDEExperiment.hpp"
+#include "support/MDPDETestSupport.hpp"
 #endif
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -467,12 +467,11 @@ namespace second_stage_test {
 Eigen::VectorXd MDPDETestBeta(const RHBMMemberDataset & data,
     const Eigen::VectorXd & weights, const std::string & backend)
 {
-    if (backend == "normal") return CalculateBetaByMDPDE(data.X, data.y, weights.asDiagonal());
     const Eigen::MatrixXd X{ weights.cwiseSqrt().asDiagonal() * data.X };
     const Eigen::VectorXd y{ weights.cwiseSqrt().asDiagonal() * data.y };
     if (backend == "qr") return X.colPivHouseholderQr().solve(y);
     if (backend == "svd") return X.jacobiSvd<Eigen::ComputeThinU | Eigen::ComputeThinV>().solve(y);
-    throw std::invalid_argument("Unknown experimental linear solver.");
+    throw std::invalid_argument("Unknown test linear solver.");
 }
 
 double MDPDETestVariance(const RHBMMemberDataset & data, double alpha,
@@ -481,10 +480,6 @@ double MDPDETestVariance(const RHBMMemberDataset & data, double alpha,
     return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
 }
 
-RHBMDiagonalMatrix MDPDETestCovariance(double variance, const Eigen::VectorXd & weights)
-{
-    return CalculateDataCovariance(variance, weights.asDiagonal());
-}
 } // namespace second_stage_test
 #endif
 
@@ -682,10 +677,6 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
             const auto squared_beta_change{ (result.beta_mdpde - beta_in_previous_iter).squaredNorm() };
             result.diagnostics.squared_beta_change = squared_beta_change;
             result.diagnostics.relative_variance_change = variance_relative_change;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            second_stage_test::RecordMDPDEIteration(result.beta_mdpde, result.sigma_square,
-                squared_beta_change, variance_relative_change);
-#endif
             if (squared_beta_change < options.tolerance &&
                 variance_relative_change < options.tolerance)
             {

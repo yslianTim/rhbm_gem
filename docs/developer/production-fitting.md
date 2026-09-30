@@ -6,8 +6,7 @@ Production fitting consumes sampled map responses, selected atomic geometry,
 explicit fitting options and previously estimated state. It never loads the
 simulation manifest, generated charges, truth widths or scoring output. Atomic
 number is not an amplitude truth initializer. `potential_analysis --simulation`
-continues to skip normalization; `-r` supplies model metadata only. SQLite and
-the schema 7 offline truth definition are unchanged.
+continues to skip normalization; `-r` supplies model metadata only.
 
 This first repair preserves the MDPDE equations, joint-offset IRLS equations,
 inner iteration budgets, transformed p99 threshold `1e-4` and 100 outer attempts.
@@ -78,10 +77,6 @@ Use matched compiler, feature flags, worker count, verbosity and quiet setting
 when comparing audit OFF/ON. Debug verbosity has an existing scheduling effect;
 a `-v 4` diagnosis must not be presented as the identical `-v 3` benchmark run.
 The numerical probe compares work, commits, terminal state, parameters and peeling.
-The external runner compares 168 atoms and retains the 25-iteration budget;
-`convergence_acceptance` additionally requires a qualified persisted-state
-certificate and a `converged` stop within 25 outer attempts. Quality remains
-`uncalibrated`, so its overall exit status remains 1.
 
 Testing builds can save the first failure of each solver/status pair:
 

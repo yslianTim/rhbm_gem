@@ -176,7 +176,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/LinearizationService_test.cpp
     utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
-    utils/hrl/MDPDEExperiment_test.cpp
+    utils/hrl/MDPDERegression_test.cpp
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES
@@ -226,8 +226,8 @@ add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
     support/SecondStageNumericalProbe.cpp
     support/SolverFailureCapture.cpp
-    support/MDPDEExperiment.cpp
-    support/EndpointRefinementExperiment.cpp
+    support/MDPDETestSupport.cpp
+    support/EndpointRefinementTestSupport.cpp
 )
 foreach(_property IN ITEMS
     COMPILE_FEATURES INTERFACE_COMPILE_FEATURES
@@ -296,11 +296,6 @@ add_dependencies(tests_all joint_component_runtime)
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_custom_target(research_tools_all)
-    add_executable(mdpde_experiment experiments/mdpde_experiment.cpp support/ForwardModelExperiment.cpp)
-    target_link_libraries(mdpde_experiment PRIVATE rhbm_gem_test CompilerFlags)
-    target_include_directories(mdpde_experiment PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
-    target_compile_definitions(mdpde_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    add_dependencies(research_tools_all mdpde_experiment)
 endif()
 
 if(RHBM_GEM_BUILD_BENCHMARKS)
@@ -518,59 +513,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         PROPERTIES LABELS "core;domain:integration;intent:algorithm"
     )
 
-
-    add_test(
-        NAME fold_168_regression_runner_test
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression_test.py"
-    )
-    set_tests_properties(
-        fold_168_regression_runner_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm"
-    )
-endif()
-
-if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION)
-    if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
-        find_package(Python REQUIRED COMPONENTS Interpreter)
-    endif()
-
-    foreach(input_path_variable IN ITEMS
-        RHBM_GEM_FOLD_168_MODEL
-        RHBM_GEM_FOLD_168_MAP)
-        if("${${input_path_variable}}" STREQUAL "" OR
-            NOT EXISTS "${${input_path_variable}}" OR
-            IS_DIRECTORY "${${input_path_variable}}")
-            message(FATAL_ERROR
-                "${input_path_variable} must name an existing file when "
-                "RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON")
-        endif()
-    endforeach()
-
-    add_dependencies(tests_all rhbm_gem_cli)
-    set(fold_168_test_name fold_168_simulation_regression)
-    set(fold_168_test_script fold_168_regression.py)
-    set(fold_168_output_directory fold_168)
-    add_test(
-        NAME ${fold_168_test_name}
-        COMMAND "${Python_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/tests/integration/${fold_168_test_script}"
-            --executable $<TARGET_FILE:rhbm_gem_cli>
-            --model "${RHBM_GEM_FOLD_168_MODEL}"
-            --map "${RHBM_GEM_FOLD_168_MAP}"
-            --baseline
-                "${PROJECT_SOURCE_DIR}/tests/benchmarks/fold_168_simulation_baseline.json"
-            --output-dir
-                "${PROJECT_BINARY_DIR}/benchmark-results/${fold_168_output_directory}"
-    )
-    set_tests_properties(
-        ${fold_168_test_name}
-        PROPERTIES
-            LABELS "external;domain:integration;intent:algorithm;benchmark:external"
-            RUN_SERIAL TRUE
-            # Full Debug measurements can exceed five minutes; this is not a quality gate.
-            TIMEOUT 900
-    )
 endif()
 
 if(UNIX)
@@ -651,7 +593,6 @@ endif()
 
 get_target_property(_tests_all_dependencies tests_all MANUALLY_ADDED_DEPENDENCIES)
 foreach(_optional_target IN ITEMS
-    mdpde_experiment
     joint_partial_selection
     joint_sparse_benchmark
     joint_postprocessing_benchmark
@@ -685,12 +626,12 @@ elseif(TARGET joint_sparse_benchmark)
 endif()
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    foreach(_target IN ITEMS mdpde_experiment research_tools_all)
+    foreach(_target IN ITEMS joint_statistical_experiment research_tools_all)
         if(NOT TARGET ${_target})
             message(FATAL_ERROR "RHBM_GEM_BUILD_RESEARCH_TOOLS did not create ${_target}")
         endif()
     endforeach()
-elseif(TARGET mdpde_experiment OR TARGET research_tools_all)
+elseif(TARGET joint_statistical_experiment OR TARGET research_tools_all)
     message(FATAL_ERROR "Research targets exist while RHBM_GEM_BUILD_RESEARCH_TOOLS=OFF")
 endif()
 
@@ -708,12 +649,4 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     endif()
 elseif(TARGET joint_offline_diagnostic OR TARGET joint_offline_support)
     message(FATAL_ERROR "Offline diagnostic targets exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
-endif()
-
-if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    if(NOT TARGET joint_statistical_experiment)
-        message(FATAL_ERROR "RHBM_GEM_BUILD_RESEARCH_TOOLS did not create joint_statistical_experiment")
-    endif()
-elseif(TARGET joint_statistical_experiment)
-    message(FATAL_ERROR "joint_statistical_experiment exists while RHBM_GEM_BUILD_RESEARCH_TOOLS=OFF")
 endif()

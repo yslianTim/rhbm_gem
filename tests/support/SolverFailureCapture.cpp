@@ -1,5 +1,5 @@
 #include "support/SolverFailureCapture.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <cstdlib>

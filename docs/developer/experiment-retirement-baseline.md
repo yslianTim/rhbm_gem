@@ -520,3 +520,30 @@ including PR 6's manifest, guard, and documentation additions. The recorded
 active fixture/reference inventory remains 20 files totaling 14,181,744 bytes.
 These are current tracked-tree figures; Git history and clone history size are
 unchanged.
+
+## PR-B update: Fold-168 and MDPDE research retirement
+
+The preceding inventory is a historical PR 1–6 snapshot. This update records
+the current PR-B work against `develop` at
+`b88d5f82fc8a23ce04b72df3faa3d03e4b8ac57e`.
+
+PR-B removes the Fold-168 external regression gate, its CMake options and
+scoring framework, and the frozen external benchmark input. It also removes the
+MDPDE solve/forward research runner, its report-only support, the forward-model
+experiment wrapper, the runner dependency, and the five tracked campaign
+figures. Their former paths, source commits, last-present commit, byte sizes,
+and SHA-256 values are recorded under `retirement_update.pr_b_update` in the
+[artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json).
+The six removed input/output artifacts total 980,670 tracked bytes; Git history
+was not rewritten.
+
+Production MDPDE, failed-only endpoint refinement, solver failure capture and
+replay, the independent numerical reference, permanent fitting tests, and the
+captured `tests/fixtures/mdpde/` inputs remain active. Joint runtime, offline,
+benchmark, and statistical paths remain active. The retained fixture and
+reference inventory now contains 19 files totaling 14,178,282 bytes.
+
+PR-C handoff: second-stage passive audit instrumentation remains, including
+`second_stage_audit.py`, the second-stage neutrality runner, the
+`RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` option, and audit-only observation and
+numerical-probe support. This update does not retire that infrastructure.

@@ -15,7 +15,7 @@
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/JointUncertainty.hpp"
 #include "core/detail/MapInterpolation.hpp"
-#include "support/ForwardModelExperiment.hpp"
+#include "core/detail/MapSampler.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -516,7 +516,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetain
         {0.2, {0.13, 0.07, 0.02}, false},
         {2.4, {2.4, 0, 0}, true},
         {2.9, {2.9, 0, 0}, true}};
-    const auto raw = second_stage_test::SampleExperimentPoints(*f.map, points);
+    const auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
     const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
@@ -575,7 +575,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     }
     auto * target = f.model->FindAtomPtr(1);
     const SamplingPointList points{{2.11, {2.11, 0, 0}, true}};
-    auto raw = second_stage_test::SampleExperimentPoints(*f.map, points);
+    auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
     auto result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem).at(1);
     ASSERT_TRUE(result.samples[0].response) << result.samples[0].reason;

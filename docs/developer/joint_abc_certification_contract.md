@@ -79,22 +79,10 @@ Low residual or a one-sided match does not establish regular parameter recovery.
 
 ## Reproduction and accounting
 
-Build the testing executable, then run:
-
-```sh
-python3 tests/integration/joint_abc_certification.py run \
-  --executable BUILD/bin/mdpde_experiment \
-  --model MODEL --map MAP --manifest MANIFEST --output FRESH_DIRECTORY
-python3 tests/integration/joint_abc_certification.py summarize FRESH_DIRECTORY
-python3 tests/integration/joint_abc_certification.py audit FRESH_DIRECTORY \
-  --executable BUILD/bin/mdpde_experiment
-python3 tests/integration/joint_abc_certification.py compare \
-  --left FIRST_DIRECTORY --right SECOND_DIRECTORY --output COMPARISON.json
-python3 tests/integration/joint_abc_certification.py plots FIRST_DIRECTORY --output FIGURES
-```
-
-The C++ entry points are `joint-abc-certification MODEL MAP MANIFEST OUTPUT` and `joint-abc-certification-audit OUTPUT`. The runner verifies source/build/input stability and requires fresh run directories. All 216 searches, including failures, are included in exact scientific JSON/CSV comparison after excluding time, process peak RSS and execution paths. Identical-endpoint audit reuse follows a sorted deterministic order.
-
-Initialization, search, search reference calls, legacy endpoint audit, new derivative/precision audit and boundary scans record elapsed time. Memory fields are process high-water RSS, not isolated allocations attributable solely to a phase; reports must preserve that distinction. Production builds contain manifest v2 but no experiment solver or multiprecision audit.
+This section records the historical accounting contract. Its former runner and
+`mdpde_experiment` executable were retired with the MDPDE research harness; the
+commands and C++ entry points are not available in the current tree. The 216
+search outcomes and their timing/RSS interpretation remain historical evidence,
+not a current reproducibility claim.
 
 References: [Boost decimal floating-point types](https://www.boost.org/latest/libs/multiprecision/doc/html/boost_multiprecision/tut/floats/cpp_dec_float.html), [Ceres derivative and extrapolation discussion](https://ceres-solver.googlesource.com/ceres-solver/+/987d3b6b370ab65205a97cf8377d8848483458a4/docs/source/derivatives.rst).

@@ -5,15 +5,16 @@
 The historical numerical-policy inventory below was checked against source **C**:
 `c174458294c1a328058f96bf37a2a21ae16c06a4`. The current passive-observation retirement is documented in the
 [audit guide](second-stage-audit.md); historical experiments below are not new
-validation. Research collectors and alternate threshold scans are retired while
-the numerical policies and unresolved regression gates below remain in force.
+validation. Research collectors and alternate threshold scans are retired.
+Production numerical decisions below remain as stated; the Fold-168 external
+regression gate was retired by PR-B.
 
 - [Second-stage local fitting](second-stage-local-fitting.md) specifies current
   execution, ownership, acceptance, recovery, and persistence contracts.
 - [Second-stage decision audit](second-stage-audit.md) explains optional
   observations, schemas, and diagnostic interpretation.
-- [fold-168 iteration regression](fold-168-iteration-regression.md) remains an
-  unresolved issue with its existing investigation and future repair proposal.
+- The Fold-168 external regression campaign was retired by PR-B. Its fixed
+  investigation record remains available at the [historical Git revision](https://github.com/yslianTim/rhbm_gem/blob/c174458294c1a328058f96bf37a2a21ae16c06a4/docs/developer/fold-168-iteration-regression.md).
 - This page owns current decisions, evidence limits, and historical references.
   Retired reports are available at fixed Git revisions, outside the current
   reading path; they do not override the current specification.
@@ -32,21 +33,24 @@ requirements for future work, not experiments or tests added by this cleanup.
 | Objective/recovery revisions | Keep independent ownership and existing partition/background triggers. | C | Objective reevaluation is not a retry event. | Captures lack applied partition changes and successful full-loop recovery; current trigger counts being equal does not make ownership interchangeable. | Revision ownership or trigger semantics change. | [E6](#evidence-index) |
 | P1 finalization and radius | Keep converged-only final polish at independent radius 1.0; production Shrink with implicit Keep, no Grow. | C | Independent Grow removal passed existing tests with rescue retained. | Combined rescue/Grow removal failed intensity scaling and was reverted; it is not independent rescue evidence. | A separate policy proposal supplies independent evidence for the changed mechanism. | [E2a, E2b](#evidence-index) |
 | Objective exhaustion | Exclude it from quarantine failure evidence; retain search rejection and other hard/invalid/guard evidence. | C | Search non-improvement alone is not freeze or recovery-failure evidence. | This was a numerical policy change: activity, patience timing, and later trajectories can change. Mixed-failure coverage is bounded. | New evidence warrants changing failure classification or recovery requirements. | [E7](#evidence-index) |
-| P2 acceptance changes | Fixed-order atomic component acceptance remains withdrawn; greedy salvage stays. Current member-best removal remains under investigation. | C | Unavailable global baselines caused healthy remote updates to be rejected in two existing regressions. | P2 was a numerical ablation. Its objective-revision retry wording and fixed-false rejection fields are superseded; fold-168 remains unresolved. | A replacement defines acceptance with unrelated missing objective evidence, or a separate member-best repair is validated. | [E3, E13](#evidence-index) |
+| P2 acceptance changes | Fixed-order atomic component acceptance remains withdrawn; greedy salvage stays. Current member-best removal remains under investigation. | C | Unavailable global baselines caused healthy remote updates to be rejected in two existing regressions. | P2 was a numerical ablation. Its objective-revision retry wording and fixed-false rejection fields are superseded; Fold-168 results remain historical and its external gate is retired. | A replacement defines acceptance with unrelated missing objective evidence, or a separate member-best repair is validated. | [E3, E13](#evidence-index) |
 | Global-best gate | Production ON, including cooperative protection. | C | Historical-best and previous references need not imply the same decision. | Zero best-only rejection in 312 complete-state and 12 cooperative comparisons; OFF did not disable cooperative best. No released best-only candidate was observed. | Actual best-only release and retention consequences are evaluated; cooperative removal needs separate evidence. | [E10](#evidence-index) |
 | Final dependency polish | Retain enabled polish and strict operator recertification. | C | Applied-path value and removal safety remain unmeasured. | First round: five converged executions, zero applied. Follow-up: 128 inputs, 15 entries, zero applied; the specified three-dataset matrix stopped at fold-168's failing baseline. | The baseline is repaired and the specified dataset evidence/removal conditions are completed, with actual application distinguished from provenance. | [E8, E9](#evidence-index) |
 | Cooperative rescue | Retain enabled capability and shared component evaluation. | C | ON improves response MSE; OFF improves audit objective and uses one fewer attempt in the exposed fixture. | Accepted and retained rescue updates are observed; neither policy uniformly dominates. Passing tests do not prove redundancy. | A separate policy decision resolves the quality/objective/cost tradeoff with relevant evidence. | [E11](#evidence-index) |
 | Background-trigger policy | Retain any-change Frozen recovery. | C | Stronger thresholds changed termination and persisted peeling despite equal Gaussian parameters. | No successful production release or applied-partition coverage; reducing failed retries does not establish safe removal. | Evidence covers those missing paths and persisted-output quality. | [E12](#evidence-index) |
-| fold-168 | Unresolved; preserve the original <=25 iteration gate and all quality gates. | C; recorded run at E13 baseline | 100 accepted iterations, `maximum-iterations`; quality/atom-cutoff gates pass, iteration gate fails. | Historical member-best intervention is not a repair implemented in C. | A separately implemented repair passes both original iteration and quality gates with the validation described in the open report. | [E13](#evidence-index) |
+| Fold-168 external campaign | Retired by PR-B; no active external iteration gate remains. | Historical C / E13 baseline | 100 accepted iterations, `maximum-iterations`; the historical runner reported its iteration gate failure. | Historical member-best intervention was not a production repair; retirement does not change the production solver. | No current acceptance criterion is defined by the retired campaign. | [E13](#evidence-index) |
 
-## Unresolved fold-168 regression
+## Historical fold-168 regression record
+
+The external runner, scorer and baseline input were retired by PR-B. This
+section preserves the investigation outcome and is not a current production
+acceptance gate.
 
 **2026-09-15 scoring correction:** The historical quality-gate results in this
 inventory used an incorrect constant offset truth. They are not evidence of
-partial-charge accuracy. The [schema-7 scorer](build-and-configuration.md#fold-168-parameter-truth-scoring)
-uses the new map's recorded charges and reports uncalibrated quality thresholds;
-the 25-iteration and atom/cluster requirements remain. Historical data below is
-not reinterpreted as a result on the new fixture.
+partial-charge accuracy. The historical schema-7 scorer used the new map's
+recorded charges and reported uncalibrated quality thresholds. These historical
+gate details do not define current acceptance criteria.
 
 The recorded boundary is adjacent commits `f50a742c` (11 accepted iterations)
 and `49d3516a` (100, best iteration 27). Restoring only the historical-best
@@ -60,10 +64,10 @@ The recorded current-source run at `6587542638d570685a11ef281aebd015d5eb8c06`
 also accepts 100 iterations. The CLI succeeds; the existing runner fails only
 `accepted_iterations <= 25`. No run at a newer source is claimed here. Patience
 can reset on improvement over the previous state without improving historical
-best; selecting iteration 27 earlier or relaxing the threshold is not a
-validated repair. Final-polish workload comparisons remain incomplete at this
-baseline failure. See the [open investigation](fold-168-iteration-regression.md)
-for the proposed independent repair, exact inputs, and subsequent validation.
+best; selecting iteration 27 earlier or relaxing the threshold was not a
+validated repair. Final-polish workload comparisons remained incomplete at this
+baseline. The detailed investigation is preserved at the fixed historical
+revision linked above.
 
 ## Evidence index
 

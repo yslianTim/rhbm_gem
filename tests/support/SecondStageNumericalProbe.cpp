@@ -1,5 +1,5 @@
 #include "support/SecondStageNumericalProbe.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/IterationResult.hpp"
 #include <atomic>

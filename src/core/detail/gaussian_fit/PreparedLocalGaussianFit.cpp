@@ -1,6 +1,6 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SecondStageNumericalProbe.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #include <sstream>
 #include <iomanip>
 #else
@@ -149,9 +149,9 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     second_stage_test::CaptureShapeFailure(dataset, alpha_r, RHBMExecutionOptions{ .thread_size = thread_size }, result);
-    if (second_stage_test::IsEndpointExperimentActive())
+    if (second_stage_test::IsEndpointTestActive())
     {
-        result = second_stage_test::ApplyEndpointExperiment({dataset,alpha_r,
+        result = second_stage_test::ApplyEndpointTestPolicy({dataset,alpha_r,
             RHBMExecutionOptions{.thread_size=thread_size},result});
     }
     else

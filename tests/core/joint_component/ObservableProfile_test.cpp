@@ -10,7 +10,7 @@
 #include "data/io/detail/JointResultJson.hpp"
 #include <limits>
 #include "core/detail/PostFitPeeling.hpp"
-#include "support/ForwardModelExperiment.hpp"
+#include "core/detail/MapSampler.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -225,7 +225,7 @@ TEST(JointObservableProfileTest, PersistenceExportPeelingAndSkippedInitializatio
     MapObject map({24,4,4},{1,1,1},{0,0,0},std::move(values));
     auto editor=model.EditAnalysis(); editor.ApplyJointResult(result,"observable-test");
     const SamplingPointList points{{23,{23,0,0},false},{1,{1,1,1},false}};
-    const auto raw=second_stage_test::SampleExperimentPoints(map,points);
+    const auto raw=core::detail::BuildLocalPotentialSampleList(map,points);
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1),raw);
     const auto peeled=core::detail::BuildPostFitPeelingSamples(map,model,problem,std::nullopt,&result);
     ASSERT_TRUE(peeled.at(1).samples[0].response);
@@ -356,7 +356,7 @@ TEST(JointObservableProfileTest, EquivalentHaloRepresentativesPreserveTargetCova
     for(std::size_t r=0;r<24;++r) values[r]=problem.Input().observations[r];
     rhbm_gem::MapObject map({24,4,4},{1,1,1},{0,0,0},std::move(values));
     const SamplingPointList points{{0,{0,0,0},false},{1,{1,0,0},false}};
-    model.EditAnalysis().SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1),second_stage_test::SampleExperimentPoints(map,points));
+    model.EditAnalysis().SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1),core::detail::BuildLocalPotentialSampleList(map,points));
     const auto sa=core::CaptureJointAnalysisResult(first),sb=core::CaptureJointAnalysisResult(second);
     const auto pa=core::detail::BuildPostFitPeelingSamples(map,model,problem,std::nullopt,&sa);
     const auto pb=core::detail::BuildPostFitPeelingSamples(map,model,problem,std::nullopt,&sb);

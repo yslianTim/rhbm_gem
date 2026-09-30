@@ -210,29 +210,7 @@ recorded separately; no cache survives a fresh run or replaces a global test.
 
 ## Runner operations
 
-The testing executable is `build/observation-matching/on/bin/mdpde_experiment`.
-The Python entry point is `tests/integration/joint_abc_components.py`.
-
-```text
-regression --baseline FROZEN_CERTIFICATION --executable EXECUTABLE --output GATE
-same-state --baseline FROZEN_CERTIFICATION --executable EXECUTABLE --output STATE_GATE
-run --baseline FROZEN_CERTIFICATION --executable EXECUTABLE --regression-gate GATE/regression.json --output RUN_A
-run --baseline FROZEN_CERTIFICATION --executable EXECUTABLE --regression-gate GATE/regression.json --output RUN_B
-audit --run RUN_A --executable EXECUTABLE --output FRESH_AUDITS
-summarize --run RUN_A [--audits FRESH_AUDITS]
-compare --left RUN_A --right RUN_B [--left-audits AUDIT_A --right-audits AUDIT_B] --output COMPARISON.json
-rerun-component --run RUN_A --executable EXECUTABLE --dataset DATASET --case CASE --component STABLE_ID [--audits FRESH_AUDITS] --output RERUN
-```
-
-`run` validates the prior regression's snapshot hashes, repeats all same-state
-controls, performs paired searches, and runs fresh audits. `audit` independently
-recomputes audits without repeating searches. An audit wrapper update is allowed
-only when every numerical search kernel matches the run's saved source hashes;
-the fresh audit executable, sources and provenance are recorded separately.
-No previous audit or boundary cache is reused. Fresh audits use three independent
-case processes, each with one numerical thread and its own empty cache. `rerun-component` reads only frozen
-input, its frozen search context, final global audit context and paired source start;
-the original component result is read afterwards solely for comparison.
-Inputs, implementation sources and hashes are copied into each run. Reports are
-derived into `summary/` (under the selected audit root for a fresh audit); complete fits, trials, spectra, probes, audits, boundary
-scans, failures and contexts remain in `datasets/` and `audits/`.
+The runner and testing executable described by this historical contract were
+retired with the MDPDE research harness. The captured certification and component
+results remain historical evidence; these operations are not available on the
+current branch.

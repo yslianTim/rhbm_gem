@@ -1,8 +1,6 @@
 #include <rhbm_gem/core/MapSampler.hpp>
+#include "core/detail/MapSampler.hpp"
 #include "core/detail/MapInterpolation.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/ForwardModelExperiment.hpp"
-#endif
 
 #include <algorithm>
 #include <array>
@@ -20,15 +18,7 @@
 #include <rhbm_gem/utils/math/GridSampler.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
-namespace rhbm_gem::core {
-namespace {
-
-double InterpolateMapValue(const MapObject & data_object, const std::array<double, 3> & position)
-{
-    return detail::InterpolateTricubic(detail::MakeTricubicStencil(data_object, position),
-        [&](const auto & node) { return data_object.GetMapValue(node[0], node[1], node[2]); });
-}
-
+namespace rhbm_gem::core::detail {
 LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sample_point_list)
@@ -37,9 +27,9 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     sampling_data_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
-        auto map_value{
-            InterpolateMapValue(map_object, sampling_point.position)
-        };
+        const auto stencil{MakeTricubicStencil(map_object, sampling_point.position)};
+        const auto map_value{InterpolateTricubic(stencil,
+            [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
         sampling_data_list.emplace_back(LocalPotentialSample{
             map_value,
             sampling_point
@@ -47,8 +37,9 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     }
     return sampling_data_list;
 }
+} // namespace rhbm_gem::core::detail
 
-} // namespace
+namespace rhbm_gem::core {
 
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
@@ -57,7 +48,7 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<double, 3> & direction)
 {
     const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
-    return BuildLocalPotentialSampleList(map_object, sample_point_list);
+    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
 LocalPotentialSampleList SampleAtomMapValues(
@@ -77,7 +68,7 @@ LocalPotentialSampleList SampleAtomMapValues(
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
     sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
-    return BuildLocalPotentialSampleList(map_object, sample_point_list);
+    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
 void RunPotentialSamplingWorkflow(
@@ -116,11 +107,3 @@ void RunPotentialSamplingWorkflow(
 }
 
 } // namespace rhbm_gem::core
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-LocalPotentialSampleList second_stage_test::SampleExperimentPoints(
-    const rhbm_gem::MapObject & map, const SamplingPointList & points)
-{
-    return rhbm_gem::core::BuildLocalPotentialSampleList(map, points);
-}
-#endif

@@ -110,19 +110,17 @@ is a non-installed instrumented copy used by tests that need internal probes.
 The `tests_all` target builds core test dependencies and any correctness option
 explicitly enabled, but never depends on benchmark or research targets.
 
-| Configuration | Production | Core tests | Offline | Extended | External | Benchmarks | Research |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No | No | No |
-| Default testing | Yes | Yes | No | No | No | No | No |
-| Offline audits | Yes | Yes | Yes | No | No | No | No |
-| Extended regressions | Yes | Yes | No | Yes | No | No | No |
-| Fold-168 external regression | Yes | Yes | No | No | Yes | No | No |
-| Benchmark tools | Yes | Yes | No | No | No | Yes | No |
-| Research tools | Yes | Yes | No | No | No | No | Yes |
+| Configuration | Production | Core tests | Offline | Extended | Benchmarks | Research |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No | No |
+| Default testing | Yes | Yes | No | No | No | No |
+| Offline audits | Yes | Yes | Yes | No | No | No |
+| Extended regressions | Yes | Yes | No | Yes | No | No |
+| Benchmark tools | Yes | Yes | No | No | Yes | No |
+| Research tools | Yes | Yes | No | No | No | Yes |
 
 The corresponding options are `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`,
 `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS`,
-`RHBM_GEM_ENABLE_FOLD_168_REGRESSION`,
 `RHBM_GEM_BUILD_BENCHMARKS`, and
 `RHBM_GEM_BUILD_RESEARCH_TOOLS`. Benchmark and research options require
 `BUILD_TESTING=ON`, because their sources and test-only support remain under
@@ -178,7 +176,7 @@ contract tests.
 and additional frozen cases. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` builds the
 separate derivative, multiprecision, boundary and local-certification tools.
 Both default to OFF and require `BUILD_TESTING=ON`. They do not change the
-installed estimator or require the external fold-168 model/map settings.
+installed estimator.
 See the [runtime validation commands](joint-component-runtime.md).
 
 ## Static Quality Checks (Targeted)
@@ -279,14 +277,11 @@ Beginner / common:
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
-| `RHBM_GEM_ENABLE_FOLD_168_REGRESSION` | `OFF` | Enable the opt-in external-data 168-atom simulation regression. |
 | `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
 | `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
 | `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Create optional benchmark and resource-measurement targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional research and historical validation targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT` | `OFF` | Passive second-stage decision records in non-quiet Debug runs; independent of testing. |
-| `RHBM_GEM_FOLD_168_MODEL` | empty | Path to the hash-verified fold-168 CIF input. |
-| `RHBM_GEM_FOLD_168_MAP` | empty | Path to the hash-verified fold-168 map input. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 
@@ -394,14 +389,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GE
 # Enable project-wide experimental features
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON
 
-# Enable the external 168-atom regression benchmark
-cmake -S . -B build-fold-168 \
-  -DRHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON \
-  -DRHBM_GEM_FOLD_168_MODEL=/path/to/fold_test_model_0.cif \
-  -DRHBM_GEM_FOLD_168_MAP=/path/to/sim_map_gaus_grid0.10_charge1_bw0.50.map
-cmake --build build-fold-168 --target tests_all -j
-ctest --test-dir build-fold-168 -R fold_168_simulation_regression --output-on-failure
-
 # Enable passive second-stage decision recording
 cmake -S . -B build-audit \
   -DBUILD_TESTING=ON \
@@ -420,106 +407,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=
 ```
 
 Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings) and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
-
-### fold-168 parameter truth scoring
-
-The schema-7 runner reads the map's adjacent `<map filename>.simulation.json`.
-Use `--simulation-manifest /path/to/record.json` to provide a relocated record;
-CMake uses the adjacent default. The model, map, and manifest file hashes must
-match `tests/benchmarks/fold_168_simulation_baseline.json`, and the manifest's
-model/map hashes must also match the supplied files. Original paths and names
-are provenance: renamed files are accepted when their hashes match. Inputs are
-verified again after fitting, before scores are published.
-
-```sh
-python3 tests/integration/fold_168_regression.py \
-  --executable build/bin/RHBM-GEM \
-  --model /path/to/fold_test_model_0.cif \
-  --map /path/to/sim_map_gaus_grid0.10_charge1_bw0.50.map \
-  --baseline tests/benchmarks/fold_168_simulation_baseline.json \
-  --output-dir build/benchmark-results/fold_168
-```
-
-The fixed fixture uses `single_gaus`, PARTIAL charge, width 0.5 Å, grid spacing
-0.1 Å, outer cutoff 2.5 Å, hydrogen exclusion, and all backbone/sidechain atoms.
-Occupancy, temperature factors, and normalization are not applied. The kernel
-and complete effective settings are pinned by the baseline and recorded in the
-output. The required SHA-256 identities are:
-
-- CIF: `156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab`
-- map: `cc9e76f94aa524b0f444bd8120ebe1adc3c364d4a277e9d805e0088677dc0a8c`
-- manifest: `b9c882e41f4ee6349ed988861d4e63a078349da9a21bbc3560cae4d4deba7de1`
-
-#### Truth and pairing
-
-Only the manifest schema-1 `single_gaus` parameter contract is supported:
-`A_truth = element atomic number`, `B_truth = settings.blurring_width`, and
-`C_truth = atoms[].charge_used`. Width is read at its full JSON precision, not
-from the filename. `C` is the physical offset coefficient, not its central
-response or a transformed convergence coordinate. The scorer never re-queries
-charge tables or uses charge mode 1 as a constant charge value.
-
-The runner reads a fresh temporary SQLite output in read-only mode. It matches
-all 168 final second-stage MDPDE results by serial, chain, sequence, component,
-atom identifier, and alternate indicator; element, structure and exact source
-coordinates must also agree. Results are ordered by preparation index. Missing,
-extra, duplicate, or mismatched atoms fail scoring. Duplicate manifest serials
-are rejected because the existing database uses serial as its atom primary key.
-The database is removed after reading; truth is never passed to production fitting.
-
-Every atom is scored, including the `PRO/OXT` atom whose unsupported spot used
-zero charge. Successful zero lookup, neutral mode, and failed lookup retain
-different statuses. Failed lookup is not a reason to silently exclude an atom.
-
-#### Metrics and result states
-
-For each parameter, the signed error is `estimate - truth`; RMSE is the square
-root of the mean squared errors. Offset bias is the mean signed error and
-`offset_max_absolute_error` is the largest absolute error. No charge-relative
-error is used. `maximum_absolute_offset` is a distribution diagnostic, not an
-accuracy gate.
-
-Artifacts remain `{run.log,actual.json,report.json}` under the requested output
-directory. `actual.json` includes input hashes, generation metadata, per-atom
-lookup evidence, truth, original estimate fields, and signed errors. The estimate
-fields `amplitude_mdpde`, `width_mdpde`, and `intercept_mdpde` come from SQLite's
-final second-stage MDPDE columns. The parsed summary records `final_state_source`,
-`final_uses_polish`, and stop reason; it is not combined with another iteration's
-operator certificate.
-
-New production binaries additionally emit a certificate for the actual persisted
-state. `actual.json.production_fitting` records this evidence, outer attempts,
-operator evaluation counts and `final_polish_applied`. The last field describes
-this final polish application, independently of the existing `final_uses_polish`
-provenance. Older binaries leave this section unavailable.
-
-`report.json` separates `truth_scoring.status` (`complete` or `failed`),
-`quality_gate.status=uncalibrated`, the iteration gate, and the atom/cluster gate.
-`convergence_acceptance` separately requires a `converged` stop, a complete and
-solver-qualified persisted-state certificate with all three nominal p99 values
-below `1e-4`, and at most 25 outer attempts. Missing evidence, a small accepted
-step or a low parameter RMSE cannot satisfy this requirement.
-An unavailable gate has `passed=null`; quality remains `passed=false` until its
-thresholds are independently established. Therefore a successful measurement
-still exits 1 and does not announce a passing regression. The runner does not
-automatically turn the current error measurements into reference thresholds.
-Schema 6 and its constant-offset/105% quality reference are not migrated or
-reused. Old records remain historical evidence for their original inputs.
-
-The existing budget remains at most 25 accepted iterations. The structural gate
-still requires all 168 atoms, limit 100, at least two initial topology clusters,
-and no cluster above 100 atoms. Elapsed time remains diagnostic; the external
-CTest timeout is 900 seconds to allow the full Debug run and report to finish.
-No convergence conclusion is inferred from small parameter errors. Forward
-sampling discrepancies and truth injection are separate work. The current
-production repair and its acceptance rules are documented in
-[Production fitting](production-fitting.md).
-
-Run the self-contained scorer tests without the external fixture:
-
-```sh
-python3 tests/integration/fold_168_regression_test.py
-```
 
 After installation, downstream CMake projects can consume this project with:
 

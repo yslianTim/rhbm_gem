@@ -1,6 +1,6 @@
 #pragma once
 
-#include "support/MDPDEExperiment.hpp"
+#include "support/MDPDETestSupport.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include <memory>
 
@@ -10,20 +10,29 @@ enum class EndpointPolicy { Legacy, FailedOnly, FreshResidual };
 const char * EndpointPolicyName(EndpointPolicy);
 bool ShouldRefineEndpoint(EndpointPolicy, rhbm_gem::RHBMEstimationStatus, bool fresh_pass);
 
+struct EndpointRefinementResult
+{
+    rhbm_gem::RHBMBetaEstimateResult result;
+    bool accepted{};
+    boost::json::object evidence;
+};
+EndpointRefinementResult RefineMDPDEEndpoint(const ShapeFixture &, int equation_budget,
+    const MDPDEEquationEvidence * initial = nullptr);
+
 // A process-scoped immutable policy is installed before workers start and removed
 // after they join. Unlike a main-thread TLS switch, every OpenMP worker sees it.
-class ScopedSecondStageEndpointExperiment
+class ScopedSecondStageEndpointTest
 {
     struct Impl;
     std::unique_ptr<Impl> impl;
 public:
-    ScopedSecondStageEndpointExperiment();
-    ~ScopedSecondStageEndpointExperiment();
+    ScopedSecondStageEndpointTest();
+    ~ScopedSecondStageEndpointTest();
 };
 
 bool IsEndpointOperatorProbe() noexcept;
-bool IsEndpointExperimentActive() noexcept;
-rhbm_gem::RHBMBetaEstimateResult ApplyEndpointExperiment(const ShapeFixture &);
+bool IsEndpointTestActive() noexcept;
+rhbm_gem::RHBMBetaEstimateResult ApplyEndpointTestPolicy(const ShapeFixture &);
 void CaptureEndpointInitialState(const rhbm_gem::core::detail::SecondStageContext &,
     const rhbm_gem::core::detail::FitState &, const rhbm_gem::core::FitOptions &);
 void CompareEndpointOperators(const char * label,

@@ -2,7 +2,7 @@
 #include <cmath>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/SolverFailureCapture.hpp"
-#include "support/EndpointRefinementExperiment.hpp"
+#include "support/EndpointRefinementTestSupport.hpp"
 #endif
 
 namespace rhbm_gem::core::detail {

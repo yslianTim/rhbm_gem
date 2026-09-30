@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/SecondStageTestSupport.hpp"
 #include "support/SolverFailureCapture.hpp"
-#include "support/MDPDEExperiment.hpp"
+#include "support/MDPDETestSupport.hpp"
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 #include "core/detail/second_stage/observation/PerformanceCounters.hpp"

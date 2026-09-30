@@ -138,4 +138,4 @@ counts before/after (the comparator checks work only between OFF and ON), and
 compare pre/post ON audit JSON after excluding version and elapsed time. Keep all
 decision, score, stage, trial, ordering and count fields in that comparison.
 
-External fold-168 regression is opt-in.
+The historical Fold-168 external campaign is retired; it is not a current test gate.

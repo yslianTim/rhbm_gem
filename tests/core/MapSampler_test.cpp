@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/MapSampler.hpp>
+#include "core/detail/MapSampler.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -193,4 +194,16 @@ TEST(MapSamplerTest, SharedTricubicStencilPreservesClampAndEffectiveWeights)
         EXPECT_NEAR(value, reference, 1e-13);
         EXPECT_NEAR(weight_sum, 1, 1e-14);
     }
+}
+
+TEST(MapSamplerTest, ExplicitMapPointsUseTheProductionInterpolationPath)
+{
+    MapObject map({4,4,4},{0.1,0.1,0.1},{-0.1,-0.1,-0.1});
+    auto values{std::make_unique<double[]>(64)};
+    for (std::size_t i=0;i<64;++i) values[i]=static_cast<double>(i);
+    map.SetMapValueArray(std::move(values));
+    const SamplingPointList points{{0.0,{-0.1,-0.1,-0.1},true},{0.0,{0.0,0.0,0.0},true}};
+    const auto samples{detail::BuildLocalPotentialSampleList(map,points)};
+    EXPECT_DOUBLE_EQ(samples[0].response,map.GetMapValue(0,0,0));
+    EXPECT_DOUBLE_EQ(samples[1].response,map.GetMapValue(1,1,1));
 }

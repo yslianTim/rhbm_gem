@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -63,24 +64,42 @@ def code_text_files():
     return sorted(path for path in files if path.is_file())
 
 
+def tracked_paths():
+    result = subprocess.run(
+        ['git', 'ls-files', '-z'],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    return {Path(path.decode()).as_posix() for path in result.stdout.split(b'\0') if path}
+
+
 class HistoricalArtifactManifestTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.manifest = json.loads(MANIFEST_PATH.read_text(encoding='utf-8'))
         if cls.manifest['schema_version'] != 1:
             raise AssertionError('unexpected artifact manifest schema version')
-        cls.update = cls.manifest['retirement_update']['pr6_update']
-        cls.artifacts = cls.update['artifacts']
-        if cls.update['entry_count'] != len(cls.artifacts):
-            raise AssertionError('artifact entry count does not match the manifest')
+        cls.updates = [
+            cls.manifest['retirement_update'][name]
+            for name in ('pr6_update', 'pr_a_update', 'pr_b_update')
+        ]
+        cls.artifacts = []
+        for update in cls.updates:
+            artifacts = update['artifacts']
+            if update['entry_count'] != len(artifacts):
+                raise AssertionError('artifact entry count does not match the manifest')
+            cls.artifacts.extend(artifacts)
+        cls.tracked = tracked_paths()
 
     def test_removed_artifacts_have_unique_provenance_and_are_absent(self):
-        ids = [record['id'] for record in self.artifacts]
-        paths = [record['path'] for record in self.artifacts]
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(len(paths), len(set(paths)))
-        self.assertEqual(set(self.update['status_values']), {record['status'] for record in self.artifacts})
-        self.assertTrue(set(self.update['status_values']).issubset(ALLOWED_STATUSES))
+        for update in self.updates:
+            ids = [record['id'] for record in update['artifacts']]
+            paths = [record['path'] for record in update['artifacts']]
+            self.assertEqual(len(ids), len(set(ids)))
+            self.assertEqual(len(paths), len(set(paths)))
+            self.assertEqual(set(update['status_values']), {record['status'] for record in update['artifacts']})
+            self.assertTrue(set(update['status_values']).issubset(ALLOWED_STATUSES))
 
         for record in self.artifacts:
             with self.subTest(artifact=record['id']):
@@ -115,7 +134,9 @@ class HistoricalArtifactManifestTest(unittest.TestCase):
             for suffix in ('.tar.gz', '.tar.xz'):
                 if stem.endswith(suffix):
                     stem = stem[:-len(suffix)]
-            tokens = {artifact_path, name}
+            tokens = {artifact_path}
+            if stem not in {'result', 'results', 'manifest', 'index', 'report'}:
+                tokens.add(name)
             if '-' in stem or len(stem) >= 12:
                 tokens.add(stem)
             for source in files:
@@ -142,7 +163,7 @@ class HistoricalArtifactManifestTest(unittest.TestCase):
             with self.subTest(artifact=reference):
                 self.assertEqual(record['status'], 'missing')
                 if record['directory_specified']:
-                    self.assertFalse((ROOT / reference).exists(), reference)
+                    self.assertNotIn(reference, self.tracked, reference)
                 name = Path(reference).name
                 for source in files:
                     try:
@@ -154,11 +175,13 @@ class HistoricalArtifactManifestTest(unittest.TestCase):
 
     def test_large_figure_files_have_manifest_ownership(self):
         known_paths = manifest_paths(self.manifest)
-        figures = ROOT / 'docs/developer/figures'
-        for artifact in figures.rglob('*'):
+        for path in self.tracked:
+            if not path.startswith('docs/developer/figures/'):
+                continue
+            artifact = ROOT / path
             if artifact.is_file() and artifact.stat().st_size >= LARGE_ARTIFACT_BYTES:
-                with self.subTest(artifact=str(artifact.relative_to(ROOT))):
-                    self.assertIn(artifact.relative_to(ROOT).as_posix(), known_paths)
+                with self.subTest(artifact=path):
+                    self.assertIn(path, known_paths)
 
 
 if __name__ == '__main__':
