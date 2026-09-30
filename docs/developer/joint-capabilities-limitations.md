@@ -10,7 +10,7 @@ halo parameters are weakly identifiable.
 
 | Stage | Question | Owner | Build category | Output meaning |
 | --- | --- | --- | --- | --- |
-| A | Why does this numerical problem behave this way? | [`joint_offline_diagnostic.py`](../../tests/integration/joint_offline_diagnostic.py) and `joint_offline_diagnostic` | OFFLINE | Per-start state, rank/spectrum, weak directions, precision and restart diagnosis; not a production acceptance gate |
+| A | Why does this numerical problem behave this way? | [`joint_offline_diagnostic.py`](../../tests/integration/joint_offline_diagnostic.py) and `joint_offline_diagnostic` | OFFLINE | Per-start state, rank/spectrum, weak directions, precision and restart diagnosis; not a production validation gate |
 | B | How does the estimator behave under controlled noise and position mismatch? | [`joint_statistical_experiment.py`](../../tests/integration/joint_statistical_experiment.py) and `joint_statistical_experiment` | RESEARCH | Fixed-seed scientific outcomes with process, numerical qualification and error summaries kept separate |
 | C | Did the complete command path run, and what resources did it use? | [`joint_benchmark.py`](../../tests/integration/joint_benchmark.py) `--profile command` | BENCHMARK | Analysis, save/reload, JSON/CSV export and process/resource classification |
 
@@ -47,12 +47,12 @@ without replacing their assertions. Refinement correctness has permanent owners
 in `MDPDERegression_test.cpp` and `ProductionFitting_test.cpp`; its campaign
 receipts do not own the production policy.
 
-The historical weak-halo diagnosis, noise/mismatch results, resource campaign,
-preflight, persistence comparisons, reports and provenance under
-[`figures/joint-validation/`](figures/joint-validation/) remain intact. They are
-historical evidence; active tools do not load those result files. Full Stage C
-external-input measurements are unavailable unless the recorded model/map are
-provided again. The limitations and measured results remain documented in the
-[weak-halo diagnosis](joint-weak-halo-attribution.md),
-[statistical experiment](joint-noise-mismatch-validation.md), and
-[historical resource evidence](joint-component-evidence.md#6-historical-resource-envelope).
+The active weak-halo snapshot and diagnostic results, and the noise/mismatch
+run records, summary, and table remain under
+[`figures/joint-validation/`](figures/joint-validation/). Historical resource,
+preflight, persistence, and validation receipts have been retired; their
+conclusions remain in the [canonical historical evidence](joint-component-evidence.md).
+Active tools do not read these result files as inputs. Full Stage C external-input
+measurements are unavailable unless the recorded model/map are provided again.
+Current limitations and results are documented in the [weak-halo diagnosis](joint-weak-halo-attribution.md)
+and [statistical experiment](joint-noise-mismatch-validation.md).
