@@ -1,11 +1,11 @@
 # Measured acceptance — PR0 / PR1 / PR3 contracts
 
-Measured on macOS arm64, Release, one numerical thread, against pristine `15e71e3fc230205e6efd7f60c8a915eb1989733b`. Full receipts (including source, input and binary hashes, build configuration, matrix probes, factor fill, process limits and statuses) are preserved beside this report as compressed JSON.
+Measured on macOS arm64, Release, one numerical thread, against pristine `15e71e3fc230205e6efd7f60c8a915eb1989733b`. This tracked report retains the detailed numerical summary below. The compressed raw receipts described during the experiment are not part of the versioned tree.
 
 ## Verdict
 
 - All 18 fixed-state audits passed; primary/reference coefficients and objectives were unchanged. Both physical runtime comparisons passed.
-- Joint tests: Eigen 100 passed / 3 existing backend-specific skips; SPQR 103 passed. All 11 new operator/contract tests passed on both backends. Existing evidence, runtime runner, runtime fixtures, physical and CLI round-trip CTest groups passed; runner comparison tests passed (4 cases). Logs are retained beside this report.
+- Joint tests: Eigen 100 passed / 3 existing backend-specific skips; SPQR 103 passed. All 11 new operator/contract tests passed on both backends. Existing evidence, runtime runner, runtime fixtures, physical and CLI round-trip CTest groups passed; runner comparison tests passed (4 cases). Raw CTest transcripts are not retained in the versioned tree.
 - All 20 preparation-only workloads completed, with identical input hashes across backends, one connected component, complete 515-membership supports per atom, and zero factorization, reference or SVD work counters.
 - 6Z6U hit the sampled RSS watchdog in both pristine and candidate runs on both backends. It has **no numerical verdict**. The overall comparison correctly exits 2 (incomplete real-data control), not success.
 - The original fixed-state driver cannot decode null halo widths in 6Z6U; those cases are explicitly not run and are covered by the public runtime control. No replacement widths were invented.

@@ -28,5 +28,13 @@
   "harness_sha256": {
     "tests/integration/joint_reference_validation.py": "4d6223f94c311b97d8d165ad4131d14be020f7f91da5c6db75a9ecc461a659be",
     "tests/integration/joint_validation_test.py": "cc4b2212ccccb71e124c737e4a3120c52013268e53a99859656588fe141e8047"
+  },
+  "repository_guards_passed": true,
+  "documentation_layout_recheck_passed": true,
+  "archive_relocation": {
+    "archive_count": 6,
+    "all_archive_hashes_verified": true,
+    "manifested_evidence_hashes_verified": true,
+    "inventory": "archives.json"
   }
 }

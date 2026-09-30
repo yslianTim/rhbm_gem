@@ -5,26 +5,22 @@
     {
       "name": "Related runtime/data/CLI CTests",
       "passed": 10,
-      "failed": 0,
-      "log": "related-tests.txt"
+      "failed": 0
     },
     {
       "name": "Offline and extended CTests",
       "passed": 4,
-      "failed": 0,
-      "log": "offline-tests.txt"
+      "failed": 0
     },
     {
       "name": "Experiment runner unittest cases",
       "passed": 8,
-      "failed": 0,
-      "log": "runner-tests.txt"
+      "failed": 0
     },
     {
       "name": "Final joint and CLI CTests after serialization recovery",
       "passed": 2,
-      "failed": 0,
-      "log": "final-joint-cli-tests.txt"
+      "failed": 0
     }
   ],
   "persistence_before": "persistence-before.json",

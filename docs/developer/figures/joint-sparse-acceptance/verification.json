@@ -417,5 +417,22 @@
     "schema_version": 3,
     "public_headers_have_no_suitesparse_types": true,
     "library_has_no_dense_test_oracle_symbols": true
-  }
+  },
+  "known_absent_artifacts": [
+    {
+      "status": "absent",
+      "former_path": "docs/developer/figures/joint-sparse-acceptance/measurements.json.gz",
+      "recorded_sha256": "9bd49e9fe3c54de03309c6adbe7bce11959b905b8078752931a94dca89ab96c4",
+      "last_known_commit": null,
+      "last_known_commit_note": "No tracked last-present commit is recorded; this archive is absent from the versioned tree."
+    },
+    {
+      "status": "absent",
+      "former_path": "docs/developer/figures/joint-sparse-acceptance/command-exports.tar.gz",
+      "recorded_sha256": "650222936e74c7545ea49fd15acd8fa14033316964d87dd81fad7d41cb8d4626",
+      "last_known_commit": null,
+      "last_known_commit_note": "No tracked last-present commit is recorded; this archive is absent from the versioned tree."
+    }
+  ],
+  "repository_guards_passed": true
 }

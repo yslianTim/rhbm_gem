@@ -51,5 +51,40 @@
     "stack-540.txt": "66a13e3678fb15c07994e2b7109689ca7d1de54766860a07c1324eb22d4e30f0",
     "stack-120.txt": "1ad3d28e7dbe0f10e9c89c8ec9b097f83b445ab31e319bf3fc5651ef3163ce18",
     "stack-300.txt": "61090e95f3b4bfad6de68586a651b875c4c29022721befd7ebe14a0810923a83"
+  },
+  "selected_stack_attribution": [
+    {
+      "sample_at_seconds": 120,
+      "frames": [
+        "SearchProfile",
+        "PrepareDerivative",
+        "JacobiSVD"
+      ],
+      "stack_file": "stack-120.txt"
+    },
+    {
+      "sample_at_seconds": 300,
+      "frames": [
+        "Profile::Trial",
+        "CheckTrust",
+        "SolveLinear",
+        "JacobiSVD (reference)"
+      ],
+      "stack_file": "stack-300.txt"
+    },
+    {
+      "sample_at_seconds": 540,
+      "frames": [
+        "SearchProfile",
+        "PrepareDerivative",
+        "JacobiSVD"
+      ],
+      "stack_file": "stack-540.txt"
+    }
+  ],
+  "raw_stack_files": {
+    "status": "git-history",
+    "last_present_commit": "bd2cd1c7509a04a08cec8b5eb176fe00b7f68599",
+    "retrieval": "git show <last_present_commit>:docs/developer/figures/joint-sparse-acceptance/late-profile/<stack_file>"
   }
 }

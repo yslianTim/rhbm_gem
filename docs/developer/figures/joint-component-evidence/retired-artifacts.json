@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source_commit": "ba2449faf1e1b163f1b4209c3ef386ff6516de43",
   "artifacts": [
     {
@@ -3467,5 +3467,531 @@
       "bytes": 13446,
       "sha256": "ddce7c5daaf28a595cda21568d1f111b964bf8950ec768d4e3ed59c376102acd"
     }
-  ]
+  ],
+  "current_tree_removals": {
+    "last_present_commit": "bd2cd1c7509a04a08cec8b5eb176fe00b7f68599",
+    "retrieval": "git show <last_present_commit>:<former_path>",
+    "artifacts": [
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/eigen-documentation-recheck.txt",
+        "bytes": 362,
+        "sha256": "fd94fc203c0a27419782e181f6d2c17e604c7c824a64863d096b2514765554b4",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/eigen-tests.txt",
+        "bytes": 9782,
+        "sha256": "e936e27e6c13daf2559f1edc151b2311f8df708791178134f2a6b9de604923c3",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/repository-guards.txt",
+        "bytes": 282,
+        "sha256": "ef7cea8fe8a267fa9155f8cdc40c55496e0ff1f0d88c781b1b69441a72405721",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/runner-tests.txt",
+        "bytes": 111,
+        "sha256": "4ea806640c6a0714dfd08353c5ac432fee72124adbfd64d7bd45ec3dd61f0030",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/spqr-documentation-recheck.txt",
+        "bytes": 361,
+        "sha256": "b3685db0c8bbe64486e42a22bcc58ca9aec763ae6679ecc111f691a3ac6b30a1",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/spqr-tests.txt",
+        "bytes": 9781,
+        "sha256": "9bf2fdc9a17ba544594e920cbd27f994081ab820ab200aa347e90a8057fafd07",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-compact-acceptance/testing-disabled-build.txt",
+        "bytes": 618,
+        "sha256": "6b82471313c26327fd75f6e80c3b9dadcdd8f3e69abe7188c83c2c4305ff8b64",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/default-tests.txt",
+        "bytes": 3814,
+        "sha256": "b58abb2aaadd34bfe804ab6634ee1bfc05e9320a9294ed6c23cdedbdd9979879",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/documentation-tests.txt",
+        "bytes": 1028,
+        "sha256": "62b3474ad3d0cd0012126505aa943ca9f6bbd7eb8db534a637758518ea8b7d82",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/guards.txt",
+        "bytes": 306,
+        "sha256": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/installed.txt",
+        "bytes": 115,
+        "sha256": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/joint-tests.txt",
+        "bytes": 457,
+        "sha256": "d9af903525b3c74f03619235e53b3b6e7dba69bf364e0be6969b6574aed64b6d",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/offline-tests.txt",
+        "bytes": 901,
+        "sha256": "f60377d0150655d7309fccffe9ed78e67838a0d58aa0a0fc8c144c4e9ed14d4d",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-partial-selection-acceptance/source.txt",
+        "bytes": 115,
+        "sha256": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-v1-acceptance/default-guards.txt",
+        "bytes": 306,
+        "sha256": "8e41f6bba64e78a149b46222f84b6ce1f03086cf6d9cd1a28cdefbb0c343ad9c",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-v1-acceptance/default-tests.txt",
+        "bytes": 3814,
+        "sha256": "28841cec7ab3e3ed43016418fd4d1c492f11b495ed9e39cf634b4409a11c882b",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-component-v1-acceptance/offline-tests.txt",
+        "bytes": 901,
+        "sha256": "e6d5726f8d16e27480ec2ae862e44993e8bdc8a6f29b21f7d7f1b1b5196515aa",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/campaign.txt",
+        "bytes": 4767,
+        "sha256": "b507fb20ff72321c2bfbbbea92cbf8ca61d4309f0fe57818da1db920a6809939",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/eigen-tests.txt",
+        "bytes": 4134,
+        "sha256": "b72b504eaf4ecc168c19db5e77299584450c4fb1aaed1a90b89f6b1db2e8e425",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/final-documentation-check.txt",
+        "bytes": 361,
+        "sha256": "8598423a01fa635daf46b9386b064903ea5d7d19c9ca61aad3f0ef0d27cec622",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/final-repository-guards.txt",
+        "bytes": 282,
+        "sha256": "ef7cea8fe8a267fa9155f8cdc40c55496e0ff1f0d88c781b1b69441a72405721",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/relocation-verification.txt",
+        "bytes": 257,
+        "sha256": "98e3298db059355a0ddaa42b29df1e1fdcfddc4fa3c374fede26dfa57906c2fd",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/repository-guards.txt",
+        "bytes": 282,
+        "sha256": "ef7cea8fe8a267fa9155f8cdc40c55496e0ff1f0d88c781b1b69441a72405721",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/runner-tests.txt",
+        "bytes": 117,
+        "sha256": "f28d27693fa3d768781b75826550be1eb2ee62ddcfb5cc16a123a5d07dca6316",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/spqr-tests.txt",
+        "bytes": 4133,
+        "sha256": "b632ea7810133ae6de30b824dd7c66d49fce35d609d4ca18eb6a431f0fa619c8",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/testing-disabled-build.txt",
+        "bytes": 1115,
+        "sha256": "dd04842fb9942ea6c6eb7572b9b595f15e6f2b2213192a2f8b5efba524b831e9",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/testing-disabled-smoke.txt",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/benchmark-source.cpp.txt",
+        "bytes": 6402,
+        "sha256": "38e53f9542a58c7c3fc84eff1ef8e5dab34f256619cebbbb88da30352b387a8f",
+        "status": "git-history",
+        "category": "source-snapshot"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/consumer-eigen.txt",
+        "bytes": 1683,
+        "sha256": "db2dd406f9c966a629cc00b08e3b98a6435742147587dd9808627b9c05a256c5",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/consumer-spqr.txt",
+        "bytes": 1681,
+        "sha256": "d87c27b84615b60ac51bbf7debef1b4038bedcf534803e08b3bb19b89adddca4",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/consumer-static.txt",
+        "bytes": 3413,
+        "sha256": "125a14f7fe2dd314817b0c268707820b6c66890d2327cb768f66e651abfb8676",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/eigen-tests.txt",
+        "bytes": 4133,
+        "sha256": "5a695655c802701312e32b6eb25f30c4fcafdfb0759afbb1b7a81158a9981160",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-core-test-eigen.txt",
+        "bytes": 459,
+        "sha256": "3733d961988ff63feb519805e5fe3ab297098aeefb11f788e39d097c1b9b9f07",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-core-test-spqr.txt",
+        "bytes": 458,
+        "sha256": "bce571e96ea7efbe8b75768f3f70b9bb1cb78d84febd3ea219b27606fbe5a561",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-install-eigen.txt",
+        "bytes": 12980,
+        "sha256": "7136055ed3ac9d70219750f617b3d6c6f2ba12a6b2fdd88fda7c8bddb736aa2f",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-install-spqr-shared.txt",
+        "bytes": 12978,
+        "sha256": "7cdf7a2de47107105e6e56c5d46932230ebdcb0380b6c0f5c781d1f0f4ee1dbb",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-install-spqr-static.txt",
+        "bytes": 12353,
+        "sha256": "195183a788de706d7706127712949094a14115fa0d9fc7ee4bf62a116bd874f6",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/final-runner-tests.txt",
+        "bytes": 107,
+        "sha256": "49c3c2f702c814a28fb1a8f66619313057c2ba32f4a8edf63bc250f7ce24a49c",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/gitless-build.txt",
+        "bytes": 16068,
+        "sha256": "3aa249a2a6224865419ab055870d98dea9cb9f02a97a95d5935e84db1298f506",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/gitless-configure.txt",
+        "bytes": 2869,
+        "sha256": "318fc05f33d0d031c449ee7f3b9f5634a6302520c2dca23c672e1efedc7e8c7a",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/gitless-consumer.txt",
+        "bytes": 115,
+        "sha256": "d02ba4513ee26ad631c268223d7b05b9d471a79ad3172a9c2aad091018aedcd7",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/stack-120.txt",
+        "bytes": 69223,
+        "sha256": "1ad3d28e7dbe0f10e9c89c8ec9b097f83b445ab31e319bf3fc5651ef3163ce18",
+        "status": "git-history",
+        "category": "sampled-stack"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/stack-300.txt",
+        "bytes": 70979,
+        "sha256": "61090e95f3b4bfad6de68586a651b875c4c29022721befd7ebe14a0810923a83",
+        "status": "git-history",
+        "category": "sampled-stack"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/stack-540.txt",
+        "bytes": 69223,
+        "sha256": "66a13e3678fb15c07994e2b7109689ca7d1de54766860a07c1324eb22d4e30f0",
+        "status": "git-history",
+        "category": "sampled-stack"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/stderr.txt",
+        "bytes": 813,
+        "sha256": "d776a6bffb5737e387ee9c6c8899305e5ef0017eaef0b4926374da97c45266e7",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/late-profile/stdout.txt",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/missing-spqr.txt",
+        "bytes": 1367,
+        "sha256": "e7f2f185178f6174811d856ead0e38bd3839b49bc7d3650ecc277e708b26c8c7",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/repository-guards.txt",
+        "bytes": 202,
+        "sha256": "186fc32a2f1075c715486eac30161d11b3ba519ea55f2a3a5069aec123f89df3",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/runner-source.py.txt",
+        "bytes": 9989,
+        "sha256": "a518bbd87e400ae59489f65309d011876ec764ec8a3491653dba8debaff74f6a",
+        "status": "git-history",
+        "category": "source-snapshot"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-sparse-acceptance/spqr-final-tests.txt",
+        "bytes": 4132,
+        "sha256": "6049805cd92671a9045ca13683fbccddbaa11298935efb9b3cb580f6dc48d1f9",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/final-joint-cli-tests.txt",
+        "bytes": 17778,
+        "sha256": "7156e19cfa63de6af95baf8bc640ea5ad30cd84791b939ff93a7960f06e8e29f",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/offline-tests.txt",
+        "bytes": 901,
+        "sha256": "f22a1ee1d386d5b3328ce0f9c0b7979d3a11ff6c5a81238b4700c52208c6d19c",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-cli-after.txt",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-cli-before.txt",
+        "bytes": 1138,
+        "sha256": "e1d92112e65a7e9f061adee8f8927c14dcd0033b9f29b3392638b1c6d101d59b",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-final-unit.txt",
+        "bytes": 774,
+        "sha256": "3f89d6bc2ce4b82b5dc7f7ea8a0d599c40deaa48da1171332ab378a416ac1997",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-unit-before.txt",
+        "bytes": 1215,
+        "sha256": "0322ffa5450fbf2cfa53fb00e209e396444c3d69861391116b6d757c791dbe96",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/related-tests.txt",
+        "bytes": 1870,
+        "sha256": "42bcd24b245a523baad9534a9e8af8d522d2a4375895435aee6073f01a5ff7ec",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/runner-tests.txt",
+        "bytes": 106,
+        "sha256": "38e96d24425ab6af9ae738fafdaf927ab857e0f868b733bb24e0c361767b2016",
+        "status": "git-history",
+        "category": "console-transcript"
+      },
+      {
+        "former_path": "docs/developer/joint-abc-certification-experiment.md",
+        "bytes": 300,
+        "sha256": "778c912823a3fefeadc5e16ffddc20c0d89624e309e08bb04b35797101927d4f",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-abc-components-experiment.md",
+        "bytes": 282,
+        "sha256": "2bcc392e0da9a42e24cfd7fca4a51ad7cde6ff9a9b3499d5f32d4bb6349c2b9c",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-abc-coverage-experiment.md",
+        "bytes": 319,
+        "sha256": "ab2a625bc7173bfa676c528161981edc0ba3f9e2aa86a0d49280785713b6237a",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-abc-profile-experiment.md",
+        "bytes": 306,
+        "sha256": "d57c85a350ac59d6b37d5d7383ca12168a338b91d99e65a93cf552547a7cc4ee",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-analysis-consolidation.md",
+        "bytes": 10161,
+        "sha256": "b1385c0b5ece2d9032ec7e74e91a4afc5ec86db5570e0763e256e2d5415f2657",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-bounded-search-rank-validation.md",
+        "bytes": 6706,
+        "sha256": "13e25f43ae2cc68a64683459d03a8e8b68d205d08fae3aed54b9a279b3d1328f",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-bounded-search-rank.md",
+        "bytes": 724,
+        "sha256": "2d9138f8d41a81c7c1713a749a8244a699f5c2dc71738bec117bdefa71ccc268",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-command-resource-envelope.md",
+        "bytes": 9230,
+        "sha256": "d285cf68e951d5133d2742b2fed458865f31cb7b2aa5aa0f87cb1e8a2c6edea3",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-compact-svd-acceptance.md",
+        "bytes": 2414,
+        "sha256": "04487b4af637ff52dd741d3390654b019731d80b24d86fb10b26f8e52bb0554c",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-doc-migration-checklist.md",
+        "bytes": 5665,
+        "sha256": "44c6244711efe259766b7d0d82bc6c75a98adc1999e8db9aa0fd59935da2d8bc",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-partial-selection-acceptance.md",
+        "bytes": 8076,
+        "sha256": "4a25d58e507364422c0745dba5b4a427f94c88eff26da0c576e7852c720e9f4c",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-reference-acceptance.md",
+        "bytes": 3992,
+        "sha256": "eddf50f77a82987a80ad7a86bc9b97d55784425722d25afa9cd0ce5b73314b51",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-sparse-acceptance.md",
+        "bytes": 8126,
+        "sha256": "97f81dbf7a3852a7db42a8846770feb97fdc566eb114575940a233a1aab31331",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-tiled-backend.md",
+        "bytes": 5893,
+        "sha256": "852d63bd58ea9cbc692ca4e90e23f205864ab24229dbbfbfa1bc194f7d349a64",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-component-v1-acceptance.md",
+        "bytes": 5904,
+        "sha256": "6424540059a86f07289ec6085dd1b3ae9469cc763ad34cce3d087d5ff1db39f7",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-fixed-actions-validation.md",
+        "bytes": 7235,
+        "sha256": "edd5a5e158d39618c30d0d8517cab278f3ac366e17cb630454a7a35d6e23f86e",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-initial-rank-diagnostic.md",
+        "bytes": 3116,
+        "sha256": "e251609d08d3bd41b9f0ef557c8d9a2a2771d949cc25f96a339401fd49cc6164",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-observable-acceptance.md",
+        "bytes": 5519,
+        "sha256": "9c799fa77f42bb726b6bec43aaa0bff6b25312c7e887b048247410518706b5cb",
+        "status": "git-history"
+      },
+      {
+        "former_path": "docs/developer/joint-operator-search-validation.md",
+        "bytes": 7206,
+        "sha256": "7004fab705bf5efd4362460a578e880d63b9dda1a048becc04d0d34e63e63f54",
+        "status": "git-history"
+      }
+    ]
+  }
 }

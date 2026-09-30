@@ -1,3 +1,0 @@
-[0/2] Re-checking globbed directories...
-[0/2] Running install consumer smoke test
--- Running guard: install_smoke

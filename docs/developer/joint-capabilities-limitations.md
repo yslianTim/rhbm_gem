@@ -55,4 +55,4 @@ external-input measurements are unavailable unless the recorded model/map are
 provided again. The limitations and measured results remain documented in the
 [weak-halo diagnosis](joint-weak-halo-attribution.md),
 [statistical experiment](joint-noise-mismatch-validation.md), and
-[historical command resource report](joint-command-resource-envelope.md).
+[historical resource evidence](joint-component-evidence.md#6-historical-resource-envelope).

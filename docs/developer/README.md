@@ -41,9 +41,6 @@ with project internals.
 - [Canonical historical evidence](joint-component-evidence.md) indexes
   retired experiments, counterexamples, unproven boundaries, and artifact
   retrieval.
-- [Document migration checklist](joint-component-doc-migration-checklist.md)
-  records which historical pages have no remaining unique content for a future
-  cleanup PR.
 - [Certification contract](joint_abc_certification_contract.md),
   [component contract](joint_abc_components_contract.md), and the
   [compact-SVD implementation contract](joint-component-compact-svd.md) own

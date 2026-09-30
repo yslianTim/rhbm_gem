@@ -5,9 +5,9 @@ architecture. Current search measurements are documented in the
 [benchmark guide](../../joint-benchmark.md); reference certification remains
 owned by the permanent offline tests.
 
-[Acceptance report](../../joint-component-reference-acceptance.md) ·
+[Canonical historical evidence](../../joint-component-evidence.md#3-backend-and-numerical-evolution) ·
 [Summary](summary.json) · [Verification](verification.json) ·
-[Archive member layout](archives.json) · [Campaign log](campaign.txt)
+[Archive member layout](archives.json)
 
 The six raw campaign archives are retrievable from Git history. Their former
 paths, source and retrieval commits, compressed sizes, and SHA-256 values are
