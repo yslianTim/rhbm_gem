@@ -73,6 +73,5 @@ python3 tests/integration/joint_benchmark.py \
 ```
 
 The [historical acceptance report](joint-fixed-actions-validation.md) retains
-the measured conclusions and limitations. Its raw receipt archive is indexed by
-the artifact manifest and retrievable from Git history; no current benchmark
-command reads it.
+the measured conclusions and limitations. Current benchmark commands do not
+consume the raw receipt archive.

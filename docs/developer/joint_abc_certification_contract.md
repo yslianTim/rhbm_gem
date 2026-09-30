@@ -79,10 +79,10 @@ Low residual or a one-sided match does not establish regular parameter recovery.
 
 ## Reproduction and accounting
 
-This section records the historical accounting contract. Its former runner and
-`mdpde_experiment` executable were retired with the MDPDE research harness; the
-commands and C++ entry points are not available in the current tree. The 216
-search outcomes and their timing/RSS interpretation remain historical evidence,
-not a current reproducibility claim.
+This section records the historical accounting contract. The 216 search
+outcomes and their timing/RSS interpretation describe the frozen experiment;
+they are not current production acceptance criteria. The [Joint evidence
+guide](joint-component-evidence.md) summarizes the retained research results
+and provenance.
 
 References: [Boost decimal floating-point types](https://www.boost.org/latest/libs/multiprecision/doc/html/boost_multiprecision/tut/floats/cpp_dec_float.html), [Ceres derivative and extrapolation discussion](https://ceres-solver.googlesource.com/ceres-solver/+/987d3b6b370ab65205a97cf8377d8848483458a4/docs/source/derivatives.rst).

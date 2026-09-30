@@ -1,26 +1,57 @@
 # Developer Documentation
 
-Start here if you are changing the codebase, validating build configurations, or working with project internals.
+Use these guides when changing the codebase, validating a build, or working
+with project internals.
 
-## Recommended Reading Order
+## Build and repository workflow
 
-For current Joint measurements, start with the [unified Joint benchmark guide](joint-benchmark.md). It replaces the seven retired campaign runners and the historical postprocessing wrapper; older acceptance documents retain their campaign results and provenance.
+- [Build and configuration](build-and-configuration.md) describes dependencies,
+  active CMake options, build modes, and validation commands.
+- [Development guidelines](development-guidelines.md) covers engineering rules,
+  test labels, generated documentation, and repository checks.
+- [Command architecture](architecture/command-architecture.md),
+  [object architecture](architecture/object-architecture.md), and
+  [data-object I/O architecture](architecture/dataobject-io-architecture.md)
+  describe the main implementation boundaries.
+- [Adding data-object operations](adding-dataobject-operations.md) and
+  [adding a command](adding-a-command.md) provide implementation checklists.
+- [Command developer notes](commands/README.md) indexes command-specific
+  documentation.
 
-### Generated Evidence
+## Production fitting
 
-- Keep deterministic regression inputs in `tests/fixtures/` with a permanent test owner.
-- Write generated benchmark and research outputs under `build/` or an explicit work directory; `docs/developer/figures/` is for curated, compact evidence and manifests.
-- Large retired campaign evidence is indexed in the [artifact manifest](figures/experiment-retirement-baseline/artifact-manifest.json) and retrieved from Git history by its recorded commit and former path.
+- [First-stage fitting](estimate-local-gaussian-with-offset.md) describes local
+  Gaussian initialization.
+- [Production fitting](production-fitting.md) owns per-atom MDPDE solves,
+  failed-only refinement, covariance, numerical failure handling, and solver
+  replay.
+- [Second-stage local fitting](second-stage-local-fitting.md) owns outer
+  iteration, candidate acceptance, recovery, convergence, and finalization.
 
-1. Read [`docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md) for CMake parameters, dependency selection, coverage, and feature-mode validation commands.
-2. Read [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md) for repository-wide engineering rules, test/label expectations, command-registry sync requirements, and quality-check alignment (`lint_repo`, formatter/tidy checks).
-3. Read [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md), [`docs/developer/architecture/object-architecture.md`](/docs/developer/architecture/object-architecture.md), and [`docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md) when you need architecture context for commands, object internals, typed dispatch, data I/O, or persistence.
-4. Read [`docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md) when you need implementation checklists for extending operations on existing `DataObject` types.
-5. Read [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md) when you need a concrete implementation template for a new command.
-6. Browse [`docs/developer/commands/README.md`](/docs/developer/commands/README.md) for command-specific developer notes generated alongside individual commands.
-7. For Gaussian fitting internals, start with [first-stage fitting](estimate-local-gaussian-with-offset.md) and the [current second-stage specification](second-stage-local-fitting.md). Use the [second-stage decision and evidence index](second-stage-outer-iteration-algorithm-audit.md) for retained policies and retired reports. Use the [production fitting contract](production-fitting.md) for truth isolation and controlled recovery.
-8. See [production failed-only refinement](failed-only-refinement.md) for current behavior and permanent property owners.
-9. The [joint estimator v1 acceptance and frozen baseline](joint-component-v1-acceptance.md) records final integration validation and metadata contracts. For joint estimation, start with the [joint component runtime API and regression guide](joint-component-runtime.md). The [optional sparse backend guide](joint-component-sparse-backend.md) describes SPQR configuration and bounded validation. The [fixed-state profile operator and PR0 resource guide](joint-profile-operator.md) describes operator ownership, PR3 preconditioner contracts and preparation-only scaling. The [operator search and Schwarz guide](joint-operator-search.md) describes PR2/PR3 policies, resource limits and promotion gates. The [fixed-state factor and normal-action guide](joint-fixed-actions.md) describes the shared rank contract, bounded diagnostics and cost interpretation. The [bounded search and free-design rank guide](joint-bounded-search-rank.md) describes independent fixed-step wall timers and the conservative SPQR rank prototype; the [validation results](joint-bounded-search-rank-validation.md) retain the experiment outcomes and limitations as text. The [observable-halo implementation](joint-observable-halo.md) describes profiling and JSON v4; the [experiment conclusions](joint-observable-acceptance.md) retain key results and remaining limitations as text. The [target estimability and 6Z6U results](joint-target-estimability.md) describes target convergence, JSON v5, quotient covariance, recorded truth results and the spectrum fix. The [6Z6U initial-rank diagnosis](joint-initial-rank-diagnostic.md) summarizes the structural cause of the initial rank failure and its implications. The [evidence index](joint-component-evidence.md) records retired comparisons, numerical contracts, representative counterexamples and historical retrieval instructions.
-10. The [Joint capability and ownership guide](joint-capabilities-limitations.md) maps Stage A to offline diagnosis, Stage B to statistical research, and Stage C to the unified command benchmark. The [second-stage integration acceptance](joint-stage-integration.md) records the six integration checkpoints.
-11. Read [`docs/developer/release-compliance.md`](/docs/developer/release-compliance.md) before preparing source or binary releases.
-12. Before retiring an experiment or benchmark, consult the [experiment retirement baseline](experiment-retirement-baseline.md), including its latest PR update, for property owners, runner dependencies, retained artifacts, and the recorded build/test inventory.
+## Joint Component estimator
+
+- [Runtime guide](joint-component-runtime.md) is the production API and
+  regression authority.
+- [Stage integration](joint-stage-integration.md) describes integration with
+  the fitting workflow.
+- [Benchmark guide](joint-benchmark.md) documents current benchmark profiles
+  and measurement semantics.
+- [Capabilities and limitations](joint-capabilities-limitations.md) identifies
+  supported behavior and current research boundaries.
+- [Historical evidence](joint-component-evidence.md) summarizes retained
+  comparisons, counterexamples, fixture ownership, and artifact retrieval.
+- [Certification contract](joint_abc_certification_contract.md),
+  [component contract](joint_abc_components_contract.md), and
+  [compact-SVD acceptance](joint-component-compact-svd-acceptance.md) retain
+  independent mathematical and numerical contracts.
+- [Endpoint-reference acceptance](joint-component-reference-acceptance.md)
+  preserves its distinct historical comparison results and provenance.
+- [Joint v1 acceptance](joint-component-v1-acceptance.md) records the
+  integration and metadata contract.
+
+## Testing and release
+
+- [Test organization](../../tests/README.md) describes default correctness
+  tests, optional Joint validation, benchmarks, and research tools.
+- Read [release compliance](release-compliance.md) before preparing a source
+  or binary release.

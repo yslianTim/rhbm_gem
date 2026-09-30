@@ -435,10 +435,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
     add_test(NAME joint_benchmark_contract_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
-    add_test(NAME historical_artifact_manifest_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/historical_artifact_manifest_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        historical_artifact_manifest_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")

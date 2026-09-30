@@ -99,9 +99,12 @@ git show ba2449faf1e1b163f1b4209c3ef386ff6516de43:docs/developer/figures/joint-a
 ```
 
 The [retired-artifact inventory](figures/joint-component-evidence/retired-artifacts.json) records the exact paths, sizes and SHA-256
-hashes. Verify the retrieved bytes against that inventory. No Git history is
-rewritten. Deleting the matrices reduces the current checkout; it does not
-remove their objects from repository history.
+hashes for the archived Joint component tree. The separate
+[endpoint-reference archive inventory](figures/joint-reference-acceptance/archives.json)
+records that campaign's former paths, source and retrieval commits, compressed
+sizes, and hashes. Verify retrieved bytes against the corresponding inventory.
+No Git history is rewritten. Deleting the matrices reduces the current
+checkout; it does not remove their objects from repository history.
 
 The older certification report referred to `scientific-records.tar.gz` and
 `frozen-diagnostics/frozen-endpoint-records.tar.gz`, which are absent from the

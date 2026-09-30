@@ -1,109 +1,101 @@
-# Production fitting and controlled recovery
+# Production fitting
 
 ## Inputs and statistical contract
 
 Production fitting consumes sampled map responses, selected atomic geometry,
-explicit fitting options and previously estimated state. It never loads the
-simulation manifest, generated charges, truth widths or scoring output. Atomic
+explicit fitting options, and previously estimated state. It never loads the
+simulation manifest, generated charges, truth widths, or scoring output. Atomic
 number is not an amplitude truth initializer. `potential_analysis --simulation`
-continues to skip normalization; `-r` supplies model metadata only.
+continues to skip normalization; `-r supplies model metadata` only.
 
-This first repair preserves the MDPDE equations, joint-offset IRLS equations,
-inner iteration budgets, transformed p99 threshold `1e-4` and 100 outer attempts.
-Parameter accuracy does not establish convergence. Inner numerical failures are
-reported and reproduced rather than reclassified as success.
+The shape solve uses the production MDPDE fixed-point equations, and selected
+offsets use joint-offset IRLS. Parameter accuracy alone does not establish
+convergence. Inner solver failures retain their native status and remain
+reproducible.
 
-## Evidence and ownership
+The [Second-stage local fitting specification](second-stage-local-fitting.md)
+owns outer iteration, candidate acceptance, recovery, convergence, and
+finalization.
 
-Each nominal shape endpoint stores its own MDPDE status, iterations, terminal
-squared beta change, relative variance change and variance. Each offset endpoint
-stores its joint solve status, iterations, normalized change and robust scale.
-Quarantine may require a separate unrestricted shape solve: its status cannot be
-borrowed from the constrained proposal. All nominal endpoints must be qualified,
-including coordinates excluded from accepted-movement statistics.
+## Solver endpoints and qualification
 
-`EvaluateNominalOperator` uses the same proposal implementation with unrestricted
-activity and scratch solver workspaces. It changes neither model parameters,
-quarantine, trust radii nor historical bests. Production invokes it for recovery
-and final certification regardless of audit enablement. Every persisted state,
-including a restored best, receives its own operator assessment under the last
-frozen background also used by persistent peeling. Failed provisional final
-certification reports `final-certificate-failed`; non-convergence stop reasons
-are not upgraded just because a final residual happens to be small.
+Each nominal shape endpoint stores its MDPDE status, iteration count, terminal
+squared beta change, relative variance change, and variance. Each offset
+endpoint stores its joint solve status, iteration count, normalized change,
+and robust scale. Quarantine may require a separate unrestricted shape solve;
+its status cannot be borrowed from the constrained proposal. Every nominal
+endpoint must be qualified, including coordinates excluded from accepted
+movement statistics.
 
-`member_best` is production-owned, one parameter patch per cluster. Ordinary
-local/boundary acceptance reevaluates that patch in the candidate overlay,
-replacing only the target member. Historical scalars are never reused across
-backgrounds. Successful commits update history; new partition keys initialize
-from committed state and removed keys are discarded. Cooperative rescue retains
-its previous member policy.
+## Failed-only refinement
 
-## Recovery
+Second-stage shape solves run the native OLS/MDPDE fixed-point solve first.
+`Native SUCCESS` results are returned unchanged. Only a non-success result
+from a prepared second-stage shape fit enters the refinement eligibility
+checks. Invalid, underdetermined, or rank-deficient data remain unqualified and
+cannot be promoted. First-stage fitting, alpha training, group solvers, and
+generic local/MDPDE calls remain native.
 
-Three accepted iterations without strict historical-best improvement, or an
-all-rejected ordinary attempt, enter recovery on the next outer attempt. Actual
-domain/quarantine transitions and finite rejected-radius shrink actions retain
-their patience resets. The existence of active quarantine tracking is not progress.
-Recovery remains active until convergence or failure; ordinary updates cannot
-immediately undo its progress.
+The production switch `--second-stage-failed-only-refinement false` selects
+native-only behavior. Refinement uses the same Powell hybrid method in
+`(beta0, log(beta1), log(variance))`, a central-difference Jacobian,
+`xtol=1e-12`, and a 128-equation budget.
 
-Recovery freezes the background, domain, partition and ridge settings during
-each search. Its direction is the unrestricted nominal endpoint, with the existing
-Gaussian interpolation and guards. It tries at most `1, 1/2, ..., 1/128`, checking
-each member's current trust radius. Both current and trial operators must be
-complete and qualified. Inactive coordinates or an unqualified operator block
-recovery explicitly. An already fixed current state may be certified without a
-search step, provided it satisfies the objective bound.
+Acceptance requires finite positive variance, a valid Gaussian, full weighted
+rank, a positive denominator, and fresh floor-inclusive scaled equations whose
+maximum norm is at most `1e-8`. The candidate must agree with a continuation
+from the native endpoint: that reference reaches residual `1e-10` within
+10,000 total fixed-point updates, including native iterations; transformed
+coordinates and weights agree within the existing `1e-6` thresholds; and
+floor masks match.
 
-For all selected atoms and three transformed coordinates, let `M` be the mean
-squared nominal residual divided by `1e-4` squared. A trial at factor `lambda`
-must satisfy both:
+An accepted result receives fresh weights and the existing covariance formula.
+Rejection preserves the native parameters, weights, covariance, iteration
+diagnostics, and status. Budget exhaustion, invalid numerical state, rank
+deficiency, reference failure, and wrong-root or branch mismatch remain
+explicitly unqualified.
 
-```text
-M_trial <= (1 - 1e-3 * lambda) * M_current
-J_trial <= J_best + 1e-8 + 1e-3 * abs(J_best)
-```
+Permanent owners are `MDPDERegression_test.cpp` and
+`ProductionFitting_test.cpp`. They cover native-success bypass and unchanged
+values, failed-only invocation, ineligible rank-deficient endpoints, wrong-root
+branch rejection, fresh weights, covariance, budget exhaustion, invalid
+variance/state, rank deficiency, and preservation of native status.
+`MDPDETestSupport.*`, `EndpointRefinementTestSupport.*`, and
+`SolverFailureCapture.*` provide numerical references, endpoint probes, and
+captured solver-failure replay.
 
-The best objective is reevaluated in this same environment. The tolerance is
-anchored to historical best and cannot accumulate after each permitted increase.
-This recovery policy is separate from ordinary member-best gates. An exhausted
-or blocked recovery stops with `recovery-failed` and preserves the best validated
-state. All recovery attempts count toward the outer limit; basic final-state
-output reports extra recovery and certificate operator evaluations separately.
+## Solver failure replay
 
-## Verification and failure replay
-
-Use matched compiler, feature flags, worker count, verbosity and quiet setting
-when comparing audit OFF/ON. Debug verbosity has an existing scheduling effect;
-a `-v 4` diagnosis must not be presented as the identical `-v 3` benchmark run.
-The numerical probe compares work, commits, terminal state, parameters and peeling.
+Match the compiler, feature flags, worker count, verbosity, and quiet setting
+when comparing runs. Debug verbosity affects scheduling, so a `-v 4`
+diagnosis is not the same benchmark run as `-v 3`. Compare work, commits,
+terminal state, parameters, and peeling. A reproducible failure case
+demonstrates repeatability; it does not establish convergence.
 
 Testing builds can save the first failure of each solver/status pair:
 
-```sh
-RHBM_TEST_SOLVER_CAPTURE_DIR=build/production-fitting/failures \
-  build/production-fitting/on/bin/RHBM-GEM potential_analysis [normal arguments]
-RHBM_TEST_REPLAY_DIR=build/production-fitting/failures \
-  build/production-fitting/on/bin/RHBM-GEM-TEST \
-  --gtest_filter=ProductionFittingTest.ReplaysCapturedSolverFailureWithoutSimulationInputs
-```
+    RHBM_TEST_SOLVER_CAPTURE_DIR=build/production-fitting/failures \
+      build/production-fitting/on/bin/RHBM-GEM potential_analysis [normal arguments]
+    RHBM_TEST_REPLAY_DIR=build/production-fitting/failures \
+      build/production-fitting/on/bin/RHBM-GEM-TEST \
+      --gtest_filter=ProductionFittingTest.ReplaysCapturedSolverFailureWithoutSimulationInputs
 
 These environment variables exist only in `BUILD_TESTING` binaries. Capture is
-independent of the observer, never changes a result, and the validation harness
-must verify that requested artifacts were produced. No map or manifest is needed
-to replay a captured subproblem. Retain executable/library hashes and build/source
-provenance beside the fixtures; replay uses the same compiled solver constants.
+independent of the observer and never changes a result. The validation harness
+must verify that requested artifacts were produced. No map or manifest is
+needed to replay a captured subproblem. Retain executable/library hashes and
+build/source provenance beside the fixtures; replay uses the same compiled
+solver constants.
 
 Fixture version 1 is whitespace-delimited with round-trip double precision:
 
-- `shape 1`: alpha, threads, iteration limit, tolerance, data-weight floor;
+- `shape 1`: alpha, threads, iteration limit, tolerance, and data-weight floor;
   dense X and y; expected status/variance; expected OLS and MDPDE beta vectors.
 - `offset 1`: sparse X dimensions/nonzero count and row/column/value entries
-  (including explicit zeros); y, anchor and ridge vectors; expected status and
+  (including explicit zeros); y, anchor, and ridge vectors; expected status and
   offset vector. The compiled IRLS constants remain unchanged.
-- Dense matrices/vectors contain row and column counts followed by row-major
-  values. Replay requires exact parameters and matching terminal status.
+- Dense matrices and vectors contain row and column counts followed by
+  row-major values. Replay requires exact parameters and matching terminal
+  status.
 
-The first-repair report distinguishes implementation verification, convergence
-acceptance and quality calibration. An early failure with a reproducible solver
-case controls the cycle but does not meet convergence acceptance.
+The MDPDE fixtures remain checked in because permanent tests use them.

@@ -121,7 +121,7 @@ schema change is required.
 
 Recovery continues to require qualified inner endpoints. Refinement does not
 relax outer convergence, offset IRLS or the best-objective bound, and does not
-itself establish convergence. See the [production validation](../failed-only-refinement.md).
+itself establish convergence. See the [production fitting contract](../production-fitting.md).
 
 ## Internal fitting ranges
 

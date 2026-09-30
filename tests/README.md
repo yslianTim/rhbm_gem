@@ -32,7 +32,6 @@ Required CTest labels:
 - `intent:validation`
 - `intent:io`
 - `intent:schema`
-- `intent:migration`
 - `intent:algorithm`
 - `intent:bindings`
 
@@ -46,9 +45,10 @@ cmake --build build --target tests_all -j
 
 Build output note:
 
-- C++ tests are compiled into a single executable: `build/bin/RHBM-GEM-TEST`
-- `ctest` still exposes grouped entries such as `rhbm_tests_core_command`, `rhbm_tests_data_contract`, and `rhbm_tests_data_schema`
-- those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
+- Default grouped C++ tests are compiled into a single executable: `build/bin/RHBM-GEM-TEST`
+- `ctest` exposes grouped entries such as `rhbm_tests_core_command`, `rhbm_tests_data_contract`, and `rhbm_tests_data_schema`
+- Those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
+- Optional Joint offline C++ tests use a separate executable.
 
 Run all tests:
 
@@ -65,7 +65,7 @@ ctest --test-dir build -L domain:data --output-on-failure
 Run by intent:
 
 ```bash
-ctest --test-dir build -L intent:migration --output-on-failure
+ctest --test-dir build -L intent:algorithm --output-on-failure
 ```
 
 Run repository guards and install consumer smoke (lint lane):
@@ -110,9 +110,9 @@ Keep second-stage defense tests in the following behavior-based files under
 Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
 All second-stage files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
 `rhbm_tests_core_estimator` CTest group. Do not add per-file CTest groups using
-this shared suite filter: each would repeat the entire suite. Research-only
-assertions have been removed. Mixed cases that also verify production
-acceptance or rollback remain with the production behavior they exercise.
+this shared suite filter: each would repeat the entire suite. Mixed cases that
+verify production acceptance or rollback remain with the production behavior
+they exercise.
 
 Boundary reference tests cover ordinary/rescue gates, unavailable evidence,
 suspicious-correction early exits, strict rejection, and single correction-delta
@@ -167,7 +167,7 @@ Release acceptance runs all default CTests with Python bindings, then the existi
 `joint:extended|joint:offline` lane, plus a testing-disabled installation and
 consumer execution. A source copy without Git metadata must also build/install
 and run the consumer. Keep the frozen fixture packages and current parity
-thresholds unchanged; no historical matrix replay is required.
+thresholds unchanged.
 
 Configure with `RHBM_GEM_BUILD_BENCHMARKS=ON` before building
 `joint_partial_selection`; it is an optional measurement executable.

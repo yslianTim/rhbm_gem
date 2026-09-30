@@ -1,22 +1,19 @@
 # Endpoint-reference acceptance evidence
 
-Status: Historical. The campaign runner was retired. Current search measurements
-are documented in [`../../joint-benchmark.md`](../../joint-benchmark.md), and
-reference certification remains owned by the permanent offline tests.
+The historical campaign runner is no longer part of the active test
+architecture. Current search measurements are documented in the
+[benchmark guide](../../joint-benchmark.md); reference certification remains
+owned by the permanent offline tests.
 
 [Acceptance report](../../joint-component-reference-acceptance.md) ·
 [Summary](summary.json) · [Verification](verification.json) ·
-[Historical file layout](archives.json) · [Campaign log](campaign.txt) ·
-[Artifact manifest](../experiment-retirement-baseline/artifact-manifest.json)
+[Archive member layout](archives.json) · [Campaign log](campaign.txt)
 
-The six raw campaign archives were removed from the current worktree in PR 6.
-Their compressed sizes, SHA-256 values, source commits and former paths are
-recorded as `removed_from_worktree` entries in the artifact manifest. The
-retained summary and verification records preserve the campaign conclusions and
-provenance; the archive blobs remain retrievable from Git history.
+The six raw campaign archives are retrievable from Git history. Their former
+paths, source and retrieval commits, compressed sizes, and SHA-256 values are
+recorded in the [archive inventory](archives.json). Retrieve a blob with:
 
-To retrieve an exact historical blob, use its `last_present_commit` and `path`
-from the manifest with `git show <commit>:<path>`. The retired campaign source
-was last updated at `7f84f931215f7b5a52948f7ecdbfc15fad79d7c5`; recreating the old
-report requires that historical source and environment. Current benchmark runs
-use the entry point in [`joint-benchmark.md`](../../joint-benchmark.md).
+    git show <last_present_commit>:<former_path>
+
+Recreating the report requires its historical source and environment. Current
+benchmark runs use the entry point documented in the benchmark guide.

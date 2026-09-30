@@ -118,7 +118,6 @@ See the [implementation/reproduction guide](joint-fixed-actions.md),
 [full comparison decisions](figures/joint-fixed-actions/comparison.json).
 The experiment metadata is in
 [`figures/joint-fixed-actions/manifest.json`](figures/joint-fixed-actions/manifest.json).
-The raw receipt archive was removed from the current worktree; its provenance is
-recorded under `joint-fixed-actions-receipts` in the artifact manifest and it is
-retrievable from Git history. Original PR0-PR3 receipts, cancellation records
-and failed promotion gates are unchanged.
+The raw receipt archive is not a current benchmark input. The compact summary
+and comparison records above retain the measured outcomes and promotion
+decision.

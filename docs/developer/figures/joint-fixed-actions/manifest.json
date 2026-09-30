@@ -3,6 +3,5 @@
   "numerical_runs": 72,
   "numerical_comparisons": 24,
   "promotion": false,
-  "timing_note": "Original totals exclude gradient setup; see acceptance report. Raw receipts retained in Git history; final corrected wrappers and functional checks included.",
-  "historical_artifact_id": "joint-fixed-actions-receipts"
+  "timing_note": "Original totals exclude gradient setup; see acceptance report. Raw receipts retained in Git history; final corrected wrappers and functional checks included."
 }

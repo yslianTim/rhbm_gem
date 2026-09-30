@@ -74,8 +74,6 @@ certification remain in `joint_numerical_reference.py`, `joint_offline_support`,
 and the opt-in offline tests. The benchmark measures these paths; it does not
 replace their assertions.
 
-The previous seven campaign runners and the separate postprocessing campaign
-wrapper have been retired. Their historical results remain in the figures and
-artifact manifests. See
-[`experiment-retirement-baseline.md`](experiment-retirement-baseline.md) for
-the retirement mapping and permanent owners.
+Historical comparison results and archive provenance are summarized in the
+[Joint evidence guide](joint-component-evidence.md). This guide covers current
+benchmark profiles and measurement semantics.

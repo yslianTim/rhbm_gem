@@ -11,13 +11,12 @@ It does not change production algorithms, rank policies or convergence gates.
 ## Historical provenance
 
 The original campaign compared `e32919f3` with `c9e0f8c9`; its retained source
-and harness fingerprints are recorded in the historical report and evidence
-manifest. The former archives were removed from the current worktree in PR 6.
-Their IDs, hashes, compressed sizes, source commits and former paths are in the
-artifact manifest. Retrieve an exact archive with `git show <commit>:<path>`
-using its `last_present_commit` and `path` fields. Historical report
-reaggregation requires the retired runner from Git history; current measurements
-use the unified benchmark profile documented in `joint-benchmark.md`.
+and harness fingerprints are recorded in the historical report. The archive
+member layout, former paths, source and retrieval commits, compressed sizes, and
+SHA-256 values are in the [Joint evidence archive inventory](figures/joint-reference-acceptance/archives.json).
+Retrieve a blob with `git show <last_present_commit>:<former_path>`. Historical
+report reaggregation requires the runner from Git history; current measurements
+use the benchmark profile documented in `joint-benchmark.md`.
 
 ## Results
 
@@ -64,9 +63,8 @@ convergence and zero search-reference time. Runtime controls cover replay-only
 search, endpoint rejection, saved-coefficient fallback, exhausted fallback and
 preservation of existing stop reasons; frozen failure expectations were unchanged.
 
-The [evidence index](figures/joint-reference-acceptance/README.md) identifies
-the retained historical records and manifest provenance. The
-[machine-readable summary](figures/joint-reference-acceptance/summary.json)
+The [Joint evidence guide](joint-component-evidence.md) summarizes retained
+comparisons and retrieval instructions. The [machine-readable summary](figures/joint-reference-acceptance/summary.json)
 retains every numerical comparison. See the
 [compact acceptance record](joint-component-compact-svd-acceptance.md) for the
 separate original compact thresholds and historical command results.

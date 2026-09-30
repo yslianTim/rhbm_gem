@@ -23,12 +23,10 @@ attempt, including candidate selection, polish, audit, and operator evaluation.
 Unselected responses still contribute to fitting, residuals, and final peeling,
 but no unselected model is persisted.
 
-This page specifies the current production algorithm. Earlier decisions and
-evidence are recorded in the
-[Second-stage outer-iteration algorithm audit](second-stage-outer-iteration-algorithm-audit.md).
-Earlier safeguard, population, and continuation reviews are
-historical records linked only from that audit; they do not override this
-page's current frozen-background contract.
+This page specifies the current production algorithm, including outer
+iteration, candidate lifecycle, recovery, convergence, and finalization. For
+per-atom MDPDE fitting, failed-only refinement, covariance, and solver replay,
+see the [production fitting contract](production-fitting.md).
 
 Implementation ownership and candidate acceptance references are specified below.
 Candidate selection uses a private builder and one transaction publication;
@@ -177,11 +175,8 @@ orchestration responsibilities; failures retain their short-circuit order.
 
 ### Conditional selection audit
 
-These call conditions were checked against `develop` commit `7500a45eb2fc20ff9d04768789883ef4b1d2eb65`
-on 2026-09-14: [boundary reconciliation and audit/salvage](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/CandidateTransactionBoundary.cpp#L664)
-and [runner publication and post-commit scoring](https://github.com/yslianTim/rhbm_gem/blob/7500a45eb2fc20ff9d04768789883ef4b1d2eb65/src/core/detail/second_stage/IterationProcess.cpp#L599).
-These are production objective acceptance decisions. Making these calls
-unconditional would change the algorithm.
+These call conditions are production objective acceptance decisions. Making
+the calls unconditional would change the algorithm.
 
 `ReconcileSelectedBoundaries()` builds the ordinary boundary component list
 from the currently selected keys before reconciliation. Each component has at
@@ -959,6 +954,14 @@ the previous state as a zero residual. `StrictOperatorPassed()` reuses the same 
 final-polish certification without the accepted-movement or orthogonal-blocker
 terms.
 
+`EvaluateNominalOperator` uses the same proposal implementation with unrestricted
+activity and scratch solver workspaces. It changes no model parameters,
+quarantine, trust radii, or historical bests. Each persisted state, including a
+restored best, receives its own operator assessment under the last frozen
+background used for persistent peeling. A failed provisional final certificate
+reports `final-certificate-failed`; a small residual alone does not upgrade a
+non-convergence stop reason.
+
 Orthogonal blockers cover objective-domain changes, quarantine transitions,
 suspicious block fallback, and rejected clusters. `suspicious_block_fallback`
 includes shape and hard-failure evidence as well as offsets. Maximum values are
@@ -975,13 +978,37 @@ The stage stops on the first applicable condition:
 - final persisted-state certification fails after provisional convergence;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
-Three accepted iterations without strict historical-best improvement schedule recovery,
-as does an all-rejected ordinary attempt. Actual domain/quarantine transitions and
-finite rejected-radius shrink actions retain their reset behavior; merely having
-an active quarantine tracker does not indefinitely reset patience. Recovery is a
-persistent production mode, bounded by the same 100 outer attempts. Its eight-step
-search, qualified nominal residual requirement and historical objective envelope
-are specified in [Production fitting](production-fitting.md).
+Three accepted iterations without strict historical-best improvement schedule
+recovery on the next attempt, as does an all-rejected ordinary attempt. Actual
+domain/quarantine transitions and finite rejected-radius shrink actions retain
+their patience resets; an active quarantine tracker alone does not keep
+resetting patience. Recovery remains active until convergence or failure, and
+ordinary updates cannot immediately undo its progress.
+
+### Controlled recovery
+
+Each recovery search freezes the background, domain, partition, and ridge
+settings. Its direction is the unrestricted nominal endpoint, using the
+existing Gaussian interpolation and guards. It tries at most
+1, 1/2, ..., 1/128, subject to each member's current trust radius. Current and
+trial operators must both be complete and qualified. Inactive coordinates or
+an unqualified operator block recovery. An already fixed current state may be
+certified without a search step when it satisfies the objective bound.
+
+For all selected atoms and three transformed coordinates, let M be the mean
+squared nominal residual divided by 1e-4 squared. A trial at factor lambda
+must satisfy both conditions:
+
+    M_trial <= (1 - 1e-3 * lambda) * M_current
+    J_trial <= J_best + 1e-8 + 1e-3 * abs(J_best)
+
+The best objective is reevaluated in the same environment. Its tolerance is
+anchored to the historical best and cannot accumulate across permitted
+increases. This recovery policy is separate from ordinary member-best gates.
+Blocked or exhausted recovery stops with `recovery-failed` and preserves the
+best validated state. Recovery attempts count toward the 100 outer-attempt
+limit; final-state output reports recovery and certificate operator
+evaluations separately.
 
 Convergence writes the current accepted state. Recovery failure, audit-patience, all-rejected,
 and iteration-limit stops always write the best validated audit state when one

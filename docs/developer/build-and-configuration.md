@@ -76,8 +76,9 @@ Build all C++ test targets:
 cmake --build build --target tests_all -j
 ```
 
-The C++ unit tests are linked into a single executable at `build/bin/RHBM-GEM-TEST`. The `ctest`
-entries remain split by domain/intent grouping and invoke filtered subsets from that one binary.
+Default grouped C++ tests are linked into one executable at `build/bin/RHBM-GEM-TEST`. The `ctest`
+entries remain split by domain/intent grouping and invoke filtered subsets from that binary. Optional
+Joint offline C++ tests use a separate executable.
 
 Run all tests:
 
@@ -94,13 +95,13 @@ ctest --test-dir build -L domain:data --output-on-failure
 Run tests by intent label:
 
 ```bash
-ctest --test-dir build -L intent:migration --output-on-failure
+ctest --test-dir build -L intent:algorithm --output-on-failure
 ```
 
 Supported labels:
 
 - domain: `core`, `data`, `utils`, `integration`
-- intent: `contract`, `command`, `validation`, `io`, `schema`, `migration`, `algorithm`, `bindings`
+- intent: `contract`, `command`, `validation`, `io`, `schema`, `algorithm`, `bindings`
 
 ## Correctness, Offline, Benchmark, and Research Builds
 
@@ -280,7 +281,7 @@ Beginner / common:
 | `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
 | `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
 | `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Create optional benchmark and resource-measurement targets. Requires `BUILD_TESTING=ON`. |
-| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional research and historical validation targets. Requires `BUILD_TESTING=ON`. |
+| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional Joint statistical research targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 
