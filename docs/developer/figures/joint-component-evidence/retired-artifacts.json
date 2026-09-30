@@ -4063,6 +4063,78 @@
         "status": "intentionally-retired",
         "category": "historical-resource-envelope",
         "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-reference-acceptance/testing-disabled-result.json",
+        "bytes": 1168969,
+        "sha256": "0a9a5dc937ead510c5471d8db3d70552373dc0093507a17af0934b32f703ec4c",
+        "status": "intentionally-retired",
+        "category": "endpoint-reference-redundant-result",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/serialization-recovery.json",
+        "bytes": 2052,
+        "sha256": "9a61e5cc42a428cbb73e01fcbd1d584e722dfad2f3e0e36365b086aad90e418b",
+        "status": "intentionally-retired",
+        "category": "weak-halo-serialization-recovery",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/build-environment.json",
+        "bytes": 934,
+        "sha256": "d8837a4ee0c0c71db5939ff6e960f48b0aada5d570143d7c45d1ff752bc86427",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/campaign.json",
+        "bytes": 11579,
+        "sha256": "7969208650b8d1f7f3b96b62f2113aae78d5f926e3edf44a549a073b9cc28e03",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/manifest.json",
+        "bytes": 3520,
+        "sha256": "886c88babc4467289ad4e4c4a3d5f145323cef5fbf2b561a27ab8749182957f1",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-before.json",
+        "bytes": 400,
+        "sha256": "4f8d7fda54e8a7829e31856ecdd6578a46cca520787e93b2d31683686cb8651d",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/persistence-after.json",
+        "bytes": 345,
+        "sha256": "3464ed1978faaa60309a0028dad6aadd472b2e3ec5464d93b74705a215d04075",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/source-index.json",
+        "bytes": 2166,
+        "sha256": "ea3691502501d1389881ecc734ca23baedb16c21297e93f9d6c507c8c2013bde",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
+      },
+      {
+        "former_path": "docs/developer/figures/joint-validation/validation.json",
+        "bytes": 1535,
+        "sha256": "90c5860356aa562217c7b84427309074c9523ae237a11fcb18894358b81c6f47",
+        "status": "intentionally-retired",
+        "category": "joint-validation-historical-metadata",
+        "last_present_commit": "35a5c034c221fee470d3d3cf07b4240de28ca757"
       }
     ]
   }
