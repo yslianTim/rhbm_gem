@@ -1,7 +1,7 @@
 # Joint compact SVD
 
 Current SVD and fixed-state measurements use the
-[Joint benchmark guide](joint-benchmark.md). Historical acceptance results and
+[Joint benchmark guide](joint-benchmark.md). Historical results and
 source-pinned provenance are indexed in the
 [canonical historical evidence](joint-component-evidence.md).
 

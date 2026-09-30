@@ -150,6 +150,6 @@ Current fixed-state examples use the same frozen case in separate backend builds
       --profile fixed --case chain-8 --build-dir build/joint-sparse-spqr \
       --output build/joint-sparse-spqr-fixed.json
 
-Historical acceptance results, incomplete resource runs, and unavailable
+Historical backend results, incomplete resource runs, and unavailable
 archives are summarized in the
 [canonical historical evidence](joint-component-evidence.md).

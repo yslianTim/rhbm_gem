@@ -85,7 +85,7 @@ python3 tests/integration/joint_offline_diagnostic.py \
   --output build/joint-diagnostic/report/weak-halo.json
 ```
 
-The output is a numerical/identifiability diagnosis, not a production acceptance
+The output is a numerical/identifiability diagnosis, not a production validation
 gate. Each available state uses
 both signs of log-width steps `1e-6` through `1e-1`, along the correction and weakest
 width direction. Every point reprofiles all A/C; steps `±1e-3` and `±1e-1` also

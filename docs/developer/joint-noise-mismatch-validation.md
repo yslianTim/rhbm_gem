@@ -3,7 +3,7 @@
 The current entry point is `tests/integration/joint_statistical_experiment.py`.
 This is a research tool: its smoke run checks the fixed-seed input and output
 contract; only the full run evaluates the complete statistical matrix. Neither
-run is a production acceptance gate.
+run is a production validation gate.
 
 Status: **complete with applicability limitations**. The 326 generated inputs
 produced 450 fitted outcomes: all retained a state, 65 passed current runtime
