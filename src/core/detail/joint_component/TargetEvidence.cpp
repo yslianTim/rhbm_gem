@@ -182,10 +182,11 @@ void AddTargetEvidence(JointFitResult & fit)
         JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }
-JointFitResult FitWithSearchPolicy(const JointProblem & problem,const std::vector<double> & b,const SearchPolicy & policy)
+JointFitResult FitWithSearchPolicy(const JointProblem & problem,const std::vector<double> & b,const SearchPolicy & policy,
+    const JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    auto out=FitWithSearchPolicyImpl(problem,b,policy); AddTargetEvidence(out); return out;
+    auto out=FitWithSearchPolicyImpl(problem,b,policy,observer); AddTargetEvidence(out); return out;
 }
 }
 namespace rhbm_gem::core {

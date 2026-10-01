@@ -168,10 +168,11 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
 {return n::FitWithSearchPolicy(problem,initial_b,{});}
-JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std::vector<double> & initial_b,const n::SearchPolicy & search_policy)
+JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std::vector<double> & initial_b,
+    const n::SearchPolicy & search_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy);
+    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy,observer);
     const auto & data=JointProblemAccess::Get(problem); JointFitResult out; out.problem=problem;
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});

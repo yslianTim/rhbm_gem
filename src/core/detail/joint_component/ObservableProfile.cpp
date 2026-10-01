@@ -73,7 +73,8 @@ EvaluationContext ProfileContext(const EvaluationContext & parent,const JointPar
     context.rank={original_rows,2*atoms,atoms}; context.linear.rank_relative=context.rank.Relative(2*atoms);
     return context;
 }
-JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b,const SearchPolicy & search_policy)
+JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b,
+    const SearchPolicy & search_policy,const JointProgressObserver &)
 {
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input;
     JointFitResult out; out.problem=problem; out.layout=data.layout; out.observation_scale=data.context.scale;
