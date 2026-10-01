@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include "detail/FirstStageInitialization.hpp"
 #include "detail/FittingWorkset.hpp"
+#include "detail/PotentialFittingWorkflow.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/JointUncertainty.hpp"
@@ -30,6 +31,12 @@ void RunTwoStageFromPreparedSamples(
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     RunGroupAlphaTraining(model, options);
     RunGroupPotentialFitting(model, options);
+}
+
+void RunTwoStageFromPreparedSamples(ModelObject & model, const FitOptions & options)
+{
+    const auto workset = MakeTwoStageFittingWorkset(model);
+    RunTwoStageFromPreparedSamples(model, workset.contributors, options);
 }
 
 void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
