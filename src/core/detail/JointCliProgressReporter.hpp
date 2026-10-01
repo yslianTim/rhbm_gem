@@ -17,6 +17,8 @@ private:
     using Clock = std::chrono::steady_clock;
     bool m_solver_started{};
     bool m_has_output{};
+    bool m_has_accepted_objective{};
+    bool m_has_accepted_gradient{};
     std::size_t m_component_index{};
     int m_accepted_updates{};
     Clock::time_point m_last_output{};

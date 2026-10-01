@@ -23,10 +23,10 @@ std::string Elapsed(double seconds)
     return output.str();
 }
 
-std::string Objective(double objective)
+std::string Scientific(double value)
 {
     std::ostringstream output;
-    output << std::scientific << std::setprecision(3) << objective;
+    output << std::scientific << std::setprecision(3) << value;
     return output.str();
 }
 
@@ -38,7 +38,9 @@ std::string ComponentSummary(const JointProgressEvent & event)
         << " | eval=" << event.profile_evaluations
         << " accepted=" << event.accepted_updates;
     if (event.accepted_objective)
-        output << " | accepted-obj=" << Objective(*event.accepted_objective);
+        output << " | accepted-obj=" << Scientific(*event.accepted_objective);
+    if (event.accepted_gradient_inf_norm)
+        output << " | accepted-grad-inf=" << Scientific(*event.accepted_gradient_inf_norm);
     output << " | stop=" << event.stop_reason
         << " | trusted=" << (event.trusted_state ? "yes" : "no")
         << " | elapsed=" << Elapsed(event.elapsed_seconds);
@@ -60,11 +62,16 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
         << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
         << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
     if (event.accepted_objective)
-        output << " | " << (certifying ? "accepted-obj=" : "obj=") << Objective(*event.accepted_objective);
+        output << " | " << (certifying ? "accepted-obj=" : "obj=") << Scientific(*event.accepted_objective);
+    if (event.accepted_gradient_inf_norm)
+        output << " | " << (certifying ? "accepted-grad-inf=" : "grad-inf=")
+            << Scientific(*event.accepted_gradient_inf_norm);
     output << " | " << Elapsed(event.elapsed_seconds);
     Logger::ProgressLine(output.str());
     m_component_index = event.component_index;
     m_accepted_updates = event.accepted_updates;
+    m_has_accepted_objective = event.accepted_objective.has_value();
+    m_has_accepted_gradient = event.accepted_gradient_inf_norm.has_value();
     m_last_phase = event.phase;
     m_last_output = Clock::now();
     m_has_output = true;
@@ -93,15 +100,20 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
             LogJointInfo("[Joint] Solving " + std::to_string(event.component_count) + " structural components");
             m_solver_started = true;
         }
+        m_has_accepted_objective = false;
+        m_has_accepted_gradient = false;
         ShowProgress(event, false);
         return;
     case JointProgressPhase::SearchProgress:
     {
         const auto now = Clock::now();
         const bool accepted_changed = event.accepted_updates != m_accepted_updates;
+        const bool metrics_became_available = (!m_has_accepted_objective && event.accepted_objective.has_value())
+            || (!m_has_accepted_gradient && event.accepted_gradient_inf_norm.has_value());
         const bool phase_changed = !m_last_phase || *m_last_phase != event.phase;
         const bool elapsed = !m_has_output || now - m_last_output >= std::chrono::milliseconds(500);
-        if (event.component_index != m_component_index || accepted_changed || phase_changed || elapsed)
+        if (event.component_index != m_component_index || accepted_changed || phase_changed
+            || metrics_became_available || elapsed)
             ShowProgress(event, false);
         return;
     }
