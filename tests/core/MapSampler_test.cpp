@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/GridSampler.hpp>
 
@@ -185,6 +187,32 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowUsesExplicitAtomDomain)
     const auto sampled_view{ AtomLocalPotentialView::For(*model->FindAtomPtr(2)) };
     ASSERT_TRUE(sampled_view.IsAvailable());
     EXPECT_FALSE(sampled_view.GetRawSamplingEntries(false).empty());
+}
+
+TEST(MapSamplerTest, PotentialSamplingProgressLabelAndQuietMode)
+{
+    auto map{ MakeWorkflowMapObject() };
+    auto model{ MakeLinearNeighborModel() };
+    model->SelectAllAtoms();
+    const auto atoms{ model->GetSelectedAtoms() };
+    const auto previous_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    RunPotentialSamplingWorkflow(map, *model, atoms,
+        SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling");
+    const auto labelled{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(labelled.find("100% Joint sampling"), std::string::npos);
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    RunPotentialSamplingWorkflow(map, *model, atoms,
+        SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling", true);
+    const auto quiet{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_level);
+    EXPECT_TRUE(quiet.empty());
 }
 
 TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
