@@ -33,6 +33,7 @@ struct JointProgressEvent
     int profile_budget{};
     int accepted_updates{};
     int update_budget{};
+    std::optional<double> accepted_objective;
     double elapsed_seconds{};
     std::string stop_reason;
     bool trusted_state{};
@@ -88,7 +89,8 @@ inline void NotifyJointProgress(
     int update_budget = 0,
     double elapsed_seconds = 0,
     const std::string & stop_reason = {},
-    bool trusted_state = false)
+    bool trusted_state = false,
+    std::optional<double> accepted_objective = std::nullopt)
 {
     if (!observer) return;
     auto event = MakeJointProgressEvent(phase, component);
@@ -99,6 +101,7 @@ inline void NotifyJointProgress(
     event.elapsed_seconds = elapsed_seconds;
     event.stop_reason = stop_reason;
     event.trusted_state = trusted_state;
+    event.accepted_objective = accepted_objective;
     observer(event);
 }
 

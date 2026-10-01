@@ -103,6 +103,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         JointComponentResult component; component.id=view.id;
         component.atoms.assign(view.atoms.begin(),view.atoms.end()); component.rows.assign(view.rows.begin(),view.rows.end());
         component.layout=ComponentLayout(data.layout,view); const auto & layout=*component.layout;
+        std::optional<double> accepted_objective;
         const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a){return std::isfinite(initial_b[a]) && initial_b[a]>0;});
         if(layout.full_atoms.empty())
         {
@@ -119,6 +120,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
                 progress_component ? &*progress_component : nullptr);
             const auto result=AssessComponentSearch(domain,y,context,std::move(search),observer,
                 progress_component ? &*progress_component : nullptr);
+            accepted_objective=result.search.accepted_objective;
             component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;
             component.profile_evaluations=result.search.evaluations; component.reference_evaluations=result.search.references;
             component.accepted_updates=result.search.accepted; component.native_status=result.search.lm_status;
@@ -147,7 +149,8 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         if(progress_component)
             NotifyJointProgress(observer,JointProgressPhase::ComponentCompleted,*progress_component,
                 component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
-                data.context.update_budget,Seconds(started),component.stop_reason,component.state.has_value());
+                data.context.update_budget,Seconds(started),component.stop_reason,component.state.has_value(),
+                accepted_objective);
         out.components.push_back(std::move(component));
     }
     // Search is included in the component elapsed time above.

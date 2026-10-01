@@ -65,7 +65,8 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         if(!progress_component) return;
         NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
             out.evaluations,context.profile_budget,out.accepted,context.update_budget,
-            std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());
+            std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),{},false,
+            out.accepted_objective);
     };
     auto finish=[&](const std::string & reason,bool stopped=true,int status=9) {
         out.stop_reason=reason; out.stopped=stopped; out.lm_status=status;
@@ -86,6 +87,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     if(!out.trials.back().trust->passed) return finish("untrusted-trial");
     out.initial_accepted=true; out.trials.back().accepted=true; out.trials.back().accepted_update=0;
     UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
+    report();
     std::shared_ptr<const PreconditionerPartition> partition;
     Vector metric; double radius{},mu=1e-3;
     try {

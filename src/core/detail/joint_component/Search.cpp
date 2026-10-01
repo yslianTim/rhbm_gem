@@ -29,7 +29,8 @@ struct Profile
     {
         if(!progress_component) return;
         NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
-            evaluations,context.profile_budget,accepted_updates,context.update_budget,Seconds(search_start));
+            evaluations,context.profile_budget,accepted_updates,context.update_budget,Seconds(search_start),{},false,
+            accepted_objective);
     }
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
@@ -82,7 +83,7 @@ struct Profile
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
-        if(changed) Report();
+        if(changed || update==0) Report();
     }
 };
 }

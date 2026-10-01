@@ -102,7 +102,8 @@ ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const Ev
 {
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
-            search.evaluations,context.profile_budget,search.accepted,context.update_budget,search.seconds,search.stop_reason);
+            search.evaluations,context.profile_budget,search.accepted,context.update_budget,search.seconds,search.stop_reason,
+            false,search.accepted_objective);
     ComponentResult out; out.search=std::move(search);
     const auto audit_start=std::chrono::steady_clock::now();
     const auto endpoint=EvaluateProfile(domain,y,out.search.eta,false,&context);
