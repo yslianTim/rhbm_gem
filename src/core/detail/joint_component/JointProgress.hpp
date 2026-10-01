@@ -34,6 +34,7 @@ struct JointProgressEvent
     int accepted_updates{};
     int update_budget{};
     std::optional<double> accepted_objective;
+    std::optional<double> accepted_gradient_inf_norm;
     double elapsed_seconds{};
     std::string stop_reason;
     bool trusted_state{};
@@ -90,7 +91,8 @@ inline void NotifyJointProgress(
     double elapsed_seconds = 0,
     const std::string & stop_reason = {},
     bool trusted_state = false,
-    std::optional<double> accepted_objective = std::nullopt)
+    std::optional<double> accepted_objective = std::nullopt,
+    std::optional<double> accepted_gradient_inf_norm = std::nullopt)
 {
     if (!observer) return;
     auto event = MakeJointProgressEvent(phase, component);
@@ -102,6 +104,7 @@ inline void NotifyJointProgress(
     event.stop_reason = stop_reason;
     event.trusted_state = trusted_state;
     event.accepted_objective = accepted_objective;
+    event.accepted_gradient_inf_norm = accepted_gradient_inf_norm;
     observer(event);
 }
 

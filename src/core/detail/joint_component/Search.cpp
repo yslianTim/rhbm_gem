@@ -31,7 +31,7 @@ struct Profile
         if(!progress_component) return;
         NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
             evaluations,context.profile_budget,accepted_updates,context.update_budget,Seconds(search_start),{},false,
-            accepted_objective);
+            accepted_objective,accepted_gradient_inf_norm);
     }
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,

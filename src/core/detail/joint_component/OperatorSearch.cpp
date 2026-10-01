@@ -66,7 +66,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
             out.evaluations,context.profile_budget,out.accepted,context.update_budget,
             std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),{},false,
-            out.accepted_objective);
+            out.accepted_objective,out.accepted_gradient_inf_norm);
     };
     auto finish=[&](const std::string & reason,bool stopped=true,int status=9) {
         out.stop_reason=reason; out.stopped=stopped; out.lm_status=status;

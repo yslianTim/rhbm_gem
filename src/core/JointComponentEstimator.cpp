@@ -234,7 +234,7 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
             n::NotifyJointProgress(observer,n::JointProgressPhase::ComponentCompleted,*progress_component,
                 component.profile_evaluations,search_context.profile_budget,component.accepted_updates,
                 search_context.update_budget,Seconds(component_start),component.stop_reason,component.state.has_value(),
-                result.search.accepted_objective);
+                result.search.accepted_objective,result.search.accepted_gradient_inf_norm);
         out.components.push_back(std::move(component)); results.push_back(std::move(result));
     }
     const auto assembly_start=Clock::now();
