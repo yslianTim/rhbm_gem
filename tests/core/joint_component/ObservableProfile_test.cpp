@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
