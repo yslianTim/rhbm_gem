@@ -1,5 +1,4 @@
 #include "FirstStageInitialization.hpp"
-#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -52,18 +51,18 @@ LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions 
 }
 
 JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & workset,
-    const FitOptions & options, FirstStageMode mode, MapObject * sampling_map)
+    const FitOptions & options, FirstStageMode mode)
 {
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
+    if (workset.full_parameter_mask.size() != workset.contributors.size())
+        throw std::invalid_argument("First-stage workset parameter count mismatch.");
     if (mode == FirstStageMode::ExistingSamplesBatch)
     {
         RunLocalAlphaTraining(model, options, FittingStage::First, workset.contributors);
         RunFixedOffsetLocalFitting(model, options, FittingStage::First, workset.contributors);
         return {};
     }
-    if (!sampling_map) throw std::invalid_argument("Contributor sampling requires a map.");
-    auto & map = *sampling_map;
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();
@@ -77,7 +76,7 @@ JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & wo
         record.mdpde = record.ols;
         record.alpha = std::numeric_limits<double>::quiet_NaN();
         double width = std::numeric_limits<double>::quiet_NaN();
-        if (!workset.full_parameter_mask.empty() && !workset.full_parameter_mask.at(index))
+        if (!workset.full_parameter_mask[index])
         {
             record.reason = "not-required-observable-contribution";
             record.seed_source = "not-required";
@@ -90,10 +89,6 @@ JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & wo
                 seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
                 editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, seed);
                 editor.SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if (FirstStageObserverForTesting()) FirstStageObserverForTesting()(atom->GetSerialID(), "raw");
-#endif
-                editor.SetAtomLocalRawSamplingEntries(*atom, SampleAtomMapValues(map, *atom, options.sampling_method));
                 const auto view = AtomLocalPotentialView::For(*atom);
                 record.sample_count = view.GetSamplingEntries(FittingStage::First).size();
                 TrainLocalAlphaForAtom(editor, options, FittingStage::First, *atom);

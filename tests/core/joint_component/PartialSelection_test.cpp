@@ -224,10 +224,12 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceW
     const auto problem = core::BuildJointProblem(map, model);
     const auto workset = core::detail::MakeJointFittingWorkset(model, problem);
     core::FitOptions options; options.thread_size = 1;
+    const auto first_stage_atoms = core::detail::CollectFirstStageAtoms(workset);
+    core::RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
     ResetProgressPercentForTest();
     testing::internal::CaptureStdout();
     const auto initialization = core::detail::RunFirstStage(model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated, &map);
+        core::detail::FirstStageMode::SampleContributorsIsolated);
     const auto progress = testing::internal::GetCapturedStdout();
     EXPECT_NE(progress.find("50%"), std::string::npos);
     EXPECT_NE(progress.find("100%"), std::string::npos);
@@ -297,13 +299,18 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
         {f.model->FindAtomPtr(1), f.model->FindAtomPtr(2)}, {true, false}, {false, true}};
     core::FitOptions options; options.thread_size = 1;
     std::map<std::pair<int, std::string>, int> calls;
+    std::map<int, int> sampling_calls;
     core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
         ++calls[{id, std::string(phase)}];
     };
+    core::detail::PotentialSamplingObserverForTesting() = [&](int id) { ++sampling_calls[id]; };
+    const auto first_stage_atoms = core::detail::CollectFirstStageAtoms(workset);
+    core::RunPotentialSamplingWorkflow(*f.map, *f.model, first_stage_atoms, options.sampling_method, 1);
+    core::detail::PotentialSamplingObserverForTesting() = {};
     ResetProgressPercentForTest();
     testing::internal::CaptureStdout();
     const auto initialization = core::detail::RunFirstStage(*f.model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated, f.map.get());
+        core::detail::FirstStageMode::SampleContributorsIsolated);
     const auto progress = testing::internal::GetCapturedStdout();
     core::detail::FirstStageObserverForTesting() = {};
 
@@ -311,10 +318,10 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     EXPECT_EQ(initialization.atoms[0].reason, "not-required-observable-contribution");
     EXPECT_EQ(initialization.atoms[0].seed_source, "not-required");
     EXPECT_FALSE(initialization.atoms[0].original_b);
-    EXPECT_EQ((calls[{1, "raw"}]), 0);
     EXPECT_EQ((calls[{1, "first"}]), 0);
-    EXPECT_EQ((calls[{2, "raw"}]), 1);
     EXPECT_EQ((calls[{2, "first"}]), 1);
+    EXPECT_EQ(sampling_calls[1], 0);
+    EXPECT_EQ(sampling_calls[2], 1);
     EXPECT_NE(progress.find("50%"), std::string::npos);
     EXPECT_NE(progress.find("100%"), std::string::npos);
     EXPECT_EQ(progress.find("Run local alpha training for 1 atoms."), std::string::npos);
@@ -323,7 +330,7 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     options.quiet_mode = true;
     testing::internal::CaptureStdout();
     core::detail::RunFirstStage(*f.model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated, f.map.get());
+        core::detail::FirstStageMode::SampleContributorsIsolated);
     EXPECT_TRUE(testing::internal::GetCapturedStdout().empty());
 }
 
@@ -398,14 +405,17 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     const auto bonds = f.model->GetSelectedBonds();
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
     std::map<std::pair<int, std::string>, int> calls;
+    std::map<int, int> sampling_calls;
     core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
         ++calls[{id, std::string(phase)}];
     };
+    core::detail::PotentialSamplingObserverForTesting() = [&](int id) { ++sampling_calls[id]; };
     core::FitOptions options;
     options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode = true;
     core::RunPotentialFittingWorkflow(*f.map, *f.model, options);
     core::detail::FirstStageObserverForTesting() = {};
+    core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
     const auto & result = *f.model->GetAnalysisView().GetJointResult();
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
@@ -415,8 +425,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
     {
         const auto id = std::stoi(result.atom_ids[i]);
-        EXPECT_EQ((calls[{id, "raw"}]), 1);
         EXPECT_EQ((calls[{id, "first"}]), 1);
+        EXPECT_EQ(sampling_calls[id], 1);
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
         EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
@@ -829,7 +839,7 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     const auto selected = f.model->GetSelectedAtoms();
     std::map<std::pair<int, std::string>, int> calls;
     core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) { ++calls[{id, std::string(phase)}]; };
-    const core::detail::FittingWorkset workset{{f.model->FindAtomPtr(2)}, {false}};
+    const core::detail::FittingWorkset workset{{f.model->FindAtomPtr(2)}, {false}, {true}};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
     core::detail::RunFirstStage(*f.model, workset, options, core::detail::FirstStageMode::ExistingSamplesBatch);
     core::detail::FirstStageObserverForTesting() = {};
@@ -837,5 +847,4 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
     EXPECT_EQ((calls[{2, "first"}]), 1);
     EXPECT_EQ((calls[{1, "first"}]), 0);
-    EXPECT_EQ((calls[{2, "raw"}]), 0);
 }

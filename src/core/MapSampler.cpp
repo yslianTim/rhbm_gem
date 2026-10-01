@@ -19,6 +19,14 @@
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem::core::detail {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+PotentialSamplingObserver & PotentialSamplingObserverForTesting()
+{
+    static thread_local PotentialSamplingObserver observer;
+    return observer;
+}
+#endif
+
 LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sample_point_list)
@@ -88,6 +96,10 @@ void RunPotentialSamplingWorkflow(
     {
         raw_sampling_entries_list[i] =
             SampleAtomMapValues(map_object, *atom_list[i], sampling_method);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if (detail::PotentialSamplingObserverForTesting())
+            detail::PotentialSamplingObserverForTesting()(atom_list[i]->GetSerialID());
+#endif
 
 #ifdef USE_OPENMP
         #pragma omp critical

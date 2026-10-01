@@ -22,8 +22,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
         throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
     model_object.EditAnalysis().InitializeLocalFittingSeedModels();
 
-    const detail::FittingWorkset workset{model_object.GetSelectedAtoms(),
-        std::vector<bool>(model_object.GetSelectedAtomCount(), true)};
+    const auto workset = detail::MakeTwoStageFittingWorkset(model_object);
     detail::RunFirstStage(model_object, workset, options, detail::FirstStageMode::ExistingSamplesBatch);
 
     detail::RunSecondStageIterations(model_object, options);
@@ -51,7 +50,10 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     const auto initialization_start = std::chrono::steady_clock::now();
     const auto workset = detail::MakeJointFittingWorkset(model, problem);
     model.EditAnalysis().InitializeFromSelection();
-    const auto initialization = detail::RunFirstStage(model, workset, options, detail::FirstStageMode::SampleContributorsIsolated, &map);
+    const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
+    const auto initialization = detail::RunFirstStage(
+        model, workset, options, detail::FirstStageMode::SampleContributorsIsolated);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
     auto snapshot = [&] {

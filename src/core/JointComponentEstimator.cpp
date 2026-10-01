@@ -276,7 +276,10 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     ModelObject initializer(model);
     const auto workset = detail::MakeJointFittingWorkset(initializer, problem);
     FitOptions options; options.thread_size = 1; options.quiet_mode = true; options.exclude_hydrogen = true;
-    const auto initialization = detail::RunFirstStage(initializer, workset, options, detail::FirstStageMode::SampleContributorsIsolated, &map);
+    const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
+    RunPotentialSamplingWorkflow(map, initializer, first_stage_atoms, options.sampling_method, 1);
+    const auto initialization = detail::RunFirstStage(
+        initializer, workset, options, detail::FirstStageMode::SampleContributorsIsolated);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
         if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;
