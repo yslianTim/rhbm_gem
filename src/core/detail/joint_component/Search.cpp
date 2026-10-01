@@ -24,6 +24,7 @@ struct Profile
     const JointProgressComponent * progress_component{};
     std::chrono::steady_clock::time_point search_start;
     int accepted_updates{};
+    std::optional<double> accepted_objective;
     void Report() const
     {
         if(!progress_component) return;
@@ -44,6 +45,8 @@ struct Profile
             auto evidence=CheckReplay(domain,y,cached,context);
             trusted=evidence.passed; row.trust=std::move(evidence);
         }
+        if(!proposed || !trusted)
+            UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,false);
         if(!trusted) failure="untrusted-trial";
         return trusted;
     }
@@ -75,6 +78,7 @@ struct Profile
     {
         const bool changed=update>accepted_updates;
         accepted_updates=update;
+        UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,true);
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
@@ -90,7 +94,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
     ResourcePhase phase("search");
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0,{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -114,6 +118,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
+    out.accepted_objective=profile.accepted_objective;
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();

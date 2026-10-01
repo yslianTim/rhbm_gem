@@ -85,6 +85,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     out.trials.back().trust=CheckReplay(domain,y,accepted,context);
     if(!out.trials.back().trust->passed) return finish("untrusted-trial");
     out.initial_accepted=true; out.trials.back().accepted=true; out.trials.back().accepted_update=0;
+    UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
     std::shared_ptr<const PreconditionerPartition> partition;
     Vector metric; double radius{},mu=1e-3;
     try {
@@ -139,12 +140,16 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 if(proposed || context.audit.trial_details) trial.trust=CheckReplay(domain,y,candidate,context);
                 const bool trusted=candidate.valid && (!trial.trust || trial.trust->passed);
                 if(!trusted)
-                {rejected=true; radius*=.25; mu*=4; lower=upper=0; continue;}
+                {
+                    UpdateAcceptedProfileObjective(out.accepted_objective,candidate,context.scale,false);
+                    rejected=true; radius*=.25; mu*=4; lower=upper=0; continue;
+                }
                 if(ratio<=.25) {radius*=.25; mu*=4;}
                 else if(ratio>=.75) {radius=std::max(radius,2*length); mu=std::max(1e-12,mu*.5);}
                 if(proposed)
                 {
                     accepted=std::move(candidate); out.eta=candidate_eta; ++out.accepted;
+                    UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
                     trial.accepted=true; trial.accepted_update=out.accepted; advanced=true;
                     report();
                     const bool small_reduction=std::abs(actual)<=1e-14*objective && step.predicted<=1e-14*objective;
@@ -152,6 +157,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                     if(small_reduction || small_step) return finish(small_step ? "operator-step-stop" : "operator-reduction-stop",false,small_step ? 2 : 1);
                     break;
                 }
+                UpdateAcceptedProfileObjective(out.accepted_objective,candidate,context.scale,false);
                 rejected=true; lower=upper=0;
                 if(radius<=1e-12*metric.cwiseProduct(out.eta).stableNorm()) return finish("no-trustworthy-descent-step");
             }

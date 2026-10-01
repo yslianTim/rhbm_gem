@@ -122,6 +122,21 @@ Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & b
     out.active_atoms=active; return out;
 }
 
+std::optional<double> NormalizedProfileObjective(const Evaluation & evaluation,double scale)
+{
+    if(!evaluation.valid || !evaluation.certificate.available || !(scale>0) || !std::isfinite(scale))
+        return std::nullopt;
+    const double objective=evaluation.certificate.objective/(scale*scale);
+    if(!std::isfinite(objective)) return std::nullopt;
+    return objective;
+}
+
+void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
+    const Evaluation & evaluation,double scale,bool accepted)
+{
+    if(accepted) accepted_objective=NormalizedProfileObjective(evaluation,scale);
+}
+
 namespace {
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
