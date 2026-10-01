@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include "JointProgress.hpp"
 #include "SnapshotViews.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
@@ -140,7 +141,8 @@ struct SearchResult
     std::string stop_reason;
     double seconds{},reference_seconds{};
 };
-SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &);
+SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct Assessment
 {
     Endpoint primary,reference;
@@ -200,8 +202,10 @@ struct ComponentResult
     std::optional<TrustEvidence> endpoint_trust;
     bool search_success{};
 };
-ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult);
-ComponentResult SolveComponent(const ComponentView &,VectorRef,const Vector &,const EvaluationContext &);
+ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
+ComponentResult SolveComponent(const ComponentView &,VectorRef,const Vector &,const EvaluationContext &,
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct AssemblyResult
 {
     bool available{},completed{true},profile_agrees{};

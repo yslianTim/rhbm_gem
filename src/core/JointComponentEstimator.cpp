@@ -186,14 +186,25 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
     auto search_context=data.context; search_context.search=search_policy;
     const n::Vector b=Eigen::Map<const n::Vector>(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
     std::vector<n::ComponentResult> results;
-    for(const auto & view:data.partition.components)
+    const auto component_count=data.partition.components.size();
+    for(std::size_t component_index=0;component_index<component_count;++component_index)
     {
+        const auto & view=data.partition.components[component_index];
         const auto component_start=Clock::now();
+        std::optional<n::JointProgressComponent> progress_component;
+        if(observer)
+        {
+            progress_component.emplace(n::JointProgressComponent{component_index+1,component_count,view.id,
+                view.atoms.size(),view.rows.size()});
+            n::NotifyJointProgress(observer,n::JointProgressPhase::ComponentStarted,*progress_component,
+                0,search_context.profile_budget,0,search_context.update_budget);
+        }
         n::ComponentResult result;
         const bool valid=std::all_of(view.atoms.begin(),view.atoms.end(),[&](auto a) {
             return std::isfinite(initial_b[static_cast<std::size_t>(a)]) && initial_b[static_cast<std::size_t>(a)]>0;
         });
-        if(valid) result=n::SolveComponent(view,data.y,b,search_context);
+        if(valid) result=n::SolveComponent(view,data.y,b,search_context,observer,
+            progress_component ? &*progress_component : nullptr);
         else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}
 
         JointComponentResult component; component.id=view.id; component.stop_reason=result.search.stop_reason;
@@ -217,9 +228,14 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
         out.costs.search_seconds+=result.search.seconds;
         out.costs.search_reference_seconds+=result.search.reference_seconds;
         out.costs.assessment_seconds+=Seconds(component_start)-result.search.seconds;
+        if(progress_component)
+            n::NotifyJointProgress(observer,n::JointProgressPhase::ComponentCompleted,*progress_component,
+                component.profile_evaluations,search_context.profile_budget,component.accepted_updates,
+                search_context.update_budget,Seconds(component_start),component.stop_reason,component.state.has_value());
         out.components.push_back(std::move(component)); results.push_back(std::move(result));
     }
     const auto assembly_start=Clock::now();
+    n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyStarted,component_count);
     std::optional<n::EvaluationContext> reuse_context;
     std::optional<n::AssessmentReuse> reuse;
     if(results.size()==1 && results[0].trusted_assessment && data.partition.constant_rows.empty())
@@ -242,6 +258,8 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
             JointEvidenceScope::AssembledGlobal,assembly.profile_difference,1e-10,{}});
     }
     out.costs.assembly_seconds=Seconds(assembly_start);
+    n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyCompleted,component_count,
+        out.costs.assembly_seconds,assembly.available && assembly.raw.valid);
     return out;
 }
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, JointAnalysisMetadata metadata)

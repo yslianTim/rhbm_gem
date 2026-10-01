@@ -74,7 +74,7 @@ EvaluationContext ProfileContext(const EvaluationContext & parent,const JointPar
     return context;
 }
 JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b,
-    const SearchPolicy & search_policy,const JointProgressObserver &)
+    const SearchPolicy & search_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input;
     JointFitResult out; out.problem=problem; out.layout=data.layout; out.observation_scale=data.context.scale;
@@ -86,9 +86,19 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     if(initial_b.size()!=input.atom_ids.size()) return out;
     const VectorMap widths(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
     Vector prediction=Vector::Zero(data.y.size());
-    for(const auto & view:data.partition.components)
+    const auto component_count=data.partition.components.size();
+    for(std::size_t component_index=0;component_index<component_count;++component_index)
     {
+        const auto & view=data.partition.components[component_index];
         const auto started=Clock::now();
+        std::optional<JointProgressComponent> progress_component;
+        if(observer)
+        {
+            progress_component.emplace(JointProgressComponent{component_index+1,component_count,view.id,
+                view.atoms.size(),view.rows.size()});
+            NotifyJointProgress(observer,JointProgressPhase::ComponentStarted,*progress_component,
+                0,data.context.profile_budget,0,data.context.update_budget);
+        }
         const double assembly_before=out.costs.assembly_seconds;
         JointComponentResult component; component.id=view.id;
         component.atoms.assign(view.atoms.begin(),view.atoms.end()); component.rows.assign(view.rows.begin(),view.rows.end());
@@ -105,7 +115,10 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
             auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(view.rows.size())); context.independent_search=true; context.search=search_policy;
             const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
             const Vector start=SelectValues(widths,IndicesOf(layout.full_atoms));
-            const auto result=AssessComponentSearch(domain,y,context,SearchProfile(domain,y,start,context));
+            auto search=SearchProfile(domain,y,start,context,observer,
+                progress_component ? &*progress_component : nullptr);
+            const auto result=AssessComponentSearch(domain,y,context,std::move(search),observer,
+                progress_component ? &*progress_component : nullptr);
             component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;
             component.profile_evaluations=result.search.evaluations; component.reference_evaluations=result.search.references;
             component.accepted_updates=result.search.accepted; component.native_status=result.search.lm_status;
@@ -131,14 +144,23 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
         out.costs.assessment_seconds+=Seconds(started)-(out.costs.assembly_seconds-assembly_before);
+        if(progress_component)
+            NotifyJointProgress(observer,JointProgressPhase::ComponentCompleted,*progress_component,
+                component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
+                data.context.update_budget,Seconds(started),component.stop_reason,component.state.has_value());
         out.components.push_back(std::move(component));
     }
     // Search is included in the component elapsed time above.
     out.costs.assessment_seconds-=out.costs.search_seconds;
     out.search_completed=std::all_of(out.components.begin(),out.components.end(),[](const auto & c){return c.search_completed;});
+    const auto assembly_started=Clock::now();
+    NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyStarted,component_count);
     if(std::any_of(out.components.begin(),out.components.end(),[](const auto & c){return !c.state;}))
     {
-        out.evidence=AssessmentEvidence(Assessment{},JointEvidenceScope::AssembledGlobal); return out;
+        out.evidence=AssessmentEvidence(Assessment{},JointEvidenceScope::AssembledGlobal);
+        NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyCompleted,component_count,
+            Seconds(assembly_started),false);
+        return out;
     }
     const auto started=Clock::now(); const auto & layout=data.layout;
     JointState state; const auto count=layout.full_atoms.size();
@@ -192,6 +214,9 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     out.evidence.push_back({"assembled-profile",agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,
         JointEvidenceScope::AssembledGlobal,difference,1e-10,reconstruction ? "" : "full-domain-reconstruction-failed"});
     out.assembled_state=std::move(state); out.prediction=Values(prediction); out.objective=out.assembled_state->objective;
-    out.costs.assembly_seconds+=Seconds(started); return out;
+    out.costs.assembly_seconds+=Seconds(started);
+    NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyCompleted,component_count,
+        Seconds(assembly_started),out.assembled_state.has_value());
+    return out;
 }
 }

@@ -63,4 +63,44 @@ inline void NotifyJointProgress(
     if (observer) observer(event);
 }
 
+inline void NotifyJointProgress(
+    const JointProgressObserver & observer,
+    JointProgressPhase phase,
+    const JointProgressComponent & component,
+    int profile_evaluations = 0,
+    int profile_budget = 0,
+    int accepted_updates = 0,
+    int update_budget = 0,
+    double elapsed_seconds = 0,
+    const std::string & stop_reason = {},
+    bool trusted_state = false)
+{
+    if (!observer) return;
+    auto event = MakeJointProgressEvent(phase, component);
+    event.profile_evaluations = profile_evaluations;
+    event.profile_budget = profile_budget;
+    event.accepted_updates = accepted_updates;
+    event.update_budget = update_budget;
+    event.elapsed_seconds = elapsed_seconds;
+    event.stop_reason = stop_reason;
+    event.trusted_state = trusted_state;
+    observer(event);
+}
+
+inline void NotifyJointAssemblyProgress(
+    const JointProgressObserver & observer,
+    JointProgressPhase phase,
+    std::size_t component_count,
+    double elapsed_seconds = 0,
+    bool trusted_state = false)
+{
+    if (!observer) return;
+    JointProgressEvent event;
+    event.phase = phase;
+    event.component_count = component_count;
+    event.elapsed_seconds = elapsed_seconds;
+    event.trusted_state = trusted_state;
+    observer(event);
+}
+
 } // namespace rhbm_gem::core::joint_component

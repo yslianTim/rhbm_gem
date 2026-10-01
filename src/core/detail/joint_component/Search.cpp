@@ -20,6 +20,16 @@ struct Profile
     int evaluations{},derivatives{};
     std::string failure;
     LinearWorkspace workspace;
+    const JointProgressObserver & observer;
+    const JointProgressComponent * progress_component{};
+    std::chrono::steady_clock::time_point search_start;
+    int accepted_updates{};
+    void Report() const
+    {
+        if(!progress_component) return;
+        NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
+            evaluations,context.profile_budget,accepted_updates,context.update_budget,Seconds(search_start));
+    }
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
         double radius,double damping,double actual,double predicted,double ratio,bool proposed)
@@ -46,6 +56,7 @@ struct Profile
         const auto start=std::chrono::steady_clock::now();
         cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,&workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start); trace.push_back(std::move(row));
+        Report();
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
     }
@@ -62,19 +73,24 @@ struct Profile
     }
     void Accept(const Vector & eta,int update)
     {
+        const bool changed=update>accepted_updates;
+        accepted_updates=update;
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
+        if(changed) Report();
     }
 };
 }
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context)
+    const EvaluationContext & context,const JointProgressObserver & observer,
+    const JointProgressComponent * progress_component)
 {
-    if(context.search.method==SearchMethod::OperatorPcg) return SearchOperatorProfile(domain,y,initial_b,context);
+    if(context.search.method==SearchMethod::OperatorPcg)
+        return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
     ResourcePhase phase("search");
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;

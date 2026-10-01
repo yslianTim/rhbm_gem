@@ -81,7 +81,8 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     }
     return c;
 }
-ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vector & initial_b,const EvaluationContext & parent)
+ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vector & initial_b,const EvaluationContext & parent,
+    const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     const auto context=ChildContext(parent,view,true);
     const Vector start=SelectValues(initial_b,view.atoms);
@@ -89,13 +90,19 @@ ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vect
     if(contiguous)
     {
         const auto local_y=y.segment(view.rows.front(),static_cast<Eigen::Index>(view.rows.size()));
-        return AssessComponentSearch(view.domain,local_y,context,SearchProfile(view.domain,local_y,start,context));
+        auto search=SearchProfile(view.domain,local_y,start,context,observer,progress_component);
+        return AssessComponentSearch(view.domain,local_y,context,std::move(search),observer,progress_component);
     }
     const Vector local_y=SelectValues(y,view.rows);
-    return AssessComponentSearch(view.domain,local_y,context,SearchProfile(view.domain,local_y,start,context));
+    auto search=SearchProfile(view.domain,local_y,start,context,observer,progress_component);
+    return AssessComponentSearch(view.domain,local_y,context,std::move(search),observer,progress_component);
 }
-ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search)
+ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,
+    const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
+    if(progress_component)
+        NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
+            search.evaluations,context.profile_budget,search.accepted,context.update_budget,search.seconds,search.stop_reason);
     ComponentResult out; out.search=std::move(search);
     const auto audit_start=std::chrono::steady_clock::now();
     const auto endpoint=EvaluateProfile(domain,y,out.search.eta,false,&context);

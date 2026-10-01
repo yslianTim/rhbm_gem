@@ -71,5 +71,6 @@ using VectorAction=std::function<Vector(VectorRef)>;
 // Generic SPD kernel also permits an independent dense-system test oracle.
 WidthStepResult SolvePcg(const VectorAction &,const VectorAction &,VectorRef,VectorRef,int=-1);
 WidthStepResult WidthStepSolver(const ProfileJacobianOperator &,VectorRef,const PreconditionerContext &,const VectorAction &,int=-1);
-SearchResult SearchOperatorProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &);
+SearchResult SearchOperatorProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 }

@@ -56,10 +56,17 @@ WidthStepResult WidthStepSolver(const ProfileJacobianOperator & op,VectorRef gra
     }
     return result;
 }
-SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vector & initial_b,const EvaluationContext & context)
+SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vector & initial_b,const EvaluationContext & context,
+    const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     ResourcePhase phase("search"); const auto start=std::chrono::steady_clock::now();
     SearchResult out; out.eta=initial_b.array().log(); out.stopped=true; out.lm_status=9;
+    auto report=[&] {
+        if(!progress_component) return;
+        NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
+            out.evaluations,context.profile_budget,out.accepted,context.update_budget,
+            std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());
+    };
     auto finish=[&](const std::string & reason,bool stopped=true,int status=9) {
         out.stop_reason=reason; out.stopped=stopped; out.lm_status=status;
         out.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
@@ -69,7 +76,8 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         const auto t=std::chrono::steady_clock::now();
         auto e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace); ++out.evaluations;
         Trial trial; trial.endpoint=e; trial.evaluation=out.evaluations;
-        trial.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-t).count(); out.trials.push_back(std::move(trial)); return e;
+        trial.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-t).count(); out.trials.push_back(std::move(trial));
+        report(); return e;
     };
     if(context.profile_budget<=0) return finish("profile-budget");
     auto accepted=evaluate(out.eta); out.initial=accepted;
@@ -138,6 +146,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 {
                     accepted=std::move(candidate); out.eta=candidate_eta; ++out.accepted;
                     trial.accepted=true; trial.accepted_update=out.accepted; advanced=true;
+                    report();
                     const bool small_reduction=std::abs(actual)<=1e-14*objective && step.predicted<=1e-14*objective;
                     const bool small_step=radius<=1e-12*metric.cwiseProduct(out.eta).stableNorm();
                     if(small_reduction || small_step) return finish(small_step ? "operator-step-stop" : "operator-reduction-stop",false,small_step ? 2 : 1);
