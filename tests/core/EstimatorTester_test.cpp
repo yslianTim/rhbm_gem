@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/command/detail/LocalFittingFeatures.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -574,7 +575,7 @@ TEST(EstimatorTesterTest, GroupFittingUsesSecondLocalInputsWithoutChangingLocalS
 
 TEST(
     EstimatorTesterTest,
-    RunPotentialFittingWorkflowProducesSingleGroupResultAfterLocalStages)
+    PreparedSampleTwoStageWorkflowProducesSingleGroupResult)
 {
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
@@ -611,7 +612,7 @@ TEST(
     const auto expected_local{ initial_view.GetGaussianResult(FittingStage::Second) };
     const auto expected_samples{ initial_view.GetPeelingSamplingEntries(false) };
 
-    rt::RunPotentialFittingWorkflow(*model, options);
+    rt_detail::RunTwoStageFromPreparedSamples(*model, options);
 
     const auto fitted_view{
         rg::AtomLocalPotentialView::For(
@@ -685,7 +686,7 @@ TEST(EstimatorTesterTest, LocalFittingResultRanksUseSelectedAtomsWithin2AInSecon
     ASSERT_EQ(selected_atoms.size(), 5u);
 
     auto options{ MakeSecondStageOptions() };
-    rt::RunPotentialFittingWorkflow(*model, options);
+    rt_detail::RunTwoStageFromPreparedSamples(*model, options);
 
     const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model) };
     constexpr std::array<GaussianParameterGetter, 3> parameter_getters{

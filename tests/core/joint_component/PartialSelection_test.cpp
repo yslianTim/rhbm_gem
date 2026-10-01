@@ -512,7 +512,6 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         EXPECT_EQ(result.components[c].state->b, direct.components[c].state->b);
         EXPECT_EQ(result.components[c].state->objective, direct.components[c].state->objective);
     }
-    EXPECT_THROW(core::RunPotentialFittingWorkflow(*f.model, options), std::invalid_argument);
 }
 
 TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissingStates)

@@ -83,6 +83,7 @@ int main()
     (void)model_object;
     rhbm_gem::core::FitOptions fit_options;
     using PotentialFittingWorkflow = void (*)(
+        rhbm_gem::MapObject &,
         rhbm_gem::ModelObject &,
         const rhbm_gem::core::FitOptions &);
     PotentialFittingWorkflow volatile workflow_entry{

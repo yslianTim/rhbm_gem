@@ -2,6 +2,7 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
+#include "detail/PotentialFittingWorkflow.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -133,7 +134,7 @@ Eigen::MatrixXd EstimateAtomicModelFullStageModels(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunPotentialFittingWorkflow(model_object, options);
+        detail::RunTwoStageFromPreparedSamples(model_object, options);
 
         const auto local_view{
             AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
@@ -425,7 +426,7 @@ BiasStatistics RunAtomicModelFullEstimationTest(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunPotentialFittingWorkflow(model_object, options);
+        detail::RunTwoStageFromPreparedSamples(model_object, options);
 
         const auto local_view{
             AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
