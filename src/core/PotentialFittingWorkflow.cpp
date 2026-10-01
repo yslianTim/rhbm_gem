@@ -50,8 +50,6 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
 
 void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
-    if (options.sampling_method != SphereSamplingMethod::FibonacciDeterministic)
-        throw std::invalid_argument("Joint initialization requires Fibonacci sampling.");
     const auto construction_start = std::chrono::steady_clock::now();
     const auto problem = BuildJointProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
@@ -60,7 +58,7 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     const auto workset = MakeJointFittingWorkset(model, problem);
     model.EditAnalysis().InitializeFromSelection();
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, SphereSamplingMethod::FibonacciDeterministic, 1);
     const auto initialization = RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
