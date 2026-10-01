@@ -74,11 +74,11 @@ LocalPotentialSampleList SampleAtomMapValues(
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
     SphereSamplingMethod sampling_method,
     int thread_count)
 {
     ScopeTimer timer("MapSampler::RunPotentialSamplingWorkflow");
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
     size_t atom_count{ 0 };
     std::vector<LocalPotentialSampleList> raw_sampling_entries_list(atom_list.size());
 #ifdef USE_OPENMP
@@ -104,6 +104,20 @@ void RunPotentialSamplingWorkflow(
         analysis.SetAtomLocalRawSamplingEntries(
             *atom_list[i], std::move(raw_sampling_entries_list[i]));
     }
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    SphereSamplingMethod sampling_method,
+    int thread_count)
+{
+    RunPotentialSamplingWorkflow(
+        map_object,
+        model_object,
+        model_object.GetSelectedAtoms(),
+        sampling_method,
+        thread_count);
 }
 
 } // namespace rhbm_gem::core

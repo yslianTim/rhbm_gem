@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
@@ -24,6 +25,13 @@ LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atoms,
+    SphereSamplingMethod sampling_method,
+    int thread_count);
 
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
