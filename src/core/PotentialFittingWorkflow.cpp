@@ -14,33 +14,34 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
+#include <stdexcept>
+#include <vector>
 
-namespace rhbm_gem::core {
-void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
+namespace rhbm_gem::core::detail {
+
+void RunTwoStageFromPreparedSamples(
+    ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
 {
-    if (options.estimator != PotentialEstimator::TWO_STAGE)
-        throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
-    model_object.EditAnalysis().InitializeLocalFittingSeedModels();
+    model.EditAnalysis().InitializeLocalFittingSeedModels();
+    RunBatchFirstStageFromPreparedSamples(model, atoms, options);
+    RunSecondStageIterations(model, options);
 
-    const auto workset = detail::MakeTwoStageFittingWorkset(model_object);
-    detail::RunBatchFirstStageFromPreparedSamples(model_object, workset.contributors, options);
-
-    detail::RunSecondStageIterations(model_object, options);
-
-    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model_object));
-    detail::RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options);
+    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
+    RunGroupAlphaTraining(model, options);
+    RunGroupPotentialFitting(model, options);
 }
 
-void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
+void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
-    if (options.estimator == PotentialEstimator::TWO_STAGE)
-    {
-        model.EditAnalysis().InitializeFromSelection();
-        RunPotentialSamplingWorkflow(map, model, options.sampling_method, options.thread_size);
-        RunPotentialFittingWorkflow(model, options);
-        return;
-    }
+    model.EditAnalysis().InitializeFromSelection();
+    const auto workset = MakeTwoStageFittingWorkset(model);
+    const auto first_stage_atoms = CollectFirstStageAtoms(workset);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, options.thread_size);
+    RunTwoStageFromPreparedSamples(model, workset.contributors, options);
+}
+
+void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
+{
     if (options.sampling_method != SphereSamplingMethod::FibonacciDeterministic)
         throw std::invalid_argument("Joint initialization requires Fibonacci sampling.");
     const auto construction_start = std::chrono::steady_clock::now();
@@ -48,12 +49,11 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     const auto construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - construction_start).count();
     const auto initialization_start = std::chrono::steady_clock::now();
-    const auto workset = detail::MakeJointFittingWorkset(model, problem);
+    const auto workset = MakeJointFittingWorkset(model, problem);
     model.EditAnalysis().InitializeFromSelection();
-    const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
+    const auto first_stage_atoms = CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
-    const auto initialization = detail::RunJointFirstStageInitializationFromPreparedSamples(
-        model, workset, options);
+    const auto initialization = RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
     auto snapshot = [&] {
@@ -65,18 +65,44 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     }();
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    for (auto & [id, peeling] : detail::BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
+    for (auto & [id, peeling] : BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
-    for (auto & [id, uncertainty] : detail::ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
+    for (auto & [id, uncertainty] : ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
     {
         auto & atom = *model.FindAtomPtr(id);
         auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
         stage.uncertainty = std::move(uncertainty);
         model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, stage);
-        model.EditAnalysis().SetAtomGroupEvidence(atom, detail::BuildJointParameterEvidence(stage));
+        model.EditAnalysis().SetAtomGroupEvidence(atom, BuildJointParameterEvidence(stage));
     }
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     RunGroupPotentialFitting(model, options);
+}
+
+} // namespace rhbm_gem::core::detail
+
+namespace rhbm_gem::core {
+
+void RunPotentialFittingWorkflow(ModelObject & model, const FitOptions & options)
+{
+    if (options.estimator != PotentialEstimator::TWO_STAGE)
+        throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
+    const auto workset = detail::MakeTwoStageFittingWorkset(model);
+    detail::RunTwoStageFromPreparedSamples(model, workset.contributors, options);
+}
+
+void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
+{
+    switch (options.estimator)
+    {
+    case PotentialEstimator::TWO_STAGE:
+        detail::RunTwoStageWorkflow(map, model, options);
+        return;
+    case PotentialEstimator::JOINT_COMPONENTS:
+        detail::RunJointComponentWorkflow(map, model, options);
+        return;
+    }
+    throw std::invalid_argument("Unsupported potential estimator.");
 }
 
 } // namespace rhbm_gem::core
