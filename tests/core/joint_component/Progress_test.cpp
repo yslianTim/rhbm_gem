@@ -19,6 +19,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 
 namespace {
 namespace core = rhbm_gem::core;
@@ -145,11 +146,21 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
 }
 
 void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitResult & fit,
-    const std::vector<joint::JointProgressEvent> & events)
+    const std::vector<joint::JointProgressEvent> & events, const joint::SearchPolicy & policy)
 {
     const auto & data = core::JointProblemAccess::Get(problem);
     ASSERT_EQ(fit.components.size(), data.partition.components.size());
-    std::size_t cursor = 0;
+    ASSERT_FALSE(events.empty());
+    EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
+    ASSERT_TRUE(events.front().solver_route);
+    const auto expected_route = joint::ResolveJointSolverRoute(policy);
+    EXPECT_EQ(events.front().solver_route->sparse_backend, expected_route.sparse_backend);
+    EXPECT_EQ(events.front().solver_route->search_method, expected_route.search_method);
+    EXPECT_EQ(events.front().solver_route->preconditioner, expected_route.preconditioner);
+    EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
+        return event.phase == joint::JointProgressPhase::SolverConfigured;
+    }), 1);
+    std::size_t cursor = 1;
     for (std::size_t k = 0; k < fit.components.size(); ++k)
     {
         const auto & view = data.partition.components[k];
@@ -232,6 +243,50 @@ TEST(JointProgressTest, PublicFitWithoutObserverIsSilent)
     EXPECT_TRUE(stderr_text.empty());
 }
 
+TEST(JointProgressTest, ActiveSparseBackendMatchesCompiledFactorizationBackend)
+{
+    const auto expected = joint::SparseBackendEnabled() ? joint::SparseBackend::Spqr : joint::SparseBackend::Eigen;
+    EXPECT_EQ(joint::ActiveSparseBackend(), expected);
+}
+
+TEST(JointProgressTest, LegacyCompactRouteOmitsUnusedPreconditioner)
+{
+    joint::SearchPolicy policy;
+    policy.method = joint::SearchMethod::LegacyCompact;
+    policy.preconditioner = joint::PreconditionerKind::Schwarz;
+    const auto route = joint::ResolveJointSolverRoute(policy);
+    EXPECT_EQ(route.sparse_backend, joint::ActiveSparseBackend());
+    EXPECT_EQ(route.search_method, joint::SearchMethod::LegacyCompact);
+    EXPECT_FALSE(route.preconditioner);
+}
+
+TEST(JointProgressTest, OperatorPcgRoutePreservesRequestedPreconditioner)
+{
+    joint::SearchPolicy policy;
+    policy.method = joint::SearchMethod::OperatorPcg;
+    for (const auto preconditioner : {joint::PreconditionerKind::Identity,
+        joint::PreconditionerKind::Diagonal, joint::PreconditionerKind::Schwarz})
+    {
+        policy.preconditioner = preconditioner;
+        const auto route = joint::ResolveJointSolverRoute(policy);
+        EXPECT_EQ(route.sparse_backend, joint::ActiveSparseBackend());
+        EXPECT_EQ(route.search_method, joint::SearchMethod::OperatorPcg);
+        ASSERT_TRUE(route.preconditioner);
+        EXPECT_EQ(*route.preconditioner, preconditioner);
+    }
+}
+
+TEST(JointProgressTest, SolverRouteNamesAreCanonical)
+{
+    EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Eigen), "EIGEN");
+    EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Spqr), "SPQR");
+    EXPECT_EQ(joint::SearchMethodName(joint::SearchMethod::LegacyCompact), "LegacyCompact");
+    EXPECT_EQ(joint::SearchMethodName(joint::SearchMethod::OperatorPcg), "OperatorPcg");
+    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Identity), "Identity");
+    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Diagonal), "Diagonal");
+    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Schwarz), "Schwarz");
+}
+
 TEST(JointProgressTest, LifecycleAndNumericsMatchForBothSearchPolicies)
 {
     const core::JointProblem problem(MakeInput());
@@ -245,7 +300,7 @@ TEST(JointProgressTest, LifecycleAndNumericsMatchForBothSearchPolicies)
         const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
         const auto with_observer = joint::FitWithSearchPolicy(problem, initial, policy, observer);
         ExpectSameFitNumerics(without_observer, with_observer);
-        ExpectLifecycle(problem, with_observer, events);
+        ExpectLifecycle(problem, with_observer, events, policy);
     }
 }
 
@@ -259,7 +314,38 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     const auto fit = joint::FitWithSearchPolicy(problem, initial, {}, observer);
     ASSERT_EQ(problem.ParameterLayout().groups.size(), 1);
     ASSERT_TRUE(fit.assembled_state);
-    ExpectLifecycle(problem, fit, events);
+    ExpectLifecycle(problem, fit, events, {});
+}
+
+TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
+{
+    const auto previous_level = Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+
+    core::detail::JointCliProgressReporter reporter;
+    joint::JointProgressEvent event;
+    event.phase = joint::JointProgressPhase::SolverConfigured;
+    joint::SearchPolicy policy;
+    policy.method = joint::SearchMethod::LegacyCompact;
+    event.solver_route = joint::ResolveJointSolverRoute(policy);
+    reporter.OnProgress(event);
+
+    policy.method = joint::SearchMethod::OperatorPcg;
+    policy.preconditioner = joint::PreconditionerKind::Schwarz;
+    event.solver_route = joint::ResolveJointSolverRoute(policy);
+    reporter.OnProgress(event);
+
+    const auto output = testing::internal::GetCapturedStdout();
+    Logger::SetLogLevel(previous_level);
+    const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
+    const auto legacy = output.find("[Joint] Solver route: sparse=" + sparse + " | width-search=LegacyCompact");
+    ASSERT_NE(legacy, std::string::npos);
+    const auto legacy_line_end = output.find('\n', legacy);
+    EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
+    EXPECT_NE(output.find("[Joint] Solver route: sparse=" + sparse
+        + " | width-search=OperatorPcg | preconditioner=Schwarz"), std::string::npos);
 }
 
 TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
@@ -271,6 +357,7 @@ TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
 
     core::detail::JointCliProgressReporter reporter;
     joint::JointProgressEvent event;
+    event.phase = joint::JointProgressPhase::ComponentStarted;
     event.component_index = 1;
     event.component_count = 2;
     event.component_id = "a";
