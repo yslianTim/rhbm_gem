@@ -1,6 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
 #include "JointProgress.hpp"
+#include "SolverRoute.hpp"
 #include "SnapshotViews.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
@@ -32,14 +33,6 @@ struct LinearPolicy
     double rank_relative{};
     int active_set_iteration_factor{20};
     double release_factor{128}, release_response_norm{-1};
-};
-enum class SearchMethod {LegacyCompact,OperatorPcg};
-enum class PreconditionerKind {Identity,Diagonal,Schwarz};
-struct SearchPolicy
-{
-    SearchMethod method{SearchMethod::LegacyCompact};
-    PreconditionerKind preconditioner{PreconditionerKind::Schwarz};
-    int pcg_iterations{-1},damping_trials{20};
 };
 struct EvaluationContext
 {

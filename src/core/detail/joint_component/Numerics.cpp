@@ -28,6 +28,40 @@ CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors 
     return EvaluateRank(r,{{rows,0,0},r.cols()},rhs,vectors);
 }
 }
+JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
+{
+    std::optional<PreconditionerKind> preconditioner;
+    if(policy.method==SearchMethod::OperatorPcg) preconditioner=policy.preconditioner;
+    return {ActiveSparseBackend(),policy.method,preconditioner};
+}
+std::string_view SparseBackendName(SparseBackend backend)
+{
+    switch(backend)
+    {
+    case SparseBackend::Eigen: return "EIGEN";
+    case SparseBackend::Spqr: return "SPQR";
+    }
+    return {};
+}
+std::string_view SearchMethodName(SearchMethod method)
+{
+    switch(method)
+    {
+    case SearchMethod::LegacyCompact: return "LegacyCompact";
+    case SearchMethod::OperatorPcg: return "OperatorPcg";
+    }
+    return {};
+}
+std::string_view PreconditionerName(PreconditionerKind preconditioner)
+{
+    switch(preconditioner)
+    {
+    case PreconditionerKind::Identity: return "Identity";
+    case PreconditionerKind::Diagonal: return "Diagonal";
+    case PreconditionerKind::Schwarz: return "Schwarz";
+    }
+    return {};
+}
 double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const

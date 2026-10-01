@@ -129,6 +129,7 @@ struct SparseFactorState
     void Clear() {++generation; if(qr) SuiteSparseQR_free<double>(&qr,&cc);}
 };
 bool SparseBackendEnabled() {return true;}
+SparseBackend ActiveSparseBackend() {return SparseBackend::Spqr;}
 LinearWorkspace::LinearWorkspace():state_(std::make_shared<SparseFactorState>()) {}
 void LinearWorkspace::Bind(const void * domain,const void * observations,const LinearPolicy * policy)
 {
@@ -322,6 +323,7 @@ struct SparseFactorState
     bool valid{};
 };
 bool SparseBackendEnabled() {return false;}
+SparseBackend ActiveSparseBackend() {return SparseBackend::Eigen;}
 LinearWorkspace::LinearWorkspace()=default;
 void LinearWorkspace::Bind(const void *,const void *,const LinearPolicy *) {}
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
