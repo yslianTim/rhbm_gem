@@ -23,14 +23,23 @@ std::string Elapsed(double seconds)
     return output.str();
 }
 
+std::string Objective(double objective)
+{
+    std::ostringstream output;
+    output << std::scientific << std::setprecision(3) << objective;
+    return output.str();
+}
+
 std::string ComponentSummary(const JointProgressEvent & event)
 {
     std::ostringstream output;
     output << "[Joint] Component " << event.component_index << '/' << event.component_count
         << " completed | atoms=" << event.atom_count << " rows=" << event.row_count
         << " | eval=" << event.profile_evaluations
-        << " accepted=" << event.accepted_updates
-        << " | stop=" << event.stop_reason
+        << " accepted=" << event.accepted_updates;
+    if (event.accepted_objective)
+        output << " | accepted-obj=" << Objective(*event.accepted_objective);
+    output << " | stop=" << event.stop_reason
         << " | trusted=" << (event.trusted_state ? "yes" : "no")
         << " | elapsed=" << Elapsed(event.elapsed_seconds);
     return output.str();
@@ -49,8 +58,10 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
         << (certifying ? "certifying endpoint" : "searching")
         << " | atoms=" << event.atom_count << " rows=" << event.row_count
         << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
-        << " | accepted=" << event.accepted_updates << '/' << event.update_budget
-        << " | " << Elapsed(event.elapsed_seconds);
+        << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
+    if (event.accepted_objective)
+        output << " | " << (certifying ? "accepted-obj=" : "obj=") << Objective(*event.accepted_objective);
+    output << " | " << Elapsed(event.elapsed_seconds);
     Logger::ProgressLine(output.str());
     m_component_index = event.component_index;
     m_accepted_updates = event.accepted_updates;
