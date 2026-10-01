@@ -121,7 +121,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         ++completed_count;
         if (!options.quiet_mode)
         {
-            Logger::ProgressPercent(completed_count, workset.contributors.size());
+            Logger::ProgressPercent(completed_count, workset.contributors.size(), 50, " Joint initialization");
         }
     }
     ApplyJointSeedFallback(initialization);

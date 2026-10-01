@@ -58,7 +58,8 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
     model.EditAnalysis().InitializeFromSelection();
     const auto workset = MakeTwoStageFittingWorkset(model);
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, options.thread_size);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method,
+        options.thread_size, " Sampling", options.quiet_mode);
     RunTwoStageFromPreparedSamples(model, workset.contributors, options);
 }
 
@@ -87,7 +88,8 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
     if (!options.quiet_mode)
         LogJointInfo("[Joint] Sampling " + std::to_string(first_stage_atoms.size()) + " FullABC contributors");
-    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, SphereSamplingMethod::FibonacciDeterministic, 1);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms,
+        SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling", options.quiet_mode);
     if (!options.quiet_mode)
         LogJointInfo("[Joint] Initializing " + std::to_string(workset.contributors.size()) + " contributors");
     const auto initialization = RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);

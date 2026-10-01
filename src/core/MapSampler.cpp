@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -86,7 +88,21 @@ void RunPotentialSamplingWorkflow(
     SphereSamplingMethod sampling_method,
     int thread_count)
 {
-    ScopeTimer timer("MapSampler::RunPotentialSamplingWorkflow");
+    RunPotentialSamplingWorkflow(map_object, model_object, atom_list, sampling_method, thread_count, {}, false);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    SphereSamplingMethod sampling_method,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode)
+{
+    std::optional<ScopeTimer> timer;
+    if (!quiet_mode) timer.emplace("MapSampler::RunPotentialSamplingWorkflow");
+    const std::string progress_message{progress_label};
     size_t atom_count{ 0 };
     std::vector<LocalPotentialSampleList> raw_sampling_entries_list(atom_list.size());
 #ifdef USE_OPENMP
@@ -106,7 +122,7 @@ void RunPotentialSamplingWorkflow(
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, atom_list.size());
+            if (!quiet_mode) Logger::ProgressPercent(atom_count, atom_list.size(), 50, progress_message);
         }
     }
 

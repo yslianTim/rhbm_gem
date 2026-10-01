@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string_view>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
@@ -32,6 +33,15 @@ void RunPotentialSamplingWorkflow(
     const std::vector<AtomObject *> & atoms,
     SphereSamplingMethod sampling_method,
     int thread_count);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atoms,
+    SphereSamplingMethod sampling_method,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode = false);
 
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
