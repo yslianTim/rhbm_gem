@@ -172,6 +172,8 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
     const n::SearchPolicy & search_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
+    const auto route=n::ResolveJointSolverRoute(search_policy);
+    n::NotifyJointSolverConfigured(observer,route);
     if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy,observer);
     const auto & data=JointProblemAccess::Get(problem); JointFitResult out; out.problem=problem;
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;

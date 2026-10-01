@@ -1,13 +1,17 @@
 #pragma once
 
+#include "SolverRoute.hpp"
+
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace rhbm_gem::core::joint_component {
 
 enum class JointProgressPhase
 {
+    SolverConfigured,
     ComponentStarted,
     SearchProgress,
     CertificationStarted,
@@ -19,6 +23,7 @@ enum class JointProgressPhase
 struct JointProgressEvent
 {
     JointProgressPhase phase{};
+    std::optional<JointSolverRoute> solver_route;
     std::size_t component_index{};
     std::size_t component_count{};
     std::string component_id;
@@ -34,6 +39,16 @@ struct JointProgressEvent
 };
 
 using JointProgressObserver = std::function<void(const JointProgressEvent &)>;
+
+inline void NotifyJointSolverConfigured(
+    const JointProgressObserver & observer, const JointSolverRoute & route)
+{
+    if (!observer) return;
+    JointProgressEvent event;
+    event.phase = JointProgressPhase::SolverConfigured;
+    event.solver_route = route;
+    observer(event);
+}
 
 struct JointProgressComponent
 {
