@@ -20,8 +20,11 @@
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
+#include "core/detail/joint_component/OperatorSearch.hpp"
+#include "core/detail/joint_component/ProfileJacobianOperator.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
+#include "support/JointOperatorWorkload.hpp"
 
 namespace {
 namespace core = rhbm_gem::core;
@@ -68,6 +71,20 @@ core::JointProblemInput MakeObservableInput()
         const auto basis = joint::EvaluateKernel(square, .7, 2.5);
         input.observations[39] += gaussian * basis.gaussian + charge * basis.charge;
     }
+    return input;
+}
+
+core::JointProblemInput MakeObservableInputWithAnalyticNuisance()
+{
+    auto input = MakeObservableInput();
+    const auto row = input.observations.size();
+    const double square = .3;
+    const auto basis = joint::EvaluateKernel(square, .7, 2.5);
+    input.atom_ids.push_back("4");
+    input.support.emplace_back();
+    input.support.back().push_back({row, square});
+    input.row_ids.push_back(std::to_string(row));
+    input.observations.push_back(.7 * basis.gaussian + .1 * basis.charge);
     return input;
 }
 
@@ -184,6 +201,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         int last_evaluation = 0;
         int last_accepted = 0;
         std::optional<double> last_search_objective;
+        std::optional<double> last_search_gradient;
         while (cursor < events.size() && events[cursor].phase == joint::JointProgressPhase::SearchProgress)
         {
             const auto & progress = events[cursor++];
@@ -199,6 +217,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             last_evaluation = progress.profile_evaluations;
             last_accepted = progress.accepted_updates;
             if (progress.accepted_objective) last_search_objective = progress.accepted_objective;
+            if (progress.accepted_gradient_inf_norm) last_search_gradient = progress.accepted_gradient_inf_norm;
         }
         EXPECT_GT(last_evaluation, 0);
         EXPECT_EQ(last_evaluation, component.profile_evaluations);
@@ -213,6 +232,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         EXPECT_EQ(certifying.profile_budget, data.context.profile_budget);
         EXPECT_EQ(certifying.update_budget, data.context.update_budget);
         EXPECT_EQ(certifying.accepted_objective, last_search_objective);
+        EXPECT_EQ(certifying.accepted_gradient_inf_norm, last_search_gradient);
 
         ASSERT_LT(cursor, events.size());
         const auto & completed = events[cursor++];
@@ -228,6 +248,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         EXPECT_EQ(completed.stop_reason, component.stop_reason);
         EXPECT_EQ(completed.trusted_state, component.state.has_value());
         EXPECT_EQ(completed.accepted_objective, last_search_objective);
+        EXPECT_EQ(completed.accepted_gradient_inf_norm, last_search_gradient);
     }
     ASSERT_EQ(events.size(), cursor + 2);
     EXPECT_EQ(events[cursor].phase, joint::JointProgressPhase::AssemblyStarted);
@@ -236,6 +257,8 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     EXPECT_EQ(events[cursor + 1].component_count, fit.components.size());
     EXPECT_FALSE(events[cursor].accepted_objective);
     EXPECT_FALSE(events[cursor + 1].accepted_objective);
+    EXPECT_FALSE(events[cursor].accepted_gradient_inf_norm);
+    EXPECT_FALSE(events[cursor + 1].accepted_gradient_inf_norm);
     EXPECT_GE(events[cursor + 1].elapsed_seconds, 0);
 }
 }
@@ -267,6 +290,27 @@ TEST(JointProgressTest, NormalizedProfileObjectiveUsesCertificateAndScale)
     EXPECT_FALSE(joint::NormalizedProfileObjective(evaluation, 5));
 }
 
+TEST(JointProgressTest, ProfileGradientInfinityNormValidatesAndUsesEvaluationGradient)
+{
+    joint::Evaluation evaluation;
+    evaluation.valid = true;
+    evaluation.gradient.resize(3);
+    evaluation.gradient << .25, -4, 2;
+
+    const auto gradient_inf_norm = joint::ProfileGradientInfinityNorm(evaluation);
+    ASSERT_TRUE(gradient_inf_norm);
+    EXPECT_DOUBLE_EQ(*gradient_inf_norm, evaluation.gradient.lpNorm<Eigen::Infinity>());
+    EXPECT_DOUBLE_EQ(*gradient_inf_norm, 4);
+
+    evaluation.valid = false;
+    EXPECT_FALSE(joint::ProfileGradientInfinityNorm(evaluation));
+    evaluation.valid = true;
+    evaluation.gradient.resize(0);
+    EXPECT_FALSE(joint::ProfileGradientInfinityNorm(evaluation));
+    evaluation.gradient = joint::Vector::Constant(2, std::numeric_limits<double>::infinity());
+    EXPECT_FALSE(joint::ProfileGradientInfinityNorm(evaluation));
+}
+
 TEST(JointProgressTest, RejectedCandidateKeepsAcceptedObjective)
 {
     joint::Evaluation accepted;
@@ -289,13 +333,12 @@ TEST(JointProgressTest, RejectedCandidateKeepsAcceptedObjective)
     EXPECT_DOUBLE_EQ(*accepted_objective, 10);
 }
 
-TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
+TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetricsForBothPolicies)
 {
-    const core::JointProblem problem(MakeInput());
+    const core::JointProblem problem(second_stage_test::OperatorWorkload("chain", 4));
     const auto & data = core::JointProblemAccess::Get(problem);
     const auto & view = data.partition.components.front();
     const auto y = joint::SelectValues(data.y, view.rows);
-    const auto initial = joint::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()), .55);
     auto context = joint::ChildContext(data.context, view, true);
     const joint::JointProgressComponent progress_component{
         1, data.partition.components.size(), view.id, view.atoms.size(), view.rows.size()};
@@ -303,17 +346,36 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
     for (const auto method : {joint::SearchMethod::LegacyCompact, joint::SearchMethod::OperatorPcg})
     {
         context.search.method = method;
+        const double initial_width = method == joint::SearchMethod::LegacyCompact ? .05 : 2.;
+        const auto initial = joint::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()), initial_width);
+        const auto adjoints_before = joint::OperatorWorkForTesting().adjoints;
+        const auto preparations_before = joint::OperatorWorkForTesting().preparations;
+        const auto search_work_before = joint::SearchWorkForTesting();
         const auto without_observer = joint::SearchProfile(view.domain, y, initial, context);
+        const auto no_observer_adjoints = joint::OperatorWorkForTesting().adjoints - adjoints_before;
+        const auto no_observer_preparations = joint::OperatorWorkForTesting().preparations - preparations_before;
+        const auto no_observer_search_work = joint::SearchWorkForTesting();
+        const auto observed_adjoints_before = joint::OperatorWorkForTesting().adjoints;
+        const auto observed_preparations_before = joint::OperatorWorkForTesting().preparations;
+        const auto observed_search_work_before = joint::SearchWorkForTesting();
         std::vector<joint::JointProgressEvent> events;
         const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
         const auto observed = joint::SearchProfile(view.domain, y, initial, context, observer, &progress_component);
+        EXPECT_EQ(joint::OperatorWorkForTesting().adjoints - observed_adjoints_before, no_observer_adjoints);
+        EXPECT_EQ(joint::OperatorWorkForTesting().preparations - observed_preparations_before, no_observer_preparations);
+        EXPECT_EQ(joint::SearchWorkForTesting().pcg_solves - observed_search_work_before.pcg_solves,
+            no_observer_search_work.pcg_solves - search_work_before.pcg_solves);
+        EXPECT_EQ(joint::SearchWorkForTesting().pcg_iterations - observed_search_work_before.pcg_iterations,
+            no_observer_search_work.pcg_iterations - search_work_before.pcg_iterations);
 
         EXPECT_EQ(observed.evaluations, without_observer.evaluations);
         EXPECT_EQ(observed.references, without_observer.references);
         EXPECT_EQ(observed.accepted, without_observer.accepted);
+        EXPECT_EQ(observed.derivatives, without_observer.derivatives);
         EXPECT_EQ(observed.stop_reason, without_observer.stop_reason);
         EXPECT_EQ(observed.eta, without_observer.eta);
         EXPECT_EQ(observed.accepted_objective, without_observer.accepted_objective);
+        EXPECT_EQ(observed.accepted_gradient_inf_norm, without_observer.accepted_gradient_inf_norm);
         EXPECT_EQ(observed.trials.size(), without_observer.trials.size());
         ASSERT_EQ(observed.trials.size(), without_observer.trials.size());
         for (std::size_t k = 0; k < observed.trials.size(); ++k)
@@ -325,13 +387,20 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
         }
         ASSERT_TRUE(observed.initial_accepted);
         ASSERT_TRUE(observed.accepted_objective);
+        ASSERT_TRUE(observed.accepted_gradient_inf_norm);
         EXPECT_TRUE(std::isfinite(*observed.accepted_objective));
         EXPECT_GE(*observed.accepted_objective, 0);
+        EXPECT_TRUE(std::isfinite(*observed.accepted_gradient_inf_norm));
+        EXPECT_GE(*observed.accepted_gradient_inf_norm, 0);
 
         std::vector<std::optional<double>> accepted_objectives(
             static_cast<std::size_t>(observed.accepted + 1));
+        std::vector<std::optional<double>> accepted_gradients(
+            static_cast<std::size_t>(observed.accepted + 1));
         accepted_objectives[0] = NormalizedEndpointObjective(observed.initial, context.scale);
+        accepted_gradients[0] = observed.initial.gradient.lpNorm<Eigen::Infinity>();
         int accepted_update{};
+        bool observed_rejection{};
         for (const auto & trial : observed.trials)
         {
             if (trial.accepted && trial.accepted_update && *trial.accepted_update > 0)
@@ -340,9 +409,12 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
                 ASSERT_LT(static_cast<std::size_t>(accepted_update), accepted_objectives.size());
                 accepted_objectives[static_cast<std::size_t>(accepted_update)] =
                     NormalizedEndpointObjective(trial.endpoint, context.scale);
+                accepted_gradients[static_cast<std::size_t>(accepted_update)] =
+                    trial.endpoint.gradient.lpNorm<Eigen::Infinity>();
             }
             else if (!trial.accepted && trial.evaluation > 1)
             {
+                observed_rejection = true;
                 const auto event = std::find_if(events.begin(), events.end(), [&](const auto & value) {
                     return value.phase == joint::JointProgressPhase::SearchProgress
                         && value.profile_evaluations == trial.evaluation
@@ -352,11 +424,18 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
                 ASSERT_TRUE(event->accepted_objective);
                 EXPECT_DOUBLE_EQ(*event->accepted_objective,
                     *accepted_objectives[static_cast<std::size_t>(accepted_update)]);
+                ASSERT_TRUE(event->accepted_gradient_inf_norm);
+                EXPECT_DOUBLE_EQ(*event->accepted_gradient_inf_norm,
+                    *accepted_gradients[static_cast<std::size_t>(accepted_update)]);
             }
         }
+        EXPECT_TRUE(observed_rejection);
         for (const auto & objective : accepted_objectives) ASSERT_TRUE(objective);
+        for (const auto & gradient : accepted_gradients) ASSERT_TRUE(gradient);
         EXPECT_DOUBLE_EQ(*observed.accepted_objective,
             *accepted_objectives[static_cast<std::size_t>(observed.accepted)]);
+        EXPECT_DOUBLE_EQ(*observed.accepted_gradient_inf_norm,
+            *accepted_gradients[static_cast<std::size_t>(observed.accepted)]);
 
         bool reported_initial_objective = false;
         for (const auto & event : events)
@@ -364,14 +443,18 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedObjectivesForBothPolicies)
             ASSERT_EQ(event.phase, joint::JointProgressPhase::SearchProgress);
             if (!event.accepted_objective)
             {
+                EXPECT_FALSE(event.accepted_gradient_inf_norm);
                 EXPECT_EQ(event.profile_evaluations, 1);
                 EXPECT_EQ(event.accepted_updates, 0);
                 continue;
             }
+            ASSERT_TRUE(event.accepted_gradient_inf_norm);
             ASSERT_GE(event.accepted_updates, 0);
             ASSERT_LT(static_cast<std::size_t>(event.accepted_updates), accepted_objectives.size());
             EXPECT_DOUBLE_EQ(*event.accepted_objective,
                 *accepted_objectives[static_cast<std::size_t>(event.accepted_updates)]);
+            EXPECT_DOUBLE_EQ(*event.accepted_gradient_inf_norm,
+                *accepted_gradients[static_cast<std::size_t>(event.accepted_updates)]);
             if (event.accepted_updates == 0) reported_initial_objective = true;
         }
         EXPECT_TRUE(reported_initial_objective);
@@ -466,6 +549,17 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     ASSERT_EQ(problem.ParameterLayout().groups.size(), 1);
     ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem, fit, events, {});
+    for (std::size_t k = 0; k < fit.components.size(); ++k)
+    {
+        if (fit.components[k].stop_reason != "analytic-nuisance-only") continue;
+        const auto completed = std::find_if(events.begin(), events.end(), [&](const auto & event) {
+            return event.phase == joint::JointProgressPhase::ComponentCompleted
+                && event.component_index == k + 1;
+        });
+        ASSERT_NE(completed, events.end());
+        EXPECT_FALSE(completed->accepted_objective);
+        EXPECT_FALSE(completed->accepted_gradient_inf_norm);
+    }
 }
 
 TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
@@ -525,6 +619,7 @@ TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
     event.profile_evaluations = 2;
     event.accepted_updates = 1;
     event.accepted_objective = 2.183e-4;
+    event.accepted_gradient_inf_norm = 4.271e-6;
     reporter.OnProgress(event);
 
     event.phase = joint::JointProgressPhase::CertificationStarted;
@@ -534,6 +629,7 @@ TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
     event.stop_reason = "native-lm-stop";
     event.trusted_state = true;
     event.accepted_objective = 2.183e-4;
+    event.accepted_gradient_inf_norm = 4.271e-6;
     reporter.OnProgress(event);
 
     event = {};
@@ -548,16 +644,17 @@ TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     EXPECT_EQ(std::count(output.begin(), output.end(), '\r'), 4);
-    EXPECT_NE(output.find("searching | atoms=1 rows=40 | eval=2/200 | accepted=1/100 | obj=2.183e-04"), std::string::npos);
-    EXPECT_NE(output.find("certifying endpoint | atoms=1 rows=40 | eval=2/200 | accepted=1/100 | accepted-obj=2.183e-04"), std::string::npos);
+    EXPECT_NE(output.find("searching | atoms=1 rows=40 | eval=2/200 | accepted=1/100 | obj=2.183e-04 | grad-inf=4.271e-06"), std::string::npos);
+    EXPECT_NE(output.find("certifying endpoint | atoms=1 rows=40 | eval=2/200 | accepted=1/100 | accepted-obj=2.183e-04 | accepted-grad-inf=4.271e-06"), std::string::npos);
     EXPECT_NE(output.find("\n[Joint] Component 1/2 completed | atoms=1 rows=40"), std::string::npos);
-    EXPECT_NE(output.find("accepted-obj=2.183e-04 | stop=native-lm-stop | trusted=yes"), std::string::npos);
+    EXPECT_NE(output.find("accepted-obj=2.183e-04 | accepted-grad-inf=4.271e-06 | stop=native-lm-stop | trusted=yes"), std::string::npos);
     EXPECT_EQ(output.find("trusted-obj="), std::string::npos);
+    EXPECT_EQ(output.find("trusted-grad="), std::string::npos);
     EXPECT_NE(output.find("[Joint] Assembling global state..."), std::string::npos);
     EXPECT_NE(output.find("[Joint] Global assembly completed | trusted=yes"), std::string::npos);
 }
 
-TEST(JointProgressTest, CliReporterOmitsUnavailableAcceptedObjective)
+TEST(JointProgressTest, CliReporterOmitsUnavailableAcceptedMetrics)
 {
     const auto previous_level = Logger::GetLogLevel();
     Logger::SetLogLevel(LogLevel::Info);
@@ -583,9 +680,85 @@ TEST(JointProgressTest, CliReporterOmitsUnavailableAcceptedObjective)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     EXPECT_EQ(output.find(" | obj="), std::string::npos);
+    EXPECT_EQ(output.find("grad-inf="), std::string::npos);
     EXPECT_EQ(output.find("accepted-obj="), std::string::npos);
+    EXPECT_EQ(output.find("accepted-grad-inf="), std::string::npos);
     EXPECT_EQ(output.find("nan"), std::string::npos);
     EXPECT_EQ(output.find("N/A"), std::string::npos);
+}
+
+TEST(JointProgressTest, CliReporterRefreshesWhenAcceptedMetricsBecomeAvailable)
+{
+    const auto previous_level = Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+
+    core::detail::JointCliProgressReporter reporter;
+    joint::JointProgressEvent event;
+    event.phase = joint::JointProgressPhase::ComponentStarted;
+    event.component_index = 1;
+    event.component_count = 2;
+    event.profile_budget = 100;
+    event.update_budget = 50;
+    reporter.OnProgress(event);
+
+    event.phase = joint::JointProgressPhase::SearchProgress;
+    event.profile_evaluations = 1;
+    event.elapsed_seconds = .1;
+    reporter.OnProgress(event);
+    event.accepted_objective = .1;
+    event.accepted_gradient_inf_norm = .2;
+    reporter.OnProgress(event);
+
+    event = {};
+    event.phase = joint::JointProgressPhase::ComponentStarted;
+    event.component_index = 2;
+    event.component_count = 2;
+    event.profile_budget = 100;
+    event.update_budget = 50;
+    reporter.OnProgress(event);
+    event.phase = joint::JointProgressPhase::SearchProgress;
+    event.profile_evaluations = 1;
+    event.elapsed_seconds = .1;
+    reporter.OnProgress(event);
+    event.accepted_objective = .3;
+    event.accepted_gradient_inf_norm = .4;
+    reporter.OnProgress(event);
+
+    const auto output = testing::internal::GetCapturedStdout();
+    Logger::SetLogLevel(previous_level);
+    EXPECT_EQ(std::count(output.begin(), output.end(), '\r'), 6);
+    EXPECT_NE(output.find("obj=1.000e-01 | grad-inf=2.000e-01"), std::string::npos);
+    EXPECT_NE(output.find("obj=3.000e-01 | grad-inf=4.000e-01"), std::string::npos);
+}
+
+TEST(JointProgressTest, AnalyticNuisanceComponentHasNoAcceptedMetrics)
+{
+    const core::JointProblem problem(MakeObservableInputWithAnalyticNuisance());
+    const std::vector<double> initial{.55, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+    std::vector<joint::JointProgressEvent> events;
+    const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
+    const auto fit = joint::FitWithSearchPolicy(problem, initial, {}, observer);
+
+    const auto analytic = std::find_if(fit.components.begin(), fit.components.end(), [](const auto & component) {
+        return component.stop_reason == "analytic-nuisance-only";
+    });
+    ASSERT_NE(analytic, fit.components.end());
+    const auto component_index = static_cast<std::size_t>(analytic - fit.components.begin()) + 1;
+    const auto completed = std::find_if(events.begin(), events.end(), [&](const auto & event) {
+        return event.phase == joint::JointProgressPhase::ComponentCompleted
+            && event.component_index == component_index;
+    });
+    ASSERT_NE(completed, events.end());
+    EXPECT_FALSE(completed->accepted_objective);
+    EXPECT_FALSE(completed->accepted_gradient_inf_norm);
+    EXPECT_EQ(std::find_if(events.begin(), events.end(), [&](const auto & event) {
+        return event.component_index == component_index
+            && (event.phase == joint::JointProgressPhase::SearchProgress
+                || event.phase == joint::JointProgressPhase::CertificationStarted);
+    }), events.end());
 }
 
 TEST(JointProgressTest, QuietWorkflowSuppressesProgressOutput)

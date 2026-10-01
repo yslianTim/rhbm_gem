@@ -64,6 +64,10 @@ void Parity(const n::Evaluation & e,const n::EvaluationContext & context)
     EXPECT_LE((op.ApplyNormal(v+2*u)-normal-2*op.ApplyNormal(u)).norm(),1e-12*std::max(1.,normal.norm()));
     const auto gradient=op.ApplyAdjoint(e.residual/context.scale);
     for(Eigen::Index k=0;k<gradient.size();++k) EXPECT_NEAR(gradient(k),e.gradient(k),1e-13+2e-9*std::abs(e.gradient(k)));
+    const auto gradient_inf_norm=n::ProfileGradientInfinityNorm(e);
+    ASSERT_TRUE(gradient_inf_norm);
+    EXPECT_NEAR(gradient.lpNorm<Eigen::Infinity>(),*gradient_inf_norm,
+        1e-13+2e-9*std::abs(*gradient_inf_norm));
 }
 }
 TEST(JointProfileOperatorTest, FullResidualCorrectionAndFixedStateParity)
