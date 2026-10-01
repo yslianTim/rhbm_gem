@@ -67,10 +67,6 @@ void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options);
 
-// Compatibility entrypoint for TWO_STAGE callers; local samples must already be prepared.
-// Full fitting workflows should use the map-aware overload, which performs sampling.
-void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);
-
 } // namespace core
 
 } // namespace rhbm_gem

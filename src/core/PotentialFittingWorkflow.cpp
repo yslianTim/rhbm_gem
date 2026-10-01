@@ -91,14 +91,6 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
 
 namespace rhbm_gem::core {
 
-void RunPotentialFittingWorkflow(ModelObject & model, const FitOptions & options)
-{
-    if (options.estimator != PotentialEstimator::TWO_STAGE)
-        throw std::invalid_argument("Joint fitting requires the map-aware workflow.");
-    const auto workset = detail::MakeTwoStageFittingWorkset(model);
-    detail::RunTwoStageFromPreparedSamples(model, workset.contributors, options);
-}
-
 void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
     switch (options.estimator)

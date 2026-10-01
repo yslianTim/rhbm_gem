@@ -167,10 +167,7 @@ target summary, post-fit peeling, uncertainty, and parameter-evidence group
 inference.
 
 The standalone `EstimateJointComponents` convenience API remains available and
-keeps its model-copy and target writeback behavior. The model-only
-`RunPotentialFittingWorkflow(model, options)` overload is a TWO_STAGE
-compatibility entrypoint that requires prepared local samples; complete fitting
-workflows should use the map-aware overload, which performs sampling.
+keeps its model-copy and target writeback behavior.
 
 The solver contracts remain `guarded-joint-ls-v1`,
 `parent-normalized-half-rss-v1`, and `sphere-fma-v1`.
