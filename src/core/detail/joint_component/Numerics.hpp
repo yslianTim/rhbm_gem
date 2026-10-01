@@ -84,6 +84,7 @@ struct Endpoint
 };
 struct Evaluation : Endpoint {Vector residual; Sparse x,derivative; std::shared_ptr<FreeDesignFactor> factor;};
 std::optional<double> NormalizedProfileObjective(const Evaluation &,double scale);
+std::optional<double> ProfileGradientInfinityNorm(const Evaluation &);
 void UpdateAcceptedProfileObjective(std::optional<double> &,const Evaluation &,double scale,bool accepted);
 struct Spectrum
 {
@@ -132,6 +133,7 @@ struct SearchResult
     Vector eta;
     std::vector<Trial> trials;
     std::optional<double> accepted_objective;
+    std::optional<double> accepted_gradient_inf_norm;
     int lm_status{},evaluations{},derivatives{},accepted{},references{};
     bool stopped{},initial_accepted{};
     std::string stop_reason;

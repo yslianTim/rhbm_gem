@@ -87,6 +87,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     if(!out.trials.back().trust->passed) return finish("untrusted-trial");
     out.initial_accepted=true; out.trials.back().accepted=true; out.trials.back().accepted_update=0;
     UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
+    out.accepted_gradient_inf_norm=ProfileGradientInfinityNorm(accepted);
     report();
     std::shared_ptr<const PreconditionerPartition> partition;
     Vector metric; double radius{},mu=1e-3;
@@ -152,6 +153,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 {
                     accepted=std::move(candidate); out.eta=candidate_eta; ++out.accepted;
                     UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
+                    out.accepted_gradient_inf_norm=ProfileGradientInfinityNorm(accepted);
                     trial.accepted=true; trial.accepted_update=out.accepted; advanced=true;
                     report();
                     const bool small_reduction=std::abs(actual)<=1e-14*objective && step.predicted<=1e-14*objective;

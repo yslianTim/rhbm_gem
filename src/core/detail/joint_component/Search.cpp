@@ -25,6 +25,7 @@ struct Profile
     std::chrono::steady_clock::time_point search_start;
     int accepted_updates{};
     std::optional<double> accepted_objective;
+    std::optional<double> accepted_gradient_inf_norm;
     void Report() const
     {
         if(!progress_component) return;
@@ -80,6 +81,7 @@ struct Profile
         const bool changed=update>accepted_updates;
         accepted_updates=update;
         UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,true);
+        accepted_gradient_inf_norm=ProfileGradientInfinityNorm(cached);
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
@@ -95,7 +97,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
     ResourcePhase phase("search");
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0,{}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -120,6 +122,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
     out.accepted_objective=profile.accepted_objective;
+    out.accepted_gradient_inf_norm=profile.accepted_gradient_inf_norm;
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();

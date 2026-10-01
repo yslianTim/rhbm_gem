@@ -131,6 +131,15 @@ std::optional<double> NormalizedProfileObjective(const Evaluation & evaluation,d
     return objective;
 }
 
+std::optional<double> ProfileGradientInfinityNorm(const Evaluation & evaluation)
+{
+    if(!evaluation.valid || evaluation.gradient.size()==0 || !evaluation.gradient.allFinite())
+        return std::nullopt;
+    const double value=evaluation.gradient.lpNorm<Eigen::Infinity>();
+    if(!std::isfinite(value)) return std::nullopt;
+    return value;
+}
+
 void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
     const Evaluation & evaluation,double scale,bool accepted)
 {
