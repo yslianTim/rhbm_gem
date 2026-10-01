@@ -64,6 +64,18 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
     using joint_component::JointProgressPhase;
     switch (event.phase)
     {
+    case JointProgressPhase::SolverConfigured:
+    {
+        if (!event.solver_route) return;
+        const auto & route = *event.solver_route;
+        std::ostringstream output;
+        output << "[Joint] Solver route: sparse=" << joint_component::SparseBackendName(route.sparse_backend)
+            << " | width-search=" << joint_component::SearchMethodName(route.search_method);
+        if (route.preconditioner)
+            output << " | preconditioner=" << joint_component::PreconditionerName(*route.preconditioner);
+        LogJointInfo(output.str());
+        return;
+    }
     case JointProgressPhase::ComponentStarted:
         if (!m_solver_started)
         {
