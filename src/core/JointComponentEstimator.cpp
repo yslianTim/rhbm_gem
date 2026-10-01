@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>

@@ -39,6 +39,7 @@ target_sources(rhbm_gem PRIVATE
     core/PotentialFittingWorkflow.cpp
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
+    core/detail/FittingWorkset.cpp
     core/detail/JointUncertainty.cpp
     core/detail/JointGroupFitting.cpp
     core/detail/PostFitPeeling.cpp
