@@ -258,7 +258,7 @@ TEST(JointObservableProfileTest, PersistenceExportPeelingAndSkippedInitializatio
     core::FitOptions options; options.quiet_mode=true; options.thread_size=1;
     const auto first_stage_atoms=core::detail::CollectFirstStageAtoms(workset);
     core::RunPotentialSamplingWorkflow(map,model,first_stage_atoms,options.sampling_method,1);
-    const auto initialization=core::detail::RunFirstStage(model,workset,options,core::detail::FirstStageMode::SampleContributorsIsolated);
+    const auto initialization=core::detail::RunJointFirstStageInitializationFromPreparedSamples(model,workset,options);
     core::detail::FirstStageObserverForTesting()={};
     EXPECT_TRUE(std::all_of(visited.begin(),visited.end(),[](int id){return id==1;}));
     EXPECT_EQ(initialization.atoms[1].reason,"not-required-observable-contribution");

@@ -23,7 +23,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     model_object.EditAnalysis().InitializeLocalFittingSeedModels();
 
     const auto workset = detail::MakeTwoStageFittingWorkset(model_object);
-    detail::RunFirstStage(model_object, workset, options, detail::FirstStageMode::ExistingSamplesBatch);
+    detail::RunBatchFirstStageFromPreparedSamples(model_object, workset.contributors, options);
 
     detail::RunSecondStageIterations(model_object, options);
 
@@ -52,8 +52,8 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     model.EditAnalysis().InitializeFromSelection();
     const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
-    const auto initialization = detail::RunFirstStage(
-        model, workset, options, detail::FirstStageMode::SampleContributorsIsolated);
+    const auto initialization = detail::RunJointFirstStageInitializationFromPreparedSamples(
+        model, workset, options);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
     auto snapshot = [&] {

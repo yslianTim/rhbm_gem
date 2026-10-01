@@ -278,8 +278,8 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     FitOptions options; options.thread_size = 1; options.quiet_mode = true; options.exclude_hydrogen = true;
     const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, initializer, first_stage_atoms, options.sampling_method, 1);
-    const auto initialization = detail::RunFirstStage(
-        initializer, workset, options, detail::FirstStageMode::SampleContributorsIsolated);
+    const auto initialization = detail::RunJointFirstStageInitializationFromPreparedSamples(
+        initializer, workset, options);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
         if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;

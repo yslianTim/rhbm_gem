@@ -50,19 +50,20 @@ LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions 
         options, view.GetEstimateMDPDE(FittingStage::First));
 }
 
-JointInitialization RunFirstStage(ModelObject & model, const FittingWorkset & workset,
-    const FitOptions & options, FirstStageMode mode)
+void RunBatchFirstStageFromPreparedSamples(
+    ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
+{
+    RunLocalAlphaTraining(model, options, FittingStage::First, atoms);
+    RunFixedOffsetLocalFitting(model, options, FittingStage::First, atoms);
+}
+
+JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
+    ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
 {
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
     if (workset.full_parameter_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset parameter count mismatch.");
-    if (mode == FirstStageMode::ExistingSamplesBatch)
-    {
-        RunLocalAlphaTraining(model, options, FittingStage::First, workset.contributors);
-        RunFixedOffsetLocalFitting(model, options, FittingStage::First, workset.contributors);
-        return {};
-    }
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();

@@ -228,8 +228,8 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceW
     core::RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method, 1);
     ResetProgressPercentForTest();
     testing::internal::CaptureStdout();
-    const auto initialization = core::detail::RunFirstStage(model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated);
+    const auto initialization = core::detail::RunJointFirstStageInitializationFromPreparedSamples(
+        model, workset, options);
     const auto progress = testing::internal::GetCapturedStdout();
     EXPECT_NE(progress.find("50%"), std::string::npos);
     EXPECT_NE(progress.find("100%"), std::string::npos);
@@ -309,8 +309,8 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     core::detail::PotentialSamplingObserverForTesting() = {};
     ResetProgressPercentForTest();
     testing::internal::CaptureStdout();
-    const auto initialization = core::detail::RunFirstStage(*f.model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated);
+    const auto initialization = core::detail::RunJointFirstStageInitializationFromPreparedSamples(
+        *f.model, workset, options);
     const auto progress = testing::internal::GetCapturedStdout();
     core::detail::FirstStageObserverForTesting() = {};
 
@@ -329,8 +329,7 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
 
     options.quiet_mode = true;
     testing::internal::CaptureStdout();
-    core::detail::RunFirstStage(*f.model, workset, options,
-        core::detail::FirstStageMode::SampleContributorsIsolated);
+    core::detail::RunJointFirstStageInitializationFromPreparedSamples(*f.model, workset, options);
     EXPECT_TRUE(testing::internal::GetCapturedStdout().empty());
 }
 
@@ -839,9 +838,9 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     const auto selected = f.model->GetSelectedAtoms();
     std::map<std::pair<int, std::string>, int> calls;
     core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) { ++calls[{id, std::string(phase)}]; };
-    const core::detail::FittingWorkset workset{{f.model->FindAtomPtr(2)}, {false}, {true}};
+    const std::vector<rhbm_gem::AtomObject *> atoms{f.model->FindAtomPtr(2)};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
-    core::detail::RunFirstStage(*f.model, workset, options, core::detail::FirstStageMode::ExistingSamplesBatch);
+    core::detail::RunBatchFirstStageFromPreparedSamples(*f.model, atoms, options);
     core::detail::FirstStageObserverForTesting() = {};
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
