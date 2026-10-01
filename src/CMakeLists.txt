@@ -36,6 +36,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/ObservableProfile.cpp
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
+    core/detail/JointCliProgressReporter.cpp
     core/PotentialFittingWorkflow.cpp
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp

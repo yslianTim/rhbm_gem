@@ -1,8 +1,11 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
+#include "detail/JointCliProgressReporter.hpp"
 #include "detail/FirstStageInitialization.hpp"
 #include "detail/FittingWorkset.hpp"
 #include "detail/PotentialFittingWorkflow.hpp"
+#include "detail/joint_component/Problem.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/JointUncertainty.hpp"
@@ -16,10 +19,21 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
+#include <iomanip>
+#include <optional>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
+namespace {
+void LogJointInfo(const std::string & message)
+{
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Info, message);
+}
+}
 
 void RunTwoStageFromPreparedSamples(
     ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
@@ -50,26 +64,51 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
 
 void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
+    if (!options.quiet_mode) LogJointInfo("[Joint] Building joint problem...");
     const auto construction_start = std::chrono::steady_clock::now();
     const auto problem = BuildJointProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - construction_start).count();
+    if (!options.quiet_mode)
+    {
+        const auto & input = problem.Input();
+        const auto targets = input.selection_domain ? input.selection_domain->target_indices.size() : 0;
+        std::ostringstream message;
+        message << "[Joint] Problem ready: observations=" << input.observations.size()
+            << ", contributors=" << input.atom_ids.size()
+            << ", targets=" << targets
+            << ", halo=" << input.atom_ids.size() - targets
+            << ", elapsed=" << std::fixed << std::setprecision(2) << construction_seconds << 's';
+        LogJointInfo(message.str());
+    }
     const auto initialization_start = std::chrono::steady_clock::now();
     const auto workset = MakeJointFittingWorkset(model, problem);
     model.EditAnalysis().InitializeFromSelection();
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
+    if (!options.quiet_mode)
+        LogJointInfo("[Joint] Sampling " + std::to_string(first_stage_atoms.size()) + " FullABC contributors");
     RunPotentialSamplingWorkflow(map, model, first_stage_atoms, SphereSamplingMethod::FibonacciDeterministic, 1);
+    if (!options.quiet_mode)
+        LogJointInfo("[Joint] Initializing " + std::to_string(workset.contributors.size()) + " contributors");
     const auto initialization = RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
+    std::optional<JointCliProgressReporter> reporter;
+    joint_component::JointProgressObserver observer;
+    if (!options.quiet_mode)
+    {
+        reporter.emplace();
+        observer = reporter->Observer();
+    }
     auto snapshot = [&] {
-        auto fit = FitJointComponents(problem, initialization.b);
+        auto fit = joint_component::FitWithSearchPolicy(problem, initialization.b, {}, observer);
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
         fit.initialization = initialization;
         return CaptureJointAnalysisResult(fit);
     }();
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
+    if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     for (auto & [id, peeling] : BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
@@ -83,6 +122,7 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     }
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     RunGroupPotentialFitting(model, options);
+    if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");
 }
 
 } // namespace rhbm_gem::core::detail
