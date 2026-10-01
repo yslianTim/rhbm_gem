@@ -7,6 +7,7 @@
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/FittingWorkset.hpp"
 #include <map>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/CommandTestHelpers.hpp"
@@ -331,6 +332,72 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     testing::internal::CaptureStdout();
     core::detail::RunJointFirstStageInitializationFromPreparedSamples(*f.model, workset, options);
     EXPECT_TRUE(testing::internal::GetCapturedStdout().empty());
+}
+
+TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContributionOnlyHalo)
+{
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for (int id = 1; id <= 3; ++id)
+    {
+        auto atom = std::make_unique<rhbm_gem::AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(0.7 * (id - 1), 0, 0);
+        atoms.push_back(std::move(atom));
+    }
+    rhbm_gem::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom) { return atom.GetSerialID() == 1; });
+    rhbm_gem::MapObject map({17, 17, 17}, {.5, .5, .5}, {-4, -4, -4});
+
+    core::JointProblemInput input;
+    input.atom_ids = {"1", "2", "3"};
+    input.row_ids = {"0", "1", "2", "3"};
+    input.observations = {.3, .5, .7, .9};
+    input.support = {
+        {{0, .1}, {1, .4}, {2, .9}, {3, 1.6}},
+        {{2, .25}, {3, 1.0}},
+        {{3, 2.0}}
+    };
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0};
+    const core::JointProblem problem(std::move(input));
+    const auto workset = core::detail::MakeJointFittingWorkset(model, problem);
+    ASSERT_EQ(workset.contributors.size(), 3);
+    EXPECT_EQ(workset.target_mask, (std::vector<bool>{true, false, false}));
+    EXPECT_EQ(workset.full_parameter_mask, (std::vector<bool>{true, true, false}));
+    EXPECT_EQ(problem.ParameterLayout().full_atoms, (std::vector<std::size_t>{0, 1}));
+    const auto selected = model.GetSelectedAtoms();
+    const auto bonds = model.GetSelectedBonds();
+
+    model.EditAnalysis().InitializeFromSelection();
+    core::FitOptions options;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    std::map<int, int> sampling_calls;
+    std::map<int, int> first_fit_calls;
+    core::detail::PotentialSamplingObserverForTesting() = [&](int id) { ++sampling_calls[id]; };
+    const auto first_stage_atoms = core::detail::CollectFirstStageAtoms(workset);
+    core::RunPotentialSamplingWorkflow(
+        map, model, first_stage_atoms, options.sampling_method, 1);
+    core::detail::PotentialSamplingObserverForTesting() = {};
+    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
+        if (phase == "first") ++first_fit_calls[id];
+    };
+    const auto initialization =
+        core::detail::RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
+    core::detail::FirstStageObserverForTesting() = {};
+
+    EXPECT_EQ(sampling_calls[1], 1);
+    EXPECT_EQ(sampling_calls[2], 1);
+    EXPECT_EQ(sampling_calls[3], 0);
+    EXPECT_EQ(first_fit_calls[1], 1);
+    EXPECT_EQ(first_fit_calls[2], 1);
+    EXPECT_EQ(first_fit_calls[3], 0);
+    ASSERT_EQ(initialization.atoms.size(), 3);
+    EXPECT_EQ(initialization.atoms[2].reason, "not-required-observable-contribution");
+    EXPECT_EQ(initialization.atoms[2].sample_count, 0);
+    EXPECT_EQ(model.GetSelectedAtoms(), selected);
+    EXPECT_EQ(model.GetSelectedBonds(), bonds);
 }
 
 TEST(JointComponentPartialSelectionTest, ZeroSignalRankDeficiencyAndInsufficientRows)

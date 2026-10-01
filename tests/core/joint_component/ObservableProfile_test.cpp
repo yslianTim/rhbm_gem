@@ -5,6 +5,7 @@
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/FittingWorkset.hpp"
 #include "core/detail/JointUncertainty.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"

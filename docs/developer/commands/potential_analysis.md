@@ -148,14 +148,29 @@ Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 
 ## Joint component opt-in
 
-`--estimator joint-components` selects the map-aware `RunPotentialFittingWorkflow`.
-It builds a fixed contributor workset, shares sampling and formal First fitting,
-then passes only First B to `FitJointComponents`. The standalone
-`EstimateJointComponents` convenience API remains available, but the command does
-not call it. Joint points are mapped by identity into estimator-neutral Second
-records, followed by the target summary, grid-consistent post-fit peeling and
-parameter-evidence group inference. The model-only overload remains two-stage;
-Joint requires map geometry.
+The map-aware `RunPotentialFittingWorkflow(map, model, options)` is the canonical
+complete workflow. It dispatches by estimator, builds the corresponding fitting
+workset, and passes an explicit atom list to the shared sampling engine.
+
+For TWO_STAGE, the workset contains the selected atoms. Their samples feed batch
+First-stage fitting, second-stage iterations, and group fitting. The configured
+worker count continues to apply to sampling and the existing parallel fitting
+operations.
+
+For JOINT_COMPONENTS, the problem fixes the observation voxel domain and the
+workset contains its target and contributor atoms. Only FullABC contributors are
+sampled and fitted locally; contribution-only halo atoms retain initialization
+provenance without local sampling or fitting. Joint initialization consumes
+those prepared samples in isolation and supplies First B plus seed provenance to
+`FitJointComponents`. Joint estimates then flow through the second-stage mapping,
+target summary, post-fit peeling, uncertainty, and parameter-evidence group
+inference.
+
+The standalone `EstimateJointComponents` convenience API remains available and
+keeps its model-copy and target writeback behavior. The model-only
+`RunPotentialFittingWorkflow(model, options)` overload is a TWO_STAGE
+compatibility entrypoint that requires prepared local samples; complete fitting
+workflows should use the map-aware overload, which performs sampling.
 
 The solver contracts remain `guarded-joint-ls-v1`,
 `parent-normalized-half-rss-v1`, and `sphere-fma-v1`.

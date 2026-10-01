@@ -161,6 +161,32 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
     }
 }
 
+TEST(MapSamplerTest, PotentialSamplingWorkflowUsesExplicitAtomDomain)
+{
+    auto map{ MakeWorkflowMapObject() };
+    auto model{ MakeLinearNeighborModel() };
+    model->SelectAtoms([](const AtomObject & atom) { return atom.GetSerialID() == 1; });
+    const auto selected{ model->GetSelectedAtoms() };
+    const std::vector<AtomObject *> atoms{ model->FindAtomPtr(2) };
+    std::vector<int> sampled;
+    detail::PotentialSamplingObserverForTesting() = [&](int id) { sampled.push_back(id); };
+
+    RunPotentialSamplingWorkflow(
+        map,
+        *model,
+        atoms,
+        SphereSamplingMethod::FibonacciDeterministic,
+        1);
+    detail::PotentialSamplingObserverForTesting() = {};
+
+    EXPECT_EQ(model->GetSelectedAtoms(), selected);
+    EXPECT_EQ(sampled, (std::vector<int>{ 2 }));
+    EXPECT_FALSE(AtomLocalPotentialView::For(*model->FindAtomPtr(1)).IsAvailable());
+    const auto sampled_view{ AtomLocalPotentialView::For(*model->FindAtomPtr(2)) };
+    ASSERT_TRUE(sampled_view.IsAvailable());
+    EXPECT_FALSE(sampled_view.GetRawSamplingEntries(false).empty());
+}
+
 TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };

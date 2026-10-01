@@ -1,7 +1,6 @@
 #pragma once
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
-#include "FittingWorkset.hpp"
 #include <vector>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <functional>
@@ -11,6 +10,7 @@
 namespace rhbm_gem { class ModelAnalysisEditor; }
 
 namespace rhbm_gem::core::detail {
+struct FittingWorkset;
 void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
 void ApplyJointSeedFallback(JointInitialization &);
 LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);

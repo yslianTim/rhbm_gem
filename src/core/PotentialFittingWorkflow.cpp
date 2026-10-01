@@ -1,6 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
 #include "detail/FirstStageInitialization.hpp"
+#include "detail/FittingWorkset.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/JointUncertainty.hpp"

@@ -12,12 +12,11 @@ namespace rhbm_gem::core::detail {
 
 FittingWorkset MakeTwoStageFittingWorkset(ModelObject & model)
 {
-    auto contributors = model.GetSelectedAtoms();
-    return {
-        contributors,
-        std::vector<bool>(contributors.size(), true),
-        std::vector<bool>(contributors.size(), true)
-    };
+    FittingWorkset workset;
+    workset.contributors = model.GetSelectedAtoms();
+    workset.target_mask.assign(workset.contributors.size(), true);
+    workset.full_parameter_mask.assign(workset.contributors.size(), true);
+    return workset;
 }
 
 FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem & problem)
