@@ -531,7 +531,7 @@ def smoke(build):
             def strip_timings(value):
                 if isinstance(value, dict):
                     for field in list(value):
-                        if field.endswith('_seconds'):
+                        if field == 'seconds' or field.endswith('_seconds'):
                             value.pop(field)
                         else:
                             strip_timings(value[field])
