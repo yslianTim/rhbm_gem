@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "profile": "rank",
+  "measurement_scope": "bounded_free_design_rank_evaluation",
+  "case": "cube-256",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "a62fabecca2d2b085e2848d5067582072a45fe16",
+    "profile": "rank",
+    "case": "cube-256",
+    "source_sha256": "bbca0c676c112388e7ed4ca951141325483aa42065f439a0976e326e93550774",
+    "benchmark_sha256": "6c8f03693df2577fd2cf4ea8d9ba6b9c22eaa23c8a35daba9875dea6f7d0d23a",
+    "solver_policy": {
+      "search_method": null,
+      "sparse_backend": "SPQR",
+      "operator_rank_active": false,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": null,
+      "operator_rank_budget_seconds": 120,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "schwarz",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "d2f41dc8f387c90b956312549b2ae03dd3ff7de399fa4afa37faf67763e50fa2",
+    "input_sha256": "7d68232f3ed4852410981fcad4a857a638e21adc0c506b1cb6f1ed91c2a8973c"
+  },
+  "execution": {
+    "status": "completed",
+    "returncode": 0,
+    "completed_repetitions": 1,
+    "failed_repetitions": 0,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 4.5727515,
+        "process_wall_seconds": 5.697439957992174,
+        "peak_rss_bytes": 355614720,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 256,
+          "voxels": 93431,
+          "components": 1,
+          "parameters": 768
+        },
+        "numerics": {
+          "rank": 512,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "status": null,
+            "reason": null,
+            "rank_lower": null,
+            "rank_upper": null,
+            "exact_rank": null,
+            "rank": 512,
+            "threshold": 2.8341622630772126e-11,
+            "minimum_lower": null,
+            "maximum_upper": null,
+            "rank_backend": null,
+            "work_stage": null,
+            "entries": null,
+            "seconds": null,
+            "workspace_bytes": null,
+            "estimated_total_entries": null,
+            "estimated_remaining_entries": null,
+            "estimated_reconstruction_entries": null,
+            "design_nonzeros": null,
+            "r_nonzeros": null,
+            "reflector_nonzeros": null,
+            "reflectors": null,
+            "threshold_lower": null,
+            "threshold_upper": null,
+            "rows": 93431,
+            "columns": 512,
+            "compact_extractions": 1,
+            "free_design_svds": 1,
+            "solver_policy": {
+              "search_method": "LegacyCompact",
+              "sparse_backend": "SPQR",
+              "operator_rank_active": false,
+              "operator_rank_mode": "Auto",
+              "resolved_rank_backend": null,
+              "operator_rank_budget_seconds": 120.0,
+              "operator_rank_budget_entries": 100000000,
+              "operator_rank_budget_workspace_bytes": 268435456,
+              "preconditioner": "Schwarz",
+              "schwarz_core_atoms": 128,
+              "schwarz_overlap_hops": 1,
+              "schwarz_max_block_atoms": 512,
+              "schwarz_storage_bytes": 536870912,
+              "schwarz_scratch_bytes": 268435456
+            },
+            "local_witness": null,
+            "local_witness_seconds": null
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 5.697439957992174,
+            "sampled_tree_peak_rss_bytes": 355614720,
+            "os_process_peak_rss_bytes": 354451456,
+            "samples": 52,
+            "maximum_sampling_gap_seconds": 0.11007487494498491
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": 256,
+    "voxels": 93431,
+    "components": 1,
+    "parameters": 768
+  },
+  "numerics": {
+    "rank": 512,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": 4.5727515,
+    "peak_rss_bytes": 355614720,
+    "count": 1,
+    "failed_count": 0,
+    "samples": [
+      4.5727515
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "not-assessed",
+    "details": {
+      "status": null,
+      "reason": null,
+      "rank_lower": null,
+      "rank_upper": null,
+      "exact_rank": null,
+      "rank": 512,
+      "threshold": 2.8341622630772126e-11,
+      "minimum_lower": null,
+      "maximum_upper": null,
+      "rank_backend": null,
+      "work_stage": null,
+      "entries": null,
+      "seconds": null,
+      "workspace_bytes": null,
+      "estimated_total_entries": null,
+      "estimated_remaining_entries": null,
+      "estimated_reconstruction_entries": null,
+      "design_nonzeros": null,
+      "r_nonzeros": null,
+      "reflector_nonzeros": null,
+      "reflectors": null,
+      "threshold_lower": null,
+      "threshold_upper": null,
+      "rows": 93431,
+      "columns": 512,
+      "compact_extractions": 1,
+      "free_design_svds": 1,
+      "solver_policy": {
+        "search_method": "LegacyCompact",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": false,
+        "operator_rank_mode": "Auto",
+        "resolved_rank_backend": null,
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "Schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "local_witness": null,
+      "local_witness_seconds": null
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "campaign": "local-support full-rank witness census",
+  "campaign_schema_version": 1,
+  "recorded_at": "2026-10-02T21:02:45+08:00",
+  "source_commit_sha": "a62fabecca2d2b085e2848d5067582072a45fe16",
+  "provenance": {
+    "source_sha256": "bbca0c676c112388e7ed4ca951141325483aa42065f439a0976e326e93550774",
+    "benchmark_sha256": "6c8f03693df2577fd2cf4ea8d9ba6b9c22eaa23c8a35daba9875dea6f7d0d23a",
+    "driver_sha256": "d2f41dc8f387c90b956312549b2ae03dd3ff7de399fa4afa37faf67763e50fa2",
+    "input_sha256": {
+      "chain-128": "9db2c643cc1cedc0b5100c598426f3f33684d61c52113808aa4afa8d0319fe35",
+      "cube-128": "a9c5cdbd8e629cfe660abda443c9422d04554ddc4c719bcf8cf49730c385fb0f",
+      "chain-256": "38f8630a525d0c8e8337eaa7646f71fc9c1456e471a4fee08476e0d2b70313a6",
+      "cube-256": "7d68232f3ed4852410981fcad4a857a638e21adc0c506b1cb6f1ed91c2a8973c"
+    }
+  },
+  "build": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334"
+  },
+  "solver_policy": {
+    "profile": "rank",
+    "rank_mode": "prototype (SPQR census), oracle (separate dense controls)",
+    "operator_rank_work_entries": 100000000,
+    "operator_rank_seconds": 120,
+    "operator_rank_workspace_bytes": 268435456,
+    "repeat": 1,
+    "warmup": 0,
+    "timeout_seconds": 600,
+    "rss_limit_bytes": 4294967296
+  },
+  "execution": {
+    "all_coverage_complete": true,
+    "all_exclusive_rows_disjoint": true,
+    "all_local_lower_bounds_strictly_above_threshold": true,
+    "all_dense_oracles_full_rank": true,
+    "all_spqr_census_compact_extractions_zero": true,
+    "all_spqr_census_free_design_svds_zero": true,
+    "near_threshold_and_duplicate_adversarial_tests_present": true,
+    "r4_gate_passed": true
+  },
+  "requested_cases": [
+    "chain-128",
+    "cube-128",
+    "chain-256",
+    "cube-256"
+  ],
+  "files_included": [
+    "local-rank-witness-census.json",
+    "local-rank-witness-census.csv",
+    "individual-results/chain-128-spqr.json",
+    "individual-results/chain-128-oracle.json",
+    "individual-results/cube-128-spqr.json",
+    "individual-results/cube-128-oracle.json",
+    "individual-results/chain-256-spqr.json",
+    "individual-results/chain-256-oracle.json",
+    "individual-results/cube-256-spqr.json",
+    "individual-results/cube-256-oracle.json"
+  ],
+  "artifact_sha256": {
+    "local-rank-witness-census.json": "208cfa2c75ebdfecec88bd96dd85321ea3cc72cefb44d12eda87c35627da00f2",
+    "local-rank-witness-census.csv": "f273316edb262b369f9cec66c26eee0ffba23ac79f8dfa4e2bb6f8e42aaac5e2",
+    "individual-results/chain-128-spqr.json": "3b81eb2daa88721f6396d3b97346f60c9ccf79cfb9892a9c90705bf285a766c1",
+    "individual-results/chain-128-oracle.json": "d82ee79836cd4573b706904d71c3ecf2971cee7dae4e031d901b302287a8c880",
+    "individual-results/cube-128-spqr.json": "aeb4a1ddba793c663e98c9c8ae58fa15b7677236c494ba43468c6b1c0845e329",
+    "individual-results/cube-128-oracle.json": "13498fa996d485f5e874e579f09c02ca6f1a4d0cbc96c3dc14e068b14ddb51e8",
+    "individual-results/chain-256-spqr.json": "e2edb106dcfd532c41b9b48e0c584c7706ca818842f75f2c6da3b493aa4ce0d0",
+    "individual-results/chain-256-oracle.json": "6682f01dd70d93a1672d1798ab477a90f39cbe59c7bb354f9f4e4faf2ed3d68e",
+    "individual-results/cube-256-spqr.json": "2e4808ec480cc8d4461c71700bc39300b31e216d3b81d76c31d45e79044a7881",
+    "individual-results/cube-256-oracle.json": "b4512d392a65d3f379f6a754ac95255d1342feea832161a73a6ac7ce47161496"
+  }
+}
