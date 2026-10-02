@@ -100,6 +100,35 @@ distribution, graph workspace, storage, and scratch bound. Rank counters show
 checks, time, entries, workspace, compact extraction count, and free-design
 SVD count, so the bounded SPQR route can be checked directly.
 
+## Schwarz scaling sweep
+
+`joint_schwarz_sweep.py` creates a configuration matrix and invokes the
+single-run benchmark once per configuration. Its defaults are a small `chain`
+sweep over 64 and 128 atoms, core sizes 32 and 64, overlap hops 0 and 1, and
+one repetition. Larger workloads such as 512, 1024, 2048, and 4096 atoms must
+be requested explicitly.
+
+```sh
+python3 tests/integration/joint_schwarz_sweep.py \
+  --build-dir build/debug --output build/joint-schwarz-sweep.json \
+  --csv build/joint-schwarz-sweep.csv \
+  --topologies chain cube --atoms 512 1024 --cores 64 128 \
+  --overlaps 0 1 2 --preconditioners identity diagonal schwarz \
+  --operator-rank auto --repeat 1 --timeout 600
+```
+
+Schwarz configurations use the Cartesian product of core sizes and overlap
+hops. Identity and Diagonal each produce one control per topology and atom
+count, without multiplying across unused Schwarz settings. Each configuration
+has its own versioned benchmark JSON under the aggregate output's sibling
+`*_runs` directory. The aggregate JSON and optional CSV include configuration,
+status, rows and free columns, rank backend and work, partition summaries,
+PCG counts and timing, search and assessment time, wall time, peak RSS,
+objective, convergence, state availability, and stop reason. An unavailable,
+timed out, or failed run keeps that status and its individual result; the sweep
+does not treat it as a successful measurement. Timing is descriptive and has
+no fixed performance pass threshold.
+
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
 `FreeDesignRank_test`. Search and bounded-work contracts remain in

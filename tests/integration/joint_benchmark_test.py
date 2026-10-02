@@ -1,13 +1,16 @@
 """Contract checks and deterministic smoke runs for the unified Joint benchmark."""
 import json
+import io
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import joint_benchmark as benchmark
+import joint_schwarz_sweep as schwarz_sweep
 
 
 class JointBenchmarkContract(unittest.TestCase):
@@ -73,6 +76,12 @@ class JointBenchmarkContract(unittest.TestCase):
                 self.assertEqual(command[command.index(option) + 1], value)
             self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['resolved_rank_backend'], 'SpqrBounds')
 
+            args.profile = 'fixed'
+            args.state_path = Path('state.json')
+            fixed = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
+                                                  Path('fixed.json'), build)
+            self.assertEqual(fixed[fixed.index('--schwarz-overlap-hops') + 1], '0')
+
     def test_non_sparse_profiles_do_not_receive_operator_policy_options(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'workflow', '--case', 'full',
@@ -93,8 +102,9 @@ class JointBenchmarkContract(unittest.TestCase):
                               ('--schwarz-scratch-mib', '-1')):
             parser = benchmark.build_parser()
             args = parser.parse_args(base + [option, value])
-            with self.assertRaises(SystemExit):
-                benchmark.validate_args(parser, args)
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    benchmark.validate_args(parser, args)
 
     def test_missing_telemetry_does_not_change_result_normalization(self):
         raw = {'search': {'stop_reason': 'converged', 'profile_evaluations': 3, 'accepted_updates': 2},
@@ -102,6 +112,38 @@ class JointBenchmarkContract(unittest.TestCase):
         details = benchmark.normalize_result('solve', raw)['details']
         self.assertEqual(set(details), {'search_completed', 'stop_reason', 'profile_evaluations',
                                         'accepted_updates', 'endpoint_valid'})
+
+    def test_sweep_does_not_expand_identity_or_diagonal_over_schwarz_dimensions(self):
+        parser = schwarz_sweep.build_parser()
+        args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',
+                                  '--atoms', '8', '--cores', '2', '4', '--overlaps', '0', '1',
+                                  '--preconditioners', 'identity', 'diagonal', 'schwarz'])
+        schwarz_sweep.validate_args(parser, args)
+        configurations = schwarz_sweep.build_configurations(args)
+        self.assertEqual(len(configurations), 6)
+        controls = [item for item in configurations if item['preconditioner'] != 'schwarz']
+        self.assertEqual(len(controls), 2)
+        self.assertTrue(all(item['core_atoms'] is None and item['overlap_hops'] is None for item in controls))
+        self.assertEqual(len({schwarz_sweep.configuration_key(item) for item in configurations}), 6)
+
+    def test_sweep_command_passes_overlap_only_to_schwarz(self):
+        args = schwarz_sweep.build_parser().parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json'])
+        config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'identity',
+                  'core_atoms': None, 'overlap_hops': None, 'max_block_atoms': None,
+                  'storage_mib': None, 'scratch_mib': None, 'operator_rank': 'auto', 'repeat': 1}
+        command = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('run.json'))
+        self.assertNotIn('--schwarz-core-atoms', command)
+        self.assertNotIn('--schwarz-overlap-hops', command)
+
+    def test_sweep_keeps_failed_and_unavailable_statuses(self):
+        config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',
+                  'core_atoms': 2, 'overlap_hops': 0, 'max_block_atoms': 8,
+                  'storage_mib': 512, 'scratch_mib': 256, 'operator_rank': 'auto', 'repeat': 1}
+        unavailable = schwarz_sweep.summarize(config, {'execution': {'status': 'unavailable'}}, 'run.json')
+        failed = schwarz_sweep.summarize(config, {'execution': {'status': 'timeout'}}, 'run.json')
+        self.assertEqual(unavailable['status'], 'unavailable')
+        self.assertEqual(failed['status'], 'timeout')
+
 
 def smoke(build):
     script = Path(__file__).with_name('joint_benchmark.py')
@@ -162,15 +204,28 @@ def smoke(build):
             actual_result = json.loads(json.dumps(report['result']))
             expected_result = benchmark.normalize_result(profile, previous)
             if profile == 'fixed':
-                timing_fields = ('preparation_seconds', 'build_seconds', 'solve_seconds', 'fixed_step_wall_seconds')
-                for result in (actual_result, expected_result):
-                    for step in result['details']['steps']:
-                        for field in timing_fields:
-                            step.pop(field, None)
+                if not report['result']['details'].get('rank_diagnostics') or \
+                        not report['result']['details'].get('preparation_work'):
+                    raise AssertionError('fixed profile omitted rank or preparation work telemetry')
+
+            def strip_timings(value):
+                if isinstance(value, dict):
+                    for field in list(value):
+                        if field.endswith('_seconds'):
+                            value.pop(field)
+                        else:
+                            strip_timings(value[field])
+                elif isinstance(value, list):
+                    for item in value:
+                        strip_timings(item)
+
+            strip_timings(actual_result)
+            strip_timings(expected_result)
             if report['problem'] != benchmark.problem_result(previous) or \
                     report['numerics'] != benchmark.numerics_result(previous) or \
                     actual_result != expected_result:
-                raise AssertionError(f'{profile} changed deterministic driver results')
+                raise AssertionError(f'{profile} changed deterministic driver results: '
+                                     f'{actual_result.get("details")} != {expected_result.get("details")}')
             if profile == 'solve':
                 assessment = previous['returned_assessment']
                 state = previous['returned_state']
@@ -182,6 +237,13 @@ def smoke(build):
                           report['result']['details']['accepted_updates'])
                 if actual != expected:
                     raise AssertionError(f'solve profile changed deterministic driver results: {actual} != {expected}')
+                policy = report['metadata']['solver_policy']
+                if policy['resolved_rank_backend'] == 'SpqrBounds':
+                    work = report['result']['details']['search_work']
+                    if (work['operator_rank_status'] != 'full-rank' or work['operator_rank_checks'] <= 0 or
+                            work['operator_rank_compact_extractions'] != 0 or
+                            work['operator_rank_free_design_svds'] != 0):
+                        raise AssertionError(f'SPQR bounded rank used an unexpected path: {work}')
 
         output = root / 'command.json'
         subprocess.run([sys.executable, str(script), '--profile', 'command', '--case', 'command-smoke',
@@ -192,6 +254,29 @@ def smoke(build):
         if report['execution']['status'] != 'completed' or not report['result']['persistence'] or not report['result']['export']:
             raise AssertionError(f'command profile did not persist and export: {report["execution"]}')
 
+        sweep_output = root / 'sweep.json'
+        sweep_csv = root / 'sweep.csv'
+        subprocess.run([sys.executable, str(Path(__file__).with_name('joint_schwarz_sweep.py')),
+                        '--build-dir', str(build), '--output', str(sweep_output), '--csv', str(sweep_csv),
+                        '--topologies', 'chain', '--atoms', '8', '--cores', '2', '--overlaps', '0', '1',
+                        '--preconditioners', 'schwarz', '--timeout', '60'],
+                       check=True, capture_output=True, text=True, timeout=180)
+        aggregate = json.loads(sweep_output.read_text())
+        configurations = aggregate['configurations']
+        if len(configurations) != 2 or len({row['configuration']['overlap_hops'] for row in configurations}) != 2:
+            raise AssertionError(f'sweep contains duplicate or missing configurations: {configurations}')
+        if not sweep_csv.is_file():
+            raise AssertionError('sweep CSV summary was not written')
+        for row in configurations:
+            individual = root / row['individual_json']
+            if not individual.is_file() or row['status'] != 'completed':
+                raise AssertionError(f'sweep run was not completed: {row}')
+            item = json.loads(individual.read_text())
+            if row['objective'] != item['numerics']['objective'] or row['runtime_convergence'] != item['numerics']['runtime_convergence']:
+                raise AssertionError(f'sweep summary does not match individual result: {row}')
+            policy = item['metadata']['solver_policy']
+            if policy['schwarz_core_atoms'] != 2 or policy['schwarz_overlap_hops'] != row['configuration']['overlap_hops']:
+                raise AssertionError(f'sweep policy was not propagated: {policy}')
     return 0
 
 

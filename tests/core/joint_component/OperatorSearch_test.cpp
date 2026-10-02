@@ -298,10 +298,10 @@ TEST(JointOperatorSearchTest, DenseAndBoundedRankSearchesPreserveStateAndEvidenc
         n::SearchPolicy bounded_policy=dense_policy;
         bounded_policy.operator_rank.mode=n::OperatorRankMode::SpqrBounds;
         n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
-        const auto dense=c::FitWithSearchPolicy(problem,initial,dense_policy);
+        const auto dense=n::FitWithSearchPolicy(problem,initial,dense_policy);
         const auto dense_reason=dense.components.front().stop_reason;
         n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
-        const auto bounded=c::FitWithSearchPolicy(problem,initial,bounded_policy);
+        const auto bounded=n::FitWithSearchPolicy(problem,initial,bounded_policy);
         ASSERT_EQ(bounded.assembled_state.has_value(),dense.assembled_state.has_value());
         EXPECT_EQ(bounded.RuntimeConvergence(),dense.RuntimeConvergence());
         ASSERT_EQ(bounded.objective.has_value(),dense.objective.has_value());

@@ -1,0 +1,249 @@
+"""Run a reproducible matrix of Joint Operator-PCG benchmark configurations."""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from experiment_io import write
+
+
+def build_configurations(args):
+    configurations = []
+    for topology in args.topologies:
+        for atoms in args.atoms:
+            for preconditioner in args.preconditioners:
+                settings = [(None, None)] if preconditioner != 'schwarz' else [
+                    (core, overlap) for core in args.cores for overlap in args.overlaps]
+                for core, overlap in settings:
+                    config = {
+                        'topology': topology,
+                        'atoms': atoms,
+                        'preconditioner': preconditioner,
+                        'core_atoms': core,
+                        'overlap_hops': overlap,
+                        'max_block_atoms': args.max_block_atoms if preconditioner == 'schwarz' else None,
+                        'storage_mib': args.storage_mib if preconditioner == 'schwarz' else None,
+                        'scratch_mib': args.scratch_mib if preconditioner == 'schwarz' else None,
+                        'operator_rank': args.operator_rank,
+                        'repeat': args.repeat,
+                    }
+                    configurations.append(config)
+    keys = [configuration_key(config) for config in configurations]
+    if len(keys) != len(set(keys)):
+        raise ValueError('sweep dimensions contain duplicate configurations')
+    return configurations
+
+
+def configuration_key(config):
+    fields = (config['topology'], config['atoms'], config['preconditioner'],
+              config['core_atoms'], config['overlap_hops'], config['max_block_atoms'],
+              config['operator_rank'])
+    return '-'.join(str(value) for value in fields if value is not None)
+
+
+def benchmark_command(script, config, args, output):
+    command = [sys.executable, str(script), '--profile', 'solve',
+               '--case', f"{config['topology']}-{config['atoms']}",
+               '--build-dir', str(args.build_dir), '--output', str(output),
+               '--repeat', str(args.repeat), '--timeout', str(args.timeout),
+               '--rss-limit', str(args.rss_limit), '--preconditioner', config['preconditioner'],
+               '--operator-rank', config['operator_rank']]
+    if config['preconditioner'] == 'schwarz':
+        command.extend(['--schwarz-core-atoms', str(config['core_atoms']),
+                        '--schwarz-overlap-hops', str(config['overlap_hops']),
+                        '--schwarz-max-block-atoms', str(config['max_block_atoms']),
+                        '--schwarz-storage-mib', str(config['storage_mib']),
+                        '--schwarz-scratch-mib', str(config['scratch_mib'])])
+    return command
+
+
+def summarize(config, report, individual_name, process_error=None):
+    execution = report.get('execution', {}) if report else {}
+    run = next((item for item in reversed(execution.get('runs', []))
+                if item.get('kind') == 'measurement'), {})
+    details = (run.get('result') or {}).get('details', {})
+    work = details.get('search_work') or {}
+    partition = details.get('partition') or {}
+    policy = (report.get('metadata') or {}).get('solver_policy', {}) if report else {}
+    numerics = report.get('numerics', {}) if report else {}
+    resources = report.get('resources', {}) if report else {}
+    status = execution.get('status', 'process_error')
+    return {
+        'configuration': config,
+        'status': status,
+        'reason': process_error or run.get('reason'),
+        'individual_json': individual_name,
+        'atoms': (report.get('problem') or {}).get('atoms') if report else config['atoms'],
+        'rows': (report.get('problem') or {}).get('voxels') if report else None,
+        'free_columns': work.get('operator_rank_columns'),
+        'rank_backend': policy.get('resolved_rank_backend'),
+        'rank_status': work.get('operator_rank_status'),
+        'rank_reason': work.get('operator_rank_reason'),
+        'rank_seconds': work.get('operator_rank_seconds'),
+        'rank_entries': work.get('operator_rank_entries'),
+        'rank_workspace_bytes': work.get('operator_rank_workspace_bytes'),
+        'compact_extractions': work.get('operator_rank_compact_extractions'),
+        'free_design_svds': work.get('operator_rank_free_design_svds'),
+        'blocks': partition.get('blocks'),
+        'maximum_block_atoms': work.get('maximum_block_atoms'),
+        'topology_bytes': work.get('topology_bytes'),
+        'storage_bytes': work.get('storage_bytes'),
+        'scratch_bytes_bound': work.get('scratch_bytes_bound'),
+        'core_atom_counts': partition.get('core_atom_counts'),
+        'block_atom_counts': partition.get('block_atom_counts'),
+        'atom_membership': partition.get('atom_membership'),
+        'atom_membership_histogram': partition.get('atom_membership_histogram'),
+        'pcg_solves': work.get('pcg_solves'),
+        'pcg_iterations': work.get('pcg_iterations'),
+        'damping_trials': work.get('damping_trials'),
+        'local_builds': work.get('local_builds'),
+        'factor_builds': work.get('factor_builds'),
+        'inverse_actions': work.get('inverse_actions'),
+        'iterations_per_solve': (work['pcg_iterations'] / work['pcg_solves']
+                                 if work.get('pcg_solves') else None),
+        'partition_seconds': work.get('partition_seconds'),
+        'local_seconds': work.get('local_seconds'),
+        'factor_seconds': work.get('factor_seconds'),
+        'inverse_seconds': work.get('inverse_seconds'),
+        'operator_seconds': sum(work.get(key, 0) or 0 for key in (
+            'operator_prepare_seconds', 'operator_apply_seconds',
+            'operator_adjoint_seconds', 'operator_normal_seconds')) if work else None,
+        'operator_prepare_seconds': work.get('operator_prepare_seconds'),
+        'pcg_seconds': work.get('pcg_seconds'),
+        'search_seconds': details.get('search_seconds'),
+        'assessment_seconds': details.get('assessment_seconds'),
+        'wall_seconds': run.get('process_wall_seconds'),
+        'peak_rss_bytes': resources.get('peak_rss_bytes'),
+        'objective': numerics.get('objective'),
+        'runtime_convergence': numerics.get('runtime_convergence'),
+        'state_available': details.get('state_available'),
+        'stop_reason': details.get('stop_reason'),
+    }
+
+
+CSV_FIELDS = (
+    'configuration', 'status', 'reason', 'individual_json', 'atoms', 'rows', 'free_columns',
+    'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
+    'rank_workspace_bytes', 'compact_extractions', 'free_design_svds', 'blocks',
+    'maximum_block_atoms', 'topology_bytes', 'storage_bytes', 'scratch_bytes_bound',
+    'pcg_solves', 'pcg_iterations', 'damping_trials', 'local_builds', 'factor_builds',
+    'inverse_actions', 'iterations_per_solve',
+    'partition_seconds', 'local_seconds', 'factor_seconds', 'inverse_seconds',
+    'operator_seconds', 'operator_prepare_seconds', 'pcg_seconds', 'search_seconds',
+    'assessment_seconds', 'wall_seconds', 'peak_rss_bytes', 'objective',
+    'runtime_convergence', 'state_available', 'stop_reason',
+)
+
+
+def write_csv(path, rows):
+    with path.open('w', newline='') as output:
+        writer = csv.DictWriter(output, fieldnames=CSV_FIELDS, extrasaction='ignore')
+        writer.writeheader()
+        for row in rows:
+            flattened = dict(row)
+            flattened['configuration'] = json.dumps(row['configuration'], sort_keys=True)
+            writer.writerow(flattened)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--build-dir', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True, help='Aggregate JSON output path')
+    parser.add_argument('--csv', type=Path, help='Optional CSV summary path')
+    parser.add_argument('--topologies', nargs='+', choices=('chain', 'cube'), default=['chain'])
+    parser.add_argument('--atoms', nargs='+', type=int, default=[64, 128])
+    parser.add_argument('--cores', nargs='+', type=int, default=[32, 64])
+    parser.add_argument('--overlaps', nargs='+', type=int, default=[0, 1])
+    parser.add_argument('--preconditioners', nargs='+', choices=('identity', 'diagonal', 'schwarz'),
+                        default=['schwarz'])
+    parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
+    parser.add_argument('--max-block-atoms', type=int, default=512)
+    parser.add_argument('--storage-mib', type=int, default=512)
+    parser.add_argument('--scratch-mib', type=int, default=256)
+    parser.add_argument('--repeat', type=int, default=1)
+    parser.add_argument('--timeout', type=float, default=600)
+    parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
+    return parser
+
+
+def validate_args(parser, args):
+    if args.repeat < 1 or args.timeout <= 0 or args.rss_limit <= 0:
+        parser.error('--repeat and limits must be positive')
+    if (not args.atoms or any(value <= 0 for value in args.atoms) or
+            not args.cores or any(value <= 0 for value in args.cores) or
+            not args.overlaps or any(value < 0 for value in args.overlaps)):
+        parser.error('atoms and cores must be positive; overlaps must be nonnegative')
+    if (args.max_block_atoms <= 0 or args.storage_mib <= 0 or args.scratch_mib <= 0):
+        parser.error('Schwarz block and memory limits must be positive')
+    for core in args.cores:
+        if core > args.max_block_atoms:
+            parser.error('max block atoms must cover every requested core')
+    if (len(args.topologies) != len(set(args.topologies)) or
+            len(args.atoms) != len(set(args.atoms)) or
+            len(args.cores) != len(set(args.cores)) or
+            len(args.overlaps) != len(set(args.overlaps)) or
+            len(args.preconditioners) != len(set(args.preconditioners))):
+        parser.error('sweep dimensions must not contain duplicate values')
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    validate_args(parser, args)
+    try:
+        configurations = build_configurations(args)
+    except ValueError as error:
+        parser.error(str(error))
+
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    run_directory = output.parent / f'{output.stem}_runs'
+    run_directory.mkdir(exist_ok=True)
+    script = Path(__file__).with_name('joint_benchmark.py').resolve()
+    rows = []
+    for config in configurations:
+        name = configuration_key(config) + '.json'
+        individual = run_directory / name
+        command = benchmark_command(script, config, args, individual)
+        error = None
+        try:
+            process = subprocess.run(command, check=False, capture_output=True, text=True,
+                                     timeout=max(120, args.timeout * (args.repeat + 1)))
+            if process.returncode:
+                error = f'joint_benchmark exited {process.returncode}'
+        except subprocess.TimeoutExpired:
+            error = 'joint_benchmark process timed out'
+        try:
+            report = json.loads(individual.read_text()) if individual.is_file() else None
+        except (OSError, json.JSONDecodeError) as failure:
+            report = None
+            error = error or f'cannot read individual result: {failure}'
+        row = summarize(config, report, str(Path(run_directory.name) / name), error)
+        if error and row['status'] == 'completed':
+            row['status'] = 'timeout' if 'timed out' in error else 'process_error'
+        elif error and row['status'] == 'process_error' and 'timed out' in error:
+            row['status'] = 'timeout'
+        rows.append(row)
+
+    aggregate = {
+        'schema_version': 1,
+        'tool': 'joint_schwarz_sweep',
+        'measurement_profile': 'solve',
+        'configuration_count': len(configurations),
+        'configurations': rows,
+    }
+    write(output, aggregate)
+    if args.csv:
+        csv_path = args.csv.resolve()
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        write_csv(csv_path, rows)
+    print(json.dumps({'status': 'completed', 'configurations': len(rows), 'output': output.name}))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
