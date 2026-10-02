@@ -15,6 +15,7 @@ struct SearchWork
     std::size_t topology_bytes{},storage_bytes{},scratch_bytes{},maximum_block_atoms{};
     double partition_seconds{},metric_seconds{},local_seconds{},factor_seconds{},inverse_seconds{},pcg_seconds{};
     double maximum_lambda{},maximum_tau{},last_relative_residual{};
+    std::vector<std::size_t> pcg_iteration_counts; // One entry per PCG solve.
     std::vector<RegularizationRecord> regularizations; // Resource-audit mode only.
 };
 SearchWork & SearchWorkForTesting();

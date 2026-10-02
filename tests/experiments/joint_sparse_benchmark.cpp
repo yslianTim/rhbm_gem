@@ -190,10 +190,17 @@ j::object SearchWork()
     j::object out;
 #ifndef PR23_BASELINE_DRIVER
     const auto & w=n::SearchWorkForTesting(); const auto & op=n::OperatorWorkForTesting();
-    j::array regularizations;
+    j::array regularizations,pcg_iteration_counts;
+    for(const auto count:w.pcg_iteration_counts) pcg_iteration_counts.push_back(count);
+    const auto pcg_iterations=Summary(w.pcg_iteration_counts);
     for(const auto & r:w.regularizations) regularizations.push_back(j::object{{"local_build",r.local_build},{"factor_build",r.factor_build},
         {"block",r.block},{"lambda",r.lambda},{"damping",r.damping},{"tau",r.tau},{"attempt",r.attempt}});
     out={{"linearizations",w.linearizations},{"pcg_solves",w.pcg_solves},{"pcg_iterations",w.pcg_iterations},
+        {"pcg_iteration_counts",pcg_iteration_counts},
+        {"pcg_iterations_min",pcg_iterations.at("min")},{"pcg_iterations_median",pcg_iterations.at("median")},
+        {"pcg_iterations_max",pcg_iterations.at("max")},
+        {"pcg_iterations_mean",w.pcg_iteration_counts.empty() ? j::value(nullptr) :
+            j::value(static_cast<double>(w.pcg_iterations)/static_cast<double>(w.pcg_iteration_counts.size()))},
         {"damping_trials",w.damping_trials},{"local_builds",w.local_builds},{"factor_builds",w.factor_builds},
         {"inverse_actions",w.inverse_actions},{"topology_bytes",w.topology_bytes},{"storage_bytes",w.storage_bytes},
         {"scratch_bytes_bound",w.scratch_bytes},{"maximum_block_atoms",w.maximum_block_atoms},

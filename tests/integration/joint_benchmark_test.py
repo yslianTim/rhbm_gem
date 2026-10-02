@@ -113,6 +113,14 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(set(details), {'search_completed', 'stop_reason', 'profile_evaluations',
                                         'accepted_updates', 'endpoint_valid'})
 
+    def test_solve_result_preserves_pcg_distribution_and_operator_counts(self):
+        work = {'pcg_solves': 2, 'pcg_iterations': 7, 'pcg_iteration_counts': [3, 4],
+                'pcg_iterations_min': 3, 'pcg_iterations_median': 3.5,
+                'pcg_iterations_max': 4, 'pcg_iterations_mean': 3.5,
+                'operator_normals': 9, 'operator_applications': 2, 'operator_adjoints': 3}
+        details = benchmark.normalize_result('solve', {'search_work': work})['details']
+        self.assertEqual(details['search_work'], work)
+
     def test_sweep_does_not_expand_identity_or_diagonal_over_schwarz_dimensions(self):
         parser = schwarz_sweep.build_parser()
         args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',

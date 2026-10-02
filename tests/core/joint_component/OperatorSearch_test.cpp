@@ -5,6 +5,7 @@
 #include "support/JointDenseReference.hpp"
 #include <algorithm>
 #include <map>
+#include <numeric>
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -30,6 +31,7 @@ Signature Describe(const n::PreconditionerPartition & p)
 }
 TEST(JointOperatorSearchTest, PcgMatchesIndependentDenseSystemAndDetectsFailure)
 {
+    n::SearchWorkForTesting()={};
     n::Matrix a(3,3); a<<4,1,0,1,3,1,0,1,2;
     n::Vector rhs(3); rhs<<1,-2,3; const n::Vector metric=n::Vector::LinSpaced(3,1,2);
     auto result=n::SolvePcg([&](n::VectorRef x)->n::Vector{return a*x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric);
@@ -39,6 +41,32 @@ TEST(JointOperatorSearchTest, PcgMatchesIndependentDenseSystemAndDetectsFailure)
     EXPECT_EQ(n::SolvePcg([](n::VectorRef x)->n::Vector{return -x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric).reason,"pcg-nonpositive-curvature");
     EXPECT_EQ(n::SolvePcg([](n::VectorRef x)->n::Vector{return x;},[](n::VectorRef x)->n::Vector{return -x;},rhs,metric).reason,"pcg-nonpositive-preconditioner");
     EXPECT_EQ(n::SolvePcg([](n::VectorRef x)->n::Vector{return n::Vector::Constant(x.size(),n::unavailable);},[](n::VectorRef x)->n::Vector{return x;},rhs,metric).reason,"pcg-nonfinite");
+    const auto & work=n::SearchWorkForTesting();
+    ASSERT_EQ(work.pcg_iteration_counts.size(),work.pcg_solves);
+    EXPECT_EQ(work.pcg_iteration_counts.front(),static_cast<std::size_t>(result.iterations));
+    EXPECT_EQ(work.pcg_iteration_counts[1],0);
+    EXPECT_EQ(std::accumulate(work.pcg_iteration_counts.begin(),work.pcg_iteration_counts.end(),std::size_t{}),work.pcg_iterations);
+}
+TEST(JointOperatorSearchTest, PcgTelemetryRecordsZeroRhsAndIterationBudgetCounts)
+{
+    n::SearchWorkForTesting()={};
+    n::Matrix a(2,2); a<<4,1,1,3;
+    n::Vector rhs=n::Vector::Zero(2),metric=n::Vector::Ones(2);
+    const auto zero=n::SolvePcg([&](n::VectorRef x)->n::Vector{return a*x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric);
+    ASSERT_TRUE(zero.valid); EXPECT_EQ(zero.reason,"pcg-zero-rhs");
+    rhs<<1,2;
+    const auto limited=n::SolvePcg([&](n::VectorRef x)->n::Vector{return a*x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric,1);
+    EXPECT_FALSE(limited.valid); EXPECT_EQ(limited.reason,"pcg-iteration-budget"); EXPECT_EQ(limited.iterations,1);
+    n::Vector empty,empty_metric;
+    const auto invalid=n::SolvePcg([](n::VectorRef x)->n::Vector{return x;},[](n::VectorRef x)->n::Vector{return x;},empty,empty_metric);
+    EXPECT_FALSE(invalid.valid);
+    const auto & work=n::SearchWorkForTesting();
+    ASSERT_EQ(work.pcg_iteration_counts.size(),3);
+    EXPECT_EQ(work.pcg_iteration_counts[0],0);
+    EXPECT_EQ(work.pcg_iteration_counts[1],1);
+    EXPECT_EQ(work.pcg_iteration_counts[2],0);
+    EXPECT_EQ(work.pcg_solves,3);
+    EXPECT_EQ(work.pcg_iterations,1);
 }
 TEST(JointOperatorSearchTest, OperatorRankPolicyResolvesEveryBackendCombination)
 {

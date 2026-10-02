@@ -7,6 +7,12 @@ WidthStepResult SolvePcg(const VectorAction & action,const VectorAction & invers
 {
     ResourcePhase phase("pcg"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.pcg_seconds); ++work.pcg_solves;
     WidthStepResult out; out.step=Vector::Zero(rhs.size()); out.reason="pcg-invalid-input";
+    struct IterationRecorder
+    {
+        SearchWork & work;
+        const WidthStepResult & result;
+        ~IterationRecorder() {work.pcg_iteration_counts.push_back(static_cast<std::size_t>(result.iterations));}
+    } recorder{work,out};
     if(rhs.size()==0 || metric.size()!=rhs.size() || !rhs.allFinite() || !metric.allFinite() || (metric.array()<=0).any()) return out;
     const auto norm=[&](VectorRef r){return (r.array()/metric.array()).matrix().stableNorm();};
     const double initial=norm(rhs); if(initial==0) {out.valid=true; out.reason="pcg-zero-rhs"; out.relative_residual=0; return out;}
