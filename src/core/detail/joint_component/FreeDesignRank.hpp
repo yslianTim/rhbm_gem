@@ -11,6 +11,8 @@ enum class FreeDesignRankWorkStage
     None,StructuralScan,DuplicateCheck,FactorInspection,WeakDirection,InverseBound,OrthogonalBound,Reconstruction
 };
 std::string_view FreeDesignRankWorkStageName(FreeDesignRankWorkStage);
+std::optional<double> CertifiedMagnitudeLowerBound(double);
+std::optional<double> CertifiedSmallestSingularLowerBound2x2(double,double,double,double);
 struct FreeDesignRankResult
 {
     FreeDesignRankStatus status{FreeDesignRankStatus::Unavailable};

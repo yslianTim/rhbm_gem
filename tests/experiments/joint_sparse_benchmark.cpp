@@ -8,6 +8,7 @@
 #include "support/JointRuntimeJson.hpp"
 #ifndef SPARSE_BASELINE_DRIVER
 #include "support/JointOperatorWorkload.hpp"
+#include "support/JointRankWitnessCensus.hpp"
 #include "core/detail/joint_component/ProfileJacobianOperator.hpp"
 #include "core/detail/JointUncertainty.hpp"
 #ifndef PR23_BASELINE_DRIVER

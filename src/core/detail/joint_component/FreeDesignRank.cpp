@@ -76,6 +76,28 @@ std::string_view FreeDesignRankWorkStageName(FreeDesignRankWorkStage stage)
     }
     return "none";
 }
+std::optional<double> CertifiedMagnitudeLowerBound(double value)
+{
+    if(!std::isfinite(value)) return std::nullopt;
+    try {return AbsLower(Interval(value));}
+    catch(const Stop &) {return std::nullopt;}
+}
+std::optional<double> CertifiedSmallestSingularLowerBound2x2(double a,double b,double c,double d)
+{
+    if(!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c) || !std::isfinite(d)) return std::nullopt;
+    try
+    {
+        const auto determinant=Add(Mul(Interval(a),Interval(d)),Neg(Mul(Interval(b),Interval(c))));
+        const double determinant_lower=AbsLower(determinant);
+        Interval frobenius_squared;
+        for(const auto value:{a,b,c,d}) frobenius_squared=Add(frobenius_squared,Mul(Interval(value),Interval(value)));
+        const double frobenius_upper=SqrtUp(frobenius_squared.hi);
+        if(!std::isfinite(frobenius_upper)) return std::nullopt;
+        if(frobenius_upper==0 || determinant_lower==0) return 0.;
+        return std::max(0.,Down(determinant_lower/frobenius_upper));
+    }
+    catch(const Stop &) {return std::nullopt;}
+}
 FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFactor * factor,const RankRequest & request,const RankBudget & budget)
 {
     FreeDesignRankResult out; out.rank_upper=std::min(z.rows(),z.cols());

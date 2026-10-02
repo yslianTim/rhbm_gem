@@ -196,6 +196,15 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual((details['rows'], details['columns']), (20, 4))
         self.assertEqual((details['compact_extractions'], details['free_design_svds']), (0, 0))
 
+    def test_rank_profile_preserves_local_witness_census(self):
+        census = {'groups': 2, 'covered_columns': 4, 'total_columns': 4,
+                  'coverage_fraction': 1., 'exclusive_rows': 4, 'max_group_size': 2,
+                  'minimum_lower': .5, 'rank_threshold_upper': 1e-8,
+                  'exclusive_rows_disjoint': True, 'would_certify': True,
+                  'reason': 'local-support-full-rank-witness'}
+        details = benchmark.normalize_result('rank', {'local_witness': census})['details']
+        self.assertEqual(details['local_witness'], census)
+
     def test_sweep_does_not_expand_identity_or_diagonal_over_schwarz_dimensions(self):
         parser = schwarz_sweep.build_parser()
         args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',

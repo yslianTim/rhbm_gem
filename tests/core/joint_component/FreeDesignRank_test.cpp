@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FreeDesignRank.hpp"
+#include "support/JointRankWitnessCensus.hpp"
 #include <limits>
 #include <numeric>
 
@@ -142,6 +143,78 @@ TEST(JointFreeDesignRank,TinyWorkBudgetNamesTheStageWithoutChangingReason)
     EXPECT_EQ(result.reason,"rank-work-budget");
     EXPECT_EQ(result.work_stage,n::FreeDesignRankWorkStage::StructuralScan);
     EXPECT_FALSE(result.estimated_total_entries);
+}
+TEST(JointLocalRankWitness,CertifiesDisjointTwoColumnSupportGroups)
+{
+    n::Matrix a=n::Matrix::Zero(4,4);
+    a(0,0)=1; a(0,1)=.2; a(1,0)=.1; a(1,1)=1;
+    a(2,2)=.9; a(2,3)=.15; a(3,2)=.1; a(3,3)=.8;
+    const n::Sparse sparse=a.sparseView();
+    const auto census=second_stage_test::DiagnoseLocalRankWitnesses(sparse,.01);
+    EXPECT_EQ(census.groups,2); EXPECT_EQ(census.covered_columns,4); EXPECT_EQ(census.total_columns,4);
+    EXPECT_DOUBLE_EQ(census.coverage_fraction,1); EXPECT_EQ(census.exclusive_rows,4);
+    EXPECT_EQ(census.max_group_size,2); ASSERT_TRUE(census.minimum_lower);
+    EXPECT_GT(*census.minimum_lower,census.threshold_upper);
+    EXPECT_TRUE(census.exclusive_rows_disjoint); EXPECT_TRUE(census.would_certify);
+    EXPECT_EQ(census.reason,"local-support-full-rank-witness");
+    EXPECT_EQ(n::EvaluateRank(a,{{100,4,0},4}).rank,4);
+}
+TEST(JointLocalRankWitness,CertifiesExclusiveSingleColumnGroups)
+{
+    n::Matrix a=n::Matrix::Zero(3,2); a(0,0)=2; a(1,1)=3;
+    const n::Sparse sparse=a.sparseView();
+    const auto census=second_stage_test::DiagnoseLocalRankWitnesses(sparse,.5);
+    EXPECT_EQ(census.groups,2); EXPECT_EQ(census.covered_columns,2);
+    EXPECT_EQ(census.max_group_size,1); ASSERT_TRUE(census.minimum_lower);
+    EXPECT_GT(*census.minimum_lower,.5); EXPECT_TRUE(census.would_certify);
+    EXPECT_EQ(n::EvaluateRank(a,{{20,2,0},2}).rank,2);
+}
+TEST(JointLocalRankWitness,StrictThresholdAndDependentColumnsDoNotCertify)
+{
+    n::Matrix a=n::Matrix::Zero(4,4);
+    a(0,0)=1; a(0,1)=.2; a(1,0)=.1; a(1,1)=1;
+    a(2,2)=.9; a(2,3)=.15; a(3,2)=.1; a(3,3)=.8;
+    const n::Sparse sparse=a.sparseView();
+    const auto baseline=second_stage_test::DiagnoseLocalRankWitnesses(sparse,.01);
+    ASSERT_TRUE(baseline.would_certify); ASSERT_TRUE(baseline.minimum_lower);
+    const auto equality=second_stage_test::DiagnoseLocalRankWitnesses(sparse,*baseline.minimum_lower);
+    EXPECT_FALSE(equality.would_certify);
+    EXPECT_EQ(equality.reason,"local-lower-not-above-threshold");
+
+    a.col(1)=a.col(0);
+    const n::Sparse deficient_sparse=a.sparseView();
+    const auto deficient=second_stage_test::DiagnoseLocalRankWitnesses(deficient_sparse,1e-12);
+    EXPECT_FALSE(deficient.would_certify);
+    EXPECT_EQ(n::EvaluateRank(a,{{100,4,0},4}).rank,3);
+}
+TEST(JointLocalRankWitness,RequiresTwoExclusiveRowsAndFallsBackForLargerGroups)
+{
+    n::Matrix shared=n::Matrix::Zero(3,3);
+    shared(0,0)=1; shared(0,1)=.2; shared(1,0)=.1; shared(1,1)=1;
+    shared(1,2)=.3; shared(2,2)=1;
+    const n::Sparse shared_sparse=shared.sparseView();
+    const auto missing=second_stage_test::DiagnoseLocalRankWitnesses(shared_sparse,.01);
+    EXPECT_FALSE(missing.would_certify);
+    EXPECT_EQ(missing.reason,"missing-exclusive-rows");
+
+    n::Matrix larger=n::Matrix::Zero(4,5);
+    larger(0,0)=1; larger(0,1)=.2; larger(1,0)=.1; larger(1,1)=1;
+    for(Eigen::Index col=2;col<5;++col) {larger(2,col)=1; larger(3,col)=.2*static_cast<double>(col);}
+    const n::Sparse larger_sparse=larger.sparseView();
+    const auto partial=second_stage_test::DiagnoseLocalRankWitnesses(larger_sparse,.01);
+    EXPECT_EQ(partial.max_group_size,3); EXPECT_EQ(partial.covered_columns,2);
+    EXPECT_DOUBLE_EQ(partial.coverage_fraction,.4); EXPECT_FALSE(partial.would_certify);
+    EXPECT_EQ(partial.reason,"unsupported-for-local-witness");
+}
+TEST(JointLocalRankWitness,TwoByTwoLowerBoundUsesOutwardArithmetic)
+{
+    n::Matrix block(2,2); block<<1,.3,.2,.9;
+    const auto lower=n::CertifiedSmallestSingularLowerBound2x2(block(0,0),block(0,1),block(1,0),block(1,1));
+    ASSERT_TRUE(lower);
+    const auto oracle=n::EvaluateRank(block,{{2,2,0},2});
+    ASSERT_EQ(oracle.rank,2);
+    EXPECT_LE(*lower,oracle.singular_values(1));
+    EXPECT_GT(*lower,0);
 }
 TEST(JointFreeDesignRank,TimeBudgetIncludesStructuralColumnScans)
 {
