@@ -25,6 +25,12 @@ j::object FixedWork()
         {"svd_seconds",w.free_design_svd_seconds},{"jacobi_retries",w.jacobi_retries},{"jacobi_retry_seconds",w.jacobi_retry_seconds},
         {"operator_preparation_seconds",op.preparation_seconds},{"operator_design_seconds",op.design_seconds},
         {"operator_factor_seconds",op.factor_seconds},{"operator_rank_seconds",op.rank_seconds},
+        {"operator_rank_checks",op.rank_checks},{"operator_rank_status",op.rank_status.empty() ? "not-run" : op.rank_status},
+        {"operator_rank_reason",op.rank_reason.empty() ? "not-run" : op.rank_reason},
+        {"operator_rank_rows",op.rank_rows},{"operator_rank_columns",op.rank_columns},
+        {"operator_rank_entries",op.rank_entries},{"operator_rank_workspace_bytes",op.rank_workspace_bytes},
+        {"operator_rank_compact_extractions",op.rank_compact_extractions},
+        {"operator_rank_free_design_svds",op.rank_free_design_svds},
         {"operator_compact_seconds",op.compact_seconds},{"operator_svd_seconds",op.svd_seconds},
         {"normal_actions",op.normals},{"normal_seconds",op.normal_seconds}};
 }
@@ -57,13 +63,30 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
         {"state_control",j::object{{"eta",Values(e.eta)},{"beta",Values(e.beta)},{"free_columns",FreeColumns(e.beta)},
             {"scale",context.scale},{"rank_rows",context.rank.rows},{"residual",Values(e.residual/context.scale)},
             {"gradient",Values(e.gradient)},{"objective",.5*(e.residual/context.scale).squaredNorm()}}}};
+    report["solver_policy"]=PolicyRecord(context.search);
+    const auto rank_backend=n::ResolveOperatorRankBackend(context.search.operator_rank.mode,n::ActiveSparseBackend());
+    if(!rank_backend)
+    {
+        report["valid"]=false; report["reason"]="rank-backend-unavailable";
+        report["rank_diagnostics"]=j::object{{"status","unavailable"},{"reason","rank-backend-unavailable"},
+            {"compact_extractions",0},{"free_design_svds",0}};
+        report["stage"]="complete"; Snapshot(output,report); return;
+    }
     Snapshot(output,report);
     n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
     svd_records.clear(); n::CompactSvdCaptureForTesting()=Capture;
     {
-    const n::ProfileJacobianOperator op(e,context);
+    const n::ProfileJacobianOperator op(e,context,-1,*rank_backend);
     n::CompactSvdCaptureForTesting()={};
     report["rank"]=svd_records; report["valid"]=op.Valid(); report["reason"]=op.Reason();
+    const auto & rank_work=n::OperatorWorkForTesting();
+    report["rank_diagnostics"]=j::object{{"requested_mode",n::OperatorRankModeName(context.search.operator_rank.mode)},
+        {"resolved_backend",n::FreeDesignRankBackendName(*rank_backend)},
+        {"status",rank_work.rank_status},{"reason",rank_work.rank_reason},
+        {"rank_seconds",rank_work.rank_seconds},{"rank_entries",rank_work.rank_entries},
+        {"rank_workspace_bytes",rank_work.rank_workspace_bytes},
+        {"compact_extractions",rank_work.rank_compact_extractions},
+        {"free_design_svds",rank_work.rank_free_design_svds}};
     report["preparation_work"]=FixedWork();
     if(!op.Valid()) {report["stage"]="complete"; Snapshot(output,report); return;}
     const n::Vector v=n::Vector::LinSpaced(op.Columns(),-.3,.7);
@@ -90,7 +113,7 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
         report["stage"]=kind; Snapshot(output,report);
         const auto wall_start=Clock::now();
         const auto preparation_start=Clock::now();
-        const n::ProfileJacobianOperator step_op(e,context);
+        const n::ProfileJacobianOperator step_op(e,context,-1,*rank_backend);
         const double preparation_seconds=Seconds(preparation_start);
         if(!step_op.Valid())
         {
@@ -114,6 +137,7 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
             partition_seconds=Seconds(partition_start);
             model=std::make_unique<n::SchwarzModel>(*partition,e,context.scale,pc);
             inverse=std::make_unique<n::SchwarzPreconditioner>(*model,pc);
+            report["partition"]=PartitionRecord(*partition);
         }
         const double build_seconds=Seconds(build_start)-partition_seconds;
         const n::Vector diagonal=norms.array().square()+pc.damping*metric.array().square();

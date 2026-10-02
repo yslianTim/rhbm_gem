@@ -39,6 +39,69 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertFalse(result['qualified'])
         self.assertEqual(result['scientific_status'], 'failed')
 
+    def test_operator_and_schwarz_defaults_are_stable(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
+                                  '--build-dir', 'build/debug', '--output', 'result.json'])
+        benchmark.validate_args(parser, args)
+        self.assertEqual((args.operator_rank, args.schwarz_core_atoms, args.schwarz_overlap_hops,
+                          args.schwarz_max_block_atoms, args.schwarz_storage_mib,
+                          args.schwarz_scratch_mib), ('auto', 128, 1, 512, 512, 256))
+        policy = benchmark.solver_policy_metadata(args, 'EIGEN')
+        self.assertEqual(policy['search_method'], 'OperatorPcg')
+        self.assertEqual(policy['resolved_rank_backend'], 'Dense')
+        self.assertEqual(policy['schwarz_overlap_hops'], 1)
+
+    def test_operator_policy_options_reach_only_sparse_driver_routes(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--operator-rank', 'spqr-bounds', '--schwarz-core-atoms', '2',
+                                  '--schwarz-overlap-hops', '0', '--schwarz-max-block-atoms', '8',
+                                  '--schwarz-storage-mib', '64', '--schwarz-scratch-mib', '32'])
+        benchmark.validate_args(parser, args)
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            driver = build / 'bin/joint_sparse_benchmark'
+            driver.parent.mkdir()
+            driver.touch()
+            command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
+                                                    Path('result.json'), build)
+            for option, value in (('--operator-rank', 'spqr-bounds'), ('--schwarz-core-atoms', '2'),
+                                  ('--schwarz-overlap-hops', '0'), ('--schwarz-max-block-atoms', '8'),
+                                  ('--schwarz-storage-mib', '64'), ('--schwarz-scratch-mib', '32')):
+                self.assertEqual(command[command.index(option) + 1], value)
+            self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['resolved_rank_backend'], 'SpqrBounds')
+
+    def test_non_sparse_profiles_do_not_receive_operator_policy_options(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'workflow', '--case', 'full',
+                                  '--build-dir', 'build/debug', '--output', 'result.json'])
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            driver = build / 'bin/joint_postprocessing_benchmark'
+            driver.parent.mkdir()
+            driver.touch()
+            command = benchmark.command_for_profile(args, {}, Path('result.sqlite'), build)
+        self.assertEqual(command, [str(driver), 'full', 'workflow', 'result.sqlite'])
+
+    def test_invalid_schwarz_policy_values_are_rejected(self):
+        base = ['--profile', 'solve', '--case', 'chain-8', '--build-dir', 'build/debug',
+                '--output', 'result.json']
+        for option, value in (('--schwarz-core-atoms', '0'), ('--schwarz-overlap-hops', '-1'),
+                              ('--schwarz-max-block-atoms', '127'), ('--schwarz-storage-mib', '0'),
+                              ('--schwarz-scratch-mib', '-1')):
+            parser = benchmark.build_parser()
+            args = parser.parse_args(base + [option, value])
+            with self.assertRaises(SystemExit):
+                benchmark.validate_args(parser, args)
+
+    def test_missing_telemetry_does_not_change_result_normalization(self):
+        raw = {'search': {'stop_reason': 'converged', 'profile_evaluations': 3, 'accepted_updates': 2},
+               'returned_assessment': {'runtime_convergence': 'passed', 'primary': {'valid': True}}}
+        details = benchmark.normalize_result('solve', raw)['details']
+        self.assertEqual(set(details), {'search_completed', 'stop_reason', 'profile_evaluations',
+                                        'accepted_updates', 'endpoint_valid'})
 
 def smoke(build):
     script = Path(__file__).with_name('joint_benchmark.py')
@@ -128,6 +191,7 @@ def smoke(build):
         report = json.loads(output.read_text())
         if report['execution']['status'] != 'completed' or not report['result']['persistence'] or not report['result']['export']:
             raise AssertionError(f'command profile did not persist and export: {report["execution"]}')
+
     return 0
 
 

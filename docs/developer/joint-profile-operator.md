@@ -60,10 +60,11 @@ owns mutable scratch.
 Both configure-time backends are supported. Eigen's operator factor is used
 only by the operator; its production active-set row-reduction route remains
 intact. Eigen extracts the existing R and restores its column permutation for
-the compact rank check rather than repeating Q-transpose actions over every
-column. Construction uses original context rows, not informative/reduced row
-counts. Rank failure is unavailable, not an approximate derivative. The
-p-by-p compact is transient; this is not a scalable rank implementation.
+the dense rank check rather than repeating Q-transpose actions over every
+column. SPQR can use the bounded free-design rank view without extracting the
+p-by-p compact or running a dense rank SVD. Construction uses original context
+rows, not informative/reduced row counts. Rank failure is unavailable, not an
+approximate derivative.
 Persistent operator storage is sparse matrices and factors plus O(p+m)
 vectors; each action uses O(N+p+m) vector workspace. Sparse fill can still be
 large. The operator stores no p-by-m derivative coefficients/correction,
@@ -96,17 +97,20 @@ hand sides. Any inverse action held through one Krylov solve must be fixed,
 linear, symmetric and positive definite. Operator and preconditioner are
 separate solver arguments.
 
-The current partition uses deterministic breadth-first core groups of at most
-128 atoms and a complete one-ring structural overlap. Numerical zeros do not
-remove edges. It does not materialize clique adjacency; row-to-atom CSR
-incidence and visited marks bound topology workspace. Resource exhaustion
-returns unavailable rather than truncating overlap or global coupling.
+`SchwarzPolicy` controls deterministic breadth-first disjoint cores and their
+structural overlap. `core_atoms` is the target maximum core size;
+`overlap_hops=0` keeps only each core, `1` adds the complete one-ring, and `2`
+adds the second ring. Numerical zeros do not remove shared-row graph edges.
+Expansion is never truncated to fit a limit. It does not materialize clique
+adjacency; row-to-atom CSR incidence and visited marks bound topology
+workspace. Resource exhaustion returns unavailable rather than truncating
+overlap or global coupling.
 
-Current limits are 512 atoms per block, 512 MiB held topology/model/factor
-storage, and 256 MiB conservative construction scratch. These bounds exclude
-the shared problem, global evaluation, and profile factor; process RSS remains
-a separate resource boundary. Shape probes are known allocations, not an
-allocator trace.
+Defaults are 128 core atoms, one overlap hop, 512 atoms per block, 512 MiB
+held topology/model/factor storage, and 256 MiB conservative construction
+scratch. These bounds exclude the shared problem, global evaluation, and
+profile factor; process RSS remains a separate resource boundary. Shape probes
+are known allocations, not an allocator trace.
 
 ## Current validation and measurement
 

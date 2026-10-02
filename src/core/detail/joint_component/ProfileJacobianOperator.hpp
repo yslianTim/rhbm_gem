@@ -5,7 +5,7 @@
 namespace rhbm_gem::core::joint_component {
 struct OperatorWork
 {
-    std::size_t preparations{},applications{},adjoints{},rank_checks{},rank_entries{},rank_workspace_bytes{},
+    std::size_t preparations{},applications{},adjoints{},rank_checks{},rank_rows{},rank_columns{},rank_entries{},rank_workspace_bytes{},
         rank_compact_extractions{},rank_free_design_svds{},normals{};
     double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{},normal_seconds{},design_seconds{},factor_seconds{},compact_seconds{},svd_seconds{};
     std::string rank_status,rank_reason;

@@ -153,9 +153,11 @@ def command_for_profile(args, case, output, build):
         if args.profile == 'fixed':
             return sparse_command(sparse, case, 'fixed', output, (
                 '--fixed', args.fixed_action, '--state', args.state_path,
-                '--fixed-preconditioner', args.preconditioner), args.svd_mode)
+                '--fixed-preconditioner', args.preconditioner,
+                *operator_policy_options(args)), args.svd_mode)
         if args.profile == 'solve':
-            return sparse_command(sparse, case, 'fixed', output, ('--search', args.preconditioner), args.svd_mode)
+            return sparse_command(sparse, case, 'fixed', output,
+                                  ('--search', args.preconditioner, *operator_policy_options(args)), args.svd_mode)
         return sparse_command(sparse, case,
                               'rank' if args.rank_mode == 'prototype' else 'rank-oracle', output,
                               svd_mode=args.svd_mode)
@@ -176,6 +178,44 @@ def command_for_profile(args, case, output, build):
     dump = [str(cli), 'result_dump', '--printer', 'joint', '-d', str(database),
             '-k', args.case, '-o', str(export)]
     return analysis, dump, database, export
+
+
+def operator_policy_options(args):
+    return (
+        '--operator-rank', args.operator_rank,
+        '--schwarz-core-atoms', str(args.schwarz_core_atoms),
+        '--schwarz-overlap-hops', str(args.schwarz_overlap_hops),
+        '--schwarz-max-block-atoms', str(args.schwarz_max_block_atoms),
+        '--schwarz-storage-mib', str(args.schwarz_storage_mib),
+        '--schwarz-scratch-mib', str(args.schwarz_scratch_mib),
+    )
+
+
+def solver_policy_metadata(args, backend):
+    active = args.profile == 'fixed' or (args.profile == 'solve' and args.preconditioner != 'legacy')
+    resolved = None
+    backend_name = backend.upper()
+    if active:
+        if args.operator_rank == 'dense' or (backend_name == 'EIGEN' and args.operator_rank == 'auto'):
+            resolved = 'Dense'
+        elif args.operator_rank in ('auto', 'spqr-bounds') and backend_name == 'SPQR':
+            resolved = 'SpqrBounds'
+    return {
+        'search_method': 'OperatorPcg' if active else 'LegacyCompact' if args.profile == 'solve' else None,
+        'sparse_backend': backend,
+        'operator_rank_active': active,
+        'operator_rank_mode': args.operator_rank,
+        'resolved_rank_backend': resolved,
+        'operator_rank_budget_seconds': 120,
+        'operator_rank_budget_entries': 100_000_000,
+        'operator_rank_budget_workspace_bytes': 256 * 1024**2,
+        'preconditioner': args.preconditioner,
+        'schwarz_core_atoms': args.schwarz_core_atoms,
+        'schwarz_overlap_hops': args.schwarz_overlap_hops,
+        'schwarz_max_block_atoms': args.schwarz_max_block_atoms,
+        'schwarz_storage_bytes': args.schwarz_storage_mib * 1024**2,
+        'schwarz_scratch_bytes': args.schwarz_scratch_mib * 1024**2,
+    }
 
 
 def raw_elapsed(profile, raw, process_wall):
@@ -216,6 +256,9 @@ def normalize_result(profile, raw):
                 'preparation_seconds', 'build_seconds', 'solve_seconds', 'fixed_step_wall_seconds')}
                       for step in raw.get('steps', [])],
         }
+        for key in ('rank_diagnostics', 'preparation_work', 'partition'):
+            if key in raw:
+                details[key] = raw[key]
     elif profile == 'solve':
         search = raw.get('search') or {}
         primary = assessment.get('primary') or {}
@@ -224,6 +267,15 @@ def normalize_result(profile, raw):
             'profile_evaluations': search.get('profile_evaluations'),
             'accepted_updates': search.get('accepted_updates'), 'endpoint_valid': primary.get('valid'),
         }
+        if 'search_seconds' in raw:
+            details['search_seconds'] = raw['search_seconds']
+        if 'assessment_seconds' in raw:
+            details['assessment_seconds'] = raw['assessment_seconds']
+        if 'returned_state' in raw:
+            details['state_available'] = raw['returned_state'] is not None
+        for key in ('search_work', 'partition'):
+            if key in raw:
+                details[key] = raw[key]
     elif profile == 'rank':
         details = {key: rank_result.get(key) for key in (
             'status', 'reason', 'rank_lower', 'rank_upper', 'exact_rank', 'rank',
@@ -360,7 +412,7 @@ def execute_once(args, case, build, run_root, deadline):
             'stages': results, 'raw': raw}
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=tuple(SCOPES), required=True)
     parser.add_argument('--case', required=True)
@@ -371,15 +423,36 @@ def main(argv=None):
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
     parser.add_argument('--preconditioner', choices=('legacy', 'identity', 'diagonal', 'schwarz'), default='schwarz')
+    parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
+    parser.add_argument('--schwarz-core-atoms', type=int, default=128)
+    parser.add_argument('--schwarz-overlap-hops', type=int, default=1)
+    parser.add_argument('--schwarz-max-block-atoms', type=int, default=512)
+    parser.add_argument('--schwarz-storage-mib', type=int, default=512)
+    parser.add_argument('--schwarz-scratch-mib', type=int, default=256)
     parser.add_argument('--fixed-action', choices=('composed', 'normal'), default='normal')
     parser.add_argument('--svd-mode', choices=('legacy', 'values', 'auto'))
     parser.add_argument('--rank-mode', choices=('prototype', 'oracle'), default='prototype')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--map', dest='map_path', type=Path)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def validate_args(parser, args):
     if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
         parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
+    if (args.schwarz_core_atoms <= 0 or args.schwarz_overlap_hops < 0 or
+            args.schwarz_max_block_atoms < args.schwarz_core_atoms or
+            args.schwarz_storage_mib <= 0 or args.schwarz_scratch_mib <= 0):
+        parser.error('Schwarz core, max block, and memory limits must be positive; overlap must be nonnegative and max block must cover core')
+    if args.profile == 'fixed' and args.preconditioner == 'legacy':
+        parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    validate_args(parser, args)
 
     output = args.output.resolve()
     build = args.build_dir.resolve()
@@ -392,6 +465,7 @@ def main(argv=None):
         parser.error(str(error))
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
+    metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
     if args.profile in ('prepare', 'fixed', 'solve', 'rank'):
         driver = build / 'bin/joint_sparse_benchmark'
     elif args.profile in ('workflow', 'postprocess'):

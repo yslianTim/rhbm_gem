@@ -17,8 +17,15 @@ The operator path solves
     (J'J + mu Gamma'Gamma) step = -J'(r/s)
 
 using the full profile operator, including residual correction. It constructs no
-global normal matrix, reduced Jacobian, or dense LM QR. The transient p-by-p
-rank SVD remains; A/C, reference, assessment, assembly and uncertainty retain
+global normal matrix, reduced Jacobian, or dense LM QR. Operator rank selection
+is explicit in `SearchPolicy`: `auto` resolves to bounded SPQR rank when the
+SPQR backend is active and to dense rank on Eigen; `dense` selects the dense
+control on either backend. `spqr-bounds` is unavailable on Eigen. The SPQR
+bounded route uses the free-design factor's rank view and does not extract a
+global p-by-p compact rank matrix or run a dense rank SVD. An unavailable or
+unresolved bounded result stops the operator search with its rank reason and
+never switches to dense. Rank checks use the policy's finite time, entry, and
+workspace budgets. A/C, reference, assessment, assembly and uncertainty retain
 their current paths.
 
 Each accepted state owns a dedicated operator factor. Trial evaluation uses a
@@ -79,10 +86,17 @@ and scatter use weights 1/sqrt(coordinate membership), and local solves scale
 on both sides by Gamma_local^-1. The resulting additive inverse action is fixed
 and SPD during PCG. Identity and raw-width diagonal inverses are controls.
 
-Resource-limit failures return unavailable without truncating overlap or
-changing the solver. Search retains its last accepted state for endpoint
-certification. The operator and partition memory limits are documented in the
-[profile-operator guide](joint-profile-operator.md).
+`SchwarzPolicy` records `core_atoms`, `overlap_hops`, `max_block_atoms`,
+`storage_bytes`, and `scratch_bytes`. Cores are deterministic disjoint groups
+up to the requested core size; each block expands its core by the requested
+number of hops on the structural shared-row graph. Zero hops is core-only,
+one hop is the complete one-ring overlap, and two hops includes the second
+structural ring. The default is 128 core atoms and one overlap hop, with a 512
+atom maximum block, 512 MiB storage limit, and 256 MiB construction scratch
+limit. Resource-limit failures return unavailable without truncating overlap
+or changing the solver. Search retains its last accepted state for endpoint
+certification. These settings affect only the preconditioner; the full global
+operator and objective remain unchanged.
 
 ## Validation and promotion prerequisites
 
@@ -97,6 +111,7 @@ Current bounded solve measurements use an explicit preconditioner profile:
 
     python3 tests/integration/joint_benchmark.py \
       --profile solve --case chain-8 --preconditioner schwarz \
+      --operator-rank auto --schwarz-core-atoms 32 --schwarz-overlap-hops 1 \
       --build-dir build/joint-eigen --output build/search-schwarz.json
 
 A future production-default change requires both backend regressions, agreement

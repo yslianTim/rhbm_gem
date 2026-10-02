@@ -42,6 +42,7 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     Indices free;
     for(Eigen::Index k=0;k<2*m;++k) if(k%2 || e.beta(k)>0) free.push_back(k);
     const auto p=static_cast<Eigen::Index>(free.size());
+    work.rank_rows=static_cast<std::size_t>(n); work.rank_columns=static_cast<std::size_t>(p);
     if(n<p) {reason_="rank-deficient-free-design"; return;}
     Sparse design(n,p); raw_.resize(n,m); contraction_.resize(p); owners_.resize(free.size());
     std::vector<Eigen::Triplet<double>> entries,raw;

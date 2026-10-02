@@ -21,6 +21,7 @@
 #include <iostream>
 #include <chrono>
 #include <bit>
+#include <map>
 #include <sys/resource.h>
 namespace {
 namespace c=rhbm_gem::core;
@@ -33,6 +34,8 @@ bool operator_audit{};
 std::string search_kind;
 std::filesystem::path capture;
 j::array svd_records;
+n::OperatorRankMode operator_rank_mode{n::OperatorRankMode::Auto};
+n::SchwarzPolicy schwarz_policy{};
 j::value Read(const char * path,bool precise=false)
 {
     std::ifstream f(path); if(!f) throw std::runtime_error("Missing input");
@@ -42,6 +45,81 @@ j::value Read(const char * path,bool precise=false)
 void Write(const char * path,const j::object & v) {std::ofstream f(path);f<<j::serialize(v)<<'\n';}
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 j::array Values(const n::Vector & v) {j::array out;for(auto x:v) out.push_back(std::isfinite(x) ? j::value(x) : j::value(nullptr));return out;}
+std::size_t ParseSize(const char * raw,bool allow_zero)
+{
+    const std::string value=raw;
+    if(value.empty() || value.front()=='-') throw std::invalid_argument("Expected a nonnegative integer policy value");
+    std::size_t used{}; const auto parsed=std::stoull(value,&used);
+    if(used!=value.size() || parsed>std::numeric_limits<std::size_t>::max() || (!allow_zero && parsed==0))
+        throw std::invalid_argument("Invalid integer policy value");
+    return static_cast<std::size_t>(parsed);
+}
+std::size_t ParseMiB(const char * raw)
+{
+    const auto mib=ParseSize(raw,false);
+    if(mib>std::numeric_limits<std::size_t>::max()/(1024*1024)) throw std::invalid_argument("Schwarz memory limit is too large");
+    return mib*1024*1024;
+}
+n::OperatorRankMode ParseOperatorRankMode(const std::string & value)
+{
+    if(value=="auto") return n::OperatorRankMode::Auto;
+    if(value=="dense") return n::OperatorRankMode::Dense;
+    if(value=="spqr-bounds") return n::OperatorRankMode::SpqrBounds;
+    throw std::invalid_argument("Expected --operator-rank auto|dense|spqr-bounds");
+}
+void ConfigureSearchPolicy(n::EvaluationContext & context)
+{
+    context.search.operator_rank.mode=operator_rank_mode;
+    context.search.schwarz=schwarz_policy;
+}
+j::object PolicyRecord(const n::SearchPolicy & policy)
+{
+    const bool rank_active=policy.method==n::SearchMethod::OperatorPcg;
+    const auto resolved=rank_active ? n::ResolveOperatorRankBackend(policy.operator_rank.mode,n::ActiveSparseBackend()) :
+        std::optional<n::FreeDesignRankBackend>{};
+    return {{"search_method",n::SearchMethodName(policy.method)},
+        {"sparse_backend",n::SparseBackendName(n::ActiveSparseBackend())},
+        {"operator_rank_active",rank_active},
+        {"operator_rank_mode",n::OperatorRankModeName(policy.operator_rank.mode)},
+        {"resolved_rank_backend",resolved ? j::value(n::FreeDesignRankBackendName(*resolved)) : j::value(nullptr)},
+        {"operator_rank_budget_seconds",policy.operator_rank.budget.seconds},
+        {"operator_rank_budget_entries",policy.operator_rank.budget.entries},
+        {"operator_rank_budget_workspace_bytes",policy.operator_rank.budget.workspace_bytes},
+        {"preconditioner",n::PreconditionerName(policy.preconditioner)},
+        {"schwarz_core_atoms",policy.schwarz.core_atoms},{"schwarz_overlap_hops",policy.schwarz.overlap_hops},
+        {"schwarz_max_block_atoms",policy.schwarz.max_block_atoms},
+        {"schwarz_storage_bytes",policy.schwarz.storage_bytes},{"schwarz_scratch_bytes",policy.schwarz.scratch_bytes}};
+}
+j::object Summary(std::vector<std::size_t> values)
+{
+    if(values.empty()) return {{"min",nullptr},{"median",nullptr},{"max",nullptr}};
+    std::sort(values.begin(),values.end());
+    const double median=values.size()%2 ? static_cast<double>(values[values.size()/2]) :
+        .5*(static_cast<double>(values[values.size()/2-1])+static_cast<double>(values[values.size()/2]));
+    return {{"min",values.front()},{"median",median},{"max",values.back()}};
+}
+j::object PartitionRecord(const n::PreconditionerPartition & partition)
+{
+    std::vector<std::size_t> cores,blocks,memberships; std::map<std::size_t,std::size_t> histogram;
+    for(const auto & block:partition.blocks)
+    {
+        cores.push_back(block.core_atoms.size()); blocks.push_back(block.core_atoms.size()+block.overlap_atoms.size());
+    }
+    for(auto atom:partition.layout.full_atoms)
+    {
+        const auto count=partition.atom_blocks[static_cast<std::size_t>(atom)].size();
+        memberships.push_back(count); ++histogram[count];
+    }
+    j::object census;
+    for(const auto & [count,atoms]:histogram) census[std::to_string(count)]=atoms;
+    const auto & work=n::SearchWorkForTesting();
+    return {{"blocks",partition.blocks.size()},{"core_atom_counts",Summary(std::move(cores))},
+        {"block_atom_counts",Summary(std::move(blocks))},{"atom_membership",Summary(std::move(memberships))},
+        {"atom_membership_histogram",census},{"overlap_hops",partition.policy.overlap_hops},
+        {"core_atoms",partition.policy.core_atoms},{"max_block_atoms",partition.policy.max_block_atoms},
+        {"topology_bytes",work.topology_bytes},{"storage_bytes",work.storage_bytes},
+        {"scratch_bytes_bound",work.scratch_bytes}};
+}
 #ifndef SPARSE_BASELINE_DRIVER
 void Mode(const std::string & name)
 {
@@ -126,6 +204,12 @@ j::object SearchWork()
         {"operator_design_seconds",op.design_seconds},{"operator_fixed_factor_seconds",op.factor_seconds},
         {"operator_compact_seconds",op.compact_seconds},{"operator_svd_seconds",op.svd_seconds},
         {"operator_prepare_seconds",op.preparation_seconds},{"operator_rank_seconds",op.rank_seconds},
+        {"operator_rank_checks",op.rank_checks},{"operator_rank_status",op.rank_status.empty() ? "not-run" : op.rank_status},
+        {"operator_rank_reason",op.rank_reason.empty() ? "not-run" : op.rank_reason},
+        {"operator_rank_rows",op.rank_rows},{"operator_rank_columns",op.rank_columns},
+        {"operator_rank_entries",op.rank_entries},{"operator_rank_workspace_bytes",op.rank_workspace_bytes},
+        {"operator_rank_compact_extractions",op.rank_compact_extractions},
+        {"operator_rank_free_design_svds",op.rank_free_design_svds},
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
         {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
 #endif
@@ -145,7 +229,9 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #else
     if(search_kind!="legacy") throw std::invalid_argument("Baseline supports only legacy search");
 #endif
+    ConfigureSearchPolicy(context);
     j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows}};
+    report["solver_policy"]=PolicyRecord(context.search);
     Snapshot(output,report);
     auto search=n::SearchProfile(domain,y,b,context);
     report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
@@ -153,8 +239,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     if(search_kind=="schwarz")
     {
         const auto partition=n::SearchPartition(domain,context,context.search.schwarz);
-        j::array memberships; for(const auto & blocks:partition->atom_blocks) if(!blocks.empty()) memberships.push_back(blocks.size());
-        report["partition"]=j::object{{"blocks",partition->blocks.size()},{"atom_memberships",memberships}};
+        report["partition"]=PartitionRecord(*partition);
     }
 #endif
     report["search_seconds"]=search.seconds; report["search_work"]=SearchWork();
@@ -181,7 +266,15 @@ void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::Ev
 
 #ifndef SPARSE_BASELINE_DRIVER
 #ifndef PR23_BASELINE_DRIVER
-    if(!fixed_mode.empty()) {RunFixed(domain,y,b,context,output); return;}
+    if(!fixed_mode.empty())
+    {
+        auto configured=context; ConfigureSearchPolicy(configured);
+        configured.search.method=n::SearchMethod::OperatorPcg;
+        if(fixed_preconditioner=="identity") configured.search.preconditioner=n::PreconditionerKind::Identity;
+        else if(fixed_preconditioner=="diagonal") configured.search.preconditioner=n::PreconditionerKind::Diagonal;
+        else if(fixed_preconditioner=="schwarz") configured.search.preconditioner=n::PreconditionerKind::Schwarz;
+        RunFixed(domain,y,b,configured,output); return;
+    }
 #endif
     if(!search_kind.empty()) {RunSearch(domain,y,b,context,output); return;}
 #endif
@@ -282,6 +375,12 @@ int main(int argc,char ** argv)
                 else if(option=="--audit") audit=true;
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
+                else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);
+                else if(option=="--schwarz-core-atoms" && k+1<end) schwarz_policy.core_atoms=ParseSize(argv[++k],false);
+                else if(option=="--schwarz-overlap-hops" && k+1<end) schwarz_policy.overlap_hops=ParseSize(argv[++k],true);
+                else if(option=="--schwarz-max-block-atoms" && k+1<end) schwarz_policy.max_block_atoms=ParseSize(argv[++k],false);
+                else if(option=="--schwarz-storage-mib" && k+1<end) schwarz_policy.storage_bytes=ParseMiB(argv[++k]);
+                else if(option=="--schwarz-scratch-mib" && k+1<end) schwarz_policy.scratch_bytes=ParseMiB(argv[++k]);
 #ifndef PR23_BASELINE_DRIVER
                 else if(option=="--fixed" && k+1<end) fixed_mode=argv[++k];
                 else if(option=="--fixed-preconditioner" && k+1<end) fixed_preconditioner=argv[++k];
@@ -292,6 +391,8 @@ int main(int argc,char ** argv)
                 else throw std::invalid_argument("Invalid benchmark option");
             }
         }
+        if(schwarz_policy.max_block_atoms<schwarz_policy.core_atoms)
+            throw std::invalid_argument("Schwarz max block atoms must be at least core atoms");
         if(audit) n::CompactSvdCaptureForTesting()=Capture;
 #endif
         Eigen::setNbThreads(1); const std::string mode=argc>1 ? argv[1] : "";
@@ -300,7 +401,9 @@ int main(int argc,char ** argv)
         {
             const std::string topology=argv[2],phase=argv[4]; const int atoms=std::stoi(argv[3]);
             if(phase!="prepare" && phase!="fixed" && phase!="workflow" && phase!="local" && phase!="rank" && phase!="rank-oracle") throw std::invalid_argument("Invalid synthetic phase");
-            if(atoms>512 && phase!="prepare" && phase!="local" && phase!="rank") throw std::invalid_argument("Large workloads are preparation/local-only");
+            const bool operator_search=search_kind=="identity" || search_kind=="diagonal" || search_kind=="schwarz";
+            if(atoms>512 && phase!="prepare" && phase!="local" && phase!="rank" && !(phase=="fixed" && operator_search))
+                throw std::invalid_argument("Large solves require an explicit OperatorPcg search route");
             const auto started=Clock::now(); const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
             const double construction_seconds=Seconds(started);
             const auto & data=c::JointProblemAccess::Get(problem);
