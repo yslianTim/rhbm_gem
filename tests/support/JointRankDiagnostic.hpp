@@ -31,9 +31,8 @@ void RunRank(const n::Evaluation & state,const n::EvaluationContext & context,bo
         {
             const auto result=n::EvaluateFreeDesignRank(design,factor.get(),{context.rank,p},context.search.operator_rank.budget);
             const auto number=[](double value)->j::value {return std::isfinite(value) ? j::value(value) : j::value(nullptr);};
-            const auto census_started=Clock::now();
-            const auto census=second_stage_test::DiagnoseLocalRankWitnesses(design,result.threshold_upper);
-            report["local_witness_seconds"]=Seconds(census_started);
+            const auto & census=result.local_witness;
+            report["local_witness_seconds"]=result.local_witness_seconds;
             report["local_witness"]=j::object{
                 {"groups",census.groups},{"covered_columns",census.covered_columns},
                 {"total_columns",census.total_columns},{"coverage_fraction",census.coverage_fraction},
@@ -44,7 +43,8 @@ void RunRank(const n::Evaluation & state,const n::EvaluationContext & context,bo
                 {"would_certify",census.would_certify},{"reason",census.reason}};
             report["rank_result"]=j::object{
                 {"status",result.status==n::FreeDesignRankStatus::FullRank ? "full-rank" : result.status==n::FreeDesignRankStatus::Deficient ? "deficient" : "unavailable"},
-                {"reason",result.reason},{"rank_lower",result.rank_lower},{"rank_upper",result.rank_upper},
+                {"reason",result.reason},{"certificate",n::FreeDesignRankCertificateName(result.certificate)},
+                {"rank_lower",result.rank_lower},{"rank_upper",result.rank_upper},
                 {"exact_rank",result.status!=n::FreeDesignRankStatus::Unavailable && result.rank_lower==result.rank_upper ? j::value(result.rank_lower) : j::value(nullptr)},
                 {"work_stage",n::FreeDesignRankWorkStageName(result.work_stage)},
                 {"estimated_total_entries",OptionalSize(result.estimated_total_entries)},

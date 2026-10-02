@@ -8,7 +8,6 @@
 #include "support/JointRuntimeJson.hpp"
 #ifndef SPARSE_BASELINE_DRIVER
 #include "support/JointOperatorWorkload.hpp"
-#include "support/JointRankWitnessCensus.hpp"
 #include "core/detail/joint_component/ProfileJacobianOperator.hpp"
 #include "core/detail/JointUncertainty.hpp"
 #ifndef PR23_BASELINE_DRIVER
@@ -48,6 +47,17 @@ void Write(const char * path,const j::object & v) {std::ofstream f(path);f<<j::s
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 j::array Values(const n::Vector & v) {j::array out;for(auto x:v) out.push_back(std::isfinite(x) ? j::value(x) : j::value(nullptr));return out;}
 j::value OptionalSize(const std::optional<std::size_t> & value) {return value ? j::value(*value) : j::value(nullptr);}
+j::object LocalWitnessRecord(const n::FreeDesignLocalWitness & witness)
+{
+    const auto number=[](double value)->j::value {return std::isfinite(value) ? j::value(value) : j::value(nullptr);};
+    return {{"groups",witness.groups},{"covered_columns",witness.covered_columns},
+        {"total_columns",witness.total_columns},{"coverage_fraction",witness.coverage_fraction},
+        {"exclusive_rows",witness.exclusive_rows},{"max_group_size",witness.max_group_size},
+        {"minimum_lower",witness.minimum_lower ? j::value(*witness.minimum_lower) : j::value(nullptr)},
+        {"rank_threshold_upper",number(witness.threshold_upper)},
+        {"exclusive_rows_disjoint",witness.exclusive_rows_disjoint},
+        {"would_certify",witness.would_certify},{"reason",std::string(witness.reason)}};
+}
 std::size_t ParseSize(const char * raw,bool allow_zero)
 {
     const std::string value=raw;
@@ -222,6 +232,8 @@ j::object SearchWork()
         {"operator_design_seconds",op.design_seconds},{"operator_fixed_factor_seconds",op.factor_seconds},
         {"operator_compact_seconds",op.compact_seconds},{"operator_svd_seconds",op.svd_seconds},
         {"operator_prepare_seconds",op.preparation_seconds},{"operator_rank_seconds",op.rank_seconds},
+        {"operator_rank_certificate",n::FreeDesignRankCertificateName(op.rank_certificate)},
+        {"operator_rank_local_witness",LocalWitnessRecord(op.rank_local_witness)},
         {"operator_rank_checks",op.rank_checks},{"operator_rank_status",op.rank_status.empty() ? "not-run" : op.rank_status},
         {"operator_rank_reason",op.rank_reason.empty() ? "not-run" : op.rank_reason},
         {"operator_rank_rows",op.rank_rows},{"operator_rank_columns",op.rank_columns},

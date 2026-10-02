@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <bit>
 #include <cfenv>
+#include <array>
+#include <map>
 #include <numeric>
 #include <unordered_map>
 
@@ -60,6 +62,142 @@ std::optional<std::size_t> CheckedMultiply(std::size_t a,std::size_t b)
     if(a && b>std::numeric_limits<std::size_t>::max()/a) return std::nullopt;
     return a*b;
 }
+std::optional<std::size_t> WorkspaceSize(std::size_t rows,std::size_t columns,std::size_t nonzeros,bool local_witness)
+{
+    const auto row_bytes=CheckedMultiply(rows,3*sizeof(Interval));
+    const auto column_bytes=CheckedMultiply(columns,192);
+    if(!row_bytes || !column_bytes) return std::nullopt;
+    auto total=CheckedAdd(*row_bytes,*column_bytes);
+    if(!total || !local_witness) return total;
+    const auto census_rows=CheckedMultiply(rows,4*sizeof(std::size_t));
+    const auto census_design=CheckedMultiply(nonzeros,sizeof(Eigen::Index));
+    const auto census_columns=CheckedMultiply(columns,sizeof(std::size_t));
+    if(!census_rows || !census_design || !census_columns) return std::nullopt;
+    total=CheckedAdd(*total,*census_rows);
+    if(!total) return std::nullopt;
+    total=CheckedAdd(*total,*census_design);
+    if(!total) return std::nullopt;
+    return CheckedAdd(*total,*census_columns);
+}
+FreeDesignLocalWitness DiagnoseLocalSupport(const Sparse & design,double threshold_upper,Audit * audit)
+{
+    FreeDesignLocalWitness out;
+    out.total_columns=static_cast<std::size_t>(design.cols());
+    out.threshold_upper=threshold_upper;
+    if(!std::isfinite(threshold_upper)) {out.reason="rank-threshold-unavailable"; return out;}
+    const auto nonzeros=static_cast<std::size_t>(design.nonZeros());
+    if(audit)
+    {
+        audit->Stage(FreeDesignRankWorkStage::LocalWitness);
+        const auto scans=CheckedMultiply(nonzeros,2);
+        if(!scans) throw Stop{"rank-work-budget"};
+        audit->Charge(*scans);
+    }
+    std::map<std::vector<Eigen::Index>,std::vector<Eigen::Index>> support_groups;
+    for(Eigen::Index col=0;col<design.cols();++col)
+    {
+        if(audit) audit->Charge(0);
+        std::vector<Eigen::Index> support;
+        for(Sparse::InnerIterator value(design,col);value;++value) if(value.value()!=0) support.push_back(value.row());
+        support_groups[std::move(support)].push_back(col);
+    }
+    out.groups=support_groups.size();
+    const auto missing_group=std::numeric_limits<std::size_t>::max();
+    std::vector<std::size_t> group_for_column(static_cast<std::size_t>(design.cols()));
+    std::size_t group_id{};
+    for(const auto & [support,columns]:support_groups)
+    {
+        (void)support;
+        for(const auto col:columns) group_for_column[static_cast<std::size_t>(col)]=group_id;
+        ++group_id;
+    }
+    std::vector<std::size_t> row_group(static_cast<std::size_t>(design.rows()),missing_group);
+    std::vector<bool> row_conflict(static_cast<std::size_t>(design.rows()));
+    for(Eigen::Index col=0;col<design.cols();++col)
+    {
+        if(audit) audit->Charge(0);
+        for(Sparse::InnerIterator value(design,col);value;++value) if(value.value()!=0)
+        {
+            const auto row=static_cast<std::size_t>(value.row());
+            const auto current=group_for_column[static_cast<std::size_t>(col)];
+            if(row_group[row]==missing_group) row_group[row]=current;
+            else if(row_group[row]!=current) row_conflict[row]=true;
+        }
+    }
+
+    group_id=0;
+    bool unsupported_size=false,missing_rows=false,weak_lower=false,bound_unavailable=false;
+    for(const auto & [support,columns]:support_groups)
+    {
+        if(audit) audit->Charge(0);
+        out.max_group_size=std::max(out.max_group_size,columns.size());
+        std::vector<Eigen::Index> exclusive;
+        for(const auto row:support)
+        {
+            const auto index=static_cast<std::size_t>(row);
+            if(!row_conflict[index] && row_group[index]==group_id) exclusive.push_back(row);
+        }
+        out.exclusive_rows+=exclusive.size();
+        if(columns.size()>2) {unsupported_size=true; ++group_id; continue;}
+        if(exclusive.size()<(columns.size()==1 ? 1u : 2u)) {missing_rows=true; ++group_id; continue;}
+        std::optional<double> best;
+        if(columns.size()==1)
+        {
+            if(audit) audit->Charge(exclusive.size());
+            for(const auto row:exclusive)
+            {
+                const auto lower=CertifiedMagnitudeLowerBound(design.coeff(row,columns[0]));
+                if(lower && (!best || *lower>*best)) best=lower;
+            }
+        }
+        else
+        {
+            std::vector<std::array<double,2>> row_values;
+            row_values.reserve(exclusive.size());
+            if(audit) audit->Charge(2*exclusive.size());
+            for(const auto row:exclusive)
+                row_values.push_back({design.coeff(row,columns[0]),design.coeff(row,columns[1])});
+            std::array<std::size_t,3> anchors{};
+            for(std::size_t k=0;k<row_values.size();++k)
+            {
+                if(std::abs(row_values[k][0])>std::abs(row_values[anchors[0]][0])) anchors[0]=k;
+                if(std::abs(row_values[k][1])>std::abs(row_values[anchors[1]][1])) anchors[1]=k;
+                const auto magnitude=[](const auto & row) {return std::max(std::abs(row[0]),std::abs(row[1]));};
+                if(magnitude(row_values[k])>magnitude(row_values[anchors[2]])) anchors[2]=k;
+            }
+            for(std::size_t a=0;a<anchors.size();++a)
+            {
+                if(std::find(anchors.begin(),anchors.begin()+static_cast<std::ptrdiff_t>(a),anchors[a])!=
+                    anchors.begin()+static_cast<std::ptrdiff_t>(a)) continue;
+                for(std::size_t k=0;k<row_values.size();++k) if(k!=anchors[a])
+                {
+                    if(audit) audit->Charge(4);
+                    const auto lower=CertifiedSmallestSingularLowerBound2x2(
+                        row_values[anchors[a]][0],row_values[anchors[a]][1],row_values[k][0],row_values[k][1]);
+                    if(lower && (!best || *lower>*best)) best=lower;
+                }
+            }
+        }
+        if(!best) bound_unavailable=true;
+        else
+        {
+            out.minimum_lower=out.minimum_lower ? std::min(*out.minimum_lower,*best) : *best;
+            if(*best>threshold_upper) out.covered_columns+=columns.size();
+            else weak_lower=true;
+        }
+        ++group_id;
+    }
+    out.coverage_fraction=out.total_columns ?
+        static_cast<double>(out.covered_columns)/static_cast<double>(out.total_columns) : 0.;
+    out.would_certify=out.total_columns>0 && out.covered_columns==out.total_columns && out.exclusive_rows_disjoint;
+    if(out.would_certify) out.reason="local-support-full-rank-witness";
+    else if(unsupported_size) out.reason="unsupported-for-local-witness";
+    else if(missing_rows) out.reason="missing-exclusive-rows";
+    else if(bound_unavailable) out.reason="local-bound-unavailable";
+    else if(weak_lower) out.reason="local-lower-not-above-threshold";
+    else out.reason="partial-column-coverage";
+    return out;
+}
 }
 std::string_view FreeDesignRankWorkStageName(FreeDesignRankWorkStage stage)
 {
@@ -68,11 +206,25 @@ std::string_view FreeDesignRankWorkStageName(FreeDesignRankWorkStage stage)
     case FreeDesignRankWorkStage::None: return "none";
     case FreeDesignRankWorkStage::StructuralScan: return "structural-scan";
     case FreeDesignRankWorkStage::DuplicateCheck: return "duplicate-check";
+    case FreeDesignRankWorkStage::LocalWitness: return "local-witness";
     case FreeDesignRankWorkStage::FactorInspection: return "factor-inspection";
     case FreeDesignRankWorkStage::WeakDirection: return "weak-direction";
     case FreeDesignRankWorkStage::InverseBound: return "inverse-bound";
     case FreeDesignRankWorkStage::OrthogonalBound: return "orthogonal-bound";
     case FreeDesignRankWorkStage::Reconstruction: return "reconstruction";
+    }
+    return "none";
+}
+std::string_view FreeDesignRankCertificateName(FreeDesignRankCertificate certificate)
+{
+    switch(certificate)
+    {
+    case FreeDesignRankCertificate::None: return "none";
+    case FreeDesignRankCertificate::Structural: return "structural";
+    case FreeDesignRankCertificate::WeakDirection: return "weak-direction";
+    case FreeDesignRankCertificate::LocalSupport: return "local-support";
+    case FreeDesignRankCertificate::SpqrReconstruction: return "spqr-reconstruction";
+    case FreeDesignRankCertificate::DenseOracle: return "dense-oracle";
     }
     return "none";
 }
@@ -98,6 +250,10 @@ std::optional<double> CertifiedSmallestSingularLowerBound2x2(double a,double b,d
     }
     catch(const Stop &) {return std::nullopt;}
 }
+FreeDesignLocalWitness DiagnoseFreeDesignLocalWitnesses(const Sparse & design,double threshold_upper)
+{
+    return DiagnoseLocalSupport(design,threshold_upper,nullptr);
+}
 FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFactor * factor,const RankRequest & request,const RankBudget & budget)
 {
     FreeDesignRankResult out; out.rank_upper=std::min(z.rows(),z.cols());
@@ -113,7 +269,8 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
         if(n<=0 || p<=0 || request.policy.rows<0 || request.columns<=0 || !std::isfinite(request.absolute) ||
             !std::isfinite(budget.seconds) || budget.seconds<0) throw Stop{"rank-invalid-input"};
         out.design_nonzeros=static_cast<std::size_t>(z.nonZeros());
-        out.workspace_bytes=static_cast<std::size_t>(n)*sizeof(Interval)*3+static_cast<std::size_t>(p)*192;
+        const auto base_workspace=WorkspaceSize(static_cast<std::size_t>(n),static_cast<std::size_t>(p),out.design_nonzeros,false);
+        out.workspace_bytes=base_workspace.value_or(std::numeric_limits<std::size_t>::max());
         if(out.workspace_bytes>budget.workspace_bytes) throw Stop{"rank-memory-budget"};
         RecordDenseShape("rank-observation-vector",n,1); RecordDenseShape("rank-free-vector",p,1);
         audit.Stage(FreeDesignRankWorkStage::StructuralScan);
@@ -178,14 +335,33 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
             out.threshold_lower=std::max(0.,Mul(Interval(relative),Interval(out.maximum_lower)).lo);
             out.threshold_upper=ProductUp(relative,out.maximum_upper);
         }
+        const double cutoff=request.boundary==RankBoundary::SvdNative ?
+            std::max(out.threshold_upper,std::numeric_limits<double>::min()) : out.threshold_upper;
         if(structural)
         {
             if(n>=p && out.maximum_upper>0 && out.threshold_lower==0) throw Stop{"rank-boundary-unresolved"};
-            out.status=FreeDesignRankStatus::Deficient; out.reason="rank-structural-deficiency";
+            out.status=FreeDesignRankStatus::Deficient; out.certificate=FreeDesignRankCertificate::Structural; out.reason="rank-structural-deficiency";
             out.rank_upper=out.maximum_upper==0 ? 0 : structural_upper;
             out.witness_upper=0;
         }
         else
+        {
+            audit.Stage(FreeDesignRankWorkStage::LocalWitness);
+            const auto witness_workspace=WorkspaceSize(static_cast<std::size_t>(n),static_cast<std::size_t>(p),out.design_nonzeros,true);
+            out.workspace_bytes=witness_workspace.value_or(std::numeric_limits<std::size_t>::max());
+            if(out.workspace_bytes>budget.workspace_bytes) throw Stop{"rank-memory-budget"};
+            const auto local_started=std::chrono::steady_clock::now();
+            out.local_witness=DiagnoseLocalSupport(z,cutoff,&audit);
+            out.local_witness_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-local_started).count();
+            if(out.local_witness.would_certify)
+            {
+                out.status=FreeDesignRankStatus::FullRank; out.certificate=FreeDesignRankCertificate::LocalSupport;
+                out.rank_lower=out.rank_upper=p; out.reason="rank-verified-full";
+                out.minimum_lower=out.local_witness.minimum_lower.value_or(0.);
+                out.estimated_total_entries=out.entries; out.estimated_remaining_entries=0;
+            }
+        }
+        if(!structural && out.status==FreeDesignRankStatus::Unavailable)
         {
             audit.Stage(FreeDesignRankWorkStage::FactorInspection);
             if(!factor) throw Stop{"rank-factor-unavailable"};
@@ -239,7 +415,8 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
                 out.witness_upper=std::isfinite(out.witness_upper) ? std::min(out.witness_upper,upper) : upper;
                 if(upper<out.threshold_lower)
                 {
-                    out.status=FreeDesignRankStatus::Deficient; out.rank_upper=p-1; out.reason="rank-verified-weak-direction"; break;
+                    out.status=FreeDesignRankStatus::Deficient; out.certificate=FreeDesignRankCertificate::WeakDirection;
+                    out.rank_upper=p-1; out.reason="rank-verified-weak-direction"; break;
                 }
             }
             if(out.status==FreeDesignRankStatus::Unavailable)
@@ -312,10 +489,10 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
                 }
                 out.reconstruction_error=SqrtUp(error_squared);
                 out.minimum_lower=std::max(0.,Down(Down(qlower/inverse_upper)-out.reconstruction_error));
-                const double cutoff=request.boundary==RankBoundary::SvdNative ? std::max(out.threshold_upper,std::numeric_limits<double>::min()) : out.threshold_upper;
                 if(out.minimum_lower>cutoff)
                 {
-                    out.status=FreeDesignRankStatus::FullRank; out.rank_lower=out.rank_upper=p; out.reason="rank-verified-full";
+                    out.status=FreeDesignRankStatus::FullRank; out.certificate=FreeDesignRankCertificate::SpqrReconstruction;
+                    out.rank_lower=out.rank_upper=p; out.reason="rank-verified-full";
                 }
                 else out.reason="rank-boundary-unresolved";
             }

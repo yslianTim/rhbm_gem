@@ -30,7 +30,9 @@ TEST(JointFreeDesignRank,FullRankWithPermutedRowsColumnsAndNoDenseWork)
     const auto oracle=n::EvaluateRank(a,{{1000,10,5},10});
     EXPECT_LE(out.minimum_lower,oracle.singular_values.tail(1)(0));
     EXPECT_LE(out.maximum_lower,oracle.singular_values(0)); EXPECT_GE(out.maximum_upper,oracle.singular_values(0));
-    EXPECT_LT(out.reconstruction_error,1e-10); EXPECT_GT(out.orthogonal_minimum,.99);
+    EXPECT_EQ(out.certificate,n::FreeDesignRankCertificate::LocalSupport);
+    EXPECT_TRUE(out.local_witness.would_certify);
+    EXPECT_EQ(out.work_stage,n::FreeDesignRankWorkStage::LocalWitness);
 }
 TEST(JointFreeDesignRank,StructuralDeficiencyDoesNotNeedAFactor)
 {
@@ -73,22 +75,34 @@ TEST(JointFreeDesignRank,BudgetsInvalidValuesAndFactorIdentity)
     EXPECT_EQ(n::EvaluateFreeDesignRank(z,nullptr,request,{1,1000,0}).reason,"rank-memory-budget");
     n::Sparse invalid=z; invalid.coeffRef(0,0)=n::unavailable;
     EXPECT_EQ(n::EvaluateFreeDesignRank(invalid,nullptr,request).reason,"rank-nonfinite-design");
-    n::Indices columns{0,1,2,3}; const auto factor=n::FreeDesignFactor::Fixed(z,columns);
-    invalid=z; invalid.coeffRef(0,0)=2;
-    const auto out=n::EvaluateFreeDesignRank(invalid,factor.get(),request);
+    n::Matrix dense(5,3);
+    for(Eigen::Index row=0;row<dense.rows();++row)
+    {
+        const double x=static_cast<double>(row);
+        dense(row,0)=1+.1*x; dense(row,1)=1+.01*x*x; dense(row,2)=1+.002*x*x*x;
+    }
+    const n::Sparse design=dense.sparseView(); n::Indices columns{0,1,2};
+    const auto factor=n::FreeDesignFactor::Fixed(design,columns);
+    invalid=design; invalid.coeffRef(0,0)+=.01;
+    const auto out=n::EvaluateFreeDesignRank(invalid,factor.get(),{{100,5,0},3});
     EXPECT_EQ(out.reason,n::SparseBackendEnabled() ? "rank-factor-mismatch" : "rank-backend-unavailable");
     invalid=z; invalid.coeffRef(0,0)=1e308;
     EXPECT_EQ(n::EvaluateFreeDesignRank(invalid,nullptr,request).reason,"rank-bound-overflow");
 }
 TEST(JointFreeDesignRank,ReportsExactReconstructionForecastAndBudgetStage)
 {
-    n::Matrix a=n::Matrix::Identity(12,4);
-    for(Eigen::Index col=0;col<a.cols();++col) {a(6+col,col)=.15; a.col(col).normalize();}
-    const n::RankRequest request{{1000,4,0},4};
+    n::Matrix a(12,3);
+    for(Eigen::Index row=0;row<a.rows();++row)
+    {
+        const double x=static_cast<double>(row);
+        a(row,0)=1+.1*x; a(row,1)=1+.01*x*x; a(row,2)=1+.002*x*x*x;
+    }
+    const n::RankRequest request{{1000,3,0},3};
     const n::RankBudget generous{120,std::numeric_limits<std::size_t>::max(),256*1024*1024};
     const auto full=Rank(a,request,generous);
     if(!n::SparseBackendEnabled()) {EXPECT_EQ(full.reason,"rank-backend-unavailable"); return;}
     ASSERT_EQ(full.status,n::FreeDesignRankStatus::FullRank)<<full.reason;
+    EXPECT_EQ(full.certificate,n::FreeDesignRankCertificate::SpqrReconstruction);
     ASSERT_TRUE(full.estimated_total_entries); ASSERT_TRUE(full.estimated_remaining_entries);
     ASSERT_TRUE(full.estimated_reconstruction_entries);
     EXPECT_EQ(*full.estimated_reconstruction_entries,
@@ -100,6 +114,7 @@ TEST(JointFreeDesignRank,ReportsExactReconstructionForecastAndBudgetStage)
     EXPECT_GT(full.factor_r_nonzeros,0);
     EXPECT_GT(full.reflector_count,0);
     EXPECT_EQ(full.work_stage,n::FreeDesignRankWorkStage::Reconstruction);
+    EXPECT_EQ(n::EvaluateRank(a,request).rank,a.cols());
 
     const n::RankBudget just_short{120,*full.estimated_total_entries-1,256*1024*1024};
     const auto stopped=Rank(a,request,just_short);
@@ -143,6 +158,15 @@ TEST(JointFreeDesignRank,TinyWorkBudgetNamesTheStageWithoutChangingReason)
     EXPECT_EQ(result.reason,"rank-work-budget");
     EXPECT_EQ(result.work_stage,n::FreeDesignRankWorkStage::StructuralScan);
     EXPECT_FALSE(result.estimated_total_entries);
+}
+TEST(JointFreeDesignRank,LocalWitnessBudgetExhaustionKeepsTheExistingReason)
+{
+    const n::Matrix a=n::Matrix::Identity(4,4); const n::RankRequest request{{100,4,0},4};
+    const auto result=Rank(a,request,{120,4,256*1024*1024});
+    EXPECT_EQ(result.status,n::FreeDesignRankStatus::Unavailable);
+    EXPECT_EQ(result.reason,"rank-work-budget");
+    EXPECT_EQ(result.work_stage,n::FreeDesignRankWorkStage::LocalWitness);
+    EXPECT_EQ(result.certificate,n::FreeDesignRankCertificate::None);
 }
 TEST(JointLocalRankWitness,CertifiesDisjointTwoColumnSupportGroups)
 {
@@ -197,9 +221,10 @@ TEST(JointLocalRankWitness,RequiresTwoExclusiveRowsAndFallsBackForLargerGroups)
     EXPECT_FALSE(missing.would_certify);
     EXPECT_EQ(missing.reason,"missing-exclusive-rows");
 
-    n::Matrix larger=n::Matrix::Zero(4,5);
+    n::Matrix larger=n::Matrix::Zero(6,5);
     larger(0,0)=1; larger(0,1)=.2; larger(1,0)=.1; larger(1,1)=1;
-    for(Eigen::Index col=2;col<5;++col) {larger(2,col)=1; larger(3,col)=.2*static_cast<double>(col);}
+    for(Eigen::Index col=2;col<5;++col)
+    {larger(2,col)=1; larger(3,col)=.2*static_cast<double>(col); larger(4,col)=.1*static_cast<double>(col*col);}
     const n::Sparse larger_sparse=larger.sparseView();
     const auto partial=second_stage_test::DiagnoseLocalRankWitnesses(larger_sparse,.01);
     EXPECT_EQ(partial.max_group_size,3); EXPECT_EQ(partial.covered_columns,2);
@@ -215,6 +240,90 @@ TEST(JointLocalRankWitness,TwoByTwoLowerBoundUsesOutwardArithmetic)
     ASSERT_EQ(oracle.rank,2);
     EXPECT_LE(*lower,oracle.singular_values(1));
     EXPECT_GT(*lower,0);
+}
+TEST(JointFreeDesignRank,LocalSupportCertificateIsSufficientAndAvoidsReconstruction)
+{
+    n::Matrix a=n::Matrix::Zero(4,4);
+    a(0,0)=1; a(0,1)=.2; a(1,0)=.1; a(1,1)=1;
+    a(2,2)=.9; a(2,3)=.15; a(3,2)=.1; a(3,3)=.8;
+    const n::RankRequest request{{1000,4,0},4};
+    const auto result=Rank(a,request);
+    ASSERT_EQ(result.status,n::FreeDesignRankStatus::FullRank)<<result.reason;
+    EXPECT_EQ(result.certificate,n::FreeDesignRankCertificate::LocalSupport);
+    EXPECT_EQ(result.reason,"rank-verified-full");
+    EXPECT_TRUE(result.local_witness.would_certify);
+    EXPECT_EQ(result.work_stage,n::FreeDesignRankWorkStage::LocalWitness);
+    EXPECT_FALSE(result.estimated_reconstruction_entries);
+    ASSERT_TRUE(result.estimated_total_entries); ASSERT_TRUE(result.estimated_remaining_entries);
+    EXPECT_EQ(*result.estimated_total_entries,result.entries);
+    EXPECT_EQ(*result.estimated_remaining_entries,0);
+    EXPECT_GT(result.minimum_lower,result.threshold_upper);
+    EXPECT_EQ(n::EvaluateRank(a,request).rank,4);
+}
+TEST(JointFreeDesignRank,LocalWitnessUsesStrictThresholdAndFallsBack)
+{
+    n::Matrix a=n::Matrix::Zero(4,4);
+    a(0,0)=1; a(0,1)=.2; a(1,0)=.1; a(1,1)=1;
+    a(2,2)=.9; a(2,3)=.15; a(3,2)=.1; a(3,3)=.8;
+    const auto witness=n::DiagnoseFreeDesignLocalWitnesses(a.sparseView(),0);
+    ASSERT_TRUE(witness.would_certify); ASSERT_TRUE(witness.minimum_lower);
+    const n::RankRequest request{{1000,4,0},4,*witness.minimum_lower};
+    const auto result=Rank(a,request);
+    EXPECT_FALSE(result.local_witness.would_certify);
+    EXPECT_EQ(result.local_witness.reason,"local-lower-not-above-threshold");
+    EXPECT_NE(result.certificate,n::FreeDesignRankCertificate::LocalSupport);
+    const auto oracle=n::EvaluateRank(a,request);
+    if(result.status==n::FreeDesignRankStatus::FullRank) EXPECT_EQ(oracle.rank,4);
+}
+TEST(JointFreeDesignRank,StructuralDeficiencyStillPrecedesLocalWitness)
+{
+    n::Matrix a=n::Matrix::Identity(4,4); a.col(3)=a.col(1);
+    const auto result=Rank(a,{{100,4,0},4});
+    EXPECT_EQ(result.status,n::FreeDesignRankStatus::Deficient);
+    EXPECT_EQ(result.certificate,n::FreeDesignRankCertificate::Structural);
+    EXPECT_FALSE(result.local_witness.would_certify);
+}
+TEST(JointFreeDesignRank,UnsupportedAndNonexclusiveGroupsFallBackToSpqr)
+{
+    n::Matrix shared=n::Matrix::Zero(3,3);
+    shared(0,0)=1; shared(0,1)=.2; shared(1,0)=.1; shared(1,1)=1;
+    shared(1,2)=.3; shared(2,2)=1;
+    const auto nonexclusive=Rank(shared,{{100,3,0},3});
+    EXPECT_EQ(nonexclusive.local_witness.reason,"missing-exclusive-rows");
+    EXPECT_NE(nonexclusive.certificate,n::FreeDesignRankCertificate::LocalSupport);
+
+    n::Matrix larger=n::Matrix::Zero(6,5);
+    larger(0,0)=1; larger(0,1)=.2; larger(1,0)=.1; larger(1,1)=1;
+    for(Eigen::Index col=2;col<5;++col)
+    {larger(2,col)=1; larger(3,col)=.2*static_cast<double>(col); larger(4,col)=.1*static_cast<double>(col*col);}
+    const auto unsupported=Rank(larger,{{100,5,0},5});
+    EXPECT_EQ(unsupported.local_witness.reason,"unsupported-for-local-witness");
+    EXPECT_DOUBLE_EQ(unsupported.local_witness.coverage_fraction,.4);
+    EXPECT_NE(unsupported.certificate,n::FreeDesignRankCertificate::LocalSupport);
+}
+TEST(JointFreeDesignRank,RowColumnPermutationsAndScaleKeepLocalConclusion)
+{
+    n::Matrix a=n::Matrix::Zero(4,4);
+    a(0,0)=1; a(0,1)=.2; a(1,0)=.1; a(1,1)=1;
+    a(2,2)=.9; a(2,3)=.15; a(3,2)=.1; a(3,3)=.8;
+    const n::RankRequest request{{1000,4,0},4};
+    const auto original=Rank(a,request);
+    ASSERT_EQ(original.status,n::FreeDesignRankStatus::FullRank);
+    ASSERT_EQ(original.certificate,n::FreeDesignRankCertificate::LocalSupport);
+    n::Matrix permuted(a.rows(),a.cols());
+    for(Eigen::Index row=0;row<a.rows();++row)
+        for(Eigen::Index col=0;col<a.cols();++col)
+            permuted(row,col)=a(a.rows()-1-row,a.cols()-1-col);
+    const auto reordered=Rank(permuted,request);
+    EXPECT_EQ(reordered.status,n::FreeDesignRankStatus::FullRank);
+    EXPECT_EQ(reordered.certificate,n::FreeDesignRankCertificate::LocalSupport);
+    for(const double scale:{1e-4,1e4})
+    {
+        const auto scaled=Rank(scale*a,request);
+        EXPECT_EQ(scaled.status,n::FreeDesignRankStatus::FullRank)<<scaled.reason;
+        EXPECT_EQ(scaled.certificate,n::FreeDesignRankCertificate::LocalSupport);
+        EXPECT_EQ(n::EvaluateRank(scale*a,request).rank,4);
+    }
 }
 TEST(JointFreeDesignRank,TimeBudgetIncludesStructuralColumnScans)
 {

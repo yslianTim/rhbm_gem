@@ -131,6 +131,19 @@ class JointBenchmarkContract(unittest.TestCase):
                                                   Path('fixed.json'), build)
             self.assertEqual(fixed[fixed.index('--schwarz-overlap-hops') + 1], '0')
 
+    def test_rank_profile_metadata_names_the_backend_it_executes(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'rank', '--case', 'chain-8',
+                                  '--build-dir', 'build/debug', '--output', 'result.json'])
+        prototype = benchmark.solver_policy_metadata(args, 'SPQR')
+        self.assertTrue(prototype['operator_rank_active'])
+        self.assertIsNone(prototype['search_method'])
+        self.assertEqual((prototype['operator_rank_mode'], prototype['resolved_rank_backend']),
+                         ('spqr-bounds', 'SpqrBounds'))
+        args.rank_mode = 'oracle'
+        oracle = benchmark.solver_policy_metadata(args, 'SPQR')
+        self.assertEqual((oracle['operator_rank_mode'], oracle['resolved_rank_backend']), ('dense', 'Dense'))
+
     def test_non_sparse_profiles_do_not_receive_operator_policy_options(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'workflow', '--case', 'full',
@@ -183,7 +196,8 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(details['search_work'], work)
 
     def test_rank_profile_preserves_work_forecast_and_factor_census(self):
-        rank = {'status': 'unavailable', 'reason': 'rank-work-budget', 'work_stage': 'reconstruction',
+        rank = {'status': 'unavailable', 'reason': 'rank-work-budget', 'certificate': 'none',
+                'work_stage': 'reconstruction',
                 'entries': 99, 'seconds': .2, 'workspace_bytes': 4096,
                 'estimated_total_entries': 120, 'estimated_remaining_entries': 21,
                 'estimated_reconstruction_entries': 40, 'design_nonzeros': 16,
@@ -245,10 +259,12 @@ class JointBenchmarkContract(unittest.TestCase):
                   'timeout': 600, 'rss_limit': 4 * 1024**3}
 
         def report(rank_backend='SpqrBounds', completed=3, compact=0, svds=0,
+                   rank_certificate='local-support',
                    rank_status='full-rank', missing_pcg=False):
             runs = []
             for index in range(completed):
                 work = {'operator_rank_status': 'full-rank',
+                        'operator_rank_certificate': rank_certificate,
                         'operator_rank_compact_extractions': compact,
                         'operator_rank_free_design_svds': svds,
                         'pcg_solves': 1, 'pcg_iterations': 2}
@@ -270,6 +286,15 @@ class JointBenchmarkContract(unittest.TestCase):
         eligible = schwarz_sweep.summarize(config, report(), 'run.json')
         self.assertTrue(eligible['evidence_eligible'])
         self.assertEqual(eligible['evidence_exclusion_reasons'], [])
+
+        reconstruction = schwarz_sweep.summarize(
+            config, report(rank_certificate='spqr-reconstruction'), 'reconstruction.json')
+        self.assertTrue(reconstruction['evidence_eligible'])
+
+        uncertified = schwarz_sweep.summarize(
+            config, report(rank_certificate='dense-oracle'), 'uncertified.json')
+        self.assertFalse(uncertified['evidence_eligible'])
+        self.assertIn('rank-certificate-not-rigorous', uncertified['evidence_exclusion_reasons'])
 
         dense_rank = schwarz_sweep.summarize(config, report(rank_backend='Dense'), 'dense.json')
         self.assertFalse(dense_rank['evidence_eligible'])

@@ -201,19 +201,28 @@ def operator_policy_options(args):
 
 
 def solver_policy_metadata(args, backend):
-    active = args.profile == 'fixed' or (args.profile == 'solve' and args.preconditioner != 'legacy')
+    rank_profile = args.profile == 'rank'
+    active = (args.profile == 'fixed' or
+              (args.profile == 'solve' and args.preconditioner != 'legacy') or rank_profile)
     resolved = None
     backend_name = backend.upper()
-    if active:
+    if rank_profile:
+        resolved = 'Dense' if args.rank_mode == 'oracle' else 'SpqrBounds'
+        rank_mode = 'dense' if args.rank_mode == 'oracle' else 'spqr-bounds'
+    elif active:
         if args.operator_rank == 'dense' or (backend_name == 'EIGEN' and args.operator_rank == 'auto'):
             resolved = 'Dense'
         elif args.operator_rank in ('auto', 'spqr-bounds') and backend_name == 'SPQR':
             resolved = 'SpqrBounds'
+        rank_mode = args.operator_rank
+    else:
+        rank_mode = args.operator_rank
     return {
-        'search_method': 'OperatorPcg' if active else 'LegacyCompact' if args.profile == 'solve' else None,
+        'search_method': ('OperatorPcg' if active and not rank_profile else
+                          'LegacyCompact' if args.profile == 'solve' else None),
         'sparse_backend': backend,
         'operator_rank_active': active,
-        'operator_rank_mode': args.operator_rank,
+        'operator_rank_mode': rank_mode,
         'resolved_rank_backend': resolved,
         'operator_rank_budget_seconds': args.operator_rank_seconds,
         'operator_rank_budget_entries': args.operator_rank_work_entries,
@@ -288,7 +297,7 @@ def normalize_result(profile, raw):
     elif profile == 'rank':
         details = {key: rank_result.get(key) for key in (
             'status', 'reason', 'rank_lower', 'rank_upper', 'exact_rank', 'rank',
-            'threshold', 'minimum_lower', 'maximum_upper', 'rank_backend', 'work_stage',
+            'threshold', 'minimum_lower', 'maximum_upper', 'rank_backend', 'certificate', 'work_stage',
             'entries', 'seconds', 'workspace_bytes', 'estimated_total_entries',
             'estimated_remaining_entries', 'estimated_reconstruction_entries', 'design_nonzeros',
             'r_nonzeros', 'reflector_nonzeros', 'reflectors', 'threshold_lower', 'threshold_upper')}

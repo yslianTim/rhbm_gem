@@ -79,6 +79,8 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 work.rank_estimated_total_entries=rank_evidence_.estimated_total_entries;
                 work.rank_estimated_remaining_entries=rank_evidence_.estimated_remaining_entries;
                 work.rank_estimated_reconstruction_entries=rank_evidence_.estimated_reconstruction_entries;
+                work.rank_certificate=rank_evidence_.certificate;
+                work.rank_local_witness=rank_evidence_.local_witness;
                 work.rank_design_nonzeros=rank_evidence_.design_nonzeros;
                 work.rank_r_nonzeros=rank_evidence_.factor_r_nonzeros;
                 work.rank_reflector_nonzeros=rank_evidence_.reflector_nonzeros;
@@ -98,8 +100,10 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 {WorkTimer svd_timer(work.svd_seconds); svd=EvaluateRank(compact,{context.rank,p,absolute});}
                 rank_evidence_.status=!svd.valid ? FreeDesignRankStatus::Unavailable :
                     svd.rank!=p || factor_->Rank()!=p ? FreeDesignRankStatus::Deficient : FreeDesignRankStatus::FullRank;
+                rank_evidence_.certificate=svd.valid ? FreeDesignRankCertificate::DenseOracle : FreeDesignRankCertificate::None;
                 rank_evidence_.reason=!svd.valid ? "rank-factorization-failed" :
                     rank_evidence_.status==FreeDesignRankStatus::Deficient ? "rank-deficient-free-design" : "rank-dense-oracle";
+                work.rank_certificate=rank_evidence_.certificate;
                 work.rank_status=RankStatus(rank_evidence_.status); work.rank_reason=rank_evidence_.reason;
                 if(!svd.valid) {reason_="nonfinite-derivative"; factor_.reset(); return;}
                 if(svd.rank!=p || factor_->Rank()!=p)

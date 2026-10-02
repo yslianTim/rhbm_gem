@@ -133,6 +133,7 @@ def summarize(config, report, individual_name, process_error=None):
         item_work = item_details.get('search_work') or {}
         rank_repetition_evidence.append({
             'rank_status': item_work.get('operator_rank_status'),
+            'rank_certificate': item_work.get('operator_rank_certificate'),
             'compact_extractions': item_work.get('operator_rank_compact_extractions'),
             'free_design_svds': item_work.get('operator_rank_free_design_svds'),
             'work_stage': item_work.get('operator_rank_work_stage'),
@@ -221,6 +222,7 @@ def summarize(config, report, individual_name, process_error=None):
         'rank_backend': policy.get('resolved_rank_backend'),
         'sparse_backend': policy.get('sparse_backend'),
         'rank_status': work.get('operator_rank_status'),
+        'rank_certificate': work.get('operator_rank_certificate'),
         'rank_reason': work.get('operator_rank_reason'),
         'rank_seconds': measurements['rank_seconds']['median'],
         'rank_entries': work.get('operator_rank_entries'),
@@ -309,6 +311,9 @@ def evidence_exclusion_reasons(row):
     rank_runs = row.get('rank_repetition_evidence') or []
     if not rank_runs or any(run.get('rank_status') != 'full-rank' for run in rank_runs):
         reasons.append('rank-not-full')
+    if not rank_runs or any(run.get('rank_certificate') not in ('local-support', 'spqr-reconstruction')
+                            for run in rank_runs):
+        reasons.append('rank-certificate-not-rigorous')
     if not rank_runs or any(run.get('compact_extractions') is None or
                             run.get('free_design_svds') is None for run in rank_runs):
         reasons.append('missing-rank-telemetry')
@@ -327,7 +332,7 @@ def set_evidence_eligibility(row):
 CSV_BASE_FIELDS = (
     'configuration', 'status', 'reason', 'individual_json', 'evidence_eligible',
     'evidence_exclusion_reasons', 'rank_repetition_evidence', 'atoms', 'rows', 'free_columns',
-    'sparse_backend', 'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
+    'sparse_backend', 'rank_backend', 'rank_status', 'rank_certificate', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'rank_work_stage', 'rank_estimated_total_entries',
     'rank_estimated_remaining_entries', 'rank_estimated_reconstruction_entries', 'rank_design_nonzeros',
     'rank_r_nonzeros', 'rank_reflector_nonzeros', 'rank_reflectors', 'compact_extractions', 'free_design_svds', 'blocks',

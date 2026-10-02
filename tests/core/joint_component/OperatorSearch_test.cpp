@@ -354,6 +354,8 @@ TEST(JointOperatorSearchTest, DenseAndBoundedRankSearchesPreserveStateAndEvidenc
         EXPECT_GT(work.rank_checks,0);
         EXPECT_EQ(work.rank_status,"full-rank");
         EXPECT_EQ(work.rank_reason,"rank-verified-full");
+        EXPECT_TRUE(work.rank_certificate==n::FreeDesignRankCertificate::LocalSupport ||
+            work.rank_certificate==n::FreeDesignRankCertificate::SpqrReconstruction);
         EXPECT_EQ(work.rank_compact_extractions,0);
         EXPECT_EQ(work.rank_free_design_svds,0);
     }
