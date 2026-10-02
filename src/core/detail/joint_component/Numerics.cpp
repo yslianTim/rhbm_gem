@@ -34,6 +34,20 @@ JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
     if(policy.method==SearchMethod::OperatorPcg) preconditioner=policy.preconditioner;
     return {ActiveSparseBackend(),policy.method,preconditioner};
 }
+std::optional<FreeDesignRankBackend> ResolveOperatorRankBackend(OperatorRankMode mode,SparseBackend backend)
+{
+    switch(mode)
+    {
+    case OperatorRankMode::Auto:
+        return backend==SparseBackend::Spqr ? FreeDesignRankBackend::SpqrBounds : FreeDesignRankBackend::Dense;
+    case OperatorRankMode::Dense:
+        return FreeDesignRankBackend::Dense;
+    case OperatorRankMode::SpqrBounds:
+        if(backend==SparseBackend::Spqr) return FreeDesignRankBackend::SpqrBounds;
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
 std::string_view SparseBackendName(SparseBackend backend)
 {
     switch(backend)
@@ -59,6 +73,16 @@ std::string_view PreconditionerName(PreconditionerKind preconditioner)
     case PreconditionerKind::Identity: return "Identity";
     case PreconditionerKind::Diagonal: return "Diagonal";
     case PreconditionerKind::Schwarz: return "Schwarz";
+    }
+    return {};
+}
+std::string_view OperatorRankModeName(OperatorRankMode mode)
+{
+    switch(mode)
+    {
+    case OperatorRankMode::Auto: return "Auto";
+    case OperatorRankMode::Dense: return "Dense";
+    case OperatorRankMode::SpqrBounds: return "SpqrBounds";
     }
     return {};
 }

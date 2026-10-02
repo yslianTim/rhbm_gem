@@ -96,7 +96,9 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         for(;;)
         {
             if(out.accepted>=context.update_budget) return finish("accepted-update-budget");
-            const ProfileJacobianOperator op(accepted,context); ++out.derivatives; ++SearchWorkForTesting().linearizations;
+            const auto rank_backend=ResolveOperatorRankBackend(context.search.operator_rank,ActiveSparseBackend());
+            if(!rank_backend) return finish("rank-backend-unavailable");
+            const ProfileJacobianOperator op(accepted,context,-1,*rank_backend); ++out.derivatives; ++SearchWorkForTesting().linearizations;
             if(!op.Valid()) return finish(op.Reason());
             Vector norms;
             {

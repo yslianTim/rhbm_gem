@@ -3,7 +3,6 @@
 #include "SparseFactor.hpp"
 
 namespace rhbm_gem::core::joint_component {
-enum class FreeDesignRankBackend {Dense,SpqrBounds};
 enum class FreeDesignRankStatus {Unavailable,FullRank,Deficient};
 struct RankBudget
 {

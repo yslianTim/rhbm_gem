@@ -39,6 +39,19 @@ TEST(JointOperatorSearchTest, PcgMatchesIndependentDenseSystemAndDetectsFailure)
     EXPECT_EQ(n::SolvePcg([](n::VectorRef x)->n::Vector{return x;},[](n::VectorRef x)->n::Vector{return -x;},rhs,metric).reason,"pcg-nonpositive-preconditioner");
     EXPECT_EQ(n::SolvePcg([](n::VectorRef x)->n::Vector{return n::Vector::Constant(x.size(),n::unavailable);},[](n::VectorRef x)->n::Vector{return x;},rhs,metric).reason,"pcg-nonfinite");
 }
+TEST(JointOperatorSearchTest, OperatorRankPolicyResolvesEveryBackendCombination)
+{
+    using B=n::SparseBackend; using M=n::OperatorRankMode; using R=n::FreeDesignRankBackend;
+    EXPECT_EQ(n::ResolveOperatorRankBackend(M::Auto,B::Spqr),R::SpqrBounds);
+    EXPECT_EQ(n::ResolveOperatorRankBackend(M::Auto,B::Eigen),R::Dense);
+    EXPECT_EQ(n::ResolveOperatorRankBackend(M::Dense,B::Spqr),R::Dense);
+    EXPECT_EQ(n::ResolveOperatorRankBackend(M::Dense,B::Eigen),R::Dense);
+    EXPECT_EQ(n::ResolveOperatorRankBackend(M::SpqrBounds,B::Spqr),R::SpqrBounds);
+    EXPECT_FALSE(n::ResolveOperatorRankBackend(M::SpqrBounds,B::Eigen));
+    const n::SearchPolicy policy;
+    EXPECT_EQ(policy.method,n::SearchMethod::LegacyCompact);
+    EXPECT_EQ(policy.operator_rank,M::Auto);
+}
 TEST(JointOperatorSearchTest, FrozenTopologyDeterminismMappingsAndLimits)
 {
     auto input=std::make_shared<c::JointProblemInput>(second_stage_test::OperatorWorkload("chain",8));
