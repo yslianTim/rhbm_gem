@@ -166,6 +166,71 @@ status and individual result; incomplete repetitions are not reported as a
 complete campaign. Timing is descriptive and has no fixed performance pass
 threshold.
 
+## One-level scaling analysis
+
+`joint_scaling_analysis.py` reads the sweep JSON and does not rerun the
+estimator. It groups rows by topology, preconditioner, core size, overlap,
+maximum block size, operator-rank mode, and sparse backend. Incomplete rows,
+identity/diagonal controls, missing policies, and duplicate global sizes cannot
+produce a one-level Schwarz verdict. The primary point value is
+`measurements.pcg_iterations_per_solve.median`, the median of per-repetition
+PCG solve medians. Total PCG iterations are supporting work only.
+Every completed repetition must contain at least one PCG solve for the point to
+be valid; missing per-solve telemetry is excluded from the valid-point count.
+
+At least four complete points with positive atom counts and positive per-solve
+iteration medians are required for a slope verdict. `growth-observed` requires
+both a log-log slope of at least 0.25 and an endpoint iteration growth ratio
+of at least 1.5. Adjacent points within 15% of exact doubling also report their
+iteration ratios; all adjacent pairs report interval log-log slopes. A
+completed larger-size point with any `pcg-iteration-budget` repetition takes
+the stronger `pcg-budget-limited` classification. That classification records
+that coarse correction investigation is warranted; it leaves solver changes to
+a separate design decision. `stable`
+means these points do not meet the growth gate; it does not guarantee scaling
+at larger sizes. `not-comparable` means the rows do not describe a single
+one-level Schwarz policy.
+
+The analysis separately reports PCG-solve, linearization, and damping-trial
+scaling. Growth in these counts with stable per-solve iterations is diagnosed
+as `nonlinear-work-growth`, not Krylov growth. If wall time or peak RSS grows
+by at least 50% while PCG iterations remain stable, the diagnostic is
+`cost-growth-with-stable-krylov`; investigate operator work, rank/setup,
+memory bandwidth, or storage. These diagnostics do not alter the solver.
+
+Example bounded tool smoke:
+
+```sh
+python3 tests/integration/joint_schwarz_sweep.py \
+  --build-dir build/joint-spqr --output build/joint-scaling.json \
+  --csv build/joint-scaling.csv --topologies chain --atoms 8 16 \
+  --cores 4 --overlaps 1 --preconditioners schwarz --operator-rank auto \
+  --warmup 1 --repeat 3 --timeout 120
+python3 tests/integration/joint_scaling_analysis.py \
+  --input build/joint-scaling.json --output build/joint-scaling-analysis.json
+```
+
+For a future campaign, keep each local Schwarz policy fixed while increasing
+global size:
+
+```sh
+python3 tests/integration/joint_schwarz_sweep.py \
+  --build-dir build/joint-spqr --output build/joint-scaling.json \
+  --csv build/joint-scaling.csv --topologies chain cube \
+  --atoms 256 512 1024 2048 4096 8192 --cores 128 --overlaps 1 \
+  --preconditioners diagonal schwarz --operator-rank auto \
+  --warmup 1 --repeat 3 --timeout 600
+python3 tests/integration/joint_scaling_analysis.py \
+  --input build/joint-scaling.json --output build/joint-scaling-analysis.json
+```
+
+Run identity controls at smaller sizes if desired. Interpret stable iterations
+with rising wall time through operator/setup costs, and stable iterations with
+rising solve, linearization, or damping counts as nonlinear search work.
+Rising RSS with stable iterations is a memory/resource-scaling issue. Only a
+repeated increase in per-solve PCG iterations under a fixed local policy is
+the main evidence for a future coarse-space investigation.
+
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
 `FreeDesignRank_test`. Search and bounded-work contracts remain in

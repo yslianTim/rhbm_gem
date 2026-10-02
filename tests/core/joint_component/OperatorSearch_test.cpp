@@ -55,8 +55,11 @@ TEST(JointOperatorSearchTest, PcgTelemetryRecordsZeroRhsAndIterationBudgetCounts
     const auto zero=n::SolvePcg([&](n::VectorRef x)->n::Vector{return a*x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric);
     ASSERT_TRUE(zero.valid); EXPECT_EQ(zero.reason,"pcg-zero-rhs");
     rhs<<1,2;
-    const auto limited=n::SolvePcg([&](n::VectorRef x)->n::Vector{return a*x;},[](n::VectorRef x)->n::Vector{return x;},rhs,metric,1);
+    int operator_actions=0,inverse_actions=0;
+    const auto limited=n::SolvePcg([&](n::VectorRef x)->n::Vector{++operator_actions;return a*x;},
+        [&](n::VectorRef x)->n::Vector{++inverse_actions;return x;},rhs,metric,1);
     EXPECT_FALSE(limited.valid); EXPECT_EQ(limited.reason,"pcg-iteration-budget"); EXPECT_EQ(limited.iterations,1);
+    EXPECT_EQ(operator_actions,2); EXPECT_EQ(inverse_actions,2);
     n::Vector empty,empty_metric;
     const auto invalid=n::SolvePcg([](n::VectorRef x)->n::Vector{return x;},[](n::VectorRef x)->n::Vector{return x;},empty,empty_metric);
     EXPECT_FALSE(invalid.valid);

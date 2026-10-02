@@ -9,6 +9,10 @@ Production still defaults to SearchMethod::LegacyCompact. The operator path is
 available through the internal EvaluationContext search policy and
 FitWithSearchPolicy; it does not extend the installed API or serialized schema.
 Search completion is independent of the returned state's convergence evidence.
+The current solver has no two-level Schwarz or coarse correction. The
+`joint_scaling_analysis.py` report only classifies whether the measured
+one-level PCG iteration trend warrants further coarse-space investigation; it
+does not alter search policy or launch a solver experiment.
 
 ## Search and ownership
 

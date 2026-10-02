@@ -10,7 +10,47 @@ from contextlib import redirect_stderr
 from pathlib import Path
 
 import joint_benchmark as benchmark
+import joint_scaling_analysis as scaling_analysis
 import joint_schwarz_sweep as schwarz_sweep
+
+
+def scaling_row(atoms, iterations, **overrides):
+    config = {'topology': 'chain', 'atoms': atoms, 'preconditioner': 'schwarz',
+              'core_atoms': 32, 'overlap_hops': 1, 'max_block_atoms': 64,
+              'operator_rank': 'auto'}
+    row = {
+        'configuration': config,
+        'status': 'completed',
+        'measurements_complete': True,
+        'pcg_iteration_telemetry_complete': True,
+        'requested_repetitions': 3,
+        'completed_repetitions': 3,
+        'atoms': atoms,
+        'measurements': {'pcg_iterations_per_solve': {'min': iterations, 'median': iterations,
+                                                       'max': iterations}},
+        'pcg_iterations_per_solve': iterations,
+        'pcg_solves': 2,
+        'linearizations': 1,
+        'damping_trials': 2,
+        'operator_normals': 4,
+        'operator_applications': 1,
+        'operator_adjoints': 1,
+        'setup_seconds': .3,
+        'pcg_seconds': .5,
+        'search_seconds': 1.,
+        'wall_seconds': 2.,
+        'peak_rss_bytes': 100,
+        'stop_reason': 'converged',
+        'stop_reasons_by_repetition': ['converged'] * 3,
+        'pcg_iteration_budget_repetitions': 0,
+    }
+    for key, value in overrides.items():
+        if key in ('topology', 'preconditioner', 'core_atoms', 'overlap_hops',
+                   'max_block_atoms', 'operator_rank'):
+            config[key] = value
+        else:
+            row[key] = value
+    return row
 
 
 class JointBenchmarkContract(unittest.TestCase):
@@ -195,14 +235,18 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(row['completed_repetitions'], 3)
         self.assertEqual(row['failed_repetitions'], 0)
         self.assertTrue(row['measurements_complete'])
+        self.assertTrue(row['pcg_iteration_telemetry_complete'])
         self.assertEqual(row['measurements']['search_seconds'], {'min': 4., 'median': 8., 'max': 12.})
-        self.assertEqual(row['measurements']['partition_seconds'], {'min': .1, 'median': .2, 'max': .3})
-        self.assertEqual(row['measurements']['topology_setup_seconds'], {'min': .1, 'median': .2, 'max': .3})
-        self.assertEqual(row['measurements']['linearization_setup_seconds'],
-                         {'min': .9, 'median': 1.8, 'max': 2.7})
-        self.assertEqual(row['measurements']['damping_setup_seconds'], {'min': .5, 'median': 1., 'max': 1.5})
-        self.assertEqual(row['measurements']['setup_seconds'], {'min': 1.5, 'median': 3., 'max': 4.5})
-        self.assertEqual(row['measurements']['iterative_seconds'], {'min': .6, 'median': 1.2, 'max': 1.8})
+        for field, expected in {
+            'partition_seconds': (.1, .2, .3),
+            'topology_setup_seconds': (.1, .2, .3),
+            'linearization_setup_seconds': (.9, 1.8, 2.7),
+            'damping_setup_seconds': (.5, 1., 1.5),
+            'setup_seconds': (1.5, 3., 4.5),
+            'iterative_seconds': (.6, 1.2, 1.8),
+        }.items():
+            for stat, value in zip(('min', 'median', 'max'), expected):
+                self.assertAlmostEqual(row['measurements'][field][stat], value)
         self.assertEqual(row['measurements']['measured_seconds'], {'min': 5., 'median': 9., 'max': 13.})
         self.assertAlmostEqual(row['setup_fraction_of_search'], .375)
         self.assertAlmostEqual(row['pcg_fraction_of_search'], .15)
@@ -243,6 +287,73 @@ class JointBenchmarkContract(unittest.TestCase):
         failed = schwarz_sweep.summarize(config, {'execution': {'status': 'timeout'}}, 'run.json')
         self.assertEqual(unavailable['status'], 'unavailable')
         self.assertEqual(failed['status'], 'timeout')
+
+    def test_scaling_analysis_classifies_stable_and_growth_trends(self):
+        sizes = (256, 512, 1024, 2048)
+        stable = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, iterations, sparse_backend='SPQR')
+            for atoms, iterations in zip(sizes, (20, 21, 20, 22))]})
+        self.assertEqual(stable['groups'][0]['coarse_gate'], 'stable')
+        self.assertEqual(stable['groups'][0]['valid_point_count'], 4)
+
+        cost_rows = [scaling_row(atoms, 20, wall_seconds=wall, sparse_backend='SPQR')
+                     for atoms, wall in zip(sizes, (2., 3., 4., 6.))]
+        cost = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': cost_rows})
+        self.assertEqual(cost['groups'][0]['coarse_gate'], 'stable')
+        self.assertIn('cost-growth-with-stable-krylov', cost['groups'][0]['diagnostics'])
+
+        growth = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, iterations, sparse_backend='SPQR')
+            for atoms, iterations in zip(sizes, (20, 25, 31, 39))]})
+        self.assertEqual(growth['groups'][0]['coarse_gate'], 'growth-observed')
+        self.assertGreaterEqual(growth['groups'][0]['iteration_loglog_slope'], .25)
+        self.assertGreaterEqual(growth['groups'][0]['iteration_growth_ratio'], 1.5)
+
+    def test_scaling_analysis_reports_insufficient_budget_and_policy_gates(self):
+        sizes = (256, 512, 1024, 2048)
+        insufficient = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, 20, sparse_backend='SPQR') for atoms in sizes[:3]]})
+        self.assertEqual(insufficient['groups'][0]['coarse_gate'], 'insufficient-evidence')
+        missing_telemetry = [scaling_row(atoms, 20, sparse_backend='SPQR') for atoms in sizes]
+        missing_telemetry[-1]['pcg_iteration_telemetry_complete'] = False
+        result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': missing_telemetry})
+        self.assertEqual(result['groups'][0]['valid_point_count'], 3)
+        self.assertEqual(result['groups'][0]['coarse_gate'], 'insufficient-evidence')
+
+        budget_rows = [scaling_row(atoms, 20, sparse_backend='SPQR') for atoms in sizes]
+        budget_rows[-1]['stop_reason'] = 'pcg-iteration-budget'
+        budget_rows[-1]['stop_reasons_by_repetition'] = ['converged', 'pcg-iteration-budget', 'converged']
+        budget_rows[-1]['pcg_iteration_budget_repetitions'] = 1
+        budget = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': budget_rows})
+        self.assertEqual(budget['groups'][0]['coarse_gate'], 'pcg-budget-limited')
+        self.assertIn('coarse-correction-investigation-warranted', budget['groups'][0]['diagnostics'])
+
+        controls = [scaling_row(atoms, 20, preconditioner='identity', core_atoms=None,
+                                overlap_hops=None, max_block_atoms=None, sparse_backend='SPQR')
+                    for atoms in sizes]
+        not_comparable = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': controls})
+        self.assertEqual(not_comparable['groups'][0]['coarse_gate'], 'not-comparable')
+
+    def test_nonlinear_work_growth_is_not_a_coarse_space_signal(self):
+        sizes = (256, 512, 1024, 2048)
+        rows = [scaling_row(atoms, 20, pcg_solves=2 ** index,
+                            linearizations=index + 1, damping_trials=2 ** index,
+                            sparse_backend='SPQR')
+                for index, atoms in enumerate(sizes)]
+        result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': rows})
+        group = result['groups'][0]
+        self.assertEqual(group['coarse_gate'], 'stable')
+        self.assertIn('nonlinear-work-growth', group['diagnostics'])
+        self.assertEqual(group['supporting_scaling']['pcg_solves']['growth_ratio'], 8.)
+
+    def test_scaling_analysis_never_mixes_local_policies(self):
+        sizes = (256, 512, 1024, 2048)
+        rows = [scaling_row(atoms, iterations,
+                            core_atoms=32 if atoms < 1024 else 64, sparse_backend='SPQR')
+                for atoms, iterations in zip(sizes, (20, 25, 31, 39))]
+        result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': rows})
+        self.assertEqual(len(result['groups']), 2)
+        self.assertTrue(all(group['coarse_gate'] == 'insufficient-evidence' for group in result['groups']))
 
 
 def smoke(build):
@@ -329,6 +440,17 @@ def smoke(build):
             if profile == 'solve':
                 assessment = previous['returned_assessment']
                 state = previous['returned_state']
+                work = report['result']['details']['search_work']
+                counts = work.get('pcg_iteration_counts')
+                if (not isinstance(counts, list) or len(counts) != work['pcg_solves'] or
+                        sum(counts) != work['pcg_iterations']):
+                    raise AssertionError(f'PCG iteration distribution does not match totals: {work}')
+                for field in ('operator_normals', 'operator_applications', 'operator_adjoints'):
+                    if not isinstance(work.get(field), int):
+                        raise AssertionError(f'solve telemetry omitted {field}: {work}')
+                if counts and not (work['pcg_iterations_min'] <= work['pcg_iterations_median'] <=
+                                   work['pcg_iterations_max']):
+                    raise AssertionError(f'PCG iteration summaries are inconsistent: {work}')
                 expected = (assessment['runtime_convergence'], assessment['design_spectrum']['rank'],
                             state['objective'], previous['search']['profile_evaluations'],
                             previous['search']['accepted_updates'])

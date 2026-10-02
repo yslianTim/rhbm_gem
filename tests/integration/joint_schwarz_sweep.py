@@ -103,6 +103,7 @@ def summarize(config, report, individual_name, process_error=None):
     status = execution.get('status', 'process_error')
     per_run_values = []
     per_run_iterations = []
+    stop_reasons = []
     for item in successful:
         item_result = item.get('result') or {}
         item_details = item_result.get('details') or {}
@@ -148,6 +149,7 @@ def summarize(config, report, individual_name, process_error=None):
         values['accepted_updates'] = item_details.get('accepted_updates')
         values['profile_evaluations'] = item_details.get('profile_evaluations')
         per_run_values.append(values)
+        stop_reasons.append(item_details.get('stop_reason'))
         counts = item_work.get('pcg_iteration_counts')
         if isinstance(counts, list):
             per_run_iterations.append(counts)
@@ -174,10 +176,17 @@ def summarize(config, report, individual_name, process_error=None):
         'measurements': measurements,
         'pcg_iteration_counts': pooled_iterations,
         'pcg_iteration_counts_by_repetition': per_run_iterations,
+        'pcg_iteration_repetitions': len(per_run_iterations),
+        'pcg_iteration_valid_repetitions': len(repetition_medians),
+        'pcg_iteration_telemetry_complete': (
+            len(per_run_iterations) == len(successful) and len(repetition_medians) == len(successful)),
+        'stop_reasons_by_repetition': stop_reasons,
+        'pcg_iteration_budget_repetitions': sum(reason == 'pcg-iteration-budget' for reason in stop_reasons),
         'atoms': (report.get('problem') or {}).get('atoms') if report else config['atoms'],
         'rows': (report.get('problem') or {}).get('voxels') if report else None,
         'free_columns': work.get('operator_rank_columns'),
         'rank_backend': policy.get('resolved_rank_backend'),
+        'sparse_backend': policy.get('sparse_backend'),
         'rank_status': work.get('operator_rank_status'),
         'rank_reason': work.get('operator_rank_reason'),
         'rank_seconds': measurements['rank_seconds']['median'],
@@ -239,10 +248,12 @@ def summarize(config, report, individual_name, process_error=None):
 
 CSV_BASE_FIELDS = (
     'configuration', 'status', 'reason', 'individual_json', 'atoms', 'rows', 'free_columns',
-    'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
+    'sparse_backend', 'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'compact_extractions', 'free_design_svds', 'blocks',
     'maximum_block_atoms', 'topology_bytes', 'storage_bytes', 'scratch_bytes_bound',
     'requested_repetitions', 'completed_repetitions', 'failed_repetitions', 'measurements_complete',
+    'pcg_iteration_repetitions', 'pcg_iteration_valid_repetitions',
+    'pcg_iteration_telemetry_complete', 'pcg_iteration_budget_repetitions',
     'pcg_solves', 'pcg_iterations', 'pcg_iterations_per_solve',
     'pcg_iterations_per_solve_pooled_median', 'operator_normals', 'operator_applications',
     'operator_adjoints', 'damping_trials', 'local_builds', 'factor_builds',
