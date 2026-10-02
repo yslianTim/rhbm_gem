@@ -4,6 +4,30 @@
 
 namespace rhbm_gem::core::joint_component {
 OperatorWork & OperatorWorkForTesting() {static thread_local OperatorWork work; return work;}
+namespace {
+struct RankWorkAudit
+{
+    OperatorWork & operator_work;
+    SparseWork & sparse_work;
+    std::size_t compact_extractions{sparse_work.compact_extractions};
+    std::size_t free_design_svds{sparse_work.free_design_svds};
+    ~RankWorkAudit()
+    {
+        operator_work.rank_compact_extractions+=sparse_work.compact_extractions-compact_extractions;
+        operator_work.rank_free_design_svds+=sparse_work.free_design_svds-free_design_svds;
+    }
+};
+const char * RankStatus(FreeDesignRankStatus status)
+{
+    switch(status)
+    {
+    case FreeDesignRankStatus::Unavailable: return "unavailable";
+    case FreeDesignRankStatus::FullRank: return "full-rank";
+    case FreeDesignRankStatus::Deficient: return "deficient";
+    }
+    return "unavailable";
+}
+}
 ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const EvaluationContext & context,double absolute,FreeDesignRankBackend backend)
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
 {
@@ -44,9 +68,13 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
         {
             ResourcePhase rank_phase("operator-rank");
             ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
+            RankWorkAudit rank_audit{work,SparseWorkForTesting()};
             if(backend==FreeDesignRankBackend::SpqrBounds)
             {
-                rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute});
+                rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute},context.search.operator_rank.budget);
+                work.rank_entries+=rank_evidence_.entries;
+                work.rank_workspace_bytes=std::max(work.rank_workspace_bytes,rank_evidence_.workspace_bytes);
+                work.rank_status=RankStatus(rank_evidence_.status); work.rank_reason=rank_evidence_.reason;
                 if(rank_evidence_.status!=FreeDesignRankStatus::FullRank)
                 {
                     reason_=rank_evidence_.status==FreeDesignRankStatus::Deficient ? "rank-deficient-free-design" : rank_evidence_.reason;
@@ -59,6 +87,11 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 {WorkTimer compact_timer(work.compact_seconds); compact=factor_->Compact();}
                 CompactSvdResult svd;
                 {WorkTimer svd_timer(work.svd_seconds); svd=EvaluateRank(compact,{context.rank,p,absolute});}
+                rank_evidence_.status=!svd.valid ? FreeDesignRankStatus::Unavailable :
+                    svd.rank!=p || factor_->Rank()!=p ? FreeDesignRankStatus::Deficient : FreeDesignRankStatus::FullRank;
+                rank_evidence_.reason=!svd.valid ? "rank-factorization-failed" :
+                    rank_evidence_.status==FreeDesignRankStatus::Deficient ? "rank-deficient-free-design" : "rank-dense-oracle";
+                work.rank_status=RankStatus(rank_evidence_.status); work.rank_reason=rank_evidence_.reason;
                 if(!svd.valid) {reason_="nonfinite-derivative"; factor_.reset(); return;}
                 if(svd.rank!=p || factor_->Rank()!=p)
                 {reason_="rank-deficient-free-design"; factor_.reset(); return;}

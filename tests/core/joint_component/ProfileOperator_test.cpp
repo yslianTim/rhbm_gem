@@ -289,3 +289,18 @@ TEST(JointProfileOperatorTest,ExplicitRankPrototypePreservesActionsAndActiveFace
         EXPECT_EQ(prototype.FreeColumns(),active ? 5 : oracle.FreeColumns());
     }
 }
+
+TEST(JointProfileOperatorTest, BoundedRankBudgetFailureDoesNotExtractCompactOrRunSvd)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR bounded rank";
+    Sample s; const auto e=n::EvaluateProfile(s.domain,s.y,s.eta,false,&s.context); ASSERT_TRUE(e.valid);
+    auto context=s.context; context.search.operator_rank.budget.entries=0;
+    n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    const n::ProfileJacobianOperator op(e,context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    EXPECT_FALSE(op.Valid()); EXPECT_EQ(op.Reason(),"rank-work-budget");
+    const auto & work=n::OperatorWorkForTesting();
+    EXPECT_EQ(work.rank_status,"unavailable"); EXPECT_EQ(work.rank_reason,"rank-work-budget");
+    EXPECT_EQ(work.rank_compact_extractions,0); EXPECT_EQ(work.rank_free_design_svds,0);
+    EXPECT_EQ(n::SparseWorkForTesting().compact_extractions,0);
+    EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,0);
+}

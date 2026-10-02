@@ -50,7 +50,7 @@ TEST(JointOperatorSearchTest, OperatorRankPolicyResolvesEveryBackendCombination)
     EXPECT_FALSE(n::ResolveOperatorRankBackend(M::SpqrBounds,B::Eigen));
     const n::SearchPolicy policy;
     EXPECT_EQ(policy.method,n::SearchMethod::LegacyCompact);
-    EXPECT_EQ(policy.operator_rank,M::Auto);
+    EXPECT_EQ(policy.operator_rank.mode,M::Auto);
 }
 TEST(JointOperatorSearchTest, FrozenTopologyDeterminismMappingsAndLimits)
 {
@@ -206,6 +206,67 @@ TEST(JointOperatorSearchTest, SearchUsesReplayWithoutGlobalReductionAndPreserves
     const auto invalid=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Zero(4),context);
     EXPECT_EQ(invalid.stop_reason,"inner-invalid-input"); EXPECT_FALSE(invalid.initial_accepted);
     context.profile_budget=0; EXPECT_EQ(n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context).stop_reason,"profile-budget");
+}
+
+TEST(JointOperatorSearchTest, DenseAndBoundedRankSearchesPreserveStateAndEvidence)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR bounded operator search";
+    for(bool halo:{false,true})
+    {
+        auto input=second_stage_test::OperatorWorkload("chain",4);
+        if(halo)
+        {
+            input.selection_domain.emplace(); input.selection_domain->target_indices={0,1,2};
+            input.support[3]={{7,0}};
+        }
+        const c::JointProblem problem(input); const std::vector<double> initial(4,.55);
+        n::SearchPolicy dense_policy; dense_policy.method=n::SearchMethod::OperatorPcg;
+        dense_policy.preconditioner=n::PreconditionerKind::Schwarz;
+        dense_policy.operator_rank.mode=n::OperatorRankMode::Dense;
+        n::SearchPolicy bounded_policy=dense_policy;
+        bounded_policy.operator_rank.mode=n::OperatorRankMode::SpqrBounds;
+        n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+        const auto dense=c::FitWithSearchPolicy(problem,initial,dense_policy);
+        const auto dense_reason=dense.components.front().stop_reason;
+        n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+        const auto bounded=c::FitWithSearchPolicy(problem,initial,bounded_policy);
+        ASSERT_EQ(bounded.assembled_state.has_value(),dense.assembled_state.has_value());
+        EXPECT_EQ(bounded.RuntimeConvergence(),dense.RuntimeConvergence());
+        ASSERT_EQ(bounded.objective.has_value(),dense.objective.has_value());
+        if(bounded.objective) EXPECT_NEAR(*bounded.objective,*dense.objective,1e-12);
+        ASSERT_EQ(bounded.components.size(),dense.components.size());
+        for(std::size_t k=0;k<bounded.components.size();++k)
+        {
+            const auto & a=bounded.components[k]; const auto & b=dense.components[k];
+            EXPECT_EQ(a.stop_reason,b.stop_reason);
+            EXPECT_EQ(a.state.has_value(),b.state.has_value());
+            if(a.state && b.state)
+            {
+                EXPECT_EQ(a.state->ac,b.state->ac);
+                EXPECT_EQ(a.state->b,b.state->b);
+            }
+        }
+        EXPECT_FALSE(dense_reason.empty());
+        const auto & work=n::OperatorWorkForTesting();
+        EXPECT_GT(work.rank_checks,0);
+        EXPECT_EQ(work.rank_status,"full-rank");
+        EXPECT_EQ(work.rank_reason,"rank-verified-full");
+        EXPECT_EQ(work.rank_compact_extractions,0);
+        EXPECT_EQ(work.rank_free_design_svds,0);
+    }
+}
+
+TEST(JointOperatorSearchTest, UnavailableBoundedBackendNeverFallsBackToDense)
+{
+    if(n::SparseBackendEnabled()) GTEST_SKIP()<<"Eigen backend unavailable route";
+    Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
+    context.search.operator_rank.mode=n::OperatorRankMode::SpqrBounds;
+    n::OperatorWorkForTesting()={};
+    const auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+    EXPECT_EQ(result.stop_reason,"rank-backend-unavailable");
+    EXPECT_EQ(n::OperatorWorkForTesting().rank_status,"unavailable");
+    EXPECT_EQ(n::OperatorWorkForTesting().rank_reason,"rank-backend-unavailable");
+    EXPECT_EQ(n::OperatorWorkForTesting().rank_checks,0);
 }
 
 #include "core/detail/JointUncertainty.hpp"

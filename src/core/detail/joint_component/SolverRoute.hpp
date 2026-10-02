@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <cstddef>
 #include <string_view>
 
 namespace rhbm_gem::core::joint_component {
@@ -10,12 +11,22 @@ enum class SearchMethod {LegacyCompact,OperatorPcg};
 enum class PreconditionerKind {Identity,Diagonal,Schwarz};
 enum class FreeDesignRankBackend {Dense,SpqrBounds};
 enum class OperatorRankMode {Auto,Dense,SpqrBounds};
+struct RankBudget
+{
+    double seconds{120};
+    std::size_t entries{100000000},workspace_bytes{256*1024*1024};
+};
+struct OperatorRankPolicy
+{
+    OperatorRankMode mode{OperatorRankMode::Auto};
+    RankBudget budget{};
+};
 
 struct SearchPolicy
 {
     SearchMethod method{SearchMethod::LegacyCompact};
     PreconditionerKind preconditioner{PreconditionerKind::Schwarz};
-    OperatorRankMode operator_rank{OperatorRankMode::Auto};
+    OperatorRankPolicy operator_rank{};
     int pcg_iterations{-1},damping_trials{20};
 };
 
@@ -33,5 +44,6 @@ std::string_view SparseBackendName(SparseBackend backend);
 std::string_view SearchMethodName(SearchMethod method);
 std::string_view PreconditionerName(PreconditionerKind preconditioner);
 std::string_view OperatorRankModeName(OperatorRankMode mode);
+std::string_view FreeDesignRankBackendName(FreeDesignRankBackend backend);
 
 } // namespace rhbm_gem::core::joint_component

@@ -4,11 +4,6 @@
 
 namespace rhbm_gem::core::joint_component {
 enum class FreeDesignRankStatus {Unavailable,FullRank,Deficient};
-struct RankBudget
-{
-    double seconds{120};
-    std::size_t entries{100000000},workspace_bytes{256*1024*1024};
-};
 struct FreeDesignRankResult
 {
     FreeDesignRankStatus status{FreeDesignRankStatus::Unavailable};
