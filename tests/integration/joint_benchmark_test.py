@@ -142,6 +142,89 @@ class JointBenchmarkContract(unittest.TestCase):
         command = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('run.json'))
         self.assertNotIn('--schwarz-core-atoms', command)
         self.assertNotIn('--schwarz-overlap-hops', command)
+        self.assertEqual(command[command.index('--warmup') + 1], '0')
+
+    def test_sweep_aggregates_completed_repetitions_and_excludes_warmup(self):
+        def run(kind, index, counts, scale, search_seconds, wall_seconds, rss_bytes):
+            work = {
+                'pcg_solves': 2 * scale,
+                'pcg_iterations': sum(counts),
+                'pcg_iteration_counts': counts,
+                'operator_normals': 7 + 2 * scale,
+                'operator_applications': 2 * scale,
+                'operator_adjoints': 3 * scale,
+                'linearizations': scale,
+                'damping_trials': 2 * scale,
+                'local_builds': scale,
+                'inverse_actions': 4 * scale,
+                'partition_seconds': .1 * scale,
+                'operator_prepare_seconds': .2 * scale,
+                'metric_seconds': .3 * scale,
+                'local_seconds': .4 * scale,
+                'factor_seconds': .5 * scale,
+                'inverse_seconds': .05 * scale,
+                'pcg_seconds': .6 * scale,
+                'operator_normal_seconds': .15 * scale,
+                'operator_apply_seconds': .02 * scale,
+                'operator_adjoint_seconds': .03 * scale,
+                'operator_rank_seconds': .04 * scale,
+                'factor_builds': 1,
+            }
+            details = {'search_work': work, 'search_seconds': search_seconds,
+                       'assessment_seconds': 1., 'accepted_updates': scale,
+                       'profile_evaluations': 3 * scale, 'stop_reason': 'converged'}
+            return {'kind': kind, 'index': index, 'status': 'completed',
+                    'process_wall_seconds': wall_seconds, 'peak_rss_bytes': rss_bytes,
+                    'result': {'details': details}}
+
+        config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',
+                  'core_atoms': 2, 'overlap_hops': 1, 'max_block_atoms': 8,
+                  'operator_rank': 'auto', 'repeat': 3, 'warmup': 1}
+        report = {
+            'execution': {'status': 'completed', 'runs': [
+                run('warmup', 1, [1000], 100, 1000., 1000., 1000),
+                run('measurement', 1, [2, 4], 1, 4., 5., 100),
+                run('measurement', 2, [4, 6], 2, 8., 10., 400),
+                run('measurement', 3, [6, 10], 3, 12., 15., 300),
+            ]},
+            'metadata': {'solver_policy': {'resolved_rank_backend': 'Dense'}},
+            'problem': {'atoms': 8, 'voxels': 120},
+            'numerics': {'objective': 1.2, 'runtime_convergence': 'passed'},
+        }
+        row = schwarz_sweep.summarize(config, report, 'run.json')
+        self.assertEqual(row['completed_repetitions'], 3)
+        self.assertEqual(row['failed_repetitions'], 0)
+        self.assertTrue(row['measurements_complete'])
+        self.assertEqual(row['measurements']['search_seconds'], {'min': 4., 'median': 8., 'max': 12.})
+        self.assertEqual(row['measurements']['partition_seconds'], {'min': .1, 'median': .2, 'max': .3})
+        self.assertEqual(row['measurements']['peak_rss_bytes'], {'min': 100, 'median': 300, 'max': 400})
+        self.assertEqual(row['peak_rss_bytes'], 400)
+        self.assertEqual(row['measurements']['operator_normals'], {'min': 9, 'median': 11, 'max': 13})
+        self.assertEqual(row['measurements']['pcg_solves'], {'min': 2, 'median': 4, 'max': 6})
+        self.assertEqual(row['measurements']['factor_builds'], {'min': 1, 'median': 1, 'max': 1})
+        self.assertEqual(row['pcg_iterations_per_solve'], 5.)
+        self.assertEqual(row['pcg_iterations_per_solve_pooled_median'], 5.)
+        self.assertEqual(row['pcg_iteration_counts_by_repetition'], [[2, 4], [4, 6], [6, 10]])
+
+    def test_sweep_marks_failed_measurement_repetition_incomplete(self):
+        config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',
+                  'core_atoms': 2, 'overlap_hops': 1, 'max_block_atoms': 8,
+                  'operator_rank': 'auto', 'repeat': 3, 'warmup': 0}
+        details = {'search_work': {'pcg_solves': 1, 'pcg_iterations': 2,
+                                   'pcg_iteration_counts': [2]},
+                   'search_seconds': 1., 'assessment_seconds': .1}
+        runs = [
+            {'kind': 'measurement', 'status': 'completed', 'process_wall_seconds': 1.,
+             'peak_rss_bytes': 100, 'result': {'details': details}},
+            {'kind': 'measurement', 'status': 'timeout'},
+            {'kind': 'measurement', 'status': 'completed', 'process_wall_seconds': 2.,
+             'peak_rss_bytes': 200, 'result': {'details': details}},
+        ]
+        row = schwarz_sweep.summarize(config, {'execution': {'status': 'timeout', 'runs': runs}}, 'run.json')
+        self.assertEqual(row['completed_repetitions'], 2)
+        self.assertEqual(row['failed_repetitions'], 1)
+        self.assertFalse(row['measurements_complete'])
+        self.assertEqual(row['measurements']['pcg_solves'], {'min': 1, 'median': 1., 'max': 1})
 
     def test_sweep_keeps_failed_and_unavailable_statuses(self):
         config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',

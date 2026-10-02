@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,7 @@ def build_configurations(args):
                         'scratch_mib': args.scratch_mib if preconditioner == 'schwarz' else None,
                         'operator_rank': args.operator_rank,
                         'repeat': args.repeat,
+                        'warmup': args.warmup,
                     }
                     configurations.append(config)
     keys = [configuration_key(config) for config in configurations]
@@ -41,7 +43,7 @@ def build_configurations(args):
 def configuration_key(config):
     fields = (config['topology'], config['atoms'], config['preconditioner'],
               config['core_atoms'], config['overlap_hops'], config['max_block_atoms'],
-              config['operator_rank'])
+              config['operator_rank'], f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
     return '-'.join(str(value) for value in fields if value is not None)
 
 
@@ -49,7 +51,7 @@ def benchmark_command(script, config, args, output):
     command = [sys.executable, str(script), '--profile', 'solve',
                '--case', f"{config['topology']}-{config['atoms']}",
                '--build-dir', str(args.build_dir), '--output', str(output),
-               '--repeat', str(args.repeat), '--timeout', str(args.timeout),
+               '--repeat', str(args.repeat), '--warmup', str(args.warmup), '--timeout', str(args.timeout),
                '--rss-limit', str(args.rss_limit), '--preconditioner', config['preconditioner'],
                '--operator-rank', config['operator_rank']]
     if config['preconditioner'] == 'schwarz':
@@ -61,29 +63,100 @@ def benchmark_command(script, config, args, output):
     return command
 
 
+TIMING_FIELDS = (
+    'partition_seconds', 'operator_prepare_seconds', 'metric_seconds', 'local_seconds',
+    'factor_seconds', 'inverse_seconds', 'pcg_seconds', 'operator_normal_seconds',
+    'operator_apply_seconds', 'operator_adjoint_seconds', 'rank_seconds',
+    'operator_seconds', 'search_seconds', 'assessment_seconds', 'wall_seconds',
+)
+COUNTER_FIELDS = (
+    'pcg_solves', 'pcg_iterations', 'operator_normals', 'operator_applications',
+    'operator_adjoints', 'linearizations', 'damping_trials', 'accepted_updates',
+    'profile_evaluations', 'local_builds', 'factor_builds', 'inverse_actions',
+)
+SUMMARY_FIELDS = (*TIMING_FIELDS, *COUNTER_FIELDS, 'peak_rss_bytes')
+
+
+def distribution(values):
+    values = [value for value in values if isinstance(value, (int, float))]
+    if not values:
+        return {'min': None, 'median': None, 'max': None}
+    return {'min': min(values), 'median': statistics.median(values), 'max': max(values)}
+
+
+def completed_measurement_runs(execution):
+    return [item for item in execution.get('runs', [])
+            if item.get('kind') == 'measurement' and item.get('status') == 'completed']
+
+
 def summarize(config, report, individual_name, process_error=None):
     execution = report.get('execution', {}) if report else {}
-    run = next((item for item in reversed(execution.get('runs', []))
-                if item.get('kind') == 'measurement'), {})
+    successful = completed_measurement_runs(execution)
+    run = successful[-1] if successful else {}
     details = (run.get('result') or {}).get('details', {})
     work = details.get('search_work') or {}
     partition = details.get('partition') or {}
     policy = (report.get('metadata') or {}).get('solver_policy', {}) if report else {}
     numerics = report.get('numerics', {}) if report else {}
-    resources = report.get('resources', {}) if report else {}
     status = execution.get('status', 'process_error')
-    return {
+    per_run_values = []
+    per_run_iterations = []
+    for item in successful:
+        item_result = item.get('result') or {}
+        item_details = item_result.get('details') or {}
+        item_work = item_details.get('search_work') or {}
+        search_seconds = item_details.get('search_seconds')
+        assessment_seconds = item_details.get('assessment_seconds')
+        pcg_seconds = item_work.get('pcg_seconds')
+        values = {key: item_work.get(key) for key in (*TIMING_FIELDS, *COUNTER_FIELDS)}
+        operator_times = [item_work.get(key) for key in (
+            'operator_prepare_seconds', 'operator_apply_seconds',
+            'operator_adjoint_seconds', 'operator_normal_seconds')]
+        values.update({
+            'rank_seconds': item_work.get('operator_rank_seconds'),
+            'search_seconds': search_seconds,
+            'assessment_seconds': assessment_seconds,
+            'wall_seconds': item.get('process_wall_seconds'),
+            'peak_rss_bytes': item.get('peak_rss_bytes'),
+            'operator_seconds': (sum(operator_times) if all(isinstance(value, (int, float))
+                                                           for value in operator_times) else None),
+        })
+        values['accepted_updates'] = item_details.get('accepted_updates')
+        values['profile_evaluations'] = item_details.get('profile_evaluations')
+        per_run_values.append(values)
+        counts = item_work.get('pcg_iteration_counts')
+        if isinstance(counts, list):
+            per_run_iterations.append(counts)
+
+    measurements = {
+        field: distribution([values.get(field) for values in per_run_values])
+        for field in SUMMARY_FIELDS
+    }
+    repetition_medians = [statistics.median(counts) for counts in per_run_iterations if counts]
+    pooled_iterations = [count for counts in per_run_iterations for count in counts]
+    measurements['pcg_iterations_per_solve'] = distribution(repetition_medians)
+    measurements['pcg_iterations_per_solve_pooled'] = distribution(pooled_iterations)
+    pooled_summary = measurements['pcg_iterations_per_solve_pooled']
+    pooled_mean = statistics.mean(pooled_iterations) if pooled_iterations else None
+    row = {
         'configuration': config,
         'status': status,
         'reason': process_error or run.get('reason'),
         'individual_json': individual_name,
+        'requested_repetitions': config.get('repeat', 1),
+        'completed_repetitions': len(successful),
+        'failed_repetitions': max(0, config.get('repeat', 1) - len(successful)),
+        'measurements_complete': (status == 'completed' and len(successful) == config.get('repeat', 1)),
+        'measurements': measurements,
+        'pcg_iteration_counts': pooled_iterations,
+        'pcg_iteration_counts_by_repetition': per_run_iterations,
         'atoms': (report.get('problem') or {}).get('atoms') if report else config['atoms'],
         'rows': (report.get('problem') or {}).get('voxels') if report else None,
         'free_columns': work.get('operator_rank_columns'),
         'rank_backend': policy.get('resolved_rank_backend'),
         'rank_status': work.get('operator_rank_status'),
         'rank_reason': work.get('operator_rank_reason'),
-        'rank_seconds': work.get('operator_rank_seconds'),
+        'rank_seconds': measurements['rank_seconds']['median'],
         'rank_entries': work.get('operator_rank_entries'),
         'rank_workspace_bytes': work.get('operator_rank_workspace_bytes'),
         'compact_extractions': work.get('operator_rank_compact_extractions'),
@@ -97,56 +170,63 @@ def summarize(config, report, individual_name, process_error=None):
         'block_atom_counts': partition.get('block_atom_counts'),
         'atom_membership': partition.get('atom_membership'),
         'atom_membership_histogram': partition.get('atom_membership_histogram'),
-        'pcg_solves': work.get('pcg_solves'),
-        'pcg_iterations': work.get('pcg_iterations'),
-        'pcg_iteration_counts': work.get('pcg_iteration_counts'),
-        'pcg_iterations_min': work.get('pcg_iterations_min'),
-        'pcg_iterations_median': work.get('pcg_iterations_median'),
-        'pcg_iterations_max': work.get('pcg_iterations_max'),
-        'pcg_iterations_mean': work.get('pcg_iterations_mean'),
-        'operator_normals': work.get('operator_normals'),
-        'operator_applications': work.get('operator_applications'),
-        'operator_adjoints': work.get('operator_adjoints'),
-        'damping_trials': work.get('damping_trials'),
-        'local_builds': work.get('local_builds'),
-        'factor_builds': work.get('factor_builds'),
-        'inverse_actions': work.get('inverse_actions'),
-        'iterations_per_solve': (work['pcg_iterations'] / work['pcg_solves']
-                                 if work.get('pcg_solves') else None),
-        'partition_seconds': work.get('partition_seconds'),
-        'local_seconds': work.get('local_seconds'),
-        'factor_seconds': work.get('factor_seconds'),
-        'inverse_seconds': work.get('inverse_seconds'),
-        'operator_seconds': sum(work.get(key, 0) or 0 for key in (
-            'operator_prepare_seconds', 'operator_apply_seconds',
-            'operator_adjoint_seconds', 'operator_normal_seconds')) if work else None,
-        'operator_prepare_seconds': work.get('operator_prepare_seconds'),
-        'pcg_seconds': work.get('pcg_seconds'),
-        'search_seconds': details.get('search_seconds'),
-        'assessment_seconds': details.get('assessment_seconds'),
-        'wall_seconds': run.get('process_wall_seconds'),
-        'peak_rss_bytes': resources.get('peak_rss_bytes'),
+        'pcg_solves': measurements['pcg_solves']['median'],
+        'pcg_iterations': measurements['pcg_iterations']['median'],
+        'pcg_iterations_min': pooled_summary['min'],
+        'pcg_iterations_median': pooled_summary['median'],
+        'pcg_iterations_max': pooled_summary['max'],
+        'pcg_iterations_mean': pooled_mean,
+        'pcg_iterations_per_solve': measurements['pcg_iterations_per_solve']['median'],
+        'pcg_iterations_per_solve_pooled_median': measurements['pcg_iterations_per_solve_pooled']['median'],
+        'damping_trials': measurements['damping_trials']['median'],
+        'local_builds': measurements['local_builds']['median'],
+        'factor_builds': measurements['factor_builds']['median'],
+        'inverse_actions': measurements['inverse_actions']['median'],
+        'iterations_per_solve': measurements['pcg_iterations_per_solve']['median'],
+        'operator_normals': measurements['operator_normals']['median'],
+        'operator_applications': measurements['operator_applications']['median'],
+        'operator_adjoints': measurements['operator_adjoints']['median'],
+        'partition_seconds': measurements['partition_seconds']['median'],
+        'local_seconds': measurements['local_seconds']['median'],
+        'factor_seconds': measurements['factor_seconds']['median'],
+        'inverse_seconds': measurements['inverse_seconds']['median'],
+        'operator_seconds': measurements['operator_seconds']['median'],
+        'operator_prepare_seconds': measurements['operator_prepare_seconds']['median'],
+        'pcg_seconds': measurements['pcg_seconds']['median'],
+        'search_seconds': measurements['search_seconds']['median'],
+        'assessment_seconds': measurements['assessment_seconds']['median'],
+        'wall_seconds': measurements['wall_seconds']['median'],
+        'peak_rss_bytes': measurements['peak_rss_bytes']['max'],
         'objective': numerics.get('objective'),
         'runtime_convergence': numerics.get('runtime_convergence'),
         'state_available': details.get('state_available'),
         'stop_reason': details.get('stop_reason'),
     }
+    return row
 
 
-CSV_FIELDS = (
+CSV_BASE_FIELDS = (
     'configuration', 'status', 'reason', 'individual_json', 'atoms', 'rows', 'free_columns',
     'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'compact_extractions', 'free_design_svds', 'blocks',
     'maximum_block_atoms', 'topology_bytes', 'storage_bytes', 'scratch_bytes_bound',
-    'pcg_solves', 'pcg_iterations', 'damping_trials', 'local_builds', 'factor_builds',
+    'requested_repetitions', 'completed_repetitions', 'failed_repetitions', 'measurements_complete',
+    'pcg_solves', 'pcg_iterations', 'pcg_iterations_per_solve',
+    'pcg_iterations_per_solve_pooled_median', 'operator_normals', 'operator_applications',
+    'operator_adjoints', 'damping_trials', 'local_builds', 'factor_builds',
     'inverse_actions', 'pcg_iteration_counts', 'pcg_iterations_min',
     'pcg_iterations_median', 'pcg_iterations_max', 'pcg_iterations_mean',
-    'operator_normals', 'operator_applications', 'operator_adjoints', 'iterations_per_solve',
+    'iterations_per_solve',
     'partition_seconds', 'local_seconds', 'factor_seconds', 'inverse_seconds',
     'operator_seconds', 'operator_prepare_seconds', 'pcg_seconds', 'search_seconds',
     'assessment_seconds', 'wall_seconds', 'peak_rss_bytes', 'objective',
     'runtime_convergence', 'state_available', 'stop_reason',
 )
+CSV_MEASUREMENT_FIELDS = tuple(
+    f'{field}_{stat}' for field in SUMMARY_FIELDS for stat in ('min', 'median', 'max')) + tuple(
+    f'{field}_{stat}' for field in ('pcg_iterations_per_solve', 'pcg_iterations_per_solve_pooled')
+    for stat in ('min', 'median', 'max'))
+CSV_FIELDS = (*CSV_BASE_FIELDS, *CSV_MEASUREMENT_FIELDS)
 
 
 def write_csv(path, rows):
@@ -156,6 +236,10 @@ def write_csv(path, rows):
         for row in rows:
             flattened = dict(row)
             flattened['configuration'] = json.dumps(row['configuration'], sort_keys=True)
+            for field, summary in row.get('measurements', {}).items():
+                for stat, value in summary.items():
+                    flattened[f'{field}_{stat}'] = value
+            flattened['pcg_iteration_counts'] = json.dumps(row.get('pcg_iteration_counts', []))
             writer.writerow(flattened)
 
 
@@ -175,14 +259,15 @@ def build_parser():
     parser.add_argument('--storage-mib', type=int, default=512)
     parser.add_argument('--scratch-mib', type=int, default=256)
     parser.add_argument('--repeat', type=int, default=1)
+    parser.add_argument('--warmup', type=int, default=0)
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
     return parser
 
 
 def validate_args(parser, args):
-    if args.repeat < 1 or args.timeout <= 0 or args.rss_limit <= 0:
-        parser.error('--repeat and limits must be positive')
+    if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
+        parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
     if (not args.atoms or any(value <= 0 for value in args.atoms) or
             not args.cores or any(value <= 0 for value in args.cores) or
             not args.overlaps or any(value < 0 for value in args.overlaps)):
