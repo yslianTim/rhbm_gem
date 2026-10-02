@@ -117,7 +117,7 @@ class JointBenchmarkContract(unittest.TestCase):
             for option, value in (('--operator-rank', 'spqr-bounds'), ('--schwarz-core-atoms', '2'),
                                   ('--schwarz-overlap-hops', '0'), ('--schwarz-max-block-atoms', '8'),
                                   ('--schwarz-storage-mib', '64'), ('--schwarz-scratch-mib', '32'),
-                                  ('--operator-rank-seconds', '9'), ('--operator-rank-work-entries', '750'),
+                                  ('--operator-rank-seconds', '9.0'), ('--operator-rank-work-entries', '750'),
                                   ('--operator-rank-workspace-mib', '12')):
                 self.assertEqual(command[command.index(option) + 1], value)
             policy = benchmark.solver_policy_metadata(args, 'SPQR')
