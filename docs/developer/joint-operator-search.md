@@ -124,3 +124,9 @@ resource-bounded comparisons, and measured benefit that includes setup and
 rebuild cost. Incomplete comparisons cannot justify promotion. The production
 default remains LegacyCompact; the historical evidence index records why
 previous operator/Schwarz campaigns did not qualify.
+
+The current one-level campaign stopped before PCG at the first chain-128
+bounded-rank `rank-work-budget` result. It has no eligible iterations-per-solve
+points and establishes neither stable Krylov scaling nor iteration growth. See
+the [current campaign record](joint-benchmark.md#current-one-level-scaling-evidence)
+for its fixed policy, resource outcome, and retained artifacts.

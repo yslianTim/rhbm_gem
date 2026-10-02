@@ -250,7 +250,10 @@ This conclusion is retained without the experiment-specific recovery record.
 ## 8. Explicitly unproven boundaries
 
 - Full 6Z6U end-to-end convergence has not been demonstrated.
-- Large connected-component scalability has not been established.
+- Large connected-component scalability remains unestablished. The current
+  one-level pilot stopped before an eligible PCG point when bounded SPQR rank
+  reached `rank-work-budget` at chain-128; see the
+  [current campaign record](joint-benchmark.md#current-one-level-scaling-evidence).
 - Observable-halo profiling removes the diagnosed full-ABC structural
   obstruction, but does not establish complete 6Z6U qualification.
 - A complete large 6Z6U target-estimability solve has not been established.

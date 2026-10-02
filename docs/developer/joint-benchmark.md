@@ -177,6 +177,9 @@ produce a one-level Schwarz verdict. The primary point value is
 PCG solve medians. Total PCG iterations are supporting work only.
 Every completed repetition must contain at least one PCG solve for the point to
 be valid; missing per-solve telemetry is excluded from the valid-point count.
+Campaign rows also carry `evidence_eligible` and
+`evidence_exclusion_reasons`. The analyzer excludes rows explicitly marked
+ineligible; unmarked inputs remain usable for general analysis.
 
 At least four complete points with positive atom counts and positive per-solve
 iteration medians are required for a slope verdict. `growth-observed` requires
@@ -230,6 +233,47 @@ rising solve, linearization, or damping counts as nonlinear search work.
 Rising RSS with stable iterations is a memory/resource-scaling issue. Only a
 repeated increase in per-solve PCG iterations under a fixed local policy is
 the main evidence for a future coarse-space investigation.
+
+## Current one-level scaling evidence
+
+The current resource-bounded campaign is recorded under
+[`joint-schwarz-scaling`](figures/joint-schwarz-scaling/campaign-manifest.json).
+It requested chain and cube sizes 128, 256, 512, and 1024 with SPQR, rank mode
+`auto`, one warmup, three measurements, a 600-second per-run timeout, and a
+4 GiB process-tree RSS ceiling. The Schwarz policy was fixed at 128 core atoms,
+one overlap hop, a 512-atom maximum block, 512 MiB storage, and 256 MiB scratch.
+
+The first chain-128 diagonal control completed all three measurement
+processes, but bounded rank was `unavailable` with `rank-work-budget` in every
+repetition. Each process recorded zero PCG solves, so this row is ineligible for
+iteration scaling. Its returned-state runtime convergence was `failed`; this
+records an unqualified endpoint after search stopped at the rank budget, not a
+PCG failure. The campaign stopped there. The remaining 15 configurations,
+including every Schwarz configuration and the small identity controls, were
+not run. No larger size was attempted and no rank budget was changed.
+
+| Topology | Requested Schwarz sizes | Valid PCG points | Iteration slope | Endpoint ratio | Coarse gate |
+| --- | --- | ---: | ---: | ---: | --- |
+| Chain | 128, 256, 512, 1024 | 0 | — | — | `insufficient-evidence` |
+| Cube | 128, 256, 512, 1024 | 0 | — | — | `insufficient-evidence` |
+
+The one completed diagnostic row had median operator-linearization setup 3.787
+s, search time 3.949 s, assessment time 21.911 s, and wall time 26.476 s. Peak
+RSS was 178,749,440 bytes (about 170.5 MiB). It performed one linearization,
+zero damping trials, zero accepted updates, and one profile evaluation per
+measurement. These are single-configuration diagnostics, not scaling results;
+PCG time and operator action counters were zero because no PCG solve ran, so
+they are not solve-cost measurements. No iteration slope can be estimated.
+
+The normalized rows and repetition statistics are in
+[`scaling-summary.json`](figures/joint-schwarz-scaling/scaling-summary.json)
+and [`scaling-summary.csv`](figures/joint-schwarz-scaling/scaling-summary.csv);
+the gate output is in
+[`scaling-analysis.json`](figures/joint-schwarz-scaling/scaling-analysis.json),
+and the individual completed run retains full provenance. Current evidence is
+resource-limited before a Krylov verdict can be established. It does not show
+stable Krylov scaling or iteration growth and does not warrant a two-level
+Schwarz investigation.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
