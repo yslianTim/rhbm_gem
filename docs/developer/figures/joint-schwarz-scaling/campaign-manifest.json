@@ -1,0 +1,124 @@
+{
+  "campaign_schema_version": 1,
+  "campaign": "one-level Schwarz scaling pilot",
+  "recorded_at": "2026-10-02T16:15:35+08:00",
+  "source_commit_sha": "9e4c1f3e7d381d859cfa3c75fb28888dd3c7c9cf",
+  "host": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "architecture": "arm64",
+    "physical_memory_bytes": 17179869184
+  },
+  "build": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "build_type_note": "CMAKE_BUILD_TYPE was empty (unspecified)",
+    "spqr_version": "4.3.6",
+    "eigen_version": "5.0.1",
+    "eigen_thread_count": 1
+  },
+  "solver_policy": {
+    "preconditioners": [
+      "diagonal",
+      "schwarz"
+    ],
+    "operator_rank_mode": "auto",
+    "resolved_rank_backend": "SpqrBounds",
+    "rank_budgets": {
+      "seconds": 120,
+      "entries": 100000000,
+      "workspace_bytes": 268435456
+    },
+    "schwarz": {
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "storage_limit_bytes": 536870912,
+      "scratch_limit_bytes": 268435456
+    }
+  },
+  "orchestration": {
+    "warmup": 1,
+    "repeat": 3,
+    "timeout_seconds_per_run": 600,
+    "outer_process_timeout_seconds": 2430,
+    "rss_limit_bytes": 4294967296
+  },
+  "requested_matrix": {
+    "topologies": [
+      "chain",
+      "cube"
+    ],
+    "atom_sizes": [
+      128,
+      256,
+      512,
+      1024
+    ],
+    "configuration_count": 16,
+    "identity_control": {
+      "atom_sizes": [
+        128,
+        256
+      ],
+      "status": "not-run-after-rank-unavailable"
+    }
+  },
+  "execution": {
+    "status": "stopped-before-pilot-complete",
+    "configurations_started": 1,
+    "configurations_not_started": 15,
+    "stop_reason": "The first chain-128 diagonal run returned bounded-rank status unavailable with rank-work-budget in each measurement repetition; PCG solves were zero. The sweep was stopped before larger sizes or other preconditioners.",
+    "process_completed": true,
+    "runtime_convergence": "failed",
+    "measured_case": {
+      "topology": "chain",
+      "atoms": 128,
+      "preconditioner": "diagonal",
+      "completed_repetitions": 3,
+      "rank_statuses": [
+        "unavailable",
+        "unavailable",
+        "unavailable"
+      ],
+      "rank_reasons": [
+        "rank-work-budget",
+        "rank-work-budget",
+        "rank-work-budget"
+      ],
+      "pcg_solves": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "provenance": {
+    "source_sha256": "2a6ace0a793e91e7aef4b5c0d23a1e60f0a9ec629b905fa43718265e4028d20d",
+    "benchmark_source_sha256": {
+      "tests/experiments/joint_sparse_benchmark.cpp": "2fb122a813cca878ae833e3a431397dde4380c8e0b3c6e160a2c1b601c527c72",
+      "tests/integration/joint_benchmark.py": "7f14551e812dea76ed38052b9d489fd3dbc4a320ab341857bc7ce902c6523316",
+      "tests/integration/joint_schwarz_sweep.py": "cce3afc1188bb35ae4e26f63eb5ca9898d75e80347f0700ae602e0dba395061b",
+      "tests/integration/joint_scaling_analysis.py": "ea912874c3439a6e6d58d02f13dea116f2e0b2e584421cb5bbb482df6a2adfd7"
+    },
+    "input_generator_sha256": {
+      "tests/support/JointOperatorWorkload.cpp": "43849aae4c43cada76b4dbbb5060c6d09c2bcc99c8f41992ef4e8d0e9af12c84",
+      "tests/support/JointOperatorWorkload.hpp": "0b36bde4429372eb4b7da9f479651304fbdf643aa1a2059606c4f22addb730a2"
+    },
+    "measured_input_sha256": "9db2c643cc1cedc0b5100c598426f3f33684d61c52113808aa4afa8d0319fe35",
+    "driver_sha256": "d8841c5d927da767ad39579ef0f789e367de776f96c1cc2e9971f6856f7d7f5e"
+  },
+  "files_included": [
+    "scaling-summary.json",
+    "scaling-summary.csv",
+    "scaling-analysis.json",
+    "individual-results/chain-128-diagonal.json"
+  ],
+  "artifact_sha256": {
+    "scaling-summary.json": "ac0b8a5a1637cf1b693cc35f6dbb0afc7ceb77843b4c8d6102eb139094a90410",
+    "scaling-summary.csv": "581e95aeb29609f86eee0b0911255e3266bc542bd644d77163de3bfb3897a510",
+    "scaling-analysis.json": "995df13cc8239074109174fc735e9b184dff561e4fd74fbda833360b47c432f1",
+    "individual-results/chain-128-diagonal.json": "e6adef8c3d9e46f610484a17f42e7f9574d76e6263e190bbb4b81fd0c7ae9b55"
+  },
+  "csv_line_endings": "LF"
+}

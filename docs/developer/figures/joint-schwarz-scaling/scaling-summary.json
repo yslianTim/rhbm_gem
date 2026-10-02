@@ -1,0 +1,811 @@
+{
+  "schema_version": 1,
+  "tool": "joint_schwarz_sweep",
+  "measurement_profile": "solve",
+  "campaign_status": "stopped-before-pilot-complete",
+  "stop_reason": "bounded SPQR rank was unavailable at chain-128 (rank-work-budget)",
+  "requested_configuration_count": 16,
+  "configuration_count": 16,
+  "orchestration": {
+    "warmup": 1,
+    "repeat": 3,
+    "timeout_seconds_per_run": 600.0,
+    "outer_process_timeout_seconds": 2430.0,
+    "rss_limit_bytes": 4294967296
+  },
+  "configurations": [
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 128,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "completed",
+      "reason": null,
+      "individual_json": "individual-results/chain-128-diagonal.json",
+      "requested_repetitions": 3,
+      "completed_repetitions": 3,
+      "failed_repetitions": 0,
+      "measurements_complete": true,
+      "measurements": {
+        "partition_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "operator_prepare_seconds": {
+          "min": 3.776255208,
+          "median": 3.786675625,
+          "max": 3.795712833
+        },
+        "metric_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "local_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "factor_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "inverse_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "pcg_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "operator_normal_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "operator_apply_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "operator_adjoint_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "rank_seconds": {
+          "min": 3.692126458,
+          "median": 3.703075292,
+          "max": 3.711712625
+        },
+        "operator_seconds": {
+          "min": 3.776255208,
+          "median": 3.786675625,
+          "max": 3.795712833
+        },
+        "search_seconds": {
+          "min": 3.942350208,
+          "median": 3.948606209,
+          "max": 3.962145541
+        },
+        "assessment_seconds": {
+          "min": 21.706030583,
+          "median": 21.910604708,
+          "max": 23.466614041
+        },
+        "topology_setup_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "linearization_setup_seconds": {
+          "min": 3.776255208,
+          "median": 3.786675625,
+          "max": 3.795712833
+        },
+        "damping_setup_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "setup_seconds": {
+          "min": 3.776255208,
+          "median": 3.786675625,
+          "max": 3.795712833
+        },
+        "iterative_seconds": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "measured_seconds": {
+          "min": 25.648380791,
+          "median": 25.872750249,
+          "max": 27.41522025
+        },
+        "wall_seconds": {
+          "min": 26.262941082939506,
+          "median": 26.47610266704578,
+          "max": 28.00620483304374
+        },
+        "setup_fraction_of_search": {
+          "min": 0.9578690397258588,
+          "median": 0.9579942972115068,
+          "max": 0.9589904448737091
+        },
+        "pcg_fraction_of_search": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 0.0
+        },
+        "pcg_solves": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "pcg_iterations": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "operator_normals": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "operator_applications": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "operator_adjoints": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "linearizations": {
+          "min": 1,
+          "median": 1,
+          "max": 1
+        },
+        "damping_trials": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "accepted_updates": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "profile_evaluations": {
+          "min": 1,
+          "median": 1,
+          "max": 1
+        },
+        "local_builds": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "factor_builds": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "inverse_actions": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        },
+        "peak_rss_bytes": {
+          "min": 178601984,
+          "median": 178651136,
+          "max": 178749440
+        },
+        "pcg_iterations_per_solve": {
+          "min": null,
+          "median": null,
+          "max": null
+        },
+        "pcg_iterations_per_solve_pooled": {
+          "min": null,
+          "median": null,
+          "max": null
+        }
+      },
+      "pcg_iteration_counts": [],
+      "pcg_iteration_counts_by_repetition": [
+        [],
+        [],
+        []
+      ],
+      "pcg_iteration_repetitions": 3,
+      "pcg_iteration_valid_repetitions": 0,
+      "pcg_iteration_telemetry_complete": false,
+      "rank_repetition_evidence": [
+        {
+          "rank_status": "unavailable",
+          "compact_extractions": 0,
+          "free_design_svds": 0
+        },
+        {
+          "rank_status": "unavailable",
+          "compact_extractions": 0,
+          "free_design_svds": 0
+        },
+        {
+          "rank_status": "unavailable",
+          "compact_extractions": 0,
+          "free_design_svds": 0
+        }
+      ],
+      "stop_reasons_by_repetition": [
+        "rank-work-budget",
+        "rank-work-budget",
+        "rank-work-budget"
+      ],
+      "pcg_iteration_budget_repetitions": 0,
+      "atoms": 128,
+      "rows": 58300,
+      "free_columns": 256,
+      "rank_backend": "SpqrBounds",
+      "sparse_backend": "SPQR",
+      "rank_status": "unavailable",
+      "rank_reason": "rank-work-budget",
+      "rank_seconds": 3.703075292,
+      "rank_entries": 99995408,
+      "rank_workspace_bytes": 2847552,
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "blocks": null,
+      "maximum_block_atoms": 0,
+      "topology_bytes": 0,
+      "storage_bytes": 0,
+      "scratch_bytes_bound": 0,
+      "core_atom_counts": null,
+      "block_atom_counts": null,
+      "atom_membership": null,
+      "atom_membership_histogram": null,
+      "pcg_solves": 0,
+      "pcg_iterations": 0,
+      "pcg_iterations_min": null,
+      "pcg_iterations_median": null,
+      "pcg_iterations_max": null,
+      "pcg_iterations_mean": null,
+      "pcg_iterations_per_solve": null,
+      "pcg_iterations_per_solve_pooled_median": null,
+      "damping_trials": 0,
+      "local_builds": 0,
+      "factor_builds": 0,
+      "inverse_actions": 0,
+      "iterations_per_solve": null,
+      "operator_normals": 0,
+      "operator_applications": 0,
+      "operator_adjoints": 0,
+      "partition_seconds": 0.0,
+      "local_seconds": 0.0,
+      "factor_seconds": 0.0,
+      "inverse_seconds": 0.0,
+      "operator_seconds": 3.786675625,
+      "operator_prepare_seconds": 3.786675625,
+      "pcg_seconds": 0.0,
+      "search_seconds": 3.948606209,
+      "assessment_seconds": 21.910604708,
+      "topology_setup_seconds": 0.0,
+      "linearization_setup_seconds": 3.786675625,
+      "damping_setup_seconds": 0.0,
+      "setup_seconds": 3.786675625,
+      "iterative_seconds": 0.0,
+      "measured_seconds": 25.872750249,
+      "setup_fraction_of_search": 0.9579942972115068,
+      "pcg_fraction_of_search": 0.0,
+      "wall_seconds": 26.47610266704578,
+      "peak_rss_bytes": 178749440,
+      "objective": 3.8582616647192673,
+      "runtime_convergence": "failed",
+      "state_available": true,
+      "stop_reason": "rank-work-budget",
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "missing-pcg-telemetry",
+        "rank-not-full"
+      ]
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 128,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 128
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 256,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 256
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 256,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 256
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 512,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 512
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 512,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 512
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 1024,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 1024
+    },
+    {
+      "configuration": {
+        "topology": "chain",
+        "atoms": 1024,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 1024
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 128,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 128
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 128,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 128
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 256,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 256
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 256,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 256
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 512,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 512
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 512,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 512
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 1024,
+        "preconditioner": "diagonal",
+        "core_atoms": null,
+        "overlap_hops": null,
+        "max_block_atoms": null,
+        "storage_mib": null,
+        "scratch_mib": null,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 1024
+    },
+    {
+      "configuration": {
+        "topology": "cube",
+        "atoms": 1024,
+        "preconditioner": "schwarz",
+        "core_atoms": 128,
+        "overlap_hops": 1,
+        "max_block_atoms": 512,
+        "storage_mib": 512,
+        "scratch_mib": 256,
+        "operator_rank": "auto",
+        "repeat": 3,
+        "warmup": 1,
+        "timeout": 600.0,
+        "rss_limit": 4294967296
+      },
+      "status": "not_run",
+      "reason": "campaign stopped after rank-work-budget at chain-128",
+      "individual_json": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 0,
+      "failed_repetitions": 0,
+      "not_run_repetitions": 3,
+      "measurements_complete": false,
+      "pcg_iteration_telemetry_complete": false,
+      "evidence_eligible": false,
+      "evidence_exclusion_reasons": [
+        "not-run-after-rank-unavailable"
+      ],
+      "sparse_backend": "SPQR",
+      "atoms": 1024
+    }
+  ]
+}
