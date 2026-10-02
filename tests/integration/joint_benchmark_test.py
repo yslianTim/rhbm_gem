@@ -188,9 +188,13 @@ class JointBenchmarkContract(unittest.TestCase):
                 'estimated_total_entries': 120, 'estimated_remaining_entries': 21,
                 'estimated_reconstruction_entries': 40, 'design_nonzeros': 16,
                 'r_nonzeros': 8, 'reflector_nonzeros': 12, 'reflectors': 4}
-        details = benchmark.normalize_result('rank', {'rank_result': rank})['details']
+        raw = {'rank_result': rank, 'rank_rows': 20, 'free_columns': 4,
+               'rank_compact_extractions': 0, 'work': {'free_design_svds': 0}}
+        details = benchmark.normalize_result('rank', raw)['details']
         for name, value in rank.items():
             self.assertEqual(details[name], value)
+        self.assertEqual((details['rows'], details['columns']), (20, 4))
+        self.assertEqual((details['compact_extractions'], details['free_design_svds']), (0, 0))
 
     def test_sweep_does_not_expand_identity_or_diagonal_over_schwarz_dimensions(self):
         parser = schwarz_sweep.build_parser()
@@ -593,7 +597,8 @@ def smoke(build):
                 driver_policy['operator_rank_budget_entries'] != 0 or
                 driver_policy['operator_rank_budget_workspace_bytes'] != 12 * 1024**2 or
                 override_result['reason'] != 'rank-work-budget' or
-                override_result['work_stage'] != 'structural-scan'):
+                override_result['work_stage'] != 'structural-scan' or
+                override_result['compact_extractions'] != 0 or override_result['free_design_svds'] != 0):
             raise AssertionError(f'rank budget override did not reach the bounded certificate: {override_report}')
 
         output = root / 'command.json'

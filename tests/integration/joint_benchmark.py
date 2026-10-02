@@ -292,6 +292,10 @@ def normalize_result(profile, raw):
             'entries', 'seconds', 'workspace_bytes', 'estimated_total_entries',
             'estimated_remaining_entries', 'estimated_reconstruction_entries', 'design_nonzeros',
             'r_nonzeros', 'reflector_nonzeros', 'reflectors')}
+        details['rows'] = raw.get('rank_rows', raw.get('rows'))
+        details['columns'] = raw.get('free_columns')
+        details['compact_extractions'] = raw.get('rank_compact_extractions')
+        details['free_design_svds'] = (raw.get('work') or {}).get('free_design_svds')
         details['solver_policy'] = raw.get('solver_policy')
     elif profile in ('workflow', 'postprocess'):
         details = {
