@@ -160,7 +160,7 @@ def command_for_profile(args, case, output, build):
                                   ('--search', args.preconditioner, *operator_policy_options(args)), args.svd_mode)
         return sparse_command(sparse, case,
                               'rank' if args.rank_mode == 'prototype' else 'rank-oracle', output,
-                              svd_mode=args.svd_mode)
+                              rank_budget_options(args), args.svd_mode)
     if args.profile in ('workflow', 'postprocess'):
         if not workflow.is_file():
             raise ValueError('Build joint_postprocessing_benchmark with RHBM_GEM_BUILD_BENCHMARKS=ON')
@@ -180,9 +180,18 @@ def command_for_profile(args, case, output, build):
     return analysis, dump, database, export
 
 
+def rank_budget_options(args):
+    return (
+        '--operator-rank-seconds', str(args.operator_rank_seconds),
+        '--operator-rank-work-entries', str(args.operator_rank_work_entries),
+        '--operator-rank-workspace-mib', str(args.operator_rank_workspace_mib),
+    )
+
+
 def operator_policy_options(args):
     return (
         '--operator-rank', args.operator_rank,
+        *rank_budget_options(args),
         '--schwarz-core-atoms', str(args.schwarz_core_atoms),
         '--schwarz-overlap-hops', str(args.schwarz_overlap_hops),
         '--schwarz-max-block-atoms', str(args.schwarz_max_block_atoms),
@@ -206,9 +215,9 @@ def solver_policy_metadata(args, backend):
         'operator_rank_active': active,
         'operator_rank_mode': args.operator_rank,
         'resolved_rank_backend': resolved,
-        'operator_rank_budget_seconds': 120,
-        'operator_rank_budget_entries': 100_000_000,
-        'operator_rank_budget_workspace_bytes': 256 * 1024**2,
+        'operator_rank_budget_seconds': args.operator_rank_seconds,
+        'operator_rank_budget_entries': args.operator_rank_work_entries,
+        'operator_rank_budget_workspace_bytes': args.operator_rank_workspace_mib * 1024**2,
         'preconditioner': args.preconditioner,
         'schwarz_core_atoms': args.schwarz_core_atoms,
         'schwarz_overlap_hops': args.schwarz_overlap_hops,
@@ -279,7 +288,11 @@ def normalize_result(profile, raw):
     elif profile == 'rank':
         details = {key: rank_result.get(key) for key in (
             'status', 'reason', 'rank_lower', 'rank_upper', 'exact_rank', 'rank',
-            'threshold', 'minimum_lower', 'maximum_upper', 'rank_backend')}
+            'threshold', 'minimum_lower', 'maximum_upper', 'rank_backend', 'work_stage',
+            'entries', 'seconds', 'workspace_bytes', 'estimated_total_entries',
+            'estimated_remaining_entries', 'estimated_reconstruction_entries', 'design_nonzeros',
+            'r_nonzeros', 'reflector_nonzeros', 'reflectors')}
+        details['solver_policy'] = raw.get('solver_policy')
     elif profile in ('workflow', 'postprocess'):
         details = {
             'endpoint_count': len(raw.get('endpoints', [])),
@@ -424,6 +437,9 @@ def build_parser():
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
     parser.add_argument('--preconditioner', choices=('legacy', 'identity', 'diagonal', 'schwarz'), default='schwarz')
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
+    parser.add_argument('--operator-rank-seconds', type=float, default=120)
+    parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
+    parser.add_argument('--operator-rank-workspace-mib', type=int, default=256)
     parser.add_argument('--schwarz-core-atoms', type=int, default=128)
     parser.add_argument('--schwarz-overlap-hops', type=int, default=1)
     parser.add_argument('--schwarz-max-block-atoms', type=int, default=512)
@@ -441,6 +457,9 @@ def build_parser():
 def validate_args(parser, args):
     if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
         parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
+    if (not math.isfinite(args.operator_rank_seconds) or args.operator_rank_seconds < 0 or
+            args.operator_rank_work_entries < 0 or args.operator_rank_workspace_mib < 0):
+        parser.error('operator rank budgets must be nonnegative and the time budget finite')
     if (args.schwarz_core_atoms <= 0 or args.schwarz_overlap_hops < 0 or
             args.schwarz_max_block_atoms < args.schwarz_core_atoms or
             args.schwarz_storage_mib <= 0 or args.schwarz_scratch_mib <= 0):

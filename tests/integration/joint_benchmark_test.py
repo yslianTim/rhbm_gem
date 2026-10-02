@@ -94,6 +94,8 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(policy['search_method'], 'OperatorPcg')
         self.assertEqual(policy['resolved_rank_backend'], 'Dense')
         self.assertEqual(policy['schwarz_overlap_hops'], 1)
+        self.assertEqual((policy['operator_rank_budget_seconds'], policy['operator_rank_budget_entries'],
+                          policy['operator_rank_budget_workspace_bytes']), (120, 100_000_000, 256 * 1024**2))
 
     def test_operator_policy_options_reach_only_sparse_driver_routes(self):
         parser = benchmark.build_parser()
@@ -101,7 +103,9 @@ class JointBenchmarkContract(unittest.TestCase):
                                   '--build-dir', 'build/debug', '--output', 'result.json',
                                   '--operator-rank', 'spqr-bounds', '--schwarz-core-atoms', '2',
                                   '--schwarz-overlap-hops', '0', '--schwarz-max-block-atoms', '8',
-                                  '--schwarz-storage-mib', '64', '--schwarz-scratch-mib', '32'])
+                                  '--schwarz-storage-mib', '64', '--schwarz-scratch-mib', '32',
+                                  '--operator-rank-seconds', '9', '--operator-rank-work-entries', '750',
+                                  '--operator-rank-workspace-mib', '12'])
         benchmark.validate_args(parser, args)
         with tempfile.TemporaryDirectory() as temporary:
             build = Path(temporary)
@@ -112,9 +116,14 @@ class JointBenchmarkContract(unittest.TestCase):
                                                     Path('result.json'), build)
             for option, value in (('--operator-rank', 'spqr-bounds'), ('--schwarz-core-atoms', '2'),
                                   ('--schwarz-overlap-hops', '0'), ('--schwarz-max-block-atoms', '8'),
-                                  ('--schwarz-storage-mib', '64'), ('--schwarz-scratch-mib', '32')):
+                                  ('--schwarz-storage-mib', '64'), ('--schwarz-scratch-mib', '32'),
+                                  ('--operator-rank-seconds', '9'), ('--operator-rank-work-entries', '750'),
+                                  ('--operator-rank-workspace-mib', '12')):
                 self.assertEqual(command[command.index(option) + 1], value)
-            self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['resolved_rank_backend'], 'SpqrBounds')
+            policy = benchmark.solver_policy_metadata(args, 'SPQR')
+            self.assertEqual(policy['resolved_rank_backend'], 'SpqrBounds')
+            self.assertEqual((policy['operator_rank_budget_seconds'], policy['operator_rank_budget_entries'],
+                              policy['operator_rank_budget_workspace_bytes']), (9, 750, 12 * 1024**2))
 
             args.profile = 'fixed'
             args.state_path = Path('state.json')
@@ -146,6 +155,18 @@ class JointBenchmarkContract(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     benchmark.validate_args(parser, args)
 
+    def test_invalid_rank_budget_values_are_rejected(self):
+        base = ['--profile', 'rank', '--case', 'chain-8', '--build-dir', 'build/debug',
+                '--output', 'result.json']
+        for option, value in (('--operator-rank-seconds', 'nan'), ('--operator-rank-seconds', '-1'),
+                              ('--operator-rank-work-entries', '-1'),
+                              ('--operator-rank-workspace-mib', '-1')):
+            parser = benchmark.build_parser()
+            args = parser.parse_args(base + [option, value])
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    benchmark.validate_args(parser, args)
+
     def test_missing_telemetry_does_not_change_result_normalization(self):
         raw = {'search': {'stop_reason': 'converged', 'profile_evaluations': 3, 'accepted_updates': 2},
                'returned_assessment': {'runtime_convergence': 'passed', 'primary': {'valid': True}}}
@@ -160,6 +181,16 @@ class JointBenchmarkContract(unittest.TestCase):
                 'operator_normals': 9, 'operator_applications': 2, 'operator_adjoints': 3}
         details = benchmark.normalize_result('solve', {'search_work': work})['details']
         self.assertEqual(details['search_work'], work)
+
+    def test_rank_profile_preserves_work_forecast_and_factor_census(self):
+        rank = {'status': 'unavailable', 'reason': 'rank-work-budget', 'work_stage': 'reconstruction',
+                'entries': 99, 'seconds': .2, 'workspace_bytes': 4096,
+                'estimated_total_entries': 120, 'estimated_remaining_entries': 21,
+                'estimated_reconstruction_entries': 40, 'design_nonzeros': 16,
+                'r_nonzeros': 8, 'reflector_nonzeros': 12, 'reflectors': 4}
+        details = benchmark.normalize_result('rank', {'rank_result': rank})['details']
+        for name, value in rank.items():
+            self.assertEqual(details[name], value)
 
     def test_sweep_does_not_expand_identity_or_diagonal_over_schwarz_dimensions(self):
         parser = schwarz_sweep.build_parser()
@@ -178,11 +209,14 @@ class JointBenchmarkContract(unittest.TestCase):
         args = schwarz_sweep.build_parser().parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json'])
         config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'identity',
                   'core_atoms': None, 'overlap_hops': None, 'max_block_atoms': None,
-                  'storage_mib': None, 'scratch_mib': None, 'operator_rank': 'auto', 'repeat': 1}
+                  'storage_mib': None, 'scratch_mib': None, 'operator_rank': 'auto',
+                  'operator_rank_seconds': 120, 'operator_rank_work_entries': 100_000_000,
+                  'operator_rank_workspace_mib': 256, 'repeat': 1}
         command = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('run.json'))
         self.assertNotIn('--schwarz-core-atoms', command)
         self.assertNotIn('--schwarz-overlap-hops', command)
         self.assertEqual(command[command.index('--warmup') + 1], '0')
+        self.assertEqual(command[command.index('--operator-rank-work-entries') + 1], '100000000')
 
     def test_outer_sweep_timeout_counts_warmups_and_measurements(self):
         parser = schwarz_sweep.build_parser()
@@ -541,6 +575,26 @@ def smoke(build):
                             work['operator_rank_compact_extractions'] != 0 or
                             work['operator_rank_free_design_svds'] != 0):
                         raise AssertionError(f'SPQR bounded rank used an unexpected path: {work}')
+
+        rank_override = root / 'rank-budget-override.json'
+        subprocess.run([sys.executable, str(script), '--profile', 'rank', '--case', 'chain-8',
+                        '--build-dir', str(build), '--output', str(rank_override), '--timeout', '60',
+                        '--operator-rank-seconds', '9', '--operator-rank-work-entries', '0',
+                        '--operator-rank-workspace-mib', '12'],
+                       check=True, capture_output=True, text=True, timeout=120)
+        override_report = json.loads(rank_override.read_text())
+        override_policy = override_report['metadata']['solver_policy']
+        override_result = override_report['result']['details']
+        driver_policy = override_result['solver_policy']
+        if (override_policy['operator_rank_budget_seconds'] != 9 or
+                override_policy['operator_rank_budget_entries'] != 0 or
+                override_policy['operator_rank_budget_workspace_bytes'] != 12 * 1024**2 or
+                driver_policy['operator_rank_budget_seconds'] != 9 or
+                driver_policy['operator_rank_budget_entries'] != 0 or
+                driver_policy['operator_rank_budget_workspace_bytes'] != 12 * 1024**2 or
+                override_result['reason'] != 'rank-work-budget' or
+                override_result['work_stage'] != 'structural-scan'):
+            raise AssertionError(f'rank budget override did not reach the bounded certificate: {override_report}')
 
         output = root / 'command.json'
         subprocess.run([sys.executable, str(script), '--profile', 'command', '--case', 'command-smoke',

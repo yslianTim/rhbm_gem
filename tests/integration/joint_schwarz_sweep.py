@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import json
 import statistics
 import subprocess
@@ -30,6 +31,9 @@ def build_configurations(args):
                         'storage_mib': args.storage_mib if preconditioner == 'schwarz' else None,
                         'scratch_mib': args.scratch_mib if preconditioner == 'schwarz' else None,
                         'operator_rank': args.operator_rank,
+                        'operator_rank_seconds': args.operator_rank_seconds,
+                        'operator_rank_work_entries': args.operator_rank_work_entries,
+                        'operator_rank_workspace_mib': args.operator_rank_workspace_mib,
                         'repeat': args.repeat,
                         'warmup': args.warmup,
                         'timeout': args.timeout,
@@ -45,7 +49,9 @@ def build_configurations(args):
 def configuration_key(config):
     fields = (config['topology'], config['atoms'], config['preconditioner'],
               config['core_atoms'], config['overlap_hops'], config['max_block_atoms'],
-              config['operator_rank'], f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
+              config['operator_rank'], config['operator_rank_seconds'],
+              config['operator_rank_work_entries'], config['operator_rank_workspace_mib'],
+              f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
     return '-'.join(str(value) for value in fields if value is not None)
 
 
@@ -55,7 +61,10 @@ def benchmark_command(script, config, args, output):
                '--build-dir', str(args.build_dir), '--output', str(output),
                '--repeat', str(args.repeat), '--warmup', str(args.warmup), '--timeout', str(args.timeout),
                '--rss-limit', str(args.rss_limit), '--preconditioner', config['preconditioner'],
-               '--operator-rank', config['operator_rank']]
+               '--operator-rank', config['operator_rank'],
+               '--operator-rank-seconds', str(config['operator_rank_seconds']),
+               '--operator-rank-work-entries', str(config['operator_rank_work_entries']),
+               '--operator-rank-workspace-mib', str(config['operator_rank_workspace_mib'])]
     if config['preconditioner'] == 'schwarz':
         command.extend(['--schwarz-core-atoms', str(config['core_atoms']),
                         '--schwarz-overlap-hops', str(config['overlap_hops']),
@@ -126,6 +135,9 @@ def summarize(config, report, individual_name, process_error=None):
             'rank_status': item_work.get('operator_rank_status'),
             'compact_extractions': item_work.get('operator_rank_compact_extractions'),
             'free_design_svds': item_work.get('operator_rank_free_design_svds'),
+            'work_stage': item_work.get('operator_rank_work_stage'),
+            'estimated_total_entries': item_work.get('operator_rank_estimated_total_entries'),
+            'estimated_remaining_entries': item_work.get('operator_rank_estimated_remaining_entries'),
         })
         search_seconds = item_details.get('search_seconds')
         assessment_seconds = item_details.get('assessment_seconds')
@@ -213,6 +225,14 @@ def summarize(config, report, individual_name, process_error=None):
         'rank_seconds': measurements['rank_seconds']['median'],
         'rank_entries': work.get('operator_rank_entries'),
         'rank_workspace_bytes': work.get('operator_rank_workspace_bytes'),
+        'rank_work_stage': work.get('operator_rank_work_stage'),
+        'rank_estimated_total_entries': work.get('operator_rank_estimated_total_entries'),
+        'rank_estimated_remaining_entries': work.get('operator_rank_estimated_remaining_entries'),
+        'rank_estimated_reconstruction_entries': work.get('operator_rank_estimated_reconstruction_entries'),
+        'rank_design_nonzeros': work.get('operator_rank_design_nonzeros'),
+        'rank_r_nonzeros': work.get('operator_rank_r_nonzeros'),
+        'rank_reflector_nonzeros': work.get('operator_rank_reflector_nonzeros'),
+        'rank_reflectors': work.get('operator_rank_reflectors'),
         'compact_extractions': work.get('operator_rank_compact_extractions'),
         'free_design_svds': work.get('operator_rank_free_design_svds'),
         'blocks': partition.get('blocks'),
@@ -308,7 +328,9 @@ CSV_BASE_FIELDS = (
     'configuration', 'status', 'reason', 'individual_json', 'evidence_eligible',
     'evidence_exclusion_reasons', 'rank_repetition_evidence', 'atoms', 'rows', 'free_columns',
     'sparse_backend', 'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
-    'rank_workspace_bytes', 'compact_extractions', 'free_design_svds', 'blocks',
+    'rank_workspace_bytes', 'rank_work_stage', 'rank_estimated_total_entries',
+    'rank_estimated_remaining_entries', 'rank_estimated_reconstruction_entries', 'rank_design_nonzeros',
+    'rank_r_nonzeros', 'rank_reflector_nonzeros', 'rank_reflectors', 'compact_extractions', 'free_design_svds', 'blocks',
     'maximum_block_atoms', 'topology_bytes', 'storage_bytes', 'scratch_bytes_bound',
     'requested_repetitions', 'completed_repetitions', 'failed_repetitions', 'measurements_complete',
     'pcg_iteration_repetitions', 'pcg_iteration_valid_repetitions',
@@ -361,6 +383,9 @@ def build_parser():
     parser.add_argument('--preconditioners', nargs='+', choices=('identity', 'diagonal', 'schwarz'),
                         default=['schwarz'])
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
+    parser.add_argument('--operator-rank-seconds', type=float, default=120)
+    parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
+    parser.add_argument('--operator-rank-workspace-mib', type=int, default=256)
     parser.add_argument('--max-block-atoms', type=int, default=512)
     parser.add_argument('--storage-mib', type=int, default=512)
     parser.add_argument('--scratch-mib', type=int, default=256)
@@ -374,6 +399,9 @@ def build_parser():
 def validate_args(parser, args):
     if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
         parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
+    if (not math.isfinite(args.operator_rank_seconds) or args.operator_rank_seconds < 0 or args.operator_rank_work_entries < 0 or
+            args.operator_rank_workspace_mib < 0):
+        parser.error('operator rank budgets must be nonnegative')
     if (not args.atoms or any(value <= 0 for value in args.atoms) or
             not args.cores or any(value <= 0 for value in args.cores) or
             not args.overlaps or any(value < 0 for value in args.overlaps)):

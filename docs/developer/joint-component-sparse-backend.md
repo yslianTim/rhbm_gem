@@ -128,6 +128,14 @@ factor; the process watchdog includes their storage, construction scratch and
 allocator overhead. Exported sparse-array bytes and known shape probes are
 reported separately; they are not allocation traces.
 
+Rank work telemetry names the active certificate stage and reports normalized
+design, R-factor, and Householder storage counts. Before reconstruction it
+forecasts the exact remaining charge from the stored reflector nonzeros and
+observation count: p * (2*nnz(H) + n). Checked size arithmetic makes the
+estimate unavailable on overflow without changing the rank decision. The
+charged work counter and `rank-work-budget` reason retain their existing
+meaning; a failed budget check also reports its active stage.
+
 The prototype allocates no global dense compact, normal matrix, inverse or
 singular-vector matrix. It retains sparse QR and its fill-in. Streaming
 verification may cost O(p * nnz(H) + n*p), and comparison bounds can be

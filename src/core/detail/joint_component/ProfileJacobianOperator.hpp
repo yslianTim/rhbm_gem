@@ -6,7 +6,9 @@ namespace rhbm_gem::core::joint_component {
 struct OperatorWork
 {
     std::size_t preparations{},applications{},adjoints{},rank_checks{},rank_rows{},rank_columns{},rank_entries{},rank_workspace_bytes{},
-        rank_compact_extractions{},rank_free_design_svds{},normals{};
+        rank_compact_extractions{},rank_free_design_svds{},rank_design_nonzeros{},rank_r_nonzeros{},rank_reflector_nonzeros{},rank_reflectors{},normals{};
+    FreeDesignRankWorkStage rank_work_stage{FreeDesignRankWorkStage::None};
+    std::optional<std::size_t> rank_estimated_total_entries,rank_estimated_remaining_entries,rank_estimated_reconstruction_entries;
     double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{},normal_seconds{},design_seconds{},factor_seconds{},compact_seconds{},svd_seconds{};
     std::string rank_status,rank_reason;
 };

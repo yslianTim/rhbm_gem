@@ -38,15 +38,43 @@ struct Audit
 {
     const RankBudget & budget; FreeDesignRankResult & result;
     std::chrono::steady_clock::time_point start{std::chrono::steady_clock::now()};
+    void Stage(FreeDesignRankWorkStage stage) {result.work_stage=stage;}
     void Charge(std::size_t entries)
     {
-        if(entries>budget.entries-result.entries) throw Stop{"rank-work-budget"};
+        if(result.entries>budget.entries || entries>budget.entries-result.entries) throw Stop{"rank-work-budget"};
         result.entries+=entries;
+        if(result.estimated_total_entries && result.entries<=*result.estimated_total_entries)
+            result.estimated_remaining_entries=*result.estimated_total_entries-result.entries;
         if(std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count()>=budget.seconds) throw Stop{"rank-time-budget"};
     }
     ~Audit() {result.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
 };
 void Finite(double value) {if(!std::isfinite(value)) throw Stop{"rank-bound-overflow"};}
+std::optional<std::size_t> CheckedAdd(std::size_t a,std::size_t b)
+{
+    if(b>std::numeric_limits<std::size_t>::max()-a) return std::nullopt;
+    return a+b;
+}
+std::optional<std::size_t> CheckedMultiply(std::size_t a,std::size_t b)
+{
+    if(a && b>std::numeric_limits<std::size_t>::max()/a) return std::nullopt;
+    return a*b;
+}
+}
+std::string_view FreeDesignRankWorkStageName(FreeDesignRankWorkStage stage)
+{
+    switch(stage)
+    {
+    case FreeDesignRankWorkStage::None: return "none";
+    case FreeDesignRankWorkStage::StructuralScan: return "structural-scan";
+    case FreeDesignRankWorkStage::DuplicateCheck: return "duplicate-check";
+    case FreeDesignRankWorkStage::FactorInspection: return "factor-inspection";
+    case FreeDesignRankWorkStage::WeakDirection: return "weak-direction";
+    case FreeDesignRankWorkStage::InverseBound: return "inverse-bound";
+    case FreeDesignRankWorkStage::OrthogonalBound: return "orthogonal-bound";
+    case FreeDesignRankWorkStage::Reconstruction: return "reconstruction";
+    }
+    return "none";
 }
 FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFactor * factor,const RankRequest & request,const RankBudget & budget)
 {
@@ -62,9 +90,11 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
         const auto n=z.rows(),p=z.cols();
         if(n<=0 || p<=0 || request.policy.rows<0 || request.columns<=0 || !std::isfinite(request.absolute) ||
             !std::isfinite(budget.seconds) || budget.seconds<0) throw Stop{"rank-invalid-input"};
+        out.design_nonzeros=static_cast<std::size_t>(z.nonZeros());
         out.workspace_bytes=static_cast<std::size_t>(n)*sizeof(Interval)*3+static_cast<std::size_t>(p)*192;
         if(out.workspace_bytes>budget.workspace_bytes) throw Stop{"rank-memory-budget"};
         RecordDenseShape("rank-observation-vector",n,1); RecordDenseShape("rank-free-vector",p,1);
+        audit.Stage(FreeDesignRankWorkStage::StructuralScan);
         audit.Charge(static_cast<std::size_t>(z.nonZeros()));
         std::vector<double> row_sums(static_cast<std::size_t>(n));
         double frobenius{},one{},maximum_lower{};
@@ -72,6 +102,7 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
         std::unordered_map<std::uint64_t,std::vector<Eigen::Index>> columns;
         for(Eigen::Index col=0;col<p;++col)
         {
+            audit.Stage(FreeDesignRankWorkStage::StructuralScan);
             audit.Charge(0);
             Interval square; double sum{}; std::uint64_t hash=1469598103934665603ULL;
             bool zero=true;
@@ -88,6 +119,7 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
             if(zero) {structural=true; structural_upper=std::min(structural_upper,p-1);}
             for(const auto previous:columns[hash])
             {
+                audit.Stage(FreeDesignRankWorkStage::DuplicateCheck);
                 audit.Charge(static_cast<std::size_t>(z.col(col).nonZeros()+z.col(previous).nonZeros()));
                 {
                     // Compare entries exactly: a norm of the difference may underflow.
@@ -133,9 +165,12 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
         }
         else
         {
+            audit.Stage(FreeDesignRankWorkStage::FactorInspection);
             if(!factor) throw Stop{"rank-factor-unavailable"};
             const auto view=factor->RankView(); if(!view) throw Stop{"rank-backend-unavailable"};
             const auto & f=*view;
+            out.factor_r_nonzeros=f.r_values.size(); out.reflector_nonzeros=f.h_values.size();
+            out.reflector_count=static_cast<std::size_t>(f.reflectors);
             if(f.rows!=n || f.columns!=p || !f.design || f.design->rows()!=n || f.design->cols()!=p ||
                 f.design->nonZeros()!=z.nonZeros()) throw Stop{"rank-factor-mismatch"};
             // An exact entry comparison prevents an underflowed difference from matching.
@@ -154,6 +189,7 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
                 if(At(f.r_inner,k)==col) diagonal(col)=At(f.r_values,k);
             }
             audit.Charge(f.r_values.size());
+            audit.Stage(FreeDesignRankWorkStage::WeakDirection);
             std::vector<Eigen::Index> pivots(static_cast<std::size_t>(p)); std::iota(pivots.begin(),pivots.end(),0);
             std::partial_sort(pivots.begin(),pivots.begin()+std::min<Eigen::Index>(3,p),pivots.end(),[&](auto a,auto b) {return std::abs(diagonal(a))<std::abs(diagonal(b)) || (std::abs(diagonal(a))==std::abs(diagonal(b)) && a<b);});
             for(Eigen::Index attempt=0;attempt<std::min<Eigen::Index>(3,p);++attempt)
@@ -188,6 +224,7 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
             {
                 // |R^-1| <= M(R)^-1. Two nonnegative triangular solves bound
                 // the infinity and one norms; no inverse or normal matrix exists.
+                audit.Stage(FreeDesignRankWorkStage::InverseBound);
                 std::vector<double> x(static_cast<std::size_t>(p),1),y(static_cast<std::size_t>(p),1);
                 for(Eigen::Index col=p;col-->0;)
                 {
@@ -206,6 +243,7 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
                 const double inverse_upper=SqrtUp(ProductUp(*std::max_element(x.begin(),x.end()),*std::max_element(y.begin(),y.end())));
                 Finite(inverse_upper);
                 if(Down(1/inverse_upper)<=out.threshold_upper) throw Stop{"rank-bound-too-wide"};
+                audit.Stage(FreeDesignRankWorkStage::OrthogonalBound);
                 double qlower=1;
                 for(Eigen::Index h=0;h<f.reflectors;++h)
                 {
@@ -217,6 +255,17 @@ FreeDesignRankResult EvaluateFreeDesignRank(const Sparse & z,const FreeDesignFac
                 audit.Charge(f.h_values.size()); out.orthogonal_minimum=qlower;
                 // Q = P_H' H_0 ... H_k. Reconstruct each R column with interval
                 // Householder actions, retaining only one observation vector.
+                audit.Stage(FreeDesignRankWorkStage::Reconstruction);
+                const auto twice_reflector_nonzeros=CheckedMultiply(2,out.reflector_nonzeros);
+                const auto per_column=twice_reflector_nonzeros ? CheckedAdd(*twice_reflector_nonzeros,static_cast<std::size_t>(n)) : std::nullopt;
+                const auto reconstruction=per_column ? CheckedMultiply(static_cast<std::size_t>(p),*per_column) : std::nullopt;
+                const auto total=reconstruction ? CheckedAdd(out.entries,*reconstruction) : std::nullopt;
+                if(total)
+                {
+                    out.estimated_reconstruction_entries=*reconstruction;
+                    out.estimated_total_entries=*total;
+                    out.estimated_remaining_entries=*reconstruction;
+                }
                 double error_squared{};
                 std::vector<Interval> column(static_cast<std::size_t>(n));
                 for(Eigen::Index col=0;col<p;++col)

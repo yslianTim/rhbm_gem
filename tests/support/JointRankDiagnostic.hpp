@@ -29,12 +29,18 @@ void RunRank(const n::Evaluation & state,const n::EvaluationContext & context,bo
         }
         else
         {
-            const auto result=n::EvaluateFreeDesignRank(design,factor.get(),{context.rank,p});
+            const auto result=n::EvaluateFreeDesignRank(design,factor.get(),{context.rank,p},context.search.operator_rank.budget);
             const auto number=[](double value)->j::value {return std::isfinite(value) ? j::value(value) : j::value(nullptr);};
             report["rank_result"]=j::object{
                 {"status",result.status==n::FreeDesignRankStatus::FullRank ? "full-rank" : result.status==n::FreeDesignRankStatus::Deficient ? "deficient" : "unavailable"},
                 {"reason",result.reason},{"rank_lower",result.rank_lower},{"rank_upper",result.rank_upper},
                 {"exact_rank",result.status!=n::FreeDesignRankStatus::Unavailable && result.rank_lower==result.rank_upper ? j::value(result.rank_lower) : j::value(nullptr)},
+                {"work_stage",n::FreeDesignRankWorkStageName(result.work_stage)},
+                {"estimated_total_entries",OptionalSize(result.estimated_total_entries)},
+                {"estimated_remaining_entries",OptionalSize(result.estimated_remaining_entries)},
+                {"estimated_reconstruction_entries",OptionalSize(result.estimated_reconstruction_entries)},
+                {"design_nonzeros",result.design_nonzeros},{"r_nonzeros",result.factor_r_nonzeros},
+                {"reflector_nonzeros",result.reflector_nonzeros},{"reflectors",result.reflector_count},
                 {"minimum_lower",number(result.minimum_lower)},{"maximum_lower",number(result.maximum_lower)},
                 {"maximum_upper",number(result.maximum_upper)},{"threshold_lower",number(result.threshold_lower)},
                 {"threshold_upper",number(result.threshold_upper)},{"reconstruction_error",number(result.reconstruction_error)},

@@ -75,6 +75,14 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute},context.search.operator_rank.budget);
                 work.rank_entries+=rank_evidence_.entries;
                 work.rank_workspace_bytes=std::max(work.rank_workspace_bytes,rank_evidence_.workspace_bytes);
+                work.rank_work_stage=rank_evidence_.work_stage;
+                work.rank_estimated_total_entries=rank_evidence_.estimated_total_entries;
+                work.rank_estimated_remaining_entries=rank_evidence_.estimated_remaining_entries;
+                work.rank_estimated_reconstruction_entries=rank_evidence_.estimated_reconstruction_entries;
+                work.rank_design_nonzeros=rank_evidence_.design_nonzeros;
+                work.rank_r_nonzeros=rank_evidence_.factor_r_nonzeros;
+                work.rank_reflector_nonzeros=rank_evidence_.reflector_nonzeros;
+                work.rank_reflectors=rank_evidence_.reflector_count;
                 work.rank_status=RankStatus(rank_evidence_.status); work.rank_reason=rank_evidence_.reason;
                 if(rank_evidence_.status!=FreeDesignRankStatus::FullRank)
                 {

@@ -41,6 +41,9 @@ The `fixed` and `solve` profiles accept these internal policy controls:
 
 ```text
 --operator-rank auto|dense|spqr-bounds
+--operator-rank-seconds S
+--operator-rank-work-entries N
+--operator-rank-workspace-mib N
 --schwarz-core-atoms N
 --schwarz-overlap-hops N
 --schwarz-max-block-atoms N
@@ -53,8 +56,10 @@ Defaults are `auto`, 128 core atoms, one overlap hop, 512 maximum block atoms,
 and dense rank on Eigen. The benchmark writes the requested and resolved rank
 backend, budget, search method, preconditioner, and all Schwarz limits into
 `metadata.solver_policy`; the C++ result also records its effective policy.
-These options belong to the internal benchmark drivers and do not add
-production CLI switches.
+Rank-budget defaults are 120 seconds, 100,000,000 work entries, and 256 MiB.
+The `rank` profile accepts the same three budget controls for the bounded
+prototype. These options belong to the internal benchmark drivers and do not
+add production CLI switches.
 
 For example, compare a small Schwarz core with core-only and one-hop overlap:
 
@@ -94,7 +99,10 @@ convergence assessment where one exists; it does not change process status or
 create a CI performance gate. Repetitions retain individual outcomes, and a
 failed or unavailable repetition prevents `joint_benchmark.py` from reporting
 its aggregate elapsed/RSS value as complete. Solve details retain the C++ search work counters,
-rank status and resource use. Schwarz runs also include a partition summary
+rank status and resource use. Bounded rank diagnostics include the work stage,
+charged entries, estimated total and remaining entries when the reconstruction
+forecast is available, and the design, R-factor, reflector-nonzero and
+reflector counts. Schwarz runs also include a partition summary
 with block count, core and block size distributions, atom membership
 distribution, graph workspace, storage, and scratch bound. Rank counters show
 checks, time, entries, workspace, compact extraction count, and free-design

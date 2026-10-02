@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FreeDesignRank.hpp"
+#include <limits>
 #include <numeric>
 
 namespace {
@@ -77,6 +78,69 @@ TEST(JointFreeDesignRank,BudgetsInvalidValuesAndFactorIdentity)
     EXPECT_EQ(out.reason,n::SparseBackendEnabled() ? "rank-factor-mismatch" : "rank-backend-unavailable");
     invalid=z; invalid.coeffRef(0,0)=1e308;
     EXPECT_EQ(n::EvaluateFreeDesignRank(invalid,nullptr,request).reason,"rank-bound-overflow");
+}
+TEST(JointFreeDesignRank,ReportsExactReconstructionForecastAndBudgetStage)
+{
+    n::Matrix a=n::Matrix::Identity(12,4);
+    for(Eigen::Index col=0;col<a.cols();++col) {a(6+col,col)=.15; a.col(col).normalize();}
+    const n::RankRequest request{{1000,4,0},4};
+    const n::RankBudget generous{120,std::numeric_limits<std::size_t>::max(),256*1024*1024};
+    const auto full=Rank(a,request,generous);
+    if(!n::SparseBackendEnabled()) {EXPECT_EQ(full.reason,"rank-backend-unavailable"); return;}
+    ASSERT_EQ(full.status,n::FreeDesignRankStatus::FullRank)<<full.reason;
+    ASSERT_TRUE(full.estimated_total_entries); ASSERT_TRUE(full.estimated_remaining_entries);
+    ASSERT_TRUE(full.estimated_reconstruction_entries);
+    EXPECT_EQ(*full.estimated_reconstruction_entries,
+        static_cast<std::size_t>(a.cols())*(2*full.reflector_nonzeros+static_cast<std::size_t>(a.rows())));
+    EXPECT_EQ(*full.estimated_total_entries,full.entries);
+    EXPECT_EQ(*full.estimated_remaining_entries,0);
+    EXPECT_EQ(full.design_nonzeros,static_cast<std::size_t>(a.sparseView().nonZeros()));
+    EXPECT_GT(full.factor_r_nonzeros,0);
+    EXPECT_GT(full.reflector_count,0);
+    EXPECT_EQ(full.work_stage,n::FreeDesignRankWorkStage::Reconstruction);
+
+    const n::RankBudget just_short{120,*full.estimated_total_entries-1,256*1024*1024};
+    const auto stopped=Rank(a,request,just_short);
+    EXPECT_EQ(stopped.status,n::FreeDesignRankStatus::Unavailable);
+    EXPECT_EQ(stopped.reason,"rank-work-budget");
+    EXPECT_EQ(stopped.work_stage,n::FreeDesignRankWorkStage::Reconstruction);
+    ASSERT_TRUE(stopped.estimated_total_entries); ASSERT_TRUE(stopped.estimated_remaining_entries);
+    EXPECT_EQ(*stopped.estimated_total_entries,*full.estimated_total_entries);
+    EXPECT_EQ(*stopped.estimated_total_entries,stopped.entries+*stopped.estimated_remaining_entries);
+    EXPECT_GE(*stopped.estimated_total_entries,stopped.entries);
+}
+TEST(JointFreeDesignRank,DiagnosticsPreserveRankDecisionsAndProductionDefaults)
+{
+    const n::RankBudget defaults{};
+    EXPECT_DOUBLE_EQ(defaults.seconds,120);
+    EXPECT_EQ(defaults.entries,100000000);
+    EXPECT_EQ(defaults.workspace_bytes,256*1024*1024);
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR rank certificate unavailable";
+
+    n::Matrix full=n::Matrix::Identity(9,4); full(6,0)=.1; full(7,1)=.2;
+    const n::RankRequest request{{1000,4,0},4};
+    const auto bounded=Rank(full,request,{120,1000000,256*1024*1024});
+    const auto roomy=Rank(full,request,{120,10000000,256*1024*1024});
+    EXPECT_EQ(roomy.status,bounded.status);
+    EXPECT_EQ(roomy.reason,bounded.reason);
+    EXPECT_EQ(bounded.status,n::EvaluateRank(full,request).rank==4 ?
+        n::FreeDesignRankStatus::FullRank : n::FreeDesignRankStatus::Deficient);
+
+    n::Matrix deficient=n::Matrix::Identity(9,4); deficient.col(3)=deficient.col(1);
+    const auto deficient_small=Rank(deficient,request,{120,1000000,256*1024*1024});
+    const auto deficient_roomy=Rank(deficient,request,{120,10000000,256*1024*1024});
+    EXPECT_EQ(deficient_small.status,n::FreeDesignRankStatus::Deficient);
+    EXPECT_EQ(deficient_roomy.status,deficient_small.status);
+    EXPECT_EQ(deficient_roomy.reason,deficient_small.reason);
+}
+TEST(JointFreeDesignRank,TinyWorkBudgetNamesTheStageWithoutChangingReason)
+{
+    const n::Matrix a=n::Matrix::Identity(4,4); const n::RankRequest request{{100,4,0},4};
+    const auto result=Rank(a,request,{120,0,256*1024*1024});
+    EXPECT_EQ(result.status,n::FreeDesignRankStatus::Unavailable);
+    EXPECT_EQ(result.reason,"rank-work-budget");
+    EXPECT_EQ(result.work_stage,n::FreeDesignRankWorkStage::StructuralScan);
+    EXPECT_FALSE(result.estimated_total_entries);
 }
 TEST(JointFreeDesignRank,TimeBudgetIncludesStructuralColumnScans)
 {

@@ -35,6 +35,7 @@ std::string search_kind;
 std::filesystem::path capture;
 j::array svd_records;
 n::OperatorRankMode operator_rank_mode{n::OperatorRankMode::Auto};
+n::RankBudget operator_rank_budget{};
 n::SchwarzPolicy schwarz_policy{};
 j::value Read(const char * path,bool precise=false)
 {
@@ -45,6 +46,7 @@ j::value Read(const char * path,bool precise=false)
 void Write(const char * path,const j::object & v) {std::ofstream f(path);f<<j::serialize(v)<<'\n';}
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 j::array Values(const n::Vector & v) {j::array out;for(auto x:v) out.push_back(std::isfinite(x) ? j::value(x) : j::value(nullptr));return out;}
+j::value OptionalSize(const std::optional<std::size_t> & value) {return value ? j::value(*value) : j::value(nullptr);}
 std::size_t ParseSize(const char * raw,bool allow_zero)
 {
     const std::string value=raw;
@@ -54,11 +56,17 @@ std::size_t ParseSize(const char * raw,bool allow_zero)
         throw std::invalid_argument("Invalid integer policy value");
     return static_cast<std::size_t>(parsed);
 }
-std::size_t ParseMiB(const char * raw)
+std::size_t ParseMiB(const char * raw,bool allow_zero=false)
 {
-    const auto mib=ParseSize(raw,false);
-    if(mib>std::numeric_limits<std::size_t>::max()/(1024*1024)) throw std::invalid_argument("Schwarz memory limit is too large");
+    const auto mib=ParseSize(raw,allow_zero);
+    if(mib>std::numeric_limits<std::size_t>::max()/(1024*1024)) throw std::invalid_argument("Memory limit is too large");
     return mib*1024*1024;
+}
+double ParseSeconds(const char * raw)
+{
+    const std::string value=raw; std::size_t used{}; const double seconds=std::stod(value,&used);
+    if(used!=value.size() || !std::isfinite(seconds) || seconds<0) throw std::invalid_argument("Expected a finite nonnegative rank time budget");
+    return seconds;
 }
 n::OperatorRankMode ParseOperatorRankMode(const std::string & value)
 {
@@ -67,11 +75,13 @@ n::OperatorRankMode ParseOperatorRankMode(const std::string & value)
     if(value=="spqr-bounds") return n::OperatorRankMode::SpqrBounds;
     throw std::invalid_argument("Expected --operator-rank auto|dense|spqr-bounds");
 }
-void ConfigureSearchPolicy(n::EvaluationContext & context)
+void ConfigureSearchPolicy(n::SearchPolicy & policy)
 {
-    context.search.operator_rank.mode=operator_rank_mode;
-    context.search.schwarz=schwarz_policy;
+    policy.operator_rank.mode=operator_rank_mode;
+    policy.operator_rank.budget=operator_rank_budget;
+    policy.schwarz=schwarz_policy;
 }
+void ConfigureSearchPolicy(n::EvaluationContext & context) {ConfigureSearchPolicy(context.search);}
 j::object PolicyRecord(const n::SearchPolicy & policy)
 {
     const bool rank_active=policy.method==n::SearchMethod::OperatorPcg;
@@ -215,6 +225,12 @@ j::object SearchWork()
         {"operator_rank_reason",op.rank_reason.empty() ? "not-run" : op.rank_reason},
         {"operator_rank_rows",op.rank_rows},{"operator_rank_columns",op.rank_columns},
         {"operator_rank_entries",op.rank_entries},{"operator_rank_workspace_bytes",op.rank_workspace_bytes},
+        {"operator_rank_work_stage",n::FreeDesignRankWorkStageName(op.rank_work_stage)},
+        {"operator_rank_estimated_total_entries",OptionalSize(op.rank_estimated_total_entries)},
+        {"operator_rank_estimated_remaining_entries",OptionalSize(op.rank_estimated_remaining_entries)},
+        {"operator_rank_estimated_reconstruction_entries",OptionalSize(op.rank_estimated_reconstruction_entries)},
+        {"operator_rank_design_nonzeros",op.rank_design_nonzeros},{"operator_rank_r_nonzeros",op.rank_r_nonzeros},
+        {"operator_rank_reflector_nonzeros",op.rank_reflector_nonzeros},{"operator_rank_reflectors",op.rank_reflectors},
         {"operator_rank_compact_extractions",op.rank_compact_extractions},
         {"operator_rank_free_design_svds",op.rank_free_design_svds},
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
@@ -383,6 +399,9 @@ int main(int argc,char ** argv)
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
                 else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);
+                else if(option=="--operator-rank-seconds" && k+1<end) operator_rank_budget.seconds=ParseSeconds(argv[++k]);
+                else if(option=="--operator-rank-work-entries" && k+1<end) operator_rank_budget.entries=ParseSize(argv[++k],true);
+                else if(option=="--operator-rank-workspace-mib" && k+1<end) operator_rank_budget.workspace_bytes=ParseMiB(argv[++k],true);
                 else if(option=="--schwarz-core-atoms" && k+1<end) schwarz_policy.core_atoms=ParseSize(argv[++k],false);
                 else if(option=="--schwarz-overlap-hops" && k+1<end) schwarz_policy.overlap_hops=ParseSize(argv[++k],true);
                 else if(option=="--schwarz-max-block-atoms" && k+1<end) schwarz_policy.max_block_atoms=ParseSize(argv[++k],false);
@@ -436,7 +455,12 @@ int main(int argc,char ** argv)
                 report["not_run"]=j::array{"ac-solve","rank","operator","reference","search","assessment","uncertainty"};
 #ifndef PR23_BASELINE_DRIVER
 #ifndef PR4_BASELINE_DRIVER
-                if(phase=="rank" || phase=="rank-oracle") RunRank(state,data.context,phase=="rank-oracle",report,argv[5]);
+                if(phase=="rank" || phase=="rank-oracle")
+                {
+                    auto rank_context=data.context; ConfigureSearchPolicy(rank_context);
+                    report["solver_policy"]=PolicyRecord(rank_context.search);
+                    RunRank(state,rank_context,phase=="rank-oracle",report,argv[5]);
+                }
 #endif
                 if(phase=="local")
                 {
@@ -469,7 +493,7 @@ int main(int argc,char ** argv)
             else
             {
 #ifndef PR23_BASELINE_DRIVER
-                n::SearchPolicy policy;
+                n::SearchPolicy policy; ConfigureSearchPolicy(policy);
                 if(!search_kind.empty() && search_kind!="legacy")
                 {
                     policy.method=n::SearchMethod::OperatorPcg;

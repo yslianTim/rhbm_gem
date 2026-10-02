@@ -300,6 +300,8 @@ TEST(JointProfileOperatorTest, BoundedRankBudgetFailureDoesNotExtractCompactOrRu
     EXPECT_FALSE(op.Valid()); EXPECT_EQ(op.Reason(),"rank-work-budget");
     const auto & work=n::OperatorWorkForTesting();
     EXPECT_EQ(work.rank_status,"unavailable"); EXPECT_EQ(work.rank_reason,"rank-work-budget");
+    EXPECT_EQ(work.rank_work_stage,n::FreeDesignRankWorkStage::StructuralScan);
+    EXPECT_GT(work.rank_design_nonzeros,0);
     EXPECT_EQ(work.rank_compact_extractions,0); EXPECT_EQ(work.rank_free_design_svds,0);
     EXPECT_EQ(n::SparseWorkForTesting().compact_extractions,0);
     EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,0);
