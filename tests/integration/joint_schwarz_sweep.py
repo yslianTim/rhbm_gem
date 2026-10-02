@@ -67,7 +67,9 @@ TIMING_FIELDS = (
     'partition_seconds', 'operator_prepare_seconds', 'metric_seconds', 'local_seconds',
     'factor_seconds', 'inverse_seconds', 'pcg_seconds', 'operator_normal_seconds',
     'operator_apply_seconds', 'operator_adjoint_seconds', 'rank_seconds',
-    'operator_seconds', 'search_seconds', 'assessment_seconds', 'wall_seconds',
+    'operator_seconds', 'search_seconds', 'assessment_seconds', 'topology_setup_seconds',
+    'linearization_setup_seconds', 'damping_setup_seconds', 'setup_seconds', 'iterative_seconds',
+    'measured_seconds', 'wall_seconds', 'setup_fraction_of_search', 'pcg_fraction_of_search',
 )
 COUNTER_FIELDS = (
     'pcg_solves', 'pcg_iterations', 'operator_normals', 'operator_applications',
@@ -108,6 +110,16 @@ def summarize(config, report, individual_name, process_error=None):
         search_seconds = item_details.get('search_seconds')
         assessment_seconds = item_details.get('assessment_seconds')
         pcg_seconds = item_work.get('pcg_seconds')
+        setup_parts = [item_work.get(key) for key in (
+            'partition_seconds', 'operator_prepare_seconds', 'metric_seconds',
+            'local_seconds', 'factor_seconds')]
+        topology_setup_seconds = item_work.get('partition_seconds')
+        linearization_setup_seconds = (sum(setup_parts[1:4])
+                                       if all(isinstance(value, (int, float)) for value in setup_parts[1:4])
+                                       else None)
+        damping_setup_seconds = item_work.get('factor_seconds')
+        setup_seconds = (sum(setup_parts)
+                         if all(isinstance(value, (int, float)) for value in setup_parts) else None)
         values = {key: item_work.get(key) for key in (*TIMING_FIELDS, *COUNTER_FIELDS)}
         operator_times = [item_work.get(key) for key in (
             'operator_prepare_seconds', 'operator_apply_seconds',
@@ -116,8 +128,20 @@ def summarize(config, report, individual_name, process_error=None):
             'rank_seconds': item_work.get('operator_rank_seconds'),
             'search_seconds': search_seconds,
             'assessment_seconds': assessment_seconds,
+            'topology_setup_seconds': topology_setup_seconds,
+            'linearization_setup_seconds': linearization_setup_seconds,
+            'damping_setup_seconds': damping_setup_seconds,
+            'setup_seconds': setup_seconds,
+            'iterative_seconds': pcg_seconds,
+            'measured_seconds': (search_seconds + assessment_seconds
+                                 if isinstance(search_seconds, (int, float)) and
+                                 isinstance(assessment_seconds, (int, float)) else None),
             'wall_seconds': item.get('process_wall_seconds'),
             'peak_rss_bytes': item.get('peak_rss_bytes'),
+            'setup_fraction_of_search': (setup_seconds / search_seconds
+                                         if setup_seconds is not None and search_seconds else None),
+            'pcg_fraction_of_search': (pcg_seconds / search_seconds
+                                       if isinstance(pcg_seconds, (int, float)) and search_seconds else None),
             'operator_seconds': (sum(operator_times) if all(isinstance(value, (int, float))
                                                            for value in operator_times) else None),
         })
@@ -195,6 +219,14 @@ def summarize(config, report, individual_name, process_error=None):
         'pcg_seconds': measurements['pcg_seconds']['median'],
         'search_seconds': measurements['search_seconds']['median'],
         'assessment_seconds': measurements['assessment_seconds']['median'],
+        'topology_setup_seconds': measurements['topology_setup_seconds']['median'],
+        'linearization_setup_seconds': measurements['linearization_setup_seconds']['median'],
+        'damping_setup_seconds': measurements['damping_setup_seconds']['median'],
+        'setup_seconds': measurements['setup_seconds']['median'],
+        'iterative_seconds': measurements['iterative_seconds']['median'],
+        'measured_seconds': measurements['measured_seconds']['median'],
+        'setup_fraction_of_search': measurements['setup_fraction_of_search']['median'],
+        'pcg_fraction_of_search': measurements['pcg_fraction_of_search']['median'],
         'wall_seconds': measurements['wall_seconds']['median'],
         'peak_rss_bytes': measurements['peak_rss_bytes']['max'],
         'objective': numerics.get('objective'),
@@ -219,7 +251,9 @@ CSV_BASE_FIELDS = (
     'iterations_per_solve',
     'partition_seconds', 'local_seconds', 'factor_seconds', 'inverse_seconds',
     'operator_seconds', 'operator_prepare_seconds', 'pcg_seconds', 'search_seconds',
-    'assessment_seconds', 'wall_seconds', 'peak_rss_bytes', 'objective',
+    'assessment_seconds', 'topology_setup_seconds', 'linearization_setup_seconds',
+    'damping_setup_seconds', 'setup_seconds', 'iterative_seconds', 'measured_seconds',
+    'setup_fraction_of_search', 'pcg_fraction_of_search', 'wall_seconds', 'peak_rss_bytes', 'objective',
     'runtime_convergence', 'state_available', 'stop_reason',
 )
 CSV_MEASUREMENT_FIELDS = tuple(

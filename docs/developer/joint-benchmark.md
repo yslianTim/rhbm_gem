@@ -92,13 +92,48 @@ not written to the result.
 work that did not run. `result.qualified` reports a solve's existing runtime
 convergence assessment where one exists; it does not change process status or
 create a CI performance gate. Repetitions retain individual outcomes, and a
-failed or unavailable repetition prevents an aggregate elapsed/RSS value from
-being reported as complete. Solve details retain the C++ search work counters,
+failed or unavailable repetition prevents `joint_benchmark.py` from reporting
+its aggregate elapsed/RSS value as complete. Solve details retain the C++ search work counters,
 rank status and resource use. Schwarz runs also include a partition summary
 with block count, core and block size distributions, atom membership
 distribution, graph workspace, storage, and scratch bound. Rank counters show
 checks, time, entries, workspace, compact extraction count, and free-design
 SVD count, so the bounded SPQR route can be checked directly.
+
+## Cost accounting
+
+The sweep reports timing summaries across completed measurement repetitions.
+Warmup runs are excluded. Timing and work-counter distributions retain their
+minimum, median, and maximum; the canonical timing fields use the median. Peak
+RSS uses the maximum. `measurements_complete` is true only when all requested
+measurement repetitions completed, and scaling analysis uses complete rows.
+For PCG, `measurements.pcg_iterations_per_solve.median` is the median of the
+per-run medians. The pooled per-solve distribution remains available alongside
+it. Counter variation across repetitions is kept in `measurements`.
+
+The decomposed costs are defined per measurement run:
+
+| Field | Definition |
+| --- | --- |
+| `topology_setup_seconds` | `partition_seconds` |
+| `linearization_setup_seconds` | `operator_prepare_seconds + metric_seconds + local_seconds` |
+| `damping_setup_seconds` | `factor_seconds` |
+| `setup_seconds` | Topology + linearization + damping setup |
+| `iterative_seconds` | `pcg_seconds` |
+| `measured_seconds` | `search_seconds + assessment_seconds` |
+| `wall_seconds` | Process wall time from the benchmark runner |
+
+The setup sum includes `operator_prepare_seconds` once. Operator preparation
+already covers design, fixed-factor, and rank work, so those subfields are
+diagnostics and are not added again. `operator_seconds` sums operator
+preparation and operator actions; Apply/Adjoint actions can also occur outside
+PCG, so this sum is not the PCG cost. `operator_normals`,
+`operator_applications`, and `operator_adjoints` count implementation calls.
+`ApplyNormal` is one optimized operator action, not an implied Apply plus
+Adjoint pair. The setup and PCG fractions divide their corresponding per-run
+cost by `search_seconds`; they are null when that denominator is zero or
+unavailable. These are descriptive measurements and have no hardware-specific
+pass threshold.
 
 ## Schwarz scaling sweep
 
@@ -123,11 +158,13 @@ count, without multiplying across unused Schwarz settings. Each configuration
 has its own versioned benchmark JSON under the aggregate output's sibling
 `*_runs` directory. The aggregate JSON and optional CSV include configuration,
 status, rows and free columns, rank backend and work, partition summaries,
-PCG counts and timing, search and assessment time, wall time, peak RSS,
-objective, convergence, state availability, and stop reason. An unavailable,
-timed out, or failed run keeps that status and its individual result; the sweep
-does not treat it as a successful measurement. Timing is descriptive and has
-no fixed performance pass threshold.
+PCG per-solve iteration counts, operator calls, timing distributions, search
+and assessment time, wall time, peak RSS, objective, convergence, state
+availability, and stop reason. `--warmup` defaults to zero and `--repeat`
+defaults to one. An unavailable, timed out, or failed measurement keeps its
+status and individual result; incomplete repetitions are not reported as a
+complete campaign. Timing is descriptive and has no fixed performance pass
+threshold.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
