@@ -94,7 +94,8 @@ TEST(JointFreeDesignRank,ReportsExactReconstructionForecastAndBudgetStage)
         static_cast<std::size_t>(a.cols())*(2*full.reflector_nonzeros+static_cast<std::size_t>(a.rows())));
     EXPECT_EQ(*full.estimated_total_entries,full.entries);
     EXPECT_EQ(*full.estimated_remaining_entries,0);
-    EXPECT_EQ(full.design_nonzeros,static_cast<std::size_t>(a.sparseView().nonZeros()));
+    const n::Sparse sparse=a.sparseView();
+    EXPECT_EQ(full.design_nonzeros,static_cast<std::size_t>(sparse.nonZeros()));
     EXPECT_GT(full.factor_r_nonzeros,0);
     EXPECT_GT(full.reflector_count,0);
     EXPECT_EQ(full.work_stage,n::FreeDesignRankWorkStage::Reconstruction);
