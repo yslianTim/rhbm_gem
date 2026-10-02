@@ -108,6 +108,13 @@ def classify_group(key, rows):
     points = []
     excluded = []
     for row in rows:
+        if row.get('_evidence_excluded'):
+            excluded.append({
+                'atoms': row.get('atoms'),
+                'reason': 'evidence-ineligible',
+                'evidence_exclusion_reasons': row.get('evidence_exclusion_reasons') or [],
+            })
+            continue
         config = row.get('configuration') or {}
         atoms = row.get('atoms') if row.get('atoms') is not None else config.get('atoms')
         complete = (
@@ -208,6 +215,16 @@ def analyze(document):
             continue
         key = configuration_key(row)
         identity = tuple(key[field] for field in GROUP_FIELDS)
+        if row.get('evidence_eligible') is False:
+            config = row.get('configuration') or {}
+            atoms = row.get('atoms') if row.get('atoms') is not None else config.get('atoms')
+            excluded_row = dict(row)
+            excluded_row['_evidence_excluded'] = True
+            grouped.setdefault(identity, [])
+            keys_by_group[identity] = key
+            excluded_row['atoms'] = atoms
+            grouped[identity].append(excluded_row)
+            continue
         grouped.setdefault(identity, []).append(row)
         keys_by_group[identity] = key
     groups = [classify_group(keys_by_group[identity], grouped[identity])

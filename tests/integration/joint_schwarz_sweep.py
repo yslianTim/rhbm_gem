@@ -32,6 +32,8 @@ def build_configurations(args):
                         'operator_rank': args.operator_rank,
                         'repeat': args.repeat,
                         'warmup': args.warmup,
+                        'timeout': args.timeout,
+                        'rss_limit': args.rss_limit,
                     }
                     configurations.append(config)
     keys = [configuration_key(config) for config in configurations]
@@ -61,6 +63,17 @@ def benchmark_command(script, config, args, output):
                         '--schwarz-storage-mib', str(config['storage_mib']),
                         '--schwarz-scratch-mib', str(config['scratch_mib'])])
     return command
+
+
+OUTER_TIMEOUT_MINIMUM = 120
+OUTER_TIMEOUT_MARGIN = 30
+
+
+def outer_process_timeout(args):
+    run_count = args.warmup + args.repeat
+    # Leave time after the per-run deadlines to write and aggregate reports.
+    return max(OUTER_TIMEOUT_MINIMUM,
+               args.timeout * run_count + OUTER_TIMEOUT_MARGIN)
 
 
 TIMING_FIELDS = (
@@ -103,11 +116,17 @@ def summarize(config, report, individual_name, process_error=None):
     status = execution.get('status', 'process_error')
     per_run_values = []
     per_run_iterations = []
+    rank_repetition_evidence = []
     stop_reasons = []
     for item in successful:
         item_result = item.get('result') or {}
         item_details = item_result.get('details') or {}
         item_work = item_details.get('search_work') or {}
+        rank_repetition_evidence.append({
+            'rank_status': item_work.get('operator_rank_status'),
+            'compact_extractions': item_work.get('operator_rank_compact_extractions'),
+            'free_design_svds': item_work.get('operator_rank_free_design_svds'),
+        })
         search_seconds = item_details.get('search_seconds')
         assessment_seconds = item_details.get('assessment_seconds')
         pcg_seconds = item_work.get('pcg_seconds')
@@ -179,7 +198,9 @@ def summarize(config, report, individual_name, process_error=None):
         'pcg_iteration_repetitions': len(per_run_iterations),
         'pcg_iteration_valid_repetitions': len(repetition_medians),
         'pcg_iteration_telemetry_complete': (
-            len(per_run_iterations) == len(successful) and len(repetition_medians) == len(successful)),
+            bool(successful) and len(per_run_iterations) == len(successful) and
+            len(repetition_medians) == len(successful)),
+        'rank_repetition_evidence': rank_repetition_evidence,
         'stop_reasons_by_repetition': stop_reasons,
         'pcg_iteration_budget_repetitions': sum(reason == 'pcg-iteration-budget' for reason in stop_reasons),
         'atoms': (report.get('problem') or {}).get('atoms') if report else config['atoms'],
@@ -243,11 +264,49 @@ def summarize(config, report, individual_name, process_error=None):
         'state_available': details.get('state_available'),
         'stop_reason': details.get('stop_reason'),
     }
+    set_evidence_eligibility(row)
     return row
 
 
+def evidence_exclusion_reasons(row):
+    reasons = []
+    status = row.get('status')
+    if status == 'timeout':
+        reasons.append('timeout')
+    elif status in ('rss_limit', 'rss-limit'):
+        reasons.append('rss-limit')
+    elif status == 'process_error':
+        reasons.append('process-error')
+    if row.get('measurements_complete') is not True:
+        reasons.append('incomplete-repetitions')
+    if row.get('pcg_iteration_telemetry_complete') is not True:
+        reasons.append('missing-pcg-telemetry')
+    if str(row.get('sparse_backend', '')).upper() != 'SPQR':
+        reasons.append('sparse-backend-not-spqr')
+    if row.get('rank_backend') != 'SpqrBounds':
+        reasons.append('rank-backend-not-spqr-bounds')
+
+    rank_runs = row.get('rank_repetition_evidence') or []
+    if not rank_runs or any(run.get('rank_status') != 'full-rank' for run in rank_runs):
+        reasons.append('rank-not-full')
+    if not rank_runs or any(run.get('compact_extractions') is None or
+                            run.get('free_design_svds') is None for run in rank_runs):
+        reasons.append('missing-rank-telemetry')
+    if any((run.get('compact_extractions') or 0) != 0 or
+           (run.get('free_design_svds') or 0) != 0 for run in rank_runs):
+        reasons.append('compact-rank-path-used')
+    return list(dict.fromkeys(reasons))
+
+
+def set_evidence_eligibility(row):
+    reasons = evidence_exclusion_reasons(row)
+    row['evidence_eligible'] = not reasons
+    row['evidence_exclusion_reasons'] = reasons
+
+
 CSV_BASE_FIELDS = (
-    'configuration', 'status', 'reason', 'individual_json', 'atoms', 'rows', 'free_columns',
+    'configuration', 'status', 'reason', 'individual_json', 'evidence_eligible',
+    'evidence_exclusion_reasons', 'rank_repetition_evidence', 'atoms', 'rows', 'free_columns',
     'sparse_backend', 'rank_backend', 'rank_status', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'compact_extractions', 'free_design_svds', 'blocks',
     'maximum_block_atoms', 'topology_bytes', 'storage_bytes', 'scratch_bytes_bound',
@@ -281,6 +340,8 @@ def write_csv(path, rows):
         for row in rows:
             flattened = dict(row)
             flattened['configuration'] = json.dumps(row['configuration'], sort_keys=True)
+            flattened['evidence_exclusion_reasons'] = json.dumps(row.get('evidence_exclusion_reasons', []))
+            flattened['rank_repetition_evidence'] = json.dumps(row.get('rank_repetition_evidence', []))
             for field, summary in row.get('measurements', {}).items():
                 for stat, value in summary.items():
                     flattened[f'{field}_{stat}'] = value
@@ -352,7 +413,7 @@ def main(argv=None):
         error = None
         try:
             process = subprocess.run(command, check=False, capture_output=True, text=True,
-                                     timeout=max(120, args.timeout * (args.repeat + 1)))
+                                     timeout=outer_process_timeout(args))
             if process.returncode:
                 error = f'joint_benchmark exited {process.returncode}'
         except subprocess.TimeoutExpired:
@@ -367,12 +428,20 @@ def main(argv=None):
             row['status'] = 'timeout' if 'timed out' in error else 'process_error'
         elif error and row['status'] == 'process_error' and 'timed out' in error:
             row['status'] = 'timeout'
+        set_evidence_eligibility(row)
         rows.append(row)
 
     aggregate = {
         'schema_version': 1,
         'tool': 'joint_schwarz_sweep',
         'measurement_profile': 'solve',
+        'orchestration': {
+            'warmup': args.warmup,
+            'repeat': args.repeat,
+            'timeout_seconds_per_run': args.timeout,
+            'outer_process_timeout_seconds': outer_process_timeout(args),
+            'rss_limit_bytes': args.rss_limit,
+        },
         'configuration_count': len(configurations),
         'configurations': rows,
     }

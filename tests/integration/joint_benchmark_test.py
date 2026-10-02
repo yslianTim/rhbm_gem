@@ -184,6 +184,81 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertNotIn('--schwarz-overlap-hops', command)
         self.assertEqual(command[command.index('--warmup') + 1], '0')
 
+    def test_outer_sweep_timeout_counts_warmups_and_measurements(self):
+        parser = schwarz_sweep.build_parser()
+        for warmup, expected in ((0, 1830), (1, 2430), (2, 3030)):
+            args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',
+                                      '--warmup', str(warmup), '--repeat', '3', '--timeout', '600'])
+            self.assertEqual(schwarz_sweep.outer_process_timeout(args), expected)
+
+    def test_campaign_evidence_requires_bounded_spqr_rank_for_every_run(self):
+        config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',
+                  'core_atoms': 2, 'overlap_hops': 1, 'max_block_atoms': 8,
+                  'operator_rank': 'auto', 'repeat': 3, 'warmup': 1,
+                  'timeout': 600, 'rss_limit': 4 * 1024**3}
+
+        def report(rank_backend='SpqrBounds', completed=3, compact=0, svds=0,
+                   rank_status='full-rank', missing_pcg=False):
+            runs = []
+            for index in range(completed):
+                work = {'operator_rank_status': 'full-rank',
+                        'operator_rank_compact_extractions': compact,
+                        'operator_rank_free_design_svds': svds,
+                        'pcg_solves': 1, 'pcg_iterations': 2}
+                work['operator_rank_status'] = rank_status
+                if not missing_pcg:
+                    work['pcg_iteration_counts'] = [2]
+                runs.append({'kind': 'measurement', 'index': index + 1, 'status': 'completed',
+                             'process_wall_seconds': 1., 'peak_rss_bytes': 100,
+                             'result': {'details': {'search_work': work, 'search_seconds': .5,
+                                                    'assessment_seconds': .1, 'stop_reason': 'converged'}}})
+            return {
+                'execution': {'status': 'completed' if completed == 3 else 'timeout', 'runs': runs},
+                'metadata': {'solver_policy': {'sparse_backend': 'SPQR',
+                                               'resolved_rank_backend': rank_backend}},
+                'problem': {'atoms': 8, 'voxels': 16},
+                'numerics': {'runtime_convergence': 'passed'},
+            }
+
+        eligible = schwarz_sweep.summarize(config, report(), 'run.json')
+        self.assertTrue(eligible['evidence_eligible'])
+        self.assertEqual(eligible['evidence_exclusion_reasons'], [])
+
+        dense_rank = schwarz_sweep.summarize(config, report(rank_backend='Dense'), 'dense.json')
+        self.assertFalse(dense_rank['evidence_eligible'])
+        self.assertIn('rank-backend-not-spqr-bounds', dense_rank['evidence_exclusion_reasons'])
+
+        deficient = schwarz_sweep.summarize(config, report(rank_status='deficient'), 'deficient.json')
+        self.assertFalse(deficient['evidence_eligible'])
+        self.assertIn('rank-not-full', deficient['evidence_exclusion_reasons'])
+
+        incomplete = schwarz_sweep.summarize(config, report(completed=2), 'incomplete.json')
+        self.assertFalse(incomplete['evidence_eligible'])
+        self.assertIn('incomplete-repetitions', incomplete['evidence_exclusion_reasons'])
+
+        missing_telemetry = schwarz_sweep.summarize(
+            config, report(missing_pcg=True), 'missing-telemetry.json')
+        self.assertFalse(missing_telemetry['evidence_eligible'])
+        self.assertIn('missing-pcg-telemetry', missing_telemetry['evidence_exclusion_reasons'])
+
+        for compact, svds in ((1, 0), (0, 1)):
+            fallback = schwarz_sweep.summarize(config, report(compact=compact, svds=svds), 'fallback.json')
+            self.assertFalse(fallback['evidence_eligible'])
+            self.assertIn('compact-rank-path-used', fallback['evidence_exclusion_reasons'])
+
+    def test_scaling_analysis_excludes_explicitly_ineligible_campaign_rows(self):
+        sizes = (256, 512, 1024, 2048)
+        rows = [scaling_row(atoms, 20, sparse_backend='SPQR') for atoms in sizes]
+        rows[-1]['evidence_eligible'] = False
+        rows[-1]['evidence_exclusion_reasons'] = ['rank-backend-not-spqr-bounds']
+        result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': rows})
+        group = result['groups'][0]
+        self.assertEqual(group['valid_point_count'], 3)
+        self.assertEqual(group['coarse_gate'], 'insufficient-evidence')
+        self.assertEqual(group['excluded_rows'][-1]['reason'], 'evidence-ineligible')
+        self.assertIn('rank-backend-not-spqr-bounds',
+                      group['excluded_rows'][-1]['evidence_exclusion_reasons'])
+
     def test_sweep_aggregates_completed_repetitions_and_excludes_warmup(self):
         def run(kind, index, counts, scale, search_seconds, wall_seconds, rss_bytes):
             work = {
