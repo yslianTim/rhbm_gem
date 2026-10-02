@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include "support/JointDenseReference.hpp"
+#include <algorithm>
 #include <map>
 
 namespace {
@@ -55,11 +56,11 @@ TEST(JointOperatorSearchTest, OperatorRankPolicyResolvesEveryBackendCombination)
 TEST(JointOperatorSearchTest, FrozenTopologyDeterminismMappingsAndLimits)
 {
     auto input=std::make_shared<c::JointProblemInput>(second_stage_test::OperatorWorkload("chain",8));
-    n::PreconditionerLimits limits; limits.core_atoms=2;
-    const auto original=n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),limits);
+    n::SchwarzPolicy policy; policy.core_atoms=2;
+    const auto original=n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy);
     auto reordered=std::make_shared<c::JointProblemInput>(*input);
     std::reverse(reordered->atom_ids.begin(),reordered->atom_ids.end()); std::reverse(reordered->support.begin(),reordered->support.end());
-    const auto permuted=n::BuildPreconditionerPartition(reordered,n::BuildParameterLayout(*reordered),limits);
+    const auto permuted=n::BuildPreconditionerPartition(reordered,n::BuildParameterLayout(*reordered),policy);
     EXPECT_EQ(Describe(*original),Describe(*permuted)); ASSERT_EQ(original->blocks.size(),4);
     for(const auto & block:original->blocks) {EXPECT_EQ(block.core_atoms.size(),2); EXPECT_FALSE(block.overlap_atoms.empty());}
     auto w=n::WidthMapping(*original); n::Vector beta=n::Vector::Ones(16); beta(0)=0; beta(1)=-2;
@@ -72,17 +73,74 @@ TEST(JointOperatorSearchTest, FrozenTopologyDeterminismMappingsAndLimits)
         EXPECT_EQ(b.LocalIndex(-1),-1);
     }
     EXPECT_LT((summed-v).norm(),1e-12);
-    limits.block_atoms=2; EXPECT_THROW(n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),limits),std::runtime_error);
-    limits.block_atoms=512; limits.scratch_bytes=1; EXPECT_THROW(n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),limits),std::runtime_error);
+    policy.max_block_atoms=2;
+    try {n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy); FAIL();}
+    catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-block-limit");}
+    policy.max_block_atoms=512; policy.storage_bytes=1;
+    try {n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy); FAIL();}
+    catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-storage-limit");}
+    policy.storage_bytes=512ULL*1024*1024; policy.scratch_bytes=1;
+    try {n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy); FAIL();}
+    catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-scratch-limit");}
+}
+TEST(JointOperatorSearchTest, OverlapZeroOneTwoFollowStructuralGraphHops)
+{
+    auto input=std::make_shared<c::JointProblemInput>(second_stage_test::OperatorWorkload("chain",8));
+    n::SchwarzPolicy policy; policy.core_atoms=1; policy.max_block_atoms=8;
+    const auto ids=[](const n::PreconditionerPartition & partition,const n::Indices & atoms) {
+        std::vector<std::string> out;
+        for(auto atom:atoms) out.push_back(partition.problem->atom_ids[static_cast<std::size_t>(atom)]);
+        return out;
+    };
+    const std::vector<std::vector<std::string>> expected{{},{"2"},{"2","3"}};
+    for(std::size_t hops=0;hops<=2;++hops)
+    {
+        policy.overlap_hops=hops;
+        const auto partition=n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy);
+        EXPECT_EQ(partition->policy.overlap_hops,hops);
+        const auto first=std::find_if(partition->blocks.begin(),partition->blocks.end(),[](const auto & block){return block.id=="1";});
+        ASSERT_NE(first,partition->blocks.end());
+        EXPECT_EQ(ids(*partition,first->core_atoms),(std::vector<std::string>{"1"}));
+        EXPECT_EQ(ids(*partition,first->overlap_atoms),expected[hops]);
+        const auto mapping=n::WidthMapping(*partition);
+        for(const auto & block:mapping.blocks) for(std::size_t k=0;k<block.global.size();++k)
+        {
+            const auto atom=partition->layout.full_atoms[static_cast<std::size_t>(block.global[k])];
+            EXPECT_DOUBLE_EQ(block.weights(static_cast<Eigen::Index>(k)),
+                1/std::sqrt(static_cast<double>(partition->atom_blocks[static_cast<std::size_t>(atom)].size())));
+        }
+    }
+    policy.core_atoms=2; policy.overlap_hops=1; policy.max_block_atoms=8;
+    const auto one_ring=n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy);
+    const Signature expected_one_ring{
+        {"1",{{"1","2"},{"3"}}},{"3",{{"3","4"},{"2","5"}}},
+        {"5",{{"5","6"},{"4","7"}}},{"7",{{"7","8"},{"6"}}}};
+    EXPECT_EQ(Describe(*one_ring),expected_one_ring);
+    policy.core_atoms=2; policy.overlap_hops=2; policy.max_block_atoms=3;
+    try {n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy); FAIL();}
+    catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-block-limit");}
+}
+TEST(JointOperatorSearchTest, IdentityAndDiagonalIgnoreUnusedSchwarzPolicy)
+{
+    Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
+    context.search.schwarz.core_atoms=0; context.search.schwarz.max_block_atoms=0;
+    for(auto kind:{n::PreconditionerKind::Identity,n::PreconditionerKind::Diagonal})
+    {
+        n::SearchWorkForTesting()={}; context.search.preconditioner=kind;
+        const auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+        EXPECT_TRUE(result.initial_accepted); EXPECT_GT(result.accepted,0)<<result.stop_reason;
+        EXPECT_DOUBLE_EQ(n::SearchWorkForTesting().partition_seconds,0);
+        EXPECT_EQ(n::SearchWorkForTesting().topology_bytes,0);
+    }
 }
 TEST(JointOperatorSearchTest, SchwarzSpdAndThreeStepSolversHaveSameGlobalSolution)
 {
     Sample s; ASSERT_TRUE(s.e.valid); const n::ProfileJacobianOperator op(s.e,s.data.context); ASSERT_TRUE(op.Valid());
     const auto norms=n::WidthNorms(n::RawWidthDerivative(s.e),s.data.context.scale);
     const n::PreconditionerContext pc{op.Identity(),n::PreconditionerSpace::Width,n::WidthMetric(norms),.02};
-    n::PreconditionerLimits limits; limits.core_atoms=2;
-    const auto partition=n::SearchPartition(s.data.domain,s.data.context,limits);
-    const n::SchwarzModel model(*partition,s.e,s.data.context.scale,pc,limits); const n::SchwarzPreconditioner schwarz(model,pc);
+    n::SchwarzPolicy policy; policy.core_atoms=2;
+    const auto partition=n::SearchPartition(s.data.domain,s.data.context,policy);
+    const n::SchwarzModel model(*partition,s.e,s.data.context.scale,pc); const n::SchwarzPreconditioner schwarz(model,pc);
     const n::Vector u=n::Vector::LinSpaced(4,-1,2),v=n::Vector::LinSpaced(4,.3,-.8);
     EXPECT_GT(u.dot(schwarz.ApplyInverse(u,pc)),0);
     EXPECT_NEAR(u.dot(schwarz.ApplyInverse(v,pc)),v.dot(schwarz.ApplyInverse(u,pc)),1e-10*std::max(1.,schwarz.ApplyInverse(u,pc).norm()));
@@ -105,13 +163,25 @@ TEST(JointOperatorSearchTest, SchwarzSpdAndThreeStepSolversHaveSameGlobalSolutio
         EXPECT_LT((result.step-expected).norm(),1e-10*(1+expected.norm()));
         EXPECT_NEAR(result.predicted,-gradient.dot(expected)-.5*(j*expected).squaredNorm(),1e-12);
     }
+    for(std::size_t hops=0;hops<=2;++hops)
+    {
+        policy.overlap_hops=hops;
+        const auto local_partition=n::SearchPartition(s.data.domain,s.data.context,policy);
+        const n::SchwarzModel local_model(*local_partition,s.e,s.data.context.scale,pc);
+        const n::SchwarzPreconditioner inverse(local_model,pc);
+        EXPECT_GT(u.dot(inverse.ApplyInverse(u,pc)),0);
+        EXPECT_NEAR(u.dot(inverse.ApplyInverse(v,pc)),v.dot(inverse.ApplyInverse(u,pc)),1e-10*std::max(1.,inverse.ApplyInverse(u,pc).norm()));
+        const auto result=n::WidthStepSolver(op,gradient,pc,[&](n::VectorRef x)->n::Vector{return inverse.ApplyInverse(x,pc);});
+        ASSERT_TRUE(result.valid)<<result.reason;
+        EXPECT_LT((result.step-expected).norm(),1e-10*(1+expected.norm()));
+    }
     auto stale=pc; stale.damping*=2; EXPECT_THROW(schwarz.ApplyInverse(u,stale),std::logic_error);
     const n::SchwarzPreconditioner shifted(model,stale); EXPECT_GT(u.dot(shifted.ApplyInverse(u,stale)),0);
     stale.metric(0)*=2; EXPECT_THROW(n::SchwarzPreconditioner(model,stale),std::logic_error);
     stale=pc; stale.linearization=std::make_shared<const n::LinearizationIdentity>(); EXPECT_THROW(schwarz.ApplyInverse(u,stale),std::logic_error);
     EXPECT_FALSE(n::WidthStepSolver(op,gradient,stale,[](n::VectorRef x)->n::Vector{return x;}).valid);
     auto changed=s.e; changed.beta(0)=0;
-    const n::SchwarzModel new_face(*partition,changed,s.data.context.scale,stale,limits);
+    const n::SchwarzModel new_face(*partition,changed,s.data.context.scale,stale);
     const n::SchwarzPreconditioner new_inverse(new_face,stale);
     EXPECT_EQ(n::FreeColumnMapping(*partition,changed.beta).dimension,7);
     EXPECT_GT(u.dot(new_inverse.ApplyInverse(u,stale)),0);
@@ -120,7 +190,7 @@ TEST(JointOperatorSearchTest, LocalRankFailureIsRegularizedWithoutGlobalRankWork
 {
     Sample s; s.e.x.col(1)=s.e.x.col(0); const auto before=n::SparseWorkForTesting();
     n::SearchWorkForTesting()={}; const n::PreconditionerContext pc{std::make_shared<const n::LinearizationIdentity>(),n::PreconditionerSpace::Width,n::Vector::Ones(4),1e-3};
-    const auto partition=n::SearchPartition(s.data.domain,s.data.context);
+    const auto partition=n::SearchPartition(s.data.domain,s.data.context,s.data.context.search.schwarz);
     const bool audit=n::ResourceWorkForTesting().enabled; n::ResourceWorkForTesting().enabled=true;
     const n::SchwarzModel model(*partition,s.e,s.data.context.scale,pc); const n::SchwarzPreconditioner inverse(model,pc);
     n::ResourceWorkForTesting().enabled=audit;
@@ -131,8 +201,10 @@ TEST(JointOperatorSearchTest, LocalRankFailureIsRegularizedWithoutGlobalRankWork
     EXPECT_DOUBLE_EQ(records[0].lambda,records[1].lambda); EXPECT_GT(records[1].tau,0);
     EXPECT_DOUBLE_EQ(records[1].damping,pc.damping); EXPECT_EQ(records[1].attempt,1);
     EXPECT_EQ(n::SparseWorkForTesting().numeric,before.numeric); EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,before.free_design_svds);
-    n::PreconditionerLimits limits; limits.storage_bytes=1;
-    EXPECT_THROW(n::SchwarzModel(*partition,s.e,s.data.context.scale,pc,limits),std::runtime_error);
+    auto constrained=std::make_shared<const n::PreconditionerPartition>(partition->problem,partition->layout,
+        partition->blocks,n::SchwarzPolicy{128,1,512,1,256ULL*1024*1024});
+    try {n::SchwarzModel(*constrained,s.e,s.data.context.scale,pc); FAIL();}
+    catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-storage-limit");}
 }
 TEST(JointOperatorSearchTest, LocalSchurMatchesDenseEliminationAndMetricFloor)
 {
@@ -140,7 +212,7 @@ TEST(JointOperatorSearchTest, LocalSchurMatchesDenseEliminationAndMetricFloor)
     const auto raw=n::RawWidthDerivative(s.e);
     const auto norms=n::WidthNorms(raw,s.data.context.scale);
     const n::PreconditionerContext pc{std::make_shared<const n::LinearizationIdentity>(),n::PreconditionerSpace::Width,n::WidthMetric(norms),.01};
-    const auto partition=n::SearchPartition(s.data.domain,s.data.context);
+    const auto partition=n::SearchPartition(s.data.domain,s.data.context,s.data.context.search.schwarz);
     const n::SchwarzModel model(*partition,s.e,s.data.context.scale,pc);
     ASSERT_EQ(model.Matrices().size(),1);
     const auto & order=model.Mapping().blocks.front().global;
@@ -170,7 +242,7 @@ TEST(JointOperatorSearchTest, ProfileRowsAndParentMappingsRemainStructural)
     const c::JointProblem problem(input); const auto & data=c::JointProblemAccess::Get(problem);
     const auto domain=n::ProfileDomain(data.domain,data.layout);
     const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
-    const auto partition=n::SearchPartition(domain,context);
+    const auto partition=n::SearchPartition(domain,context,context.search.schwarz);
     EXPECT_EQ(partition->problem.get(),data.input.get()); EXPECT_EQ(partition->layout.full_atoms,data.layout.full_atoms);
     for(const auto & block:partition->blocks)
     {

@@ -152,7 +152,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #ifndef PR23_BASELINE_DRIVER
     if(search_kind=="schwarz")
     {
-        const auto partition=n::SearchPartition(domain,context);
+        const auto partition=n::SearchPartition(domain,context,context.search.schwarz);
         j::array memberships; for(const auto & blocks:partition->atom_blocks) if(!blocks.empty()) memberships.push_back(blocks.size());
         report["partition"]=j::object{{"blocks",partition->blocks.size()},{"atom_memberships",memberships}};
     }
@@ -332,7 +332,7 @@ int main(int argc,char ** argv)
                 {
                     report["stage"]="local"; Snapshot(argv[5],report);
                     try {
-                        const auto partition=n::BuildPreconditionerPartition(data.input,data.layout);
+                        const auto partition=n::BuildPreconditionerPartition(data.input,data.layout,data.context.search.schwarz);
                         {
                             const auto free=n::FreeColumnMapping(*partition,state.beta);
                             report["free_coordinates"]=free.dimension;

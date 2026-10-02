@@ -3,11 +3,6 @@
 #include <functional>
 
 namespace rhbm_gem::core::joint_component {
-struct PreconditionerLimits
-{
-    std::size_t core_atoms{128},block_atoms{512};
-    std::size_t storage_bytes{512ULL*1024*1024},scratch_bytes{256ULL*1024*1024};
-};
 struct RegularizationRecord
 {
     std::size_t local_build{},factor_build{},block{};
@@ -24,8 +19,8 @@ struct SearchWork
 };
 SearchWork & SearchWorkForTesting();
 std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
-    std::shared_ptr<const JointProblemInput>,const JointParameterLayout &,const PreconditionerLimits & = {});
-std::shared_ptr<const PreconditionerPartition> SearchPartition(const Domain &,const EvaluationContext &,const PreconditionerLimits & = {});
+    std::shared_ptr<const JointProblemInput>,const JointParameterLayout &,const SchwarzPolicy &);
+std::shared_ptr<const PreconditionerPartition> SearchPartition(const Domain &,const EvaluationContext &,const SchwarzPolicy &);
 SolverBlockMapping WidthMapping(const PreconditionerPartition &);
 SolverBlockMapping FreeColumnMapping(const PreconditionerPartition &,VectorRef beta);
 Sparse RawWidthDerivative(const Evaluation &);
@@ -38,16 +33,16 @@ class SchwarzModel
     std::vector<Matrix> schur_;
     std::vector<double> lambdas_;
     std::size_t build_{};
-    PreconditionerLimits limits_;
+    SchwarzPolicy policy_;
     std::size_t bytes_{};
 public:
-    SchwarzModel(const PreconditionerPartition &,const Evaluation &,double,const PreconditionerContext &,const PreconditionerLimits & = {});
+    SchwarzModel(const PreconditionerPartition &,const Evaluation &,double,const PreconditionerContext &);
     const SolverBlockMapping & Mapping() const {return mapping_;}
     const std::vector<Matrix> & Matrices() const {return schur_;}
     const std::vector<double> & Lambdas() const {return lambdas_;}
     std::size_t Build() const {return build_;}
     const PreconditionerContext & Context() const {return context_;}
-    const PreconditionerLimits & Limits() const {return limits_;}
+    const SchwarzPolicy & Policy() const {return policy_;}
     std::size_t Bytes() const {return bytes_;}
 };
 class SchwarzPreconditioner

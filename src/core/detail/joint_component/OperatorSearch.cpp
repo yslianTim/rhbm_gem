@@ -92,7 +92,8 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     std::shared_ptr<const PreconditionerPartition> partition;
     Vector metric; double radius{},mu=1e-3;
     try {
-        if(context.search.preconditioner==PreconditionerKind::Schwarz) partition=SearchPartition(domain,context);
+        if(context.search.preconditioner==PreconditionerKind::Schwarz)
+            partition=SearchPartition(domain,context,context.search.schwarz);
         for(;;)
         {
             if(out.accepted>=context.update_budget) return finish("accepted-update-budget");

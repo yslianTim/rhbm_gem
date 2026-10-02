@@ -6,8 +6,8 @@
 namespace rhbm_gem::core::joint_component {
 namespace {
 constexpr double eps=std::numeric_limits<double>::epsilon();
-void Budget(std::size_t bytes,std::size_t limit)
-{if(bytes>limit) throw std::runtime_error("preconditioner-resource-limit");}
+void Budget(std::size_t bytes,std::size_t limit,const char * reason)
+{if(bytes>limit) throw std::runtime_error(reason);}
 std::size_t TopologyBytes(const PreconditionerPartition & p)
 {
     std::size_t bytes=sizeof(p)+8*(p.layout.full_atoms.size()+p.layout.informative_rows.size())+32*p.atom_blocks.size();
@@ -15,17 +15,17 @@ std::size_t TopologyBytes(const PreconditionerPartition & p)
     for(const auto & membership:p.atom_blocks) bytes+=8*membership.size();
     return bytes;
 }
-SolverBlockMapping CheckedWidthMapping(const PreconditionerPartition & p,const PreconditionerLimits & limits)
+SolverBlockMapping CheckedWidthMapping(const PreconditionerPartition & p,const SchwarzPolicy & policy)
 {
     std::size_t coordinates{};
     for(const auto & block:p.blocks)
     {
         const auto size=block.core_atoms.size()+block.overlap_atoms.size();
-        if(size>limits.block_atoms) throw std::runtime_error("preconditioner-block-limit");
+        if(size>policy.max_block_atoms) throw std::runtime_error("preconditioner-block-limit");
         coordinates+=size;
     }
-    Budget(TopologyBytes(p)+64*coordinates,limits.storage_bytes);
-    Budget(32*p.problem->atom_ids.size()+32*coordinates,limits.scratch_bytes);
+    Budget(TopologyBytes(p)+64*coordinates,policy.storage_bytes,"preconditioner-storage-limit");
+    Budget(32*p.problem->atom_ids.size()+32*coordinates,policy.scratch_bytes,"preconditioner-scratch-limit");
     return WidthMapping(p);
 }
 std::vector<Indices> Coordinates(const PreconditionerPartition & p,const Indices & positions)
@@ -40,24 +40,24 @@ std::vector<Indices> Coordinates(const PreconditionerPartition & p,const Indices
     return out;
 }
 double Infinity(const Matrix & x) {return x.cwiseAbs().rowwise().sum().maxCoeff();}
-void RecordRegularization(RegularizationRecord record,std::size_t held,const PreconditionerLimits & limits)
+void RecordRegularization(RegularizationRecord record,std::size_t held,const SchwarzPolicy & policy)
 {
     if(!ResourceWorkForTesting().enabled) return;
     auto & records=SearchWorkForTesting().regularizations;
-    Budget(held+2*(records.size()+1)*sizeof(RegularizationRecord),limits.storage_bytes);
+    Budget(held+2*(records.size()+1)*sizeof(RegularizationRecord),policy.storage_bytes,"preconditioner-storage-limit");
     records.push_back(record);
 }
 }
 std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
-    std::shared_ptr<const JointProblemInput> input,const JointParameterLayout & layout,const PreconditionerLimits & limits)
+    std::shared_ptr<const JointProblemInput> input,const JointParameterLayout & layout,const SchwarzPolicy & policy)
 {
     ResourcePhase phase("preconditioner-partition"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.partition_seconds);
-    if(!input || limits.core_atoms==0 || limits.core_atoms>limits.block_atoms) throw std::invalid_argument("Invalid partition policy");
+    if(!input || policy.core_atoms==0 || policy.core_atoms>policy.max_block_atoms) throw std::invalid_argument("Invalid partition policy");
     const auto n=input->observations.size(),m=input->atom_ids.size();
     std::size_t memberships{};
     for(auto a:layout.full_atoms) memberships+=input->support.at(a).size();
-    const auto scratch=24*(n+1)+24*(m+1)+16*memberships;
-    Budget(scratch,limits.scratch_bytes); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
+    const auto scratch=24*(n+1)+24*(m+1)+16*memberships+32*std::min(m,policy.max_block_atoms);
+    Budget(scratch,policy.scratch_bytes,"preconditioner-scratch-limit"); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
     std::vector<bool> informative(n,false),assigned(m,false);
     for(auto r:layout.informative_rows) informative.at(r)=true;
     std::vector<std::size_t> offsets(n+1),order=layout.full_atoms;
@@ -81,7 +81,7 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
     {
         PreconditionerBlock block; block.id=input->atom_ids[seed];
         std::deque<Eigen::Index> queue{static_cast<Eigen::Index>(seed)}; std::vector<bool> queued(m,false); queued[seed]=true;
-        while(!queue.empty() && block.core_atoms.size()<limits.core_atoms)
+        while(!queue.empty() && block.core_atoms.size()<policy.core_atoms)
         {
             const auto a=queue.front(); queue.pop_front(); if(assigned[static_cast<std::size_t>(a)]) continue;
             assigned[static_cast<std::size_t>(a)]=true; block.core_atoms.push_back(a);
@@ -89,16 +89,27 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
             {queue.push_back(b); queued[static_cast<std::size_t>(b)]=true;}
         }
         std::sort(block.core_atoms.begin(),block.core_atoms.end(),less);
+        blocks.push_back(std::move(block));
+    }
+    for(auto & block:blocks)
+    {
         std::vector<bool> included(m,false); for(auto a:block.core_atoms) included[static_cast<std::size_t>(a)]=true;
-        for(auto a:block.core_atoms) for(auto b:neighbors(static_cast<std::size_t>(a))) if(!included[static_cast<std::size_t>(b)])
+        Indices frontier=block.core_atoms;
+        for(std::size_t hop=0;hop<policy.overlap_hops && !frontier.empty();++hop)
         {
-            included[static_cast<std::size_t>(b)]=true; block.overlap_atoms.push_back(b);
-            if(block.core_atoms.size()+block.overlap_atoms.size()>limits.block_atoms) throw std::runtime_error("preconditioner-block-limit");
+            Indices next;
+            for(auto a:frontier) for(auto b:neighbors(static_cast<std::size_t>(a))) if(!included[static_cast<std::size_t>(b)])
+            {
+                included[static_cast<std::size_t>(b)]=true; block.overlap_atoms.push_back(b); next.push_back(b);
+                if(block.core_atoms.size()+block.overlap_atoms.size()>policy.max_block_atoms)
+                    throw std::runtime_error("preconditioner-block-limit");
+            }
+            frontier=std::move(next);
         }
         std::sort(block.overlap_atoms.begin(),block.overlap_atoms.end(),less);
         std::size_t row_bound{};
         for(const auto * atoms:{&block.core_atoms,&block.overlap_atoms}) for(auto a:*atoms) row_bound+=input->support[static_cast<std::size_t>(a)].size();
-        Budget(bytes+8*row_bound+64*limits.block_atoms+sizeof(block)+block.id.size(),limits.storage_bytes);
+        Budget(bytes+8*row_bound+64*policy.max_block_atoms+sizeof(block)+block.id.size(),policy.storage_bytes,"preconditioner-storage-limit");
         block.informative_rows.reserve(row_bound);
         for(const auto * atoms:{&block.core_atoms,&block.overlap_atoms}) for(auto a:*atoms)
             for(const auto & s:input->support[static_cast<std::size_t>(a)]) if(informative[s.row]) block.informative_rows.push_back(static_cast<Eigen::Index>(s.row));
@@ -106,14 +117,13 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
         block.informative_rows.erase(std::unique(block.informative_rows.begin(),block.informative_rows.end()),block.informative_rows.end());
         block.informative_rows.shrink_to_fit();
         bytes+=sizeof(block)+block.id.size()+32*(block.core_atoms.size()+block.overlap_atoms.size())+8*block.informative_rows.size();
-        Budget(bytes,limits.storage_bytes);
+        Budget(bytes,policy.storage_bytes,"preconditioner-storage-limit");
         work.maximum_block_atoms=std::max(work.maximum_block_atoms,block.core_atoms.size()+block.overlap_atoms.size());
-        blocks.push_back(std::move(block));
     }
-    auto result=std::make_shared<const PreconditionerPartition>(std::move(input),layout,std::move(blocks));
-    work.topology_bytes=TopologyBytes(*result); Budget(work.topology_bytes,limits.storage_bytes); return result;
+    auto result=std::make_shared<const PreconditionerPartition>(std::move(input),layout,std::move(blocks),policy);
+    work.topology_bytes=TopologyBytes(*result); Budget(work.topology_bytes,policy.storage_bytes,"preconditioner-storage-limit"); return result;
 }
-std::shared_ptr<const PreconditionerPartition> SearchPartition(const Domain & domain,const EvaluationContext & context,const PreconditionerLimits & limits)
+std::shared_ptr<const PreconditionerPartition> SearchPartition(const Domain & domain,const EvaluationContext & context,const SchwarzPolicy & policy)
 {
     auto snapshot=domain.atoms.Snapshot(); JointParameterLayout layout;
     // Hand-built numerical fixtures predate immutable problem identities.
@@ -135,7 +145,7 @@ std::shared_ptr<const PreconditionerPartition> SearchPartition(const Domain & do
         }
         for(std::size_t r=0;r<rows.size();++r) if(rows[r]) layout.informative_rows.push_back(r);
     }
-    return BuildPreconditionerPartition(std::move(snapshot),layout,limits);
+    return BuildPreconditionerPartition(std::move(snapshot),layout,policy);
 }
 SolverBlockMapping WidthMapping(const PreconditionerPartition & p)
 {
@@ -182,23 +192,23 @@ Vector WidthMetric(VectorRef norms)
     return maximum==0 ? Vector::Ones(norms.size()).eval() : norms.array().max(std::sqrt(eps)*maximum).matrix().eval();
 }
 SchwarzModel::SchwarzModel(const PreconditionerPartition & partition,const Evaluation & e,double scale,
-    const PreconditionerContext & context,const PreconditionerLimits & limits)
-    :context_(context),mapping_(CheckedWidthMapping(partition,limits)),limits_(limits),bytes_(TopologyBytes(partition))
+    const PreconditionerContext & context)
+    :context_(context),mapping_(CheckedWidthMapping(partition,partition.policy)),policy_(partition.policy),bytes_(TopologyBytes(partition))
 {
     ResourcePhase phase("preconditioner-local"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.local_seconds); ++work.local_builds;
     build_=work.local_builds;
     if(!context.Valid() || context.space!=PreconditionerSpace::Width || context.metric.size()!=mapping_.dimension || e.eta.size()!=mapping_.dimension || !e.valid)
         throw std::invalid_argument("Invalid Schwarz linearization");
-    Budget(bytes_,limits.storage_bytes);
+    Budget(bytes_,policy_.storage_bytes,"preconditioner-storage-limit");
     for(const auto & block:mapping_.blocks)
     {
-        const auto b=block.global.size(); if(b>limits.block_atoms) throw std::runtime_error("preconditioner-block-limit");
+        const auto b=block.global.size(); if(b>policy_.max_block_atoms) throw std::runtime_error("preconditioner-block-limit");
         // Model plus a shifted LLT, mapping and metric. Sparse product temporaries
         // are bounded below before constructing any selected matrices.
-        bytes_+=16*b*b+64*b; Budget(bytes_,limits.storage_bytes);
+        bytes_+=16*b*b+64*b; Budget(bytes_,policy_.storage_bytes,"preconditioner-storage-limit");
         std::size_t nnz{}; for(auto a:block.global) nnz+=static_cast<std::size_t>(e.x.col(2*a).nonZeros()+e.x.col(2*a+1).nonZeros()+e.derivative.col(2*a).nonZeros()+e.derivative.col(2*a+1).nonZeros());
         const std::size_t scratch=160*b*b+48*nnz+32*static_cast<std::size_t>(e.x.rows()+1);
-        Budget(scratch,limits.scratch_bytes); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
+        Budget(scratch,policy_.scratch_bytes,"preconditioner-scratch-limit"); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
         Indices free; for(auto a:block.global) for(auto k:{2*a,2*a+1}) if(k%2 || e.beta(k)>0) free.push_back(k);
         Sparse z(e.x.rows(),static_cast<Eigen::Index>(free.size())),d(e.x.rows(),static_cast<Eigen::Index>(b));
         z.reserve(static_cast<Eigen::Index>(nnz)); d.reserve(static_cast<Eigen::Index>(nnz));
@@ -220,7 +230,7 @@ SchwarzModel::SchwarzModel(const PreconditionerPartition & partition,const Evalu
         RecordDenseShape("schwarz-ac-gram",a.rows(),a.cols()); RecordDenseShape("schwarz-cross",cross.rows(),cross.cols()); RecordDenseShape("schwarz-width-gram",c.rows(),c.cols());
         const double lambda=std::sqrt(eps)*std::max(1.,Infinity(a)); work.maximum_lambda=std::max(work.maximum_lambda,lambda);
         lambdas_.push_back(lambda);
-        RecordRegularization({build_,0,schur_.size(),lambda,context.damping,0,1},bytes_,limits_);
+        RecordRegularization({build_,0,schur_.size(),lambda,context.damping,0,1},bytes_,policy_);
         a.diagonal().array()+=lambda; Eigen::LLT<Matrix> factor(a);
         if(factor.info()!=Eigen::Success) throw std::runtime_error("preconditioner-ac-factorization");
         Matrix schur=c-cross.transpose()*factor.solve(cross); schur=(.5*(schur+schur.transpose())).eval();
@@ -240,7 +250,7 @@ SchwarzPreconditioner::SchwarzPreconditioner(const SchwarzModel & model,const Pr
         for(int retry=0;retry<6;++retry)
         {
             work.maximum_tau=std::max(work.maximum_tau,tau);
-            RecordRegularization({model.Build(),work.factor_builds,factors_.size(),model.Lambdas()[factors_.size()],context.damping,tau,retry+1},model.Bytes(),model.Limits());
+            RecordRegularization({model.Build(),work.factor_builds,factors_.size(),model.Lambdas()[factors_.size()],context.damping,tau,retry+1},model.Bytes(),model.Policy());
             Matrix shifted=s; shifted.diagonal().array()+=context.damping+tau;
             RecordDenseShape("schwarz-shifted-factor",s.rows(),s.cols()); factor.compute(shifted);
             if(factor.info()==Eigen::Success) break;

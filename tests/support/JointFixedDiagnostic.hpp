@@ -110,7 +110,7 @@ void RunFixed(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const 
         const auto build_start=Clock::now();
         if(std::string(kind)=="schwarz")
         {
-            const auto partition_start=Clock::now(); const auto partition=n::SearchPartition(domain,context);
+            const auto partition_start=Clock::now(); const auto partition=n::SearchPartition(domain,context,context.search.schwarz);
             partition_seconds=Seconds(partition_start);
             model=std::make_unique<n::SchwarzModel>(*partition,e,context.scale,pc);
             inverse=std::make_unique<n::SchwarzPreconditioner>(*model,pc);

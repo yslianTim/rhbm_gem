@@ -18,9 +18,10 @@ struct PreconditionerPartition
     const std::shared_ptr<const JointProblemInput> problem;
     const JointParameterLayout layout;
     const std::vector<PreconditionerBlock> blocks;
+    const SchwarzPolicy policy;
     std::vector<std::vector<std::size_t>> atom_blocks; // parent atom -> memberships
     PreconditionerPartition(std::shared_ptr<const JointProblemInput> input,JointParameterLayout l,
-        std::vector<PreconditionerBlock> b):problem(std::move(input)),layout(std::move(l)),blocks(std::move(b))
+        std::vector<PreconditionerBlock> b,const SchwarzPolicy & p = {}):problem(std::move(input)),layout(std::move(l)),blocks(std::move(b)),policy(p)
     {
         if(!problem) throw std::invalid_argument("Missing preconditioner snapshot");
         atom_blocks.resize(problem->atom_ids.size());
