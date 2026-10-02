@@ -1,0 +1,17 @@
+topology,atoms,preconditioner,status,evidence_eligible,rank_status,rank_certificate,rank_entries_per_search,rank_seconds,pcg_solves_median,pcg_iterations_median,pcg_iterations_per_solve_exact,search_seconds,setup_seconds,pcg_seconds,assessment_seconds,peak_rss_bytes,wall_seconds,rank_fraction_of_search,evidence_exclusion_reasons
+chain,128,diagonal,completed,True,full-rank,local-support,3495440,0.392055584,27,159,5.888888888888889,3.492665875,0.8258737900000002,1.444320625,21.527018042,146374656,25.617079416057095,0.11225109931249865,
+chain,128,schwarz,completed,True,full-rank,local-support,3495440,0.395511166,27,79,2.925925925925926,3.377170958,1.37224379,0.8469075849999999,21.337128333,151027712,25.364020292065106,0.11711316096186802,
+chain,256,diagonal,completed,True,full-rank,local-support,6987280,0.7921653740000001,27,158,5.851851851851852,6.972878459,1.666544749,2.916417624,118.665535667,222740480,126.43950262502767,0.11360665163717865,
+chain,256,schwarz,completed,True,full-rank,local-support,6987280,0.791408751,27,107,3.962962962962963,7.296449916,2.805188497,2.1761440000000003,118.386659667,219250688,126.59716854197904,0.10846490555147394,
+chain,512,diagonal,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+chain,512,schwarz,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+chain,1024,diagonal,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+chain,1024,schwarz,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+cube,128,diagonal,completed,True,full-rank,local-support,2893520,0.313587249,27,213,7.888888888888889,10.771971458,0.937623582,7.364524496999999,19.613808333,550354944,30.973484207992442,0.029111407342906463,
+cube,128,schwarz,completed,True,full-rank,local-support,2893520,0.297102082,27,82,3.037037037037037,7.28209,1.4633061680000001,3.372474874999999,19.665260833,554975232,27.5866091249045,0.04079901264609473,
+cube,256,diagonal,completed,True,full-rank,local-support,5664850,0.564152874,30,236,7.866666666666666,30.934865375,2.041009792,22.351448379,102.828428166,1031815168,134.52102220791858,0.018236797450423687,
+cube,256,schwarz,completed,True,full-rank,local-support,5664850,0.56359154,30,170,5.666666666666667,28.329314208,4.810809464,16.986713623999997,103.199225958,1175191552,132.4511955420021,0.019894288151911764,
+cube,512,diagonal,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+cube,512,schwarz,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+cube,1024,diagonal,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry
+cube,1024,schwarz,timeout,False,,,,,,,,,,,,,,,timeout;incomplete-repetitions;missing-pcg-telemetry;rank-not-full;rank-certificate-not-rigorous;missing-rank-telemetry

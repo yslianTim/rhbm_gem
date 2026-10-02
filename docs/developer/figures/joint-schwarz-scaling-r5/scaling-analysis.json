@@ -1,0 +1,486 @@
+{
+  "schema_version": 1,
+  "tool": "joint_scaling_analysis",
+  "groups": [
+    {
+      "topology": "chain",
+      "preconditioner": "diagonal",
+      "core_atoms": null,
+      "overlap_hops": null,
+      "max_block_atoms": null,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 6,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 186,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 0.8258737900000002,
+          "pcg_seconds": 1.444320625,
+          "search_seconds": 3.492665875,
+          "wall_seconds": 25.617079416057095,
+          "peak_rss_bytes": 146374656,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 6,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 185,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.666544749,
+          "pcg_seconds": 2.916417624,
+          "search_seconds": 6.972878459,
+          "wall_seconds": 126.43950262502767,
+          "peak_rss_bytes": 222740480,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 512,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        },
+        {
+          "atoms": 1024,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 2,
+      "iteration_loglog_slope": 0.0,
+      "iteration_growth_ratio": 1.0,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        }
+      },
+      "coarse_gate": "not-comparable",
+      "diagnostics": [
+        "missing-comparison-policy:core_atoms,overlap_hops,max_block_atoms"
+      ],
+      "interpretation": "these rows do not share a comparable one-level Schwarz policy"
+    },
+    {
+      "topology": "chain",
+      "preconditioner": "schwarz",
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 3,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 106,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.37224379,
+          "pcg_seconds": 0.8469075849999999,
+          "search_seconds": 3.377170958,
+          "wall_seconds": 25.364020292065106,
+          "peak_rss_bytes": 151027712,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 4,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 134,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 2.805188497,
+          "pcg_seconds": 2.1761440000000003,
+          "search_seconds": 7.296449916,
+          "wall_seconds": 126.59716854197904,
+          "peak_rss_bytes": 219250688,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 512,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        },
+        {
+          "atoms": 1024,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 2,
+      "iteration_loglog_slope": 0.41503749927884354,
+      "iteration_growth_ratio": 1.3333333333333333,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.3333333333333333,
+          "iteration_loglog_slope": 0.4150374992788437,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.3333333333333333,
+          "iteration_loglog_slope": 0.4150374992788437,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        }
+      },
+      "coarse_gate": "insufficient-evidence",
+      "diagnostics": [],
+      "interpretation": "more complete global sizes are needed for a scaling classification"
+    },
+    {
+      "topology": "cube",
+      "preconditioner": "diagonal",
+      "core_atoms": null,
+      "overlap_hops": null,
+      "max_block_atoms": null,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 8,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 240,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 0.937623582,
+          "pcg_seconds": 7.364524496999999,
+          "search_seconds": 10.771971458,
+          "wall_seconds": 30.973484207992442,
+          "peak_rss_bytes": 550354944,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 8.0,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 266,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 2.041009792,
+          "pcg_seconds": 22.351448379,
+          "search_seconds": 30.934865375,
+          "wall_seconds": 134.52102220791858,
+          "peak_rss_bytes": 1031815168,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 512,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        },
+        {
+          "atoms": 1024,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 2,
+      "iteration_loglog_slope": 0.0,
+      "iteration_growth_ratio": 1.0,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.15200309344505,
+          "growth_ratio": 1.1111111111111112
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.15200309344505,
+          "growth_ratio": 1.1111111111111112
+        }
+      },
+      "coarse_gate": "not-comparable",
+      "diagnostics": [
+        "missing-comparison-policy:core_atoms,overlap_hops,max_block_atoms"
+      ],
+      "interpretation": "these rows do not share a comparable one-level Schwarz policy"
+    },
+    {
+      "topology": "cube",
+      "preconditioner": "schwarz",
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 3,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 109,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.4633061680000001,
+          "pcg_seconds": 3.372474874999999,
+          "search_seconds": 7.28209,
+          "wall_seconds": 27.5866091249045,
+          "peak_rss_bytes": 554975232,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 6.0,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 200,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 4.810809464,
+          "pcg_seconds": 16.986713623999997,
+          "search_seconds": 28.329314208,
+          "wall_seconds": 132.4511955420021,
+          "peak_rss_bytes": 1175191552,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 512,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        },
+        {
+          "atoms": 1024,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "timeout",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 2,
+      "iteration_loglog_slope": 0.9999999999999997,
+      "iteration_growth_ratio": 2.0,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 2.0,
+          "iteration_loglog_slope": 1.0,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 2.0,
+          "iteration_loglog_slope": 1.0,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.15200309344505,
+          "growth_ratio": 1.1111111111111112
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.15200309344505,
+          "growth_ratio": 1.1111111111111112
+        }
+      },
+      "coarse_gate": "insufficient-evidence",
+      "diagnostics": [],
+      "interpretation": "more complete global sizes are needed for a scaling classification"
+    }
+  ]
+}

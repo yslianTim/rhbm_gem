@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "profile": "solve",
+  "measurement_scope": "joint_search_and_returned_state_assessment",
+  "case": "chain-512",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "7b2b8b8cd5403f6d6124d19f269c095053495c29",
+    "profile": "solve",
+    "case": "chain-512",
+    "source_sha256": "7c00652b65dc1f644d4098f1de181b469959636de7bb9487fd679045848e4f05",
+    "benchmark_sha256": "56e78c50cbe31ec512e7417c27cbc13c1c06c7a0439bf15360a32af710f7b1f8",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "diagonal",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "da3ee4d0abaed4272ac6a7219ad035b0d219df4eb5c5ad9a262c20ba1283b5ee",
+    "input_sha256": "2fb5c8a3863f8e323eecb3d3043609a0102e34c83725886f248a9461a2cf9efc"
+  },
+  "execution": {
+    "status": "timeout",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 3,
+    "runs": [
+      {
+        "kind": "warmup",
+        "index": 1,
+        "status": "timeout",
+        "reason": null,
+        "elapsed_seconds": null,
+        "process_wall_seconds": null,
+        "peak_rss_bytes": null,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": null,
+          "voxels": null,
+          "components": null,
+          "parameters": null
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "endpoint_valid": null
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "timeout",
+            "exit_code": -15,
+            "wall_seconds": 600.028601582977,
+            "sampled_tree_peak_rss_bytes": 376160256,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5485,
+            "maximum_sampling_gap_seconds": 0.1728721249382943
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "timeout",
+        "reason": null,
+        "elapsed_seconds": null,
+        "process_wall_seconds": null,
+        "peak_rss_bytes": null,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": null,
+          "voxels": null,
+          "components": null,
+          "parameters": null
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "endpoint_valid": null
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "timeout",
+            "exit_code": -15,
+            "wall_seconds": 600.0306348750601,
+            "sampled_tree_peak_rss_bytes": 595869696,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5485,
+            "maximum_sampling_gap_seconds": 0.1638245841022581
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 2,
+        "status": "timeout",
+        "reason": null,
+        "elapsed_seconds": null,
+        "process_wall_seconds": null,
+        "peak_rss_bytes": null,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": null,
+          "voxels": null,
+          "components": null,
+          "parameters": null
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "endpoint_valid": null
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "timeout",
+            "exit_code": -15,
+            "wall_seconds": 600.0235484170262,
+            "sampled_tree_peak_rss_bytes": 588087296,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5493,
+            "maximum_sampling_gap_seconds": 0.12909879197832197
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 3,
+        "status": "timeout",
+        "reason": null,
+        "elapsed_seconds": null,
+        "process_wall_seconds": null,
+        "peak_rss_bytes": null,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": null,
+          "voxels": null,
+          "components": null,
+          "parameters": null
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "endpoint_valid": null
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "timeout",
+            "exit_code": -15,
+            "wall_seconds": 600.0303664170206,
+            "sampled_tree_peak_rss_bytes": 380223488,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5488,
+            "maximum_sampling_gap_seconds": 0.13068454200401902
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": null,
+    "count": 3,
+    "failed_count": 3,
+    "samples": [
+      null,
+      null,
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "not-assessed",
+    "details": {
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "endpoint_valid": null
+    }
+  }
+}

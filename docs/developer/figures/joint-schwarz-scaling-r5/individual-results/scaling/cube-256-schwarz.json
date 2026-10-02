@@ -1,0 +1,3999 @@
+{
+  "schema_version": 1,
+  "profile": "solve",
+  "measurement_scope": "joint_search_and_returned_state_assessment",
+  "case": "cube-256",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "7b2b8b8cd5403f6d6124d19f269c095053495c29",
+    "profile": "solve",
+    "case": "cube-256",
+    "source_sha256": "7c00652b65dc1f644d4098f1de181b469959636de7bb9487fd679045848e4f05",
+    "benchmark_sha256": "56e78c50cbe31ec512e7417c27cbc13c1c06c7a0439bf15360a32af710f7b1f8",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "schwarz",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "da3ee4d0abaed4272ac6a7219ad035b0d219df4eb5c5ad9a262c20ba1283b5ee",
+    "input_sha256": "7d68232f3ed4852410981fcad4a857a638e21adc0c506b1cb6f1ed91c2a8973c"
+  },
+  "execution": {
+    "status": "completed",
+    "returncode": 0,
+    "completed_repetitions": 3,
+    "failed_repetitions": 0,
+    "runs": [
+      {
+        "kind": "warmup",
+        "index": 1,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 131.432900042,
+        "process_wall_seconds": 132.37890533311293,
+        "peak_rss_bytes": 1145323520,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 256,
+          "voxels": 93431,
+          "components": null,
+          "parameters": 768
+        },
+        "numerics": {
+          "rank": 512,
+          "objective": 5.046816780922431e-07,
+          "gradient_norm": null,
+          "runtime_convergence": "passed",
+          "active_atoms": []
+        },
+        "result": {
+          "qualified": true,
+          "scientific_status": "passed",
+          "details": {
+            "search_completed": true,
+            "stop_reason": "operator-gradient-stop",
+            "profile_evaluations": 5,
+            "accepted_updates": 4,
+            "endpoint_valid": true,
+            "search_seconds": 28.325872792,
+            "assessment_seconds": 103.10702725,
+            "state_available": true,
+            "search_work": {
+              "linearizations": 5,
+              "pcg_solves": 30,
+              "pcg_iterations": 170,
+              "pcg_iteration_counts": [
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+              ],
+              "pcg_iterations_min": 5,
+              "pcg_iterations_median": 6.0,
+              "pcg_iterations_max": 6,
+              "pcg_iterations_mean": 5.666666666666667,
+              "damping_trials": 30,
+              "local_builds": 4,
+              "factor_builds": 30,
+              "inverse_actions": 170,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864,
+              "maximum_block_atoms": 201,
+              "partition_seconds": 0.18500104099999998,
+              "metric_seconds": 0.053394374,
+              "local_seconds": 2.1126692510000002,
+              "factor_seconds": 0.473514711,
+              "inverse_seconds": 0.16953171099999997,
+              "pcg_seconds": 16.986415,
+              "maximum_lambda": 3.131827512884052e-08,
+              "maximum_tau": 1.4210854715202004e-14,
+              "last_relative_residual": 2.2667876454233908e-12,
+              "operator_normal_seconds": 16.796262796,
+              "operator_normals": 200,
+              "operator_design_seconds": 0.664388957,
+              "operator_fixed_factor_seconds": 0.7332318320000001,
+              "operator_compact_seconds": 0.0,
+              "operator_svd_seconds": 0.0,
+              "operator_prepare_seconds": 1.9863089999999999,
+              "operator_rank_seconds": 0.563544376,
+              "operator_rank_certificate": "local-support",
+              "operator_rank_local_witness": {
+                "groups": 256,
+                "covered_columns": 512,
+                "total_columns": 512,
+                "coverage_fraction": 1.0,
+                "exclusive_rows": 57159,
+                "max_group_size": 2,
+                "minimum_lower": 0.050767965830409365,
+                "rank_threshold_upper": 7.050387568311184e-11,
+                "exclusive_rows_disjoint": true,
+                "would_certify": true,
+                "reason": "local-support-full-rank-witness"
+              },
+              "operator_rank_checks": 5,
+              "operator_rank_status": "full-rank",
+              "operator_rank_reason": "rank-verified-full",
+              "operator_rank_rows": 93431,
+              "operator_rank_columns": 512,
+              "operator_rank_entries": 5664850,
+              "operator_rank_workspace_bytes": 9686320,
+              "operator_rank_work_stage": "local-witness",
+              "operator_rank_estimated_total_entries": 1132970,
+              "operator_rank_estimated_remaining_entries": 0,
+              "operator_rank_estimated_reconstruction_entries": null,
+              "operator_rank_design_nonzeros": 263680,
+              "operator_rank_r_nonzeros": 0,
+              "operator_rank_reflector_nonzeros": 0,
+              "operator_rank_reflectors": 0,
+              "operator_rank_compact_extractions": 0,
+              "operator_rank_free_design_svds": 0,
+              "operator_apply_seconds": 3.727534625,
+              "operator_adjoint_seconds": 0.616795332,
+              "operator_applications": 30,
+              "operator_adjoints": 5,
+              "regularizations": [
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                }
+              ]
+            },
+            "partition": {
+              "blocks": 2,
+              "core_atom_counts": {
+                "min": 128,
+                "median": 128.0,
+                "max": 128
+              },
+              "block_atom_counts": {
+                "min": 188,
+                "median": 194.5,
+                "max": 201
+              },
+              "atom_membership": {
+                "min": 1,
+                "median": 2.0,
+                "max": 2
+              },
+              "atom_membership_histogram": {
+                "1": 123,
+                "2": 133
+              },
+              "overlap_hops": 1,
+              "core_atoms": 128,
+              "max_block_atoms": 512,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864
+            }
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 132.37890533311293,
+            "sampled_tree_peak_rss_bytes": 1145323520,
+            "os_process_peak_rss_bytes": 1144160256,
+            "samples": 1214,
+            "maximum_sampling_gap_seconds": 0.11010783293750137
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 130.720393499,
+        "process_wall_seconds": 131.66441175004002,
+        "peak_rss_bytes": 1114570752,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 256,
+          "voxels": 93431,
+          "components": null,
+          "parameters": 768
+        },
+        "numerics": {
+          "rank": 512,
+          "objective": 5.046816780922431e-07,
+          "gradient_norm": null,
+          "runtime_convergence": "passed",
+          "active_atoms": []
+        },
+        "result": {
+          "qualified": true,
+          "scientific_status": "passed",
+          "details": {
+            "search_completed": true,
+            "stop_reason": "operator-gradient-stop",
+            "profile_evaluations": 5,
+            "accepted_updates": 4,
+            "endpoint_valid": true,
+            "search_seconds": 28.247934666,
+            "assessment_seconds": 102.472458833,
+            "state_available": true,
+            "search_work": {
+              "linearizations": 5,
+              "pcg_solves": 30,
+              "pcg_iterations": 170,
+              "pcg_iteration_counts": [
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+              ],
+              "pcg_iterations_min": 5,
+              "pcg_iterations_median": 6.0,
+              "pcg_iterations_max": 6,
+              "pcg_iterations_mean": 5.666666666666667,
+              "damping_trials": 30,
+              "local_builds": 4,
+              "factor_builds": 30,
+              "inverse_actions": 170,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864,
+              "maximum_block_atoms": 201,
+              "partition_seconds": 0.18611645799999998,
+              "metric_seconds": 0.053409668,
+              "local_seconds": 2.108185416,
+              "factor_seconds": 0.47227837699999997,
+              "inverse_seconds": 0.16853450600000006,
+              "pcg_seconds": 16.986713623999997,
+              "maximum_lambda": 3.131827512884052e-08,
+              "maximum_tau": 1.4210854715202004e-14,
+              "last_relative_residual": 2.2667876454233908e-12,
+              "operator_normal_seconds": 16.799859548999997,
+              "operator_normals": 200,
+              "operator_design_seconds": 0.665759582,
+              "operator_fixed_factor_seconds": 0.737834458,
+              "operator_compact_seconds": 0.0,
+              "operator_svd_seconds": 0.0,
+              "operator_prepare_seconds": 1.9868702079999996,
+              "operator_rank_seconds": 0.56359154,
+              "operator_rank_certificate": "local-support",
+              "operator_rank_local_witness": {
+                "groups": 256,
+                "covered_columns": 512,
+                "total_columns": 512,
+                "coverage_fraction": 1.0,
+                "exclusive_rows": 57159,
+                "max_group_size": 2,
+                "minimum_lower": 0.050767965830409365,
+                "rank_threshold_upper": 7.050387568311184e-11,
+                "exclusive_rows_disjoint": true,
+                "would_certify": true,
+                "reason": "local-support-full-rank-witness"
+              },
+              "operator_rank_checks": 5,
+              "operator_rank_status": "full-rank",
+              "operator_rank_reason": "rank-verified-full",
+              "operator_rank_rows": 93431,
+              "operator_rank_columns": 512,
+              "operator_rank_entries": 5664850,
+              "operator_rank_workspace_bytes": 9686320,
+              "operator_rank_work_stage": "local-witness",
+              "operator_rank_estimated_total_entries": 1132970,
+              "operator_rank_estimated_remaining_entries": 0,
+              "operator_rank_estimated_reconstruction_entries": null,
+              "operator_rank_design_nonzeros": 263680,
+              "operator_rank_r_nonzeros": 0,
+              "operator_rank_reflector_nonzeros": 0,
+              "operator_rank_reflectors": 0,
+              "operator_rank_compact_extractions": 0,
+              "operator_rank_free_design_svds": 0,
+              "operator_apply_seconds": 3.690926291,
+              "operator_adjoint_seconds": 0.616539375,
+              "operator_applications": 30,
+              "operator_adjoints": 5,
+              "regularizations": [
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                }
+              ]
+            },
+            "partition": {
+              "blocks": 2,
+              "core_atom_counts": {
+                "min": 128,
+                "median": 128.0,
+                "max": 128
+              },
+              "block_atom_counts": {
+                "min": 188,
+                "median": 194.5,
+                "max": 201
+              },
+              "atom_membership": {
+                "min": 1,
+                "median": 2.0,
+                "max": 2
+              },
+              "atom_membership_histogram": {
+                "1": 123,
+                "2": 133
+              },
+              "overlap_hops": 1,
+              "core_atoms": 128,
+              "max_block_atoms": 512,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864
+            }
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 131.66441175004002,
+            "sampled_tree_peak_rss_bytes": 1097367552,
+            "os_process_peak_rss_bytes": 1114570752,
+            "samples": 1203,
+            "maximum_sampling_gap_seconds": 0.11011066602077335
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 2,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 131.53732566600002,
+        "process_wall_seconds": 132.4511955420021,
+        "peak_rss_bytes": 1175191552,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 256,
+          "voxels": 93431,
+          "components": null,
+          "parameters": 768
+        },
+        "numerics": {
+          "rank": 512,
+          "objective": 5.046816780922431e-07,
+          "gradient_norm": null,
+          "runtime_convergence": "passed",
+          "active_atoms": []
+        },
+        "result": {
+          "qualified": true,
+          "scientific_status": "passed",
+          "details": {
+            "search_completed": true,
+            "stop_reason": "operator-gradient-stop",
+            "profile_evaluations": 5,
+            "accepted_updates": 4,
+            "endpoint_valid": true,
+            "search_seconds": 28.338099708,
+            "assessment_seconds": 103.199225958,
+            "state_available": true,
+            "search_work": {
+              "linearizations": 5,
+              "pcg_solves": 30,
+              "pcg_iterations": 170,
+              "pcg_iteration_counts": [
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+              ],
+              "pcg_iterations_min": 5,
+              "pcg_iterations_median": 6.0,
+              "pcg_iterations_max": 6,
+              "pcg_iterations_mean": 5.666666666666667,
+              "damping_trials": 30,
+              "local_builds": 4,
+              "factor_builds": 30,
+              "inverse_actions": 170,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864,
+              "maximum_block_atoms": 201,
+              "partition_seconds": 0.18568533399999998,
+              "metric_seconds": 0.053320166999999995,
+              "local_seconds": 2.115244584,
+              "factor_seconds": 0.4729435830000001,
+              "inverse_seconds": 0.169693787,
+              "pcg_seconds": 16.991663833,
+              "maximum_lambda": 3.131827512884052e-08,
+              "maximum_tau": 1.4210854715202004e-14,
+              "last_relative_residual": 2.2667876454233908e-12,
+              "operator_normal_seconds": 16.801334500999996,
+              "operator_normals": 200,
+              "operator_design_seconds": 0.6644384990000001,
+              "operator_fixed_factor_seconds": 0.7340715819999999,
+              "operator_compact_seconds": 0.0,
+              "operator_svd_seconds": 0.0,
+              "operator_prepare_seconds": 1.986526751,
+              "operator_rank_seconds": 0.562930499,
+              "operator_rank_certificate": "local-support",
+              "operator_rank_local_witness": {
+                "groups": 256,
+                "covered_columns": 512,
+                "total_columns": 512,
+                "coverage_fraction": 1.0,
+                "exclusive_rows": 57159,
+                "max_group_size": 2,
+                "minimum_lower": 0.050767965830409365,
+                "rank_threshold_upper": 7.050387568311184e-11,
+                "exclusive_rows_disjoint": true,
+                "would_certify": true,
+                "reason": "local-support-full-rank-witness"
+              },
+              "operator_rank_checks": 5,
+              "operator_rank_status": "full-rank",
+              "operator_rank_reason": "rank-verified-full",
+              "operator_rank_rows": 93431,
+              "operator_rank_columns": 512,
+              "operator_rank_entries": 5664850,
+              "operator_rank_workspace_bytes": 9686320,
+              "operator_rank_work_stage": "local-witness",
+              "operator_rank_estimated_total_entries": 1132970,
+              "operator_rank_estimated_remaining_entries": 0,
+              "operator_rank_estimated_reconstruction_entries": null,
+              "operator_rank_design_nonzeros": 263680,
+              "operator_rank_r_nonzeros": 0,
+              "operator_rank_reflector_nonzeros": 0,
+              "operator_rank_reflectors": 0,
+              "operator_rank_compact_extractions": 0,
+              "operator_rank_free_design_svds": 0,
+              "operator_apply_seconds": 3.7318786290000006,
+              "operator_adjoint_seconds": 0.617903792,
+              "operator_applications": 30,
+              "operator_adjoints": 5,
+              "regularizations": [
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                }
+              ]
+            },
+            "partition": {
+              "blocks": 2,
+              "core_atom_counts": {
+                "min": 128,
+                "median": 128.0,
+                "max": 128
+              },
+              "block_atom_counts": {
+                "min": 188,
+                "median": 194.5,
+                "max": 201
+              },
+              "atom_membership": {
+                "min": 1,
+                "median": 2.0,
+                "max": 2
+              },
+              "atom_membership_histogram": {
+                "1": 123,
+                "2": 133
+              },
+              "overlap_hops": 1,
+              "core_atoms": 128,
+              "max_block_atoms": 512,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864
+            }
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 132.4511955420021,
+            "sampled_tree_peak_rss_bytes": 1175191552,
+            "os_process_peak_rss_bytes": 1174028288,
+            "samples": 1211,
+            "maximum_sampling_gap_seconds": 0.11011500004678965
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 3,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 131.924883916,
+        "process_wall_seconds": 132.80430233303923,
+        "peak_rss_bytes": 1135017984,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 256,
+          "voxels": 93431,
+          "components": null,
+          "parameters": 768
+        },
+        "numerics": {
+          "rank": 512,
+          "objective": 5.046816780922431e-07,
+          "gradient_norm": null,
+          "runtime_convergence": "passed",
+          "active_atoms": []
+        },
+        "result": {
+          "qualified": true,
+          "scientific_status": "passed",
+          "details": {
+            "search_completed": true,
+            "stop_reason": "operator-gradient-stop",
+            "profile_evaluations": 5,
+            "accepted_updates": 4,
+            "endpoint_valid": true,
+            "search_seconds": 28.329314208,
+            "assessment_seconds": 103.595569708,
+            "state_available": true,
+            "search_work": {
+              "linearizations": 5,
+              "pcg_solves": 30,
+              "pcg_iterations": 170,
+              "pcg_iteration_counts": [
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                5,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+              ],
+              "pcg_iterations_min": 5,
+              "pcg_iterations_median": 6.0,
+              "pcg_iterations_max": 6,
+              "pcg_iterations_mean": 5.666666666666667,
+              "damping_trials": 30,
+              "local_builds": 4,
+              "factor_builds": 30,
+              "inverse_actions": 170,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864,
+              "maximum_block_atoms": 201,
+              "partition_seconds": 0.18621591599999998,
+              "metric_seconds": 0.053293374000000004,
+              "local_seconds": 2.112113625,
+              "factor_seconds": 0.4723881730000001,
+              "inverse_seconds": 0.1690280860000001,
+              "pcg_seconds": 16.974367999,
+              "maximum_lambda": 3.131827512884052e-08,
+              "maximum_tau": 1.4210854715202004e-14,
+              "last_relative_residual": 2.2667876454233908e-12,
+              "operator_normal_seconds": 16.78486987099999,
+              "operator_normals": 200,
+              "operator_design_seconds": 0.665090291,
+              "operator_fixed_factor_seconds": 0.7324567499999999,
+              "operator_compact_seconds": 0.0,
+              "operator_svd_seconds": 0.0,
+              "operator_prepare_seconds": 1.9867983760000003,
+              "operator_rank_seconds": 0.564120459,
+              "operator_rank_certificate": "local-support",
+              "operator_rank_local_witness": {
+                "groups": 256,
+                "covered_columns": 512,
+                "total_columns": 512,
+                "coverage_fraction": 1.0,
+                "exclusive_rows": 57159,
+                "max_group_size": 2,
+                "minimum_lower": 0.050767965830409365,
+                "rank_threshold_upper": 7.050387568311184e-11,
+                "exclusive_rows_disjoint": true,
+                "would_certify": true,
+                "reason": "local-support-full-rank-witness"
+              },
+              "operator_rank_checks": 5,
+              "operator_rank_status": "full-rank",
+              "operator_rank_reason": "rank-verified-full",
+              "operator_rank_rows": 93431,
+              "operator_rank_columns": 512,
+              "operator_rank_entries": 5664850,
+              "operator_rank_workspace_bytes": 9686320,
+              "operator_rank_work_stage": "local-witness",
+              "operator_rank_estimated_total_entries": 1132970,
+              "operator_rank_estimated_remaining_entries": 0,
+              "operator_rank_estimated_reconstruction_entries": null,
+              "operator_rank_design_nonzeros": 263680,
+              "operator_rank_r_nonzeros": 0,
+              "operator_rank_reflector_nonzeros": 0,
+              "operator_rank_reflectors": 0,
+              "operator_rank_compact_extractions": 0,
+              "operator_rank_free_design_svds": 0,
+              "operator_apply_seconds": 3.7243619159999994,
+              "operator_adjoint_seconds": 0.629172458,
+              "operator_applications": 30,
+              "operator_adjoints": 5,
+              "regularizations": [
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 1,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.001,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 2,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.004,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 3,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.016,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 4,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.064,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 5,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.256,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 6,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.128,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 7,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.18101933598375616,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 0,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 1,
+                  "factor_build": 8,
+                  "block": 1,
+                  "lambda": 3.131827512884052e-08,
+                  "damping": 0.1522185107203483,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 9,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.07610925536017416,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 10,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.01902731384004354,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 11,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.004756828460010885,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 12,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0011892071150027212,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 13,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 0.0002973017787506803,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 14,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.432544468767007e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 15,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.858136117191752e-05,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 16,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.64534029297938e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 17,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.161335073244845e-06,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 18,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.903337683112112e-07,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 19,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.25834420778028e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 20,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.81458605194507e-08,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 21,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.536465129862675e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 22,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1341162824656688e-09,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 23,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 2.835290706164172e-10,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 24,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 7.08822676541043e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 25,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.7720566913526076e-11,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 26,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 4.430141728381519e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 27,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1.1075354320953797e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 0,
+                  "lambda": 3.077878873835185e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 2,
+                  "factor_build": 28,
+                  "block": 1,
+                  "lambda": 3.077878729328614e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 0,
+                  "lambda": 3.04354881087294e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 3,
+                  "factor_build": 29,
+                  "block": 1,
+                  "lambda": 3.043548720124682e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 0,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 0.0,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 0,
+                  "lambda": 3.0433957476909363e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                },
+                {
+                  "local_build": 4,
+                  "factor_build": 30,
+                  "block": 1,
+                  "lambda": 3.043395718071161e-08,
+                  "damping": 1e-12,
+                  "tau": 1.4210854715202004e-14,
+                  "attempt": 1
+                }
+              ]
+            },
+            "partition": {
+              "blocks": 2,
+              "core_atom_counts": {
+                "min": 128,
+                "median": 128.0,
+                "max": 128
+              },
+              "block_atom_counts": {
+                "min": 188,
+                "median": 194.5,
+                "max": 201
+              },
+              "atom_membership": {
+                "min": 1,
+                "median": 2.0,
+                "max": 2
+              },
+              "atom_membership_histogram": {
+                "1": 123,
+                "2": 133
+              },
+              "overlap_hops": 1,
+              "core_atoms": 128,
+              "max_block_atoms": 512,
+              "topology_bytes": 1923284,
+              "storage_bytes": 3160100,
+              "scratch_bytes_bound": 29328864
+            }
+          }
+        },
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 132.80430233303923,
+            "sampled_tree_peak_rss_bytes": 1129807872,
+            "os_process_peak_rss_bytes": 1135017984,
+            "samples": 1213,
+            "maximum_sampling_gap_seconds": 0.17412141698878258
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": 256,
+    "voxels": 93431,
+    "components": null,
+    "parameters": 768
+  },
+  "numerics": {
+    "rank": 512,
+    "objective": 5.046816780922431e-07,
+    "gradient_norm": null,
+    "runtime_convergence": "passed",
+    "active_atoms": []
+  },
+  "resources": {
+    "elapsed_seconds": 131.53732566600002,
+    "peak_rss_bytes": 1175191552,
+    "count": 3,
+    "failed_count": 0,
+    "samples": [
+      130.720393499,
+      131.53732566600002,
+      131.924883916
+    ]
+  },
+  "result": {
+    "qualified": true,
+    "scientific_status": "passed",
+    "details": {
+      "search_completed": true,
+      "stop_reason": "operator-gradient-stop",
+      "profile_evaluations": 5,
+      "accepted_updates": 4,
+      "endpoint_valid": true,
+      "search_seconds": 28.329314208,
+      "assessment_seconds": 103.595569708,
+      "state_available": true,
+      "search_work": {
+        "linearizations": 5,
+        "pcg_solves": 30,
+        "pcg_iterations": 170,
+        "pcg_iteration_counts": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6
+        ],
+        "pcg_iterations_min": 5,
+        "pcg_iterations_median": 6.0,
+        "pcg_iterations_max": 6,
+        "pcg_iterations_mean": 5.666666666666667,
+        "damping_trials": 30,
+        "local_builds": 4,
+        "factor_builds": 30,
+        "inverse_actions": 170,
+        "topology_bytes": 1923284,
+        "storage_bytes": 3160100,
+        "scratch_bytes_bound": 29328864,
+        "maximum_block_atoms": 201,
+        "partition_seconds": 0.18621591599999998,
+        "metric_seconds": 0.053293374000000004,
+        "local_seconds": 2.112113625,
+        "factor_seconds": 0.4723881730000001,
+        "inverse_seconds": 0.1690280860000001,
+        "pcg_seconds": 16.974367999,
+        "maximum_lambda": 3.131827512884052e-08,
+        "maximum_tau": 1.4210854715202004e-14,
+        "last_relative_residual": 2.2667876454233908e-12,
+        "operator_normal_seconds": 16.78486987099999,
+        "operator_normals": 200,
+        "operator_design_seconds": 0.665090291,
+        "operator_fixed_factor_seconds": 0.7324567499999999,
+        "operator_compact_seconds": 0.0,
+        "operator_svd_seconds": 0.0,
+        "operator_prepare_seconds": 1.9867983760000003,
+        "operator_rank_seconds": 0.564120459,
+        "operator_rank_certificate": "local-support",
+        "operator_rank_local_witness": {
+          "groups": 256,
+          "covered_columns": 512,
+          "total_columns": 512,
+          "coverage_fraction": 1.0,
+          "exclusive_rows": 57159,
+          "max_group_size": 2,
+          "minimum_lower": 0.050767965830409365,
+          "rank_threshold_upper": 7.050387568311184e-11,
+          "exclusive_rows_disjoint": true,
+          "would_certify": true,
+          "reason": "local-support-full-rank-witness"
+        },
+        "operator_rank_checks": 5,
+        "operator_rank_status": "full-rank",
+        "operator_rank_reason": "rank-verified-full",
+        "operator_rank_rows": 93431,
+        "operator_rank_columns": 512,
+        "operator_rank_entries": 5664850,
+        "operator_rank_workspace_bytes": 9686320,
+        "operator_rank_work_stage": "local-witness",
+        "operator_rank_estimated_total_entries": 1132970,
+        "operator_rank_estimated_remaining_entries": 0,
+        "operator_rank_estimated_reconstruction_entries": null,
+        "operator_rank_design_nonzeros": 263680,
+        "operator_rank_r_nonzeros": 0,
+        "operator_rank_reflector_nonzeros": 0,
+        "operator_rank_reflectors": 0,
+        "operator_rank_compact_extractions": 0,
+        "operator_rank_free_design_svds": 0,
+        "operator_apply_seconds": 3.7243619159999994,
+        "operator_adjoint_seconds": 0.629172458,
+        "operator_applications": 30,
+        "operator_adjoints": 5,
+        "regularizations": [
+          {
+            "local_build": 1,
+            "factor_build": 0,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.001,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 0,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.001,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 1,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.001,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 1,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.001,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 2,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.004,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 2,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.004,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 3,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.016,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 3,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.016,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 4,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.064,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 4,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.064,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 5,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.256,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 5,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.256,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 6,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.128,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 6,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.128,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 7,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.18101933598375616,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 7,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.18101933598375616,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 8,
+            "block": 0,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.1522185107203483,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 1,
+            "factor_build": 8,
+            "block": 1,
+            "lambda": 3.131827512884052e-08,
+            "damping": 0.1522185107203483,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 0,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.07610925536017416,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 0,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.07610925536017416,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 9,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.07610925536017416,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 9,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.07610925536017416,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 10,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.01902731384004354,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 10,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.01902731384004354,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 11,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.004756828460010885,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 11,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.004756828460010885,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 12,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.0011892071150027212,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 12,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.0011892071150027212,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 13,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 0.0002973017787506803,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 13,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 0.0002973017787506803,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 14,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 7.432544468767007e-05,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 14,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 7.432544468767007e-05,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 15,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.858136117191752e-05,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 15,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.858136117191752e-05,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 16,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 4.64534029297938e-06,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 16,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 4.64534029297938e-06,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 17,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.161335073244845e-06,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 17,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.161335073244845e-06,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 18,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 2.903337683112112e-07,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 18,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 2.903337683112112e-07,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 19,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 7.25834420778028e-08,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 19,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 7.25834420778028e-08,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 20,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.81458605194507e-08,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 20,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.81458605194507e-08,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 21,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 4.536465129862675e-09,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 21,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 4.536465129862675e-09,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 22,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.1341162824656688e-09,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 22,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.1341162824656688e-09,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 23,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 2.835290706164172e-10,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 23,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 2.835290706164172e-10,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 24,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 7.08822676541043e-11,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 24,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 7.08822676541043e-11,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 25,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.7720566913526076e-11,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 25,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.7720566913526076e-11,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 26,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 4.430141728381519e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 26,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 4.430141728381519e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 27,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1.1075354320953797e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 27,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1.1075354320953797e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 28,
+            "block": 0,
+            "lambda": 3.077878873835185e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 2,
+            "factor_build": 28,
+            "block": 1,
+            "lambda": 3.077878729328614e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 3,
+            "factor_build": 0,
+            "block": 0,
+            "lambda": 3.04354881087294e-08,
+            "damping": 1e-12,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 3,
+            "factor_build": 0,
+            "block": 1,
+            "lambda": 3.043548720124682e-08,
+            "damping": 1e-12,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 3,
+            "factor_build": 29,
+            "block": 0,
+            "lambda": 3.04354881087294e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 3,
+            "factor_build": 29,
+            "block": 1,
+            "lambda": 3.043548720124682e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 4,
+            "factor_build": 0,
+            "block": 0,
+            "lambda": 3.0433957476909363e-08,
+            "damping": 1e-12,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 4,
+            "factor_build": 0,
+            "block": 1,
+            "lambda": 3.043395718071161e-08,
+            "damping": 1e-12,
+            "tau": 0.0,
+            "attempt": 1
+          },
+          {
+            "local_build": 4,
+            "factor_build": 30,
+            "block": 0,
+            "lambda": 3.0433957476909363e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          },
+          {
+            "local_build": 4,
+            "factor_build": 30,
+            "block": 1,
+            "lambda": 3.043395718071161e-08,
+            "damping": 1e-12,
+            "tau": 1.4210854715202004e-14,
+            "attempt": 1
+          }
+        ]
+      },
+      "partition": {
+        "blocks": 2,
+        "core_atom_counts": {
+          "min": 128,
+          "median": 128.0,
+          "max": 128
+        },
+        "block_atom_counts": {
+          "min": 188,
+          "median": 194.5,
+          "max": 201
+        },
+        "atom_membership": {
+          "min": 1,
+          "median": 2.0,
+          "max": 2
+        },
+        "atom_membership_histogram": {
+          "1": 123,
+          "2": 133
+        },
+        "overlap_hops": 1,
+        "core_atoms": 128,
+        "max_block_atoms": 512,
+        "topology_bytes": 1923284,
+        "storage_bytes": 3160100,
+        "scratch_bytes_bound": 29328864
+      }
+    }
+  }
+}
