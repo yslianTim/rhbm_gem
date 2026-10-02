@@ -62,9 +62,12 @@ only by the operator; its production active-set row-reduction route remains
 intact. Eigen extracts the existing R and restores its column permutation for
 the dense rank check rather than repeating Q-transpose actions over every
 column. SPQR can use the bounded free-design rank view without extracting the
-p-by-p compact or running a dense rank SVD. Construction uses original context
-rows, not informative/reduced row counts. Rank failure is unavailable, not an
-approximate derivative.
+p-by-p compact or running a dense rank SVD. The bounded rank route checks
+structural deficiency first, then may certify full rank from a rigorous
+local-support witness; designs that do not meet that sufficient condition use
+the existing SPQR interval reconstruction certificate. Construction uses
+original context rows, not informative/reduced row counts. Rank failure is
+unavailable, not an approximate derivative.
 Persistent operator storage is sparse matrices and factors plus O(p+m)
 vectors; each action uses O(N+p+m) vector workspace. Sparse fill can still be
 large. The operator stores no p-by-m derivative coefficients/correction,

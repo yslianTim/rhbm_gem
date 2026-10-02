@@ -57,9 +57,10 @@ and dense rank on Eigen. The benchmark writes the requested and resolved rank
 backend, budget, search method, preconditioner, and all Schwarz limits into
 `metadata.solver_policy`; the C++ result also records its effective policy.
 Rank-budget defaults are 120 seconds, 100,000,000 work entries, and 256 MiB.
-The `rank` profile accepts the same three budget controls for the bounded
-prototype. These options belong to the internal benchmark drivers and do not
-add production CLI switches.
+The `rank` profile records its actual `SpqrBounds` or dense-oracle path and
+accepts the same three budget controls for the bounded prototype. These options
+belong to the internal benchmark drivers and do not add production CLI
+switches.
 
 For example, compare a small Schwarz core with core-only and one-hop overlap:
 
@@ -99,7 +100,8 @@ convergence assessment where one exists; it does not change process status or
 create a CI performance gate. Repetitions retain individual outcomes, and a
 failed or unavailable repetition prevents `joint_benchmark.py` from reporting
 its aggregate elapsed/RSS value as complete. Solve details retain the C++ search work counters,
-rank status and resource use. Bounded rank diagnostics include the work stage,
+rank status, certificate path, and resource use. Bounded rank diagnostics
+include local-support coverage and its threshold/lower bound, the work stage,
 charged entries, estimated total and remaining entries when the reconstruction
 forecast is available, and the design, R-factor, reflector-nonzero and
 reflector counts. Schwarz runs also include a partition summary
@@ -242,46 +244,103 @@ Rising RSS with stable iterations is a memory/resource-scaling issue. Only a
 repeated increase in per-solve PCG iterations under a fixed local policy is
 the main evidence for a future coarse-space investigation.
 
-## Current one-level scaling evidence
+### Archived initial rank-blocked campaign
 
-The current resource-bounded campaign is recorded under
+The initial chain-128 diagonal attempt remains archived at
 [`joint-schwarz-scaling`](figures/joint-schwarz-scaling/campaign-manifest.json).
-It requested chain and cube sizes 128, 256, 512, and 1024 with SPQR, rank mode
-`auto`, one warmup, three measurements, a 600-second per-run timeout, and a
-4 GiB process-tree RSS ceiling. The Schwarz policy was fixed at 128 core atoms,
-one overlap hop, a 512-atom maximum block, 512 MiB storage, and 256 MiB scratch.
+Its three rank evaluations returned `unavailable` with `rank-work-budget` and
+zero PCG solves. The refreshed campaign and its current evidence are recorded
+below.
 
-The first chain-128 diagonal control completed all three measurement
-processes, but bounded rank was `unavailable` with `rank-work-budget` in every
-repetition. Each process recorded zero PCG solves, so this row is ineligible for
-iteration scaling. Its returned-state runtime convergence was `failed`; this
-records an unqualified endpoint after search stopped at the rank budget, not a
-PCG failure. The campaign stopped there. The remaining 15 configurations,
-including every Schwarz configuration and the small identity controls, were
-not run. No larger size was attempted and no rank budget was changed.
+### Bounded-rank work frontier
 
-| Topology | Requested Schwarz sizes | Valid PCG points | Iteration slope | Endpoint ratio | Coarse gate |
-| --- | --- | ---: | ---: | ---: | --- |
-| Chain | 128, 256, 512, 1024 | 0 | — | — | `insufficient-evidence` |
-| Cube | 128, 256, 512, 1024 | 0 | — | — | `insufficient-evidence` |
+The rank-only frontier is recorded in
+[`campaign-manifest.json`](figures/joint-rank-budget-frontier/campaign-manifest.json),
+with its normalized records in
+[`rank-frontier.json`](figures/joint-rank-budget-frontier/rank-frontier.json)
+and [`rank-frontier.csv`](figures/joint-rank-budget-frontier/rank-frontier.csv).
+At 100M, chain-128 stopped in reconstruction after 99,995,408 charged entries;
+the exact total estimate was 339,953,610, with 239,958,202 remaining. The first
+tested complete point was 500M, which returned the existing rigorous
+`rank-verified-full` result. Thus 100M is about 3.4 times below the measured
+certificate work, rather than marginally below it.
 
-The one completed diagnostic row had median operator-linearization setup 3.787
-s, search time 3.949 s, assessment time 21.911 s, and wall time 26.476 s. Peak
-RSS was 178,749,440 bytes (about 170.5 MiB). It performed one linearization,
-zero damping trials, zero accepted updates, and one profile evaluation per
-measurement. These are single-configuration diagnostics, not scaling results;
-PCG time and operator action counters were zero because no PCG solve ran, so
-they are not solve-cost measurements. No iteration slope can be estimated.
+| Case | Budget | Rank result | Charged entries | Estimated total | Rank time | Peak RSS |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| chain-128 | 100M | `rank-work-budget` | 99,995,408 | 339,953,610 | 3.58 s | 87.9 MB |
+| chain-128 | 150M | `rank-work-budget` | 149,998,500 | 339,953,610 | 6.02 s | 87.9 MB |
+| chain-128 | 250M | `rank-work-budget` | 249,995,604 | 339,953,610 | 12.29 s | 87.9 MB |
+| chain-128 | 500M | `rank-verified-full` | 339,953,610 | 339,953,610 | 19.66 s | 88.0 MB |
+| cube-128 | 500M | `rank-work-budget` | 499,995,688 | 1,758,700,534 | 15.22 s | 157.8 MB |
+| chain-256 | 500M | `rank-work-budget` | 499,994,398 | 1,363,814,378 | 19.21 s | 141.2 MB |
 
-The normalized rows and repetition statistics are in
-[`scaling-summary.json`](figures/joint-schwarz-scaling/scaling-summary.json)
-and [`scaling-summary.csv`](figures/joint-schwarz-scaling/scaling-summary.csv);
-the gate output is in
-[`scaling-analysis.json`](figures/joint-schwarz-scaling/scaling-analysis.json),
-and the individual completed run retains full provenance. Current evidence is
-resource-limited before a Krylov verdict can be established. It does not show
-stable Krylov scaling or iteration growth and does not warrant a two-level
-Schwarz investigation.
+The rank-only profile performed no PCG solves or assessment. Compact
+extractions and free-design SVDs were zero in all six measurements. Doubling
+chain size increases estimated SPQR reconstruction work by 4.01x; cube-128 estimates
+5.17x the chain-128 work at the same atom count. The 500M samples for cube-128
+and chain-256 stopped at the budget, but reported the complete reconstruction
+forecast. The census results are recorded separately in
+[`local-rank-witness-census.json`](figures/joint-local-rank-witness-census/local-rank-witness-census.json),
+with per-case SPQR and oracle runs in the same directory.
+
+### Local-support witness census
+
+The diagnostic-only census covered every free column with disjoint exclusive
+rows for chain and cube at 128 and 256 atoms. Each case had 128 or 256 groups
+of two columns; the minimum certified local lower bound was 0.0465905, while
+the threshold upper bounds ranged from 1.44e-11 to 8.27e-11. Independent dense
+oracles returned full rank at every size. The four SPQR census runs had zero
+compact extractions and zero free-design SVDs.
+
+The bounded rank route now tries this sufficient-only local certificate after
+structural checks and falls back to SPQR interval reconstruction when the
+local test does not certify. These rank measurements do not establish PCG
+scaling or support a two-level Schwarz conclusion.
+
+### Current one-level PCG pilot
+
+The refreshed campaign is recorded under
+[`joint-schwarz-scaling-r5`](figures/joint-schwarz-scaling-r5/campaign-manifest.json).
+It uses the production-equivalent rank budget of 120 seconds, 100,000,000 work
+entries, and 256 MiB, with SPQR and rank mode `auto`. The fixed Schwarz policy
+uses 128 core atoms, one overlap hop, a 512-atom maximum block, 512 MiB storage,
+and 256 MiB scratch. The campaign requested chain and cube sizes 128, 256, 512,
+and 1024, with one warmup, three measurements, a 600-second per-run timeout,
+and a 4 GiB process-tree RSS ceiling. Identity controls cover 128 and 256.
+
+All chain and cube measurements at 128 and 256 completed with a rigorous
+`local-support` FullRank certificate and entered PCG. They used the resolved
+`SpqrBounds` backend; compact extractions and free-design SVDs were zero.
+
+| Case | Preconditioner | Solves | PCG iterations/solve | Rank time | Search | Assessment | Peak RSS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| chain-128 | diagonal | 27 | 5.89 | 0.392 s | 3.493 s | 21.527 s | 139.6 MiB |
+| chain-128 | Schwarz | 27 | 2.93 | 0.396 s | 3.377 s | 21.337 s | 144.0 MiB |
+| chain-256 | diagonal | 27 | 5.85 | 0.792 s | 6.973 s | 118.666 s | 212.4 MiB |
+| chain-256 | Schwarz | 27 | 3.96 | 0.791 s | 7.296 s | 118.387 s | 209.1 MiB |
+| cube-128 | diagonal | 27 | 7.89 | 0.314 s | 10.772 s | 19.614 s | 524.9 MiB |
+| cube-128 | Schwarz | 27 | 3.04 | 0.297 s | 7.282 s | 19.665 s | 529.3 MiB |
+| cube-256 | diagonal | 30 | 7.87 | 0.564 s | 30.935 s | 102.828 s | 984.0 MiB |
+| cube-256 | Schwarz | 30 | 5.67 | 0.564 s | 28.329 s | 103.199 s | 1120.8 MiB |
+
+The 512 and 1024 configurations reached rank and PCG search, but their full
+solve profiles timed out during returned-state assessment. Those rows remain
+in the sweep output with their process limits and are excluded from the
+scaling analysis. Search-side observations are in
+[`partial-large-run-diagnostics.json`](figures/joint-schwarz-scaling-r5/partial-large-run-diagnostics.json).
+The Schwarz analyzer reports `insufficient-evidence` for both topologies:
+only two complete sizes are available. Chain iterations per solve changed from
+2.93 to 3.96; cube changed from 3.04 to 5.67. These two-point trends do not
+warrant a two-level Schwarz investigation.
+
+Across completed points, rank work took 1.8%–11.7% of search time. Each of the
+five nonlinear linearizations performed one rank check. Repeated bounded-rank
+certification is not a material search bottleneck, so rank-certificate
+continuation is not warranted by these measurements.
+
+The normalized points, raw repetitions, identity controls, process limits, and
+analyzer output are linked from the
+[`campaign manifest`](figures/joint-schwarz-scaling-r5/campaign-manifest.json).
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and

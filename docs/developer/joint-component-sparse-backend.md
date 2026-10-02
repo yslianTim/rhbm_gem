@@ -70,21 +70,22 @@ hashes and linked-library version information.
 
 ## Bounded SPQR rank certificate
 
-The SPQR prototype is an explicitly selected internal/offline path. Production
-search continues to use the dense rank backend. EvaluateFreeDesignRank accepts
-the normalized sparse design, an optional immutable factor, the existing
-RankRequest, and a RankBudget. Its result is one of FullRank, Deficient, or
-Unavailable, with rank bounds, threshold/spectral bounds, verification error,
-weak-direction bound, charged work, workspace bound and elapsed time. A missing
-factor permits structural checks only. EIGEN has no prototype factor view and
-returns unavailable for nonstructural cases. Dense EvaluateRank remains the
-oracle and is never a hidden fallback.
+The bounded SPQR rank route is internal and is selected through the explicit
+Operator-PCG policy or the rank-only benchmark profile. The production search
+default remains `LegacyCompact`. `EvaluateFreeDesignRank` accepts the normalized
+sparse design, an optional immutable factor, the existing `RankRequest`, and a
+`RankBudget`. Its result is `FullRank`, `Deficient`, or `Unavailable`, with rank
+bounds, threshold/spectral bounds, certificate path, charged work, workspace
+bound, and elapsed time. Without a factor, structural checks and a
+sufficient-only local-support witness can still decide rank; if neither
+certifies, the result is unavailable. Dense `EvaluateRank` remains the oracle
+and is never a hidden fallback.
 
 For the public SPQR representation
 
     Z P = Q [R; 0] + E
 
-the certificate proceeds as follows:
+the certificate proceeds in this order:
 
 1. Sparse column, row and Frobenius norms enclose the largest singular value
    and therefore the original rank threshold. An absolute override includes
@@ -94,20 +95,35 @@ the certificate proceeds as follows:
    bounds. Nonzero problems at a zero threshold remain unavailable rather than
    promising agreement with roundoff-sensitive SVD equality. The zero matrix
    and insufficient row dimension have direct bounds.
-3. Up to three smallest-pivot triangular directions are checked against the
+3. For structurally nondeficient designs, a local-support witness may certify
+   `FullRank`. Columns are grouped by identical sparse row support; each group
+   needs exclusive rows and has size one or two. Selected exclusive rows form
+   disjoint square blocks. For a one-column block, an outward-rounded magnitude
+   lower bound is used. For a two-column block, the lower bound is
+   `|det(B)|_lower / ||B||_F,upper`, also evaluated with outward-rounded
+   intervals. If `S` contains the selected rows, then
+   `Z'Z = S'S + R'R`, so `sigma_min(Z) >= sigma_min(S)`; for the block diagonal
+   `S`, the global lower bound is the minimum block bound. Every block bound
+   must be strictly greater than the same `RankRequest` threshold upper bound.
+   This is a sufficient-only certificate: incomplete coverage, unsupported
+   groups, missing exclusive rows, interval uncertainty, or a lower bound at
+   or below threshold falls through to the existing SPQR factor inspection and
+   reconstruction (or returns unavailable if no factor was supplied); it does
+   not imply deficiency.
+4. Up to three smallest-pivot triangular directions are checked against the
    original sparse design. Only a direct-action upper bound strictly below the
    threshold lower bound establishes numerical deficiency. Pivot size alone
    never decides rank.
-4. Let M(R) have diagonal abs(R_ii) and off-diagonal -abs(R_ij).
+5. Let M(R) have diagonal abs(R_ii) and off-diagonal -abs(R_ij).
    Nonnegative triangular solves with ones bound the infinity and 1-norms of
    R inverse. Their geometric mean bounds its spectral norm. An already
    insufficient comparison bound returns rank-bound-too-wide without an
    expensive futile verification. See
    [Higham's triangular inverse norm bound](https://nhigham.com/2021/03/30/bounds-for-the-norm-of-the-inverse-of-a-triangular-matrix/).
-5. For each stored reflector I - tau h h', enclose its exceptional eigenvalue
+6. For each stored reflector I - tau h h', enclose its exceptional eigenvalue
    1 - tau norm(h)^2. The product of the smaller of its absolute lower bound
    and one bounds sigma-min(Q) below; permutations preserve it.
-6. Apply the stored reflectors to each R column using outward-rounded
+7. Apply the stored reflectors to each R column using outward-rounded
    intervals, compare with the corresponding Z column, and accumulate a
    Frobenius upper bound delta on E. Only one observation column is retained.
 
@@ -121,14 +137,18 @@ outward with nextafter. IEEE binary arithmetic and round-to-nearest are
 required; fast-math is rejected. No guessed safety factor or stochastic
 estimate is used as a certificate.
 
-Current implementation budget defaults are 120 seconds, 100 million charged
-sparse-entry work units, and a conservative workspace bound of 48*n + 192*p
-bytes capped at 256 MiB. The workspace excludes the input design and immutable
-factor; the process watchdog includes their storage, construction scratch and
-allocator overhead. Exported sparse-array bytes and known shape probes are
-reported separately; they are not allocation traces.
+Current rank budget defaults are 120 seconds, 100 million charged work entries,
+and 256 MiB of workspace. The checked workspace estimate accounts for row
+vectors, the sparse support census, and column/group metadata. The workspace
+excludes the input design and immutable factor; the process watchdog includes
+their storage, construction scratch and allocator overhead. Exported
+sparse-array bytes and known shape probes are reported separately; they are
+not allocation traces. Benchmark-only budget overrides do not alter these
+defaults.
 
-Rank work telemetry names the active certificate stage and reports normalized
+Rank work telemetry names the active certificate stage, including
+`local-witness`, and reports the certificate path plus local-witness coverage,
+threshold and lower bound. On the SPQR fallback path it reports normalized
 design, R-factor, and Householder storage counts. Before reconstruction it
 forecasts the exact remaining charge from the stored reflector nonzeros and
 observation count: p * (2*nnz(H) + n). Checked size arithmetic makes the
