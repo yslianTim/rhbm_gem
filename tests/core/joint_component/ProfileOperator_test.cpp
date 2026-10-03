@@ -4,6 +4,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointDenseReference.hpp"
 #include "support/JointOperatorWorkload.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -134,6 +135,35 @@ TEST(JointProfileOperatorTest, FactorAdjointsAndPermutation)
     workspace.Factor(a.sparseView(),{4,1,3},0);
     EXPECT_THROW(factor->LeastSquares(w),std::logic_error);
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+TEST(JointProfileOperatorTest, FactorResidencyTracksConcurrentStatesAndGenerations)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR factor residency";
+    n::ResetFactorResidencyWorkForTesting();
+    n::Matrix a=n::Matrix::Identity(8,3); auto sparse=a.sparseView();
+    {
+        n::LinearWorkspace workspace;
+        const auto first=workspace.Factor(sparse,{0,1,2},0);
+        const auto fixed=n::FreeDesignFactor::Fixed(sparse,{0,1,2});
+        ASSERT_EQ(first->Rank(),3); ASSERT_EQ(fixed->Rank(),3);
+        const auto second=workspace.Factor(sparse,{0,1,2},0);
+        ASSERT_EQ(second->Rank(),3);
+        const auto & work=n::FactorResidencyWorkForTesting();
+        EXPECT_EQ(work.maximum_concurrent_factor_count,2);
+        EXPECT_GT(work.maximum_concurrent_owned_bytes,0);
+        ASSERT_EQ(work.factors.size(),3);
+        EXPECT_EQ(work.factors[0].kind,"workspace");
+        EXPECT_EQ(work.factors[1].kind,"operator-fixed");
+        EXPECT_FALSE(work.factors[0].alive);
+        EXPECT_EQ(work.factors[0].generation,2);
+        EXPECT_EQ(work.factors[2].generation,3);
+        EXPECT_TRUE(work.factors[1].alive);
+        EXPECT_TRUE(work.factors[2].alive);
+    }
+    const auto & work=n::FactorResidencyWorkForTesting();
+    EXPECT_TRUE(std::none_of(work.factors.begin(),work.factors.end(),[](const auto & factor){return factor.alive;}));
+}
+#endif
 TEST(JointProfileOperatorTest, NearThresholdDecisionsUseOriginalRows)
 {
     for(double delta:{1e-8,1e-12,1e-15,0.})

@@ -4,6 +4,9 @@
 #include <chrono>
 #include <span>
 #include <cstdint>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include <functional>
+#endif
 
 namespace rhbm_gem::core::joint_component {
 struct SparseFactorState;
@@ -29,6 +32,47 @@ struct SparseWork
 };
 SparseWork & SparseWorkForTesting();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct FactorResidencyRecord
+{
+    std::size_t factor_id{},generation{};
+    std::string kind,role,created_at_stage,destroyed_at_stage,search_stage,destroyed_search_stage;
+    Eigen::Index rows{},columns{};
+    std::size_t nonzeros{},r_nonzeros{},h_nonzeros{},owned_factor_bytes{};
+    double created_seconds{},destroyed_seconds{};
+    bool alive{};
+};
+struct FactorConstructionRecord
+{
+    std::size_t factor_id{},generation{};
+    std::string kind,role,stage;
+    Eigen::Index rows{},columns{};
+    std::size_t nonzeros{},owned_factor_bytes_estimate{};
+    std::function<std::size_t()> estimate_owned_bytes;
+};
+struct FactorResidencyWork
+{
+    std::vector<FactorResidencyRecord> factors;
+    std::vector<FactorConstructionRecord> constructing;
+    std::size_t next_factor_id{1},maximum_concurrent_factor_count{},maximum_concurrent_owned_bytes{};
+    std::string maximum_concurrent_factor_stage,maximum_concurrent_owned_bytes_stage;
+    std::size_t peak_rss_bytes_observed{},peak_rss_factor_count{},peak_rss_owned_bytes{};
+    std::vector<std::size_t> peak_rss_factor_ids;
+    std::vector<std::string> peak_rss_factor_generations;
+    std::string peak_rss_stage;
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+};
+FactorResidencyWork & FactorResidencyWorkForTesting();
+void ResetFactorResidencyWorkForTesting();
+std::string & FactorCreationRoleForTesting();
+class FactorCreationRoleScopeForTesting
+{
+    std::string previous_;
+public:
+    explicit FactorCreationRoleScopeForTesting(std::string);
+    ~FactorCreationRoleScopeForTesting();
+    FactorCreationRoleScopeForTesting(const FactorCreationRoleScopeForTesting &)=delete;
+    FactorCreationRoleScopeForTesting & operator=(const FactorCreationRoleScopeForTesting &)=delete;
+};
 enum class SpqrOrdering {Colamd,Default,Best,Metis};
 SpqrOrdering & SpqrOrderingForTesting();
 const char * SpqrOrderingName(SpqrOrdering);

@@ -3,6 +3,9 @@
 #include <chrono>
 #include <stdexcept>
 #include <cstring>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include <sys/resource.h>
+#endif
 #include <Eigen/SparseQR>
 #ifdef RHBM_GEM_JOINT_SPQR
 #include <SuiteSparseQR.hpp>
@@ -11,6 +14,137 @@
 namespace rhbm_gem::core::joint_component {
 SparseWork & SparseWorkForTesting() {static thread_local SparseWork work; return work;}
 ResourceWork & ResourceWorkForTesting() {static thread_local ResourceWork work; return work;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+FactorResidencyWork & FactorResidencyWorkForTesting() {static thread_local FactorResidencyWork work; return work;}
+void ResetFactorResidencyWorkForTesting() {FactorResidencyWorkForTesting()=FactorResidencyWork{};}
+std::string & FactorCreationRoleForTesting() {static thread_local std::string role; return role;}
+FactorCreationRoleScopeForTesting::FactorCreationRoleScopeForTesting(std::string role)
+    :previous_(FactorCreationRoleForTesting())
+{FactorCreationRoleForTesting()=std::move(role);}
+FactorCreationRoleScopeForTesting::~FactorCreationRoleScopeForTesting()
+{FactorCreationRoleForTesting()=std::move(previous_);}
+namespace {
+std::string FactorStageForTesting()
+{
+    return ResourceWorkForTesting().phase;
+}
+std::string FactorSearchStageForTesting()
+{
+    return ResourceWorkForTesting().active_search_stage;
+}
+double FactorElapsedForTesting()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now()-FactorResidencyWorkForTesting().started).count();
+}
+std::size_t CurrentFactorBytesForTesting(const FactorResidencyWork & work)
+{
+    std::size_t bytes{};
+    for(const auto & factor:work.factors) if(factor.alive) bytes+=factor.owned_factor_bytes;
+    for(const auto & factor:work.constructing) bytes+=factor.owned_factor_bytes_estimate;
+    return bytes;
+}
+std::size_t CurrentFactorCountForTesting(const FactorResidencyWork & work)
+{
+    return static_cast<std::size_t>(std::count_if(work.factors.begin(),work.factors.end(),
+        [](const auto & factor){return factor.alive;}))+work.constructing.size();
+}
+void RecordFactorRssPeakForTesting(FactorResidencyWork & work)
+{
+    for(auto & factor:work.constructing) factor.owned_factor_bytes_estimate=factor.estimate_owned_bytes();
+    const auto count=CurrentFactorCountForTesting(work), owned_bytes=CurrentFactorBytesForTesting(work);
+    const std::string stage=FactorStageForTesting();
+    if(count>work.maximum_concurrent_factor_count)
+    {work.maximum_concurrent_factor_count=count; work.maximum_concurrent_factor_stage=stage;}
+    if(owned_bytes>work.maximum_concurrent_owned_bytes)
+    {work.maximum_concurrent_owned_bytes=owned_bytes; work.maximum_concurrent_owned_bytes_stage=stage;}
+    rusage usage{}; if(getrusage(RUSAGE_SELF,&usage)!=0) return;
+#ifdef __APPLE__
+    const auto bytes=static_cast<std::size_t>(usage.ru_maxrss);
+#else
+    const auto bytes=static_cast<std::size_t>(usage.ru_maxrss)*1024;
+#endif
+    if(bytes<=work.peak_rss_bytes_observed) return;
+    work.peak_rss_bytes_observed=bytes;
+    work.peak_rss_factor_count=count;
+    work.peak_rss_owned_bytes=owned_bytes;
+    work.peak_rss_stage=stage;
+    work.peak_rss_factor_ids.clear();
+    work.peak_rss_factor_generations.clear();
+    for(const auto & factor:work.factors) if(factor.alive)
+    {
+        work.peak_rss_factor_ids.push_back(factor.factor_id);
+        work.peak_rss_factor_generations.push_back(std::to_string(factor.factor_id)+":"+
+            std::to_string(factor.generation));
+    }
+    for(const auto & factor:work.constructing)
+    {
+        work.peak_rss_factor_ids.push_back(factor.factor_id);
+        work.peak_rss_factor_generations.push_back(std::to_string(factor.factor_id)+":"+
+            std::to_string(factor.generation));
+    }
+}
+void StartFactorResidencyForTesting(std::size_t id,std::size_t generation,const char * kind,const std::string & role,
+    Eigen::Index rows,Eigen::Index columns,std::size_t nonzeros,std::size_t r_nonzeros,std::size_t h_nonzeros,
+    std::size_t owned_bytes)
+{
+    auto & work=FactorResidencyWorkForTesting();
+    const std::string stage=FactorStageForTesting();
+    work.factors.push_back({id,generation,kind,role.empty() ? kind : role,stage,{},FactorSearchStageForTesting(),{},rows,columns,nonzeros,
+        r_nonzeros,h_nonzeros,owned_bytes,FactorElapsedForTesting(),0,true});
+    const auto count=CurrentFactorCountForTesting(work), bytes=CurrentFactorBytesForTesting(work);
+    if(count>work.maximum_concurrent_factor_count)
+    {
+        work.maximum_concurrent_factor_count=count;
+        work.maximum_concurrent_factor_stage=stage;
+    }
+    if(bytes>work.maximum_concurrent_owned_bytes)
+    {
+        work.maximum_concurrent_owned_bytes=bytes;
+        work.maximum_concurrent_owned_bytes_stage=stage;
+    }
+    RecordFactorRssPeakForTesting(work);
+}
+void EndFactorResidencyForTesting(std::size_t id,std::size_t generation)
+{
+    auto & work=FactorResidencyWorkForTesting();
+    for(auto it=work.factors.rbegin();it!=work.factors.rend();++it)
+    {
+        if(it->factor_id!=id || it->generation!=generation || !it->alive) continue;
+        RecordFactorRssPeakForTesting(work);
+        it->alive=false; it->destroyed_at_stage=FactorStageForTesting();
+        it->destroyed_search_stage=FactorSearchStageForTesting(); it->destroyed_seconds=FactorElapsedForTesting();
+        return;
+    }
+}
+std::size_t NewFactorIdForTesting()
+{return FactorResidencyWorkForTesting().next_factor_id++;}
+void BeginFactorConstructionForTesting(std::size_t id,std::size_t generation,const char * kind,const std::string & role,
+    Eigen::Index rows,Eigen::Index columns,std::size_t nonzeros,std::function<std::size_t()> estimate)
+{
+    auto & work=FactorResidencyWorkForTesting();
+    work.constructing.push_back({id,generation,kind,role.empty() ? kind : role,FactorStageForTesting(),rows,columns,
+        nonzeros,estimate(),std::move(estimate)});
+    RecordFactorRssPeakForTesting(work);
+}
+void EndFactorConstructionForTesting(std::size_t id,std::size_t generation)
+{
+    auto & constructing=FactorResidencyWorkForTesting().constructing;
+    constructing.erase(std::remove_if(constructing.begin(),constructing.end(),[&](const auto & factor)
+        {return factor.factor_id==id && factor.generation==generation;}),constructing.end());
+}
+#ifdef RHBM_GEM_JOINT_SPQR
+std::size_t OwnedFactorBytesForTesting(const Sparse & design,
+    const Eigen::SparseMatrix<double,Eigen::ColMajor,int64_t> * r,const cholmod_common & cc)
+{
+    const auto design_bytes=static_cast<std::size_t>(design.nonZeros())*(sizeof(double)+sizeof(int))+
+        static_cast<std::size_t>(design.cols()+1)*sizeof(int);
+    const auto r_bytes=r ? static_cast<std::size_t>(r->nonZeros())*(sizeof(double)+sizeof(int64_t))+
+        static_cast<std::size_t>(r->cols()+1)*sizeof(int64_t) : 0;
+    return design_bytes+r_bytes+cc.memory_inuse;
+}
+#endif
+}
+#endif
 namespace {
 ResourceStageObserverForTesting & ResourceStageObserver()
 {static thread_local ResourceStageObserverForTesting observer{}; return observer;}
@@ -78,12 +212,18 @@ ResourcePhase::ResourcePhase(const char * name,bool search_stage,Eigen::Index ro
         NotifyResourceStageObserver();
     }
     started_=std::chrono::steady_clock::now();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(w.enabled) RecordFactorRssPeakForTesting(FactorResidencyWorkForTesting());
+#endif
 }
 ResourcePhase::~ResourcePhase()
 {
     if(!enabled_) return;
     auto & w=ResourceWorkForTesting();
     const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    RecordFactorRssPeakForTesting(FactorResidencyWorkForTesting());
+#endif
     bool found=false;
     for(auto & record:w.phases) if(record.phase==name_) {++record.calls; record.inclusive_seconds+=seconds; found=true; break;}
     if(!found) w.phases.push_back({name_,1,seconds});
@@ -254,9 +394,22 @@ struct SparseFactorState
     LinearPolicy policy{};
     double tolerance{};
     bool bound{},policy_present{};
-    SparseFactorState() {cholmod_l_start(&cc); cc.SPQR_nthreads=1;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::size_t residency_id{},residency_generation{};
+    bool residency_active{};
+#endif
+    SparseFactorState()
+    {
+        cholmod_l_start(&cc); cc.SPQR_nthreads=1;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        residency_id=NewFactorIdForTesting();
+#endif
+    }
     ~SparseFactorState()
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(residency_active) EndFactorResidencyForTesting(residency_id,residency_generation);
+#endif
         if(qr) SuiteSparseQR_free<double>(&qr,&cc);
         if(h) cholmod_l_free_sparse(&h,&cc);
         if(tau) cholmod_l_free_dense(&tau,&cc);
@@ -264,7 +417,14 @@ struct SparseFactorState
         if(hpinv) cholmod_l_free(static_cast<std::size_t>(design.rows()),sizeof(int64_t),hpinv,&cc);
         cholmod_l_finish(&cc);
     }
-    void Clear() {++generation; if(qr) SuiteSparseQR_free<double>(&qr,&cc);}
+    void Clear()
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(residency_active)
+        {EndFactorResidencyForTesting(residency_id,residency_generation); residency_active=false;}
+#endif
+        ++generation; if(qr) SuiteSparseQR_free<double>(&qr,&cc);
+    }
 };
 bool SparseBackendEnabled() {return true;}
 SparseBackend ActiveSparseBackend() {return SparseBackend::Spqr;}
@@ -280,7 +440,12 @@ void LinearWorkspace::Bind(const void * domain,const void * observations,const L
 }
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
-    auto & s=*state_; ++s.generation;
+    auto & s=*state_;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(s.residency_active)
+    {EndFactorResidencyForTesting(s.residency_id,s.residency_generation); s.residency_active=false;}
+#endif
+    ++s.generation;
     LongSparse storage; cholmod_sparse view{};
     {
         ResourcePhase preparation("linear-factor-preparation",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
@@ -309,6 +474,11 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
     ++work.numeric; work.numeric_rows=std::max(work.numeric_rows,a.rows());
     work.numeric_columns=std::max(work.numeric_columns,a.cols());
     work.numeric_input_nonzeros=std::max(work.numeric_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto role=FactorCreationRoleForTesting();
+    BeginFactorConstructionForTesting(s.residency_id,s.generation,"workspace",role,a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),[state=&s]{return OwnedFactorBytesForTesting(state->design,nullptr,state->cc);});
+#endif
     {
         ResourcePhase linear_stage("linear-numeric",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
         ResourcePhase stage("spqr-numeric",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
@@ -316,8 +486,22 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
         ok=SuiteSparseQR_numeric<double>(tolerance,&view,s.qr,&s.cc);
         work.numeric_seconds+=Seconds(start);
     }
-    if(!ok) {s.Clear(); throw std::runtime_error("SPQR numeric factorization failed");}
+    if(!ok)
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        EndFactorConstructionForTesting(s.residency_id,s.generation);
+#endif
+        s.Clear(); throw std::runtime_error("SPQR numeric factorization failed");
+    }
     work.factor_nonzeros=std::max(work.factor_nonzeros,static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0])));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    EndFactorConstructionForTesting(s.residency_id,s.generation);
+    const auto r_nonzeros=static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0]));
+    const auto h_nonzeros=s.qr->QRnum ? static_cast<std::size_t>(std::max<int64_t>(0,s.qr->QRnum->hisize)) : 0;
+    StartFactorResidencyForTesting(s.residency_id,s.generation,"workspace",role,a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),r_nonzeros,h_nonzeros,OwnedFactorBytesForTesting(s.design,nullptr,s.cc));
+    s.residency_generation=s.generation; s.residency_active=true;
+#endif
     return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(state_,s.generation));
 }
 std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const std::vector<Eigen::Index> & columns)
@@ -331,6 +515,10 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
     work.fixed_factor_rows=std::max(work.fixed_factor_rows,a.rows());
     work.fixed_factor_columns=std::max(work.fixed_factor_columns,a.cols());
     work.fixed_factor_input_nonzeros=std::max(work.fixed_factor_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    BeginFactorConstructionForTesting(s.residency_id,0,"operator-fixed","operator-fixed",a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),[state=&s]{return OwnedFactorBytesForTesting(state->design,&state->r,state->cc);});
+#endif
     {
         ResourcePhase stage("spqr-fixed-factor",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
         RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
@@ -345,6 +533,9 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
             static_cast<int64_t *>(r->i),static_cast<double *>(r->x));
         cholmod_l_free_sparse(&r,&s.cc);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    EndFactorConstructionForTesting(s.residency_id,0);
+#endif
     if(s.fixed_rank<0 || !s.h || !s.tau || s.r.rows()!=a.cols()) throw std::runtime_error("SPQR fixed factorization failed");
     work.factor_nonzeros=std::max(work.factor_nonzeros,static_cast<std::size_t>(s.r.nonZeros()));
     work.fixed_factor_nonzeros=std::max(work.fixed_factor_nonzeros,static_cast<std::size_t>(s.r.nonZeros()));
@@ -356,6 +547,13 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
         (s.hpinv ? static_cast<std::size_t>(a.rows())*sizeof(int64_t) : 0);
     work.factor_storage_bytes=std::max(work.factor_storage_bytes,bytes);
     work.fixed_factor_storage_bytes=std::max(work.fixed_factor_storage_bytes,bytes);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto h_nonzeros=static_cast<std::size_t>(static_cast<const int64_t *>(s.h->p)[s.h->ncol]);
+    StartFactorResidencyForTesting(s.residency_id,0,"operator-fixed","operator-fixed",a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),static_cast<std::size_t>(s.r.nonZeros()),h_nonzeros,
+        OwnedFactorBytesForTesting(s.design,&s.r,s.cc));
+    s.residency_generation=0; s.residency_active=true;
+#endif
     return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(std::move(state),0));
 }
 FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std::size_t generation):state_(std::move(state)),generation_(generation) {}

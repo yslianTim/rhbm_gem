@@ -187,9 +187,55 @@ void Capture(const n::Matrix & a,double relative,double absolute,const n::Vector
     svd_records.push_back(std::move(record));
 }
 #endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+j::object FactorResidency()
+{
+    const auto & residency=n::FactorResidencyWorkForTesting(); j::array factors,constructing,peak_ids,peak_generations;
+    std::size_t current_count=residency.constructing.size(),current_bytes{};
+    for(const auto & factor:residency.factors)
+    {
+        if(factor.alive) {++current_count; current_bytes+=factor.owned_factor_bytes;}
+        factors.push_back(j::object{{"factor_id",factor.factor_id},{"generation",factor.generation},
+            {"kind",factor.kind},{"role",factor.role},{"created_at_stage",factor.created_at_stage},
+            {"destroyed_at_stage",factor.destroyed_at_stage.empty() ? j::value(nullptr) : j::value(factor.destroyed_at_stage)},
+            {"search_stage",factor.search_stage.empty() ? j::value(nullptr) : j::value(factor.search_stage)},
+            {"destroyed_search_stage",factor.destroyed_search_stage.empty() ? j::value(nullptr) : j::value(factor.destroyed_search_stage)},
+            {"rows",factor.rows},{"columns",factor.columns},{"nonzeros",factor.nonzeros},
+            {"r_nonzeros",factor.r_nonzeros},{"h_nonzeros",factor.h_nonzeros},
+            {"owned_factor_bytes_estimate",factor.owned_factor_bytes},{"created_seconds",factor.created_seconds},
+            {"destroyed_seconds",factor.alive ? j::value(nullptr) : j::value(factor.destroyed_seconds)},
+            {"alive_at_snapshot",factor.alive}});
+    }
+    for(const auto & factor:residency.constructing)
+    {
+        current_bytes+=factor.owned_factor_bytes_estimate;
+        constructing.push_back(j::object{{"factor_id",factor.factor_id},{"generation",factor.generation},
+            {"kind",factor.kind},{"role",factor.role},{"stage",factor.stage},{"rows",factor.rows},
+            {"columns",factor.columns},{"nonzeros",factor.nonzeros},
+            {"owned_factor_bytes_estimate",factor.owned_factor_bytes_estimate}});
+    }
+    for(const auto id:residency.peak_rss_factor_ids) peak_ids.push_back(id);
+    for(const auto & generation:residency.peak_rss_factor_generations) peak_generations.push_back(j::value(generation));
+    return {{"current_concurrent_factor_count",current_count},{"current_concurrent_owned_bytes_estimate",current_bytes},
+        {"maximum_concurrent_factor_count",residency.maximum_concurrent_factor_count},
+        {"maximum_concurrent_owned_bytes_estimate",residency.maximum_concurrent_owned_bytes},
+        {"maximum_concurrent_factor_stage",residency.maximum_concurrent_factor_stage},
+        {"maximum_concurrent_owned_bytes_stage",residency.maximum_concurrent_owned_bytes_stage},
+        {"process_peak_rss_bytes_observed_at_factor_events",residency.peak_rss_bytes_observed},
+        {"factor_count_at_process_peak_rss_event",residency.peak_rss_factor_count},
+        {"owned_factor_bytes_at_process_peak_rss_event_estimate",residency.peak_rss_owned_bytes},
+        {"stage_at_process_peak_rss_event",residency.peak_rss_stage},{"factor_ids_at_process_peak_rss_event",peak_ids},
+        {"factor_generations_at_process_peak_rss_event",peak_generations},{"factors",factors},
+        {"constructions_in_progress",constructing},
+        {"semantics","owned bytes estimate includes CHOLMOD current allocations plus owned sparse design/R arrays; it is separate from process RSS"}};
+}
+#endif
 void Snapshot(const char * output,j::object & report)
 {
 #ifndef SPARSE_BASELINE_DRIVER
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    report["factor_residency"]=FactorResidency();
+#endif
     const auto & resource=n::ResourceWorkForTesting();
     if(resource.enabled)
     {
@@ -328,6 +374,9 @@ j::object SearchWork()
         {"operator_rank_free_design_svds",op.rank_free_design_svds},
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
         {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    out["factor_residency"]=FactorResidency();
+#endif
 #endif
     return out;
 }
@@ -450,6 +499,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     n::AssessmentWorkForTesting()={};
     n::DerivativeWorkForTesting()={};
+    n::ResetFactorResidencyWorkForTesting();
 #endif
     n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
     Snapshot(output,report);
@@ -533,7 +583,7 @@ void Run(const n::Domain & domain,n::VectorRef y,const n::Vector & b,const n::Ev
 #endif
     j::object report{{"rows",domain.rows},{"atoms",b.size()},{"initial_b",Values(b)},{"stage","primary"}};Snapshot(output,report);
 #ifndef SPARSE_BASELINE_DRIVER
-    n::SparseWorkForTesting()={}; n::LinearWorkspace workspace;
+    n::SparseWorkForTesting()={}; n::ResetFactorResidencyWorkForTesting(); n::LinearWorkspace workspace;
 #endif
     const n::Vector eta=b.array().log();auto started=Clock::now();
 #ifdef SPARSE_BASELINE_DRIVER

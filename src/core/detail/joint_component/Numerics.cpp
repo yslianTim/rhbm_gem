@@ -216,6 +216,11 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 {
     ResourcePhase phase(reference ? "reference" : "ac-profile");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto search_stage=ResourceWorkForTesting().active_search_stage;
+    FactorCreationRoleScopeForTesting factor_role(reference ? "reference" :
+        search_stage=="trial-evaluation" ? "trial" : "profile");
+#endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
     if(workspace) workspace->Bind(&domain,y.data(),context ? &context->linear : nullptr);

@@ -352,7 +352,7 @@ def normalize_result(profile, raw):
         for key in ('failure_stage', 'active_search_stage', 'last_completed_search_stage',
                     'completed_search_stages', 'stage_seconds', 'stage_calls', 'stage_completed_calls',
                     'stage_dimensions', 'stage_nnz',
-                    'spqr_factorization'):
+                    'spqr_factorization', 'factor_residency'):
             if key in raw:
                 details[key] = raw[key]
         if 'partition' in raw:

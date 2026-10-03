@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-1024",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "5eb13f8f6aca9204f95291e162b8e3e09905af7a",
+    "profile": "search",
+    "case": "cube-1024",
+    "assessment_reduction": "observation-tsqr",
+    "source_sha256": "812271e7d44218bbf3b1656135bda55c24f6c5dee1f706f12f63b6a564fc3528",
+    "benchmark_sha256": "724b5b8d5c870b94f0c798106fd425817c2626867dc34b489f3689fc576e4073",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "schwarz",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "21dc970bf49496a71b33bad6d30af8d248a46178840675fb26d96229678007dd",
+    "input_sha256": "53ced251a2373538026cc1b08fa03f9a761ece24415081ea3610b586643558ee"
+  },
+  "execution": {
+    "status": "rss_limit",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 1,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 254.59614700009115,
+        "process_wall_seconds": 254.59614700009115,
+        "peak_rss_bytes": 4328275968,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 1024,
+          "voxels": 361867,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 3072
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "accepted_objective": null,
+            "accepted_gradient_inf_norm": null,
+            "returned_search_state": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null,
+            "failure_stage": "search",
+            "active_search_stage": "spqr-fixed-factor",
+            "last_completed_search_stage": "trial-evaluation",
+            "completed_search_stages": [
+              "profile-basis-build",
+              "linear-factor-preparation",
+              "spqr-symbolic",
+              "linear-symbolic",
+              "spqr-numeric",
+              "linear-numeric",
+              "linear-solve",
+              "profile-evaluation",
+              "schwarz-partition",
+              "spqr-fixed-factor",
+              "fixed-operator-factor",
+              "rank-certificate",
+              "operator-prepare",
+              "width-metric",
+              "schwarz-local-build",
+              "schwarz-factor",
+              "pcg",
+              "trial-evaluation"
+            ],
+            "stage_seconds": {
+              "search": 0.0,
+              "profile-evaluation": 2.749204875,
+              "profile-basis-build": 2.2162538339999998,
+              "linear-solve": 9.141607002,
+              "linear-factor-preparation": 0.100733667,
+              "linear-symbolic": 0.139069458,
+              "spqr-symbolic": 0.133265082,
+              "linear-numeric": 6.563870624000001,
+              "spqr-numeric": 6.557835083,
+              "schwarz-partition": 0.466924458,
+              "operator-prepare": 9.626364417,
+              "fixed-operator-factor": 6.672383999999999,
+              "spqr-fixed-factor": 6.5591992910000005,
+              "rank-certificate": 1.299404041,
+              "width-metric": 0.12843708399999998,
+              "schwarz-local-build": 14.736142001000001,
+              "schwarz-factor": 3.9004777900000005,
+              "pcg": 172.64464958100004,
+              "trial-evaluation": 8.621790374
+            },
+            "stage_calls": {
+              "search": 1,
+              "profile-evaluation": 1,
+              "profile-basis-build": 4,
+              "linear-solve": 4,
+              "linear-factor-preparation": 4,
+              "linear-symbolic": 4,
+              "spqr-symbolic": 4,
+              "linear-numeric": 4,
+              "spqr-numeric": 4,
+              "schwarz-partition": 1,
+              "operator-prepare": 4,
+              "fixed-operator-factor": 4,
+              "spqr-fixed-factor": 4,
+              "rank-certificate": 3,
+              "width-metric": 3,
+              "schwarz-local-build": 3,
+              "schwarz-factor": 29,
+              "pcg": 29,
+              "trial-evaluation": 3
+            },
+            "stage_completed_calls": {
+              "search": 0,
+              "profile-evaluation": 1,
+              "profile-basis-build": 4,
+              "linear-solve": 4,
+              "linear-factor-preparation": 4,
+              "linear-symbolic": 4,
+              "spqr-symbolic": 4,
+              "linear-numeric": 4,
+              "spqr-numeric": 4,
+              "schwarz-partition": 1,
+              "operator-prepare": 3,
+              "fixed-operator-factor": 3,
+              "spqr-fixed-factor": 3,
+              "rank-certificate": 3,
+              "width-metric": 3,
+              "schwarz-local-build": 3,
+              "schwarz-factor": 29,
+              "pcg": 29,
+              "trial-evaluation": 3
+            },
+            "stage_dimensions": {
+              "search": {
+                "rows": 361867,
+                "columns": 1024
+              },
+              "profile-evaluation": {
+                "rows": 361867,
+                "columns": 1024
+              },
+              "profile-basis-build": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "linear-solve": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "linear-factor-preparation": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "linear-symbolic": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "spqr-symbolic": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "linear-numeric": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "spqr-numeric": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "schwarz-partition": {
+                "rows": 361867,
+                "columns": 1024
+              },
+              "operator-prepare": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "fixed-operator-factor": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "spqr-fixed-factor": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "rank-certificate": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "width-metric": {
+                "rows": 361867,
+                "columns": 1024
+              },
+              "schwarz-local-build": {
+                "rows": 361867,
+                "columns": 2048
+              },
+              "schwarz-factor": {
+                "rows": 9,
+                "columns": 1024
+              },
+              "pcg": {
+                "rows": 1024,
+                "columns": 1024
+              },
+              "trial-evaluation": {
+                "rows": 361867,
+                "columns": 1024
+              }
+            },
+            "stage_nnz": {
+              "search": 0,
+              "profile-evaluation": 0,
+              "profile-basis-build": 1054720,
+              "linear-solve": 1054720,
+              "linear-factor-preparation": 1054720,
+              "linear-symbolic": 1054720,
+              "spqr-symbolic": 1054720,
+              "linear-numeric": 1054720,
+              "spqr-numeric": 1054720,
+              "schwarz-partition": 0,
+              "operator-prepare": 1054720,
+              "fixed-operator-factor": 1054720,
+              "spqr-fixed-factor": 1054720,
+              "rank-certificate": 1054720,
+              "width-metric": 1054720,
+              "schwarz-local-build": 0,
+              "schwarz-factor": 0,
+              "pcg": 0,
+              "trial-evaluation": 0
+            },
+            "spqr_factorization": {
+              "ordering": "COLAMD",
+              "symbolic": {
+                "calls": 4,
+                "seconds": 0.137853915,
+                "matrix_rows": 361867,
+                "matrix_columns": 2048,
+                "matrix_nonzeros": 1054720
+              },
+              "numeric": {
+                "calls": 4,
+                "seconds": 6.562383624,
+                "matrix_rows": 361867,
+                "matrix_columns": 2048,
+                "matrix_nonzeros": 1054720,
+                "reported_factor_nonzeros": 519728
+              },
+              "fixed_factor": {
+                "calls": 4,
+                "seconds": 6.559148251,
+                "matrix_rows": 361867,
+                "matrix_columns": 2048,
+                "matrix_nonzeros": 1054720,
+                "reported_factor_nonzeros": 481584,
+                "factor_exported_storage_bytes": 1472353992
+              }
+            }
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 254.59614700009115,
+            "sampled_tree_peak_rss_bytes": 4328275968,
+            "os_process_peak_rss_bytes": null,
+            "samples": 2328,
+            "maximum_sampling_gap_seconds": 0.2451662910170853
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 4328275968,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 1,
+    "failed_count": 1,
+    "samples": [
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": null,
+      "scope_description": null,
+      "assessment_execution": null,
+      "assessment_work": null,
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "accepted_objective": null,
+      "accepted_gradient_inf_norm": null,
+      "returned_search_state": null,
+      "search_seconds": null,
+      "free_columns": null,
+      "design_nonzeros": null,
+      "search_work": null
+    }
+  }
+}

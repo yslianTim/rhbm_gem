@@ -145,7 +145,9 @@ class JointBenchmarkContract(unittest.TestCase):
                'stage_seconds': {'profile-evaluation': .2},
                'stage_dimensions': {'spqr-numeric': {'rows': 32, 'columns': 8}},
                'stage_nnz': {'spqr-numeric': 128},
-               'spqr_factorization': {'ordering': 'COLAMD'}}
+               'spqr_factorization': {'ordering': 'COLAMD'},
+               'factor_residency': {'maximum_concurrent_factor_count': 2,
+                                    'stage_at_process_peak_rss_event': 'spqr-fixed-factor'}}
         details = benchmark.normalize_result('search', raw)['details']
         for key, value in raw.items():
             self.assertEqual(details[key], value)

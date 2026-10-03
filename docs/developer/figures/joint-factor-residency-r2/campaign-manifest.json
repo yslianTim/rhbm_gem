@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-factor-residency-r2",
+  "repository": {
+    "url": "https://github.com/yslianTim/rhbm_gem",
+    "branch": "develop",
+    "pre_measurement_commit": "5eb13f8f"
+  },
+  "purpose": "Attribute overlapping SPQR factor generations during one-level cube Schwarz search, including a factor under construction at RSS high-water events.",
+  "measurement": {
+    "profile": "search",
+    "measurement_scope": "search-only",
+    "cases": [
+      "cube-512",
+      "cube-1024",
+      "cube-2048"
+    ],
+    "ordering": "COLAMD",
+    "preconditioner": "Schwarz",
+    "operator_rank": "auto -> SpqrBounds",
+    "rank_certificate": "rigorous LocalSupport when available; bounded SPQR fallback retained",
+    "core_atoms": 128,
+    "overlap_hops": 1,
+    "max_block_atoms": 512,
+    "rank_work_entries": 100000000,
+    "rank_workspace_bytes": 268435456,
+    "rank_time_budget_seconds": 120,
+    "schwarz_storage_bytes": 536870912,
+    "schwarz_scratch_bytes": 268435456,
+    "warmup": 0,
+    "repeat": 1,
+    "timeout_seconds": 600,
+    "rss_limit_bytes": 4294967296,
+    "eigen_threads": 1
+  },
+  "factor_metrics": {
+    "owned_factor_bytes": "CHOLMOD current allocations plus owned sparse design/R arrays; an estimate separate from RSS",
+    "rss": "process-tree sampled RSS from the experiment watchdog",
+    "peak_factor_snapshot": "process high-water RSS observed at resource-stage events; includes completed and in-flight factor IDs/generations"
+  },
+  "build": {
+    "directory": "build/joint-spqr",
+    "backend": "SPQR",
+    "build_jobs": 4,
+    "instrumentation": "test-only factor residency, in-flight construction, and resource-stage capture"
+  },
+  "status": "completed",
+  "artifacts": {
+    "summary_json": "residency-analysis.json",
+    "summary_csv": "residency-summary.csv",
+    "individual_results": "individual-results/",
+    "original_campaign": "colamd-sweep.json",
+    "supplemental_2048_replay": "colamd-2048-capture.json"
+  },
+  "result_notes": [
+    "cube-512 and cube-1024 completed; both reached a maximum of two concurrent factor states during spqr-fixed-factor.",
+    "cube-1024 sampled tree RSS was 4,118,118,400 bytes, below the fixed 4,294,967,296 byte cap.",
+    "cube-2048 was repeated once after correcting summary normalization to retain the factor inventory in its stage-entry snapshot. Both runs failed at spqr-fixed-factor over the same 4 GiB cap; no PCG telemetry exists.",
+    "At the 2048 failure, the profile workspace factor and the operator-fixed factor under construction were both present. The owned-byte estimate is a stage-entry estimate, not a peak allocation estimate."
+  ]
+}
