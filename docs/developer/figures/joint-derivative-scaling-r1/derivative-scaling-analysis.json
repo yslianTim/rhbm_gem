@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-derivative-scaling-r1",
+  "definitions": {
+    "T_reduction": "inclusive derivative_reduction_micro_attribution.reduction_inclusive_seconds",
+    "rows": "exclusive rows-generation timer",
+    "projected_qr": "exclusive projected-role TiledQR timer",
+    "jacobian_qr": "exclusive Jacobian-role TiledQR timer",
+    "norms": "exclusive combined projected and Jacobian norm timer",
+    "fractions": "each median exclusive substage seconds divided by median inclusive reduction seconds; the difference is outer-loop/checkpoint overhead"
+  },
+  "completed_case_analysis": {
+    "chain-128": {
+      "reduction_inclusive_seconds_median": 15.728563583,
+      "stage_seconds_median": {
+        "rows": 1.0611522070000001,
+        "projected_qr": 6.9358429169999996,
+        "jacobian_qr": 7.1082642069999995,
+        "norms": 0.176898583
+      },
+      "fraction_of_reduction": {
+        "rows": 0.06746656815800597,
+        "projected_qr": 0.44097115927970115,
+        "jacobian_qr": 0.4519334629312793,
+        "norms": 0.011246963657329674
+      },
+      "exclusive_sum_seconds_median": 15.281438497,
+      "outer_overhead_seconds_median": 0.4471250859999998,
+      "tile_count_median": 8
+    },
+    "chain-256": {
+      "reduction_inclusive_seconds_median": 94.691141417,
+      "stage_seconds_median": {
+        "rows": 4.292788167000001,
+        "projected_qr": 43.687182957000005,
+        "jacobian_qr": 44.381494999000004,
+        "norms": 0.715873459
+      },
+      "fraction_of_reduction": {
+        "rows": 0.04533463323771185,
+        "projected_qr": 0.4613650474927827,
+        "jacobian_qr": 0.4686974339400259,
+        "norms": 0.007560089025090984
+      },
+      "exclusive_sum_seconds_median": 93.057183003,
+      "outer_overhead_seconds_median": 1.6339584139999914,
+      "tile_count_median": 15
+    },
+    "cube-128": {
+      "reduction_inclusive_seconds_median": 13.114601958,
+      "stage_seconds_median": {
+        "rows": 0.945009126,
+        "projected_qr": 5.759009998000001,
+        "jacobian_qr": 5.899801501,
+        "norms": 0.145970583
+      },
+      "fraction_of_reduction": {
+        "rows": 0.07205778177838922,
+        "projected_qr": 0.4391296065594247,
+        "jacobian_qr": 0.4498650832022454,
+        "norms": 0.011130386074047554
+      },
+      "exclusive_sum_seconds_median": 12.752850877999999,
+      "outer_overhead_seconds_median": 0.3617510800000012,
+      "tile_count_median": 6
+    },
+    "cube-256": {
+      "reduction_inclusive_seconds_median": 76.227409834,
+      "stage_seconds_median": {
+        "rows": 3.72047225,
+        "projected_qr": 35.018344084,
+        "jacobian_qr": 35.602980626000004,
+        "norms": 0.575805916
+      },
+      "fraction_of_reduction": {
+        "rows": 0.04880753862819229,
+        "projected_qr": 0.459393073439846,
+        "jacobian_qr": 0.46706271016596806,
+        "norms": 0.007553790916599807
+      },
+      "exclusive_sum_seconds_median": 74.916063418,
+      "outer_overhead_seconds_median": 1.3113464160000063,
+      "tile_count_median": 12
+    }
+  },
+  "growth_128_to_256": {
+    "chain": {
+      "from_case": "chain-128",
+      "to_case": "chain-256",
+      "growth_ratios_256_over_128": {
+        "derivative_reduction_inclusive": 6.020329886916413,
+        "rows": 4.045402854258024,
+        "projected_qr": 6.298756110799619,
+        "jacobian_qr": 6.243647352794579,
+        "norms": 4.046801545041206
+      },
+      "fractions_at_128": {
+        "rows": 0.06746656815800597,
+        "projected_qr": 0.44097115927970115,
+        "jacobian_qr": 0.4519334629312793,
+        "norms": 0.011246963657329674
+      },
+      "fractions_at_256": {
+        "rows": 0.04533463323771185,
+        "projected_qr": 0.4613650474927827,
+        "jacobian_qr": 0.4686974339400259,
+        "norms": 0.007560089025090984
+      }
+    },
+    "cube": {
+      "from_case": "cube-128",
+      "to_case": "cube-256",
+      "growth_ratios_256_over_128": {
+        "derivative_reduction_inclusive": 5.81240742785188,
+        "rows": 3.9369696520793176,
+        "projected_qr": 6.080618734150701,
+        "jacobian_qr": 6.034606523620396,
+        "norms": 3.9446709341429433
+      },
+      "fractions_at_128": {
+        "rows": 0.07205778177838922,
+        "projected_qr": 0.4391296065594247,
+        "jacobian_qr": 0.4498650832022454,
+        "norms": 0.011130386074047554
+      },
+      "fractions_at_256": {
+        "rows": 0.04880753862819229,
+        "projected_qr": 0.459393073439846,
+        "jacobian_qr": 0.46706271016596806,
+        "norms": 0.007553790916599807
+      }
+    }
+  },
+  "timeout_cases": {
+    "chain-512": {
+      "wall_seconds": [
+        600.0310872499831
+      ],
+      "peak_rss_bytes": 584777728,
+      "active_micro_stage": "derivative-projected-qr",
+      "partial_elapsed_micro_stage_seconds_at_timeout": {
+        "rows": 14.026991706999995,
+        "projected_qr": 225.90010312399997,
+        "jacobian_qr": 228.74405791599997,
+        "norms": 2.2225125820000007
+      },
+      "partial_completed_tiles": 23,
+      "partial_exclusive_seconds": 470.89366532899993,
+      "partial_tiled_qr": {
+        "projected": {
+          "role": "derivative-projected-qr",
+          "append_calls": 22,
+          "rows_processed": 180224,
+          "columns": 512,
+          "responses": 0,
+          "maximum_assembled_rows": 8704,
+          "maximum_dense_design_bytes": 35651584,
+          "maximum_dense_response_bytes": 0,
+          "qr_seconds": 225.89988341599994
+        },
+        "jacobian": {
+          "role": "derivative-jacobian-qr",
+          "append_calls": 22,
+          "rows_processed": 180224,
+          "columns": 512,
+          "responses": 1,
+          "maximum_assembled_rows": 8704,
+          "maximum_dense_design_bytes": 35651584,
+          "maximum_dense_response_bytes": 69632,
+          "qr_seconds": 228.74164466699997
+        }
+      }
+    },
+    "cube-512": {
+      "wall_seconds": [
+        600.0315378338564
+      ],
+      "peak_rss_bytes": 2568011776,
+      "active_micro_stage": "derivative-projected-qr",
+      "partial_elapsed_micro_stage_seconds_at_timeout": {
+        "rows": 12.553627126,
+        "projected_qr": 187.06353195899996,
+        "jacobian_qr": 188.557088041,
+        "norms": 1.813757001
+      },
+      "partial_completed_tiles": 19,
+      "partial_exclusive_seconds": 389.98800412699995,
+      "partial_tiled_qr": {
+        "projected": {
+          "role": "derivative-projected-qr",
+          "append_calls": 18,
+          "rows_processed": 147456,
+          "columns": 512,
+          "responses": 0,
+          "maximum_assembled_rows": 8704,
+          "maximum_dense_design_bytes": 35651584,
+          "maximum_dense_response_bytes": 0,
+          "qr_seconds": 187.06334533499998
+        },
+        "jacobian": {
+          "role": "derivative-jacobian-qr",
+          "append_calls": 18,
+          "rows_processed": 147456,
+          "columns": 512,
+          "responses": 1,
+          "maximum_assembled_rows": 8704,
+          "maximum_dense_design_bytes": 35651584,
+          "maximum_dense_response_bytes": 69632,
+          "qr_seconds": 188.555105414
+        }
+      }
+    }
+  },
+  "interpretation": "Completed 128/256 rows support stage fractions and growth ratios. The 512 rows timed out under the fixed 600 s/4 GiB envelope; their partial counters only describe completed tiles through timeout and are not full derivative-reduction totals."
+}

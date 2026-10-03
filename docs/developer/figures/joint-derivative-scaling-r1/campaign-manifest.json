@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-derivative-scaling-r1",
+  "recorded_head": "454b649e70907e5739e25bb40b68c998474a8204",
+  "method": "tests/integration/joint_benchmark.py --profile solve --preconditioner schwarz --operator-rank auto; existing auto policy resolves to SpqrBounds on the SPQR build",
+  "resource_limits": {
+    "timeout_seconds": 600,
+    "rss_limit_bytes": 4294967296,
+    "eigen_threads": 1
+  },
+  "repetitions": {
+    "128": {
+      "repeat": 3,
+      "warmup": 0
+    },
+    "256": {
+      "repeat": 3,
+      "warmup": 0
+    },
+    "512": {
+      "repeat": 1,
+      "warmup": 0
+    }
+  },
+  "cases": {
+    "chain-128": {
+      "status": "completed",
+      "completed_repetitions": 3,
+      "artifact": "individual-results/chain-128-schwarz.json"
+    },
+    "chain-256": {
+      "status": "completed",
+      "completed_repetitions": 3,
+      "artifact": "individual-results/chain-256-schwarz.json"
+    },
+    "chain-512": {
+      "status": "timeout",
+      "completed_repetitions": 0,
+      "artifact": "individual-results/chain-512-schwarz.json"
+    },
+    "cube-128": {
+      "status": "completed",
+      "completed_repetitions": 3,
+      "artifact": "individual-results/cube-128-schwarz.json"
+    },
+    "cube-256": {
+      "status": "completed",
+      "completed_repetitions": 3,
+      "artifact": "individual-results/cube-256-schwarz.json"
+    },
+    "cube-512": {
+      "status": "timeout",
+      "completed_repetitions": 0,
+      "artifact": "individual-results/cube-512-schwarz.json"
+    }
+  },
+  "ordering": "production benchmark solve path uses existing COLAMD default; no experimental SPQR ordering override used",
+  "telemetry": "Search is included in solve profile, but reported derivative micro stages belong to returned-state assessment. Process RSS is runner-sampled, not inferred from C++ factor/storage estimates."
+}
