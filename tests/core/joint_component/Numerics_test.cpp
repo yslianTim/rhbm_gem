@@ -2,13 +2,18 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
+#include "core/detail/joint_component/Problem.hpp"
+#include "support/JointOperatorWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 
 namespace {
 namespace m=second_stage_test::matched;
 namespace p=m::joint_abc;
+namespace n=p::runtime;
 using Vector=Eigen::VectorXd;
 using Matrix=Eigen::MatrixXd;
 struct SvdMode
@@ -66,6 +71,151 @@ struct Direct
         return 0;
     }
 };
+
+struct CompactJacobianDiagnostics
+{
+    double ztp_relative{},ztr_relative{},ztr_relative_all{},gram_absolute{},gram_relative{},gram_elementwise{};
+    double orthogonal_gram_relative{},spectrum_relative{},weak_projector_difference{};
+    double response_norm_difference{},response_gradient_difference{},correction_difference{};
+    double ztp_absolute{},ztr_absolute{},ztr_scaled{};
+    Eigen::Index exact_rank{},compact_rank{};
+    bool projection_normalized{},stationarity_normalized{},rank_parity{},candidate_compared{};
+};
+struct CompactJacobianSummary
+{
+    CompactJacobianDiagnostics maximum;
+    bool rank_parity{true};
+};
+void CheckCompactJacobianIdentity(const n::Evaluation & e,const n::EvaluationContext & context,
+    const std::string & name,bool require_orthogonality,bool compare_compact_candidate,bool require_candidate_parity,
+    CompactJacobianSummary & summary)
+{
+    SCOPED_TRACE(name);
+    const auto d=n::PrepareDerivative(e,context.scale,&context);
+    ASSERT_TRUE(d.valid)<<d.reason;
+    const auto reduced=n::ReduceDerivative(d,e.residual,true);
+    ASSERT_TRUE(reduced.valid)<<reduced.reason;
+
+    const auto m=e.eta.size(),p=d.free_design.cols(),rows=e.residual.size();
+    n::Matrix cross=n::Matrix::Zero(p,m); n::Vector ztr=n::Vector::Zero(p),projected_rhs=n::Vector::Zero(m);
+    std::optional<n::TiledQR> design_qr;
+    if(compare_compact_candidate) design_qr.emplace(p,1,"identity-design");
+    n::Matrix projected,jacobian;
+    for(Eigen::Index first=0;first<rows;first+=n::derivative_tile_rows)
+    {
+        const auto count=std::min(n::derivative_tile_rows,rows-first);
+        d.Rows(first,count,projected,jacobian);
+        const auto design=d.free_design.middleRows(first,count);
+        cross.noalias()+=design.transpose()*projected;
+        ztr.noalias()+=design.transpose()*e.residual.segment(first,count);
+        if(compare_compact_candidate)
+        {
+            n::Matrix rhs(count,1); rhs.col(0)=e.residual.segment(first,count)/d.scale;
+            projected_rhs.noalias()+=projected.transpose()*rhs.col(0);
+            design_qr->Append(n::Matrix(design),rhs);
+        }
+    }
+
+    CompactJacobianDiagnostics result;
+    result.ztp_absolute=cross.norm();
+    const double z_norm=d.free_design.norm(),p_norm=reduced.projected.norm(),residual_norm=e.residual.norm();
+    const double orthogonal_scale=z_norm*p_norm;
+    result.projection_normalized=orthogonal_scale>1e-30;
+    if(result.projection_normalized) result.ztp_relative=result.ztp_absolute/orthogonal_scale;
+    const double stationarity_scale=z_norm*residual_norm;
+    result.ztr_absolute=ztr.norm();
+    result.stationarity_normalized=residual_norm>1e-12*context.scale && stationarity_scale>1e-30;
+    if(stationarity_scale>1e-30) result.ztr_relative=result.ztr_absolute/stationarity_scale;
+    result.ztr_relative_all=result.ztr_relative;
+    result.ztr_scaled=z_norm*context.scale>1e-30 ? result.ztr_absolute/(z_norm*context.scale) : result.ztr_absolute;
+
+    const n::Matrix ztz=n::Matrix(d.free_design.transpose()*d.free_design);
+    const n::Matrix correction=d.correction/d.scale;
+    const n::Matrix projected_gram=reduced.projected.transpose()*reduced.projected;
+    const n::Matrix exact_gram=reduced.jacobian.transpose()*reduced.jacobian;
+    const n::Matrix full_gram=projected_gram-cross.transpose()*correction-correction.transpose()*cross+
+        correction.transpose()*ztz*correction;
+    const n::Matrix orthogonal_gram=projected_gram+correction.transpose()*ztz*correction;
+    const n::Matrix gram_error=full_gram-exact_gram;
+    result.gram_absolute=gram_error.norm();
+    result.gram_relative=result.gram_absolute/std::max(1e-30,exact_gram.norm());
+    result.gram_elementwise=gram_error.cwiseAbs().maxCoeff();
+    result.orthogonal_gram_relative=(orthogonal_gram-exact_gram).norm()/std::max(1e-30,exact_gram.norm());
+    EXPECT_LE(result.gram_relative,1e-8);
+    if(require_orthogonality)
+    {
+        ASSERT_TRUE(result.projection_normalized);
+        EXPECT_LE(result.ztp_relative,1e-8);
+        EXPECT_LE(result.ztr_scaled,1e-8);
+    }
+
+    const n::RankRequest request{{context.rank.rows,0,0},m};
+    const auto exact=n::EvaluateRank(reduced.jacobian,request,nullptr,n::CompactSvdVectors::Right);
+    ASSERT_TRUE(exact.valid);
+    result.exact_rank=exact.rank;
+    if(compare_compact_candidate)
+    {
+        const n::Matrix & projected_factor=reduced.projected;
+        const n::Vector projected_target=projected_factor.transpose().triangularView<Eigen::Lower>().solve(projected_rhs);
+        n::Matrix compact_design(projected_factor.rows()+design_qr->r.rows(),m);
+        compact_design.topRows(projected_factor.rows())=projected_factor;
+        compact_design.bottomRows(design_qr->r.rows())=-(design_qr->r*correction);
+        n::Matrix compact_response(compact_design.rows(),1);
+        compact_response.topRows(projected_target.size())=projected_target;
+        compact_response.bottomRows(design_qr->target.rows())=design_qr->target;
+        n::TiledQR compact_qr(m,1,"identity-orthogonal-stack");
+        compact_qr.Append(compact_design,compact_response);
+        const auto compact=n::EvaluateRank(compact_qr.r,request,nullptr,n::CompactSvdVectors::Right);
+        ASSERT_TRUE(compact.valid);
+        result.candidate_compared=true;
+        result.compact_rank=compact.rank;
+        result.rank_parity=exact.rank==compact.rank;
+        result.spectrum_relative=(exact.singular_values-compact.singular_values).lpNorm<Eigen::Infinity>()/
+            std::max(1e-30,exact.singular_values(0));
+        const Eigen::Index weak=std::min<Eigen::Index>(3,exact.right_vectors.cols());
+        const n::Matrix exact_weak=exact.right_vectors.rightCols(weak),compact_weak=compact.right_vectors.rightCols(weak);
+        result.weak_projector_difference=(exact_weak*exact_weak.transpose()-compact_weak*compact_weak.transpose()).norm()/
+            std::sqrt(static_cast<double>(weak));
+
+        const n::Vector exact_rhs=-reduced.response,compact_rhs=-compact_qr.target.col(0);
+        const auto exact_solve=n::EvaluateRank(reduced.jacobian,request,&exact_rhs);
+        const auto compact_solve=n::EvaluateRank(compact_qr.r,request,&compact_rhs);
+        ASSERT_TRUE(exact_solve.valid && compact_solve.valid);
+        result.correction_difference=(exact_solve.solution-compact_solve.solution).norm()/
+            std::max(1.0,exact_solve.solution.norm());
+        const n::Vector exact_gradient=reduced.jacobian.transpose()*reduced.response;
+        const n::Vector compact_gradient=compact_qr.r.transpose()*compact_qr.target.col(0);
+        result.response_gradient_difference=(exact_gradient-compact_gradient).norm()/std::max(1.0,exact_gradient.norm());
+        result.response_norm_difference=std::abs(reduced.response.norm()-compact_qr.target.norm())/
+            std::max(1.0,reduced.response.norm());
+        if(require_candidate_parity)
+        {
+            EXPECT_TRUE(result.rank_parity);
+            EXPECT_LE(result.spectrum_relative,1e-8);
+            EXPECT_LE(result.response_gradient_difference,1e-8);
+            EXPECT_LE(result.correction_difference,1e-7);
+        }
+        summary.rank_parity &= result.rank_parity;
+    }
+    auto & maximum=summary.maximum;
+    maximum.ztp_relative=std::max(maximum.ztp_relative,result.ztp_relative);
+    if(result.stationarity_normalized) maximum.ztr_relative=std::max(maximum.ztr_relative,result.ztr_relative);
+    maximum.ztr_relative_all=std::max(maximum.ztr_relative_all,result.ztr_relative_all);
+    maximum.ztr_scaled=std::max(maximum.ztr_scaled,result.ztr_scaled);
+    maximum.ztp_absolute=std::max(maximum.ztp_absolute,result.ztp_absolute);
+    maximum.gram_absolute=std::max(maximum.gram_absolute,result.gram_absolute);
+    maximum.gram_relative=std::max(maximum.gram_relative,result.gram_relative);
+    maximum.gram_elementwise=std::max(maximum.gram_elementwise,result.gram_elementwise);
+    if(result.candidate_compared)
+    {
+        maximum.orthogonal_gram_relative=std::max(maximum.orthogonal_gram_relative,result.orthogonal_gram_relative);
+        maximum.spectrum_relative=std::max(maximum.spectrum_relative,result.spectrum_relative);
+        maximum.weak_projector_difference=std::max(maximum.weak_projector_difference,result.weak_projector_difference);
+        maximum.response_norm_difference=std::max(maximum.response_norm_difference,result.response_norm_difference);
+        maximum.response_gradient_difference=std::max(maximum.response_gradient_difference,result.response_gradient_difference);
+        maximum.correction_difference=std::max(maximum.correction_difference,result.correction_difference);
+    }
+}
 }
 
 TEST(JointTestNumericsTest, LogWidthBasisIncludesCenterNearZeroAndFixedCutoff)
@@ -218,6 +368,83 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
             EXPECT_LT((reduced.jacobian_norms-dense.jacobian.colwise().blueNorm().transpose()).norm()/dense.jacobian.norm(),1e-10);
         }
     }
+}
+
+TEST(JointComponentNumericsTest, CompactJacobianGramIdentityDiagnosticsAcrossLattices)
+{
+    CompactJacobianSummary summary;
+    for(const std::string topology:{"chain","cube"}) for(const int atoms:{8,32,128,256})
+    {
+        rhbm_gem::core::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+        const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+        const Vector eta=Vector::Constant(atoms,std::log(.55));
+        const auto e=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+        ASSERT_TRUE(e.valid)<<topology<<"-"<<atoms<<": "<<e.reason;
+        const bool candidate=atoms<=32;
+        CheckCompactJacobianIdentity(e,data.context,topology+"-"+std::to_string(atoms),true,candidate,candidate,summary);
+    }
+    const auto record=[](const char * key,double value) {
+        std::ostringstream out; out<<std::setprecision(17)<<value; RecordProperty(key,out.str());
+    };
+    record("max_normalized_ZtP",summary.maximum.ztp_relative);
+    record("max_normalized_Ztr",summary.maximum.ztr_relative);
+    record("max_raw_normalized_Ztr",summary.maximum.ztr_relative_all);
+    record("max_scaled_Ztr_stationarity",summary.maximum.ztr_scaled);
+    record("max_full_gram_relative_frobenius_error",summary.maximum.gram_relative);
+    record("max_full_gram_absolute_frobenius_error",summary.maximum.gram_absolute);
+    record("max_full_gram_max_elementwise_error",summary.maximum.gram_elementwise);
+    record("max_orthogonality_only_gram_relative_error",summary.maximum.orthogonal_gram_relative);
+    record("max_compact_candidate_spectrum_relative_error",summary.maximum.spectrum_relative);
+    record("max_weak_direction_projector_difference",summary.maximum.weak_projector_difference);
+    record("max_response_coordinate_norm_difference",summary.maximum.response_norm_difference);
+    record("max_response_gradient_difference",summary.maximum.response_gradient_difference);
+    record("max_correction_difference",summary.maximum.correction_difference);
+    RecordProperty("compact_candidate_rank_parity",summary.rank_parity ? "true" : "false");
+}
+
+TEST(JointComponentNumericsTest, CompactJacobianDiagnosticsCoverCancellationAndActiveFaces)
+{
+    CompactJacobianSummary cancellation;
+    {
+        Sample sample; const p::Domain domain(sample.grid,sample.atoms);
+        const auto context=n::CreateContext(sample.y,2);
+        auto e=n::EvaluateProfile(domain,sample.y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
+        ASSERT_TRUE(e.valid);
+        e.derivative=e.x;
+        n::SparseWorkForTesting()={};
+        const auto prepared=n::PrepareDerivative(e,context.scale,&context);
+        ASSERT_TRUE(prepared.valid);
+        EXPECT_EQ(prepared.reference_order,n::SparseBackendEnabled());
+        CheckCompactJacobianIdentity(e,context,"near-complete-cancellation",false,true,false,cancellation);
+    }
+    CompactJacobianSummary active_faces; bool saw_active=false,saw_interior=false;
+    {
+        Sample sample; sample.atoms.resize(1); sample.atoms[0].amplitude=.05; sample.atoms[0].charge=-1;
+        for(Eigen::Index k=0;k<sample.y.size();++k)
+            sample.y(k)=m::unique_grid::Direct(sample.grid.voxels[static_cast<std::size_t>(k)].position,sample.atoms,2.5);
+        const p::Domain domain(sample.grid,sample.atoms); const auto context=n::CreateContext(sample.y,1);
+        for(const double width:{.25,.42,.8})
+        {
+            const Vector eta=Vector::Constant(1,std::log(width));
+            const auto e=n::EvaluateProfile(domain,sample.y,eta,false,&context);
+            ASSERT_TRUE(e.valid)<<width<<": "<<e.reason;
+            saw_active|=e.beta(0)==0; saw_interior|=e.beta(0)>0;
+            CheckCompactJacobianIdentity(e,context,"active-face-width-"+std::to_string(width),true,true,false,active_faces);
+        }
+    }
+    EXPECT_TRUE(saw_active && saw_interior);
+    const auto record=[](const char * key,double value) {
+        std::ostringstream out; out<<std::setprecision(17)<<value; RecordProperty(key,out.str());
+    };
+    record("cancellation_ZtP_absolute",cancellation.maximum.ztp_absolute);
+    record("cancellation_full_gram_relative_error",cancellation.maximum.gram_relative);
+    RecordProperty("cancellation_candidate_rank_parity",cancellation.rank_parity ? "true" : "false");
+    record("active_face_max_normalized_ZtP",active_faces.maximum.ztp_relative);
+    record("active_face_max_normalized_Ztr",active_faces.maximum.ztr_relative);
+    record("active_face_max_raw_normalized_Ztr",active_faces.maximum.ztr_relative_all);
+    record("active_face_max_scaled_Ztr_stationarity",active_faces.maximum.ztr_scaled);
+    RecordProperty("active_face_candidate_rank_parity",active_faces.rank_parity ? "true" : "false");
+    RecordProperty("active_and_interior_faces_seen",saw_active && saw_interior ? "true" : "false");
 }
 
 
