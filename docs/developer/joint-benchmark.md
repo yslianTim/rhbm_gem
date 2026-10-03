@@ -359,7 +359,7 @@ The Schwarz measurements were:
 | cube | 256 | 2 | 6 | 0.566 | 4.799 | 16.986 | 28.288 | 617.0 MiB |
 | cube | 512 | 4 | 6 | 1.097 | 13.852 | 45.579 | 75.673 | 1269.4 MiB |
 | cube | 1024 | 9 | 7 | 2.176 | 39.902 | 177.522 | 274.031 | 3301.2 MiB |
-| cube | 2048 | — | — | — | — | — | RSS limit | 4.02 GiB |
+| cube | 2048 | — | — | — | — | — | RSS limit | 4.03 GiB |
 
 The full-range coarse gates are chain `stable` (5 points, slope 0.0830,
 endpoint growth 1.33) and cube `growth-observed` (4 points, slope 0.3667,
@@ -407,8 +407,8 @@ Derivative reduction dominated every completed assessment, accounting for
 66.5%–79.7% of total assessment time; it was also the active stage at both
 512 timeouts. Total assessment grew 5.55x for chain and 5.24x for cube from
 128 to 256. The 512 timeout rows retain the completed stages, active stage,
-stage dimensions, 600-second process wall, and peak RSS (610 MiB for chain;
-2.84 GiB for cube). Their stage checkpoints and per-run records are available
+stage dimensions, 600-second process wall, and peak RSS (581.8 MiB for chain;
+2.64 GiB for cube). Their stage checkpoints and per-run records are available
 in the assessment campaign JSON, CSV, analysis, and `individual-results/`.
 
 No exact duplicate recomputation or identity-safe reuse was demonstrated in
