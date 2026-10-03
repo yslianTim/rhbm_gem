@@ -252,6 +252,22 @@ const char * SpqrOrderingName(SpqrOrdering ordering)
     }
     return "unknown";
 }
+OperatorFactorRepresentation & OperatorFactorRepresentationForTesting()
+{static thread_local OperatorFactorRepresentation representation=OperatorFactorRepresentation::ExportedFixed; return representation;}
+const char * OperatorFactorRepresentationName(OperatorFactorRepresentation representation)
+{
+    switch(representation)
+    {
+    case OperatorFactorRepresentation::ExportedFixed: return "exported-fixed";
+    case OperatorFactorRepresentation::NativeQr: return "native-qr";
+    }
+    return "unknown";
+}
+OperatorFactorRepresentationScopeForTesting::OperatorFactorRepresentationScopeForTesting(OperatorFactorRepresentation representation)
+    :previous_(OperatorFactorRepresentationForTesting())
+{OperatorFactorRepresentationForTesting()=representation;}
+OperatorFactorRepresentationScopeForTesting::~OperatorFactorRepresentationScopeForTesting()
+{OperatorFactorRepresentationForTesting()=previous_;}
 bool SpqrOrderingAvailable(SpqrOrdering ordering)
 {
 #ifdef RHBM_GEM_JOINT_SPQR
@@ -556,6 +572,38 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
 #endif
     return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(std::move(state),0));
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+std::shared_ptr<FreeDesignFactor> FreeDesignFactor::NativeFixedForTesting(const Sparse & a,const std::vector<Eigen::Index> & columns)
+{
+    auto state=std::make_shared<SparseFactorState>(); auto & s=*state;
+    s.design=a; s.columns=columns;
+    LongSparse storage=a; storage.makeCompressed(); auto view=View(storage);
+    auto & work=SparseWorkForTesting(); ++work.native_operator_factorizations;
+    work.fixed_factor_rows=std::max(work.fixed_factor_rows,a.rows());
+    work.fixed_factor_columns=std::max(work.fixed_factor_columns,a.cols());
+    work.fixed_factor_input_nonzeros=std::max(work.fixed_factor_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
+    const auto started=Clock::now(); bool ok=false;
+    BeginFactorConstructionForTesting(s.residency_id,0,"operator-native-qr","operator-fixed",a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),[state=&s]{return OwnedFactorBytesForTesting(state->design,nullptr,state->cc);});
+    {
+        ResourcePhase stage("spqr-native-factor",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        s.qr=SuiteSparseQR_symbolic<double>(ActiveOrdering(),0,&view,&s.cc);
+        ok=s.qr && SuiteSparseQR_numeric<double>(0,&view,s.qr,&s.cc);
+    }
+    EndFactorConstructionForTesting(s.residency_id,0);
+    work.native_operator_factor_seconds+=Seconds(started);
+    if(!ok) throw std::runtime_error("SPQR native operator factorization failed");
+    work.factor_nonzeros=std::max(work.factor_nonzeros,
+        static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0])));
+    const auto r_nonzeros=static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0]));
+    const auto h_nonzeros=s.qr->QRnum ? static_cast<std::size_t>(std::max<int64_t>(0,s.qr->QRnum->hisize)) : 0;
+    StartFactorResidencyForTesting(s.residency_id,0,"operator-native-qr","operator-fixed",a.rows(),a.cols(),
+        static_cast<std::size_t>(a.nonZeros()),r_nonzeros,h_nonzeros,OwnedFactorBytesForTesting(s.design,nullptr,s.cc));
+    s.residency_generation=0; s.residency_active=true;
+    return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(std::move(state),0));
+}
+#endif
 FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std::size_t generation):state_(std::move(state)),generation_(generation) {}
 void FreeDesignFactor::Check() const
 {if(!state_ || state_->generation!=generation_ || (!state_->qr && state_->fixed_rank<0)) throw std::logic_error("Expired free-design factor");}

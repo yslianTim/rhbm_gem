@@ -27,6 +27,23 @@ const char * RankStatus(FreeDesignRankStatus status)
     }
     return "unavailable";
 }
+void RecordRankEvidence(OperatorWork & work,const FreeDesignRankResult & evidence)
+{
+    work.rank_entries+=evidence.entries;
+    work.rank_workspace_bytes=std::max(work.rank_workspace_bytes,evidence.workspace_bytes);
+    work.rank_work_stage=evidence.work_stage;
+    work.rank_estimated_total_entries=evidence.estimated_total_entries;
+    work.rank_estimated_remaining_entries=evidence.estimated_remaining_entries;
+    work.rank_estimated_reconstruction_entries=evidence.estimated_reconstruction_entries;
+    work.rank_certificate=evidence.certificate;
+    work.rank_local_witness=evidence.local_witness;
+    work.rank_design_nonzeros=evidence.design_nonzeros;
+    work.rank_r_nonzeros=evidence.factor_r_nonzeros;
+    work.rank_reflector_nonzeros=evidence.reflector_nonzeros;
+    work.rank_reflectors=evidence.reflector_count;
+    work.rank_status=RankStatus(evidence.status);
+    work.rank_reason=evidence.reason;
+}
 }
 ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const EvaluationContext & context,double absolute,FreeDesignRankBackend backend)
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
@@ -63,31 +80,56 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     design.setFromTriplets(entries.begin(),entries.end()); raw_.setFromTriplets(raw.begin(),raw.end());
     work.design_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-design_started).count();
     try {
-        // Dedicated ownership: a trial's mutable workspace cannot expire this factor.
-        {ResourcePhase factor_stage("fixed-operator-factor",true,n,p,static_cast<std::size_t>(design.nonZeros()));
-        WorkTimer factor_timer(work.factor_seconds);
-        factor_=FreeDesignFactor::Fixed(design,free);}
+#if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
+        const bool native_requested=OperatorFactorRepresentationForTesting()==OperatorFactorRepresentation::NativeQr;
+        bool native_eligible=false;
+        FreeDesignRankResult native_evidence;
+        if(native_requested && backend==FreeDesignRankBackend::SpqrBounds)
         {
             ResourcePhase rank_phase("operator-rank");
             ResourcePhase rank_stage("rank-certificate",true,n,p,static_cast<std::size_t>(design.nonZeros()));
             ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
             RankWorkAudit rank_audit{work,SparseWorkForTesting()};
+            native_evidence=EvaluateFreeDesignRank(design,nullptr,{context.rank,p,absolute},context.search.operator_rank.budget);
+            RecordRankEvidence(work,native_evidence);
+            native_eligible=native_evidence.status==FreeDesignRankStatus::FullRank &&
+                native_evidence.certificate==FreeDesignRankCertificate::LocalSupport;
+        }
+#endif
+        // Dedicated ownership: a trial's mutable workspace cannot expire this factor.
+        {ResourcePhase factor_stage("fixed-operator-factor",true,n,p,static_cast<std::size_t>(design.nonZeros()));
+        WorkTimer factor_timer(work.factor_seconds);
+#if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
+        if(native_eligible)
+        {
+            try {factor_=FreeDesignFactor::NativeFixedForTesting(design,free);}
+            catch(const std::runtime_error &) {native_eligible=false;}
+        }
+        if(!native_eligible) factor_=FreeDesignFactor::Fixed(design,free);
+        if(native_requested)
+        {
+            if(native_eligible) ++work.native_factor_accepted;
+            else ++work.native_factor_fallbacks;
+        }
+#else
+        factor_=FreeDesignFactor::Fixed(design,free);
+#endif
+        }
+        {
+            ResourcePhase rank_phase("operator-rank");
+            ResourcePhase rank_stage("rank-certificate",true,n,p,static_cast<std::size_t>(design.nonZeros()));
             if(backend==FreeDesignRankBackend::SpqrBounds)
             {
-                rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute},context.search.operator_rank.budget);
-                work.rank_entries+=rank_evidence_.entries;
-                work.rank_workspace_bytes=std::max(work.rank_workspace_bytes,rank_evidence_.workspace_bytes);
-                work.rank_work_stage=rank_evidence_.work_stage;
-                work.rank_estimated_total_entries=rank_evidence_.estimated_total_entries;
-                work.rank_estimated_remaining_entries=rank_evidence_.estimated_remaining_entries;
-                work.rank_estimated_reconstruction_entries=rank_evidence_.estimated_reconstruction_entries;
-                work.rank_certificate=rank_evidence_.certificate;
-                work.rank_local_witness=rank_evidence_.local_witness;
-                work.rank_design_nonzeros=rank_evidence_.design_nonzeros;
-                work.rank_r_nonzeros=rank_evidence_.factor_r_nonzeros;
-                work.rank_reflector_nonzeros=rank_evidence_.reflector_nonzeros;
-                work.rank_reflectors=rank_evidence_.reflector_count;
-                work.rank_status=RankStatus(rank_evidence_.status); work.rank_reason=rank_evidence_.reason;
+#if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
+                if(native_eligible) rank_evidence_=std::move(native_evidence);
+                else
+#endif
+                {
+                    ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
+                    RankWorkAudit rank_audit{work,SparseWorkForTesting()};
+                    rank_evidence_=EvaluateFreeDesignRank(design,factor_.get(),{context.rank,p,absolute},context.search.operator_rank.budget);
+                    RecordRankEvidence(work,rank_evidence_);
+                }
                 if(rank_evidence_.status!=FreeDesignRankStatus::FullRank)
                 {
                     reason_=rank_evidence_.status==FreeDesignRankStatus::Deficient ? "rank-deficient-free-design" : rank_evidence_.reason;
@@ -96,6 +138,8 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
             }
             else
             {
+                ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
+                RankWorkAudit rank_audit{work,SparseWorkForTesting()};
                 Matrix compact;
                 {WorkTimer compact_timer(work.compact_seconds); compact=factor_->Compact();}
                 CompactSvdResult svd;

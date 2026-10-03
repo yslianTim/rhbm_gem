@@ -12,6 +12,9 @@ struct OperatorWork
     FreeDesignRankCertificate rank_certificate{FreeDesignRankCertificate::None};
     FreeDesignLocalWitness rank_local_witness;
     double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{},normal_seconds{},design_seconds{},factor_seconds{},compact_seconds{},svd_seconds{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::size_t native_factor_accepted{},native_factor_fallbacks{};
+#endif
     std::string rank_status,rank_reason;
 };
 OperatorWork & OperatorWorkForTesting();

@@ -146,6 +146,7 @@ class JointBenchmarkContract(unittest.TestCase):
                'stage_dimensions': {'spqr-numeric': {'rows': 32, 'columns': 8}},
                'stage_nnz': {'spqr-numeric': 128},
                'spqr_factorization': {'ordering': 'COLAMD'},
+               'operator_factor_representation': 'native-qr',
                'factor_residency': {'maximum_concurrent_factor_count': 2,
                                     'stage_at_process_peak_rss_event': 'spqr-fixed-factor'}}
         details = benchmark.normalize_result('search', raw)['details']
@@ -235,6 +236,11 @@ class JointBenchmarkContract(unittest.TestCase):
                                       '--preconditioner', 'diagonal', '--spqr-ordering', ordering])
             benchmark.validate_args(parser, args)
             self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['spqr_ordering'], ordering.upper())
+        args = parser.parse_args(['--profile', 'search', '--case', 'cube-512',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--operator-factor-representation', 'native-qr'])
+        benchmark.validate_args(parser, args)
+        self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['operator_factor_representation'], 'native-qr')
         args = parser.parse_args(['--profile', 'solve', '--case', 'cube-512',
                                   '--build-dir', 'build/debug', '--output', 'result.json',
                                   '--spqr-ordering', 'best'])
@@ -379,8 +385,24 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(command[command.index('--operator-rank-work-entries') + 1], '100000000')
         self.assertEqual(command[command.index('--assessment-reduction') + 1], 'compact-stack-qr')
         config['profile'] = 'search'
+        config['spqr_ordering'] = 'best'
+        config['operator_factor_representation'] = 'native-qr'
         search = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('search.json'))
         self.assertEqual(search[search.index('--profile') + 1], 'search')
+        self.assertEqual(search[search.index('--spqr-ordering') + 1], 'best')
+        self.assertEqual(search[search.index('--operator-factor-representation') + 1], 'native-qr')
+
+    def test_sweep_expands_ordering_and_representation_as_separate_dimensions(self):
+        parser = schwarz_sweep.build_parser()
+        args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',
+                                  '--profile', 'search', '--topologies', 'cube', '--atoms', '512',
+                                  '--cores', '128', '--overlaps', '1',
+                                  '--spqr-orderings', 'colamd', 'best',
+                                  '--operator-factor-representations', 'exported-fixed', 'native-qr'])
+        schwarz_sweep.validate_args(parser, args)
+        configurations = schwarz_sweep.build_configurations(args)
+        self.assertEqual(len(configurations), 4)
+        self.assertEqual(len({schwarz_sweep.configuration_key(item) for item in configurations}), 4)
 
     def test_compact_assessment_sweep_is_solve_only(self):
         parser = schwarz_sweep.build_parser()

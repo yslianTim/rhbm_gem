@@ -21,29 +21,33 @@ def build_configurations(args):
                 settings = [(None, None)] if preconditioner != 'schwarz' else [
                     (core, overlap) for core in args.cores for overlap in args.overlaps]
                 for core, overlap in settings:
-                    config = {
-                        'topology': topology,
-                        'atoms': atoms,
-                        'preconditioner': preconditioner,
-                        'core_atoms': core,
-                        'overlap_hops': overlap,
-                        'max_block_atoms': args.max_block_atoms if preconditioner == 'schwarz' else None,
-                        'storage_mib': args.storage_mib if preconditioner == 'schwarz' else None,
-                        'scratch_mib': args.scratch_mib if preconditioner == 'schwarz' else None,
-                        'operator_rank': args.operator_rank,
-                        'operator_rank_seconds': args.operator_rank_seconds,
-                        'operator_rank_work_entries': args.operator_rank_work_entries,
-                        'operator_rank_workspace_mib': args.operator_rank_workspace_mib,
-                        'assessment_reduction': args.assessment_reduction,
-                        'profile': args.profile,
-                        'measurement_scope': ('search-only' if args.profile == 'search' else
-                                              'joint_search_and_returned_state_assessment'),
-                        'repeat': args.repeat,
-                        'warmup': args.warmup,
-                        'timeout': args.timeout,
-                        'rss_limit': args.rss_limit,
-                    }
-                    configurations.append(config)
+                    for ordering in args.spqr_orderings:
+                        for representation in args.operator_factor_representations:
+                            config = {
+                                'topology': topology,
+                                'atoms': atoms,
+                                'preconditioner': preconditioner,
+                                'core_atoms': core,
+                                'overlap_hops': overlap,
+                                'max_block_atoms': args.max_block_atoms if preconditioner == 'schwarz' else None,
+                                'storage_mib': args.storage_mib if preconditioner == 'schwarz' else None,
+                                'scratch_mib': args.scratch_mib if preconditioner == 'schwarz' else None,
+                                'operator_rank': args.operator_rank,
+                                'operator_rank_seconds': args.operator_rank_seconds,
+                                'operator_rank_work_entries': args.operator_rank_work_entries,
+                                'operator_rank_workspace_mib': args.operator_rank_workspace_mib,
+                                'assessment_reduction': args.assessment_reduction,
+                                'spqr_ordering': ordering,
+                                'operator_factor_representation': representation,
+                                'profile': args.profile,
+                                'measurement_scope': ('search-only' if args.profile == 'search' else
+                                                      'joint_search_and_returned_state_assessment'),
+                                'repeat': args.repeat,
+                                'warmup': args.warmup,
+                                'timeout': args.timeout,
+                                'rss_limit': args.rss_limit,
+                            }
+                            configurations.append(config)
     keys = [configuration_key(config) for config in configurations]
     if len(keys) != len(set(keys)):
         raise ValueError('sweep dimensions contain duplicate configurations')
@@ -56,6 +60,8 @@ def configuration_key(config):
               config['storage_mib'], config['scratch_mib'],
               config['operator_rank'], config['operator_rank_seconds'],
               config['operator_rank_work_entries'], config['operator_rank_workspace_mib'],
+              config.get('spqr_ordering', 'colamd'),
+              config.get('operator_factor_representation', 'exported-fixed'),
               config.get('assessment_reduction', 'observation-tsqr'),
               config.get('profile', 'solve'),
               f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
@@ -73,6 +79,11 @@ def benchmark_command(script, config, args, output):
                '--operator-rank-work-entries', str(config['operator_rank_work_entries']),
                '--operator-rank-workspace-mib', str(config['operator_rank_workspace_mib']),
                '--assessment-reduction', config.get('assessment_reduction', 'observation-tsqr')]
+    if config.get('profile', args.profile) == 'search':
+        if config.get('spqr_ordering', 'colamd') != 'colamd':
+            command.extend(['--spqr-ordering', config['spqr_ordering']])
+        if config.get('operator_factor_representation', 'exported-fixed') != 'exported-fixed':
+            command.extend(['--operator-factor-representation', config['operator_factor_representation']])
     if config['preconditioner'] == 'schwarz':
         command.extend(['--schwarz-core-atoms', str(config['core_atoms']),
                         '--schwarz-overlap-hops', str(config['overlap_hops']),
@@ -485,6 +496,10 @@ def build_parser():
     parser.add_argument('--operator-rank-workspace-mib', type=int, default=256)
     parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
                         default='observation-tsqr')
+    parser.add_argument('--spqr-orderings', nargs='+', choices=('colamd', 'default', 'best', 'metis'),
+                        default=['colamd'])
+    parser.add_argument('--operator-factor-representations', nargs='+',
+                        choices=('exported-fixed', 'native-qr'), default=['exported-fixed'])
     parser.add_argument('--max-block-atoms', type=int, default=512)
     parser.add_argument('--storage-mib', type=int, default=512)
     parser.add_argument('--scratch-mib', type=int, default=256)
@@ -509,6 +524,9 @@ def validate_args(parser, args):
         parser.error('Schwarz block and memory limits must be positive')
     if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
         parser.error('compact assessment reduction requires the solve profile')
+    if (args.profile != 'search' and (args.spqr_orderings != ['colamd'] or
+                                      args.operator_factor_representations != ['exported-fixed'])):
+        parser.error('operator-factor representation and ordering comparisons require the search profile')
     for core in args.cores:
         if core > args.max_block_atoms:
             parser.error('max block atoms must cover every requested core')

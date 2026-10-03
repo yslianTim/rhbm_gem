@@ -164,6 +164,60 @@ TEST(JointProfileOperatorTest, FactorResidencyTracksConcurrentStatesAndGeneratio
     EXPECT_TRUE(std::none_of(work.factors.begin(),work.factors.end(),[](const auto & factor){return factor.alive;}));
 }
 #endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+TEST(JointProfileOperatorTest, NativeQrRepresentationMatchesActionsAfterLocalSupportCertification)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR native QR representation";
+    const c::JointProblem problem(second_stage_test::OperatorWorkload("chain",4));
+    const auto & data=c::JointProblemAccess::Get(problem);
+    const auto e=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(4,std::log(.55)),false,&data.context);
+    ASSERT_TRUE(e.valid);
+    n::OperatorWorkForTesting()={};
+    const n::ProfileJacobianOperator current(e,data.context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    ASSERT_TRUE(current.Valid());
+    const n::Vector v=n::Vector::LinSpaced(current.Columns(),-.3,.8);
+    const n::Vector w=n::Vector::LinSpaced(current.Rows(),-.4,.7);
+    const auto apply=current.Apply(v),adjoint=current.ApplyAdjoint(w),normal=current.ApplyNormal(v);
+    n::OperatorWorkForTesting()={};
+    n::OperatorFactorRepresentationScopeForTesting representation(n::OperatorFactorRepresentation::NativeQr);
+    const n::ProfileJacobianOperator candidate(e,data.context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    ASSERT_TRUE(candidate.Valid())<<candidate.Reason();
+    EXPECT_EQ(candidate.RankEvidence().status,n::FreeDesignRankStatus::FullRank);
+    EXPECT_EQ(candidate.RankEvidence().certificate,n::FreeDesignRankCertificate::LocalSupport);
+    EXPECT_EQ(n::OperatorWorkForTesting().native_factor_accepted,1);
+    EXPECT_EQ(n::OperatorWorkForTesting().native_factor_fallbacks,0);
+    EXPECT_LE((candidate.Apply(v)-apply).norm(),1e-10*(1+apply.norm()));
+    EXPECT_LE((candidate.ApplyAdjoint(w)-adjoint).norm(),1e-10*(1+adjoint.norm()));
+    EXPECT_LE((candidate.ApplyNormal(v)-normal).norm(),1e-10*(1+normal.norm()));
+    const auto gradient=candidate.ApplyAdjoint(e.residual/data.context.scale);
+    for(Eigen::Index k=0;k<gradient.size();++k)
+        EXPECT_NEAR(gradient(k),e.gradient(k),1e-13+2e-9*std::abs(e.gradient(k)));
+}
+
+TEST(JointProfileOperatorTest, NativeQrRepresentationFallsBackWhenLocalSupportIsUnavailable)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR native QR representation";
+    n::Evaluation e; e.valid=true; e.eta=n::Vector::Zero(2); e.beta=n::Vector::Ones(4);
+    n::Matrix x(20,4);
+    for(Eigen::Index r=0;r<x.rows();++r)
+    {
+        const double t=.1+.07*static_cast<double>(r);
+        x(r,0)=1; x(r,1)=t; x(r,2)=t*t; x(r,3)=std::sin(t)+.03*t*t*t;
+    }
+    e.x=x.sparseView(); e.derivative=e.x; e.residual=n::Vector::Zero(x.rows());
+    const auto context=n::CreateContext(e.residual,2);
+    n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    n::OperatorFactorRepresentationScopeForTesting representation(n::OperatorFactorRepresentation::NativeQr);
+    const n::ProfileJacobianOperator candidate(e,context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    ASSERT_TRUE(candidate.Valid())<<candidate.Reason();
+    EXPECT_EQ(candidate.RankEvidence().status,n::FreeDesignRankStatus::FullRank);
+    EXPECT_NE(candidate.RankEvidence().certificate,n::FreeDesignRankCertificate::LocalSupport);
+    EXPECT_EQ(n::OperatorWorkForTesting().native_factor_accepted,0);
+    EXPECT_EQ(n::OperatorWorkForTesting().native_factor_fallbacks,1);
+    EXPECT_EQ(n::SparseWorkForTesting().fixed_factorizations,1);
+    EXPECT_EQ(n::SparseWorkForTesting().native_operator_factorizations,0);
+}
+#endif
 TEST(JointProfileOperatorTest, NearThresholdDecisionsUseOriginalRows)
 {
     for(double delta:{1e-8,1e-12,1e-15,0.})

@@ -289,6 +289,7 @@ void Snapshot(const char * output,j::object & report)
         {"spqr_fixed_factor_storage_bytes",w.fixed_factor_storage_bytes}};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     report["work"].as_object()["spqr_ordering"]=n::SpqrOrderingName(n::SpqrOrderingForTesting());
+    report["operator_factor_representation"]=n::OperatorFactorRepresentationName(n::OperatorFactorRepresentationForTesting());
     report["spqr_factorization"]=j::object{
         {"ordering",n::SpqrOrderingName(n::SpqrOrderingForTesting())},
         {"symbolic",j::object{{"calls",w.symbolic},{"seconds",w.symbolic_seconds},{"matrix_rows",w.symbolic_rows},
@@ -299,7 +300,9 @@ void Snapshot(const char * output,j::object & report)
         {"fixed_factor",j::object{{"calls",w.fixed_factorizations},{"seconds",w.fixed_factor_seconds},
             {"matrix_rows",w.fixed_factor_rows},{"matrix_columns",w.fixed_factor_columns},
             {"matrix_nonzeros",w.fixed_factor_input_nonzeros},{"reported_factor_nonzeros",w.fixed_factor_nonzeros},
-            {"factor_exported_storage_bytes",w.fixed_factor_storage_bytes}}}};
+            {"factor_exported_storage_bytes",w.fixed_factor_storage_bytes}}},
+        {"native_operator_factor",j::object{{"calls",w.native_operator_factorizations},
+            {"seconds",w.native_operator_factor_seconds}}}};
 #endif
     if(audit) report["svd_records"]=svd_records;
 #endif
@@ -375,6 +378,8 @@ j::object SearchWork()
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
         {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    out["native_factor_accepted"]=op.native_factor_accepted;
+    out["native_factor_fallbacks"]=op.native_factor_fallbacks;
     out["factor_residency"]=FactorResidency();
 #endif
 #endif
@@ -688,6 +693,17 @@ int main(int argc,char ** argv)
                         n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
                     else throw std::invalid_argument("Expected --assessment-reduction observation-tsqr|compact-stack-qr");
                 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                else if(option=="--operator-factor-representation" && k+1<end)
+                {
+                    const std::string representation=argv[++k];
+                    if(representation=="exported-fixed")
+                        n::OperatorFactorRepresentationForTesting()=n::OperatorFactorRepresentation::ExportedFixed;
+                    else if(representation=="native-qr")
+                        n::OperatorFactorRepresentationForTesting()=n::OperatorFactorRepresentation::NativeQr;
+                    else throw std::invalid_argument("Expected --operator-factor-representation exported-fixed|native-qr");
+                }
+#endif
                 else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);
                 else if(option=="--operator-rank-seconds" && k+1<end) operator_rank_budget.seconds=ParseSeconds(argv[++k]);
                 else if(option=="--operator-rank-work-entries" && k+1<end) operator_rank_budget.entries=ParseSize(argv[++k],true);
