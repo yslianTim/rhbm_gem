@@ -159,7 +159,7 @@ TEST(JointProfileOperatorTest, InstrumentationIsNeutralAndActionsDoNotReduceMatr
     bool compact=false;
     for(const auto & shape:work.dense_shapes)
     {
-        if(shape.phase=="operator-rank" && shape.role=="free-design-compact") compact=true;
+        if(shape.phase=="rank-certificate" && shape.role=="free-design-compact") compact=true;
         if(shape.phase=="operator-apply" || shape.phase=="operator-adjoint" || shape.phase=="operator-normal") EXPECT_EQ(shape.columns,1);
         EXPECT_NE(shape.role,"derivative-t"); EXPECT_NE(shape.role,"derivative-coefficients"); EXPECT_NE(shape.role,"derivative-correction");
     }
