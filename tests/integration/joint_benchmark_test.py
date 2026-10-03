@@ -101,6 +101,15 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(result['scientific_status'], 'search-only')
         self.assertNotIn('runtime_convergence', result['details'])
 
+    def test_interrupted_sparse_run_keeps_partial_driver_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            output = directory / 'driver.json'
+            output.write_text(json.dumps({'stage': 'search', 'measurement_scope': 'search-only'}))
+            self.assertEqual(benchmark.partial_driver_json('search', directory, output),
+                             {'stage': 'search', 'measurement_scope': 'search-only'})
+            self.assertIsNone(benchmark.partial_driver_json('workflow', directory, output))
+
     def test_operator_and_schwarz_defaults_are_stable(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
@@ -443,7 +452,11 @@ class JointBenchmarkContract(unittest.TestCase):
         runs = [
             {'kind': 'measurement', 'status': 'completed', 'process_wall_seconds': 1.,
              'peak_rss_bytes': 100, 'result': {'details': details}},
-            {'kind': 'measurement', 'status': 'timeout'},
+            {'kind': 'measurement', 'status': 'rss_limit', 'reason': 'rss-limit',
+             'process_wall_seconds': 20., 'peak_rss_bytes': 4 * 1024**3,
+             'driver_stage': 'search', 'measurement_scope': 'search-only',
+             'stages': [{'role': 'measurement', 'status': 'rss_limit',
+                         'sampled_tree_peak_rss_bytes': 4 * 1024**3}]},
             {'kind': 'measurement', 'status': 'completed', 'process_wall_seconds': 2.,
              'peak_rss_bytes': 200, 'result': {'details': details}},
         ]
@@ -452,6 +465,11 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(row['failed_repetitions'], 1)
         self.assertFalse(row['measurements_complete'])
         self.assertEqual(row['measurements']['pcg_solves'], {'min': 1, 'median': 1., 'max': 1})
+        self.assertEqual(row['reason'], 'rss-limit')
+        self.assertEqual(row['failure_stage'], 'search')
+        self.assertEqual(row['failure_process_stage'], 'measurement')
+        self.assertEqual(row['peak_rss_bytes'], 4 * 1024**3)
+        self.assertEqual(row['run_resource_observations'][1]['process_stage_status'], 'rss_limit')
 
     def test_sweep_keeps_failed_and_unavailable_statuses(self):
         config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'schwarz',

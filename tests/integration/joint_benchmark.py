@@ -143,6 +143,15 @@ def driver_json(directory, output=None):
     raise ValueError('Benchmark driver did not produce a JSON result')
 
 
+def partial_driver_json(profile, directory, output=None):
+    if profile not in ('workflow', 'postprocess'):
+        try:
+            return driver_json(directory, output)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+    return None
+
+
 def command_for_profile(args, case, output, build):
     sparse = build / 'bin/joint_sparse_benchmark'
     workflow = build / 'bin/joint_postprocessing_benchmark'
@@ -456,8 +465,14 @@ def execute_once(args, case, build, run_root, deadline):
     rss = max(record.get('sampled_tree_peak_rss_bytes') or 0,
               record.get('os_process_peak_rss_bytes') or 0)
     if record['status'] != 'completed':
-        return {'status': record['status'], 'elapsed_seconds': None, 'peak_rss_bytes': None,
-                'stages': results, 'raw': None}
+        raw = partial_driver_json(args.profile, directory,
+                                  driver_output if args.profile not in ('workflow', 'postprocess') else None)
+        raw_peak = (raw.get('peak_rss_bytes') or raw.get('process_peak_rss_bytes') or 0) if raw else 0
+        return {'status': record['status'], 'reason': record.get('raw_status'),
+                'elapsed_seconds': (raw_elapsed(args.profile, raw, record.get('wall_seconds') or 0)
+                                    if raw else None),
+                'process_wall_seconds': record.get('wall_seconds'),
+                'peak_rss_bytes': max(rss, raw_peak), 'stages': results, 'raw': raw}
     try:
         raw = driver_json(directory, driver_output if args.profile not in ('workflow', 'postprocess') else None)
     except (OSError, ValueError, json.JSONDecodeError) as error:
@@ -599,6 +614,8 @@ def main(argv=None):
             run['problem'] = problem_result(raw)
             run['numerics'] = numerics_result(raw)
             run['result'] = normalize_result(args.profile, raw)
+            run['driver_stage'] = raw.get('stage')
+            run['measurement_scope'] = raw.get('measurement_scope')
             run['stages'] = [{key: stage.get(key) for key in (
                 'role', 'status', 'exit_code', 'wall_seconds',
                 'sampled_tree_peak_rss_bytes', 'os_process_peak_rss_bytes',
@@ -619,7 +636,8 @@ def main(argv=None):
             'numerics': numerics_result(last_raw or {}),
             'resources': {
                 'elapsed_seconds': statistics.median(elapsed) if all_measured and elapsed else None,
-                'peak_rss_bytes': max(peaks) if all_measured and peaks else None,
+                'peak_rss_bytes': max((r.get('peak_rss_bytes') or 0 for r in records), default=0) or None,
+                'completed_measurement_peak_rss_bytes': max(peaks) if all_measured and peaks else None,
                 'count': args.repeat, 'failed_count': args.repeat - len(successful),
                 'samples': [r.get('elapsed_seconds') if r['status'] == 'completed' else None for r in measurements],
             },

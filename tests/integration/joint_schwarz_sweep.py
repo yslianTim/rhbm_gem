@@ -118,6 +118,27 @@ def completed_measurement_runs(execution):
             if item.get('kind') == 'measurement' and item.get('status') == 'completed']
 
 
+def run_resource_observations(execution):
+    observations = []
+    for run in execution.get('runs', []):
+        stages = run.get('stages') or []
+        stage_peaks = [stage.get(key) for stage in stages
+                       for key in ('sampled_tree_peak_rss_bytes', 'os_process_peak_rss_bytes')
+                       if isinstance(stage.get(key), (int, float))]
+        peaks = [run.get('peak_rss_bytes'), *stage_peaks]
+        observed_peak = max((value for value in peaks if isinstance(value, (int, float))), default=None)
+        failed_stage = next((stage for stage in stages if stage.get('status') not in ('completed', 'unavailable')), None)
+        observations.append({
+            'kind': run.get('kind'), 'index': run.get('index'), 'status': run.get('status'),
+            'reason': run.get('reason'), 'process_wall_seconds': run.get('process_wall_seconds'),
+            'peak_rss_bytes': observed_peak, 'driver_stage': run.get('driver_stage'),
+            'measurement_scope': run.get('measurement_scope'),
+            'process_stage': failed_stage.get('role') if failed_stage else None,
+            'process_stage_status': failed_stage.get('status') if failed_stage else None,
+        })
+    return observations
+
+
 def summarize(config, report, individual_name, process_error=None):
     execution = report.get('execution', {}) if report else {}
     successful = completed_measurement_runs(execution)
@@ -205,6 +226,14 @@ def summarize(config, report, individual_name, process_error=None):
         field: distribution([values.get(field) for values in per_run_values])
         for field in SUMMARY_FIELDS
     }
+    resource_observations = run_resource_observations(execution)
+    observed_peaks = [item['peak_rss_bytes'] for item in resource_observations
+                      if isinstance(item.get('peak_rss_bytes'), (int, float))]
+    measurement_peaks = [item['peak_rss_bytes'] for item in resource_observations
+                         if item.get('kind') == 'measurement' and
+                         isinstance(item.get('peak_rss_bytes'), (int, float))]
+    failed_observations = [item for item in resource_observations
+                           if item.get('status') not in ('completed', 'unavailable')]
     repetition_medians = [statistics.median(counts) for counts in per_run_iterations if counts]
     pooled_iterations = [count for counts in per_run_iterations for count in counts]
     measurements['pcg_iterations_per_solve'] = distribution(repetition_medians)
@@ -215,8 +244,14 @@ def summarize(config, report, individual_name, process_error=None):
         'configuration': config,
         'measurement_scope': (report or {}).get('measurement_scope', config.get('measurement_scope')),
         'status': status,
-        'reason': process_error or run.get('reason'),
+        'reason': next((item.get('reason') for item in failed_observations if item.get('reason')),
+                       process_error or run.get('reason')),
         'individual_json': individual_name,
+        'run_resource_observations': resource_observations,
+        'failure_stage': next((item.get('driver_stage') for item in failed_observations
+                               if item.get('driver_stage')), None),
+        'failure_process_stage': next((item.get('process_stage') for item in failed_observations
+                                       if item.get('process_stage')), None),
         'requested_repetitions': config.get('repeat', 1),
         'completed_repetitions': len(successful),
         'failed_repetitions': max(0, config.get('repeat', 1) - len(successful)),
@@ -302,7 +337,8 @@ def summarize(config, report, individual_name, process_error=None):
         'setup_fraction_of_search': measurements['setup_fraction_of_search']['median'],
         'pcg_fraction_of_search': measurements['pcg_fraction_of_search']['median'],
         'wall_seconds': measurements['wall_seconds']['median'],
-        'peak_rss_bytes': measurements['peak_rss_bytes']['max'],
+        'peak_rss_bytes': max(measurement_peaks or observed_peaks,
+                              default=measurements['peak_rss_bytes']['max']),
         'objective': numerics.get('objective'),
         'runtime_convergence': numerics.get('runtime_convergence'),
         'state_available': details.get('state_available'),
@@ -379,7 +415,8 @@ def set_evidence_eligibility(row):
 
 
 CSV_BASE_FIELDS = (
-    'configuration', 'measurement_scope', 'solver_policy', 'status', 'reason', 'individual_json', 'evidence_eligible',
+    'configuration', 'measurement_scope', 'solver_policy', 'status', 'reason', 'individual_json',
+    'run_resource_observations', 'failure_stage', 'failure_process_stage', 'evidence_eligible',
     'evidence_exclusion_reasons', 'rank_repetition_evidence', 'atoms', 'rows', 'free_columns',
     'sparse_backend', 'rank_backend', 'rank_status', 'rank_certificate', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'rank_work_stage', 'rank_estimated_total_entries',
@@ -419,6 +456,7 @@ def write_csv(path, rows):
             flattened['solver_policy'] = json.dumps(row.get('solver_policy', {}), sort_keys=True)
             flattened['evidence_exclusion_reasons'] = json.dumps(row.get('evidence_exclusion_reasons', []))
             flattened['rank_repetition_evidence'] = json.dumps(row.get('rank_repetition_evidence', []))
+            flattened['run_resource_observations'] = json.dumps(row.get('run_resource_observations', []))
             for field, summary in row.get('measurements', {}).items():
                 for stat, value in summary.items():
                     flattened[f'{field}_{stat}'] = value
