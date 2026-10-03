@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 #include <limits>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include <chrono>
+#endif
 
 namespace rhbm_gem::core::joint_component {
 using Matrix=Eigen::MatrixXd;
@@ -167,8 +170,39 @@ struct AssessmentReuse
     const Assessment & assessment;
 };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct AssessmentWork {int assessments{},reference_evaluations{};};
+struct AssessmentStageWork
+{
+    std::string name;
+    int calls{},completed_calls{};
+    Eigen::Index rows{},columns{};
+    double seconds{};
+};
+struct AssessmentWork
+{
+    int assessments{},reference_evaluations{};
+    std::string active_stage,last_stage;
+    std::vector<std::string> stage_stack;
+    std::vector<AssessmentStageWork> stages;
+};
 AssessmentWork & AssessmentWorkForTesting();
+using AssessmentStageObserverForTesting=void (*)(const AssessmentWork &,void *);
+void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting,void *);
+void BeginAssessmentStageForTesting(const std::string &,Eigen::Index,Eigen::Index);
+void FinishAssessmentStageForTesting(const std::string &,double,bool);
+class AssessmentStageTimerForTesting
+{
+public:
+    AssessmentStageTimerForTesting(std::string,Eigen::Index,Eigen::Index);
+    ~AssessmentStageTimerForTesting();
+    AssessmentStageTimerForTesting(const AssessmentStageTimerForTesting &)=delete;
+    AssessmentStageTimerForTesting & operator=(const AssessmentStageTimerForTesting &)=delete;
+    void Finish();
+private:
+    std::string name_;
+    std::chrono::steady_clock::time_point started_;
+    int uncaught_exceptions_{};
+    bool finished_{};
+};
 #endif
 struct ComponentView
 {

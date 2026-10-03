@@ -302,6 +302,14 @@ def normalize_result(profile, raw):
             'search_completed': raw.get('search_completed'), 'stop_reason': search.get('stop_reason'),
             'profile_evaluations': search.get('profile_evaluations'),
             'accepted_updates': search.get('accepted_updates'), 'endpoint_valid': primary.get('valid'),
+            'assessment_execution': raw.get('assessment_execution'),
+            'assessment_telemetry': raw.get('assessment_telemetry'),
+            'assessment_stage': raw.get('assessment_stage'),
+            'last_assessment_stage': raw.get('last_assessment_stage'),
+            'active_assessment_stage': raw.get('active_assessment_stage'),
+            'completed_assessment_stages': raw.get('completed_assessment_stages'),
+            'completed_stage_seconds': raw.get('completed_stage_seconds'),
+            'stage_dimensions': raw.get('stage_dimensions'),
         }
         if 'search_seconds' in raw:
             details['search_seconds'] = raw['search_seconds']

@@ -29,6 +29,8 @@ core::JointProblemInput Snapshot()
     }
     return input;
 }
+void CountAssessmentStageSnapshot(const n::AssessmentWork &,void * context)
+{++*static_cast<int *>(context);}
 }
 TEST(JointComponentRuntimeTest, ImmutableSnapshotAndPartialFailure)
 {
@@ -201,6 +203,65 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     ASSERT_TRUE(multiple.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,3);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,3);
+}
+
+TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTimes)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
+    const auto context=n::ChildContext(data.context,view,true);
+    const auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
+    n::AssessmentWorkForTesting()={};
+    n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
+    n::AssessComponentSearch(view.domain,y,context,search);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    const auto & stages=n::AssessmentWorkForTesting().stages;
+    const auto stage=[&](const std::string & name)->const n::AssessmentStageWork & {
+        const auto found=std::find_if(stages.begin(),stages.end(),[&](const auto & value){return value.name==name;});
+        EXPECT_NE(found,stages.end());
+        return *found;
+    };
+    for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
+            "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
+            "normalized-width-spectrum","correction-jacobian-spectrum"})
+    {
+        const auto & measurement=stage(name);
+        EXPECT_GE(measurement.seconds,0);
+        EXPECT_EQ(measurement.completed_calls,measurement.calls);
+        EXPECT_GT(measurement.calls,0);
+        EXPECT_GT(measurement.rows,0);
+        EXPECT_GT(measurement.columns,0);
+    }
+    EXPECT_EQ(stage("total-assessment").calls,1);
+}
+
+TEST(JointComponentRuntimeTest, AssessmentSnapshotHookDoesNotChangeAssessmentResults)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
+    const auto context=n::ChildContext(data.context,view,true);
+    const auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
+    n::SetAssessmentStageObserverForTesting(nullptr,nullptr); n::AssessmentWorkForTesting()={};
+    const auto baseline=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto baseline_status=n::ConvergenceStatus(
+        n::AssessmentEvidence(baseline.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal),
+        rhbm_gem::JointEvidenceScope::ComponentLocal);
+    int snapshots{};
+    n::SetAssessmentStageObserverForTesting(CountAssessmentStageSnapshot,&snapshots);
+    n::AssessmentWorkForTesting()={};
+    const auto observed=n::AssessComponentSearch(view.domain,y,context,search);
+    n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
+    const auto observed_status=n::ConvergenceStatus(
+        n::AssessmentEvidence(observed.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal),
+        rhbm_gem::JointEvidenceScope::ComponentLocal);
+    EXPECT_GT(snapshots,0);
+    EXPECT_EQ(baseline_status,observed_status);
+    EXPECT_EQ(baseline.search_success,observed.search_success);
+    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(baseline.assessment),
+             second_stage_test::matched::runtime_json::Assessment(observed.assessment));
+    ASSERT_TRUE(baseline.trusted_assessment && observed.trusted_assessment);
+    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(*baseline.trusted_assessment),
+             second_stage_test::matched::runtime_json::Assessment(*observed.trusted_assessment));
 }
 
 TEST(JointComponentRuntimeTest, SearchReplaysWithoutReferenceIncludingInitialAndDetailedTrials)

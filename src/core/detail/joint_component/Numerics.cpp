@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <numbers>
+#include <utility>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
@@ -377,12 +379,76 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy
 }
 Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),eta.size());
+    AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size());
+#endif
     const auto endpoint=supplied_beta ? EvaluateState(domain,y,eta,*supplied_beta,policy) : EvaluateProfile(domain,y,eta,false,&policy);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    primary_stage.Finish();
+    AssessmentStageTimerForTesting reference_stage("reference-evaluation",y.size(),eta.size());
+#endif
     const auto reference=EvaluateProfile(domain,y,eta,true,&policy);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    reference_stage.Finish();
+#endif
     return AssessEvaluated(domain,y,endpoint,reference,policy,supplied_beta!=nullptr);
 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 AssessmentWork & AssessmentWorkForTesting() {static thread_local AssessmentWork work; return work;}
+namespace {
+AssessmentStageObserverForTesting & AssessmentStageObserver()
+{static thread_local AssessmentStageObserverForTesting observer{}; return observer;}
+void * & AssessmentStageObserverContext()
+{static thread_local void * context{}; return context;}
+AssessmentStageWork & AssessmentStage(const std::string & name)
+{
+    auto & stages=AssessmentWorkForTesting().stages;
+    const auto found=std::find_if(stages.begin(),stages.end(),[&](const auto & stage){return stage.name==name;});
+    if(found!=stages.end()) return *found;
+    stages.push_back({name}); return stages.back();
+}
+void NotifyAssessmentStageObserver()
+{
+    if(const auto observer=AssessmentStageObserver()) observer(AssessmentWorkForTesting(),AssessmentStageObserverContext());
+}
+}
+void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting observer,void * context)
+{AssessmentStageObserver()=observer; AssessmentStageObserverContext()=context;}
+void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,Eigen::Index columns)
+{
+    auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
+    ++stage.calls; stage.rows=rows; stage.columns=columns;
+    work.stage_stack.push_back(name); work.active_stage=name; work.last_stage=name;
+    NotifyAssessmentStageObserver();
+}
+void FinishAssessmentStageForTesting(const std::string & name,double seconds,bool completed)
+{
+    auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
+    stage.seconds+=seconds; if(completed) ++stage.completed_calls;
+    if(!work.stage_stack.empty()) work.stage_stack.pop_back();
+    work.active_stage=work.stage_stack.empty() ? std::string{} : work.stage_stack.back();
+    work.last_stage=name;
+    NotifyAssessmentStageObserver();
+}
+AssessmentStageTimerForTesting::AssessmentStageTimerForTesting(std::string name,Eigen::Index rows,Eigen::Index columns)
+    :name_(std::move(name)),uncaught_exceptions_(std::uncaught_exceptions())
+{
+    BeginAssessmentStageForTesting(name_,rows,columns);
+    started_=std::chrono::steady_clock::now();
+}
+AssessmentStageTimerForTesting::~AssessmentStageTimerForTesting()
+{
+    if(finished_) return;
+    const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
+    FinishAssessmentStageForTesting(name_,seconds,std::uncaught_exceptions()==uncaught_exceptions_);
+}
+void AssessmentStageTimerForTesting::Finish()
+{
+    if(finished_) return;
+    const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
+    FinishAssessmentStageForTesting(name_,seconds,true); finished_=true;
+}
 #endif
 bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & b)
 {
@@ -404,18 +470,46 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
     if(!out.primary.valid || !reference.valid) {out.failure="inner-solve"; return out;}
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting design_stage("design-spectrum",endpoint.x.rows(),endpoint.x.cols());
+#endif
     out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()),&policy.rank);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    design_stage.Finish();
+#endif
     out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",endpoint.derivative.rows(),endpoint.derivative.cols());
+#endif
     const auto prepared=PrepareDerivative(endpoint,scale,context);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    prepare_stage.Finish();
+    AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
+#endif
     const auto differential=ReduceDerivative(prepared,endpoint.residual);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    reduce_stage.Finish();
+#endif
     if(!differential.valid) {out.failure=differential.reason; return out;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),differential.projected.cols());
+#endif
     const auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    width_stage.Finish();
+#endif
     if(!widths.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.widths=CompactSpectrum(widths,context->rank.rows);
     const Vector & norms=differential.projected_norms; out.widths->column_norms=norms;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),differential.projected.cols());
+#endif
     Matrix normalized=differential.projected;
     for(Eigen::Index k=0;k<norms.size();++k) if(norms(k)>0) normalized.col(k)/=norms(k);
     const auto normalized_svd=Decompose(normalized,context->rank.rows);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    normalized_stage.Finish();
+#endif
     if(!normalized_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
     out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
@@ -426,7 +520,13 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
         out.weak_directions.col(k)=direction;
     }
     const Vector response=-differential.response;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting correction_stage("correction-jacobian-spectrum",differential.jacobian.rows(),differential.jacobian.cols());
+#endif
     const auto correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    correction_stage.Finish();
+#endif
     if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     const Vector & correction=correction_svd.solution; out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);

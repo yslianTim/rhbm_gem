@@ -257,6 +257,59 @@ j::object AssessmentWork()
     const auto & work=n::AssessmentWorkForTesting();
     return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations}};
 }
+j::object AssessmentTelemetry()
+{
+    const auto & work=n::AssessmentWorkForTesting(); j::array stages,completed; j::object seconds,dimensions;
+    for(const auto & stage:work.stages)
+    {
+        const bool is_complete=stage.calls==stage.completed_calls;
+        stages.push_back(j::object{{"name",stage.name},{"calls",stage.calls},
+            {"completed_calls",stage.completed_calls},{"rows",stage.rows},{"columns",stage.columns},
+            {"seconds",stage.seconds},{"complete",is_complete}});
+        dimensions[stage.name]=j::object{{"calls",stage.calls},{"completed_calls",stage.completed_calls},
+            {"rows",stage.rows},{"columns",stage.columns}};
+        if(is_complete) {completed.push_back(j::value(stage.name)); seconds[stage.name]=stage.seconds;}
+    }
+    const auto optional_stage=[](const std::string & name)->j::value {
+        return name.empty() ? j::value(nullptr) : j::value(name);
+    };
+    return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations},
+        {"last_assessment_stage",optional_stage(work.last_stage)},
+        {"active_assessment_stage",optional_stage(work.active_stage)},
+        {"completed_assessment_stages",completed},{"completed_stage_seconds",seconds},
+        {"stage_dimensions",dimensions},{"stages",stages}};
+}
+struct AssessmentSnapshotContext {const char * output{}; j::object * report{};};
+void AssessmentSnapshot(const n::AssessmentWork &,void * raw_context)
+{
+    auto & context=*static_cast<AssessmentSnapshotContext *>(raw_context);
+    const auto telemetry=AssessmentTelemetry();
+    (*context.report)["assessment_work"]=AssessmentWork();
+    (*context.report)["assessment_telemetry"]=telemetry;
+    (*context.report)["last_assessment_stage"]=telemetry.at("last_assessment_stage");
+    (*context.report)["active_assessment_stage"]=telemetry.at("active_assessment_stage");
+    (*context.report)["assessment_stage"]=telemetry.at("active_assessment_stage");
+    (*context.report)["completed_assessment_stages"]=telemetry.at("completed_assessment_stages");
+    (*context.report)["completed_stage_seconds"]=telemetry.at("completed_stage_seconds");
+    (*context.report)["stage_dimensions"]=telemetry.at("stage_dimensions");
+    Snapshot(context.output,*context.report);
+}
+class AssessmentSnapshotRegistration
+{
+public:
+    AssessmentSnapshotRegistration(const char * output,j::object & report):context_{output,&report}
+    {n::SetAssessmentStageObserverForTesting(AssessmentSnapshot,&context_);}
+    ~AssessmentSnapshotRegistration() {Stop();}
+    AssessmentSnapshotRegistration(const AssessmentSnapshotRegistration &)=delete;
+    AssessmentSnapshotRegistration & operator=(const AssessmentSnapshotRegistration &)=delete;
+    void Stop()
+    {
+        if(active_) {n::SetAssessmentStageObserverForTesting(nullptr,nullptr); active_=false;}
+    }
+private:
+    AssessmentSnapshotContext context_;
+    bool active_{true};
+};
 void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::EvaluationContext context,const char * output)
 {
 #ifndef PR23_BASELINE_DRIVER
@@ -303,13 +356,27 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
         report["scope_description"]="This profile measures nonlinear Operator-PCG search only. It does not perform returned-state assessment and does not establish runtime convergence or endpoint qualification.";
         report["stage"]="complete"; Snapshot(output,report); return;
     }
+    report["assessment_execution"]="running";
+    report["returned_assessment"]=nullptr;
+    report["assessment_stage"]=nullptr;
+    report["last_assessment_stage"]=nullptr;
+    report["active_assessment_stage"]=nullptr;
+    report["completed_assessment_stages"]=j::array{};
+    report["completed_stage_seconds"]=j::object{};
+    report["stage_dimensions"]=j::object{};
+    report["assessment_telemetry"]=AssessmentTelemetry();
     report["stage"]="assessment"; Snapshot(output,report);
+    AssessmentSnapshotRegistration assessment_snapshot(output,report);
     const auto fit=n::AssessComponentSearch(domain,y,context,std::move(search));
+    assessment_snapshot.Stop();
     report["search_completed"]=fit.search_success;
     report["assessment_seconds"]=fit.assessment_seconds;
+    report["assessment_execution"]="completed";
     report["assessment"]=second_stage_test::matched::runtime_json::Assessment(fit.assessment);
     report["returned_state"]=fit.trusted_state ? j::value(second_stage_test::matched::runtime_json::Endpoint(*fit.trusted_state)) : j::value(nullptr);
     report["returned_assessment"]=fit.trusted_assessment ? j::value(second_stage_test::matched::runtime_json::Assessment(*fit.trusted_assessment)) : j::value(nullptr);
+    report["assessment_work"]=AssessmentWork();
+    report["assessment_telemetry"]=AssessmentTelemetry();
     report["stage"]="complete"; Snapshot(output,report);
 }
 

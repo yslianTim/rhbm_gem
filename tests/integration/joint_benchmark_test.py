@@ -218,7 +218,10 @@ class JointBenchmarkContract(unittest.TestCase):
                'returned_assessment': {'runtime_convergence': 'passed', 'primary': {'valid': True}}}
         details = benchmark.normalize_result('solve', raw)['details']
         self.assertEqual(set(details), {'search_completed', 'stop_reason', 'profile_evaluations',
-                                        'accepted_updates', 'endpoint_valid'})
+                                        'accepted_updates', 'endpoint_valid', 'assessment_execution',
+                                        'assessment_telemetry', 'assessment_stage', 'last_assessment_stage',
+                                        'active_assessment_stage', 'completed_assessment_stages',
+                                        'completed_stage_seconds', 'stage_dimensions'})
 
     def test_solve_result_preserves_pcg_distribution_and_operator_counts(self):
         work = {'pcg_solves': 2, 'pcg_iterations': 7, 'pcg_iteration_counts': [3, 4],
@@ -711,6 +714,23 @@ def smoke(build):
             if profile == 'solve':
                 assessment = previous['returned_assessment']
                 state = previous['returned_state']
+                details = report['result']['details']
+                telemetry = details.get('assessment_telemetry') or {}
+                stage_names = {stage.get('name') for stage in telemetry.get('stages', [])}
+                required_stages = {
+                    'total-assessment', 'endpoint-primary-evaluation', 'reference-evaluation',
+                    'design-spectrum', 'derivative-preparation', 'derivative-reduction',
+                    'projected-width-spectrum', 'normalized-width-spectrum',
+                    'correction-jacobian-spectrum',
+                }
+                if (details.get('assessment_execution') != 'completed' or
+                        not required_stages.issubset(stage_names) or
+                        any(stage.get('seconds', -1) < 0 or stage.get('calls', 0) < 1 or
+                            stage.get('rows', 0) < 1 or stage.get('columns', 0) < 1
+                            for stage in telemetry.get('stages', [])) or
+                        not details.get('completed_assessment_stages') or
+                        not details.get('stage_dimensions')):
+                    raise AssertionError(f'assessment stage telemetry is incomplete: {telemetry}')
                 work = report['result']['details']['search_work']
                 counts = work.get('pcg_iteration_counts')
                 if (not isinstance(counts, list) or len(counts) != work['pcg_solves'] or
