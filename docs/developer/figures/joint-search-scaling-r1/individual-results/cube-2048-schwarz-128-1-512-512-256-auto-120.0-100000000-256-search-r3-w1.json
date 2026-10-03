@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-2048",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "82bab4be05f6bf15d841e48bbb2d4e3eb4a83ae7",
+    "profile": "search",
+    "case": "cube-2048",
+    "source_sha256": "7c00652b65dc1f644d4098f1de181b469959636de7bb9487fd679045848e4f05",
+    "benchmark_sha256": "75b1343c33f57556a1adafa2228a6ac5748131e9da46e44b89a4b14b26ac174b",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "schwarz",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "98de7fd0aad1e088d1dc6fb84882137bea02ea4d1c9c5376f073a445dbacce96",
+    "input_sha256": "ec7223ff21192d168022b1a503f22c5761fb9a1f4f07d9de3088a106a50e48a3"
+  },
+  "execution": {
+    "status": "rss_limit",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 3,
+    "runs": [
+      {
+        "kind": "warmup",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 20.25610354100354,
+        "process_wall_seconds": 20.25610354100354,
+        "peak_rss_bytes": 4324392960,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 20.25610354100354,
+            "sampled_tree_peak_rss_bytes": 4324392960,
+            "os_process_peak_rss_bytes": null,
+            "samples": 186,
+            "maximum_sampling_gap_seconds": 0.11012458393815905
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 20.29766604094766,
+        "process_wall_seconds": 20.29766604094766,
+        "peak_rss_bytes": 4324392960,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 20.29766604094766,
+            "sampled_tree_peak_rss_bytes": 4324392960,
+            "os_process_peak_rss_bytes": null,
+            "samples": 186,
+            "maximum_sampling_gap_seconds": 0.11012016702443361
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 2,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 20.377872374956496,
+        "process_wall_seconds": 20.377872374956496,
+        "peak_rss_bytes": 4324491264,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 20.377872374956496,
+            "sampled_tree_peak_rss_bytes": 4324491264,
+            "os_process_peak_rss_bytes": null,
+            "samples": 187,
+            "maximum_sampling_gap_seconds": 0.11012441699858755
+          }
+        ]
+      },
+      {
+        "kind": "measurement",
+        "index": 3,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 20.28714629204478,
+        "process_wall_seconds": 20.28714629204478,
+        "peak_rss_bytes": 4324491264,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 20.28714629204478,
+            "sampled_tree_peak_rss_bytes": 4324491264,
+            "os_process_peak_rss_bytes": null,
+            "samples": 188,
+            "maximum_sampling_gap_seconds": 0.1101422079373151
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 4324491264,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 3,
+    "failed_count": 3,
+    "samples": [
+      null,
+      null,
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": null,
+      "scope_description": null,
+      "assessment_execution": null,
+      "assessment_work": null,
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "search_seconds": null,
+      "free_columns": null,
+      "design_nonzeros": null,
+      "search_work": null
+    }
+  }
+}

@@ -1,0 +1,864 @@
+{
+  "schema_version": 1,
+  "tool": "joint_scaling_analysis",
+  "groups": [
+    {
+      "topology": "chain",
+      "preconditioner": "diagonal",
+      "core_atoms": null,
+      "overlap_hops": null,
+      "max_block_atoms": null,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "storage_mib": null,
+      "scratch_mib": null,
+      "operator_rank_seconds": 120.0,
+      "operator_rank_work_entries": 100000000,
+      "operator_rank_workspace_mib": 256,
+      "measurement_scope": "search-only",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 6,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 186,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 0.819515042,
+          "pcg_seconds": 1.4321102920000006,
+          "search_seconds": 3.456008584,
+          "wall_seconds": 4.053240584093146,
+          "peak_rss_bytes": 149143552,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 6,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 185,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.6416923350000001,
+          "pcg_seconds": 2.9089067909999997,
+          "search_seconds": 6.940037709,
+          "wall_seconds": 7.757602915982716,
+          "peak_rss_bytes": 264028160,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 512,
+          "iterations_per_solve": 6,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 183,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 3.3206715410000003,
+          "pcg_seconds": 5.805119375999999,
+          "search_seconds": 13.908768458,
+          "wall_seconds": 15.296316749998368,
+          "peak_rss_bytes": 484311040,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 1024,
+          "iterations_per_solve": 6,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 182,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 6.672556291,
+          "pcg_seconds": 11.633626794,
+          "search_seconds": 27.974223209,
+          "wall_seconds": 30.40137258300092,
+          "peak_rss_bytes": 619347968,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 2048,
+          "iterations_per_solve": 6,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 180,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 13.543498583999998,
+          "pcg_seconds": 23.080594959,
+          "search_seconds": 56.660634417,
+          "wall_seconds": 61.430540457949974,
+          "peak_rss_bytes": 1225031680,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [],
+      "valid_point_count": 5,
+      "iteration_loglog_slope": 0.0,
+      "iteration_growth_ratio": 1.0,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 1024,
+          "to_atoms": 2048,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 1024,
+          "to_atoms": 2048,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        }
+      },
+      "coarse_gate": "not-comparable",
+      "multi_block_valid_point_count": 0,
+      "multi_block_point_sizes": [],
+      "multi_block_counts": [],
+      "multi_block_iteration_loglog_slope": null,
+      "multi_block_iteration_growth_ratio": null,
+      "multi_block_gate": "not-comparable",
+      "diagnostics": [
+        "missing-comparison-policy:core_atoms,overlap_hops,max_block_atoms,storage_mib,scratch_mib"
+      ],
+      "interpretation": "these rows do not share a comparable one-level Schwarz policy"
+    },
+    {
+      "topology": "chain",
+      "preconditioner": "schwarz",
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "storage_mib": 512,
+      "scratch_mib": 256,
+      "operator_rank_seconds": 120.0,
+      "operator_rank_work_entries": 100000000,
+      "operator_rank_workspace_mib": 256,
+      "measurement_scope": "search-only",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 3,
+          "block_count": 1,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 106,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.354550333,
+          "pcg_seconds": 0.8407571669999998,
+          "search_seconds": 3.375517625,
+          "wall_seconds": 3.945974541013129,
+          "peak_rss_bytes": 153649152,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 4,
+          "block_count": 2,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 134,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 2.782225627,
+          "pcg_seconds": 2.16262133,
+          "search_seconds": 7.253974125,
+          "wall_seconds": 8.188806500053033,
+          "peak_rss_bytes": 270041088,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 512,
+          "iterations_per_solve": 4,
+          "block_count": 4,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 134,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 5.7571281260000005,
+          "pcg_seconds": 4.381058747000001,
+          "search_seconds": 14.916604791,
+          "wall_seconds": 16.4286570410477,
+          "peak_rss_bytes": 499122176,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 1024,
+          "iterations_per_solve": 4,
+          "block_count": 8,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 134,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 12.110879168,
+          "pcg_seconds": 8.775602874000002,
+          "search_seconds": 30.5626885,
+          "wall_seconds": 33.38218100008089,
+          "peak_rss_bytes": 661651456,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 2048,
+          "iterations_per_solve": 4,
+          "block_count": 17,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 134,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 26.612422458,
+          "pcg_seconds": 17.616321917999997,
+          "search_seconds": 62.960582084,
+          "wall_seconds": 68.41382066707592,
+          "peak_rss_bytes": 1194262528,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [],
+      "valid_point_count": 5,
+      "iteration_loglog_slope": 0.0830074998557687,
+      "iteration_growth_ratio": 1.3333333333333333,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.3333333333333333,
+          "iteration_loglog_slope": 0.4150374992788437,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 1024,
+          "to_atoms": 2048,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.3333333333333333,
+          "iteration_loglog_slope": 0.4150374992788437,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 1024,
+          "to_atoms": 2048,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.0,
+          "growth_ratio": 1.0
+        }
+      },
+      "coarse_gate": "stable",
+      "multi_block_valid_point_count": 4,
+      "multi_block_point_sizes": [
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "multi_block_counts": [
+        2,
+        4,
+        8,
+        17
+      ],
+      "multi_block_iteration_loglog_slope": 0.0,
+      "multi_block_iteration_growth_ratio": 1.0,
+      "multi_block_gate": "stable",
+      "diagnostics": [
+        "cost-growth-with-stable-krylov"
+      ],
+      "interpretation": "the available points show no clear PCG iteration growth"
+    },
+    {
+      "topology": "cube",
+      "preconditioner": "diagonal",
+      "core_atoms": null,
+      "overlap_hops": null,
+      "max_block_atoms": null,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "storage_mib": null,
+      "scratch_mib": null,
+      "operator_rank_seconds": 120.0,
+      "operator_rank_work_entries": 100000000,
+      "operator_rank_workspace_mib": 256,
+      "measurement_scope": "search-only",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 8,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 240,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 0.914041042,
+          "pcg_seconds": 7.374992916000002,
+          "search_seconds": 10.74381625,
+          "wall_seconds": 11.33550320903305,
+          "peak_rss_bytes": 375717888,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 8.0,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 266,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 2.0369198309999996,
+          "pcg_seconds": 22.376631913,
+          "search_seconds": 31.019959958,
+          "wall_seconds": 31.809876832994632,
+          "peak_rss_bytes": 648970240,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 512,
+          "iterations_per_solve": 7.0,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 239,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 4.719937541999999,
+          "pcg_seconds": 52.141680543000014,
+          "search_seconds": 73.227674083,
+          "wall_seconds": 74.58190066704992,
+          "peak_rss_bytes": 1319075840,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 1024,
+          "iterations_per_solve": 8.0,
+          "block_count": null,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 264,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 15.263497375,
+          "pcg_seconds": 206.63433454099996,
+          "search_seconds": 279.223299291,
+          "wall_seconds": 281.5263599579921,
+          "peak_rss_bytes": 3338698752,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 2048,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "rss-limit",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "no-pcg-solves",
+            "missing-search-result-or-stop-reason",
+            "incomplete-rank-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 4,
+      "iteration_loglog_slope": -0.019264507794239574,
+      "iteration_growth_ratio": 1.0,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 0.875,
+          "iteration_loglog_slope": -0.1926450779423959,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.1428571428571428,
+          "iteration_loglog_slope": 0.19264507794239583,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 0.875,
+          "iteration_loglog_slope": -0.1926450779423959,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.1428571428571428,
+          "iteration_loglog_slope": 0.19264507794239583,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.04560092803351501,
+          "growth_ratio": 1.1111111111111112
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.04560092803351501,
+          "growth_ratio": 1.1111111111111112
+        }
+      },
+      "coarse_gate": "not-comparable",
+      "multi_block_valid_point_count": 0,
+      "multi_block_point_sizes": [],
+      "multi_block_counts": [],
+      "multi_block_iteration_loglog_slope": null,
+      "multi_block_iteration_growth_ratio": null,
+      "multi_block_gate": "not-comparable",
+      "diagnostics": [
+        "missing-comparison-policy:core_atoms,overlap_hops,max_block_atoms,storage_mib,scratch_mib"
+      ],
+      "interpretation": "these rows do not share a comparable one-level Schwarz policy"
+    },
+    {
+      "topology": "cube",
+      "preconditioner": "schwarz",
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "operator_rank": "auto",
+      "sparse_backend": "SPQR",
+      "storage_mib": 512,
+      "scratch_mib": 256,
+      "operator_rank_seconds": 120.0,
+      "operator_rank_work_entries": 100000000,
+      "operator_rank_workspace_mib": 256,
+      "measurement_scope": "search-only",
+      "points": [
+        {
+          "atoms": 128,
+          "iterations_per_solve": 3,
+          "block_count": 1,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 27,
+          "linearizations": null,
+          "damping_trials": 27,
+          "operator_normals": 109,
+          "operator_applications": 27,
+          "operator_adjoints": 5,
+          "setup_seconds": 1.454216961,
+          "pcg_seconds": 3.371052128,
+          "search_seconds": 7.273352833,
+          "wall_seconds": 7.870548375067301,
+          "peak_rss_bytes": 347996160,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 256,
+          "iterations_per_solve": 6.0,
+          "block_count": 2,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 200,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 4.799003211,
+          "pcg_seconds": 16.986281374,
+          "search_seconds": 28.288284083,
+          "wall_seconds": 29.135802625096403,
+          "peak_rss_bytes": 647053312,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 512,
+          "iterations_per_solve": 6.0,
+          "block_count": 4,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 207,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 13.852190878,
+          "pcg_seconds": 45.578593588000004,
+          "search_seconds": 75.673278833,
+          "wall_seconds": 77.18038691591937,
+          "peak_rss_bytes": 1330757632,
+          "valid_iteration_point": true
+        },
+        {
+          "atoms": 1024,
+          "iterations_per_solve": 7.0,
+          "block_count": 9,
+          "pcg_iteration_budget_repetitions": 0,
+          "stop_reasons_by_repetition": [
+            "operator-gradient-stop",
+            "operator-gradient-stop",
+            "operator-gradient-stop"
+          ],
+          "pcg_solves": 30,
+          "linearizations": null,
+          "damping_trials": 30,
+          "operator_normals": 225,
+          "operator_applications": 30,
+          "operator_adjoints": 5,
+          "setup_seconds": 39.901777333,
+          "pcg_seconds": 177.52242254400002,
+          "search_seconds": 274.030720834,
+          "wall_seconds": 276.8181247089524,
+          "peak_rss_bytes": 3461742592,
+          "valid_iteration_point": true
+        }
+      ],
+      "excluded_rows": [
+        {
+          "atoms": 2048,
+          "reason": "evidence-ineligible",
+          "evidence_exclusion_reasons": [
+            "rss-limit",
+            "incomplete-repetitions",
+            "missing-pcg-telemetry",
+            "no-pcg-solves",
+            "missing-search-result-or-stop-reason",
+            "incomplete-rank-telemetry",
+            "rank-not-full",
+            "rank-certificate-not-rigorous",
+            "missing-rank-telemetry"
+          ]
+        }
+      ],
+      "valid_point_count": 4,
+      "iteration_loglog_slope": 0.3667177264009343,
+      "iteration_growth_ratio": 2.3333333333333335,
+      "adjacent_scaling": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 2.0,
+          "iteration_loglog_slope": 1.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.1666666666666667,
+          "iteration_loglog_slope": 0.22239242133644802,
+          "approximately_doubling": true
+        }
+      ],
+      "doubling_ratios": [
+        {
+          "from_atoms": 128,
+          "to_atoms": 256,
+          "iteration_growth_ratio": 2.0,
+          "iteration_loglog_slope": 1.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 256,
+          "to_atoms": 512,
+          "iteration_growth_ratio": 1.0,
+          "iteration_loglog_slope": 0.0,
+          "approximately_doubling": true
+        },
+        {
+          "from_atoms": 512,
+          "to_atoms": 1024,
+          "iteration_growth_ratio": 1.1666666666666667,
+          "iteration_loglog_slope": 0.22239242133644802,
+          "approximately_doubling": true
+        }
+      ],
+      "supporting_scaling": {
+        "pcg_solves": {
+          "loglog_slope": 0.04560092803351501,
+          "growth_ratio": 1.1111111111111112
+        },
+        "linearizations": {
+          "loglog_slope": null,
+          "growth_ratio": null
+        },
+        "damping_trials": {
+          "loglog_slope": 0.04560092803351501,
+          "growth_ratio": 1.1111111111111112
+        }
+      },
+      "coarse_gate": "growth-observed",
+      "multi_block_valid_point_count": 3,
+      "multi_block_point_sizes": [
+        256,
+        512,
+        1024
+      ],
+      "multi_block_counts": [
+        2,
+        4,
+        9
+      ],
+      "multi_block_iteration_loglog_slope": 0.11119621066822394,
+      "multi_block_iteration_growth_ratio": 1.1666666666666667,
+      "multi_block_gate": "insufficient-evidence",
+      "diagnostics": [],
+      "interpretation": "coarse correction investigation is warranted"
+    }
+  ]
+}
