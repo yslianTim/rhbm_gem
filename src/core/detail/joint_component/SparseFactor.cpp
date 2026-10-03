@@ -1,6 +1,8 @@
 #include "SparseFactor.hpp"
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <cstring>
 #include <Eigen/SparseQR>
 #ifdef RHBM_GEM_JOINT_SPQR
 #include <SuiteSparseQR.hpp>
@@ -9,6 +11,23 @@
 namespace rhbm_gem::core::joint_component {
 SparseWork & SparseWorkForTesting() {static thread_local SparseWork work; return work;}
 ResourceWork & ResourceWorkForTesting() {static thread_local ResourceWork work; return work;}
+namespace {
+ResourceStageObserverForTesting & ResourceStageObserver()
+{static thread_local ResourceStageObserverForTesting observer{}; return observer;}
+void * & ResourceStageObserverContext()
+{static thread_local void * context{}; return context;}
+SearchStageWork & SearchStage(ResourceWork & work,const char * name)
+{
+    const auto found=std::find_if(work.search_stages.begin(),work.search_stages.end(),
+        [&](const auto & stage){return stage.stage==name;});
+    if(found!=work.search_stages.end()) return *found;
+    work.search_stages.push_back({name}); return work.search_stages.back();
+}
+void NotifyResourceStageObserver()
+{if(const auto observer=ResourceStageObserver()) observer(ResourceWorkForTesting(),ResourceStageObserverContext());}
+}
+void SetResourceStageObserverForTesting(ResourceStageObserverForTesting observer,void * context)
+{ResourceStageObserver()=observer; ResourceStageObserverContext()=context;}
 void RecordDenseShape(const char * role,Eigen::Index rows,Eigen::Index columns)
 {
     auto & w=ResourceWorkForTesting(); if(!w.enabled) return;
@@ -21,23 +40,142 @@ void RecordDenseShape(const char * role,Eigen::Index rows,Eigen::Index columns)
     }
     w.dense_shapes.push_back({w.phase,role,rows,columns,1,bytes});
 }
-ResourcePhase::ResourcePhase(const char * name):enabled_(ResourceWorkForTesting().enabled),name_(name)
+void RecordSparseShape(const char * role,Eigen::Index rows,Eigen::Index columns,std::size_t nonzeros)
 {
-    if(enabled_) {auto & w=ResourceWorkForTesting(); previous_=w.phase; w.phase=name; started_=std::chrono::steady_clock::now();}
+    auto & w=ResourceWorkForTesting(); if(!w.enabled) return;
+    for(auto & record:w.search_stages) if(record.stage==w.active_search_stage)
+    {
+        record.rows=std::max(record.rows,rows); record.columns=std::max(record.columns,columns);
+        record.nonzeros=std::max(record.nonzeros,nonzeros); break;
+    }
+    // Preserve the phase/role record separately from stage aggregation.
+    const std::string phase=w.phase, name=role;
+    auto & shapes=w.sparse_shapes;
+    for(auto & record:shapes) if(record.phase==phase && record.role==name)
+    {
+        ++record.observations;
+        if(nonzeros>record.maximum_nonzeros) {record.rows=rows; record.columns=columns; record.maximum_nonzeros=nonzeros;}
+        return;
+    }
+    shapes.push_back({phase,name,rows,columns,1,nonzeros});
+}
+ResourcePhase::ResourcePhase(const char * name,bool search_stage,Eigen::Index rows,Eigen::Index columns,std::size_t nonzeros)
+    :enabled_(ResourceWorkForTesting().enabled),name_(name)
+{
+    if(!enabled_) return;
+    auto & w=ResourceWorkForTesting(); previous_=w.phase; w.phase=name;
+    search_scope_=std::strcmp(name,"search")==0;
+    if(search_scope_) ++w.search_depth;
+    search_stage_=search_scope_ || (search_stage && w.search_depth>0);
+    if(search_stage_)
+    {
+        previous_search_stage_=w.active_search_stage;
+        w.active_search_stage=name;
+        auto & stage=SearchStage(w,name); ++stage.calls;
+        if(rows>=0) stage.rows=std::max(stage.rows,rows);
+        if(columns>=0) stage.columns=std::max(stage.columns,columns);
+        stage.nonzeros=std::max(stage.nonzeros,nonzeros);
+        NotifyResourceStageObserver();
+    }
+    started_=std::chrono::steady_clock::now();
 }
 ResourcePhase::~ResourcePhase()
 {
     if(!enabled_) return;
-    auto & w=ResourceWorkForTesting(); w.phase=previous_;
+    auto & w=ResourceWorkForTesting();
     const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
-    for(auto & record:w.phases) if(record.phase==name_) {++record.calls; record.inclusive_seconds+=seconds; return;}
-    w.phases.push_back({name_,1,seconds});
+    bool found=false;
+    for(auto & record:w.phases) if(record.phase==name_) {++record.calls; record.inclusive_seconds+=seconds; found=true; break;}
+    if(!found) w.phases.push_back({name_,1,seconds});
+    if(search_stage_)
+    {
+        auto & stage=SearchStage(w,name_); ++stage.completed_calls; stage.seconds+=seconds;
+        w.last_completed_search_stage=name_;
+        if(std::find(w.completed_search_stages.begin(),w.completed_search_stages.end(),name_)==w.completed_search_stages.end())
+            w.completed_search_stages.push_back(name_);
+        w.active_search_stage=previous_search_stage_;
+    }
+    if(search_scope_ && w.search_depth>0) --w.search_depth;
+    w.phase=previous_;
+    if(search_stage_) NotifyResourceStageObserver();
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+SpqrOrdering & SpqrOrderingForTesting() {static thread_local SpqrOrdering ordering=SpqrOrdering::Colamd; return ordering;}
+const char * SpqrOrderingName(SpqrOrdering ordering)
+{
+    switch(ordering)
+    {
+    case SpqrOrdering::Colamd: return "COLAMD";
+    case SpqrOrdering::Default: return "DEFAULT";
+    case SpqrOrdering::Best: return "BEST";
+    case SpqrOrdering::Metis: return "METIS";
+    }
+    return "unknown";
+}
+bool SpqrOrderingAvailable(SpqrOrdering ordering)
+{
+#ifdef RHBM_GEM_JOINT_SPQR
+    switch(ordering)
+    {
+    case SpqrOrdering::Colamd: return true;
+    case SpqrOrdering::Default:
+#ifdef SPQR_ORDERING_DEFAULT
+        return true;
+#else
+        return false;
+#endif
+    case SpqrOrdering::Best:
+#ifdef SPQR_ORDERING_BEST
+        return true;
+#else
+        return false;
+#endif
+    case SpqrOrdering::Metis:
+#ifdef SPQR_ORDERING_METIS
+        return true;
+#else
+        return false;
+#endif
+    }
+#else
+    (void)ordering;
+#endif
+    return false;
+}
+#endif
 #ifdef RHBM_GEM_JOINT_SPQR
 namespace {
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point t) {return std::chrono::duration<double>(Clock::now()-t).count();}
 using LongSparse=Eigen::SparseMatrix<double,Eigen::ColMajor,int64_t>;
+int ActiveOrdering()
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    switch(SpqrOrderingForTesting())
+    {
+    case SpqrOrdering::Colamd: return SPQR_ORDERING_COLAMD;
+    case SpqrOrdering::Default:
+#ifdef SPQR_ORDERING_DEFAULT
+        return SPQR_ORDERING_DEFAULT;
+#else
+        return SPQR_ORDERING_COLAMD;
+#endif
+    case SpqrOrdering::Best:
+#ifdef SPQR_ORDERING_BEST
+        return SPQR_ORDERING_BEST;
+#else
+        return SPQR_ORDERING_COLAMD;
+#endif
+    case SpqrOrdering::Metis:
+#ifdef SPQR_ORDERING_METIS
+        return SPQR_ORDERING_METIS;
+#else
+        return SPQR_ORDERING_COLAMD;
+#endif
+    }
+#endif
+    return SPQR_ORDERING_COLAMD;
+}
 cholmod_sparse View(LongSparse & a)
 {
     cholmod_sparse v{}; v.nrow=static_cast<std::size_t>(a.rows()); v.ncol=static_cast<std::size_t>(a.cols());
@@ -143,22 +281,43 @@ void LinearWorkspace::Bind(const void * domain,const void * observations,const L
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
     auto & s=*state_; ++s.generation;
-    const auto conversion=Clock::now();
-    LongSparse storage=a; storage.makeCompressed(); auto view=View(storage);
-    SparseWorkForTesting().matrix_preparation_seconds+=Seconds(conversion);
+    LongSparse storage; cholmod_sparse view{};
+    {
+        ResourcePhase preparation("linear-factor-preparation",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        const auto conversion=Clock::now(); storage=a; storage.makeCompressed(); view=View(storage);
+        RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        SparseWorkForTesting().matrix_preparation_seconds+=Seconds(conversion);
+    }
     if(!s.qr || s.tolerance!=tolerance || s.columns!=columns || !Pattern(s.design,a))
     {
-        s.Clear(); const auto start=Clock::now();
-        s.qr=SuiteSparseQR_symbolic<double>(SPQR_ORDERING_COLAMD,true,&view,&s.cc);
-        ++SparseWorkForTesting().symbolic; SparseWorkForTesting().symbolic_seconds+=Seconds(start);
+        s.Clear(); const auto start=Clock::now(); auto & work=SparseWorkForTesting();
+        ++work.symbolic; work.symbolic_rows=std::max(work.symbolic_rows,a.rows());
+        work.symbolic_columns=std::max(work.symbolic_columns,a.cols());
+        work.symbolic_input_nonzeros=std::max(work.symbolic_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
+        {
+            ResourcePhase linear_stage("linear-symbolic",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+            ResourcePhase stage("spqr-symbolic",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+            RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+            s.qr=SuiteSparseQR_symbolic<double>(ActiveOrdering(),true,&view,&s.cc);
+            work.symbolic_seconds+=Seconds(start);
+        }
         if(!s.qr) throw std::runtime_error("SPQR symbolic analysis failed");
     }
     else ++SparseWorkForTesting().symbolic_reuses;
     s.design=a; s.columns=columns; s.tolerance=tolerance;
-    const auto start=Clock::now(); const auto ok=SuiteSparseQR_numeric<double>(tolerance,&view,s.qr,&s.cc);
-    ++SparseWorkForTesting().numeric; SparseWorkForTesting().numeric_seconds+=Seconds(start);
+    auto & work=SparseWorkForTesting(); const auto start=Clock::now(); int ok{};
+    ++work.numeric; work.numeric_rows=std::max(work.numeric_rows,a.rows());
+    work.numeric_columns=std::max(work.numeric_columns,a.cols());
+    work.numeric_input_nonzeros=std::max(work.numeric_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
+    {
+        ResourcePhase linear_stage("linear-numeric",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        ResourcePhase stage("spqr-numeric",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        ok=SuiteSparseQR_numeric<double>(tolerance,&view,s.qr,&s.cc);
+        work.numeric_seconds+=Seconds(start);
+    }
     if(!ok) {s.Clear(); throw std::runtime_error("SPQR numeric factorization failed");}
-    SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0])));
+    work.factor_nonzeros=std::max(work.factor_nonzeros,static_cast<std::size_t>(std::max<int64_t>(0,s.cc.SPQR_istat[0])));
     return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(state_,s.generation));
 }
 std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const std::vector<Eigen::Index> & columns)
@@ -168,9 +327,15 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
     LongSparse storage=a; storage.makeCompressed(); auto view=View(storage);
     cholmod_sparse * r{};
     auto & work=SparseWorkForTesting();
+    ++work.fixed_factorizations;
+    work.fixed_factor_rows=std::max(work.fixed_factor_rows,a.rows());
+    work.fixed_factor_columns=std::max(work.fixed_factor_columns,a.cols());
+    work.fixed_factor_input_nonzeros=std::max(work.fixed_factor_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
     {
-        ++work.fixed_factorizations; WorkTimer timer(work.fixed_factor_seconds);
-        s.fixed_rank=static_cast<int>(SuiteSparseQR<double>(SPQR_ORDERING_COLAMD,0,static_cast<int64_t>(a.cols()),
+        ResourcePhase stage("spqr-fixed-factor",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
+        WorkTimer timer(work.fixed_factor_seconds);
+        s.fixed_rank=static_cast<int>(SuiteSparseQR<double>(ActiveOrdering(),0,static_cast<int64_t>(a.cols()),
             &view,&r,&s.permutation,&s.h,&s.hpinv,&s.tau,&s.cc));
     }
     if(r)
@@ -182,6 +347,7 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
     }
     if(s.fixed_rank<0 || !s.h || !s.tau || s.r.rows()!=a.cols()) throw std::runtime_error("SPQR fixed factorization failed");
     work.factor_nonzeros=std::max(work.factor_nonzeros,static_cast<std::size_t>(s.r.nonZeros()));
+    work.fixed_factor_nonzeros=std::max(work.fixed_factor_nonzeros,static_cast<std::size_t>(s.r.nonZeros()));
     // Owned exported arrays only, not an estimate of peak factorization scratch.
     const auto bytes=static_cast<std::size_t>(s.r.nonZeros())*(sizeof(double)+sizeof(int64_t))+
         static_cast<std::size_t>(s.r.cols()+1)*sizeof(int64_t)+s.h->nzmax*(sizeof(double)+sizeof(int64_t))+
@@ -189,6 +355,7 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
         (s.permutation ? static_cast<std::size_t>(a.cols())*sizeof(int64_t) : 0)+
         (s.hpinv ? static_cast<std::size_t>(a.rows())*sizeof(int64_t) : 0);
     work.factor_storage_bytes=std::max(work.factor_storage_bytes,bytes);
+    work.fixed_factor_storage_bytes=std::max(work.fixed_factor_storage_bytes,bytes);
     return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(std::move(state),0));
 }
 FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std::size_t generation):state_(std::move(state)),generation_(generation) {}

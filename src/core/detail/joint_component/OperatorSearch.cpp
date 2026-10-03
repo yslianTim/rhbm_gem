@@ -5,7 +5,7 @@ namespace rhbm_gem::core::joint_component {
 SearchWork & SearchWorkForTesting() {static thread_local SearchWork work; return work;}
 WidthStepResult SolvePcg(const VectorAction & action,const VectorAction & inverse,VectorRef rhs,VectorRef metric,int limit)
 {
-    ResourcePhase phase("pcg"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.pcg_seconds); ++work.pcg_solves;
+    ResourcePhase phase("pcg",true,rhs.size(),rhs.size()); auto & work=SearchWorkForTesting(); WorkTimer timer(work.pcg_seconds); ++work.pcg_solves;
     WidthStepResult out; out.step=Vector::Zero(rhs.size()); out.reason="pcg-invalid-input";
     struct IterationRecorder
     {
@@ -65,7 +65,7 @@ WidthStepResult WidthStepSolver(const ProfileJacobianOperator & op,VectorRef gra
 SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vector & initial_b,const EvaluationContext & context,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
-    ResourcePhase phase("search"); const auto start=std::chrono::steady_clock::now();
+    ResourcePhase phase("search",true,domain.rows,initial_b.size()); const auto start=std::chrono::steady_clock::now();
     SearchResult out; out.eta=initial_b.array().log(); out.stopped=true; out.lm_status=9;
     auto report=[&] {
         if(!progress_component) return;
@@ -80,6 +80,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     };
     LinearWorkspace trial_workspace;
     auto evaluate=[&](const Vector & eta) {
+        ResourcePhase evaluation(out.evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto t=std::chrono::steady_clock::now();
         auto e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace); ++out.evaluations;
         Trial trial; trial.endpoint=e; trial.evaluation=out.evaluations;

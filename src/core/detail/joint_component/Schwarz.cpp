@@ -51,7 +51,8 @@ void RecordRegularization(RegularizationRecord record,std::size_t held,const Sch
 std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
     std::shared_ptr<const JointProblemInput> input,const JointParameterLayout & layout,const SchwarzPolicy & policy)
 {
-    ResourcePhase phase("preconditioner-partition"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.partition_seconds);
+    ResourcePhase phase("schwarz-partition",true,static_cast<Eigen::Index>(input ? input->observations.size() : 0),
+        static_cast<Eigen::Index>(input ? input->atom_ids.size() : 0)); auto & work=SearchWorkForTesting(); WorkTimer timer(work.partition_seconds);
     if(!input || policy.core_atoms==0 || policy.core_atoms>policy.max_block_atoms) throw std::invalid_argument("Invalid partition policy");
     const auto n=input->observations.size(),m=input->atom_ids.size();
     std::size_t memberships{};
@@ -195,7 +196,7 @@ SchwarzModel::SchwarzModel(const PreconditionerPartition & partition,const Evalu
     const PreconditionerContext & context)
     :context_(context),mapping_(CheckedWidthMapping(partition,partition.policy)),policy_(partition.policy),bytes_(TopologyBytes(partition))
 {
-    ResourcePhase phase("preconditioner-local"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.local_seconds); ++work.local_builds;
+    ResourcePhase phase("schwarz-local-build",true,e.x.rows(),e.beta.size()); auto & work=SearchWorkForTesting(); WorkTimer timer(work.local_seconds); ++work.local_builds;
     build_=work.local_builds;
     if(!context.Valid() || context.space!=PreconditionerSpace::Width || context.metric.size()!=mapping_.dimension || e.eta.size()!=mapping_.dimension || !e.valid)
         throw std::invalid_argument("Invalid Schwarz linearization");
@@ -241,7 +242,8 @@ SchwarzModel::SchwarzModel(const PreconditionerPartition & partition,const Evalu
 }
 SchwarzPreconditioner::SchwarzPreconditioner(const SchwarzModel & model,const PreconditionerContext & context):model_(model),context_(context)
 {
-    ResourcePhase phase("preconditioner-factor"); auto & work=SearchWorkForTesting(); WorkTimer timer(work.factor_seconds); ++work.factor_builds;
+    ResourcePhase phase("schwarz-factor",true,static_cast<Eigen::Index>(model.Matrices().size()),
+        static_cast<Eigen::Index>(model.Context().metric.size())); auto & work=SearchWorkForTesting(); WorkTimer timer(work.factor_seconds); ++work.factor_builds;
     auto expected=context; expected.damping=model.Context().damping;
     if(!context.Valid() || !model.Context().Matches(expected)) throw std::logic_error("Stale preconditioner context");
     for(const auto & s:model.Matrices())

@@ -182,12 +182,34 @@ void Snapshot(const char * output,j::object & report)
     const auto & resource=n::ResourceWorkForTesting();
     if(resource.enabled)
     {
-        j::array shapes,phases;
+        j::array shapes,sparse_shapes,phases,completed_stages;
+        j::object stage_seconds,stage_calls,stage_completed_calls,stage_dimensions,stage_nnz;
         for(const auto & r:resource.dense_shapes) shapes.push_back(j::object{{"phase",r.phase},{"role",r.role},
             {"rows",r.rows},{"columns",r.columns},{"observations",r.observations},{"maximum_matrix_bytes",r.maximum_bytes}});
+        for(const auto & r:resource.sparse_shapes) sparse_shapes.push_back(j::object{{"phase",r.phase},{"role",r.role},
+            {"rows",r.rows},{"columns",r.columns},{"observations",r.observations},{"maximum_nonzeros",r.maximum_nonzeros}});
         for(const auto & r:resource.phases) phases.push_back(j::object{{"phase",r.phase},{"calls",r.calls},{"inclusive_seconds",r.inclusive_seconds}});
-        report["resources"]=j::object{{"dense_shape_probes",shapes},{"phases",phases},
-            {"semantics","phase times overlap; shapes are known matrix probes, not an allocation trace"}};
+        for(const auto & stage:resource.search_stages)
+        {
+            stage_seconds[stage.stage]=stage.seconds;
+            stage_calls[stage.stage]=stage.calls;
+            stage_completed_calls[stage.stage]=stage.completed_calls;
+            stage_dimensions[stage.stage]=j::object{{"rows",stage.rows},{"columns",stage.columns}};
+            stage_nnz[stage.stage]=stage.nonzeros;
+        }
+        completed_stages.clear();
+        for(const auto & stage:resource.completed_search_stages) completed_stages.push_back(j::value(stage));
+        const auto optional_stage=[](const std::string & stage)->j::value {return stage.empty() ? j::value(nullptr) : j::value(stage);};
+        report["last_completed_search_stage"]=optional_stage(resource.last_completed_search_stage);
+        report["active_search_stage"]=optional_stage(resource.active_search_stage);
+        report["completed_search_stages"]=completed_stages;
+        report["stage_seconds"]=stage_seconds;
+        report["stage_calls"]=stage_calls;
+        report["stage_completed_calls"]=stage_completed_calls;
+        report["stage_dimensions"]=stage_dimensions;
+        report["stage_nnz"]=stage_nnz;
+        report["resources"]=j::object{{"dense_shape_probes",shapes},{"sparse_shape_probes",sparse_shapes},{"phases",phases},
+            {"semantics","phase times overlap; shape probes describe known matrices, not every allocation"}};
     }
     const auto & w=n::SparseWorkForTesting();
     report["work"]=j::object{{"symbolic",w.symbolic},{"numeric",w.numeric},{"symbolic_reuses",w.symbolic_reuses},
@@ -200,11 +222,57 @@ void Snapshot(const char * output,j::object & report)
         {"derivative_compact_seconds",w.derivative_compact_seconds},{"reference_compact_seconds",w.reference_compact_seconds},
         {"free_design_svd_seconds",w.free_design_svd_seconds},{"reference_solve_seconds",w.reference_solve_seconds},
         {"cancellation_seconds",w.cancellation_seconds},{"jacobi_retry_seconds",w.jacobi_retry_seconds},
-        {"derivative_inclusive_seconds",w.derivative_seconds}};
+        {"derivative_inclusive_seconds",w.derivative_seconds},
+        {"spqr_symbolic_rows",w.symbolic_rows},{"spqr_symbolic_columns",w.symbolic_columns},
+        {"spqr_symbolic_input_nonzeros",w.symbolic_input_nonzeros},{"spqr_numeric_rows",w.numeric_rows},
+        {"spqr_numeric_columns",w.numeric_columns},{"spqr_numeric_input_nonzeros",w.numeric_input_nonzeros},
+        {"spqr_fixed_factor_rows",w.fixed_factor_rows},{"spqr_fixed_factor_columns",w.fixed_factor_columns},
+        {"spqr_fixed_factor_input_nonzeros",w.fixed_factor_input_nonzeros},
+        {"spqr_fixed_factor_nonzeros",w.fixed_factor_nonzeros},
+        {"spqr_fixed_factor_storage_bytes",w.fixed_factor_storage_bytes}};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    report["work"].as_object()["spqr_ordering"]=n::SpqrOrderingName(n::SpqrOrderingForTesting());
+    report["spqr_factorization"]=j::object{
+        {"ordering",n::SpqrOrderingName(n::SpqrOrderingForTesting())},
+        {"symbolic",j::object{{"calls",w.symbolic},{"seconds",w.symbolic_seconds},{"matrix_rows",w.symbolic_rows},
+            {"matrix_columns",w.symbolic_columns},{"matrix_nonzeros",w.symbolic_input_nonzeros}}},
+        {"numeric",j::object{{"calls",w.numeric},{"seconds",w.numeric_seconds},{"matrix_rows",w.numeric_rows},
+            {"matrix_columns",w.numeric_columns},{"matrix_nonzeros",w.numeric_input_nonzeros},
+            {"reported_factor_nonzeros",w.factor_nonzeros}}},
+        {"fixed_factor",j::object{{"calls",w.fixed_factorizations},{"seconds",w.fixed_factor_seconds},
+            {"matrix_rows",w.fixed_factor_rows},{"matrix_columns",w.fixed_factor_columns},
+            {"matrix_nonzeros",w.fixed_factor_input_nonzeros},{"reported_factor_nonzeros",w.fixed_factor_nonzeros},
+            {"factor_exported_storage_bytes",w.fixed_factor_storage_bytes}}}};
+#endif
     if(audit) report["svd_records"]=svd_records;
 #endif
     Write(output,report);
 }
+
+struct SearchStageSnapshotContext {const char * output{}; j::object * report{};};
+void SearchStageSnapshot(const n::ResourceWork & resource,void * raw_context)
+{
+    (void)resource;
+    auto & context=*static_cast<SearchStageSnapshotContext *>(raw_context);
+    (*context.report)["failure_stage"]="search";
+    Snapshot(context.output,*context.report);
+}
+class SearchStageSnapshotRegistration
+{
+public:
+    SearchStageSnapshotRegistration(const char * output,j::object & report):context_{output,&report}
+    {n::SetResourceStageObserverForTesting(SearchStageSnapshot,&context_);}
+    ~SearchStageSnapshotRegistration() {Stop();}
+    SearchStageSnapshotRegistration(const SearchStageSnapshotRegistration &)=delete;
+    SearchStageSnapshotRegistration & operator=(const SearchStageSnapshotRegistration &)=delete;
+    void Stop()
+    {
+        if(active_) {n::SetResourceStageObserverForTesting(nullptr,nullptr); active_=false;}
+    }
+private:
+    SearchStageSnapshotContext context_;
+    bool active_{true};
+};
 
 #ifndef SPARSE_BASELINE_DRIVER
 j::object SearchWork()
@@ -328,11 +396,16 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows},
         {"measurement_scope",search_only ? "search-only" : "joint_search_and_returned_state_assessment"}};
     report["solver_policy"]=PolicyRecord(context.search);
-    Snapshot(output,report);
+    auto & resource=n::ResourceWorkForTesting(); const bool resources_enabled=resource.enabled;
+    resource={}; resource.enabled=resources_enabled;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     n::AssessmentWorkForTesting()={};
 #endif
+    n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    Snapshot(output,report);
+    SearchStageSnapshotRegistration search_snapshot(output,report);
     auto search=n::SearchProfile(domain,y,b,context);
+    search_snapshot.Stop(); report["failure_stage"]=nullptr;
     report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
     if(search_only) report["search"].as_object().erase("runtime_convergence");
 #ifndef PR23_BASELINE_DRIVER

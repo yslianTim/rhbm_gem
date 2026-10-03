@@ -184,7 +184,7 @@ void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
 namespace {
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
-    ResourcePhase phase("basis");
+    ResourcePhase phase("profile-basis-build",true,domain.rows,2*eta.size());
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         eta.size()==0 || !eta.allFinite() || !y.allFinite()) {out.reason="invalid-input"; return out;}
@@ -207,6 +207,7 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
         }
     }
     out.x.setFromTriplets(x.begin(),x.end()); out.derivative.setFromTriplets(dx.begin(),dx.end());
+    RecordSparseShape("profile-design",out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     out.valid=true; return out;
 }
 }
@@ -223,6 +224,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     SparseWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
+    ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks,workspace);
     if(!reference) out.factor=solved.factor;
     out.beta=solved.beta; out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);

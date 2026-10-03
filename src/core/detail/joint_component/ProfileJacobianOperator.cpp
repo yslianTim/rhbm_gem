@@ -64,10 +64,12 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     work.design_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-design_started).count();
     try {
         // Dedicated ownership: a trial's mutable workspace cannot expire this factor.
-        {WorkTimer factor_timer(work.factor_seconds);
+        {ResourcePhase factor_stage("fixed-operator-factor",true,n,p,static_cast<std::size_t>(design.nonZeros()));
+        WorkTimer factor_timer(work.factor_seconds);
         factor_=FreeDesignFactor::Fixed(design,free);}
         {
             ResourcePhase rank_phase("operator-rank");
+            ResourcePhase rank_stage("rank-certificate",true,n,p,static_cast<std::size_t>(design.nonZeros()));
             ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
             RankWorkAudit rank_audit{work,SparseWorkForTesting()};
             if(backend==FreeDesignRankBackend::SpqrBounds)

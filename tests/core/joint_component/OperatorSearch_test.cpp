@@ -17,6 +17,17 @@ struct Sample
     n::Evaluation e=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(4,std::log(.55)),false,&data.context);
 };
 using Signature=std::map<std::string,std::pair<std::vector<std::string>,std::vector<std::string>>>;
+struct SearchStageCapture {std::string active,last; Eigen::Index rows{},columns{}; std::size_t nonzeros{};};
+void CaptureSearchStage(const n::ResourceWork & work,void * raw)
+{
+    if(work.active_search_stage!="spqr-numeric") return;
+    auto & capture=*static_cast<SearchStageCapture *>(raw);
+    capture.active=work.active_search_stage; capture.last=work.last_completed_search_stage;
+    const auto stage=std::find_if(work.search_stages.begin(),work.search_stages.end(),
+        [](const auto & item){return item.stage=="spqr-numeric";});
+    if(stage!=work.search_stages.end())
+    {capture.rows=stage->rows; capture.columns=stage->columns; capture.nonzeros=stage->nonzeros;}
+}
 Signature Describe(const n::PreconditionerPartition & p)
 {
     Signature out;
@@ -405,4 +416,60 @@ TEST(JointOperatorSearchTest, FullRuntimeEvidenceUncertaintyAndPersistenceWithOp
             if(u.covariance && v.covariance) EXPECT_LT((*u.covariance-*v.covariance).norm(),1e-10*(1+u.covariance->norm()));
         }
     }
+}
+
+TEST(JointOperatorSearchTest, SearchResourceStagesAreNeutralDistinctAndBounded)
+{
+    Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
+    context.search.preconditioner=n::PreconditionerKind::Diagonal;
+    auto & resources=n::ResourceWorkForTesting(); resources={};
+    const auto control=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+    EXPECT_TRUE(resources.search_stages.empty());
+    resources={}; resources.enabled=true;
+    const auto measured=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+    EXPECT_EQ(measured.stop_reason,control.stop_reason);
+    EXPECT_EQ(measured.evaluations,control.evaluations);
+    EXPECT_EQ(measured.accepted,control.accepted);
+    EXPECT_EQ((measured.eta-control.eta).norm(),0.);
+    ASSERT_EQ(measured.accepted_objective.has_value(),control.accepted_objective.has_value());
+    if(measured.accepted_objective) EXPECT_DOUBLE_EQ(*measured.accepted_objective,*control.accepted_objective);
+    EXPECT_EQ(measured.trials.size(),control.trials.size());
+    const auto has_stage=[&](const std::string & name) {
+        return std::find_if(resources.search_stages.begin(),resources.search_stages.end(),
+            [&](const auto & stage){return stage.stage==name;})!=resources.search_stages.end();
+    };
+    for(const auto * name:{"profile-evaluation","profile-basis-build","linear-solve","linear-factor-preparation",
+        "linear-symbolic","spqr-symbolic","linear-numeric","spqr-numeric","fixed-operator-factor",
+        "spqr-fixed-factor","rank-certificate","pcg","trial-evaluation"})
+        EXPECT_TRUE(has_stage(name))<<name;
+    EXPECT_GT(n::SparseWorkForTesting().symbolic,0);
+    EXPECT_GT(n::SparseWorkForTesting().numeric,0);
+    EXPECT_GT(n::SparseWorkForTesting().symbolic_seconds,0);
+    EXPECT_GT(n::SparseWorkForTesting().numeric_seconds,0);
+    EXPECT_LT(resources.search_stages.size(),32);
+    EXPECT_LE(resources.completed_search_stages.size(),resources.search_stages.size());
+    for(const auto & stage:resources.search_stages)
+    {
+        EXPECT_EQ(stage.calls,stage.completed_calls)<<stage.stage;
+        EXPECT_GE(stage.seconds,0)<<stage.stage;
+    }
+    resources={};
+}
+
+TEST(JointOperatorSearchTest, ActiveSearchCheckpointKeepsTheInterruptedSubstage)
+{
+    auto & resources=n::ResourceWorkForTesting(); resources={}; resources.enabled=true;
+    SearchStageCapture capture;
+    n::SetResourceStageObserverForTesting(CaptureSearchStage,&capture);
+    {
+        n::ResourcePhase search("search",true,200,16);
+        {n::ResourcePhase basis("profile-basis-build",true,200,32,900);}
+        n::ResourcePhase numeric("spqr-numeric",true,200,16,1200);
+        EXPECT_EQ(resources.active_search_stage,"spqr-numeric");
+    }
+    n::SetResourceStageObserverForTesting(nullptr,nullptr);
+    EXPECT_EQ(capture.active,"spqr-numeric");
+    EXPECT_EQ(capture.last,"profile-basis-build");
+    EXPECT_EQ(capture.rows,200); EXPECT_EQ(capture.columns,16); EXPECT_EQ(capture.nonzeros,1200);
+    resources={};
 }

@@ -58,6 +58,7 @@ struct Profile
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
+        ResourcePhase evaluation(evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto start=std::chrono::steady_clock::now();
         cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,&workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start); trace.push_back(std::move(row));
@@ -95,7 +96,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
 {
     if(context.search.method==SearchMethod::OperatorPcg)
         return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
-    ResourcePhase phase("search");
+    ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};

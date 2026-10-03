@@ -105,10 +105,29 @@ class JointBenchmarkContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             output = directory / 'driver.json'
-            output.write_text(json.dumps({'stage': 'search', 'measurement_scope': 'search-only'}))
+            snapshot = {'stage': 'search', 'measurement_scope': 'search-only', 'failure_stage': 'search',
+                        'active_search_stage': 'spqr-numeric',
+                        'last_completed_search_stage': 'profile-basis-build',
+                        'completed_search_stages': ['profile-evaluation', 'profile-basis-build'],
+                        'stage_seconds': {'profile-evaluation': .2},
+                        'stage_dimensions': {'spqr-numeric': {'rows': 32, 'columns': 8}},
+                        'stage_nnz': {'spqr-numeric': 128}}
+            output.write_text(json.dumps(snapshot))
             self.assertEqual(benchmark.partial_driver_json('search', directory, output),
-                             {'stage': 'search', 'measurement_scope': 'search-only'})
+                             snapshot)
             self.assertIsNone(benchmark.partial_driver_json('workflow', directory, output))
+
+    def test_interrupted_search_result_preserves_stage_and_spqr_telemetry(self):
+        raw = {'failure_stage': 'search', 'active_search_stage': 'spqr-numeric',
+               'last_completed_search_stage': 'profile-basis-build',
+               'completed_search_stages': ['profile-evaluation', 'profile-basis-build'],
+               'stage_seconds': {'profile-evaluation': .2},
+               'stage_dimensions': {'spqr-numeric': {'rows': 32, 'columns': 8}},
+               'stage_nnz': {'spqr-numeric': 128},
+               'spqr_factorization': {'ordering': 'COLAMD'}}
+        details = benchmark.normalize_result('search', raw)['details']
+        for key, value in raw.items():
+            self.assertEqual(details[key], value)
 
     def test_operator_and_schwarz_defaults_are_stable(self):
         parser = benchmark.build_parser()
