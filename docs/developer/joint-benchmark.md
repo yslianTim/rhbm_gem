@@ -172,20 +172,27 @@ cost by `search_seconds`; they are null when that denominator is zero or
 unavailable. These are descriptive measurements and have no hardware-specific
 pass threshold.
 
-## Four scaling questions
+## Five scalability axes
 
 Do not use total solve wall time as a proxy for a single scaling property. The
-current evidence separates four questions:
+current evidence separates five questions:
 
-| Scaling question | Measurement | Current evidence |
+| Scalability axis | Measurement | Current evidence |
 | --- | --- | --- |
 | Rank certification | bounded rank work, certificate status, SPQR reconstruction | [rank frontier](figures/joint-rank-budget-frontier/campaign-manifest.json) and [local-support census](figures/joint-local-rank-witness-census/local-rank-witness-census.json) |
-| Operator-PCG Krylov | iterations per solve under a fixed Schwarz policy | [search scaling and multi-block gates](figures/joint-search-scaling-r1/search-scaling-analysis.json) |
-| Search memory and operator throughput | search-stage ownership, factor fill/storage, sampled process RSS, PCG/operator time | [cube memory analysis](figures/cube-search-memory-r1/cube-memory-analysis.json) |
-| Returned-state assessment | assessment stages and derivative micro-stages after search returns | [derivative scaling analysis](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json) |
+| Krylov iteration scaling | iterations per solve under a fixed Schwarz policy | [cube multi-block gate](figures/joint-search-scaling-r2/search-scaling-analysis.json) |
+| Search operator throughput | operator action, factorization, and search time | [factor residency](figures/joint-factor-residency-r2/residency-analysis.json) and [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json) |
+| Search memory and factor representation | factor lifetime, owned-byte estimates, factor fill, and sampled process-tree RSS | [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json) and [cube memory analysis](figures/cube-search-memory-r1/cube-memory-analysis.json) |
+| Returned-state assessment scaling | assessment stages, derivative reduction, and full endpoint behavior | [compact acceptance](figures/joint-compact-acceptance-r2/acceptance-analysis.json) and [derivative scaling](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json) |
 
 Search-only results do not establish assessment or endpoint qualification.
 Assessment timeouts remain incomplete evidence even when search succeeded.
+Production returned-state assessment now uses guarded compact stacked QR when
+the singular-value decision is clear; the exact observation-scale Jacobian TSQR
+remains the fallback at the one-ULP rank boundary. The 128/256 acceptance cases
+passed full assessment and returned-state parity, and production-route 512
+chain/cube assessments completed within the existing 600-second / 4-GiB
+envelope. See the compact acceptance artifacts for per-case timings and RSS.
 
 ## Schwarz scaling sweep
 
@@ -341,8 +348,11 @@ scaling or support a two-level Schwarz conclusion.
 
 ### Current Operator-PCG search scaling
 
-The formal search-only campaign is recorded under
+The original formal search-only campaign is recorded under
 [`joint-search-scaling-r1`](figures/joint-search-scaling-r1/campaign-manifest.json).
+The cube multi-block gate was then completed with a preselected 768-atom point;
+the copied baseline points and official analyzer output are in
+[`joint-search-scaling-r2`](figures/joint-search-scaling-r2/campaign-manifest.json).
 It used SPQR with `auto` resolving to `SpqrBounds`, the rigorous
 `LocalSupport` certificate, the production-equivalent rank budget of 120
 seconds, 100,000,000 work entries, and 256 MiB. The fixed Schwarz policy used
@@ -374,24 +384,25 @@ The Schwarz measurements were:
 | cube | 128 | 1 | 3 | 0.294 | 1.454 | 3.371 | 7.273 | 331.8 MiB |
 | cube | 256 | 2 | 6 | 0.566 | 4.799 | 16.986 | 28.288 | 617.0 MiB |
 | cube | 512 | 4 | 6 | 1.097 | 13.852 | 45.579 | 75.673 | 1269.4 MiB |
-| cube | 1024 | 9 | 7 | 2.176 | 39.902 | 177.522 | 274.031 | 3301.2 MiB |
+| cube | 768 | 7 | 6 | 1.630 | 23.925 | 101.152 | 160.107 | 3.71 GiB |
+| cube | 1024 | 9 | 7 | 2.176 | 39.902 | 177.522 | 274.031 | 3.22 GiB |
 | cube | 2048 | — | — | — | — | — | RSS limit | 4.03 GiB |
 
-The full-range coarse gates are chain `stable` (5 points, slope 0.0830,
-endpoint growth 1.33) and cube `growth-observed` (4 points, slope 0.3667,
-endpoint growth 2.33). The cube full-range result includes the single-block
-128-to-multi-block-256 transition, so the separate actual-block-count gate is
-the basis for a coarse-space decision:
+The full-range cube result includes the single-block 128-to-multi-block-256
+transition, so the separate actual-block-count gate is the basis for a
+coarse-space decision:
 
 | Topology | Multi-block sizes | Actual block counts | Valid points | Slope | Growth ratio | Multi-block gate |
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | chain | 256, 512, 1024, 2048 | 2, 4, 8, 17 | 4 | 0.0000 | 1.00 | stable |
-| cube | 256, 512, 1024 | 2, 4, 9 | 3 | 0.1112 | 1.17 | insufficient-evidence |
+| cube | 256, 512, 768, 1024 | 2, 4, 7, 9 | 4 | 0.0841 | 1.17 | stable |
 
-The cube-2048 point failed the resource limit, leaving only three eligible
-multi-block points. The current multi-block evidence is therefore stable for
-chain and insufficient for cube. **No, current evidence does not warrant a
-two-level Schwarz investigation.** No coarse correction was implemented.
+The cube-768 point completed all three measurements at 3.71 GiB peak RSS.
+The four-point cube multi-block gate is `stable`; the analyzer's unchanged
+thresholds are four points, slope 0.25, and growth ratio 1.5. Together with the
+stable chain gate, **current synthetic evidence does not warrant a two-level
+Schwarz investigation.** The cube-2048 RSS failures concern factor memory and
+do not reopen the Krylov decision. No coarse correction was implemented.
 
 Rank work was 1.8%–11.7% of search time on completed rows. Each of five
 nonlinear linearizations used one rank check per measurement; the rigorous
@@ -451,12 +462,41 @@ One diagnostic-only BEST/diagonal run used a 6 GiB cap. It completed at
 5.672 GiB in 395.7 seconds with four accepted updates, five profile
 evaluations, 30 PCG solves, and 7.8 mean iterations per solve. It is excluded
 from the formal 4 GiB gate and provides no Schwarz block-count point. No
-cube-2048 Schwarz point was obtained. The cube multi-block gate therefore
-remains `insufficient-evidence`: sizes 256/512/1024, blocks 2/4/9,
-iterations/solve 6/6/7, slope 0.1112, growth 1.167. Do not infer that Schwarz
-failed, and do not begin a two-level Schwarz investigation. Production ordering
-remains COLAMD because no candidate completed cube-2048 inside the original
-resource envelope. No production memory optimization was promoted.
+cube-2048 Schwarz point was obtained. The later preselected cube-768 campaign
+closed the separate Krylov question with a stable four-point multi-block gate;
+the 2048 failures are only memory/resource evidence. Do not infer that Schwarz
+failed, and do not begin a two-level Schwarz investigation.
+
+### Factor residency and operator representation
+
+The [factor residency campaign](figures/joint-factor-residency-r2/residency-analysis.json)
+records at most two concurrently resident global factors at the sampled peak:
+an older profile/trial workspace and the next operator factor being built.
+This confirms overlap during accepted-state transitions. The instrumentation's
+owned-byte estimate is separate from the process-tree RSS measured by the
+runner; at a resource stop it can describe stage-entry factors while another
+factor construction is in progress.
+
+The [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json)
+compares the current exported `Fixed` factor with a benchmark-only native
+SuiteSparseQR representation. At cube-512/COLAMD, the native run matched the
+current run's stop reason, accepted updates, rank certificate, all 30 PCG
+iteration counts, and returned search state (maximum absolute state difference
+2.22e-16). Search time changed from 75.58 s to 64.55 s, process RSS from
+2.04 GiB to 1.89 GiB, and concurrent owned-byte estimate from 646 MB to
+449 MB. At cube-1024/BEST, the corresponding figures were 153.53 s to 132.78 s,
+2.94 GiB to 2.62 GiB, and 1,167 MB to 815 MB, with the same discrete search
+trajectory and maximum state difference 2.22e-16. These are search-only
+comparisons; they do not measure returned-state assessment or endpoint trust.
+
+For cube-1024/COLAMD, one current-representation run exceeded the 4 GiB cap
+while the native candidate finished only about 29 MiB below it; an earlier
+current run completed at about 4.12 GB. That variability does not establish a
+reliable process-RSS margin for the production ordering. All six cube-2048
+representation/ordering retries stopped at the unchanged 4 GiB cap before any
+PCG solve. Therefore the native representation remains benchmark-only, the
+production factor representation remains exported `Fixed`, and production
+ordering remains COLAMD. No production memory optimization was promoted.
 
 ### Returned-state assessment attribution
 
@@ -532,11 +572,21 @@ difference 4.20e-15. For a near-exact active-face fit, the residual-normalized
 `||Z^T r||/(||Z|| ||r||)` ratio reached 0.478 because `||r||` was near zero;
 observation-scale normalization gave 6.60e-16.
 
-These results support a test-only compact QR prototype, not a production
-replacement. Near-threshold Jacobian rank behavior, complete endpoint
-assessment parity, and production resource/time behavior remain unmeasured.
-The observation-scale Jacobian TSQR remains the production source of truth;
-no assessment optimization or threshold change was made.
+Near-threshold rank fixtures cover clearly deficient/full-rank cases and the
+floating-point boundary on both sides. The compact path accepts a result only
+when its rank decision is outside the one-ULP boundary enclosure; ambiguous
+cases fall back to the exact observation-scale Jacobian TSQR. Full Assessment,
+AssessmentEvidence, convergence, and returned-state parity passed on the
+chain/cube 8/32 endpoints plus cancellation, active-face, and rank-boundary
+fixtures. Rank, objective, and KKT thresholds were unchanged.
+
+The [compact assessment acceptance campaign](figures/joint-compact-acceptance-r2/acceptance-analysis.json)
+reported 1.41x–1.57x median assessment speedups on chain/cube 128/256, with
+peak RSS changes from -0.1% to +3.4%. Both production-route 512 cases were
+rerun under the same 600-second / 4-GiB envelope and completed: chain-512 used
+454.88 s assessment time and 627 MB peak RSS; cube-512 used 410.41 s and
+2.56 GB. The guarded compact reduction is therefore the production assessment
+path, with the current observation-scale TSQR retained as the exact fallback.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and

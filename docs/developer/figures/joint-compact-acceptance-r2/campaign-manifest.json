@@ -78,7 +78,10 @@
     "summary_json": "acceptance-summary.json",
     "summary_csv": "acceptance-summary.csv",
     "analysis_json": "acceptance-analysis.json",
-    "individual_results_directory": "individual-results/"
+    "individual_results_directory": "individual-results/",
+    "post_promotion_summary_json": "post-promotion-summary.json",
+    "post_promotion_summary_csv": "post-promotion-summary.csv",
+    "post_promotion_individual_results_directory": "post-promotion-summary_runs/"
   },
   "acceptance_result": {
     "128_256_full_assessment_and_returned_state_parity": "passed",
@@ -90,5 +93,30 @@
     "compact_other_fallbacks": 0
   },
   "status": "completed",
-  "completed_at_utc": "2026-10-03 12:58:05 UTC"
+  "completed_at_utc": "2026-10-03 12:58:05 UTC",
+  "production_promotion": {
+    "status": "committed",
+    "commit": "5eb13f8f",
+    "message": "perf(joint): use guarded compact Jacobian reduction",
+    "boundary_policy": "One-ULP rank-boundary enclosure falls back to observation-scale Jacobian TSQR.",
+    "post_promotion_validation": [
+      {
+        "case": "chain-512",
+        "status": "completed",
+        "assessment_seconds": 454.883724458,
+        "process_wall_seconds": 472.08131341682747,
+        "peak_rss_bytes": 627376128,
+        "runtime_convergence": "passed"
+      },
+      {
+        "case": "cube-512",
+        "status": "completed",
+        "assessment_seconds": 410.409737584,
+        "process_wall_seconds": 488.20188912493177,
+        "peak_rss_bytes": 2559606784,
+        "runtime_convergence": "passed"
+      }
+    ],
+    "contract": "Same 600-second and 4-GiB envelope; SPQR, one Eigen thread, production COLAMD, Schwarz core 128 / overlap 1 / maximum block 512."
+  }
 }

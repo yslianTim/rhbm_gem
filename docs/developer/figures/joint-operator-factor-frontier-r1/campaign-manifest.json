@@ -33,7 +33,7 @@
       "exported-fixed",
       "native-qr"
     ],
-    "preconditioner": "Schwarz",
+    "preconditioner": "Schwarz at cube-512/1024; diagonal and Schwarz at cube-2048 diagnostics",
     "operator_rank": "auto -> SpqrBounds",
     "rank_certificate": "LocalSupport before native QR; exact existing Fixed plus bounded SPQR fallback when certification is unavailable",
     "core_atoms": 128,
@@ -50,7 +50,11 @@
     "rss_limit_bytes": 4294967296,
     "eigen_threads": 1,
     "cube_2048_policy": "Diagnostic retries only after cube-1024 BEST/native reduced RSS with matched search parity; all retries retained the original 4 GiB / 600 s envelope.",
-    "status_semantics": "All requested runs produced a terminal completed or rss_limit record; a resource stop is retained as a failure, not a completed measurement."
+    "status_semantics": "All requested runs produced a terminal completed or rss_limit record; a resource stop is retained as a failure, not a completed measurement.",
+    "cube_2048_preconditioners": [
+      "diagonal",
+      "Schwarz"
+    ]
   },
   "build": {
     "directory": "build/joint-spqr",

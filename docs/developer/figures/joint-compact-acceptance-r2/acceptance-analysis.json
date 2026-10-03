@@ -109,5 +109,36 @@
   },
   "thresholds_changed": false,
   "evidence_weakened": false,
-  "production_promotion": "eligible for conditional promotion; promotion not yet committed"
+  "production_promotion": {
+    "status": "committed",
+    "commit": "5eb13f8f",
+    "message": "perf(joint): use guarded compact Jacobian reduction",
+    "fallback": "Exact observation-scale Jacobian TSQR for decisions within the one-ULP rank-boundary enclosure.",
+    "thresholds_changed": false,
+    "evidence_weakened": false
+  },
+  "production_route_512_rerun": {
+    "status": "passed",
+    "source": "post-promotion-summary.json",
+    "same_600_second_4_gib_envelope": true,
+    "cases": [
+      {
+        "case": "chain-512",
+        "status": "completed",
+        "assessment_seconds": 454.883724458,
+        "process_wall_seconds": 472.08131341682747,
+        "peak_rss_bytes": 627376128,
+        "runtime_convergence": "passed"
+      },
+      {
+        "case": "cube-512",
+        "status": "completed",
+        "assessment_seconds": 410.409737584,
+        "process_wall_seconds": 488.20188912493177,
+        "peak_rss_bytes": 2559606784,
+        "runtime_convergence": "passed"
+      }
+    ],
+    "full_current_vs_compact_endpoint_parity": "unavailable for 512 because the current route times out before completing returned-state assessment; this rerun verifies completion and runtime convergence of the promoted route."
+  }
 }
